@@ -27,6 +27,7 @@ Auto Research is deliberately absent from the runtime and public UI. Its legacy 
 
 ### P1 — package quality
 
+0. Build public archives from an explicit release allowlist. Experimental plugins must remain excluded until their status is formally promoted and the release scope explicitly approves them; package generation must fail if an experimental DLL is present.
 1. Produce a versioned zip with only the required DLLs, README, changelog, license, and install/uninstall instructions. Inspect raw ZIP entries and reject backslashes, rooted paths, or missing `BepInEx/plugins/` entries so extraction works on SteamOS/Bazzite.
 2. Add a first-run section explaining Disabled/Active modes, affordability, optional reserves, queue slots, Bulk Development, action multiplier behavior, and the emergency stop.
 3. Add a troubleshooting section covering log opt-in, duplicate DLLs, conflicting auto-buy plugins, and restoring the previous version.
