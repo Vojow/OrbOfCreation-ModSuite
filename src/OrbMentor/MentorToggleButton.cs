@@ -35,6 +35,16 @@ internal sealed class MentorToggleButton : IDisposable
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
+        if (icon is not null)
+        {
+            icon.sprite = null;
+            icon.enabled = false;
+        }
+        if (text is not null)
+        {
+            text.gameObject.SetActive(true);
+            text.alignment = TextAlignmentOptions.Center;
+        }
         if (cloned is Behaviour behaviour) behaviour.enabled = false;
         if (cloned is not null) UnityEngine.Object.Destroy(cloned);
         var button = root.GetComponent<Button>();
@@ -49,8 +59,12 @@ internal sealed class MentorToggleButton : IDisposable
     public void Render()
     {
         var state = _runtime.IsBlocked ? "BLOCKED" : _config.Active ? "ON" : "OFF";
-        if (_text is not null) _text.text = $"M {state}";
-        if (_icon is not null) _icon.color = _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.55f, .55f, .55f);
+        var color = _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+        if (_text is not null)
+        {
+            _text.text = $"M {state}";
+            _text.color = color;
+        }
     }
     private void Toggle()
     {
