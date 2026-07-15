@@ -1,6 +1,6 @@
 # Local runtime validation protocol
 
-[Back to compatibility and testing](compatibility-and-testing.md) · [Three-mod iteration plan](three-mod-iteration-plan.md)
+[Back to compatibility and testing](testing.md) · [Three-mod iteration plan](../plans/three-mod-iteration.md)
 
 ## Purpose
 
@@ -212,7 +212,7 @@ Verify independent configs and keybinds, unscaled Automata cadence, one owner fo
 - Install from the exact release archive, not a developer output directory.
 - Repeat the load smoke test on a clean BepInEx profile.
 - Inspect the archive: only intended plugin DLLs and release documentation are allowed.
-- Attach a completed report based on [`tests/runtime/report-template.md`](../tests/runtime/report-template.md).
+- Attach a completed report based on [`tests/runtime/report-template.md`](../../tests/runtime/report-template.md).
 
 ## Evidence and stop rules
 

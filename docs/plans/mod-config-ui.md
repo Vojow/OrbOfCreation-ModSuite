@@ -1,5 +1,7 @@
 # In-game mod configuration UI plan
 
+> **Lifecycle: Implemented / evolving.** The optional configuration UI is in public beta; this plan includes later improvements.
+
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
 ## Goal

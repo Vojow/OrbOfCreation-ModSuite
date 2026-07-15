@@ -17,7 +17,7 @@ The normalized mapping currently contains:
 
 Every mapped UUID is unique. Names are not unique and must never be treated as primary identity.
 
-The exhaustive machine-readable count for every managed type is stored in [`data/entity-types.tsv`](../data/entity-types.tsv); the catalog below explains how those types fit together.
+The exhaustive machine-readable count for every managed type is stored in [`data/entity-types.tsv`](../../data/entity-types.tsv); the catalog below explains how those types fit together.
 
 The mapped objects divide into four structural layers:
 

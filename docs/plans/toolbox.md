@@ -1,5 +1,7 @@
 # Orb Toolbox plan
 
+> **Lifecycle: Planned.** Design and research only; no released plugin behavior is implied.
+
 [Back to roadmap](roadmap.md)
 
 ## Goal

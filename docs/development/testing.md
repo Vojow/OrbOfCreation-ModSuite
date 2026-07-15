@@ -1,6 +1,6 @@
 # Compatibility, testing, and releases
 
-[Back to roadmap](roadmap.md) · [Local runtime validation protocol](local-runtime-validation.md)
+[Back to roadmap](../plans/roadmap.md) · [Local runtime validation protocol](runtime-validation.md)
 
 ## Supported baseline
 
@@ -73,7 +73,7 @@ The supported release profile uses one auto-buy mod. Automata does not detect, p
 
 The table defines required scenarios, not current results. Results should be recorded under `tests/` with date, game version, plugin version, and save used.
 
-Use the [local runtime validation protocol](local-runtime-validation.md) for the ordered build, static-audit, load-smoke, read-only, active, rollback, combined-mod, and release gates. A computer without the game can run the automated tests, but cannot mark any real-reference or runtime gate as passed.
+Use the [local runtime validation protocol](runtime-validation.md) for the ordered build, static-audit, load-smoke, read-only, active, rollback, combined-mod, and release gates. A computer without the game can run the automated tests, but cannot mark any real-reference or runtime gate as passed.
 
 ## Runtime assertions
 

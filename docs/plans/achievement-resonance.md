@@ -1,10 +1,12 @@
 # Orb Achievement Resonance plan
 
-[Back to roadmap](roadmap.md) · [Reverse-engineering map](README.md)
+> **Lifecycle: Experimental.** Native mutation remains disabled by default while runtime validation continues.
+
+[Back to roadmap](roadmap.md) · [Reverse-engineering map](../reverse-engineering/README.md)
 
 ## Goal
 
-Coordinated implementation iterations and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration-plan.md).
+Coordinated implementation iterations and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration.md).
 
 Expand **Achievement Strength** so it grants configurable bonuses to speed, power, duration, special effects, and carefully selected scaling properties in addition to the game's existing advancement/resource benefits.
 
@@ -75,7 +77,7 @@ sequenceDiagram
 
 ## Candidate bonus targets
 
-The exhaustive broad-target inventory is maintained in [Global and global-ish stat catalog](global-stats-catalog.md). It includes all 24 mapped attribute groups, player-wide number variables, global type objects, and the complete static upgradeable-property vocabulary.
+The exhaustive broad-target inventory is maintained in [Global and global-ish stat catalog](../reverse-engineering/global-stats-catalog.md). It includes all 24 mapped attribute groups, player-wide number variables, global type objects, and the complete static upgradeable-property vocabulary.
 
 ### Speed
 

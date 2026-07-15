@@ -22,7 +22,7 @@ Current validated totals:
 
 The importer guarantees UUID uniqueness, not name uniqueness. Consumers must resolve by `id`, validate `type`, and use `name` only for display or diagnostics.
 
-The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Entity catalog](../docs/entity-catalog.md) and [Entity correlations](../docs/entity-correlations.md).
+The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Entity catalog](../docs/reverse-engineering/entity-catalog.md) and [Entity correlations](../docs/reverse-engineering/entity-correlations.md).
 
 ## Refreshing the mappings
 

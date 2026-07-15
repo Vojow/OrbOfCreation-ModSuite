@@ -1,119 +1,37 @@
-# Orb of Creation reverse-engineering notes
+# Documentation
 
-These notes describe the managed-code architecture of the installed Orb of Creation build. The current main assembly was re-audited on 2026-07-13; see [Reverse-engineering audit](reverse-engineering-audit.md) for hashes, corrections, and confidence boundaries.
+Choose the path that matches what you are trying to do.
 
-## Examined build
+## Players
 
-- Unity `6000.0.70`
-- 64-bit Mono runtime
-- BepInEx `5.4.23.5`
-- Main game assembly: `Orb Of Creation_Data/Managed/Assembly-CSharp.dll`
-- Numeric library: `Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll`
-- Save format version observed: `6`
+- [Install Orb Automata](user-guide/installation.md)
+- [Configure automation safely](user-guide/configuration.md)
+- [Troubleshoot a problem](user-guide/troubleshooting.md)
+- [Remove the mods](user-guide/uninstalling.md)
+- [Orb Automata behavior reference](../src/OrbAutomata/README.md)
+- [Orb Mod Config reference](../src/OrbModConfig/README.md)
 
-The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified.
+## Contributors and maintainers
 
-## Knowledge map
+- [Development setup](development/setup.md)
+- [Testing and compatibility](development/testing.md)
+- [Runtime validation protocol](development/runtime-validation.md)
+- [Release process](development/releases.md)
+- [Source layout](../src/README.md)
+- [Contributing guidelines](../CONTRIBUTING.md)
 
-```mermaid
-mindmap
-  root((Orb of Creation))
-    Startup
-      GameManager
-      GamePhase
-        Validate
-        Bind
-        Initialize
-        Start
-        Increment
-        SlowIncrement
-      AbstractManager
-    Identity
-      IdScriptableObject
-      GuidContainer
-      RuntimeLookup
-      2792 mapped UUIDs
-      141 runtime types
-      Name collisions
-    Entity domains
-      Progression
-      Resources and structures
-      Magic and alchemy
-      Agromancy
-      Combat
-      UI and registries
-    Correlations
-      Instance to type
-      Type to registered members
-      Effect to modifier record
-      Group to merged properties
-    Resources
-      ResourceSO
-        quantity
-        lifetimeQuantity
-        maxQuantity
-        Gain
-        Spend
-        SetQuantity
-      ResourceManager
-      ResourceListVariable
-      ResourceCostList
-      ResourceFillList
-    Numbers
-      BigDouble
-        mantissa
-        exponent
-        Normalize
-    Persistence
-      SaveStateManager
-      ISaveable
-      JsonSaveData
-      SaveInfo
-      Base64 encoded JSON
-    Modding
-      BepInEx 5
-      Harmony
-      Runtime GUID lookup
-      Developer console hooks
-      Resource observables
-```
+## Reverse-engineering research
 
-## Suggested reading order
+- [Knowledge map and reading order](reverse-engineering/README.md)
+- [Architecture](reverse-engineering/architecture.md)
+- [Entity catalog](reverse-engineering/entity-catalog.md)
+- [Latest assembly audit](reverse-engineering/audit.md)
 
-1. [Architecture](architecture.md)
-2. [Identity and registries](identity-and-registries.md)
-3. [Entity catalog and taxonomy](entity-catalog.md)
-4. [Entity correlations](entity-correlations.md)
-5. [Resources and large numbers](resources-and-bigdouble.md)
-6. [Save system](save-system.md)
-7. [Modding hooks](modding-hooks.md)
-8. [Global and global-ish stat catalog](global-stats-catalog.md)
-9. [Public release checklist](public-release-checklist.md)
-9. [Reverse-engineering audit](reverse-engineering-audit.md)
+Research pages distinguish **Verified**, **Inferred**, and **Candidate** findings. They document the supported installed-game baseline and do not include game binaries.
 
-## Product and implementation plans
+## Roadmap and design plans
 
-- [Three-mod iteration plan](three-mod-iteration-plan.md)
-- [Project roadmap](roadmap.md)
-- [Orb Chronomancer plan](chronomancer-plan.md)
-- [Orb Automata plan](automata-plan.md)
-- [Auto Cast MVP](auto-cast-mvp.md)
-- [Orb Insights plan](insights-plan.md)
-- [Orb Toolbox plan](toolbox-plan.md)
-- [Orb Achievement Resonance plan](achievement-resonance-plan.md)
-- [Orb Mastery Sharing plan](mastery-sharing-plan.md)
-- [In-game mod configuration UI plan](mod-config-ui-plan.md)
-- [Compatibility, testing, and releases](compatibility-and-testing.md)
-- [Local runtime validation protocol](local-runtime-validation.md)
+- [Project roadmap](plans/roadmap.md)
+- [Plan index and lifecycle status](plans/README.md)
 
-## Important discovered identifier
-
-| Entity | UUID | Runtime type |
-|---|---|---|
-| Alchemic Scroll | `67acd892-8a8a-455a-aa71-3fb06e75bf38` | `ResourceSO` |
-
-## Confidence labels
-
-- **Verified:** directly present in metadata or inspected IL.
-- **Inferred:** conclusion based on verified structure but not yet confirmed at runtime.
-- **Candidate:** promising target that should be tested in a logging-only plugin.
+Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.
