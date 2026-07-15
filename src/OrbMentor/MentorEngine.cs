@@ -23,7 +23,8 @@ internal sealed class MentorGrant
 
 internal sealed class MentorEngine
 {
-    private readonly SortedDictionary<string, MentorAmount> _pending = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MentorAmount> _pending = new(StringComparer.Ordinal);
+    private readonly Queue<string> _pendingOrder = new();
 
     public IReadOnlyList<MentorRecipe> EligibleRecipients(
         string sourceUuid,
@@ -58,16 +59,30 @@ internal sealed class MentorEngine
     public void Consolidate(IEnumerable<MentorGrant> grants)
     {
         foreach (var grant in grants.Where(g => g.Amount.IsValidPositive))
-            _pending[grant.Uuid] = _pending.TryGetValue(grant.Uuid, out var current) ? current.Add(grant.Amount) : grant.Amount;
+        {
+            if (_pending.TryGetValue(grant.Uuid, out var current))
+            {
+                _pending[grant.Uuid] = current.Add(grant.Amount);
+                continue;
+            }
+
+            _pending[grant.Uuid] = grant.Amount;
+            _pendingOrder.Enqueue(grant.Uuid);
+        }
     }
 
     public IReadOnlyList<MentorGrant> Take(int operationBudget)
     {
-        var result = _pending.Take(Math.Max(0, operationBudget)).Select(p => new MentorGrant(p.Key, p.Value)).ToArray();
-        foreach (var grant in result) _pending.Remove(grant.Uuid);
+        var result = new List<MentorGrant>();
+        while (result.Count < Math.Max(0, operationBudget) && _pendingOrder.Count > 0)
+        {
+            var uuid = _pendingOrder.Dequeue();
+            if (!_pending.Remove(uuid, out var amount)) continue;
+            result.Add(new MentorGrant(uuid, amount));
+        }
         return result;
     }
 
     public int PendingCount => _pending.Count;
-    public void Cancel() => _pending.Clear();
+    public void Cancel() { _pending.Clear(); _pendingOrder.Clear(); }
 }

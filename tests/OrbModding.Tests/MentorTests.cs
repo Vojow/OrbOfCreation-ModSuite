@@ -72,12 +72,35 @@ public sealed class MentorTests
         var engine = new MentorEngine();
         engine.Consolidate(new[] { new MentorGrant("b", new MentorAmount(1, 3)), new MentorGrant("b", new MentorAmount(2, 3)), new MentorGrant("a", new MentorAmount(1, 2)) });
         var first = Assert.Single(engine.Take(1));
-        Assert.Equal("a", first.Uuid);
+        Assert.Equal("b", first.Uuid);
+        Assert.Equal(3, first.Amount.Mantissa, 12);
         Assert.Equal(1, engine.PendingCount);
-        Assert.Equal(3, Assert.Single(engine.Take(1)).Amount.Mantissa, 12);
+        Assert.Equal("a", Assert.Single(engine.Take(1)).Uuid);
         engine.Consolidate(new[] { new MentorGrant("x", new MentorAmount(1, 1)) });
         engine.Cancel();
         Assert.Equal(0, engine.PendingCount);
+    }
+
+    [Fact]
+    public void ReplenishingEarlyRecipientsCannotStarveLaterRecipients()
+    {
+        var engine = new MentorEngine();
+        var batch = new[]
+        {
+            new MentorGrant("a", new MentorAmount(1, 1)),
+            new MentorGrant("b", new MentorAmount(1, 1)),
+            new MentorGrant("c", new MentorAmount(1, 1)),
+        };
+
+        engine.Consolidate(batch);
+        Assert.Equal("a", Assert.Single(engine.Take(1)).Uuid);
+
+        engine.Consolidate(batch);
+        Assert.Equal("b", Assert.Single(engine.Take(1)).Uuid);
+        engine.Consolidate(batch);
+        Assert.Equal("c", Assert.Single(engine.Take(1)).Uuid);
+
+        Assert.Equal(new[] { "a", "b" }, engine.Take(2).Select(grant => grant.Uuid));
     }
 
     [Fact]
