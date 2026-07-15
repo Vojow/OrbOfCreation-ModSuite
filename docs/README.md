@@ -101,7 +101,7 @@ mindmap
 - [Orb Insights plan](insights-plan.md)
 - [Orb Toolbox plan](toolbox-plan.md)
 - [Orb Achievement Resonance plan](achievement-resonance-plan.md)
-- [Orb Mastery Sharing plan](mastery-sharing-plan.md)
+- [Orb Mentor plan](mastery-sharing-plan.md)
 - [In-game mod configuration UI plan](mod-config-ui-plan.md)
 - [Compatibility, testing, and releases](compatibility-and-testing.md)
 - [Local runtime validation protocol](local-runtime-validation.md)

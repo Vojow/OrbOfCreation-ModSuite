@@ -11,7 +11,7 @@ The project will produce six focused gameplay BepInEx 5 plugins plus an optional
 3. **Orb Insights** — extends existing tooltips into an inspection and explanation layer.
 4. **Orb Toolbox** — provides explicit resource/debug operations and development safeguards.
 5. **Orb Achievement Resonance** — extends Achievement Strength through the game's native persistent-effect pipeline.
-6. **Orb Mastery Sharing** — shares a controlled portion of earned mastery/experience with unlocked, underused spells, artifacts, and alchemy entities.
+6. **Orb Mentor** — shares a controlled portion of earned mastery experience with lower-level discovered spells, with artifacts and alchemy deferred to separately audited extensions.
 
 **Orb Mod Config** is optional shared UI infrastructure that exposes loaded BepInEx configuration inside the game without becoming a dependency of the gameplay plugins.
 
@@ -37,7 +37,7 @@ flowchart TD
     Bep --> Insights["Orb Insights"]
     Bep --> Toolbox["Orb Toolbox"]
     Bep --> Resonance["Orb Achievement Resonance"]
-    Bep --> Sharing["Orb Mastery Sharing"]
+    Bep --> Sharing["Orb Mentor"]
     Bep --> ModConfig["Orb Mod Config"]
     Game["Assembly-CSharp APIs"] --> Chrono
     Game --> Automata
@@ -133,17 +133,18 @@ Exit criterion: supported actions change only the selected runtime objects, surv
 
 Exit criterion: bonuses update immediately when achievements change, never duplicate across loads, and do not alter achievement save data.
 
-### Phase 4d — Orb Mastery Sharing
+### Phase 4d — Orb Mentor
 
-- Audit native XP gain, mastery, level-up, active-state, and save ownership for spells, artifacts, and alchemy.
-- Build a logging-only event probe before changing progression.
-- Add same-domain catch-up sharing one vertical slice at a time: spells, artifacts, then alchemy.
-- Use native XP paths, stable UUID eligibility, recursion suppression, deterministic distribution, and strict per-event caps.
-- Support bonus and total-preserving split modes with dry-run and emergency-disable safeguards.
+- Lock installed-game contracts around the verified spell mastery, catalog, save, and type-XP surfaces.
+- Validate the `SpellRecipeSO.GainMasteryExp` boundary with a development-only logging probe.
+- Add global highest-mastery mentoring through Shared Pool and Per Recipient economy modes.
+- Use native recipient XP grants, stable UUID ordering, recursion suppression, per-frame aggregation, and bounded processing.
+- Add live Mod Config integration, `Alt+M`, and a queue/status-area ON/OFF/BLOCKED control.
+- Defer automatic mastery confirmation to Automata and audit artifacts/alchemy as later independent extensions.
 
-See [Orb Mastery Sharing plan](mastery-sharing-plan.md) for balance defaults, domain questions, delivery stages, and verification requirements.
+See [Orb Mentor plan](mastery-sharing-plan.md) for the resolved spell MVP contract, verified native XP path, delivery stages, and verification requirements.
 
-Exit criterion: eligible underused entities receive exactly the configured XP through native progression behavior, grants never recurse, and saves remain stable across extended sessions and plugin removal.
+Exit criterion: every discovered lower-mastery spell receives exactly the configured XP through native progression behavior, grants never recurse or directly modify spell-type XP, and saves remain stable across extended sessions and plugin removal.
 
 ### Phase 5 — In-game mod configuration UI
 

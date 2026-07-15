@@ -16,6 +16,7 @@ The current public beta centers on Orb Automata: queue-aware Auto Buy, safe Auto
 | **Orb Mod Config 0.4.0** | Beta | Optional in-game Mods tab for typed BepInEx configuration. |
 | **Orb Chronomancer** | Experimental | Simulation-speed controls; not included in the Automata release archive. |
 | **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation remains disabled by default. |
+| **Orb Mentor** | Planned | Highest-mastery spells share final native mastery XP with lower-level discovered spells. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline:
