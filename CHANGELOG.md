@@ -2,7 +2,7 @@
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 
-- Added the complete suite package with Orb Automata, Orb Mentor, Orb Mod Config, Orb Achievement Resonance, Orb Chronomancer, and Orb Modding Common.
+- Added the supported suite package with Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. Experimental plugins remain excluded.
 - Bundled Orb Mod Config 0.5.1.
 - Made the Mods configuration tab available from the start of a new save instead of requiring the NG+-gated Time tab.
 - Kept Mods as the final item when native navigation tabs unlock or reorder.

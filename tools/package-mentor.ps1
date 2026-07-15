@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$GameRoot,
     [string]$OutputDirectory,
-    [switch]$IncludeCompleteSuite
+    [switch]$IncludeSupportedSuite
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -15,7 +15,7 @@ if (-not $OutputDirectory.StartsWith($artifacts, [StringComparison]::OrdinalIgno
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed.' }
 [xml]$project = Get-Content -Raw (Join-Path $root 'src/OrbMentor/OrbMentor.csproj')
 $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
-$name = if ($IncludeCompleteSuite) { "OrbOfCreation-ModSuite-$version" } else { "OrbMentor-$version" }
+$name = if ($IncludeSupportedSuite) { "OrbOfCreation-ModSuite-$version" } else { "OrbMentor-$version" }
 $stage = Join-Path $OutputDirectory $name
 $zip = "$stage.zip"
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
@@ -25,12 +25,17 @@ $plugins = Join-Path $stage 'BepInEx/plugins/OrbMentor'
 New-Item -ItemType Directory -Force $plugins | Out-Null
 $files = @('OrbMentor.dll','OrbModding.Common.dll')
 foreach ($file in $files) { Copy-Item (Join-Path $root "src/OrbMentor/bin/Release/netstandard2.1/$file") $plugins }
-if ($IncludeCompleteSuite) {
-    foreach ($item in @(@('OrbAutomata','OrbAutomata.dll'),@('OrbModConfig','OrbModConfig.dll'),@('OrbAchievementResonance','OrbAchievementResonance.dll'),@('OrbChronomancer','OrbChronomancer.dll'))) {
+if ($IncludeSupportedSuite) {
+    # Release allowlist: experimental projects must be promoted and explicitly
+    # added here before they can enter a public package.
+    foreach ($item in @(@('OrbAutomata','OrbAutomata.dll'),@('OrbModConfig','OrbModConfig.dll'))) {
         $dir = Join-Path $stage "BepInEx/plugins/$($item[0])"; New-Item -ItemType Directory -Force $dir | Out-Null
         Copy-Item (Join-Path $root "src/$($item[0])/bin/Release/netstandard2.1/$($item[1])") $dir
     }
 }
+$forbiddenReleaseDlls = @('OrbAchievementResonance.dll', 'OrbChronomancer.dll')
+$unexpected = Get-ChildItem -Recurse -File $stage | Where-Object { $_.Name -in $forbiddenReleaseDlls }
+if ($unexpected) { throw "Experimental plugin entered the public package: $($unexpected.Name -join ', ')" }
 foreach ($file in @('README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md')) { Copy-Item (Join-Path $root $file) $stage }
 New-PortableZip -SourceDirectory $stage -DestinationPath $zip
 $hashes = Get-ChildItem -Recurse -File $stage | ForEach-Object { $h = Get-FileHash -Algorithm SHA256 $_.FullName; "$($h.Hash.ToLowerInvariant())  $($_.Name)" }
