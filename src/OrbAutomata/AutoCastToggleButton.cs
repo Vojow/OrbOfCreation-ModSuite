@@ -97,11 +97,10 @@ internal sealed class AutoCastToggleButton : IDisposable
         GameObject? root = null;
         try
         {
-            root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, nativeToggle.transform.parent, false);
+            var group = StatusControlGroup.GetOrCreate(nativeToggle);
+            root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, group, false);
             root.name = ObjectName;
-            IgnoreParentLayout(root);
-            root.transform.SetSiblingIndex(nativeToggle.transform.GetSiblingIndex());
-            PositionLeftOfNativeToggle(root, nativeToggle.gameObject);
+            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Place(root, 1, nativeRect);
 
             var clonedNativeToggle = root.GetComponent(nativeToggleType);
             var iconImage = ReadField(clonedNativeToggle, "iconImage") as Image;
@@ -379,11 +378,6 @@ internal sealed class AutoCastToggleButton : IDisposable
             nativeRect.anchoredPosition.y);
     }
 
-    private static void IgnoreParentLayout(GameObject root)
-    {
-        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
-        layout.ignoreLayout = true;
-    }
 
     internal static float CalculateLeftX(float nativeX, float renderedWidth)
     {

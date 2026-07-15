@@ -36,16 +36,11 @@ internal sealed class MentorToggleButton : IDisposable
             .OfType<Component>()
             .FirstOrDefault(component => component.gameObject.activeInHierarchy && ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
-        var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
+        var group = MentorStatusControlGroup.GetOrCreate(native);
+        var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
         root.name = "OrbMentor.Toggle";
-        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
-        layout.ignoreLayout = true;
-        root.transform.SetSiblingIndex(native.transform.GetSiblingIndex());
         if (root.transform is RectTransform rect && native.transform is RectTransform nativeRect)
-        {
-            var width = Math.Max(44, Math.Abs(nativeRect.rect.width));
-            rect.anchoredPosition = new Vector2(nativeRect.anchoredPosition.x - width - 12, nativeRect.anchoredPosition.y);
-        }
+            MentorStatusControlGroup.Place(root, nativeRect);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;

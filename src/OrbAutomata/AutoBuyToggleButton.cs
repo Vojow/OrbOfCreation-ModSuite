@@ -31,12 +31,10 @@ internal sealed class AutoBuyToggleButton : IDisposable
         if (autoBuyEnabled is null) return false;
         var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => c.gameObject.activeInHierarchy && ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
-        var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
+        var group = StatusControlGroup.GetOrCreate(native);
+        var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
         root.name = "OrbAutomata.AutoBuyToggle";
-        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
-        layout.ignoreLayout = true;
-        root.transform.SetSiblingIndex(native.transform.GetSiblingIndex());
-        Position(root, native.gameObject, 3);
+        if (native.transform is RectTransform nativeRect) StatusControlGroup.Place(root, 0, nativeRect);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
@@ -65,10 +63,4 @@ internal sealed class AutoBuyToggleButton : IDisposable
     private void Toggle() { _control.Toggle(); Render(); }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
-    private static void Position(GameObject clone, GameObject native, int slot)
-    {
-        if (clone.transform is not RectTransform rect || native.transform is not RectTransform nativeRect) return;
-        var width = Math.Abs(nativeRect.rect.width); if (width < 1) width = 44;
-        rect.anchoredPosition = new Vector2(nativeRect.anchoredPosition.x - slot * (width + AutoCastToggleButton.HorizontalGap), nativeRect.anchoredPosition.y);
-    }
 }
