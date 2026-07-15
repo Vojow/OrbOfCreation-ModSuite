@@ -14,7 +14,7 @@ The underlying editor continues to provide:
 - discovers loaded plugins and their typed BepInEx configuration entries;
 - groups entries deterministically by mod and presentation group, honoring optional public metadata;
 - classifies the editor each setting will require;
-- clones the native Time button visuals into a Mods button immediately after Time;
+- clones the last available native top-tab visuals into a Mods button that is available from the start and remains last;
 - opens a mod-owned overlay panel and closes it from Mods or any native top-level tab;
 - presents loaded mods as a horizontal tab row and simplified feature groups as a second tab row;
 - renders a scrollable settings list with descriptions, ranges, current values, and defaults;

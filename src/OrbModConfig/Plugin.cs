@@ -100,6 +100,8 @@ public sealed class Plugin : BaseUnityPlugin
                     Logger.LogWarning("Mod Config UI shell was not installed: " + reason);
                 }
             }
+
+            _uiShell?.EnsureButtonIsLast();
         }
         else if (_uiShell is not null)
         {
