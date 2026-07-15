@@ -113,6 +113,14 @@ internal sealed class AutoCastToggleButton : IDisposable
                 iconImage.sprite = spellIcon;
                 iconImage.preserveAspect = true;
             }
+            if (text is not null)
+            {
+                text.gameObject.SetActive(true);
+                text.enabled = true;
+                text.alignment = TextAlignmentOptions.Center;
+                text.raycastTarget = false;
+                text.transform.SetAsLastSibling();
+            }
             if (clonedNativeToggle is Behaviour behaviour)
             {
                 behaviour.enabled = false;
@@ -212,12 +220,8 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         if (_text is not null)
         {
-            _text.text = state switch
-            {
-                AutoCastToggleVisualState.On => "AC ON",
-                AutoCastToggleVisualState.Blocked => "AC !",
-                _ => "AC OFF",
-            };
+            _text.text = FormatLabel(state);
+            _text.color = color;
         }
 
         if (announce)
@@ -225,6 +229,13 @@ internal sealed class AutoCastToggleButton : IDisposable
             ShowStateNotice(state);
         }
     }
+
+    internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
+    {
+        AutoCastToggleVisualState.On => "AC ON",
+        AutoCastToggleVisualState.Blocked => "AC !",
+        _ => "AC OFF",
+    };
 
     public void Dispose()
     {

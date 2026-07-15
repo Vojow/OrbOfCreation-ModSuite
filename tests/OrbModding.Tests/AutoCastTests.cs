@@ -10,6 +10,15 @@ namespace OrbModding.Tests;
 
 public sealed class AutoCastTests
 {
+    [Theory]
+    [InlineData(0, "AC OFF")]
+    [InlineData(1, "AC ON")]
+    [InlineData(2, "AC !")]
+    public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
+    {
+        Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
+    }
+
     [Fact]
     public void TogglePlacementLeavesTwelvePixelGapLeftOfNativeControl()
     {
