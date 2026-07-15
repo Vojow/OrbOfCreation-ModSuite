@@ -7,6 +7,7 @@ using UnityEngine;
 using System.Collections;
 using System.Reflection;
 using System.Linq;
+using BepInEx.Logging;
 
 namespace OrbMentor;
 
@@ -19,10 +20,12 @@ public sealed class Plugin : BaseUnityPlugin
     private MentorToggleButton? _button;
     private float _uiRetry;
     internal static Plugin? Instance { get; private set; }
+    internal static ManualLogSource Log { get; private set; } = null!;
 
     private void Awake()
     {
         Instance = this;
+        Log = Logger;
         _config = MentorConfig.Bind(Config);
         _runtime = new MentorRuntime(_config, Logger);
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);

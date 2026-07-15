@@ -23,9 +23,13 @@ internal sealed class AutoBuyToggleButton : IDisposable
         var toggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
         var managerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
         if (toggleType is null || managerType is null) return false;
-        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType).Select(manager => Read(manager, "autoBuyEnabled")).FirstOrDefault(value => value is not null);
+        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType)
+            .OfType<Component>()
+            .Where(manager => manager.gameObject.activeInHierarchy)
+            .Select(manager => Read(manager, "autoBuyEnabled"))
+            .FirstOrDefault(value => value is not null);
         if (autoBuyEnabled is null) return false;
-        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
+        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => c.gameObject.activeInHierarchy && ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
         var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
         root.name = "OrbAutomata.AutoBuyToggle";
@@ -46,7 +50,10 @@ internal sealed class AutoBuyToggleButton : IDisposable
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
         result = new AutoBuyToggleButton(root, button, text, control);
-        button.onClick.AddListener(result.Toggle); result.Render(); return true;
+        button.onClick.AddListener(result.Toggle); result.Render();
+        var rect = root.transform as RectTransform;
+        Plugin.Log.LogInfo($"Auto Buy toggle installed: AnchoredPosition=({rect?.anchoredPosition.x:0.##},{rect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
+        return true;
     }
     public void Render()
     {

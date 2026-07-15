@@ -27,12 +27,14 @@ internal sealed class MentorToggleButton : IDisposable
         var managerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
         if (toggleType is null || managerType is null) return false;
         var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType)
+            .OfType<Component>()
+            .Where(manager => manager.gameObject.activeInHierarchy)
             .Select(manager => Read(manager, "autoBuyEnabled"))
             .FirstOrDefault(value => value is not null);
         if (autoBuyEnabled is null) return false;
         var native = Resources.FindObjectsOfTypeAll(toggleType)
             .OfType<Component>()
-            .FirstOrDefault(component => ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
+            .FirstOrDefault(component => component.gameObject.activeInHierarchy && ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
         var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
         root.name = "OrbMentor.Toggle";
@@ -73,6 +75,8 @@ internal sealed class MentorToggleButton : IDisposable
         result = new MentorToggleButton(root, button, text, icon, config, runtime);
         button.onClick.AddListener(result.Toggle);
         result.Render();
+        var installedRect = root.transform as RectTransform;
+        Plugin.Log.LogInfo($"Mentor toggle installed: AnchoredPosition=({installedRect?.anchoredPosition.x:0.##},{installedRect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
         return true;
     }
 

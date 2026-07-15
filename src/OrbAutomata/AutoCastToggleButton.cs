@@ -74,6 +74,8 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
 
         var autoBuyEnabled = Resources.FindObjectsOfTypeAll(autoBuyManagerType)
+            .OfType<Component>()
+            .Where(manager => manager.gameObject.activeInHierarchy)
             .Select(manager => ReadField(manager, "autoBuyEnabled"))
             .FirstOrDefault(variable => variable is not null);
         if (autoBuyEnabled is null)
@@ -84,7 +86,7 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         var nativeToggle = Resources.FindObjectsOfTypeAll(nativeToggleType)
             .OfType<Component>()
-            .FirstOrDefault(component => ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
+            .FirstOrDefault(component => component.gameObject.activeInHierarchy && ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
         if (nativeToggle is null || nativeToggle.transform.parent is null)
         {
             reason = "native Auto Buy queue switch is not initialized";
