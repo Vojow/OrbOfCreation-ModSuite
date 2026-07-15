@@ -24,6 +24,34 @@ public class SpellRecipeSO
     public string GetName() => "Spell";
 }
 
+public interface ITooltipable
+{
+    string GetName();
+    string GetDisplayType();
+    UnityEngine.Sprite GetIcon();
+    UnityEngine.Color GetColor();
+    bool IsColoredIcon();
+    bool HasAltTooltips();
+    string GetDescription();
+    List<TooltipNode> GetTooltipNodes();
+    List<TooltipNode> GetAltTooltipNodes();
+}
+
+public class TooltipableObject : UnityEngine.ScriptableObject { }
+
+public class TooltipNode
+{
+    public TooltipNode(string text) { }
+    public TooltipNode(string text, UnityEngine.Color color) { }
+}
+
+public class HoverTooltip : UnityEngine.MonoBehaviour
+{
+    public ITooltipable? tooltipItem;
+    public TooltipableObject? setupObject;
+    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null) { tooltipItem = item; }
+}
+
 namespace BepInEx
 {
     [AttributeUsage(AttributeTargets.Class)]

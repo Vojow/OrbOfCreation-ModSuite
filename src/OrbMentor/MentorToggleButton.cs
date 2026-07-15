@@ -35,6 +35,7 @@ internal sealed class MentorToggleButton : IDisposable
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
+        var hoverTooltip = root.GetComponent<HoverTooltip>();
         if (icon is not null)
         {
             icon.sprite = null;
@@ -47,6 +48,11 @@ internal sealed class MentorToggleButton : IDisposable
         }
         if (cloned is Behaviour behaviour) behaviour.enabled = false;
         if (cloned is not null) UnityEngine.Object.Destroy(cloned);
+        if (hoverTooltip is not null)
+        {
+            hoverTooltip.setupObject = null;
+            hoverTooltip.Setup(new MentorTooltip(config, runtime));
+        }
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
