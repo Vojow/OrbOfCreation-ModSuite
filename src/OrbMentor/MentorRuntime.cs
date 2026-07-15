@@ -17,6 +17,8 @@ internal sealed class MentorRuntime
         public readonly MentorEngine Engine = new();
         public MentorAmount FrameXp;
         public long NextDistributionTimestamp;
+        public long NextSummaryTimestamp;
+        public string MentorSummary = "None";
     }
 
     private const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -25,6 +27,7 @@ internal sealed class MentorRuntime
     private readonly Dictionary<MentorDomain, DomainState> _domains = Enum.GetValues(typeof(MentorDomain)).Cast<MentorDomain>().ToDictionary(d => d, _ => new DomainState());
     private readonly Dictionary<MentorDomain, MentorRecipe[]> _catalogCache = new();
     private static readonly long ContinuousDistributionTicks = Math.Max(1, Stopwatch.Frequency / 4);
+    private static readonly long SummaryRefreshTicks = Math.Max(1, Stopwatch.Frequency);
     private bool _guarded;
     private int _nextDomain;
     private string? _blockedReason;
@@ -33,6 +36,29 @@ internal sealed class MentorRuntime
     public MentorRuntime(MentorConfig config, ManualLogSource log) { _config = config; _log = log; }
     public string? BlockedReason => _blockedReason;
     public bool IsBlocked => _blockedReason is not null;
+
+    public string CurrentMentor(MentorDomain domain)
+    {
+        var state = _domains[domain];
+        var now = Stopwatch.GetTimestamp();
+        if (now < state.NextSummaryTimestamp) return state.MentorSummary;
+        state.NextSummaryTimestamp = now + SummaryRefreshTicks;
+        if (!TryCatalog(domain, out var catalog)) return state.MentorSummary = "Unavailable";
+        var eligible = catalog.Where(recipe => recipe.IsDiscovered).ToArray();
+        if (eligible.Length == 0) return state.MentorSummary = "None";
+        var highest = eligible.Max(recipe => recipe.MasteryLevel);
+        var mentorIds = eligible.Where(recipe => recipe.MasteryLevel == highest).Select(recipe => recipe.Uuid).ToArray();
+        var names = mentorIds.Select(id => Resolve(domain, id)).Where(item => item is not null).Select(item => SafeName(item!)).ToArray();
+        return state.MentorSummary = FormatMentorSummary(names, highest, mentorIds.Length);
+    }
+
+    internal static string FormatMentorSummary(IReadOnlyList<string> names, int mastery, int total)
+    {
+        if (names.Count == 0) return "None";
+        var shown = names.Take(3).ToArray();
+        var extra = Math.Max(0, total - shown.Length);
+        return $"{string.Join(", ", shown)}{(extra > 0 ? $" +{extra}" : string.Empty)} (Lv {mastery})";
+    }
 
     public string StatusText()
     {

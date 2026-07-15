@@ -22,10 +22,9 @@ internal sealed class MentorTooltip : ITooltipable
         {
             new TooltipNode($"State: {GetDisplayType()}", GetColor()),
             new TooltipNode($"Economy: {_config.EconomyMode.Value}"),
-            new TooltipNode($"Spells: {_config.SharePercent.Value:0.##}%"),
-            new TooltipNode(_config.ArtifactsEnabled.Value ? $"Artifacts: {_config.ArtifactSharePercent.Value:0.##}%" : "Artifacts: OFF"),
-            new TooltipNode(_config.AlchemyEnabled.Value ? $"Alchemy: {_config.AlchemySharePercent.Value:0.##}%" : "Alchemy: OFF"),
-            new TooltipNode(_runtime.StatusText()),
+            new TooltipNode($"Spells {_config.SharePercent.Value:0.##}% | Mentor: {_runtime.CurrentMentor(MentorDomain.Spells)}"),
+            new TooltipNode($"Artifacts {(_config.ArtifactsEnabled.Value ? $"{_config.ArtifactSharePercent.Value:0.##}%" : "OFF")} | Mentor: {_runtime.CurrentMentor(MentorDomain.Artifacts)}"),
+            new TooltipNode($"Alchemy {(_config.AlchemyEnabled.Value ? $"{_config.AlchemySharePercent.Value:0.##}%" : "OFF")} | Mentor: {_runtime.CurrentMentor(MentorDomain.Alchemy)}"),
             new TooltipNode("Click or press Alt+M to toggle."),
         };
         if (_runtime.IsBlocked) nodes.Add(new TooltipNode($"Blocked: {_runtime.BlockedReason}", new Color(1, .3f, .25f)));

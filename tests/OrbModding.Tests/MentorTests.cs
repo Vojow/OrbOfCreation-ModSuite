@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using OrbMentor;
 using Xunit;
@@ -138,6 +139,14 @@ public sealed class MentorTests
         Assert.False(MentorRuntime.DistributionDue(124, ref next, 25));
         Assert.True(MentorRuntime.DistributionDue(125, ref next, 25));
         Assert.Equal(150, next);
+    }
+
+    [Fact]
+    public void MentorSummaryShowsTiesLevelsAndOverflow()
+    {
+        Assert.Equal("Analyze Nature, Study Magic, Transmute Magic +2 (Lv 92)",
+            MentorRuntime.FormatMentorSummary(new[] { "Analyze Nature", "Study Magic", "Transmute Magic", "Fourth", "Fifth" }, 92, 5));
+        Assert.Equal("None", MentorRuntime.FormatMentorSummary(Array.Empty<string>(), 0, 0));
     }
 
     [Fact]
