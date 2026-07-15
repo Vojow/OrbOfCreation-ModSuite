@@ -73,11 +73,16 @@ internal sealed class ModConfigUiShell : IDisposable
             .Where(component => NavigationProbe.BuildObjectPath(component)
                 .IndexOf("MainContentContainer/TopBar/ViewRadio", StringComparison.OrdinalIgnoreCase) >= 0)
             .ToArray();
-        var timeButton = nativeButtons.FirstOrDefault(component =>
-            string.Equals(NavigationProbe.ReadViewLabel(component), "Time", StringComparison.OrdinalIgnoreCase));
-        if (timeButton is null)
+        var cloneSource = nativeButtons
+            .Where(component => component.gameObject.activeInHierarchy)
+            .OrderBy(component => component.transform.GetSiblingIndex())
+            .LastOrDefault()
+            ?? nativeButtons
+                .OrderBy(component => component.transform.GetSiblingIndex())
+                .LastOrDefault();
+        if (cloneSource is null)
         {
-            reason = "native Time top-bar button unavailable";
+            reason = "native top-bar button unavailable";
             return false;
         }
 
@@ -88,10 +93,10 @@ internal sealed class ModConfigUiShell : IDisposable
             return false;
         }
 
-        var buttonParent = timeButton.transform.parent;
+        var buttonParent = cloneSource.transform.parent;
         if (buttonParent is null)
         {
-            reason = "native Time button has no parent";
+            reason = "native top-bar button has no parent";
             return false;
         }
 
@@ -104,19 +109,20 @@ internal sealed class ModConfigUiShell : IDisposable
         try
         {
             // RenderContent swaps the root image between these two sprites.
-            // Cloning Time while it is active otherwise permanently copies its
+            // Cloning an active native tab otherwise permanently copies its
             // highlighted sprite after UIViewRadioButton is removed.
-            var inactiveSprite = ReadSpriteField(timeButton, "baseImage");
-            var activeSprite = ReadSpriteField(timeButton, "activeImage");
+            var inactiveSprite = ReadSpriteField(cloneSource, "baseImage");
+            var activeSprite = ReadSpriteField(cloneSource, "activeImage");
             var nativeViews = nativeButtons
                 .Select(ReadNativeView)
                 .Where(view => view is not null)
                 .Cast<object>()
                 .Distinct()
                 .ToArray();
-            buttonObject = UnityEngine.Object.Instantiate(timeButton.gameObject, buttonParent, false);
+            buttonObject = UnityEngine.Object.Instantiate(cloneSource.gameObject, buttonParent, false);
             buttonObject.name = ButtonObjectName;
-            buttonObject.transform.SetSiblingIndex(timeButton.transform.GetSiblingIndex() + 1);
+            buttonObject.SetActive(true);
+            buttonObject.transform.SetSiblingIndex(buttonParent.childCount - 1);
 
             var clonedGameComponent = buttonObject.GetComponent(buttonType);
             if (clonedGameComponent is Behaviour clonedBehaviour)
@@ -143,7 +149,7 @@ internal sealed class ModConfigUiShell : IDisposable
             var button = buttonObject.GetComponent<Button>();
             if (button is null)
             {
-                reason = "cloned Time object has no Unity Button";
+                reason = "cloned top-bar object has no Unity Button";
                 UnityEngine.Object.Destroy(buttonObject);
                 return false;
             }
@@ -152,7 +158,7 @@ internal sealed class ModConfigUiShell : IDisposable
             var label = buttonObject.GetComponentInChildren<TextMeshProUGUI>(true);
             if (label is null)
             {
-                reason = "cloned Time button has no TextMeshPro label";
+                reason = "cloned top-bar button has no TextMeshPro label";
                 UnityEngine.Object.Destroy(buttonObject);
                 return false;
             }
@@ -214,6 +220,15 @@ internal sealed class ModConfigUiShell : IDisposable
     public void Toggle()
     {
         SetOpen(!_open, restorePreviousNativeView: _open);
+    }
+
+    public void EnsureButtonIsLast()
+    {
+        if (!_disposed && _buttonObject.transform.parent is { } parent &&
+            _buttonObject.transform.GetSiblingIndex() != parent.childCount - 1)
+        {
+            _buttonObject.transform.SetSiblingIndex(parent.childCount - 1);
+        }
     }
 
     public void Close()
