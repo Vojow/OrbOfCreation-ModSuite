@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add the Orb Mentor 0.1.0 spells-only MVP with native mastery grants, guarded recursion suppression, Shared Pool and Per Recipient economies, bounded frame processing, `Alt+M`, status control, live typed configuration, installed-game contracts, portable tests, and packaging support.
+- Keep the logging probe development-only and fresh installations disabled.
+
 All notable user-facing changes are documented here. The project follows semantic versioning per plugin while the suite remains in beta.
 
 ## Unreleased

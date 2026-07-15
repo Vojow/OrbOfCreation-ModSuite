@@ -15,6 +15,10 @@ $OOC_GAME_DIR/
 
 Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally small and must not grow into a shared gameplay framework until duplicated implementation pressure proves it is worth extracting.
 
+## Orb Mentor
+
+`OrbMentor` is the spells-only mastery-sharing plugin. Its pure engine is covered by the portable suite; production builds hook the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary and fail closed on contract or lifecycle errors.
+
 ## Achievement Resonance
 
 Native mutation is guarded by `General.ApplyNativeEffectBlocks=false`. The exact target, script-list, `BigDouble`, stable-GUID, and capped-refresh contracts are now verified statically and by tests. Use the default mode for the read-only load probe, then enable only the global-speed slice for isolated gameplay validation.
