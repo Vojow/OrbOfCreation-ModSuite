@@ -20,13 +20,6 @@ public sealed class AutoCastTests
     }
 
     [Fact]
-    public void TogglePlacementLeavesTwelvePixelGapLeftOfNativeControl()
-    {
-        Assert.Equal(-62.0f, AutoCastToggleButton.CalculateLeftX(0.0f, 50.0f));
-        Assert.Equal(-56.0f, AutoCastToggleButton.CalculateLeftX(0.0f, 0.0f));
-    }
-
-    [Fact]
     public void ToggleSwitchesBetweenDisabledAndActive()
     {
         var config = AutomataConfig.Bind(new ConfigFile());

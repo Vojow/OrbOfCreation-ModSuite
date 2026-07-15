@@ -4,7 +4,7 @@
     <RootNamespace>OrbMentor</RootNamespace>
     <Version>0.1.0</Version>
     <RequireGameReferences>true</RequireGameReferences>
-    <Description>Native spell-mastery catch-up for Orb Of Creation.</Description>
+    <Description>Native spell, artifact, and alchemy mastery catch-up for Orb Of Creation.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\OrbModding.Common\OrbModding.Common.csproj" />

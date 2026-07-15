@@ -12,8 +12,6 @@ namespace OrbAutomata;
 internal sealed class AutoCastToggleButton : IDisposable
 {
     internal const string ObjectName = "OrbAutomata.AutoCastToggle";
-    internal const float HorizontalGap = 12.0f;
-
     private static readonly Color OffColor = new Color(0.55f, 0.55f, 0.55f, 1.0f);
     private static readonly Color OnColor = new Color(0.4f, 1.0f, 0.55f, 1.0f);
     private static readonly Color BlockedColor = new Color(1.0f, 0.35f, 0.3f, 1.0f);
@@ -371,41 +369,6 @@ internal sealed class AutoCastToggleButton : IDisposable
         !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
         component.gameObject.name != "OrbMentor.Toggle" &&
         component.transform.parent?.name != StatusControlGroup.ObjectName;
-
-    private static void PositionLeftOfNativeToggle(GameObject clone, GameObject native)
-    {
-        if (clone.transform is not RectTransform cloneRect || native.transform is not RectTransform nativeRect)
-        {
-            return;
-        }
-
-        var renderedWidth = Math.Abs(nativeRect.rect.width);
-        if (renderedWidth < 1.0f)
-        {
-            renderedWidth = Math.Abs(nativeRect.sizeDelta.x);
-        }
-
-        if (renderedWidth < 1.0f)
-        {
-            renderedWidth = 44.0f;
-        }
-
-        cloneRect.anchoredPosition = new Vector2(
-            nativeRect.anchoredPosition.x - 2.0f * (renderedWidth + HorizontalGap),
-            nativeRect.anchoredPosition.y);
-    }
-
-
-    internal static float CalculateLeftX(float nativeX, float renderedWidth)
-    {
-        var width = Math.Abs(renderedWidth);
-        if (width < 1.0f)
-        {
-            width = 44.0f;
-        }
-
-        return nativeX - width - HorizontalGap;
-    }
 
     private static Sprite? FindEquippedSpellIcon(out string source)
     {
