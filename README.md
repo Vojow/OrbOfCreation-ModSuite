@@ -69,6 +69,8 @@ Orb of Creation/
             `-- OrbModding.Common.dll
 ```
 
+Release ZIPs use portable `/` entry separators and can be extracted directly on Windows, SteamOS, or Bazzite. If an older archive creates root-level filenames containing `BepInEx\plugins`, delete those files and download a corrected archive.
+
 `OrbAutomata.dll` is the gameplay plugin. `OrbModConfig.dll` provides the optional in-game **Mods** tab. `OrbModding.Common.dll` is required. Keep only one copy of each DLL.
 
 After starting the game, `BepInEx/LogOutput.log` should list Orb Automata and Orb Mod Config once each without missing-dependency errors. Auto Buy defaults to Active with 100× affordability thresholds; Auto Cast defaults to Disabled.

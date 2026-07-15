@@ -6,6 +6,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'portable-zip.ps1')
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { $OutputDirectory = Join-Path $root 'artifacts/releases' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $artifacts = [IO.Path]::GetFullPath((Join-Path $root 'artifacts'))
@@ -31,7 +32,7 @@ if ($IncludeCompleteSuite) {
     }
 }
 foreach ($file in @('README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md')) { Copy-Item (Join-Path $root $file) $stage }
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+New-PortableZip -SourceDirectory $stage -DestinationPath $zip
 $hashes = Get-ChildItem -Recurse -File $stage | ForEach-Object { $h = Get-FileHash -Algorithm SHA256 $_.FullName; "$($h.Hash.ToLowerInvariant())  $($_.Name)" }
 $hashes += "$( (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant())  $(Split-Path $zip -Leaf)"
 $hashes | Set-Content (Join-Path $OutputDirectory "$name-SHA256SUMS.txt") -Encoding utf8
