@@ -217,6 +217,41 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void OrbMentorAlchemy_MatchesNativeMasteryContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+        Assert.Equal("System.Collections.Generic.List`1<AlchemyRecipeSO>", assembly.GetFieldType("AlchemyRecipeSO", "All"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO", "masteryXp"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
+        AssertMethod(assembly, "AlchemyRecipeSO", "GainMasteryXp", false, "System.Void", "BigDouble");
+        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
+        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
+        AssertMethod(assembly, "AlchemyInstance", "CompleteRecipe", false, "System.Void");
+        Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryXp"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryLevel"));
+    }
+
+    [GameAssemblyFact]
+    public void OrbMentorArtifacts_MatchNativeProgressionSequence()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+        Assert.Equal("System.Collections.Generic.List`1<EquipmentSO>", assembly.GetFieldType("EquipmentSO", "All"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO", "masteryXp"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO", "masteryLevel"));
+        Assert.Equal("ExperienceContainer", assembly.GetFieldType("EquipmentSO", "experienceContainer"));
+        AssertMethod(assembly, "EquipmentSO", "IncrementActive", false, "System.Void", "System.Double");
+        AssertMethod(assembly, "EquipmentSO", "GainMasteryLevels", false, "System.Void", "System.Int32");
+        AssertMethod(assembly, "EquipmentSO", "GetExperienceElement", false, "IExperienceElement");
+        AssertMethod(assembly, "EquipmentSO", "IsCreated", false, "System.Boolean");
+        AssertMethod(assembly, "ExperienceContainer", "GainExperience", false, "System.Void", "BigDouble");
+        AssertMethod(assembly, "ExperienceContainer", "GetGainedLevels", false, "System.Int32");
+        AssertMethod(assembly, "ExperienceContainer", "GetExperience", false, "BigDouble");
+        AssertMethod(assembly, "ExperienceContainer", "GetLevel", false, "System.Int32");
+        Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mXp"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mLv"));
+    }
+
+    [GameAssemblyFact]
     public void ModConfigNavigation_MatchesKnownNativeLayout()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

@@ -6,6 +6,24 @@ namespace OrbModding.Tests;
 
 public sealed class MentorTests
 {
+    private sealed class FakeArtifactContainer
+    {
+        public global::BigDouble Received;
+        public void GainExperience(global::BigDouble xp) => Received = xp;
+        public int GetGainedLevels() => 2;
+        public global::BigDouble GetExperience() => new(3.0, 4);
+    }
+
+    private sealed class FakeArtifact
+    {
+        private readonly FakeArtifactContainer container = new();
+        public global::BigDouble masteryXp = default;
+        public int masteryLevel;
+        public object GetExperienceElement() => container;
+        private void GainMasteryLevels(int levels) => masteryLevel += levels;
+        public FakeArtifactContainer Container => container;
+    }
+
     private static readonly MentorRecipe Mentor = new("mentor", 5, true);
     private static readonly MentorRecipe[] Recipes =
     {
@@ -60,5 +78,30 @@ public sealed class MentorTests
         engine.Consolidate(new[] { new MentorGrant("x", new MentorAmount(1, 1)) });
         engine.Cancel();
         Assert.Equal(0, engine.PendingCount);
+    }
+
+    [Fact]
+    public void ArtifactAdapterCompletesNativeContainerLevelAndSaveSequence()
+    {
+        var artifact = new FakeArtifact();
+
+        MentorRuntime.GrantArtifact(artifact, new global::BigDouble(7.0, 8));
+
+        Assert.Equal(7.0, artifact.Container.Received.mantissa);
+        Assert.Equal(8, artifact.Container.Received.exponent);
+        Assert.Equal(2, artifact.masteryLevel);
+        Assert.Equal(3.0, artifact.masteryXp.mantissa);
+        Assert.Equal(4, artifact.masteryXp.exponent);
+    }
+
+    [Fact]
+    public void NewProgressionDomainsStartDisabledWithTenPercentShares()
+    {
+        var config = MentorConfig.Bind(new BepInEx.Configuration.ConfigFile());
+
+        Assert.False(config.ArtifactsEnabled.Value);
+        Assert.Equal(10.0, config.ArtifactSharePercent.Value);
+        Assert.False(config.AlchemyEnabled.Value);
+        Assert.Equal(10.0, config.AlchemySharePercent.Value);
     }
 }

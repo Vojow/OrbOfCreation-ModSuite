@@ -15,4 +15,20 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 - Repeat at accelerated Chronomancer speeds and with/without Automata, Orb Mod Config, and Achievement Resonance.
 - Confirm normal logs remain quiet and detailed logs identify source, batch, recipient UUID, and amount when enabled.
 
+## Alchemy extension
+
+- Enable only the Alchemy domain and confirm continuous active-recipe XP is observed once at the exact native amount.
+- Complete a recipe, including a multi-completion batch, and confirm the final multiplied completion XP is shared once.
+- Verify only discovered lower-mastery recipes receive XP and native automatic mastery/type progression occurs once.
+- Confirm Mentor grants do not change active instances, quantities, recipe time, advancement, costs, or completion effects.
+
+## Artifact extension
+
+- Enable only the Artifacts domain and confirm only equipped, fully attuned artifacts create mentor events.
+- Confirm unequipped, attuning, and merely created artifacts do not create source XP events.
+- Verify created lower-mastery artifacts can receive XP without being equipped, created, attuned, or charged usage costs by Mentor.
+- Cross one and several mastery thresholds; compare recipient XP, mastery level, total equipment mastery, sounds/logs, and saved values with native equipped progression.
+- Confirm Mentor does not change loadout membership, stack quantity, attunement, effects, slots, costs, or creation state.
+- Run spells, artifacts, and alchemy together and confirm the round-robin worker prevents any domain from starving.
+
 Do not call the beta production-ready until every applicable item has runtime evidence.

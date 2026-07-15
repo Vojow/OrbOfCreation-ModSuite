@@ -15,14 +15,16 @@ internal sealed class MentorTooltip : ITooltipable
     public Color GetColor() => _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
-    public string GetDescription() => "Highest-mastery spells share final native mastery XP with discovered lower-mastery spells.";
+    public string GetDescription() => "Highest-mastery spells, equipped artifacts, and active alchemy recipes can mentor lower-mastery discoveries in their own domain.";
     public List<TooltipNode> GetTooltipNodes()
     {
         var nodes = new List<TooltipNode>
         {
             new TooltipNode($"State: {GetDisplayType()}", GetColor()),
             new TooltipNode($"Economy: {_config.EconomyMode.Value}"),
-            new TooltipNode($"Share: {_config.SharePercent.Value:0.##}%"),
+            new TooltipNode($"Spells: {_config.SharePercent.Value:0.##}%"),
+            new TooltipNode(_config.ArtifactsEnabled.Value ? $"Artifacts: {_config.ArtifactSharePercent.Value:0.##}%" : "Artifacts: OFF"),
+            new TooltipNode(_config.AlchemyEnabled.Value ? $"Alchemy: {_config.AlchemySharePercent.Value:0.##}%" : "Alchemy: OFF"),
             new TooltipNode(_runtime.StatusText()),
             new TooltipNode("Click or press Alt+M to toggle."),
         };

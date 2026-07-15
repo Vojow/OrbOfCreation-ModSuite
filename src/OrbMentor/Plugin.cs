@@ -34,6 +34,10 @@ public sealed class Plugin : BaseUnityPlugin
         if (target is null) { Logger.LogError("Orb Mentor blocked: native GainMasteryExp hook unavailable."); return; }
         _harmony = new Harmony(PluginIds.MentorGuid);
         _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain)));
+        PatchOptional("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), postfix: true);
+        PatchOptional("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), postfix: false);
+        PatchFinalizer("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick));
+        PatchOptional("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), postfix: false);
         SceneManager.activeSceneChanged += OnSceneChanged;
         Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
     }
@@ -57,6 +61,23 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void LateUpdate() => _runtime?.LateTick();
     private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp) => Instance?._runtime?.Observe(__instance, exp);
+    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp) => Instance?._runtime?.ObserveAlchemy(__instance, exp);
+    private static void BeforeArtifactTick(object __instance) => Instance?._runtime?.BeginArtifactTick(__instance);
+    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(); return __exception; }
+    private static void BeforeContainerGain(object __instance, BigDouble __0) => Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
+    private void PatchOptional(string targetName, string patchName, bool postfix)
+    {
+        var target = AccessTools.Method(targetName);
+        if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
+        var patch = new HarmonyMethod(typeof(Plugin), patchName);
+        if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
+    }
+    private void PatchFinalizer(string targetName, string patchName)
+    {
+        var target = AccessTools.Method(targetName);
+        if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
+        _harmony!.Patch(target, finalizer: new HarmonyMethod(typeof(Plugin), patchName));
+    }
     private void OnSceneChanged(Scene previous, Scene next) { _runtime?.Cancel(); _runtime?.ClearBlock(); }
     private void OnDestroy()
     {

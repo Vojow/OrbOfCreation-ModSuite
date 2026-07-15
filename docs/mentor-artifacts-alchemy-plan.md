@@ -134,3 +134,7 @@ Test all three domains independently and together at normal and Chronomancer spe
 - Whether artifact sharing can safely include created but never-equipped recipients depends on adapter initialization evidence.
 - Whether continuous alchemy/artifact event volume needs time-window aggregation beyond the existing per-frame accumulator depends on runtime profiling.
 - Domain percentages may initially share the spells default of 10%; changing that default requires balance evidence, not API evidence.
+
+## Implementation status
+
+The first development build now includes independent Alchemy and Artifacts switches, guarded hooks, per-domain frame aggregation and queues, round-robin budgeting, alchemy native grants, and the artifact native-sequence adapter. Both new domains default disabled. Automated contracts and adapter tests are required before installation, and the interactive gates above remain mandatory before either domain is described as production-ready.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -7,131 +8,191 @@ using BepInEx.Logging;
 
 namespace OrbMentor;
 
+internal enum MentorDomain { Spells, Artifacts, Alchemy }
+
 internal sealed class MentorRuntime
 {
+    private sealed class DomainState
+    {
+        public readonly MentorEngine Engine = new();
+        public MentorAmount FrameXp;
+    }
+
+    private const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
     private readonly MentorConfig _config;
     private readonly ManualLogSource _log;
-    private readonly MentorEngine _engine = new();
-    private MentorAmount _frameXp;
+    private readonly Dictionary<MentorDomain, DomainState> _domains = Enum.GetValues(typeof(MentorDomain)).Cast<MentorDomain>().ToDictionary(d => d, _ => new DomainState());
     private bool _guarded;
+    private int _nextDomain;
     private string? _blockedReason;
+    private object? _activeArtifact;
 
     public MentorRuntime(MentorConfig config, ManualLogSource log) { _config = config; _log = log; }
     public string? BlockedReason => _blockedReason;
     public bool IsBlocked => _blockedReason is not null;
+
     public string StatusText()
     {
-        if (!TryCatalog(out var catalog)) return _blockedReason ?? "catalog unavailable";
-        var discovered = catalog.Where(r => r.IsDiscovered).ToArray();
-        var highest = discovered.Select(r => r.MasteryLevel).DefaultIfEmpty().Max();
-        var mentorIds = discovered.Where(r => r.MasteryLevel == highest).Select(r => r.Uuid).ToArray();
-        var names = SpellRecipeSO.All.Where(r => r is not null && mentorIds.Contains(StableId(r))).Select(SafeName).Take(4).ToArray();
-        var recipients = discovered.Count(r => r.MasteryLevel < highest);
+        var parts = new List<string> { $"Spells {_config.SharePercent.Value:0.##}%" };
+        parts.Add(_config.ArtifactsEnabled.Value ? $"Artifacts {_config.ArtifactSharePercent.Value:0.##}%" : "Artifacts off");
+        parts.Add(_config.AlchemyEnabled.Value ? $"Alchemy {_config.AlchemySharePercent.Value:0.##}%" : "Alchemy off");
         var warning = _config.EconomyMode.Value == MentorEconomyMode.PerRecipient ? " Warning: total bonus scales with recipient count." : string.Empty;
-        return $"{_config.EconomyMode.Value}, {_config.SharePercent.Value:0.##}%. Mentors ({mentorIds.Length}): {string.Join(", ", names)}. Eligible recipients: {recipients}.{warning}";
+        return $"{_config.EconomyMode.Value}. {string.Join("; ", parts)}.{warning}";
     }
 
-    public void Observe(SpellRecipeSO source, BigDouble xp)
+    public void Observe(SpellRecipeSO source, BigDouble xp) => ObserveDomain(MentorDomain.Spells, source, xp);
+    public void ObserveAlchemy(object source, BigDouble xp)
+    {
+        if (_config.AlchemyEnabled.Value) ObserveDomain(MentorDomain.Alchemy, source, xp);
+    }
+
+    public void BeginArtifactTick(object source) => _activeArtifact = _guarded ? null : source;
+    public void EndArtifactTick() => _activeArtifact = null;
+    public void ObserveExperienceContainer(object container, BigDouble xp)
+    {
+        if (!_config.ArtifactsEnabled.Value || _activeArtifact is null || _guarded) return;
+        var owned = Invoke(_activeArtifact, "GetExperienceElement");
+        if (owned is not null && ReferenceEquals(owned, container)) ObserveDomain(MentorDomain.Artifacts, _activeArtifact, xp);
+    }
+
+    private void ObserveDomain(MentorDomain domain, object source, BigDouble xp)
     {
         if (_guarded || !_config.Active || !TryAmount(xp, out var amount)) return;
-        if (!TryCatalog(out var catalog)) return;
+        if (!TryCatalog(domain, out var catalog)) return;
         var sourceId = StableId(source);
-        if (sourceId is null) { Block("source recipe has no stable UUID"); return; }
-        var recipients = _engine.EligibleRecipients(sourceId, catalog);
-        if (recipients.Count == 0) return;
-        _frameXp = _frameXp.Add(amount);
+        if (sourceId is null) { Block($"{domain} source has no stable UUID"); return; }
+        if (_domains[domain].Engine.EligibleRecipients(sourceId, catalog).Count == 0) return;
+        _domains[domain].FrameXp = _domains[domain].FrameXp.Add(amount);
 #if DEBUG
-        if (_config.DevelopmentProbeEnabled)
-            _log.LogInfo($"Mentor probe: source={sourceId} name={SafeName(source)} xp={amount.Mantissa}e{amount.Exponent} mastery={source.masteryLevel} ready={source.IsReadyToLevelMastery()}");
+        if (_config.DevelopmentProbeEnabled) _log.LogInfo($"Mentor {domain} probe: source={sourceId} xp={amount.Mantissa}e{amount.Exponent}");
 #endif
     }
 
     public void LateTick()
     {
         if (!_config.Active || IsBlocked) { Cancel(); return; }
-        if (_frameXp.IsValidPositive)
-        {
-            if (TryCatalog(out var catalog))
-            {
-                var highest = catalog.Where(r => r.IsDiscovered).Select(r => r.MasteryLevel).DefaultIfEmpty().Max();
-                var recipients = catalog.Where(r => r.IsDiscovered && r.MasteryLevel < highest).OrderBy(r => r.Uuid, StringComparer.Ordinal).ToArray();
-                var grants = _engine.Plan(_frameXp, _config.SharePercent.Value, _config.EconomyMode.Value, recipients);
-                _engine.Consolidate(grants);
-                if (_config.DetailedLogging.Value && grants.Count > 0) _log.LogInfo($"Mentor batch: recipients={grants.Count}, mode={_config.EconomyMode.Value}, share={_config.SharePercent.Value:0.##}%");
-            }
-            _frameXp = default;
-        }
+        PlanDomain(MentorDomain.Spells, _config.SharePercent.Value);
+        if (_config.ArtifactsEnabled.Value) PlanDomain(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value); else CancelDomain(MentorDomain.Artifacts);
+        if (_config.AlchemyEnabled.Value) PlanDomain(MentorDomain.Alchemy, _config.AlchemySharePercent.Value); else CancelDomain(MentorDomain.Alchemy);
 
         var timer = Stopwatch.StartNew();
-        for (var operation = 0; operation < _config.OperationsPerFrame.Value; operation++)
+        var domains = new[] { MentorDomain.Spells, MentorDomain.Artifacts, MentorDomain.Alchemy };
+        var operation = 0;
+        var emptyChecks = 0;
+        while (operation < _config.OperationsPerFrame.Value && timer.Elapsed.TotalMilliseconds < _config.CpuBudgetMilliseconds.Value && emptyChecks < domains.Length)
         {
-            if (timer.Elapsed.TotalMilliseconds >= _config.CpuBudgetMilliseconds.Value) break;
-            var grants = _engine.Take(1);
-            if (grants.Count == 0) break;
-            var grant = grants[0];
-            var recipient = Resolve(grant.Uuid);
-            if (recipient is null || !recipient.IsDiscovered()) continue;
-            var highest = SpellRecipeSO.All.Where(r => r is not null && r.IsDiscovered()).Select(r => r.masteryLevel).DefaultIfEmpty().Max();
-            if (recipient.masteryLevel >= highest) continue;
-            try
+            var domain = domains[_nextDomain++ % domains.Length];
+            var grants = _domains[domain].Engine.Take(1);
+            if (grants.Count == 0)
             {
-                _guarded = true;
-                recipient.GainMasteryExp(new BigDouble(grant.Amount.Mantissa, grant.Amount.Exponent));
-                if (_config.DetailedLogging.Value) _log.LogInfo($"Mentor grant: recipient={grant.Uuid} amount={grant.Amount.Mantissa}e{grant.Amount.Exponent}");
+                emptyChecks++;
+                continue;
             }
-            catch (Exception ex) { Block($"native mastery grant failed: {ex.GetBaseException().Message}"); }
-            finally { _guarded = false; }
+            emptyChecks = 0;
+            operation++;
+            Grant(domain, grants[0]);
         }
     }
 
-    public void Cancel() { _frameXp = default; _engine.Cancel(); }
+    private void PlanDomain(MentorDomain domain, double percent)
+    {
+        var state = _domains[domain];
+        if (!state.FrameXp.IsValidPositive) return;
+        if (TryCatalog(domain, out var catalog))
+        {
+            var highest = catalog.Where(r => r.IsDiscovered).Select(r => r.MasteryLevel).DefaultIfEmpty().Max();
+            var recipients = catalog.Where(r => r.IsDiscovered && r.MasteryLevel < highest).OrderBy(r => r.Uuid, StringComparer.Ordinal).ToArray();
+            var grants = state.Engine.Plan(state.FrameXp, percent, _config.EconomyMode.Value, recipients);
+            state.Engine.Consolidate(grants);
+            if (_config.DetailedLogging.Value && grants.Count > 0) _log.LogInfo($"Mentor {domain} batch: recipients={grants.Count}, share={percent:0.##}%");
+        }
+        state.FrameXp = default;
+    }
+
+    private void Grant(MentorDomain domain, MentorGrant grant)
+    {
+        var recipient = Resolve(domain, grant.Uuid);
+        if (recipient is null || !IsDiscovered(domain, recipient)) return;
+        if (!TryCatalog(domain, out var catalog)) return;
+        var highest = catalog.Where(r => r.IsDiscovered).Select(r => r.MasteryLevel).DefaultIfEmpty().Max();
+        if (ReadInt(recipient, MasteryField(domain)) >= highest) return;
+        try
+        {
+            _guarded = true;
+            var value = new BigDouble(grant.Amount.Mantissa, grant.Amount.Exponent);
+            if (domain == MentorDomain.Spells) ((SpellRecipeSO)recipient).GainMasteryExp(value);
+            else if (domain == MentorDomain.Alchemy) InvokeRequired(recipient, "GainMasteryXp", value);
+            else GrantArtifact(recipient, value);
+            if (_config.DetailedLogging.Value) _log.LogInfo($"Mentor {domain} grant: recipient={grant.Uuid} amount={grant.Amount.Mantissa}e{grant.Amount.Exponent}");
+        }
+        catch (Exception ex) { Block($"{domain} native mastery grant failed: {ex.GetBaseException().Message}"); }
+        finally { _guarded = false; }
+    }
+
+    internal static void GrantArtifact(object equipment, BigDouble xp)
+    {
+        var container = Invoke(equipment, "GetExperienceElement") ?? throw new MissingMemberException("artifact experience container unavailable");
+        InvokeRequired(container, "GainExperience", xp);
+        var gained = Convert.ToInt32(InvokeRequired(container, "GetGainedLevels"));
+        if (gained > 0) InvokeRequired(equipment, "GainMasteryLevels", gained);
+        var current = InvokeRequired(container, "GetExperience");
+        var savedXp = FindField(equipment.GetType(), "masteryXp") ?? throw new MissingMemberException("artifact saved mastery XP field unavailable");
+        savedXp.SetValue(equipment, current);
+    }
+
+    public void Cancel() { foreach (var domain in _domains.Keys.ToArray()) CancelDomain(domain); _activeArtifact = null; }
+    private void CancelDomain(MentorDomain domain) { _domains[domain].FrameXp = default; _domains[domain].Engine.Cancel(); }
     public void ClearBlock() => _blockedReason = null;
     private void Block(string reason) { if (_blockedReason == reason) return; _blockedReason = reason; Cancel(); _log.LogError($"Orb Mentor blocked: {reason}"); }
 
-    private bool TryCatalog(out MentorRecipe[] catalog)
+    private bool TryCatalog(MentorDomain domain, out MentorRecipe[] catalog)
     {
-        var list = SpellRecipeSO.All;
-        if (list is null) { catalog = Array.Empty<MentorRecipe>(); Block("SpellRecipeSO.All is unavailable"); return false; }
+        var typeName = domain switch { MentorDomain.Spells => "SpellRecipeSO", MentorDomain.Artifacts => "EquipmentSO", _ => "AlchemyRecipeSO" };
+        var type = Type.GetType(typeName + ", Assembly-CSharp", false);
+        var list = type is null ? null : FindField(type, "All")?.GetValue(null) as IEnumerable;
+        if (list is null) { catalog = Array.Empty<MentorRecipe>(); Block($"{typeName}.All is unavailable"); return false; }
         var result = new List<MentorRecipe>();
-        foreach (var recipe in list.Where(r => r is not null))
+        foreach (var item in list.Cast<object>().Where(x => x is not null))
         {
-            var id = StableId(recipe);
-            if (id is null) { catalog = Array.Empty<MentorRecipe>(); Block("registered recipe has no stable UUID"); return false; }
-            result.Add(new MentorRecipe(id, recipe.masteryLevel, recipe.IsDiscovered()));
+            var id = StableId(item);
+            if (id is null) { catalog = Array.Empty<MentorRecipe>(); Block($"registered {domain} item has no stable UUID"); return false; }
+            result.Add(new MentorRecipe(id, ReadInt(item, MasteryField(domain)), IsDiscovered(domain, item)));
         }
         catalog = result.ToArray();
         return true;
     }
 
-    private static SpellRecipeSO? Resolve(string id) => SpellRecipeSO.All?.FirstOrDefault(r => r is not null && string.Equals(StableId(r), id, StringComparison.Ordinal));
+    private static object? Resolve(MentorDomain domain, string id)
+    {
+        var typeName = domain switch { MentorDomain.Spells => "SpellRecipeSO", MentorDomain.Artifacts => "EquipmentSO", _ => "AlchemyRecipeSO" };
+        var type = Type.GetType(typeName + ", Assembly-CSharp", false);
+        var list = type is null ? null : FindField(type, "All")?.GetValue(null) as IEnumerable;
+        return list?.Cast<object>().FirstOrDefault(item => string.Equals(StableId(item), id, StringComparison.Ordinal));
+    }
+
+    private static string MasteryField(MentorDomain domain) => domain == MentorDomain.Spells ? "masteryLevel" : "masteryLevel";
+    private static bool IsDiscovered(MentorDomain domain, object item) => Convert.ToBoolean(Invoke(item, domain == MentorDomain.Artifacts ? "IsCreated" : "IsDiscovered") ?? false);
+    private static int ReadInt(object item, string name) => Convert.ToInt32(FindField(item.GetType(), name)?.GetValue(item) ?? 0);
+    private static object? Invoke(object instance, string name, params object[] args) => FindMethod(instance.GetType(), name, args.Length)?.Invoke(instance, args);
+    private static object InvokeRequired(object instance, string name, params object[] args) => Invoke(instance, name, args) ?? (FindMethod(instance.GetType(), name, args.Length)?.ReturnType == typeof(void) ? new object() : throw new MissingMemberException(name));
+    private static MethodInfo? FindMethod(Type type, string name, int count) { for (var t = type; t is not null; t = t.BaseType) { var m = t.GetMethods(AllFlags | BindingFlags.DeclaredOnly).FirstOrDefault(x => x.Name == name && x.GetParameters().Length == count); if (m is not null) return m; } return null; }
+    private static FieldInfo? FindField(Type type, string name) { for (var t = type; t is not null; t = t.BaseType) { var f = t.GetField(name, AllFlags | BindingFlags.DeclaredOnly); if (f is not null) return f; } return null; }
+
     private static bool TryAmount(BigDouble value, out MentorAmount amount)
     {
-        const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var boxed = (object)value;
-        var type = boxed.GetType();
-        var mantissa = type.GetField("mantissa", Flags)?.GetValue(boxed);
-        var exponent = type.GetField("exponent", Flags)?.GetValue(boxed);
+        var boxed = (object)value; var type = boxed.GetType();
+        var mantissa = type.GetField("mantissa", AllFlags)?.GetValue(boxed); var exponent = type.GetField("exponent", AllFlags)?.GetValue(boxed);
         if (mantissa is not double m || exponent is not long e) { amount = default; return false; }
-        amount = new MentorAmount(m, e);
-        return amount.IsValidPositive;
+        amount = new MentorAmount(m, e); return amount.IsValidPositive;
     }
+
     internal static string? StableId(object instance)
     {
-        const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         for (var type = instance.GetType(); type is not null; type = type.BaseType)
         {
-            foreach (var name in new[] { "uuid", "UUID", "Uuid", "guid", "Guid", "id", "ID" })
-            {
-                var value = type.GetField(name, Flags | BindingFlags.DeclaredOnly)?.GetValue(instance);
-                if (!string.IsNullOrWhiteSpace(value?.ToString())) return value!.ToString();
-            }
-            foreach (var name in new[] { "GetUuid", "GetUUID", "GetGuid", "GetId" })
-            {
-                var value = type.GetMethod(name, Flags | BindingFlags.DeclaredOnly, null, Type.EmptyTypes, null)?.Invoke(instance, Array.Empty<object>());
-                if (!string.IsNullOrWhiteSpace(value?.ToString())) return value!.ToString();
-            }
+            foreach (var name in new[] { "uuid", "UUID", "Uuid", "guid", "Guid", "id", "ID" }) { var value = type.GetField(name, AllFlags | BindingFlags.DeclaredOnly)?.GetValue(instance); if (!string.IsNullOrWhiteSpace(value?.ToString())) return value!.ToString(); }
+            foreach (var name in new[] { "GetUuid", "GetUUID", "GetGuid", "GetId" }) { var value = type.GetMethod(name, AllFlags | BindingFlags.DeclaredOnly, null, Type.EmptyTypes, null)?.Invoke(instance, Array.Empty<object>()); if (!string.IsNullOrWhiteSpace(value?.ToString())) return value!.ToString(); }
         }
         return null;
     }
-    private static string SafeName(SpellRecipeSO recipe) { try { return recipe.GetName(); } catch { return "<unavailable>"; } }
 }
