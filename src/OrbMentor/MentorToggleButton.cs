@@ -31,7 +31,10 @@ internal sealed class MentorToggleButton : IDisposable
         root.name = "OrbMentor.Toggle";
         root.transform.SetSiblingIndex(native.transform.GetSiblingIndex());
         if (root.transform is RectTransform rect && native.transform is RectTransform nativeRect)
-            rect.anchoredPosition = new Vector2(nativeRect.anchoredPosition.x - Math.Max(44, Math.Abs(nativeRect.rect.width)) * 2 - 24, nativeRect.anchoredPosition.y);
+        {
+            var width = Math.Max(44, Math.Abs(nativeRect.rect.width));
+            rect.anchoredPosition = new Vector2(nativeRect.anchoredPosition.x - width - 12, nativeRect.anchoredPosition.y);
+        }
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;

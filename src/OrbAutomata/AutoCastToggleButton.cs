@@ -372,7 +372,7 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
 
         cloneRect.anchoredPosition = new Vector2(
-            CalculateLeftX(nativeRect.anchoredPosition.x, renderedWidth),
+            nativeRect.anchoredPosition.x - 2.0f * (renderedWidth + HorizontalGap),
             nativeRect.anchoredPosition.y);
     }
 
