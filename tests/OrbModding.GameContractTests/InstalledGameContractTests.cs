@@ -225,6 +225,8 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
         AssertMethod(assembly, "AlchemyRecipeSO", "GainMasteryXp", false, "System.Void", "BigDouble");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
+        AssertMethod(assembly, "AlchemyRecipeSO", "IsAvailable", false, "System.Boolean");
+        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscoveredRecipe", false, "System.Boolean");
         AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
         AssertMethod(assembly, "AlchemyInstance", "CompleteRecipe", false, "System.Void");
         Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryXp"));

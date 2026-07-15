@@ -116,4 +116,12 @@ public sealed class MentorTests
         Assert.True(MentorRuntime.DistributionDue(125, ref next, 25));
         Assert.Equal(150, next);
     }
+
+    [Fact]
+    public void DomainsUseTheirNativeUnlockPredicates()
+    {
+        Assert.Equal("IsDiscovered", MentorRuntime.AvailabilityMethod(MentorDomain.Spells));
+        Assert.Equal("IsCreated", MentorRuntime.AvailabilityMethod(MentorDomain.Artifacts));
+        Assert.Equal("IsAvailable", MentorRuntime.AvailabilityMethod(MentorDomain.Alchemy));
+    }
 }

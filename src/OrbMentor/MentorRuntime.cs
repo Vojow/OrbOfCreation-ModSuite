@@ -179,7 +179,13 @@ internal sealed class MentorRuntime
     }
 
     private static string MasteryField(MentorDomain domain) => domain == MentorDomain.Spells ? "masteryLevel" : "masteryLevel";
-    private static bool IsDiscovered(MentorDomain domain, object item) => Convert.ToBoolean(Invoke(item, domain == MentorDomain.Artifacts ? "IsCreated" : "IsDiscovered") ?? false);
+    private static bool IsDiscovered(MentorDomain domain, object item) => Convert.ToBoolean(Invoke(item, AvailabilityMethod(domain)) ?? false);
+    internal static string AvailabilityMethod(MentorDomain domain) => domain switch
+    {
+        MentorDomain.Artifacts => "IsCreated",
+        MentorDomain.Alchemy => "IsAvailable",
+        _ => "IsDiscovered",
+    };
     private static int ReadInt(object item, string name) => Convert.ToInt32(FindField(item.GetType(), name)?.GetValue(item) ?? 0);
     private static object? Invoke(object instance, string name, params object[] args) => FindMethod(instance.GetType(), name, args.Length)?.Invoke(instance, args);
     private static object InvokeRequired(object instance, string name, params object[] args) => Invoke(instance, name, args) ?? (FindMethod(instance.GetType(), name, args.Length)?.ReturnType == typeof(void) ? new object() : throw new MissingMemberException(name));

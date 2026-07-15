@@ -27,7 +27,7 @@ Configuration should add independent `Spells`, `Artifacts`, and `Alchemy` enable
 
 - Catalog: `AlchemyRecipeSO.All`.
 - Stable identity: inherited GUID.
-- Eligibility: `AlchemyRecipeSO.IsDiscovered()`.
+- Eligibility: `AlchemyRecipeSO.IsAvailable()`. This covers both manually discovered recipes and natural/prerequisite recipes whose native `discovered` field may remain false.
 - XP and confirmed mastery owner: `AlchemyRecipeSO.masteryXp` and `masteryLevel`.
 - Native grant path: `AlchemyRecipeSO.GainMasteryXp(BigDouble)`.
 - Persistence: `AlchemyRecipeSO.AlchemyRecipeSaveData`.
