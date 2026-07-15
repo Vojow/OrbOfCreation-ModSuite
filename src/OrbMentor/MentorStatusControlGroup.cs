@@ -48,7 +48,7 @@ internal static class MentorStatusControlGroup
             rect.anchorMin = new Vector2(0.0f, 0.5f);
             rect.anchorMax = new Vector2(0.0f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(width * 0.5f + slot * (width + Gap), 0.0f);
+            rect.anchoredPosition = new Vector2(CalculateSlotCenterX(width, slot), 0.0f);
             slot++;
         }
         if (group is RectTransform groupRect)
@@ -59,10 +59,19 @@ internal static class MentorStatusControlGroup
     {
         var width = Width(nativeRect);
         var height = Math.Abs(nativeRect.rect.height);
-        var right = nativeRect.anchoredPosition.x + (1.0f - nativeRect.pivot.x) * width;
-        var centerY = nativeRect.anchoredPosition.y + (0.5f - nativeRect.pivot.y) * height;
-        groupRect.anchoredPosition = new Vector2(right + Gap, centerY);
+        groupRect.anchoredPosition = CalculateGroupPosition(
+            nativeRect.anchoredPosition,
+            nativeRect.pivot,
+            width,
+            height);
     }
+
+    internal static Vector2 CalculateGroupPosition(Vector2 nativePosition, Vector2 nativePivot, float width, float height) =>
+        new(nativePosition.x + (1.0f - nativePivot.x) * width + Gap,
+            nativePosition.y + (0.5f - nativePivot.y) * height);
+
+    internal static float CalculateSlotCenterX(float width, int slot) =>
+        width * 0.5f + slot * (width + Gap);
 
     private static float Width(RectTransform rect)
     {
