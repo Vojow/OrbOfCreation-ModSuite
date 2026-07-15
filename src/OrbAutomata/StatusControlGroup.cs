@@ -16,7 +16,10 @@ internal static class StatusControlGroup
         for (var index = 0; index < parent.childCount; index++)
         {
             var child = parent.GetChild(index);
-            if (child.name == ObjectName) return child;
+            if (child.name != ObjectName) continue;
+            if (nativeToggle.transform is RectTransform existingNativeRect && child is RectTransform existingGroupRect)
+                PositionBesideNative(existingGroupRect, existingNativeRect);
+            return child;
         }
 
         if (nativeToggle.transform is not RectTransform nativeRect) throw new InvalidOperationException("native toggle rect unavailable");
@@ -31,7 +34,7 @@ internal static class StatusControlGroup
         rect.anchorMax = nativeRect.anchorMax;
         rect.pivot = new Vector2(0.0f, 0.5f);
         rect.sizeDelta = new Vector2(SlotCount * width + (SlotCount - 1) * Gap, height);
-        rect.anchoredPosition = new Vector2(nativeRect.anchoredPosition.x + width * 0.5f + Gap, nativeRect.anchoredPosition.y);
+        PositionBesideNative(rect, nativeRect);
         return rect;
     }
 
@@ -54,6 +57,15 @@ internal static class StatusControlGroup
         }
         if (group is RectTransform groupRect)
             groupRect.sizeDelta = new Vector2(slot == 0 ? 0 : slot * width + (slot - 1) * Gap, groupRect.sizeDelta.y);
+    }
+
+    private static void PositionBesideNative(RectTransform groupRect, RectTransform nativeRect)
+    {
+        var width = GetWidth(nativeRect);
+        var height = Math.Abs(nativeRect.rect.height);
+        var right = nativeRect.anchoredPosition.x + (1.0f - nativeRect.pivot.x) * width;
+        var centerY = nativeRect.anchoredPosition.y + (0.5f - nativeRect.pivot.y) * height;
+        groupRect.anchoredPosition = new Vector2(right + Gap, centerY);
     }
 
     private static float GetWidth(RectTransform rect)
