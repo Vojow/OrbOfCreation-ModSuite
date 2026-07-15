@@ -29,12 +29,12 @@ internal sealed class AutoBuyToggleButton : IDisposable
             .Select(manager => Read(manager, "autoBuyEnabled"))
             .FirstOrDefault(value => value is not null);
         if (autoBuyEnabled is null) return false;
-        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => c.gameObject.activeInHierarchy && ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
+        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => IsNativeQueueToggle(c) && ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
         var group = StatusControlGroup.GetOrCreate(native);
         var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
         root.name = "OrbAutomata.AutoBuyToggle";
-        if (native.transform is RectTransform nativeRect) StatusControlGroup.Place(root, 0, nativeRect);
+        if (native.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
@@ -63,4 +63,9 @@ internal sealed class AutoBuyToggleButton : IDisposable
     private void Toggle() { _control.Toggle(); Render(); }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
+    private static bool IsNativeQueueToggle(Component component) =>
+        component.gameObject.activeInHierarchy &&
+        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
+        component.gameObject.name != "OrbMentor.Toggle" &&
+        component.transform.parent?.name != StatusControlGroup.ObjectName;
 }

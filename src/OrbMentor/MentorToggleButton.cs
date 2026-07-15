@@ -34,13 +34,12 @@ internal sealed class MentorToggleButton : IDisposable
         if (autoBuyEnabled is null) return false;
         var native = Resources.FindObjectsOfTypeAll(toggleType)
             .OfType<Component>()
-            .FirstOrDefault(component => component.gameObject.activeInHierarchy && ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
+            .FirstOrDefault(component => IsNativeQueueToggle(component) && ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
         var group = MentorStatusControlGroup.GetOrCreate(native);
         var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
         root.name = "OrbMentor.Toggle";
-        if (root.transform is RectTransform rect && native.transform is RectTransform nativeRect)
-            MentorStatusControlGroup.Place(root, nativeRect);
+        if (native.transform is RectTransform nativeRect) MentorStatusControlGroup.Reflow(group, nativeRect);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
@@ -92,4 +91,9 @@ internal sealed class MentorToggleButton : IDisposable
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
+    private static bool IsNativeQueueToggle(Component component) =>
+        component.gameObject.activeInHierarchy &&
+        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
+        component.gameObject.name != "OrbMentor.Toggle" &&
+        component.transform.parent?.name != "OrbModSuite.StatusControls";
 }

@@ -31,14 +31,25 @@ internal static class MentorStatusControlGroup
         return rect;
     }
 
-    public static void Place(GameObject control, RectTransform nativeRect)
+    public static void Reflow(Transform group, RectTransform nativeRect)
     {
         var width = Width(nativeRect);
-        if (control.transform is not RectTransform rect) return;
-        rect.anchorMin = new Vector2(0.0f, 0.5f);
-        rect.anchorMax = new Vector2(0.0f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = new Vector2(width * 0.5f + 2 * (width + Gap), 0.0f);
+        var names = new[] { "OrbAutomata.AutoBuyToggle", "OrbAutomata.AutoCastToggle", "OrbMentor.Toggle" };
+        var slot = 0;
+        foreach (var name in names)
+        {
+            RectTransform? rect = null;
+            for (var index = 0; index < group.childCount; index++)
+                if (group.GetChild(index).name == name) { rect = group.GetChild(index) as RectTransform; break; }
+            if (rect is null) continue;
+            rect.anchorMin = new Vector2(0.0f, 0.5f);
+            rect.anchorMax = new Vector2(0.0f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(width * 0.5f + slot * (width + Gap), 0.0f);
+            slot++;
+        }
+        if (group is RectTransform groupRect)
+            groupRect.sizeDelta = new Vector2(slot == 0 ? 0 : slot * width + (slot - 1) * Gap, groupRect.sizeDelta.y);
     }
 
     private static float Width(RectTransform rect)

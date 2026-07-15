@@ -86,7 +86,7 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         var nativeToggle = Resources.FindObjectsOfTypeAll(nativeToggleType)
             .OfType<Component>()
-            .FirstOrDefault(component => component.gameObject.activeInHierarchy && ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
+            .FirstOrDefault(component => IsNativeQueueToggle(component) && ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
         if (nativeToggle is null || nativeToggle.transform.parent is null)
         {
             reason = "native Auto Buy queue switch is not initialized";
@@ -100,7 +100,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             var group = StatusControlGroup.GetOrCreate(nativeToggle);
             root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, group, false);
             root.name = ObjectName;
-            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Place(root, 1, nativeRect);
+            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
 
             var clonedNativeToggle = root.GetComponent(nativeToggleType);
             var iconImage = ReadField(clonedNativeToggle, "iconImage") as Image;
@@ -354,6 +354,12 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         return null;
     }
+
+    private static bool IsNativeQueueToggle(Component component) =>
+        component.gameObject.activeInHierarchy &&
+        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
+        component.gameObject.name != "OrbMentor.Toggle" &&
+        component.transform.parent?.name != StatusControlGroup.ObjectName;
 
     private static void PositionLeftOfNativeToggle(GameObject clone, GameObject native)
     {
