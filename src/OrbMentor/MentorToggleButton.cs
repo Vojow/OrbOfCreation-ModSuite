@@ -24,8 +24,15 @@ internal sealed class MentorToggleButton : IDisposable
     {
         result = null;
         var toggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
-        if (toggleType is null) return false;
-        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => c.gameObject.activeInHierarchy);
+        var managerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
+        if (toggleType is null || managerType is null) return false;
+        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType)
+            .Select(manager => Read(manager, "autoBuyEnabled"))
+            .FirstOrDefault(value => value is not null);
+        if (autoBuyEnabled is null) return false;
+        var native = Resources.FindObjectsOfTypeAll(toggleType)
+            .OfType<Component>()
+            .FirstOrDefault(component => ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
         if (native?.transform.parent is null) return false;
         var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
         root.name = "OrbMentor.Toggle";
