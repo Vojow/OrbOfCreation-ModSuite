@@ -110,7 +110,12 @@ internal sealed class MentorRuntime
             var recipients = catalog.Where(r => r.IsDiscovered && r.MasteryLevel < highest).OrderBy(r => r.Uuid, StringComparer.Ordinal).ToArray();
             var grants = state.Engine.Plan(state.FrameXp, percent, _config.EconomyMode.Value, recipients);
             state.Engine.Consolidate(grants);
-            if (_config.DetailedLogging.Value && grants.Count > 0) _log.LogInfo($"Mentor {domain} batch: recipients={grants.Count}, share={percent:0.##}%");
+            if (_config.DetailedLogging.Value && grants.Count > 0)
+            {
+                var mentors = catalog.Where(r => r.IsDiscovered && r.MasteryLevel == highest)
+                    .Select(r => Resolve(domain, r.Uuid)).Where(r => r is not null).Select(r => SafeName(r!)).Take(6);
+                _log.LogInfo($"Mentor {domain} batch: catalog={catalog.Length}, available={catalog.Count(r => r.IsDiscovered)}, highest={highest}, mentors={string.Join(", ", mentors)}, recipients={grants.Count}, share={percent:0.##}%");
+            }
         }
         state.FrameXp = default;
     }
@@ -129,7 +134,7 @@ internal sealed class MentorRuntime
             if (domain == MentorDomain.Spells) ((SpellRecipeSO)recipient).GainMasteryExp(value);
             else if (domain == MentorDomain.Alchemy) InvokeRequired(recipient, "GainMasteryXp", value);
             else GrantArtifact(recipient, value);
-            if (_config.DetailedLogging.Value) _log.LogInfo($"Mentor {domain} grant: recipient={grant.Uuid} amount={grant.Amount.Mantissa}e{grant.Amount.Exponent}");
+            if (_config.DetailedLogging.Value) _log.LogInfo($"Mentor {domain} grant: recipient={SafeName(recipient)} ({grant.Uuid}), mastery={ReadInt(recipient, MasteryField(domain))}, amount={grant.Amount.Mantissa}e{grant.Amount.Exponent}");
         }
         catch (Exception ex) { Block($"{domain} native mastery grant failed: {ex.GetBaseException().Message}"); }
         finally { _guarded = false; }
@@ -187,6 +192,11 @@ internal sealed class MentorRuntime
         _ => "IsDiscovered",
     };
     private static int ReadInt(object item, string name) => Convert.ToInt32(FindField(item.GetType(), name)?.GetValue(item) ?? 0);
+    private static string SafeName(object item)
+    {
+        try { return Invoke(item, "GetName")?.ToString() ?? "<unnamed>"; }
+        catch { return "<unavailable>"; }
+    }
     private static object? Invoke(object instance, string name, params object[] args) => FindMethod(instance.GetType(), name, args.Length)?.Invoke(instance, args);
     private static object InvokeRequired(object instance, string name, params object[] args) => Invoke(instance, name, args) ?? (FindMethod(instance.GetType(), name, args.Length)?.ReturnType == typeof(void) ? new object() : throw new MissingMemberException(name));
     private static MethodInfo? FindMethod(Type type, string name, int count) { for (var t = type; t is not null; t = t.BaseType) { var m = t.GetMethods(AllFlags | BindingFlags.DeclaredOnly).FirstOrDefault(x => x.Name == name && x.GetParameters().Length == count); if (m is not null) return m; } return null; }
