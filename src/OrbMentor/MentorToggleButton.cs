@@ -36,6 +36,8 @@ internal sealed class MentorToggleButton : IDisposable
         if (native?.transform.parent is null) return false;
         var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
         root.name = "OrbMentor.Toggle";
+        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
+        layout.ignoreLayout = true;
         root.transform.SetSiblingIndex(native.transform.GetSiblingIndex());
         if (root.transform is RectTransform rect && native.transform is RectTransform nativeRect)
         {

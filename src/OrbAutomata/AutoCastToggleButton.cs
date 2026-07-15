@@ -97,6 +97,7 @@ internal sealed class AutoCastToggleButton : IDisposable
         {
             root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, nativeToggle.transform.parent, false);
             root.name = ObjectName;
+            IgnoreParentLayout(root);
             root.transform.SetSiblingIndex(nativeToggle.transform.GetSiblingIndex());
             PositionLeftOfNativeToggle(root, nativeToggle.gameObject);
 
@@ -374,6 +375,12 @@ internal sealed class AutoCastToggleButton : IDisposable
         cloneRect.anchoredPosition = new Vector2(
             nativeRect.anchoredPosition.x - 2.0f * (renderedWidth + HorizontalGap),
             nativeRect.anchoredPosition.y);
+    }
+
+    private static void IgnoreParentLayout(GameObject root)
+    {
+        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
+        layout.ignoreLayout = true;
     }
 
     internal static float CalculateLeftX(float nativeX, float renderedWidth)

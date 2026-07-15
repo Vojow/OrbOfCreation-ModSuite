@@ -672,6 +672,11 @@ namespace UnityEngine.UI
     {
     }
 
+    public class LayoutElement : UnityEngine.Behaviour
+    {
+        public bool ignoreLayout { get; set; }
+    }
+
     public class ScrollRect : UnityEngine.Behaviour
     {
         public enum MovementType

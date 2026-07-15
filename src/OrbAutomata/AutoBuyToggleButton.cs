@@ -29,6 +29,8 @@ internal sealed class AutoBuyToggleButton : IDisposable
         if (native?.transform.parent is null) return false;
         var root = UnityEngine.Object.Instantiate(native.gameObject, native.transform.parent, false);
         root.name = "OrbAutomata.AutoBuyToggle";
+        var layout = root.GetComponent<LayoutElement>() ?? root.AddComponent<LayoutElement>();
+        layout.ignoreLayout = true;
         root.transform.SetSiblingIndex(native.transform.GetSiblingIndex());
         Position(root, native.gameObject, 3);
         var cloned = root.GetComponent(toggleType);
