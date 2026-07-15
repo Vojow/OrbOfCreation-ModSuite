@@ -102,6 +102,7 @@ mindmap
 - [Orb Toolbox plan](toolbox-plan.md)
 - [Orb Achievement Resonance plan](achievement-resonance-plan.md)
 - [Orb Mentor plan](mastery-sharing-plan.md)
+- [Orb Mentor artifacts and alchemy design](mentor-artifacts-alchemy-plan.md)
 - [Orb Mentor interactive runtime checklist](orb-mentor-runtime-validation.md)
 - [In-game mod configuration UI plan](mod-config-ui-plan.md)
 - [Compatibility, testing, and releases](compatibility-and-testing.md)
