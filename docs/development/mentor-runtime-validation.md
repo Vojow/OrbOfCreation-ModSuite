@@ -1,5 +1,7 @@
 # Orb Mentor interactive runtime checklist
 
+[Back to development documentation](../README.md) · [Orb Mentor reference](../../src/OrbMentor/README.md)
+
 Use only on a backed-up save and a manually installed test copy of the built DLLs. Automated checks do not install anything into the live game.
 
 - Confirm the supported assembly hash and a quiet startup with `Mode=Disabled`.

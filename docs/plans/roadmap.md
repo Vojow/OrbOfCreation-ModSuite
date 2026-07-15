@@ -1,6 +1,8 @@
 # Project roadmap
 
-[Back to project index](../README.md) · [Reverse-engineering map](README.md)
+> **Lifecycle: Active.** This is the portfolio-level source of current direction and sequencing.
+
+[Back to documentation](../README.md) · [Reverse-engineering map](../reverse-engineering/README.md)
 
 ## Product direction
 
@@ -62,7 +64,7 @@ Do not create a shared library on day one. First prove both plugins independentl
 
 ## Milestones
 
-The coordinated execution order for Chronomancer, Automata, and Achievement Resonance is defined in [Three-mod iteration plan](three-mod-iteration-plan.md). Its pre-worktree discovery gate takes precedence over beginning the older phase list in parallel.
+The coordinated execution order for Chronomancer, Automata, and Achievement Resonance is defined in [Three-mod iteration plan](three-mod-iteration.md). Its pre-worktree discovery gate takes precedence over beginning the older phase list in parallel.
 
 ### Phase 0 — Development foundation
 
@@ -142,7 +144,7 @@ Exit criterion: bonuses update immediately when achievements change, never dupli
 - Add live Mod Config integration, `Alt+M`, and a queue/status-area ON/OFF/BLOCKED control.
 - Defer automatic mastery confirmation to Automata and audit artifacts/alchemy as later independent extensions.
 
-See [Orb Mentor plan](mastery-sharing-plan.md) for the resolved spell MVP contract, verified native XP path, delivery stages, and verification requirements.
+See [Orb Mentor plan](mentor.md) for the resolved spell MVP contract, verified native XP path, delivery stages, and verification requirements.
 
 Exit criterion: every discovered lower-mastery spell receives exactly the configured XP through native progression behavior, grants never recurse or directly modify spell-type XP, and saves remain stable across extended sessions and plugin removal.
 
@@ -155,7 +157,7 @@ Exit criterion: every discovered lower-mastery spell receives exactly the config
 - Preserve `.cfg` files as the source of truth with staged Apply/Revert behavior and honest live/restart status.
 - Keep the panel usable with unscaled time, keyboard/controller navigation, scene changes, and other UI mods.
 
-See [In-game mod configuration UI plan](mod-config-ui-plan.md) for architecture, delivery stages, risks, and acceptance criteria.
+See [In-game mod configuration UI plan](mod-config-ui.md) for architecture, delivery stages, risks, and acceptance criteria.
 
 Exit criterion: the suite's supported configuration types round-trip safely in game, the compatibility matrix passes, and removing the UI plugin leaves every mod configurable through its normal `.cfg` file.
 
@@ -167,4 +169,4 @@ Exit criterion: the suite's supported configuration types round-trip safely in g
 
 ## Immediate next task
 
-Complete P0/P1 from the [Three-mod iteration plan](three-mod-iteration-plan.md), then build the unified runtime probe before creating feature worktrees.
+Complete P0/P1 from the [Three-mod iteration plan](three-mod-iteration.md), then build the unified runtime probe before creating feature worktrees.

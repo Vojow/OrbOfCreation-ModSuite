@@ -12,22 +12,9 @@ Thanks for helping improve OrbOfCreation-ModSuite. This is an unofficial modding
 
 ## Development setup
 
-Portable tests do not require the game:
+Follow the [development setup](docs/development/setup.md) for local prerequisites and portable tests. Work that depends on real game state must also follow the [runtime validation protocol](docs/development/runtime-validation.md).
 
-```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
-```
-
-Production builds require `OOC_GAME_DIR` to point to a local Orb of Creation installation containing BepInEx 5:
-
-```powershell
-$env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-modsuite.ps1 -GameRoot $env:OOC_GAME_DIR
-```
-
-The test-stub build writes to `bin-stubs/` and `obj-stubs/`; deployable game builds write to the normal `bin/` directory. Never install a stub-linked DLL into BepInEx.
-
-`tools/package-automata.ps1` is the maintainer release path. It reruns the complete validation pipeline and packages only the three required DLLs plus public documentation and checksums.
+The test-stub build writes to `bin-stubs/` and `obj-stubs/`; deployable game builds write to the normal `bin/` directory. Never install a stub-linked DLL into BepInEx. Maintainers should use the documented [release process](docs/development/releases.md).
 
 ## Runtime testing
 

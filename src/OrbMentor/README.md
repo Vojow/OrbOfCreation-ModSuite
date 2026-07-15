@@ -6,4 +6,4 @@ Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Alt+
 
 The plugin uses each domain's native mastery path and suppresses its own grant callbacks. It never subtracts source XP or changes loadouts, recipe activity, costs, or discovery state. A contract failure blocks sharing and discards pending bonus work.
 
-Automated and static installed-game validation is complete. Interactive gameplay/save validation remains required before a production-ready release; see [the implementation plan](../../docs/mastery-sharing-plan.md).
+Automated and static installed-game validation is complete. Interactive gameplay/save validation remains required before a production-ready release; see [the implementation plan](../../docs/plans/mentor.md) and [runtime checklist](../../docs/development/mentor-runtime-validation.md).

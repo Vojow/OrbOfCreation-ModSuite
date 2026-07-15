@@ -1,10 +1,12 @@
 # Orb Automata plan
 
+> **Lifecycle: Implemented / evolving.** Core Auto Buy and Auto Cast are in public beta; this plan also contains later work.
+
 [Back to roadmap](roadmap.md)
 
 ## Goal
 
-Coordinated implementation iterations, the shared admission model, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration-plan.md).
+Coordinated implementation iterations, the shared admission model, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration.md).
 
 Automate repetitive actions through transparent, configurable rules without silently consuming resources the player intended to reserve.
 

@@ -1,6 +1,8 @@
 # Auto Cast MVP
 
-[Back to Automata plan](automata-plan.md)
+> **Lifecycle: Implemented.** Retained as the historical MVP contract; use the Orb Automata README for released behavior.
+
+[Back to Automata plan](automata.md)
 
 ## Player contract
 

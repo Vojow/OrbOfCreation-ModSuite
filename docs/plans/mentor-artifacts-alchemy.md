@@ -1,6 +1,8 @@
 # Orb Mentor: artifacts and alchemy design
 
-[Back to the spells MVP](mastery-sharing-plan.md) · [Project roadmap](roadmap.md)
+> **Lifecycle: Planned.** These are future vertical slices, separate from the implemented spells-only beta candidate.
+
+[Back to plan index](README.md) · [Orb Mentor plan](mentor.md) · [Project roadmap](roadmap.md)
 
 ## Purpose
 

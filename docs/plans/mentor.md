@@ -1,5 +1,7 @@
 # Orb Mentor plan
 
+> **Lifecycle: Implemented / beta candidate.** The spells-only implementation awaits interactive runtime validation before release.
+
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
 ## Goal

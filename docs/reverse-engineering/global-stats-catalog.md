@@ -1,6 +1,6 @@
 # Global and global-ish stat catalog
 
-[Back to index](README.md) · [Achievement Resonance](achievement-resonance-plan.md) · [Audit](reverse-engineering-audit.md)
+[Back to index](README.md) · [Achievement Resonance](../plans/achievement-resonance.md) · [Audit](audit.md)
 
 ## Modifier scopes
 

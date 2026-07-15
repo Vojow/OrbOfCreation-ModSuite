@@ -1,6 +1,6 @@
 # Public release checklist
 
-[Back to roadmap](roadmap.md)
+[Back to roadmap](../plans/roadmap.md)
 
 ## Proposed first public package
 

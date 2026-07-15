@@ -1,6 +1,8 @@
 # Three-mod iteration plan
 
-[Back to roadmap](roadmap.md) · [Compatibility and testing](compatibility-and-testing.md)
+> **Lifecycle: Historical.** Retained for implementation history and decision context; the roadmap governs current sequencing.
+
+[Back to roadmap](roadmap.md) · [Compatibility and testing](../development/testing.md)
 
 ## Objective
 

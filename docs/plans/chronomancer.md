@@ -1,10 +1,12 @@
 # Orb Chronomancer plan
 
+> **Lifecycle: Experimental.** An implementation exists but is not included in the Automata release archive.
+
 [Back to roadmap](roadmap.md)
 
 ## Goal
 
-Coordinated implementation iterations, timing-strategy experiments, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration-plan.md).
+Coordinated implementation iterations, timing-strategy experiments, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration.md).
 
 Provide safe simulation-speed control without making menus, input, saving, or animation systems unusable.
 
