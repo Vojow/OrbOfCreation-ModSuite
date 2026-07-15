@@ -17,6 +17,8 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoCastEngine? _autoCastEngine;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
+    private AutoBuyToggleControl? _autoBuyToggleControl;
+    private AutoBuyToggleButton? _autoBuyToggleButton;
     private float _autoCastUiRetrySeconds;
     private float _autoCastUiFailureSeconds;
     private bool _autoCastUiFailureLogged;
@@ -42,6 +44,7 @@ public sealed class Plugin : BaseUnityPlugin
 
         var reservePolicy = new ReservePolicy(_config);
         _autoCastToggleControl = new AutoCastToggleControl(_config);
+        _autoBuyToggleControl = new AutoBuyToggleControl(_config);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),
@@ -73,6 +76,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
+        UpdateAutoBuyControl();
         _autoBuyEngine?.Tick(deltaTime);
         _autoCastEngine?.Tick(deltaTime);
     }
@@ -86,6 +90,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
+        _autoBuyToggleButton?.Dispose();
+        _autoBuyToggleButton = null;
+        _autoBuyToggleControl = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
     }
@@ -170,6 +177,24 @@ public sealed class Plugin : BaseUnityPlugin
 
         _autoCastUiFailureLogged = true;
         Log.LogWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
+    }
+
+    private void UpdateAutoBuyControl()
+    {
+        if (_autoBuyToggleControl is null) return;
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _autoBuyToggleButton?.Dispose();
+            _autoBuyToggleButton = null;
+            return;
+        }
+        if (_autoBuyToggleButton is not null && !_autoBuyToggleButton.IsAlive)
+        {
+            _autoBuyToggleButton.Dispose();
+            _autoBuyToggleButton = null;
+        }
+        if (_autoBuyToggleButton is not null) { _autoBuyToggleButton.Render(); return; }
+        AutoBuyToggleButton.TryCreate(_autoBuyToggleControl, out _autoBuyToggleButton);
     }
 
     private static int CountConfiguredUuids(string value)

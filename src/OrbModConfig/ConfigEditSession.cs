@@ -74,6 +74,16 @@ internal sealed class ConfigEditSession
 
     public ConfigEditValue Get(ConfigSettingDescriptor setting) => _values[setting.Source];
 
+    public bool DependencySatisfied(ConfigSettingDescriptor setting)
+    {
+        if (string.IsNullOrWhiteSpace(setting.DependencySection) || string.IsNullOrWhiteSpace(setting.DependencyKey)) return true;
+        var dependency = _values.Values.FirstOrDefault(value =>
+            ReferenceEquals(value.Setting.Source.ConfigFile, setting.Source.ConfigFile) &&
+            string.Equals(value.Setting.SourceSection, setting.DependencySection, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(value.Setting.Key, setting.DependencyKey, StringComparison.OrdinalIgnoreCase));
+        return dependency is not null && string.Equals(dependency.StagedSerialized, setting.DependencyValue, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void RevertAll()
     {
         foreach (var value in _values.Values)

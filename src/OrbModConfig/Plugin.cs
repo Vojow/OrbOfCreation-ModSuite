@@ -28,7 +28,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription(
                 "Enable Orb Mod Config.",
                 null,
-                new ModConfigMetadata(0, 0)));
+                new ModConfigMetadata(0, 0, hidden: true)));
         _enableUiShell = Config.Bind(
             "Interface",
             "EnableButtonShell",
@@ -36,7 +36,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigDescription(
                 "Insert the Mods top-bar button and in-game configuration editor.",
                 null,
-                new ModConfigMetadata(10, 0)));
+                new ModConfigMetadata(10, 0, hidden: true)));
 
         if (!_enabled.Value)
         {

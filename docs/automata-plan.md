@@ -103,7 +103,7 @@ Exit: structure and upgrade affordability thresholds can be tuned independently,
 
 ### A2 — Auto Cast
 
-The agreed first slice is specified in [Auto Cast MVP](auto-cast-mvp.md). It operates on the complete active loadout in native slot order, uses a round-robin cursor, admits casts at an 80% resource-fullness threshold plus shared reserves, automatically fulfills owned target requests with native random-valid selection, skips active auras, waits behind active channels, and excludes charged spells. Manual casts pause the rotation for a configurable two seconds.
+The agreed first slice is specified in [Auto Cast MVP](auto-cast-mvp.md). It operates on the complete active loadout in native slot order, uses a round-robin cursor, admits casts at a configurable resource-fullness threshold plus shared reserves (0% on fresh installs), automatically fulfills owned target requests with native random-valid selection, skips active auras, waits behind active channels, and excludes charged spells. Manual casts pause the rotation for a configurable two seconds.
 
 Exit: the equipped rotation casts through `SpellManager.FireSpellIndex`, never hijacks manual targeting or interrupts a channel, respects cost and drain admission, and leaves all persistent-spell shutdown to the game or player.
 

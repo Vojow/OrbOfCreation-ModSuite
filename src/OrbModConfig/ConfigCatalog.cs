@@ -80,7 +80,7 @@ internal sealed class ConfigSettingDescriptor
     public ConfigSettingDescriptor(ConfigEntryBase source)
     {
         Source = source;
-        Section = source.Definition.Section;
+        SourceSection = source.Definition.Section;
         Key = source.Definition.Key;
         Description = source.Description.Description ?? string.Empty;
         SettingType = source.SettingType;
@@ -89,14 +89,22 @@ internal sealed class ConfigSettingDescriptor
         DefaultSerializedValue = ConfigCatalog.Serialize(source.DefaultValue);
         AcceptableValuesDescription = source.Description.AcceptableValues?.ToDescriptionString() ?? string.Empty;
         var metadata = source.Description.Tags.OfType<ModConfigMetadata>().FirstOrDefault();
+        Section = metadata?.DisplaySection ?? SourceSection;
+        DisplayName = metadata?.DisplayName ?? Humanize(Key);
         SectionOrder = metadata?.SectionOrder ?? int.MaxValue;
         SettingOrder = metadata?.SettingOrder ?? int.MaxValue;
         Hidden = metadata?.Hidden == true;
+        RestartRequired = metadata?.RestartRequired == true;
+        DependencySection = metadata?.DependencySection;
+        DependencyKey = metadata?.DependencyKey;
+        DependencyValue = metadata?.DependencyValue ?? "true";
     }
 
     public ConfigEntryBase Source { get; }
+    public string SourceSection { get; }
     public string Section { get; }
     public string Key { get; }
+    public string DisplayName { get; }
     public string Description { get; }
     public Type SettingType { get; }
     public ConfigEditorKind Kind { get; }
@@ -106,6 +114,21 @@ internal sealed class ConfigSettingDescriptor
     public int SectionOrder { get; }
     public int SettingOrder { get; }
     public bool Hidden { get; }
+    public bool RestartRequired { get; }
+    public string? DependencySection { get; }
+    public string? DependencyKey { get; }
+    public string DependencyValue { get; }
+
+    private static string Humanize(string value)
+    {
+        var chars = new List<char>(value.Length + 8);
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (index > 0 && char.IsUpper(value[index]) && !char.IsUpper(value[index - 1])) chars.Add(' ');
+            chars.Add(value[index]);
+        }
+        return new string(chars.ToArray());
+    }
 }
 
 internal static class ConfigCatalog

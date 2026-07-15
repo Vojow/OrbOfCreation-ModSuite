@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'portable-zip.ps1')
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repositoryRoot 'artifacts/releases'
 }
@@ -68,7 +69,7 @@ foreach ($file in $files) {
     Copy-Item -LiteralPath $source -Destination $file.Destination
 }
 
-Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath -CompressionLevel Optimal
+New-PortableZip -SourceDirectory $stagingDirectory -DestinationPath $zipPath
 
 $checksumTargets = @(
     (Join-Path $pluginDirectory 'OrbAutomata.dll'),

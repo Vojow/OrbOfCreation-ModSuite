@@ -13,9 +13,10 @@ The current public beta centers on Orb Automata: queue-aware Auto Buy, safe Auto
 | Component | Status | Description |
 |---|---|---|
 | **Orb Automata 0.4.0** | Beta | Auto Buy and Auto Cast using native game actions, configurable affordability, reserves, and queue ownership. |
-| **Orb Mod Config 0.4.0** | Beta | Optional in-game Mods tab for typed BepInEx configuration. |
+| **Orb Mod Config 0.5.0** | Beta | Simplified in-game Mods tab with typed editors and Steam Deck keyboard support. |
 | **Orb Chronomancer** | Experimental | Simulation-speed controls; not included in the Automata release archive. |
 | **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation remains disabled by default. |
+| **Orb Mentor 0.1.0** | Beta candidate | Highest-mastery spells share final native mastery XP with lower-level discovered spells; interactive validation remains before release. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline:
@@ -68,6 +69,8 @@ Orb of Creation/
             `-- OrbModding.Common.dll
 ```
 
+Release ZIPs use portable `/` entry separators and can be extracted directly on Windows, SteamOS, or Bazzite. If an older archive creates root-level filenames containing `BepInEx\plugins`, delete those files and download a corrected archive.
+
 `OrbAutomata.dll` is the gameplay plugin. `OrbModConfig.dll` provides the optional in-game **Mods** tab. `OrbModding.Common.dll` is required. Keep only one copy of each DLL.
 
 After starting the game, `BepInEx/LogOutput.log` should list Orb Automata and Orb Mod Config once each without missing-dependency errors. Auto Buy defaults to Active with 100× affordability thresholds; Auto Cast defaults to Disabled.
@@ -88,7 +91,7 @@ Operational purchase/cast logging is off by default. Enable it only while troubl
 ## Troubleshooting and removal
 
 - No `LogOutput.log`: verify BepInEx files are beside the game executable and recheck the Proton override when applicable.
-- Mod Config shows only itself: verify BepInEx reports both plugins during startup and remove duplicate or test-stub DLLs.
+- Mod Config shows no configurable mods: verify BepInEx reports the suite plugins during startup and remove duplicate or test-stub DLLs.
 - Automata does not load: confirm all three release DLLs are present and search the log for dependency or assembly errors.
 - Bug reports: include game, BepInEx, and plugin versions plus sanitized reproduction steps. Do not attach private saves or unredacted logs.
 - Uninstall: close the game and remove the three DLLs from `BepInEx/plugins/OrbAutomata`. Configuration files may be retained or deleted separately. The mods do not add custom save-file records.

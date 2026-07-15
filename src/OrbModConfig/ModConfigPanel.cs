@@ -216,14 +216,21 @@ internal sealed class ModConfigPanel : IDisposable
         row.GetComponent<Image>()!.color = RowColor;
         _settingObjects.Add(row);
 
-        CreateText("Key", row.transform, new Vector2(0.018f, 0.51f), new Vector2(0.53f, 0.94f), _labelTemplate, setting.Key, TextAlignmentOptions.MidlineLeft, 0.78f);
+        CreateText("Key", row.transform, new Vector2(0.018f, 0.51f), new Vector2(0.53f, 0.94f), _labelTemplate, setting.DisplayName, TextAlignmentOptions.MidlineLeft, 0.78f);
         var description = setting.Description;
         if (!string.IsNullOrWhiteSpace(setting.AcceptableValuesDescription))
         {
             description += "  " + setting.AcceptableValuesDescription;
         }
+        description += setting.RestartRequired ? "  Restart required." : "  Applies immediately.";
 
         CreateText("Description", row.transform, new Vector2(0.018f, 0.08f), new Vector2(0.55f, 0.52f), _labelTemplate, description, TextAlignmentOptions.TopLeft, 0.55f);
+
+        if (!_session.DependencySatisfied(setting))
+        {
+            CreateText("Dependency", row.transform, new Vector2(0.58f, 0.2f), new Vector2(0.98f, 0.8f), _labelTemplate, "Enable this feature first", TextAlignmentOptions.Midline, 0.6f);
+            return;
+        }
 
         switch (setting.Kind)
         {
@@ -263,9 +270,7 @@ internal sealed class ModConfigPanel : IDisposable
 
     private void CreateBooleanEditor(Transform parent, ConfigEditValue edit)
     {
-        Button? button = null;
-        TextMeshProUGUI? label = null;
-        button = CreateButton(
+        CreateButton(
             "Boolean",
             parent,
             new Vector2(0.58f, 0.18f),
@@ -276,14 +281,8 @@ internal sealed class ModConfigPanel : IDisposable
             {
                 var current = bool.TryParse(edit.StagedSerialized, out var parsed) && parsed;
                 edit.Stage((!current).ToString());
-                if (label is not null)
-                {
-                    label.text = edit.StagedSerialized;
-                }
-
-                RefreshStatus(edit);
+                RebuildSettings();
             });
-        label = button.GetComponentInChildren<TextMeshProUGUI>(true);
     }
 
     private void CreateEnumEditor(Transform parent, ConfigEditValue edit)
@@ -322,6 +321,7 @@ internal sealed class ModConfigPanel : IDisposable
         input.textComponent = text;
         input.text = edit.StagedSerialized;
         input.lineType = TMP_InputField.LineType.SingleLine;
+        input.onSelect.AddListener(_ => SteamKeyboardBridge.TryShow(input, edit.Setting.DisplayName, edit.Setting.Kind));
         input.onValueChanged.AddListener(value =>
         {
             edit.Stage(value);

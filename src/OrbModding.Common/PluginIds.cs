@@ -16,7 +16,11 @@ public static class PluginIds
 
     public const string ModConfigGuid = "dev.vojow.orbofcreation.modconfig";
     public const string ModConfigName = "Orb Mod Config";
-    public const string ModConfigVersion = "0.4.0";
+    public const string ModConfigVersion = "0.5.0";
+
+    public const string MentorGuid = "dev.vojow.orbofcreation.mentor";
+    public const string MentorName = "Orb Mentor";
+    public const string MentorVersion = "0.1.0";
 
     public const string Version = "0.1.0";
 }

@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using OrbAutomata;
 using OrbModConfig;
 using OrbModding.Common;
+using OrbMentor;
 using UnityEngine;
 using Xunit;
 
@@ -91,7 +92,7 @@ public sealed class ModConfigTests
             "Earlier",
             "First",
             true,
-            new ConfigDescription("first", null, new ModConfigMetadata(10, 10)));
+            new ConfigDescription("first", null, new ModConfigMetadata(10, 10, displaySection: "Basics", displayName: "Friendly first")));
         config.Bind(
             "Earlier",
             "Hidden",
@@ -104,8 +105,8 @@ public sealed class ModConfigTests
             })
             .Mods.Single();
 
-        Assert.Equal(new[] { "Earlier", "Later" }, mod.Sections.Select(section => section.Name));
-        Assert.Equal(new[] { "First", "Second" }, mod.Sections[0].Settings.Select(setting => setting.Key));
+        Assert.Equal(new[] { "Basics", "Earlier", "Later" }, mod.Sections.Select(section => section.Name));
+        Assert.Equal("Friendly first", mod.Sections[0].Settings.Single().DisplayName);
         Assert.Equal(3, mod.Sections.Sum(section => section.Settings.Count));
     }
 
@@ -122,28 +123,48 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "AutoBuy", "AutoCast", "Reserves", "Performance", "Safety", "Diagnostics" },
+            new[] { "Auto Buy", "Auto Cast", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
             new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
-            mod.Sections.Single(section => section.Name == "AutoBuy").Settings.Take(6).Select(setting => setting.Key));
-        Assert.Equal(
-            new[] { "EnableOperationalLogging", "DecisionLogLevel", "MaxLoggedRejections" },
-            mod.Sections.Single(section => section.Name == "Diagnostics").Settings.Select(setting => setting.Key));
+            mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(6).Select(setting => setting.Key));
         Assert.Equal(
             new[] { "Mode", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
-            mod.Sections.Single(section => section.Name == "AutoCast").Settings.Select(setting => setting.Key));
+            mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
                        setting.Key.Contains("PurchaseLimitPerSession", StringComparison.Ordinal));
         Assert.Contains(
-            mod.Sections.Single(section => section.Name == "AutoBuy").Settings,
+            mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
             setting => setting.Key == "RespectActionMultiplier");
 
-        var autoBuyMode = mod.Sections.Single(section => section.Name == "AutoBuy").Settings.Single(setting => setting.Key == "Mode");
+        Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
+
+        var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
+    }
+
+    [Fact]
+    public void MentorCatalog_UsesFeatureTabsAndDependencies()
+    {
+        var config = new ConfigFile();
+        var mentor = MentorConfig.Bind(config);
+        var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("mentor", "Mentor", "test", config) }).Mods.Single();
+
+        Assert.Equal(new[] { "Spells", "Artifacts", "Alchemy", "Advanced" }, mod.Sections.Select(section => section.Name));
+        Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
+        var artifactShare = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "SharePercent");
+        Assert.Equal("Artifacts", artifactShare.DependencySection);
+        Assert.Equal("Enabled", artifactShare.DependencyKey);
+
+        var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
+        Assert.False(session.DependencySatisfied(artifactShare));
+        mentor.ArtifactsEnabled.Value = true;
+        session.RevertAll();
+        Assert.True(session.DependencySatisfied(artifactShare));
     }
 
     [Fact]
