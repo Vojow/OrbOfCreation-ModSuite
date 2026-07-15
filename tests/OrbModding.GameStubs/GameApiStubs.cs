@@ -5,6 +5,25 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 
+public struct BigDouble
+{
+    public BigDouble(double mantissa, long exponent) { this.mantissa = mantissa; this.exponent = exponent; }
+    public double mantissa;
+    public long exponent;
+}
+
+public class SpellRecipeSO
+{
+    public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
+    public int masteryLevel;
+    public BigDouble masteryExperience;
+    public bool discovered;
+    public void GainMasteryExp(BigDouble exp) { masteryExperience = exp; }
+    public bool IsDiscovered() => discovered;
+    public bool IsReadyToLevelMastery() => false;
+    public string GetName() => "Spell";
+}
+
 namespace BepInEx
 {
     [AttributeUsage(AttributeTargets.Class)]
@@ -540,6 +559,7 @@ namespace UnityEngine
         Minus = 45,
         Alpha0 = 48,
         X = 120,
+        M = 109,
         LeftAlt = 308,
     }
 

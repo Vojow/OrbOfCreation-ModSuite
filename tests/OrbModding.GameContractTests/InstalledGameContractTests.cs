@@ -197,6 +197,26 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void OrbMentor_MatchesNativeMasteryCatalogSaveAndTypeXpContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+        Assert.Equal("System.Collections.Generic.List`1<SpellRecipeSO>", assembly.GetFieldType("SpellRecipeSO", "All"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("SpellRecipeSO", "masteryLevel"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("SpellRecipeSO", "masteryExperience"));
+        AssertMethod(assembly, "SpellRecipeSO", "GainMasteryExp", false, "System.Void", "BigDouble");
+        AssertMethod(assembly, "SpellRecipeSO", "IsDiscovered", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "IsReadyToLevelMastery", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "PurchaseLevel", false, "System.Void");
+        AssertMethod(assembly, "SpellRecipeSO", "CollectSaveData", false, "JsonSaveData");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "IdScriptableObject", "GetId", false, "System.Guid");
+        Assert.Equal("System.Boolean", assembly.GetFieldType("SpellRecipeSO+SpellRecipeSaveData", "discovered"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("SpellRecipeSO+SpellRecipeSaveData", "masteryExperience"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("SpellRecipeSO+SpellRecipeSaveData", "masteryLevel"));
+        AssertMethod(assembly, "SpellTypeSO", "GainTypeXp", false, "System.Void", "BigDouble", "System.Collections.Generic.List`1<TooltipNode>");
+    }
+
+    [GameAssemblyFact]
     public void ModConfigNavigation_MatchesKnownNativeLayout()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

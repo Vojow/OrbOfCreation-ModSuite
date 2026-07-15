@@ -85,6 +85,7 @@ try {
             [pscustomobject]@{ Project = 'src/OrbAutomata/OrbAutomata.csproj'; Name = 'OrbAutomata'; Assembly = 'OrbAutomata.dll' }
             [pscustomobject]@{ Project = 'src/OrbAchievementResonance/OrbAchievementResonance.csproj'; Name = 'OrbAchievementResonance'; Assembly = 'OrbAchievementResonance.dll' }
             [pscustomobject]@{ Project = 'src/OrbModConfig/OrbModConfig.csproj'; Name = 'OrbModConfig'; Assembly = 'OrbModConfig.dll' }
+            [pscustomobject]@{ Project = 'src/OrbMentor/OrbMentor.csproj'; Name = 'OrbMentor'; Assembly = 'OrbMentor.dll' }
         )
         foreach ($build in $builds) {
             Invoke-DotNet @('build', $build.Project, '-c', 'Release')
