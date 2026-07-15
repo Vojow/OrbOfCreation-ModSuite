@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Force $plugins | Out-Null
 $files = @('OrbMentor.dll','OrbModding.Common.dll')
 foreach ($file in $files) { Copy-Item (Join-Path $root "src/OrbMentor/bin/Release/netstandard2.1/$file") $plugins }
 if ($IncludeCompleteSuite) {
-    foreach ($item in @(@('OrbAutomata','OrbAutomata.dll'),@('OrbModConfig','OrbModConfig.dll'),@('OrbAchievementResonance','OrbAchievementResonance.dll'),@('OrbChronomancer','OrbChronomancer.dll'))) {
+    foreach ($item in @(@('OrbAutomata','OrbAutomata.dll'),@('OrbModConfig','OrbModConfig.dll'))) {
         $dir = Join-Path $stage "BepInEx/plugins/$($item[0])"; New-Item -ItemType Directory -Force $dir | Out-Null
         Copy-Item (Join-Path $root "src/$($item[0])/bin/Release/netstandard2.1/$($item[1])") $dir
     }
