@@ -132,6 +132,9 @@ internal sealed class AutoCastToggleButton : IDisposable
                 UnityEngine.Object.Destroy(tooltip);
             }
 
+            var hoverTooltip = root.AddComponent<HoverTooltip>();
+            hoverTooltip.Setup(new AutoCastTooltip(control.Config, control));
+
             var button = root.GetComponent<Button>();
             if (button is null)
             {
