@@ -2,7 +2,7 @@
 
 Orb Mod Config is the planned in-game configuration surface for the mod suite and other loaded BepInEx plugins.
 
-The current `0.5.0` build provides a simplified configuration UI:
+The current `0.5.1` build provides a simplified configuration UI:
 
 - feature-oriented presentation groups independent of raw BepInEx sections;
 - friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
@@ -27,6 +27,6 @@ The underlying editor continues to provide:
 
 `0.3.2` makes Mods participate in the top-level navigation state: opening it temporarily deactivates the selected native tab, toggling Mods closed restores that tab, and choosing another native tab closes Mods without restoring the prior selection.
 
-`0.5.0` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata.
+`0.5.1` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+ and keeps it last in the native navigation row.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.
