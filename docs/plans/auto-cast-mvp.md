@@ -16,7 +16,7 @@ The configured mode can be toggled from the default `Left Alt + X` shortcut or a
 
 - Default mode is `Disabled`; the public selector contains only `Disabled` and `Active`.
 - `ToggleShortcut` defaults to `Left Alt + X`; `ShowToggleButton` defaults to `true`.
-- A spell may start only when every finite, positive-cap resource used by its immediate cost or persistent drain is at least 80% full.
+- A spell may start only when every finite, positive-cap resource used by its immediate cost or persistent drain meets the configurable fullness threshold. Fresh installs default to 0%; affordability and reserve checks still apply.
 - Existing absolute, relative, and cost-ratio reserves also apply to immediate cast costs.
 - A manual spell fire pauses Auto Cast for two unscaled seconds by default. The pause is configurable.
 - Existing manual target selection always owns the targeting interface and pauses automation.
@@ -57,7 +57,7 @@ flowchart TD
     Shape -->|Yes| Next["Skip to next slot"]
     Shape -->|No| Targets{"All target requests have a valid target?"}
     Targets -->|No| Next
-    Targets -->|Yes| Resources{"At least 80% full and reserves pass?"}
+    Targets -->|Yes| Resources{"Configured fullness and reserves pass?"}
     Resources -->|No| Next
     Resources -->|Yes| Mode{"Active?"}
     Mode -->|No| Stop
@@ -78,4 +78,4 @@ flowchart TD
 
 ## Runtime validation
 
-Use a disposable backed-up save and begin with one harmless instant spell before adding targeting or persistent spells. With operational logging enabled, validate loadout ordering, cooldown/charge rejection, the 80% boundary, a zero-cost instant spell, a targeted spell, an aura followed by another spell, a channel that blocks rotation, manual pause, and emergency disable. Confirm that `Left Alt + X` and the queue-adjacent button produce the same Disabled/Active transitions and indicator state.
+Use a disposable backed-up save and begin with one harmless instant spell before adding targeting or persistent spells. With operational logging enabled, validate loadout ordering, cooldown/charge rejection, the configured threshold at 0% and 80%, a zero-cost instant spell, a targeted spell, an aura followed by another spell, a channel that blocks rotation, manual pause, and emergency disable. Confirm that `Left Alt + X` and the queue-adjacent button produce the same Disabled/Active transitions and indicator state.

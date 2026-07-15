@@ -12,8 +12,6 @@ namespace OrbAutomata;
 internal sealed class AutoCastToggleButton : IDisposable
 {
     internal const string ObjectName = "OrbAutomata.AutoCastToggle";
-    internal const float HorizontalGap = 12.0f;
-
     private static readonly Color OffColor = new Color(0.55f, 0.55f, 0.55f, 1.0f);
     private static readonly Color OnColor = new Color(0.4f, 1.0f, 0.55f, 1.0f);
     private static readonly Color BlockedColor = new Color(1.0f, 0.35f, 0.3f, 1.0f);
@@ -74,6 +72,8 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
 
         var autoBuyEnabled = Resources.FindObjectsOfTypeAll(autoBuyManagerType)
+            .OfType<Component>()
+            .Where(manager => manager.gameObject.activeInHierarchy)
             .Select(manager => ReadField(manager, "autoBuyEnabled"))
             .FirstOrDefault(variable => variable is not null);
         if (autoBuyEnabled is null)
@@ -84,7 +84,7 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         var nativeToggle = Resources.FindObjectsOfTypeAll(nativeToggleType)
             .OfType<Component>()
-            .FirstOrDefault(component => ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
+            .FirstOrDefault(component => IsNativeQueueToggle(component) && ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
         if (nativeToggle is null || nativeToggle.transform.parent is null)
         {
             reason = "native Auto Buy queue switch is not initialized";
@@ -95,10 +95,10 @@ internal sealed class AutoCastToggleButton : IDisposable
         GameObject? root = null;
         try
         {
-            root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, nativeToggle.transform.parent, false);
+            var group = StatusControlGroup.GetOrCreate(nativeToggle);
+            root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, group, false);
             root.name = ObjectName;
-            root.transform.SetSiblingIndex(nativeToggle.transform.GetSiblingIndex());
-            PositionLeftOfNativeToggle(root, nativeToggle.gameObject);
+            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
 
             var clonedNativeToggle = root.GetComponent(nativeToggleType);
             var iconImage = ReadField(clonedNativeToggle, "iconImage") as Image;
@@ -110,6 +110,14 @@ internal sealed class AutoCastToggleButton : IDisposable
             {
                 iconImage.sprite = spellIcon;
                 iconImage.preserveAspect = true;
+            }
+            if (text is not null)
+            {
+                text.gameObject.SetActive(true);
+                text.enabled = true;
+                text.alignment = TextAlignmentOptions.Center;
+                text.raycastTarget = false;
+                text.transform.SetAsLastSibling();
             }
             if (clonedNativeToggle is Behaviour behaviour)
             {
@@ -131,6 +139,9 @@ internal sealed class AutoCastToggleButton : IDisposable
 
                 UnityEngine.Object.Destroy(tooltip);
             }
+
+            var hoverTooltip = root.AddComponent<HoverTooltip>();
+            hoverTooltip.Setup(new AutoCastTooltip(control.Config, control));
 
             var button = root.GetComponent<Button>();
             if (button is null)
@@ -207,12 +218,8 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         if (_text is not null)
         {
-            _text.text = state switch
-            {
-                AutoCastToggleVisualState.On => "AC ON",
-                AutoCastToggleVisualState.Blocked => "AC !",
-                _ => "AC OFF",
-            };
+            _text.text = FormatLabel(state);
+            _text.color = color;
         }
 
         if (announce)
@@ -220,6 +227,13 @@ internal sealed class AutoCastToggleButton : IDisposable
             ShowStateNotice(state);
         }
     }
+
+    internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
+    {
+        AutoCastToggleVisualState.On => "AC ON",
+        AutoCastToggleVisualState.Blocked => "AC !",
+        _ => "AC OFF",
+    };
 
     public void Dispose()
     {
@@ -350,39 +364,11 @@ internal sealed class AutoCastToggleButton : IDisposable
         return null;
     }
 
-    private static void PositionLeftOfNativeToggle(GameObject clone, GameObject native)
-    {
-        if (clone.transform is not RectTransform cloneRect || native.transform is not RectTransform nativeRect)
-        {
-            return;
-        }
-
-        var renderedWidth = Math.Abs(nativeRect.rect.width);
-        if (renderedWidth < 1.0f)
-        {
-            renderedWidth = Math.Abs(nativeRect.sizeDelta.x);
-        }
-
-        if (renderedWidth < 1.0f)
-        {
-            renderedWidth = 44.0f;
-        }
-
-        cloneRect.anchoredPosition = new Vector2(
-            CalculateLeftX(nativeRect.anchoredPosition.x, renderedWidth),
-            nativeRect.anchoredPosition.y);
-    }
-
-    internal static float CalculateLeftX(float nativeX, float renderedWidth)
-    {
-        var width = Math.Abs(renderedWidth);
-        if (width < 1.0f)
-        {
-            width = 44.0f;
-        }
-
-        return nativeX - width - HorizontalGap;
-    }
+    private static bool IsNativeQueueToggle(Component component) =>
+        component.gameObject.activeInHierarchy &&
+        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
+        component.gameObject.name != "OrbMentor.Toggle" &&
+        component.transform.parent?.name != StatusControlGroup.ObjectName;
 
     private static Sprite? FindEquippedSpellIcon(out string source)
     {

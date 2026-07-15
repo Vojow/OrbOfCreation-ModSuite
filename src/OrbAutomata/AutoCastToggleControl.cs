@@ -16,6 +16,8 @@ internal sealed class AutoCastToggleControl
         _config = config;
     }
 
+    internal AutomataConfig Config => _config;
+
     public AutoCastToggleVisualState State
     {
         get

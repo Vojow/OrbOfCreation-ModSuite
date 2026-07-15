@@ -27,7 +27,7 @@ Auto Research is deliberately absent from the runtime and public UI. Its legacy 
 
 ### P1 — package quality
 
-1. Produce a versioned zip with only the required DLLs, README, changelog, license, and install/uninstall instructions.
+1. Produce a versioned zip with only the required DLLs, README, changelog, license, and install/uninstall instructions. Inspect raw ZIP entries and reject backslashes, rooted paths, or missing `BepInEx/plugins/` entries so extraction works on SteamOS/Bazzite.
 2. Add a first-run section explaining Disabled/Active modes, affordability, optional reserves, queue slots, Bulk Development, action multiplier behavior, and the emergency stop.
 3. Add a troubleshooting section covering log opt-in, duplicate DLLs, conflicting auto-buy plugins, and restoring the previous version.
 4. Capture two screenshots: the Mods/Automata configuration page and a correctly maintained native queue.

@@ -6,11 +6,26 @@ namespace OrbModding.Common;
 /// </summary>
 public sealed class ModConfigMetadata
 {
-    public ModConfigMetadata(int sectionOrder, int settingOrder, bool hidden = false)
+    public ModConfigMetadata(
+        int sectionOrder,
+        int settingOrder,
+        bool hidden = false,
+        string? displaySection = null,
+        string? displayName = null,
+        bool restartRequired = false,
+        string? dependencySection = null,
+        string? dependencyKey = null,
+        string dependencyValue = "true")
     {
         SectionOrder = sectionOrder;
         SettingOrder = settingOrder;
         Hidden = hidden;
+        DisplaySection = displaySection;
+        DisplayName = displayName;
+        RestartRequired = restartRequired;
+        DependencySection = dependencySection;
+        DependencyKey = dependencyKey;
+        DependencyValue = dependencyValue;
     }
 
     public int SectionOrder { get; }
@@ -18,4 +33,10 @@ public sealed class ModConfigMetadata
     public int SettingOrder { get; }
 
     public bool Hidden { get; }
+    public string? DisplaySection { get; }
+    public string? DisplayName { get; }
+    public bool RestartRequired { get; }
+    public string? DependencySection { get; }
+    public string? DependencyKey { get; }
+    public string DependencyValue { get; }
 }

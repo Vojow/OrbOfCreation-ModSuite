@@ -10,12 +10,14 @@ Choose the path that matches what you are trying to do.
 - [Remove the mods](user-guide/uninstalling.md)
 - [Orb Automata behavior reference](../src/OrbAutomata/README.md)
 - [Orb Mod Config reference](../src/OrbModConfig/README.md)
+- [Orb Mentor beta reference](../src/OrbMentor/README.md)
 
 ## Contributors and maintainers
 
 - [Development setup](development/setup.md)
 - [Testing and compatibility](development/testing.md)
 - [Runtime validation protocol](development/runtime-validation.md)
+- [Orb Mentor interactive runtime checklist](development/mentor-runtime-validation.md)
 - [Release process](development/releases.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)
@@ -33,5 +35,6 @@ Research pages distinguish **Verified**, **Inferred**, and **Candidate** finding
 
 - [Project roadmap](plans/roadmap.md)
 - [Plan index and lifecycle status](plans/README.md)
+- [Orb Mentor artifacts and alchemy design](plans/mentor-artifacts-alchemy.md)
 
 Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.

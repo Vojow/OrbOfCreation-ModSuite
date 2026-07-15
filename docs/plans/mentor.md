@@ -1,6 +1,6 @@
 # Orb Mentor plan
 
-> **Lifecycle: Planned.** The spell MVP contract is defined, but no public plugin has been released.
+> **Lifecycle: Implemented / beta candidate.** The spells-only implementation awaits interactive runtime validation before release.
 
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 

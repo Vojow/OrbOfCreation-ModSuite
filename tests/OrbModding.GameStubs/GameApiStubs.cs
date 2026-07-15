@@ -5,6 +5,53 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 
+public struct BigDouble
+{
+    public BigDouble(double mantissa, long exponent) { this.mantissa = mantissa; this.exponent = exponent; }
+    public double mantissa;
+    public long exponent;
+}
+
+public class SpellRecipeSO
+{
+    public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
+    public int masteryLevel;
+    public BigDouble masteryExperience;
+    public bool discovered;
+    public void GainMasteryExp(BigDouble exp) { masteryExperience = exp; }
+    public bool IsDiscovered() => discovered;
+    public bool IsReadyToLevelMastery() => false;
+    public string GetName() => "Spell";
+}
+
+public interface ITooltipable
+{
+    string GetName();
+    string GetDisplayType();
+    UnityEngine.Sprite GetIcon();
+    UnityEngine.Color GetColor();
+    bool IsColoredIcon();
+    bool HasAltTooltips();
+    string GetDescription();
+    List<TooltipNode> GetTooltipNodes();
+    List<TooltipNode> GetAltTooltipNodes();
+}
+
+public class TooltipableObject : UnityEngine.ScriptableObject { }
+
+public class TooltipNode
+{
+    public TooltipNode(string text) { }
+    public TooltipNode(string text, UnityEngine.Color color) { }
+}
+
+public class HoverTooltip : UnityEngine.MonoBehaviour
+{
+    public ITooltipable? tooltipItem;
+    public TooltipableObject? setupObject;
+    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null) { tooltipItem = item; }
+}
+
 namespace BepInEx
 {
     [AttributeUsage(AttributeTargets.Class)]
@@ -540,6 +587,7 @@ namespace UnityEngine
         Minus = 45,
         Alpha0 = 48,
         X = 120,
+        M = 109,
         LeftAlt = 308,
     }
 
@@ -624,6 +672,11 @@ namespace UnityEngine.UI
     {
     }
 
+    public class LayoutElement : UnityEngine.Behaviour
+    {
+        public bool ignoreLayout { get; set; }
+    }
+
     public class ScrollRect : UnityEngine.Behaviour
     {
         public enum MovementType
@@ -692,8 +745,9 @@ namespace TMPro
         public UnityEngine.RectTransform? textViewport { get; set; }
         public TextMeshProUGUI? textComponent { get; set; }
         public string text { get; set; } = string.Empty;
-        public LineType lineType { get; set; }
-        public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
+          public LineType lineType { get; set; }
+          public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
+          public OnChangeEvent onSelect { get; } = new OnChangeEvent();
 
         public sealed class OnChangeEvent
         {
