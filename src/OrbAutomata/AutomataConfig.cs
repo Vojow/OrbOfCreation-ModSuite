@@ -234,6 +234,29 @@ internal sealed class AutomataConfig
         int settingOrder,
         AcceptableValueBase? acceptableValues = null)
     {
+        var hidden = section == "General" && key == "Enabled";
+        var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids" || key == "MaxCandidatesPerScan");
+        var displaySection = section switch
+        {
+            "AutoBuy" when !advancedAutoBuy => "Auto Buy",
+            "AutoCast" => "Auto Cast",
+            _ => "Advanced",
+        };
+        var displayName = key switch
+        {
+            "Mode" when section == "AutoBuy" => "Auto Buy",
+            "Mode" when section == "AutoCast" => "Auto Cast",
+            "AffordabilityMode" => "Structure affordability",
+            "UpgradeAffordabilityMode" => "Upgrade affordability",
+            "IncludeStructures" => "Buy structures",
+            "IncludeUpgrades" => "Buy upgrades",
+            "StartResourcePercent" => "Minimum resource percent",
+            "CpuBudgetMilliseconds" => "CPU budget (ms)",
+            "AllowedUuids" => "Allowed UUIDs",
+            "BlockedUuids" => "Blocked UUIDs",
+            _ => null,
+        };
+        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : 20;
         return config.Bind(
             section,
             key,
@@ -241,7 +264,7 @@ internal sealed class AutomataConfig
             new ConfigDescription(
                 description,
                 acceptableValues,
-                new ModConfigMetadata(sectionOrder, settingOrder)));
+                new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName)));
     }
 }
 

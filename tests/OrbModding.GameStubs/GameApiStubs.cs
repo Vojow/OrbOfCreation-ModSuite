@@ -745,8 +745,9 @@ namespace TMPro
         public UnityEngine.RectTransform? textViewport { get; set; }
         public TextMeshProUGUI? textComponent { get; set; }
         public string text { get; set; } = string.Empty;
-        public LineType lineType { get; set; }
-        public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
+          public LineType lineType { get; set; }
+          public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
+          public OnChangeEvent onSelect { get; } = new OnChangeEvent();
 
         public sealed class OnChangeEvent
         {

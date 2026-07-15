@@ -2,14 +2,21 @@
 
 Orb Mod Config is the planned in-game configuration surface for the mod suite and other loaded BepInEx plugins.
 
-The current `0.4.0` build provides the publication-oriented configuration MVP:
+The current `0.5.0` build provides a simplified configuration UI:
+
+- feature-oriented presentation groups independent of raw BepInEx sections;
+- friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
+- automatic Steam keyboard input for text fields when running on Steam Deck;
+- no hard Steamworks dependency, so desktop and non-Steam startup remain unchanged;
+
+The underlying editor continues to provide:
 
 - discovers loaded plugins and their typed BepInEx configuration entries;
-- groups entries deterministically by mod and section, honoring optional public order/visibility metadata;
+- groups entries deterministically by mod and presentation group, honoring optional public metadata;
 - classifies the editor each setting will require;
 - clones the native Time button visuals into a Mods button immediately after Time;
 - opens a mod-owned overlay panel and closes it from Mods or any native top-level tab;
-- presents loaded mods as a horizontal tab row and BepInEx sections as a second tab row;
+- presents loaded mods as a horizontal tab row and simplified feature groups as a second tab row;
 - renders a scrollable settings list with descriptions, ranges, current values, and defaults;
 - edits booleans, enums, bounded/unbounded numbers, strings, and keyboard-shortcut serialization;
 - stages all changes until Apply, supports per-setting Default and global Revert, validates before writing, and saves through each owning `ConfigFile`;
@@ -20,6 +27,6 @@ The current `0.4.0` build provides the publication-oriented configuration MVP:
 
 `0.3.2` makes Mods participate in the top-level navigation state: opening it temporarily deactivates the selected native tab, toggling Mods closed restores that tab, and choosing another native tab closes Mods without restoring the prior selection.
 
-`0.4.0` adds explicit section/setting ordering and hidden legacy-setting metadata. The completed navigation probe is no longer run or exposed in public configuration, and routine open/close/apply events no longer write log chatter.
+`0.5.0` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.
