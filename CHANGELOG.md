@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
+
+- Added the complete suite package with Orb Automata, Orb Mentor, Orb Mod Config, Orb Achievement Resonance, Orb Chronomancer, and Orb Modding Common.
+- Bundled Orb Mod Config 0.5.1.
+- Made the Mods configuration tab available from the start of a new save instead of requiring the NG+-gated Time tab.
+- Kept Mods as the final item when native navigation tabs unlock or reorder.
 
 - Default fresh Auto Cast configurations to a 0% resource-fullness threshold while retaining affordability and reserve checks.
 - Write release ZIP entries with portable `/` separators and validate their layout for Linux, SteamOS, and Bazzite extraction.
@@ -12,8 +17,6 @@
 - Keep the logging probe development-only and fresh installations disabled.
 
 All notable user-facing changes are documented here. The project follows semantic versioning per plugin while the suite remains in beta.
-
-## Unreleased
 
 - Public-repository documentation, contribution guidance, CI, and release hygiene.
 
