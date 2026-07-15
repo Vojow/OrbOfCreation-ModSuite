@@ -104,4 +104,16 @@ public sealed class MentorTests
         Assert.False(config.AlchemyEnabled.Value);
         Assert.Equal(10.0, config.AlchemySharePercent.Value);
     }
+
+    [Fact]
+    public void ContinuousDomainsDistributeAtMostOncePerWindow()
+    {
+        long next = 0;
+
+        Assert.True(MentorRuntime.DistributionDue(100, ref next, 25));
+        Assert.Equal(125, next);
+        Assert.False(MentorRuntime.DistributionDue(124, ref next, 25));
+        Assert.True(MentorRuntime.DistributionDue(125, ref next, 25));
+        Assert.Equal(150, next);
+    }
 }

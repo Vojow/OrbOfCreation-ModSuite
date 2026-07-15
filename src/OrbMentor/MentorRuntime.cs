@@ -16,12 +16,15 @@ internal sealed class MentorRuntime
     {
         public readonly MentorEngine Engine = new();
         public MentorAmount FrameXp;
+        public long NextDistributionTimestamp;
     }
 
     private const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
     private readonly MentorConfig _config;
     private readonly ManualLogSource _log;
     private readonly Dictionary<MentorDomain, DomainState> _domains = Enum.GetValues(typeof(MentorDomain)).Cast<MentorDomain>().ToDictionary(d => d, _ => new DomainState());
+    private readonly Dictionary<MentorDomain, MentorRecipe[]> _catalogCache = new();
+    private static readonly long ContinuousDistributionTicks = Math.Max(1, Stopwatch.Frequency / 4);
     private bool _guarded;
     private int _nextDomain;
     private string? _blockedReason;
@@ -71,9 +74,9 @@ internal sealed class MentorRuntime
     public void LateTick()
     {
         if (!_config.Active || IsBlocked) { Cancel(); return; }
-        PlanDomain(MentorDomain.Spells, _config.SharePercent.Value);
-        if (_config.ArtifactsEnabled.Value) PlanDomain(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value); else CancelDomain(MentorDomain.Artifacts);
-        if (_config.AlchemyEnabled.Value) PlanDomain(MentorDomain.Alchemy, _config.AlchemySharePercent.Value); else CancelDomain(MentorDomain.Alchemy);
+        PlanDomain(MentorDomain.Spells, _config.SharePercent.Value, continuous: false);
+        if (_config.ArtifactsEnabled.Value) PlanDomain(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value, continuous: true); else CancelDomain(MentorDomain.Artifacts);
+        if (_config.AlchemyEnabled.Value) PlanDomain(MentorDomain.Alchemy, _config.AlchemySharePercent.Value, continuous: true); else CancelDomain(MentorDomain.Alchemy);
 
         var timer = Stopwatch.StartNew();
         var domains = new[] { MentorDomain.Spells, MentorDomain.Artifacts, MentorDomain.Alchemy };
@@ -92,12 +95,15 @@ internal sealed class MentorRuntime
             operation++;
             Grant(domain, grants[0]);
         }
+        _catalogCache.Clear();
     }
 
-    private void PlanDomain(MentorDomain domain, double percent)
+    private void PlanDomain(MentorDomain domain, double percent, bool continuous)
     {
         var state = _domains[domain];
         if (!state.FrameXp.IsValidPositive) return;
+        var now = Stopwatch.GetTimestamp();
+        if (continuous && !DistributionDue(now, ref state.NextDistributionTimestamp, ContinuousDistributionTicks)) return;
         if (TryCatalog(domain, out var catalog))
         {
             var highest = catalog.Where(r => r.IsDiscovered).Select(r => r.MasteryLevel).DefaultIfEmpty().Max();
@@ -140,13 +146,14 @@ internal sealed class MentorRuntime
         savedXp.SetValue(equipment, current);
     }
 
-    public void Cancel() { foreach (var domain in _domains.Keys.ToArray()) CancelDomain(domain); _activeArtifact = null; }
-    private void CancelDomain(MentorDomain domain) { _domains[domain].FrameXp = default; _domains[domain].Engine.Cancel(); }
+    public void Cancel() { foreach (var domain in _domains.Keys.ToArray()) CancelDomain(domain); _activeArtifact = null; _catalogCache.Clear(); }
+    private void CancelDomain(MentorDomain domain) { _domains[domain].FrameXp = default; _domains[domain].NextDistributionTimestamp = 0; _domains[domain].Engine.Cancel(); _catalogCache.Remove(domain); }
     public void ClearBlock() => _blockedReason = null;
     private void Block(string reason) { if (_blockedReason == reason) return; _blockedReason = reason; Cancel(); _log.LogError($"Orb Mentor blocked: {reason}"); }
 
     private bool TryCatalog(MentorDomain domain, out MentorRecipe[] catalog)
     {
+        if (_catalogCache.TryGetValue(domain, out catalog!)) return true;
         var typeName = domain switch { MentorDomain.Spells => "SpellRecipeSO", MentorDomain.Artifacts => "EquipmentSO", _ => "AlchemyRecipeSO" };
         var type = Type.GetType(typeName + ", Assembly-CSharp", false);
         var list = type is null ? null : FindField(type, "All")?.GetValue(null) as IEnumerable;
@@ -159,6 +166,7 @@ internal sealed class MentorRuntime
             result.Add(new MentorRecipe(id, ReadInt(item, MasteryField(domain)), IsDiscovered(domain, item)));
         }
         catalog = result.ToArray();
+        _catalogCache[domain] = catalog;
         return true;
     }
 
@@ -194,5 +202,12 @@ internal sealed class MentorRuntime
             foreach (var name in new[] { "GetUuid", "GetUUID", "GetGuid", "GetId" }) { var value = type.GetMethod(name, AllFlags | BindingFlags.DeclaredOnly, null, Type.EmptyTypes, null)?.Invoke(instance, Array.Empty<object>()); if (!string.IsNullOrWhiteSpace(value?.ToString())) return value!.ToString(); }
         }
         return null;
+    }
+
+    internal static bool DistributionDue(long now, ref long next, long interval)
+    {
+        if (now < next) return false;
+        next = now + Math.Max(1, interval);
+        return true;
     }
 }
