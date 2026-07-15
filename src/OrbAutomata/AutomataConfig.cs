@@ -178,7 +178,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.X, UnityEngine.KeyCode.LeftAlt), "Toggle Auto Cast between Disabled and Active. Default: Left Alt + X.", 15, 5),
                 Bind(config, "AutoCast", "ShowToggleButton", true, "Show the Auto Cast state button immediately left of the native Auto Buy queue switch.", 15, 6),
                 Bind(config, "AutoCast", "EvaluationIntervalSeconds", 0.25f, "Unscaled seconds between Auto Cast evaluations.", 15, 10, new AcceptableValueRange<float>(0.1f, 10.0f)),
-                Bind(config, "AutoCast", "StartResourcePercent", 80.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
+                Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
                 Bind(config, "Performance", "CpuBudgetMilliseconds", 4.0f, "Soft CPU budget for each scan or per-frame purchase slice. Higher values fill the queue faster but may reduce frame rate.", 30, 0),

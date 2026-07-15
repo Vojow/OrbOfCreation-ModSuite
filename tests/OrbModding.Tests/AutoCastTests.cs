@@ -10,6 +10,25 @@ namespace OrbModding.Tests;
 
 public sealed class AutoCastTests
 {
+    [Fact]
+    public void FreshConfigUsesZeroResourceThreshold()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+
+        Assert.Equal(0.0f, config.AutoCastStartResourcePercent.Value);
+    }
+
+    [Fact]
+    public void ExistingResourceThresholdIsPreserved()
+    {
+        var file = new ConfigFile();
+        file.Bind("AutoCast", "StartResourcePercent", 80.0f, "existing").Value = 37.0f;
+
+        var config = AutomataConfig.Bind(file);
+
+        Assert.Equal(37.0f, config.AutoCastStartResourcePercent.Value);
+    }
+
     [Theory]
     [InlineData(0, "AC OFF")]
     [InlineData(1, "AC ON")]
@@ -151,6 +170,7 @@ public sealed class AutoCastTests
         var admitted = Spell("admitted", immediate: Costs(80, 100, 1), drain: Costs(90, 100, 1));
         using var fixture = Create(belowImmediate, belowDrain, admitted);
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
 
         fixture.Engine.Tick(1.0f);
 
@@ -165,6 +185,7 @@ public sealed class AutoCastTests
         var below = Spell("mana hungry", immediate: Costs(79, 100, 1));
         using var fixture = Create(below);
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
         fixture.Config.EnableOperationalLogging.Value = true;
         fixture.Config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Verbose;
 
@@ -186,6 +207,7 @@ public sealed class AutoCastTests
             drain: Costs(90, 100, 3));
         using var fixture = Create(spell);
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
         fixture.Config.EnableOperationalLogging.Value = true;
 
         fixture.Engine.Tick(1.0f);
