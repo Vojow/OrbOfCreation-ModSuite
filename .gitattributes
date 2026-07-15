@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.sln text eol=crlf
+*.dll binary
+*.exe binary
+*.pdb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.zip binary

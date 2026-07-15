@@ -1,0 +1,30 @@
+# Local reverse-engineering inputs and generated scratch output
+.analysis/
+artifacts/
+
+# .NET build output
+bin/
+obj/
+bin-stubs/
+obj-stubs/
+
+# Local game libraries copied for compilation
+lib/
+
+# IDE and user-specific files
+.vs/
+*.user
+*.suo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Local release staging
+release-staging/
+*.nupkg

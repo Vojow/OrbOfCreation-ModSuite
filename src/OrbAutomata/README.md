@@ -1,0 +1,65 @@
+# Orb Automata
+
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.4.0` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+
+## Build
+
+Set `OOC_GAME_DIR` to the Orb of Creation installation root, then build the project:
+
+```powershell
+$env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
+dotnet build .\src\OrbAutomata\OrbAutomata.csproj -c Release
+```
+
+Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
+
+## Release defaults
+
+- Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades.
+- Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
+- Both mode selectors expose only `Disabled` and `Active`.
+- One native queue slot is reserved for manual actions.
+- Structure repeat follows the live Bulk Development value.
+- Native action-multiplier handling is off by default.
+- Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
+- Operational decision logging is off; startup, warning, and error records remain enabled.
+- `EmergencyDisable` immediately stops new automated purchases and casts.
+
+The former runtime-probe, per-session purchase-limit, DryRun, expert-override, and Auto Research settings are not part of the release configuration or Mod Config UI. Existing legacy keys are removed when the configuration is loaded and saved.
+
+## Auto Buy
+
+Automata discovers native `StructureSO` and `UpgradeSO` candidates, evaluates the complete bounded set, ranks eligible purchases by their highest cost-to-current-resource ratio, and revalidates every level immediately before calling the native purchase method.
+
+`AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
+
+- `BuyAll` accepts any natively affordable action that passes reserves.
+- `Excess10`, `Excess100`, and `Excess1000` limit each resource cost to 1/10, 1/100, or 1/1000 of its current amount.
+
+Reserves are an optional second policy. After each level, Automata requires enough resource for that level plus the larger of `AbsoluteReserve` and `cost × RelativeReserveMultiplier`. Because the game deducts each native cost immediately, a repeated or multiplied purchase rechecks the progressively lower live balance before every next level.
+
+When `RespectActionMultiplier=true`, Automata reads the game's current action multiplier, caps it to free queue room, and submits that many one-level native purchases. It does not pass an uncapped multiplier into `UpgradeSO.Purchase()`, whose native implementation does not cap itself to remaining queue room. Holding a modifier key can change the live multiplier, so the option remains off by default.
+
+When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
+
+### Queue scheduling
+
+The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. Once a ranked batch is prepared, it also checks queue room every frame and feeds the first newly available slot without waiting for the queue to become nearly empty or performing another scan. After a successful batch, the following scan begins on the next frame while existing native actions continue.
+
+This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
+
+Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
+
+## Auto Cast
+
+Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. It skips empty and charged slots, treats an active aura as already satisfied, pauses while a channel is active, respects native readiness and targeting, and never turns persistent spells off.
+
+Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
+
+The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active configuration. It uses the first equipped spell icon when available.
+
+## Diagnostics
+
+Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. Summary mode records recommendations, successful work, batches, and queue waits. Verbose mode also records bounded candidate rejections and detailed Auto Cast resource snapshots.
+
+Orb of Creation's LeanTween pool defaults to 400 simultaneous tweens. AutobuyOrb raises that capacity because very large purchase bursts can create enough UI popups to exhaust it. This is separate from queue scheduling; Automata does not currently override the global tween pool. If the BepInEx log reports LeanTween exhaustion or UI animations begin disappearing during unusually large batches, treat a restart-time tween-capacity option as a separate performance feature.

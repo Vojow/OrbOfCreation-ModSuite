@@ -1,0 +1,171 @@
+# Orb Automata plan
+
+[Back to roadmap](roadmap.md)
+
+## Goal
+
+Coordinated implementation iterations, the shared admission model, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration-plan.md).
+
+Automate repetitive actions through transparent, configurable rules without silently consuming resources the player intended to reserve.
+
+## Product priorities
+
+Automata now prioritizes the actions that players repeat most often:
+
+1. **Auto Buy** — attributes/structures first, then verified upgrades and other levelable purchases.
+2. **Auto Cast** — selected player spells, subject to readiness, targeting, cooldown, channel, and reserve rules.
+3. **Auto Concept** — maintain selected concept recipes and levels through the game's concept/alchemy pipeline.
+4. **Auto Harvest** — execute selected ready harvest actions without taking over planting or plot strategy in the first slice.
+5. **Original expansion modules** — crafting, scribing, ordinary alchemy, and finally optional auto-research.
+
+Research is no longer the MVP. The release plugin removes the deprecated research runtime and cleans its legacy configuration keys while preserving the shared resource-admission model used by Auto Buy and Auto Cast.
+
+## Current implementation status
+
+The first A1 implementation slice now covers both audited native purchase families:
+
+- `StructureSO.All`: availability, one-level cost, queue state, and `Purchase(true)`.
+- `UpgradeSO.All`: availability, one-level cost, queued level verification, and `Purchase()` while native multi-buy is temporarily forced to one and restored.
+- Disabled/Active release modes, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
+
+Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases; the `0.4.0` queue-continuation and action-multiplier changes require the focused release matrix in the public checklist.
+
+## AutobuyOrb reference boundary
+
+[AutobuyOrb](https://github.com/IngoHHacks/AutobuyOrb) was a useful behavior and reverse-engineering reference, not a runtime dependency or supported companion. Its implementation buys available `StructureSO.All` entries through native `Purchase()`, ranks by true-spend/current-resource ratio, respects action-queue room, supports excess thresholds, bulk limits, a buy interval, a per-frame time budget, optional native action-multiplier behavior, and a restart-time LeanTween capacity override.
+
+Automata does not patch AutobuyOrb, depend on its types, or implement coexistence behavior. The supported installation has one auto-buy plugin. Running multiple buyers is explicitly unsupported because they can race for resources, queue room, and the global multi-buy value.
+
+## Core rule model
+
+Every candidate action is evaluated against the same policy:
+
+```mermaid
+flowchart LR
+    Candidate["Candidate action"] --> Available{"Available?"}
+    Available -->|No| Reject["Reject with reason"]
+    Available -->|Yes| Queue{"Queue room?"}
+    Queue -->|No| Reject
+    Queue -->|Yes| Reserve{"Reserves remain?"}
+    Reserve -->|No| Reject
+    Reserve -->|Yes| Priority["Compute priority"]
+    Priority --> Budget{"Action/time budget?"}
+    Budget -->|No| Defer["Defer"]
+    Budget -->|Yes| Execute["Use normal game API"]
+```
+
+Common conditions:
+
+- Module enabled.
+- Object is available and unlocked.
+- Prerequisites are met.
+- Queue has sufficient room.
+- Cost does not violate absolute or relative reserves.
+- Cost/current-resource ratio is under the configured threshold.
+- Per-tick action and CPU budgets are not exhausted.
+
+## Resource reserves
+
+Support both reserve types:
+
+- **Absolute:** keep at least `1e9` of a resource.
+- **Relative:** keep at least 100 times the evaluated action cost.
+
+When an action costs multiple resources, all reserve checks must pass. Calculations must use `BigDouble` rather than conversion to `double`.
+
+Reserves have two enforcement modes:
+
+- **Atomic purchases/casts/actions:** validate immediately before invoking the native action.
+- **Progressive drains:** admission checks only unless the native system exposes a safe pause/resume contract. Unrelated manual actions and other mods can still change quantities afterward.
+
+## Priority model
+
+Start simple and deterministic:
+
+1. User-pinned targets.
+2. Explicit category priority.
+3. Lowest cost/current-resource ratio.
+4. Stable UUID ordering as the final tie-breaker.
+
+Do not introduce opaque scoring until the deterministic rules are proven.
+
+## Module delivery order
+
+### A1 — Auto Buy vertical slice
+
+- Reproduce the useful AutobuyOrb modes for native attribute/structure purchases: disabled, buy all, and 10x/100x/1000x excess.
+- Add Automata's absolute/relative reserve policy, dry-run explanations, queue-space reservation, action limits, resumable scans, and emergency disable.
+- Use `GetTrueSpend()` semantics and `BigDouble`; a zero resource quantity must never create a falsely attractive ratio.
+- Start with `StructureSO` because its native availability, next-cost, global registry, queue, and `Purchase()` path are statically known from AutobuyOrb and the game assembly.
+- Probe `UpgradeSO` and each additional levelable family separately. “Purchasable” is not permission to invoke an arbitrary method.
+
+Exit: structure and upgrade affordability thresholds can be tuned independently, and Automata active mode buys through the normal queue without overspending reserves or blocking manual play in a supported single-buyer installation.
+
+### A2 — Auto Cast
+
+The agreed first slice is specified in [Auto Cast MVP](auto-cast-mvp.md). It operates on the complete active loadout in native slot order, uses a round-robin cursor, admits casts at an 80% resource-fullness threshold plus shared reserves, automatically fulfills owned target requests with native random-valid selection, skips active auras, waits behind active channels, and excludes charged spells. Manual casts pause the rotation for a configurable two seconds.
+
+Exit: the equipped rotation casts through `SpellManager.FireSpellIndex`, never hijacks manual targeting or interrupts a channel, respects cost and drain admission, and leaves all persistent-spell shutdown to the game or player.
+
+### A3 — Auto Concept
+
+Concepts reuse alchemy runtime types in this build:
+
+- Reductive, Reflective, and Conceptualization are `AlchemyTypeSO` families.
+- Study/Learning concept definitions are `AlchemyRecipeSO` assets.
+- `ConceptRecipes` is an `AlchemyRecipeListVariable` and `ActiveConcepts` is an `AlchemyInstanceListVariable`.
+
+The module must filter the concept registries rather than treating all alchemy recipes as concepts. Its first slice maintains a user-selected concept and conservative level/drain target. Automatic discovery, loadout swapping, mastery optimization, and multi-concept balancing come later.
+
+Exit: a selected unlocked concept is loaded or maintained through the native concept/alchemy API, with capacity and resource drains respected and no ordinary alchemy recipe touched.
+
+### A4 — Auto Harvest
+
+- Discover `HarvestElementSO`, `HarvestTypeSO`, `HarvestActionSO`, live `HarvestActionInstance`, and plot-node relationships.
+- Start with an allowlisted ready harvest action on an existing plot; do not choose seeds, replace plants, or redesign plot layouts.
+- Validate readiness, repeatability, action cost, action-queue room, yield state, and whether an action destroys or preserves the plant.
+- Add replanting and plot strategies only as later explicit policies.
+
+Exit: Automata harvests only selected ready targets through the native action path and never destroys a plant when the configured policy requires preservation.
+
+### A5+ — Original expansion modules
+
+Add auto-crafting, auto-scribing, ordinary auto-alchemy, and optional auto-research one vertical slice at a time. Reuse the same policies and diagnostics, but keep separate adapters because availability, queueing, costs, drains, cancellation, and completion differ by domain.
+
+## Explainability
+
+Automation must expose decisions in two forms:
+
+- BepInEx log entries at configurable verbosity.
+- Enhanced tooltip lines such as:
+
+```text
+Automata: Eligible
+Priority: 3
+Reserve check: Pass
+Next evaluation: 0.8s
+```
+
+Rejected actions should have a concise reason: locked, insufficient queue space, reserve violation, disabled category, or lower priority.
+
+## Performance controls
+
+- Evaluation interval defaults to 0.5 seconds of unscaled time.
+- Maximum actions per evaluation defaults to 1.
+- CPU budget defaults to 25% of a 60 FPS frame.
+- Cache static candidate lists and invalidate on relevant observable changes.
+- Never scan and sort every game object every frame.
+
+## Definition of done for v0.1
+
+- Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
+- Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.
+- Auto Concept supports one explicitly selected concept-maintenance policy.
+- Auto Harvest supports one explicitly selected non-destructive harvest policy.
+- Every module rejects unknown state, cost, or action contracts instead of guessing.
+- Automata never starts an action whose conservative admission calculation would cross configured reserves.
+- Manual actions remain available.
+- It behaves consistently at Chronomancer 1×, 2×, 4×, and 8×.
+- Disabling the plugin stops new actions immediately.
+- Existing queued actions are not deleted or rewritten.
+- Documentation and packaging state that concurrent auto-buy plugins are unsupported.

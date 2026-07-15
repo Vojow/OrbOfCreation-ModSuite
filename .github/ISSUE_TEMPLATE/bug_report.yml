@@ -1,0 +1,72 @@
+name: Bug report
+description: Report reproducible mod behavior or installation problems.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Back up your save first. Do not upload private saves or unredacted logs unless you intend to share their contents.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Orb Automata
+        - Orb Mod Config
+        - Orb Chronomancer
+        - Orb Achievement Resonance
+        - Build, tests, or documentation
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Include the game, BepInEx, and plugin versions.
+      placeholder: "Orb of Creation ..., BepInEx 5.4.23.5, Orb Automata ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest repeatable sequence.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized log excerpt
+      description: Remove usernames, email addresses, local paths, and unrelated data.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I backed up my save before reproducing the issue.
+          required: true
+        - label: I am not running another automatic buyer alongside Automata.
+          required: false
+        - label: I removed personal information from attached logs.
+          required: true

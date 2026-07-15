@@ -1,0 +1,8 @@
+<Project>
+  <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences" Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true'">
+    <Error Condition="'$(GameRoot)' == ''" Text="Set OOC_GAME_DIR to the Orb Of Creation install root before building plugin projects." />
+    <Error Condition="'$(GameRoot)' != '' and !Exists('$(BepInExCoreDir)/BepInEx.dll')" Text="BepInEx.dll was not found under $(BepInExCoreDir)." />
+    <Error Condition="'$(GameRoot)' != '' and !Exists('$(ManagedDir)/UnityEngine.dll')" Text="UnityEngine.dll was not found under $(ManagedDir)." />
+    <Error Condition="'$(GameRoot)' != '' and !Exists('$(ManagedDir)/Assembly-CSharp.dll')" Text="Assembly-CSharp.dll was not found under $(ManagedDir)." />
+  </Target>
+</Project>

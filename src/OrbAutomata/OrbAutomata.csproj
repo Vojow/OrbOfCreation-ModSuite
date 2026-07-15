@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrbAutomata</AssemblyName>
+    <RootNamespace>OrbAutomata</RootNamespace>
+    <Version>0.4.0</Version>
+    <RequireGameReferences>true</RequireGameReferences>
+    <Description>Safe configurable buying and progression automation for Orb Of Creation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrbModding.Common\OrbModding.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(GameRoot)' != ''">
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedDir)/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedDir)/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ManagedDir)/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrbModding.Tests" />
+  </ItemGroup>
+</Project>

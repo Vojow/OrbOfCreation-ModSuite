@@ -1,0 +1,53 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+    <Authors>Vojow</Authors>
+    <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <GameRoot>$(OOC_GAME_DIR)</GameRoot>
+    <ManagedDir>$(GameRoot)/Orb Of Creation_Data/Managed</ManagedDir>
+    <BepInExCoreDir>$(GameRoot)/BepInEx/core</BepInExCoreDir>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;bin-stubs/**;obj/**;obj-stubs/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(UseGameStubs)' == 'true'">
+    <BaseOutputPath>bin-stubs/</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj-stubs/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' == 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)tests/OrbModding.GameStubs/OrbModding.GameStubs.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(GameRoot)' != ''">
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedDir)/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedDir)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(ManagedDir)/Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

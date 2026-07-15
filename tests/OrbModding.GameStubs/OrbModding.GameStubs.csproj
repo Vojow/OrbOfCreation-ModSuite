@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrbModding.GameStubs</AssemblyName>
+    <RootNamespace>OrbModding.GameStubs</RootNamespace>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RequireGameReferences>false</RequireGameReferences>
+  </PropertyGroup>
+</Project>
