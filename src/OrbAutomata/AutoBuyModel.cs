@@ -9,6 +9,48 @@ internal enum AutoBuyCandidateKind
     Upgrade
 }
 
+internal enum AutoBuyCandidateLifecycleState
+{
+    Registered,
+    Locked,
+    Available,
+    Queued,
+    TerminalQueued,
+    Completed,
+    Invalid,
+}
+
+internal readonly struct AutoBuyLifecycleEvidence
+{
+    public AutoBuyLifecycleEvidence(
+        bool isAvailable,
+        int currentLevel,
+        int queuedLevels,
+        bool hasFiniteLevels,
+        bool isMaxLevel,
+        bool isMaxQueuedLevel)
+    {
+        IsAvailable = isAvailable;
+        CurrentLevel = currentLevel;
+        QueuedLevels = queuedLevels;
+        HasFiniteLevels = hasFiniteLevels;
+        IsMaxLevel = isMaxLevel;
+        IsMaxQueuedLevel = isMaxQueuedLevel;
+    }
+
+    public bool IsAvailable { get; }
+
+    public int CurrentLevel { get; }
+
+    public int QueuedLevels { get; }
+
+    public bool HasFiniteLevels { get; }
+
+    public bool IsMaxLevel { get; }
+
+    public bool IsMaxQueuedLevel { get; }
+}
+
 internal interface IAutoBuyCatalog : IDisposable
 {
     IEnumerable<IAutoBuyCandidate> Discover();
@@ -31,6 +73,16 @@ internal interface IAutoBuyCandidate
     IReadOnlyList<ResourceAdmissionCost> GetCosts();
 
     bool TryPurchaseOne(out string reason);
+}
+
+internal interface IAutoBuyNativeIdentity
+{
+    object NativeIdentity { get; }
+}
+
+internal interface IAutoBuyLifecycleCandidate
+{
+    bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason);
 }
 
 internal sealed class AutoBuyCandidateSnapshot

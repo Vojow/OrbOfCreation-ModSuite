@@ -2,20 +2,32 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 using System.Reflection;
+using UnityEngine;
 
 namespace OrbAutomata;
 
 internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
 {
-    private IReadOnlyList<IAutoBuyCandidate>? _cachedCandidates;
+    private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
+    private readonly AutoBuyCandidateIndex _index = new AutoBuyCandidateIndex();
+    private readonly Stopwatch _lifetime = Stopwatch.StartNew();
+    private IReadOnlyList<IAutoBuyCandidate>? _registeredCandidates;
+    private TimeSpan _nextRegistryReconciliation;
 
     public IEnumerable<IAutoBuyCandidate> Discover()
     {
-        return _cachedCandidates ??= EnumerateStaticList("StructureSO", "All", AutoBuyCandidateKind.Structure)
-            .Concat(EnumerateStaticList("UpgradeSO", "All", AutoBuyCandidateKind.Upgrade))
-            .OrderBy(candidate => candidate.Snapshot().Uuid, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        if (_registeredCandidates is null || _lifetime.Elapsed >= _nextRegistryReconciliation)
+        {
+            _registeredCandidates = EnumerateStaticList("StructureSO", "All", AutoBuyCandidateKind.Structure)
+                .Concat(EnumerateStaticList("UpgradeSO", "All", AutoBuyCandidateKind.Upgrade))
+                .OrderBy(candidate => candidate.Snapshot().Uuid, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            _nextRegistryReconciliation = _lifetime.Elapsed + RegistryReconciliationInterval;
+        }
+
+        return _index.Reconcile(_registeredCandidates);
     }
 
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
@@ -83,7 +95,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
 
     public void Dispose()
     {
-        _cachedCandidates = null;
+        _registeredCandidates = null;
+        _index.Clear();
     }
 
     private static IEnumerable<IAutoBuyCandidate> EnumerateStaticList(
@@ -111,36 +124,67 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
     }
 }
 
-internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate
+internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLifecycleCandidate, IAutoBuyNativeIdentity
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
+    private readonly Type _sourceType;
+    private readonly MethodInfo? _isAvailable;
+    private readonly MethodInfo? _canPurchase;
+    private readonly MethodInfo? _getPurchaseCost;
+    private readonly MethodInfo? _purchase;
+    private readonly MethodInfo? _getPurchaseLevel;
+    private readonly MethodInfo? _getQueuedState;
+    private readonly MethodInfo? _hasFiniteLevels;
+    private readonly MethodInfo? _isMaxLevel;
+    private readonly MethodInfo? _isMaxQueuedLevel;
+    private readonly bool _expectedNativeType;
     private AutoBuyCandidateSnapshot? _snapshot;
 
     public ReflectionAutoBuyCandidate(object source, AutoBuyCandidateKind kind)
     {
         _source = source;
         _kind = kind;
+        _sourceType = source.GetType();
+        _expectedNativeType = HasExpectedNativeType(_sourceType, kind);
+        _isAvailable = FindNoArgMethod("IsAvailable", typeof(bool));
+        _canPurchase = FindNoArgMethod("CanPurchase", typeof(bool));
+        _getPurchaseCost = FindNoArgMethod("GetPurchaseCost", null);
+        _purchase = kind == AutoBuyCandidateKind.Structure
+            ? _sourceType.GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, new[] { typeof(bool) }, null)
+            : _sourceType.GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+        _getPurchaseLevel = FindNoArgMethod("GetPurchaseLevel", typeof(int));
+        _getQueuedState = FindNoArgMethod(
+            kind == AutoBuyCandidateKind.Structure ? "GetQueuedQuantity" : "GetQueuedPurchaseLevel",
+            typeof(int));
+        if (kind == AutoBuyCandidateKind.Upgrade)
+        {
+            _hasFiniteLevels = FindNoArgMethod("HasFiniteLevels", typeof(bool));
+            _isMaxLevel = FindNoArgMethod("IsMaxLevel", typeof(bool));
+            _isMaxQueuedLevel = FindNoArgMethod("IsMaxQueuedLevel", typeof(bool));
+        }
     }
+
+    public object NativeIdentity => _source;
 
     public AutoBuyCandidateSnapshot Snapshot()
     {
         return _snapshot ??= new AutoBuyCandidateSnapshot(
             this,
-            ReflectionUtil.ReadStableId(_source) ?? $"{_kind}:{_source.GetType().Name}:{_source.GetHashCode()}",
-            ReflectionUtil.ReadDisplayName(_source) ?? _source.GetType().Name,
+            ReflectionUtil.ReadStableId(_source) ?? string.Empty,
+            ReflectionUtil.ReadDisplayName(_source) ?? _sourceType.Name,
             _kind,
-            _source.GetType().FullName ?? _source.GetType().Name);
+            _sourceType.FullName ?? _sourceType.Name);
     }
 
     public bool IsAvailable()
     {
-        return ReflectionUtil.TryInvokeBool(_source, out var available, "IsAvailable") && available;
+        return TryInvoke(_isAvailable, out bool available) && available;
     }
 
     public bool CanPurchase(out string reason)
     {
-        if (!ReflectionUtil.TryInvokeBool(_source, out var canPurchase, "CanPurchase"))
+        if (!TryInvoke(_canPurchase, out bool canPurchase))
         {
             reason = "CanPurchase unavailable";
             return false;
@@ -152,10 +196,64 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate
 
     public IReadOnlyList<ResourceAdmissionCost> GetCosts()
     {
-        var container = ReflectionUtil.InvokeNoArgs(_source, "GetPurchaseCost") ??
-                        ReflectionUtil.InvokeNoArgs(_source, "GetResourceCost") ??
-                        ReflectionUtil.InvokeNoArgs(_source, "GetNextCost");
+        var container = Invoke(_getPurchaseCost);
         return ReflectionCostReader.Read(container);
+    }
+
+    public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
+    {
+        evidence = default;
+        if (!_expectedNativeType)
+        {
+            reason = $"native object is not an audited {_kind} type";
+            return false;
+        }
+
+        if (_source is UnityEngine.Object unityObject && unityObject == null)
+        {
+            reason = "native Unity object was destroyed";
+            return false;
+        }
+
+        if (!TryInvoke(_isAvailable, out bool available) ||
+            !TryInvoke(_getPurchaseLevel, out int currentLevel) ||
+            !TryInvoke(_getQueuedState, out int queuedValue))
+        {
+            reason = "required native lifecycle method was unavailable";
+            return false;
+        }
+
+        if (_kind == AutoBuyCandidateKind.Structure)
+        {
+            evidence = new AutoBuyLifecycleEvidence(
+                available,
+                currentLevel,
+                queuedValue,
+                hasFiniteLevels: false,
+                isMaxLevel: false,
+                isMaxQueuedLevel: false);
+            reason = string.Empty;
+            return true;
+        }
+
+        if (!TryInvoke(_hasFiniteLevels, out bool finite) ||
+            !TryInvoke(_isMaxLevel, out bool maxLevel) ||
+            !TryInvoke(_isMaxQueuedLevel, out bool maxQueued))
+        {
+            reason = "required finite Upgrade lifecycle method was unavailable";
+            return false;
+        }
+
+        var queuedLevels = queuedValue - currentLevel;
+        evidence = new AutoBuyLifecycleEvidence(
+            available,
+            currentLevel,
+            queuedLevels,
+            finite,
+            maxLevel,
+            maxQueued);
+        reason = string.Empty;
+        return true;
     }
 
     public bool TryPurchaseOne(out string reason)
@@ -174,7 +272,7 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate
     private bool TryPurchaseStructure(out string reason)
     {
         reason = string.Empty;
-        var method = _source.GetType().GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, new[] { typeof(bool) }, null);
+        var method = _purchase;
         if (method is null)
         {
             reason = "Purchase(bool forceOne) unavailable";
@@ -187,7 +285,7 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate
     private bool TryPurchaseUpgrade(out string reason)
     {
         reason = string.Empty;
-        var method = _source.GetType().GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+        var method = _purchase;
         if (method is null)
         {
             reason = "Purchase() unavailable";
@@ -231,6 +329,51 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate
         }
 
         return true;
+    }
+
+    private MethodInfo? FindNoArgMethod(string name, Type? returnType)
+    {
+        var method = _sourceType.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+        return method is not null && (returnType is null || method.ReturnType == returnType) ? method : null;
+    }
+
+    private object? Invoke(MethodInfo? method)
+    {
+        try
+        {
+            return method?.Invoke(_source, Array.Empty<object>());
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private bool TryInvoke<T>(MethodInfo? method, out T value)
+    {
+        var result = Invoke(method);
+        if (result is T typed)
+        {
+            value = typed;
+            return true;
+        }
+
+        value = default!;
+        return false;
+    }
+
+    private static bool HasExpectedNativeType(Type type, AutoBuyCandidateKind kind)
+    {
+        var expected = kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO";
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (string.Equals(current.Name, expected, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

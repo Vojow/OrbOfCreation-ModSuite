@@ -67,6 +67,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "CanPurchase", false, "System.Boolean");
         AssertMethod(assembly, "StructureSO", "GetPurchaseCost", false, "ResourceCostList");
         AssertMethod(assembly, "StructureSO", "Purchase", false, "System.Void", "System.Boolean");
+        AssertMethod(assembly, "StructureSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
@@ -74,7 +75,11 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "CanPurchase", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "GetPurchaseCost", false, "ResourceCostList");
         AssertMethod(assembly, "UpgradeSO", "Purchase", false, "System.Void");
+        AssertMethod(assembly, "UpgradeSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "UpgradeSO", "GetQueuedPurchaseLevel", false, "System.Int32");
+        AssertMethod(assembly, "UpgradeSO", "HasFiniteLevels", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
 
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
