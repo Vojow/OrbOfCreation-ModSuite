@@ -598,6 +598,7 @@ namespace UnityEngine
         public static float deltaTime { get; set; } = 0.016f;
         public static float unscaledDeltaTime { get; set; } = 0.016f;
         public static float realtimeSinceStartup { get; set; }
+        public static int frameCount { get; set; }
     }
 
     public static class Resources

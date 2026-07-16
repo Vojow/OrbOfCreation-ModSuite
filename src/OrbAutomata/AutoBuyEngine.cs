@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using BepInEx.Logging;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -18,6 +19,10 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly ManualLogSource _log;
     private readonly Func<Stopwatch, double> _readElapsedMilliseconds;
     private readonly Func<Stopwatch, double> _readPurchaseElapsedMilliseconds;
+    private readonly SuitePerformanceCoordinator? _coordinator;
+    private readonly Func<long>? _readFrameIdentity;
+    private readonly SuiteWorkRegistration? _readWork;
+    private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _decisionLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly DecisionLogGate _scanProgressLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
@@ -62,7 +67,9 @@ internal sealed class AutoBuyEngine : IDisposable
         ReservePolicy reservePolicy,
         ManualLogSource log,
         Func<Stopwatch, double>? readElapsedMilliseconds = null,
-        Func<Stopwatch, double>? readPurchaseElapsedMilliseconds = null)
+        Func<Stopwatch, double>? readPurchaseElapsedMilliseconds = null,
+        SuitePerformanceCoordinator? coordinator = null,
+        Func<long>? readFrameIdentity = null)
     {
         _config = config;
         _catalog = catalog;
@@ -71,10 +78,37 @@ internal sealed class AutoBuyEngine : IDisposable
         _log = log;
         _readElapsedMilliseconds = readElapsedMilliseconds ?? (stopwatch => stopwatch.Elapsed.TotalMilliseconds);
         _readPurchaseElapsedMilliseconds = readPurchaseElapsedMilliseconds ?? (stopwatch => stopwatch.Elapsed.TotalMilliseconds);
+        _coordinator = coordinator;
+        _readFrameIdentity = readFrameIdentity;
+        if (coordinator is not null)
+        {
+            _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+            _readWork = coordinator.Register(
+                "OrbAutomata.AutoBuy",
+                "Evaluate candidates",
+                SuiteBudgetClass.SoftLimited,
+                SuiteWorkExecutionKind.Cooperative);
+            _mutationWork = coordinator.Register(
+                "OrbAutomata.AutoBuy",
+                "Submit one purchase",
+                SuiteBudgetClass.HardLimited,
+                SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        }
         _secondsUntilEvaluation = ClampInterval(config.AutoBuyIntervalSeconds.Value);
     }
 
     public void Tick(float unscaledDeltaTime)
+    {
+        if (_coordinator is null)
+        {
+            TickLegacy(unscaledDeltaTime);
+            return;
+        }
+
+        TickCoordinated(unscaledDeltaTime);
+    }
+
+    private void TickLegacy(float unscaledDeltaTime)
     {
         if (_nativeStateSignalPending)
         {
@@ -154,9 +188,168 @@ internal sealed class AutoBuyEngine : IDisposable
         EvaluateBatch();
     }
 
+    private void TickCoordinated(float unscaledDeltaTime)
+    {
+        if (_nativeStateSignalPending)
+        {
+            _nativeStateSignalPending = false;
+            ResetAllPendingWork();
+            _secondsUntilEvaluation = 0.0f;
+        }
+
+        var mode = _config.AutoBuyMode.Value;
+        if (mode == AutoBuyOperationMode.Disabled || !_config.CanStartAutoBuyActively)
+        {
+            ResetAllPendingWork();
+            SetCoordinatorEnabled(false);
+            return;
+        }
+
+        SetCoordinatorEnabled(true);
+        RefreshPolicyIfNeeded();
+
+        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
+        var readDue = false;
+        var mutationDue = false;
+        if (_pendingPurchaseRecommendations is not null)
+        {
+            if (mode != AutoBuyOperationMode.Active)
+            {
+                ResetPendingPurchaseBatch();
+            }
+            else if (_pendingWaitingForQueue)
+            {
+                _secondsUntilQueuePoll -= elapsed;
+                mutationDue = _secondsUntilQueuePoll <= 0.0f;
+            }
+            else
+            {
+                mutationDue = true;
+            }
+        }
+        else if (_pendingCandidates is not null)
+        {
+            readDue = true;
+        }
+        else
+        {
+            _secondsUntilEvaluation -= elapsed;
+            readDue = _secondsUntilEvaluation <= 0.0f;
+        }
+
+        SetCoordinatorPending(readDue, mutationDue);
+        var readCompleted = false;
+        if (readDue && TryAcquire(_readWork, out var readLease))
+        {
+            using (readLease)
+            {
+                if (_pendingCandidates is null)
+                {
+                    _secondsUntilEvaluation = ClampInterval(_config.AutoBuyIntervalSeconds.Value);
+                }
+
+                EvaluateBatch();
+                readLease.Complete();
+                readCompleted = true;
+            }
+        }
+
+        // A read step may have completed ranking and created a purchase batch.
+        mutationDue = _pendingPurchaseRecommendations is not null &&
+                      !_pendingWaitingForQueue &&
+                      mode == AutoBuyOperationMode.Active;
+        if (_pendingWaitingForQueue && _secondsUntilQueuePoll <= 0.0f)
+        {
+            mutationDue = true;
+        }
+
+        SetCoordinatorPending(
+            (!readCompleted && readDue) || _pendingCandidates is not null,
+            mutationDue);
+        var mutationCompleted = false;
+        if (mutationDue && TryAcquire(_mutationWork, out var mutationLease))
+        {
+            using (mutationLease)
+            {
+                if (_pendingWaitingForQueue)
+                {
+                    _secondsUntilQueuePoll = QueuePollIntervalSeconds;
+                }
+
+                ContinueRankedBatch(singleStep: true);
+                mutationLease.Complete();
+                mutationCompleted = true;
+            }
+        }
+
+        SetCoordinatorPending(
+            (!readCompleted && readDue) || _pendingCandidates is not null,
+            (!mutationCompleted && mutationDue) ||
+            (_pendingPurchaseRecommendations is not null && !_pendingWaitingForQueue));
+    }
+
+    private void RefreshPolicyIfNeeded()
+    {
+        if (_incrementalCatalog is null)
+        {
+            return;
+        }
+
+        var policy = AutoBuyPolicyFingerprint.Capture(_config);
+        if (_lastPolicy.HasValue && _lastPolicy.Value.Equals(policy))
+        {
+            return;
+        }
+
+        _lastPolicy = policy;
+        _cachedDecisions.Clear();
+        _rankedRecommendations.Clear();
+        PopulateUuidSet(_allowedUuids, _config.AllowedAutoBuyUuids.Value);
+        PopulateUuidSet(_blockedUuids, _config.BlockedAutoBuyUuids.Value);
+        _incrementalCatalog.InvalidatePolicy();
+        ResetAllPendingWork();
+        _secondsUntilEvaluation = 0.0f;
+    }
+
+    private bool TryAcquire(SuiteWorkRegistration? registration, out SuiteWorkLease lease)
+    {
+        lease = default;
+        return registration is not null &&
+               _coordinator is not null &&
+               _readFrameIdentity is not null &&
+               _coordinator.RequestWork(registration, _readFrameIdentity(), out lease) == SuiteWorkAdmission.Granted;
+    }
+
+    private void SetCoordinatorEnabled(bool enabled)
+    {
+        if (_readWork is not null && _readWork.IsEnabled != enabled)
+        {
+            _readWork.SetEnabled(enabled);
+        }
+
+        if (_mutationWork is not null && _mutationWork.IsEnabled != enabled)
+        {
+            _mutationWork.SetEnabled(enabled);
+        }
+
+        if (!enabled)
+        {
+            SetCoordinatorPending(false, false);
+        }
+    }
+
+    private void SetCoordinatorPending(bool readPending, bool mutationPending)
+    {
+        _readWork?.SetPending(readPending);
+        _mutationWork?.SetPending(mutationPending);
+    }
+
     public void Dispose()
     {
         ResetAllPendingWork();
+        SetCoordinatorEnabled(false);
+        _readWork?.Dispose();
+        _mutationWork?.Dispose();
         _catalog.Dispose();
     }
 
@@ -198,7 +391,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        var budget = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
+        var budget = EffectiveReadSliceBudget();
         while (_pendingCandidates is not null && _pendingIndex < _pendingCandidates.Count)
         {
             var candidate = _pendingCandidates[_pendingIndex];
@@ -435,15 +628,26 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingBatchQueueWaitLogged = false;
         _pendingWaitingForQueue = false;
         _incrementalCatalog?.BeginMutationEvaluation();
-        ContinueRankedBatch();
+        if (_coordinator is null)
+        {
+            ContinueRankedBatch();
+        }
     }
 
-    private void ContinueRankedBatch()
+    private void ContinueRankedBatch(bool singleStep = false)
     {
         var recommendations = _pendingPurchaseRecommendations;
         if (recommendations is null)
         {
             return;
+        }
+
+        if (singleStep)
+        {
+            // A shared-coordinator denial can defer this batch for several
+            // frames. Start a fresh lazy resource epoch immediately before
+            // final reserve and affordability validation.
+            _incrementalCatalog?.BeginMutationEvaluation();
         }
 
         var maximumPurchases = _config.AutoBuyBatchSizing.Value == AutoBuyBatchSizingMode.FillAvailableQueue
@@ -477,6 +681,12 @@ internal sealed class AutoBuyEngine : IDisposable
                 }
 
                 AdvancePurchaseCandidate();
+
+                if (singleStep)
+                {
+                    _pendingBatchCpuSliced = true;
+                    break;
+                }
 
                 if (ReachedPurchaseSliceBudget(stopwatch, cpuBudget))
                 {
@@ -544,6 +754,14 @@ internal sealed class AutoBuyEngine : IDisposable
                     // the invalidations before another candidate mutates.
                     _pendingPurchaseIndex = recommendations.Count;
                 }
+            }
+
+            if (singleStep &&
+                _pendingPurchaseIndex < recommendations.Count &&
+                _pendingBatchPurchased < maximumPurchases)
+            {
+                _pendingBatchCpuSliced = true;
+                break;
             }
 
             if (ReachedPurchaseSliceBudget(stopwatch, cpuBudget) &&
@@ -836,6 +1054,18 @@ internal sealed class AutoBuyEngine : IDisposable
     internal static double EffectiveCpuBudget(double configuredMilliseconds)
     {
         return Math.Min(MaximumCpuBudgetMilliseconds, Math.Max(0.1, configuredMilliseconds));
+    }
+
+    private double EffectiveReadSliceBudget()
+    {
+        var configured = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
+        if (_coordinator is null)
+        {
+            return configured;
+        }
+
+        var remaining = _coordinator.SoftBudgetMilliseconds - _coordinator.CurrentFrameElapsedMilliseconds;
+        return Math.Min(configured, Math.Max(0.01, remaining));
     }
 
     private readonly struct AutoBuyPolicyFingerprint : IEquatable<AutoBuyPolicyFingerprint>

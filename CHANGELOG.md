@@ -6,6 +6,7 @@
 - Throttle missing native-control discovery to avoid scanning the complete Unity object registry every frame before autoqueue unlock.
 - Cache Auto Buy's static candidate registry, cap its reflective CPU slice to 1 ms, and poll full queues at 10 Hz instead of every frame.
 - Cache Mentor catalogs and native object lookups, stop repeated inactive-state cleanup, and lower its default grant and CPU budgets.
+- Schedule Auto Buy and Auto Cast through the shared suite frame budget, with at most one native automation mutation per frame and resumable multi-level purchase groups.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

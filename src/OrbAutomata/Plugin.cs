@@ -51,13 +51,17 @@ public sealed class Plugin : BaseUnityPlugin
             _config,
             new ReflectionAutoBuyCatalog(),
             reservePolicy,
-            Log);
+            Log,
+            coordinator: SuitePerformanceCoordinator.Shared,
+            readFrameIdentity: () => UnityEngine.Time.frameCount);
         _autoCastEngine = new AutoCastEngine(
             _config,
             new ReflectionAutoCastCatalog(),
             reservePolicy,
             new ResourceFullnessPolicy(),
-            Log);
+            Log,
+            coordinator: SuitePerformanceCoordinator.Shared,
+            readFrameIdentity: () => UnityEngine.Time.frameCount);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;

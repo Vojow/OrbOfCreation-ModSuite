@@ -52,6 +52,8 @@ The configured evaluation interval applies only while Auto Buy is idle. Once a s
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
+Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level or fired spell requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. A denied lease retains the pending candidate and repeat count, so Fixed, Bulk Development, and action-multiplier groups keep their initial queue-room clamp instead of restarting. Disabled automation clears its pending work and stops requesting leases.
+
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
 Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels or assign special priority to cost-reduction effects.

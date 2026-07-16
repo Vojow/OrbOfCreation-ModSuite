@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
+using OrbModding.Common;
 using UnityEngine.SceneManagement;
 
 namespace OrbAutomata;
@@ -14,6 +15,10 @@ internal sealed class AutoCastEngine : IDisposable
     private readonly ResourceFullnessPolicy _fullnessPolicy;
     private readonly ManualLogSource _log;
     private readonly Func<bool> _isGameplayScene;
+    private readonly SuitePerformanceCoordinator? _coordinator;
+    private readonly Func<long>? _readFrameIdentity;
+    private readonly SuiteWorkRegistration? _readWork;
+    private readonly SuiteWorkRegistration? _mutationWork;
     private readonly Dictionary<int, DecisionLogGate> _slotLogGates = new Dictionary<int, DecisionLogGate>();
     private readonly Dictionary<int, string> _activeChannels = new Dictionary<int, string>();
     private float _secondsUntilEvaluation;
@@ -21,6 +26,8 @@ internal sealed class AutoCastEngine : IDisposable
     private double _elapsedSeconds;
     private int _nextSlotIndex;
     private bool _operationalLoggingWasEnabled;
+    private IAutoCastCandidate? _pendingCandidate;
+    private string _pendingResourceSummary = string.Empty;
 
     public AutoCastEngine(
         AutomataConfig config,
@@ -28,7 +35,9 @@ internal sealed class AutoCastEngine : IDisposable
         ReservePolicy reservePolicy,
         ResourceFullnessPolicy fullnessPolicy,
         ManualLogSource log,
-        Func<bool>? isGameplayScene = null)
+        Func<bool>? isGameplayScene = null,
+        SuitePerformanceCoordinator? coordinator = null,
+        Func<long>? readFrameIdentity = null)
     {
         _config = config;
         _catalog = catalog;
@@ -36,12 +45,39 @@ internal sealed class AutoCastEngine : IDisposable
         _fullnessPolicy = fullnessPolicy;
         _log = log;
         _isGameplayScene = isGameplayScene ?? (() => SceneManager.GetActiveScene().name == "Main");
+        _coordinator = coordinator;
+        _readFrameIdentity = readFrameIdentity;
+        if (coordinator is not null)
+        {
+            _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+            _readWork = coordinator.Register(
+                "OrbAutomata.AutoCast",
+                "Evaluate loadout",
+                SuiteBudgetClass.SoftLimited,
+                SuiteWorkExecutionKind.Cooperative);
+            _mutationWork = coordinator.Register(
+                "OrbAutomata.AutoCast",
+                "Fire one spell",
+                SuiteBudgetClass.HardLimited,
+                SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        }
         _secondsUntilEvaluation = ClampInterval(config.AutoCastIntervalSeconds.Value);
         _operationalLoggingWasEnabled = config.EnableOperationalLogging.Value;
         AutoCastManualSignal.ManualSpellFired += OnManualSpellFired;
     }
 
     public void Tick(float unscaledDeltaTime)
+    {
+        if (_coordinator is null)
+        {
+            TickLegacy(unscaledDeltaTime);
+            return;
+        }
+
+        TickCoordinated(unscaledDeltaTime);
+    }
+
+    private void TickLegacy(float unscaledDeltaTime)
     {
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
@@ -63,9 +99,195 @@ internal sealed class AutoCastEngine : IDisposable
         Evaluate();
     }
 
+    private void TickCoordinated(float unscaledDeltaTime)
+    {
+        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
+        _elapsedSeconds += elapsed;
+        _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
+        ResetDiagnosticStateWhenLoggingIsEnabled();
+
+        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active ||
+            !_config.CanStartAutoCastActively)
+        {
+            ClearPendingCandidate();
+            SetCoordinatorEnabled(false);
+            return;
+        }
+
+        SetCoordinatorEnabled(true);
+        var readDue = _pendingCandidate is null && _secondsUntilEvaluation <= 0.0f;
+        if (_pendingCandidate is null && !readDue)
+        {
+            _secondsUntilEvaluation -= elapsed;
+            readDue = _secondsUntilEvaluation <= 0.0f;
+        }
+
+        SetCoordinatorPending(readDue, _pendingCandidate is not null);
+        var readCompleted = false;
+        if (readDue && TryAcquire(_readWork, out var readLease))
+        {
+            using (readLease)
+            {
+                _secondsUntilEvaluation = ClampInterval(_config.AutoCastIntervalSeconds.Value);
+                PrepareCandidate();
+                readLease.Complete();
+                readCompleted = true;
+            }
+        }
+
+        SetCoordinatorPending(!readCompleted && readDue, _pendingCandidate is not null);
+        if (_pendingCandidate is not null && TryAcquire(_mutationWork, out var mutationLease))
+        {
+            using (mutationLease)
+            {
+                FirePreparedCandidate();
+                mutationLease.Complete();
+            }
+        }
+
+        SetCoordinatorPending(!readCompleted && readDue, _pendingCandidate is not null);
+    }
+
+    private void PrepareCandidate()
+    {
+        ClearPendingCandidate();
+        if (!_isGameplayScene() || _manualPauseRemaining > 0.0f || _catalog.IsTargeting())
+        {
+            return;
+        }
+
+        IReadOnlyList<IAutoCastCandidate> loadout;
+        try
+        {
+            loadout = _catalog.DiscoverActiveLoadout();
+        }
+        catch (Exception ex)
+        {
+            _log.LogError($"Auto Cast could not read the active loadout: {ex.Message}");
+            return;
+        }
+
+        if (loadout.Count == 0)
+        {
+            return;
+        }
+
+        var activeChannels = loadout
+            .Where(spell => spell.Kind == AutoCastSpellKind.Channel && spell.IsCasting)
+            .ToArray();
+        UpdateChannelLifecycle(activeChannels);
+        if (activeChannels.Length > 0 || _catalog.IsNativeCastBusy())
+        {
+            return;
+        }
+
+        var start = NormalizeCursor(_nextSlotIndex, loadout.Count);
+        for (var offset = 0; offset < loadout.Count; offset++)
+        {
+            var index = (start + offset) % loadout.Count;
+            var candidate = loadout[index];
+            if (!TryAdmit(candidate, out var reason, out var resourceSummary))
+            {
+                LogVerboseRejection(candidate, reason);
+                continue;
+            }
+
+            _pendingCandidate = candidate;
+            _pendingResourceSummary = resourceSummary;
+            return;
+        }
+    }
+
+    private void FirePreparedCandidate()
+    {
+        var candidate = _pendingCandidate;
+        var resourceSummary = _pendingResourceSummary;
+        if (candidate is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_isGameplayScene() ||
+                _manualPauseRemaining > 0.0f ||
+                _catalog.IsTargeting() ||
+                !_config.CanStartAutoCastActively ||
+                _catalog.IsNativeCastBusy())
+            {
+                return;
+            }
+
+            if (!TryAdmit(candidate, out var reason, out resourceSummary))
+            {
+                LogVerboseRejection(candidate, reason);
+                return;
+            }
+
+            if (!candidate.TryFireAndResolveTargets(out reason))
+            {
+                _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                return;
+            }
+
+            MarkSlotState(candidate, "active fired");
+            LogOperation(
+                $"Auto Cast fired slot {candidate.SlotIndex + 1}: " +
+                $"{candidate.DisplayName} [{candidate.Kind}]; {resourceSummary}.");
+            _nextSlotIndex = candidate.SlotIndex + 1;
+        }
+        finally
+        {
+            ClearPendingCandidate();
+        }
+    }
+
+    private bool TryAcquire(SuiteWorkRegistration? registration, out SuiteWorkLease lease)
+    {
+        lease = default;
+        return registration is not null &&
+               _coordinator is not null &&
+               _readFrameIdentity is not null &&
+               _coordinator.RequestWork(registration, _readFrameIdentity(), out lease) == SuiteWorkAdmission.Granted;
+    }
+
+    private void SetCoordinatorEnabled(bool enabled)
+    {
+        if (_readWork is not null && _readWork.IsEnabled != enabled)
+        {
+            _readWork.SetEnabled(enabled);
+        }
+
+        if (_mutationWork is not null && _mutationWork.IsEnabled != enabled)
+        {
+            _mutationWork.SetEnabled(enabled);
+        }
+
+        if (!enabled)
+        {
+            SetCoordinatorPending(false, false);
+        }
+    }
+
+    private void SetCoordinatorPending(bool readPending, bool mutationPending)
+    {
+        _readWork?.SetPending(readPending);
+        _mutationWork?.SetPending(mutationPending);
+    }
+
+    private void ClearPendingCandidate()
+    {
+        _pendingCandidate = null;
+        _pendingResourceSummary = string.Empty;
+    }
+
     public void Dispose()
     {
         AutoCastManualSignal.ManualSpellFired -= OnManualSpellFired;
+        ClearPendingCandidate();
+        SetCoordinatorEnabled(false);
+        _readWork?.Dispose();
+        _mutationWork?.Dispose();
         _catalog.Dispose();
     }
 
@@ -197,6 +419,8 @@ internal sealed class AutoCastEngine : IDisposable
     private void OnManualSpellFired()
     {
         _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, _config.AutoCastManualPauseSeconds.Value));
+        ClearPendingCandidate();
+        _mutationWork?.SetPending(false);
     }
 
     private void LogOperation(string message)
