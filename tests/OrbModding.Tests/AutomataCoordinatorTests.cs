@@ -263,6 +263,57 @@ public sealed class AutomataCoordinatorTests
         probe.Dispose();
     }
 
+    [Fact]
+    public void MultiBuyQuarantineDropsRankedUpgradesAndAllowsLowerRankedStructure()
+    {
+        NativeMultiBuyScope.ResetQuarantineForTests();
+        GlobalVariables.MultiBuy = new IntVariable { Value = 7 };
+        try
+        {
+            var coordinator = Coordinator();
+            long frame = 60;
+            var log = new ManualLogSource();
+            var upgrade = new QuarantiningUpgradeCandidate("a-upgrade");
+            var structure = new BuyCandidate("z-structure", AutoBuyCandidateKind.Structure);
+            using var engine = BuyEngine(
+                Config(),
+                new BuyCatalog(4, upgrade, structure),
+                coordinator,
+                () => frame,
+                log);
+
+            engine.Tick(1.0f);
+
+            Assert.True(NativeMultiBuyScope.IsMutationQuarantined);
+            Assert.Equal(1, upgrade.PurchaseCalls);
+            Assert.Equal(0, structure.PurchaseCalls);
+            var setterCallsAfterQuarantine = GlobalVariables.MultiBuy.SetCalls;
+            Assert.Equal(2, setterCallsAfterQuarantine);
+
+            // Lifecycle invalidation must not clear the process quarantine.
+            engine.InvalidateLifecycle();
+            frame++;
+            engine.Tick(0.0f);
+
+            Assert.True(NativeMultiBuyScope.IsMutationQuarantined);
+            Assert.Equal(1, upgrade.PurchaseCalls);
+            Assert.Equal(setterCallsAfterQuarantine, GlobalVariables.MultiBuy.SetCalls);
+            Assert.Equal(1, structure.PurchaseCalls);
+            Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoBuy", out var snapshot));
+            Assert.Equal(2, snapshot.NativeMutationsStarted);
+            Assert.Single(
+                log.Entries,
+                entry => entry?.ToString()?.Contains(
+                    "removed automated Upgrades from admission and ranking",
+                    StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            NativeMultiBuyScope.ResetQuarantineForTests();
+            GlobalVariables.MultiBuy = new IntVariable();
+        }
+    }
+
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
 
@@ -281,12 +332,13 @@ public sealed class AutomataCoordinatorTests
         AutomataConfig config,
         IAutoBuyCatalog catalog,
         SuitePerformanceCoordinator coordinator,
-        Func<long> frameIdentity) =>
+        Func<long> frameIdentity,
+        ManualLogSource? log = null) =>
         new(
             config,
             catalog,
             new ReservePolicy(config),
-            new ManualLogSource(),
+            log ?? new ManualLogSource(),
             coordinator: coordinator,
             readFrameIdentity: frameIdentity);
 
@@ -381,6 +433,49 @@ public sealed class AutomataCoordinatorTests
             PurchaseCalls++;
             reason = string.Empty;
             return true;
+        }
+    }
+
+    private sealed class QuarantiningUpgradeCandidate : IAutoBuyCandidate
+    {
+        private readonly AutoBuyCandidateSnapshot _snapshot;
+
+        public QuarantiningUpgradeCandidate(string uuid)
+        {
+            _snapshot = new AutoBuyCandidateSnapshot(
+                this,
+                uuid,
+                uuid,
+                AutoBuyCandidateKind.Upgrade,
+                GetType().Name);
+        }
+
+        public int PurchaseCalls { get; private set; }
+
+        public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
+
+        public bool IsAvailable() => true;
+
+        public bool CanPurchase(out string reason)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        public IReadOnlyList<ResourceAdmissionCost> GetCosts() => Array.Empty<ResourceAdmissionCost>();
+
+        public bool TryPurchaseOne(out string reason)
+        {
+            PurchaseCalls++;
+            if (!NativeMultiBuyScope.TryEnterOne(out var scope, out reason))
+            {
+                return false;
+            }
+
+            GlobalVariables.MultiBuy.ThrowBeforeWriteFor = 7;
+            scope.Dispose();
+            reason = "forced unverified restoration";
+            return false;
         }
     }
 

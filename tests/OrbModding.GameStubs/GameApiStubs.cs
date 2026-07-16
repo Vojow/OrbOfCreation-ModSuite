@@ -16,6 +16,8 @@ public sealed class IntVariable
 {
     public int Value { get; set; } = 1;
 
+    public int SetCalls { get; private set; }
+
     public int? ThrowBeforeWriteFor { get; set; }
 
     public int? ThrowAfterWriteFor { get; set; }
@@ -24,6 +26,7 @@ public sealed class IntVariable
 
     public void SetValue(int value)
     {
+        SetCalls++;
         if (ThrowBeforeWriteFor == value)
         {
             throw new InvalidOperationException($"setter rejected {value} before write");

@@ -25,6 +25,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _decisionLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly DecisionLogGate _scanProgressLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
+    private readonly DecisionLogGate _upgradeQuarantineLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
     private IReadOnlyList<IAutoBuyCandidate>? _pendingCandidates;
     private IReadOnlyList<IAutoBuyCandidate>? _pendingActiveCandidates;
@@ -36,6 +37,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly HashSet<string> _activeCandidateUuids =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _inactiveCandidateUuids = new List<string>();
+    private readonly List<string> _quarantinedUpgradeUuids = new List<string>();
     private readonly List<AutoBuyDecision> _activeDecisionBuffer = new List<AutoBuyDecision>();
     private readonly List<AutoBuyDecision> _recommendationBuffer = new List<AutoBuyDecision>();
     private readonly HashSet<string> _allowedUuids =
@@ -60,6 +62,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
     private bool _nativeStateSignalPending;
+    private bool _upgradeQuarantineObserved;
 
     public AutoBuyEngine(
         AutomataConfig config,
@@ -146,6 +149,8 @@ internal sealed class AutoBuyEngine : IDisposable
             }
         }
 
+        SynchronizeUpgradeQuarantine(cancelPendingBatch: true);
+
         if (_pendingPurchaseRecommendations is not null)
         {
             if (mode != AutoBuyOperationMode.Active)
@@ -207,6 +212,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
         SetCoordinatorEnabled(true);
         RefreshPolicyIfNeeded();
+        SynchronizeUpgradeQuarantine(cancelPendingBatch: true);
 
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         var readDue = false;
@@ -506,6 +512,12 @@ internal sealed class AutoBuyEngine : IDisposable
     {
         policyExcluded = false;
         var snapshot = candidate.Snapshot();
+        if (snapshot.Kind == AutoBuyCandidateKind.Upgrade &&
+            NativeMultiBuyScope.TryGetMutationQuarantine(out _))
+        {
+            return AutoBuyDecision.Rejected(snapshot, "automated Upgrade mutations are quarantined for this process");
+        }
+
         if (_allowedUuids.Count > 0 && !_allowedUuids.Contains(snapshot.Uuid))
         {
             policyExcluded = true;
@@ -728,6 +740,15 @@ internal sealed class AutoBuyEngine : IDisposable
                 purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out reason);
             }
             _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
+            var upgradeQuarantineActive = SynchronizeUpgradeQuarantine(cancelPendingBatch: false);
+            if (upgradeQuarantineActive && recommendation.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
+            {
+                // The native cleanup failure may have happened after the
+                // purchase call returned. Do not let any remaining cached
+                // Upgrade consume another mutation lease in this batch.
+                _pendingPurchaseIndex = recommendations.Count;
+            }
+
             if (purchaseSucceeded)
             {
                 _pendingBatchPurchased++;
@@ -1003,6 +1024,79 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             _rankedRecommendations.Add(decision);
         }
+    }
+
+    private bool SynchronizeUpgradeQuarantine(bool cancelPendingBatch)
+    {
+        if (!NativeMultiBuyScope.TryGetMutationQuarantine(out var reason))
+        {
+            return false;
+        }
+
+        var firstObservation = !_upgradeQuarantineObserved;
+        var stateChanged = firstObservation;
+        _upgradeQuarantineObserved = true;
+
+        _quarantinedUpgradeUuids.Clear();
+        foreach (var pair in _cachedDecisions)
+        {
+            if (pair.Value.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
+            {
+                _quarantinedUpgradeUuids.Add(pair.Key);
+            }
+        }
+
+        for (var i = 0; i < _quarantinedUpgradeUuids.Count; i++)
+        {
+            var uuid = _quarantinedUpgradeUuids[i];
+            if (_cachedDecisions.TryGetValue(uuid, out var decision) &&
+                decision.Kind == AutoBuyDecisionKind.Recommendation)
+            {
+                _rankedRecommendations.Remove(decision);
+            }
+
+            _cachedDecisions.Remove(uuid);
+            stateChanged = true;
+        }
+
+        if (cancelPendingBatch && PendingBatchContainsUpgrade())
+        {
+            ResetPendingPurchaseBatch();
+            stateChanged = true;
+        }
+
+        if (firstObservation &&
+            _upgradeQuarantineLogGate.ShouldLog("upgrade-mutation-quarantine", _lifetime.Elapsed))
+        {
+            _log.LogError(
+                "Auto Buy removed automated Upgrades from admission and ranking because native " +
+                $"multi-buy restoration is unverified; Structures remain eligible. {reason}");
+        }
+
+        if (stateChanged)
+        {
+            _secondsUntilEvaluation = 0.0f;
+        }
+
+        return true;
+    }
+
+    private bool PendingBatchContainsUpgrade()
+    {
+        if (_pendingPurchaseRecommendations is null)
+        {
+            return false;
+        }
+
+        for (var i = _pendingPurchaseIndex; i < _pendingPurchaseRecommendations.Count; i++)
+        {
+            if (_pendingPurchaseRecommendations[i].Candidate.Kind == AutoBuyCandidateKind.Upgrade)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ResetPendingPurchaseBatch()

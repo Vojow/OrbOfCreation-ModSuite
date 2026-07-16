@@ -871,6 +871,12 @@ internal sealed class NativeMultiBuyScope : IDisposable
 
     internal static bool IsMutationQuarantined => _mutationQuarantined;
 
+    internal static bool TryGetMutationQuarantine(out string reason)
+    {
+        reason = _quarantineReason;
+        return _mutationQuarantined;
+    }
+
     internal static void ResetQuarantineForTests()
     {
         _mutationQuarantined = false;
@@ -918,7 +924,6 @@ internal sealed class NativeMultiBuyScope : IDisposable
     {
         _mutationQuarantined = true;
         _quarantineReason = reason;
-        LogFailure($"Auto Buy quarantined Upgrade mutations because native multi-buy state is unknown: {reason}");
     }
 
     private static void LogFailure(string message)

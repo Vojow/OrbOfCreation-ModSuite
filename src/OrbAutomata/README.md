@@ -44,7 +44,7 @@ Reserves are an optional second policy. After each level, Automata requires enou
 
 When `RespectActionMultiplier=true`, Automata reads the game's current action multiplier, caps it to free queue room, and submits that many one-level native purchases. It does not pass an uncapped multiplier into `UpgradeSO.Purchase()`, whose native implementation does not cap itself to remaining queue room. Holding a modifier key can change the live multiplier, so the option remains off by default.
 
-Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process. Structure purchases do not use that global and remain independently validated.
+Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process and removed from admission, cached ranking, and pending batches. Structure purchases do not use that global and remain independently eligible.
 
 When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
 
