@@ -35,6 +35,8 @@ internal interface IAutoCastCandidate
 
     bool IsCasting { get; }
 
+    bool IsReadyingCast { get; }
+
     bool CanCast(out string reason);
 
     bool TryGetImmediateCosts(out IReadOnlyList<ResourceAdmissionCost> costs);
@@ -44,6 +46,8 @@ internal interface IAutoCastCandidate
     bool HasValidTargets(out string reason);
 
     bool TryFireAndResolveTargets(out string reason);
+
+    bool TrySetChargeHold(bool isHolding, out string reason);
 }
 
 internal sealed class ResourceFullnessPolicy

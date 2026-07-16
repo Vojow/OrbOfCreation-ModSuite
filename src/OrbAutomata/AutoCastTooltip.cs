@@ -32,6 +32,7 @@ internal sealed class AutoCastTooltip : ITooltipable
         {
             new TooltipNode($"State: {GetDisplayType()}", GetColor()),
             new TooltipNode($"Minimum resource fullness: {_config.AutoCastStartResourcePercent.Value:0.##}%"),
+            new TooltipNode($"Charged spells: {(_config.AutoCastFullCharge.Value ? "Full charge" : "Fire immediately")}"),
             new TooltipNode($"Evaluation interval: {_config.AutoCastIntervalSeconds.Value:0.##} seconds"),
             new TooltipNode($"Pause after manual cast: {_config.AutoCastManualPauseSeconds.Value:0.##} seconds"),
             new TooltipNode("Click or press Left Alt + X to toggle."),

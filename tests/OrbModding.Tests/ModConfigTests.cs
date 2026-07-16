@@ -130,7 +130,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(6).Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
+            new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
@@ -241,6 +241,29 @@ public sealed class ModConfigTests
         session.RevertAll();
         Assert.Equal("False", session.Get(settings["Enabled"]).StagedSerialized);
         Assert.False(session.IsDirty);
+    }
+
+    [Fact]
+    public void EditSession_RefreshesExternalChangesWithoutOverwritingStagedEdits()
+    {
+        var config = new ConfigFile();
+        var mode = config.Bind("General", "Mode", SampleMode.Disabled, "Mode");
+        var enabled = config.Bind("General", "Enabled", true, "Enabled");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        var settings = catalog.Mods.Single().Sections.Single().Settings.ToDictionary(setting => setting.Key);
+
+        mode.Value = SampleMode.Active;
+        session.Get(settings["Enabled"]).Stage("false");
+        enabled.Value = false;
+
+        Assert.True(session.RefreshExternalValues());
+        Assert.Equal("Active", session.Get(settings["Mode"]).StagedSerialized);
+        Assert.Equal("false", session.Get(settings["Enabled"]).StagedSerialized, ignoreCase: true);
+        Assert.True(session.Get(settings["Enabled"]).IsDirty);
     }
 
     [Fact]

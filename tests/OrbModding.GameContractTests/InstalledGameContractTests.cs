@@ -106,6 +106,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "Spell", "IsChanneled", false, "System.Boolean");
         AssertMethod(assembly, "Spell", "IsToggledSpell", false, "System.Boolean");
         AssertMethod(assembly, "Spell", "CanCharge", false, "System.Boolean");
+        AssertMethod(assembly, "Spell", "SetChargeInput", false, "System.Void", "System.String", "System.Boolean");
         AssertMethod(assembly, "Spell", "IsAttuning", false, "System.Boolean");
         AssertMethod(assembly, "Spell", "IsChargeAvailable", false, "System.Boolean");
         AssertMethod(assembly, "Spell", "GetCurrSpellCharges", false, "System.Int32");

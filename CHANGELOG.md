@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Synchronize clean Mod Config fields with live changes made by native status buttons or shortcuts without overwriting staged edits.
+- Add configurable Auto Cast support for charge-capable spells: fully charge through the native hold contract by default, or fire immediately when full charging is disabled.
+
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 
 - Added the supported suite package with Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. Experimental plugins remain excluded.

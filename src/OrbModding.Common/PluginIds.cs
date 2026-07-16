@@ -9,14 +9,14 @@ public static class PluginIds
 
     public const string AutomataGuid = "dev.vojow.orbofcreation.automata";
     public const string AutomataName = "Orb Automata";
-    public const string AutomataVersion = "0.4.1";
+    public const string AutomataVersion = "0.5.0";
 
     public const string ChronomancerGuid = "dev.vojow.orbofcreation.chronomancer";
     public const string ChronomancerName = "Orb Chronomancer";
 
     public const string ModConfigGuid = "dev.vojow.orbofcreation.modconfig";
     public const string ModConfigName = "Orb Mod Config";
-    public const string ModConfigVersion = "0.5.1";
+    public const string ModConfigVersion = "0.5.2";
 
     public const string MentorGuid = "dev.vojow.orbofcreation.mentor";
     public const string MentorName = "Orb Mentor";

@@ -101,7 +101,7 @@ public sealed class Plugin : BaseUnityPlugin
                 }
             }
 
-            _uiShell?.EnsureButtonIsLast();
+            _uiShell?.Tick(Time.unscaledDeltaTime);
         }
         else if (_uiShell is not null)
         {

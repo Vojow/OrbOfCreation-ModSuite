@@ -19,6 +19,14 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    public void FreshConfigFullChargesChargedSpellsByDefault()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+
+        Assert.True(config.AutoCastFullCharge.Value);
+    }
+
+    [Fact]
     public void ExistingResourceThresholdIsPreserved()
     {
         var file = new ConfigFile();
@@ -80,9 +88,10 @@ public sealed class AutoCastTests
     }
 
     [Fact]
-    public void ActiveModeUsesRoundRobinOrderAndSkipsChargedAndActiveAura()
+    public void ActiveModeFullChargesChargedSpellBeforeContinuingRotation()
     {
         var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
         var aura = Spell("active aura", kind: AutoCastSpellKind.Aura, casting: true);
         var first = Spell("first");
         var second = Spell("second");
@@ -93,10 +102,173 @@ public sealed class AutoCastTests
         fixture.Engine.Tick(1.0f);
         fixture.Engine.Tick(1.0f);
 
+        Assert.Equal(new[] { true }, charged.ChargeHoldChanges);
+        Assert.Equal(1, charged.FireCalls);
+        Assert.Equal(0, first.FireCalls);
+        charged.IsReadyingCast = false;
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
         Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("first", StringComparison.Ordinal));
-        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("second", StringComparison.Ordinal));
         Assert.Equal(1, first.FireCalls);
-        Assert.Equal(1, second.FireCalls);
+    }
+
+    [Fact]
+    public void DisabledFullChargeSettingFiresChargedSpellImmediately()
+    {
+        var charged = Spell("charged", charged: true);
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastFullCharge.Value = false;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(1, charged.FireCalls);
+        Assert.Empty(charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void DisablingAutoCastReleasesOwnedFullChargeHold()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Engine.Tick(1.0f);
+
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Disabled;
+        fixture.Engine.Tick(0.1f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void ManualSpellInputReleasesOwnedFullChargeHoldAndPausesRotation()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Engine.Tick(1.0f);
+
+        AutoCastManualSignal.NotifySpellFire();
+        fixture.Engine.Tick(0.1f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+        Assert.Equal(1, charged.FireCalls);
+    }
+
+    [Fact]
+    public void LeavingGameplayReleasesOwnedFullChargeHold()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        var inGameplay = true;
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var catalog = new FakeCatalog(charged);
+        using var engine = new AutoCastEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            new ManualLogSource(),
+            () => inGameplay);
+        engine.Tick(1.0f);
+
+        inGameplay = false;
+        engine.Tick(0.1f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void TurningOffFullChargeDuringChargeReleasesOwnedHold()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Engine.Tick(1.0f);
+
+        fixture.Config.AutoCastFullCharge.Value = false;
+        fixture.Engine.Tick(0.1f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void EmergencyDisableDuringChargeReleasesOwnedHold()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Engine.Tick(1.0f);
+
+        fixture.Config.EmergencyDisable.Value = true;
+        fixture.Engine.Tick(0.1f);
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void DisposingEngineDuringChargeReleasesOwnedHold()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.IsReadyingCast = true;
+        var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Engine.Tick(1.0f);
+
+        fixture.Dispose();
+
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void NativeFireFailureAfterAcquiringHoldReleasesIt()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.FireResult = false;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(1, charged.FireCalls);
+        Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void NativeHoldFailurePreventsChargedSpellFromFiring()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.HoldStartResult = false;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(0, charged.FireCalls);
+        Assert.Equal(new[] { true }, charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void NativeFireAndHoldReleaseFailuresAreBothReported()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.FireResult = false;
+        charged.HoldReleaseResult = false;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("could not release full-charge hold", StringComparison.Ordinal));
+        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("could not fire", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -483,7 +655,17 @@ public sealed class AutoCastTests
 
         public bool IsCasting { get; set; }
 
+        public bool IsReadyingCast { get; set; }
+
         public int FireCalls { get; private set; }
+
+        public List<bool> ChargeHoldChanges { get; } = new List<bool>();
+
+        public bool FireResult { get; set; } = true;
+
+        public bool HoldStartResult { get; set; } = true;
+
+        public bool HoldReleaseResult { get; set; } = true;
 
         public bool TargetsValid { get; set; } = true;
 
@@ -518,8 +700,16 @@ public sealed class AutoCastTests
         public bool TryFireAndResolveTargets(out string reason)
         {
             FireCalls++;
-            reason = "fired";
-            return true;
+            reason = FireResult ? "fired" : "native fire failed";
+            return FireResult;
+        }
+
+        public bool TrySetChargeHold(bool isHolding, out string reason)
+        {
+            ChargeHoldChanges.Add(isHolding);
+            var succeeded = isHolding ? HoldStartResult : HoldReleaseResult;
+            reason = succeeded ? (isHolding ? "held" : "released") : "native hold failed";
+            return succeeded;
         }
     }
 

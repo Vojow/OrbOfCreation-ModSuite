@@ -134,6 +134,7 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
 
 internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 {
+    private const string AutoCastChargeInput = "OrbAutomata.AutoCast.FullCharge";
     private readonly ReflectionAutoCastCatalog _catalog;
     private readonly object _spell;
 
@@ -168,6 +169,8 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
     public bool IsCharged => ReadBool("CanCharge", fallback: true);
 
     public bool IsCasting => ReadBool("IsCasting", fallback: false);
+
+    public bool IsReadyingCast => ReadBool("IsReadyingCast", fallback: false);
 
     public bool CanCast(out string reason)
     {
@@ -254,6 +257,33 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
     }
 
     public bool TryFireAndResolveTargets(out string reason) => _catalog.FireSlotAndResolveTargets(SlotIndex, out reason);
+
+    public bool TrySetChargeHold(bool isHolding, out string reason)
+    {
+        var method = _spell.GetType().GetMethod(
+            "SetChargeInput",
+            ReflectionUtil.InstanceFlags,
+            null,
+            new[] { typeof(string), typeof(bool) },
+            null);
+        if (method is null)
+        {
+            reason = "Spell.SetChargeInput(string, bool) unavailable";
+            return false;
+        }
+
+        try
+        {
+            method.Invoke(_spell, new object[] { AutoCastChargeInput, isHolding });
+            reason = isHolding ? "full-charge hold started" : "full-charge hold released";
+            return true;
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        {
+            reason = ex.InnerException?.Message ?? ex.Message;
+            return false;
+        }
+    }
 
     private bool TryGetCosts(string methodName, out IReadOnlyList<ResourceAdmissionCost> costs)
     {
