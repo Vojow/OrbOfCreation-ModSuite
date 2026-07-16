@@ -54,6 +54,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _successfulPurchasesThisSession;
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
+    private bool _nativeStateSignalPending;
 
     public AutoBuyEngine(
         AutomataConfig config,
@@ -75,6 +76,13 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void Tick(float unscaledDeltaTime)
     {
+        if (_nativeStateSignalPending)
+        {
+            _nativeStateSignalPending = false;
+            ResetAllPendingWork();
+            _secondsUntilEvaluation = 0.0f;
+        }
+
         var mode = _config.AutoBuyMode.Value;
         if (mode == AutoBuyOperationMode.Disabled)
         {
@@ -159,8 +167,21 @@ internal sealed class AutoBuyEngine : IDisposable
         _rankedRecommendations.Clear();
         _lastPolicy = null;
         _registryReconciliationPending = false;
+        _nativeStateSignalPending = false;
         _incrementalCatalog?.InvalidateLifecycle();
         _secondsUntilEvaluation = 0.0f;
+    }
+
+    public void NotifyStructureQueueChanged()
+    {
+        _incrementalCatalog?.NotifyStructureQueueChanged();
+        _nativeStateSignalPending = true;
+    }
+
+    public void NotifyNativeCompletion()
+    {
+        _incrementalCatalog?.NotifyNativeCompletion();
+        _nativeStateSignalPending = true;
     }
 
     private void EvaluateBatch()
@@ -175,12 +196,12 @@ internal sealed class AutoBuyEngine : IDisposable
         while (_pendingCandidates is not null && _pendingIndex < _pendingCandidates.Count)
         {
             var candidate = _pendingCandidates[_pendingIndex];
-            var decision = EvaluateCandidate(candidate);
+            var decision = EvaluateCandidate(candidate, out var policyExcluded);
             _pendingDecisions.Add(decision);
             if (_incrementalCatalog is not null)
             {
                 UpdateCachedDecision(decision);
-                _incrementalCatalog.CompleteCandidateEvaluation(candidate);
+                _incrementalCatalog.CompleteCandidateEvaluation(candidate, policyExcluded);
             }
             _pendingIndex++;
 
@@ -264,14 +285,22 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private AutoBuyDecision EvaluateCandidate(IAutoBuyCandidate candidate)
     {
+        return EvaluateCandidate(candidate, out _);
+    }
+
+    private AutoBuyDecision EvaluateCandidate(IAutoBuyCandidate candidate, out bool policyExcluded)
+    {
+        policyExcluded = false;
         var snapshot = candidate.Snapshot();
         if (_allowedUuids.Count > 0 && !_allowedUuids.Contains(snapshot.Uuid))
         {
+            policyExcluded = true;
             return AutoBuyDecision.Rejected(snapshot, "not included in the configured allowlist");
         }
 
         if (_blockedUuids.Contains(snapshot.Uuid))
         {
+            policyExcluded = true;
             return AutoBuyDecision.Rejected(snapshot, "blocked by configuration");
         }
 
@@ -460,9 +489,10 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             _pendingBatchAttempted++;
-            if (recommendation.Candidate.Source.TryPurchaseOne(out var reason))
+            var purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out var reason);
+            _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
+            if (purchaseSucceeded)
             {
-                _incrementalCatalog?.NotifyPurchaseAccepted(recommendation.Candidate.Source);
                 _pendingBatchPurchased++;
                 _successfulPurchasesThisSession++;
                 _pendingCandidateRepeats++;
@@ -495,6 +525,13 @@ internal sealed class AutoBuyEngine : IDisposable
                     $"Auto Buy could not purchase {recommendation.Candidate.DisplayName} " +
                     $"({recommendation.Candidate.Uuid}): {reason}");
                 AdvancePurchaseCandidate();
+                if (_incrementalCatalog is not null)
+                {
+                    // A native call may have spent resources or changed queue
+                    // state even when post-call verification failed. Settle
+                    // the invalidations before another candidate mutates.
+                    _pendingPurchaseIndex = recommendations.Count;
+                }
             }
 
             if (ReachedPurchaseSliceBudget(stopwatch, cpuBudget) &&
@@ -570,9 +607,10 @@ internal sealed class AutoBuyEngine : IDisposable
 
         return _config.StructureRepeatMode.Value switch
         {
-            AutoBuyStructureRepeatMode.Fixed => Math.Max(1, Math.Min(100, _config.FixedStructureLevelsPerCandidate.Value)),
+            AutoBuyStructureRepeatMode.Fixed =>
+                Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, _config.FixedStructureLevelsPerCandidate.Value))),
             AutoBuyStructureRepeatMode.BulkDevelopment when _catalog.TryGetBulkDevelopment(out var levels) =>
-                Math.Max(1, Math.Min(100, levels)),
+                Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, levels))),
             _ => 1,
         };
     }

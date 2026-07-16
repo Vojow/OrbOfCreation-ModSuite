@@ -9,52 +9,6 @@ namespace OrbAutomata;
 
 internal static class ReflectionCostReader
 {
-    public static IReadOnlyList<AutoBuyResourceDefinition> ReadDefinitions(object? container)
-    {
-        if (container is null)
-        {
-            return Array.Empty<AutoBuyResourceDefinition>();
-        }
-
-        var definitions = new List<AutoBuyResourceDefinition>();
-        var byId = new Dictionary<string, AutoBuyResourceDefinition>(StringComparer.OrdinalIgnoreCase);
-        var visited = 0;
-        foreach (var item in FlattenCostObjects(container, 0))
-        {
-            if (visited++ >= 128)
-            {
-                break;
-            }
-
-            if (!TryReadResourceAndAmount(item, out var resource, out var amount))
-            {
-                continue;
-            }
-
-            var resourceId = ReflectionUtil.ReadStableId(resource) ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(resourceId))
-            {
-                continue;
-            }
-
-            if (byId.TryGetValue(resourceId, out var existing))
-            {
-                existing.NominalCost = existing.NominalCost.Add(amount);
-                continue;
-            }
-
-            var definition = new AutoBuyResourceDefinition(
-                resourceId,
-                ReflectionUtil.ReadDisplayName(resource) ?? ObjectName(resource),
-                resource,
-                amount);
-            byId.Add(resourceId, definition);
-            definitions.Add(definition);
-        }
-
-        return definitions;
-    }
-
     public static IReadOnlyList<ResourceAdmissionCost> Read(object? container)
     {
         if (container is null)

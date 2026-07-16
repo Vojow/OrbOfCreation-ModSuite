@@ -20,6 +20,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
+    private bool _structureQueuesDirty;
+    private bool _completionEffectsDirty;
 
     public ReflectionAutoBuyCatalog()
     {
@@ -35,6 +37,18 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     public AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request)
     {
+        if (_completionEffectsDirty)
+        {
+            _completionEffectsDirty = false;
+            _index.InvalidateCompletionEffects();
+        }
+
+        if (_structureQueuesDirty)
+        {
+            _structureQueuesDirty = false;
+            _index.InvalidateStructureQueues();
+        }
+
         StartRegistryReconciliationIfDue();
         ProcessRegistryReconciliationSlice();
         _resourceSnapshots.BeginEvaluationEpoch(_index.HasResourceDependents);
@@ -48,12 +62,14 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             batch.ActiveCandidates,
             batch.DirtyCandidates,
             batch.FirstExcludedCandidate,
-            _registryReconciliation is not null || _index.EpochValidationPending);
+            _registryReconciliation is not null ||
+            _index.EpochValidationPending ||
+            _index.SettlementValidationPending);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate)
+    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
     {
-        _index.CompleteCandidateEvaluation(candidate);
+        _index.CompleteCandidateEvaluation(candidate, policyExcluded);
     }
 
     public void InvalidatePolicy()
@@ -66,16 +82,28 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _resourceSnapshots.BeginLazyEpoch();
     }
 
-    public void NotifyPurchaseAccepted(IAutoBuyCandidate candidate)
+    public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
     {
-        _index.MarkPurchaseAccepted(candidate);
+        _index.MarkPurchaseAttempted(candidate);
         _resourceSnapshots.BeginLazyEpoch();
+    }
+
+    public void NotifyStructureQueueChanged()
+    {
+        _structureQueuesDirty = true;
+    }
+
+    public void NotifyNativeCompletion()
+    {
+        _completionEffectsDirty = true;
     }
 
     public void InvalidateLifecycle()
     {
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
+        _structureQueuesDirty = false;
+        _completionEffectsDirty = false;
         _nextRegistryReconciliation = TimeSpan.Zero;
         _index.InvalidateLifecycleIncrementally();
     }
@@ -176,6 +204,19 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             remaining--;
             if (source is null)
             {
+                continue;
+            }
+
+            var uuid = ReflectionUtil.ReadStableId(source) ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(uuid) &&
+                _index.TryReuseObservedCandidate(
+                    uuid,
+                    source,
+                    kind,
+                    reconciliation.Seen,
+                    out var reusedEpochChanged))
+            {
+                reconciliation.ReplacementDetected |= reusedEpochChanged;
                 continue;
             }
 
@@ -293,11 +334,16 @@ internal sealed class ReflectionAutoBuyCandidate :
     private readonly bool _expectedNativeType;
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private readonly List<AutoBuyResourceDefinition> _costDefinitions = new List<AutoBuyResourceDefinition>();
+    private readonly List<DecodedResourceCost> _decodedCosts = new List<DecodedResourceCost>();
+    private readonly List<DecodedResourceCost> _combinedCosts = new List<DecodedResourceCost>();
     private readonly List<ResourceAdmissionCost> _admissionCosts = new List<ResourceAdmissionCost>();
     private readonly List<string> _resourceDependencies = new List<string>();
     private AutoBuyCandidateSnapshot? _snapshot;
     private bool _costDirty = true;
     private bool _hasResolvedCosts;
+    private int _adapterFailureCount;
+    private long _nextAdapterRetryEpoch;
+    private long _lastAdapterWarningEpoch = long.MinValue;
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
 
@@ -368,26 +414,40 @@ internal sealed class ReflectionAutoBuyCandidate :
     {
         if (_costDirty)
         {
-            _costDefinitions.Clear();
-            _resourceDependencies.Clear();
             _hasResolvedCosts = false;
-            var costContainer = Invoke(_getPurchaseCost);
-            if (costContainer is null)
+            if (_resourceSnapshots.Epoch < _nextAdapterRetryEpoch)
             {
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
 
-            var definitions = ReflectionCostReader.ReadDefinitions(costContainer);
-            for (var i = 0; i < definitions.Count; i++)
+            var costContainer = Invoke(_getPurchaseCost);
+            if (costContainer is null)
             {
-                _costDefinitions.Add(definitions[i]);
-                _resourceDependencies.Add(definitions[i].ResourceId);
+                RecordAdapterFailure("native GetPurchaseCost result is unavailable");
+                _admissionCosts.Clear();
+                return _admissionCosts;
             }
 
-            // An empty native ResourceCostList is a valid zero-cost result.
+            if (!NativeResourceCostAdapter.TryRead(
+                    costContainer,
+                    _decodedCosts,
+                    out _,
+                    out var adapterReason) ||
+                !ApplyDecodedCosts())
+            {
+                RecordAdapterFailure(
+                    string.IsNullOrWhiteSpace(adapterReason)
+                        ? "native ResourceCostList contained contradictory duplicate resources"
+                        : adapterReason);
+                _admissionCosts.Clear();
+                return _admissionCosts;
+            }
+
             _costDirty = false;
             _hasResolvedCosts = true;
+            _adapterFailureCount = 0;
+            _nextAdapterRetryEpoch = 0;
         }
 
         _admissionCosts.Clear();
@@ -410,6 +470,95 @@ internal sealed class ReflectionAutoBuyCandidate :
         }
 
         return _admissionCosts;
+    }
+
+    private bool ApplyDecodedCosts()
+    {
+        _combinedCosts.Clear();
+        for (var i = 0; i < _decodedCosts.Count; i++)
+        {
+            var decoded = _decodedCosts[i];
+            var combined = false;
+            for (var j = 0; j < _combinedCosts.Count; j++)
+            {
+                var existing = _combinedCosts[j];
+                if (!string.Equals(existing.ResourceId, decoded.ResourceId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!ReferenceEquals(existing.NativeResource, decoded.NativeResource))
+                {
+                    return false;
+                }
+
+                _combinedCosts[j] = new DecodedResourceCost(
+                    existing.ResourceId,
+                    existing.NativeResource,
+                    existing.Amount.Add(decoded.Amount));
+                combined = true;
+                break;
+            }
+
+            if (!combined)
+            {
+                _combinedCosts.Add(decoded);
+            }
+        }
+
+        for (var i = 0; i < _combinedCosts.Count; i++)
+        {
+            var decoded = _combinedCosts[i];
+            if (i < _costDefinitions.Count &&
+                string.Equals(_costDefinitions[i].ResourceId, decoded.ResourceId, StringComparison.OrdinalIgnoreCase) &&
+                ReferenceEquals(_costDefinitions[i].NativeResource, decoded.NativeResource))
+            {
+                _costDefinitions[i].NominalCost = decoded.Amount;
+                continue;
+            }
+
+            var definition = new AutoBuyResourceDefinition(
+                decoded.ResourceId,
+                NativeResourceCostAdapter.ReadResourceName(decoded.NativeResource) ?? decoded.NativeResource.GetType().Name,
+                decoded.NativeResource,
+                decoded.Amount);
+            if (i < _costDefinitions.Count)
+            {
+                _costDefinitions[i] = definition;
+            }
+            else
+            {
+                _costDefinitions.Add(definition);
+            }
+        }
+
+        if (_costDefinitions.Count > _combinedCosts.Count)
+        {
+            _costDefinitions.RemoveRange(_combinedCosts.Count, _costDefinitions.Count - _combinedCosts.Count);
+        }
+
+        _resourceDependencies.Clear();
+        for (var i = 0; i < _costDefinitions.Count; i++)
+        {
+            _resourceDependencies.Add(_costDefinitions[i].ResourceId);
+        }
+
+        return true;
+    }
+
+    private void RecordAdapterFailure(string reason)
+    {
+        _adapterFailureCount = Math.Min(16, _adapterFailureCount + 1);
+        var backoff = 1L << Math.Min(6, _adapterFailureCount - 1);
+        _nextAdapterRetryEpoch = _resourceSnapshots.Epoch + backoff;
+        if (_adapterFailureCount == 1 ||
+            _resourceSnapshots.Epoch - _lastAdapterWarningEpoch >= 64)
+        {
+            _lastAdapterWarningEpoch = _resourceSnapshots.Epoch;
+            Plugin.Log?.LogWarning(
+                $"Auto Buy quarantined cost evaluation for {Snapshot().Uuid}; " +
+                $"retryEpoch={_nextAdapterRetryEpoch}; reason={reason}");
+        }
     }
 
     public void MarkDirty(AutoBuyDirtyReason reasons)

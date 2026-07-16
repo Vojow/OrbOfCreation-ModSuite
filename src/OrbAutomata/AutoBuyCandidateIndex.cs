@@ -19,6 +19,7 @@ internal sealed class AutoBuyCandidateIndex
     private int _activeRefreshCursor;
     private int _slowRefreshCursor;
     private int _epochValidationPending;
+    private int _settlementValidationPending;
     private long _epoch = 1;
 
     public long Epoch => _epoch;
@@ -26,6 +27,8 @@ internal sealed class AutoBuyCandidateIndex
     public bool RegistryCompletionPending => _registryCompletionSweep is not null;
 
     public bool EpochValidationPending => _epochValidationPending > 0;
+
+    public bool SettlementValidationPending => _settlementValidationPending > 0;
 
     public IReadOnlyList<IAutoBuyCandidate> Reconcile(IEnumerable<IAutoBuyCandidate> candidates)
     {
@@ -103,6 +106,25 @@ internal sealed class AutoBuyCandidateIndex
         }
 
         return false;
+    }
+
+    public bool TryReuseObservedCandidate(
+        string uuid,
+        object nativeIdentity,
+        AutoBuyCandidateKind kind,
+        ISet<string> seen,
+        out bool epochChanged)
+    {
+        epochChanged = false;
+        if (!_entries.TryGetValue(uuid, out var entry) ||
+            entry.Definition.Kind != kind ||
+            !ReferenceEquals(GetNativeIdentity(entry.Candidate), nativeIdentity))
+        {
+            return false;
+        }
+
+        epochChanged = ObserveCandidate(entry.Candidate, seen);
+        return true;
     }
 
     public void CompleteRegistryReconciliation(ISet<string> seen)
@@ -195,10 +217,16 @@ internal sealed class AutoBuyCandidateIndex
         return new AutoBuyEvaluationBatch(_active, _dirty, firstExcluded, reconciliationPending: false);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate)
+    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded = false)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
+            return;
+        }
+
+        if (policyExcluded)
+        {
+            entry.DirtyReasons = AutoBuyDirtyReason.None;
             return;
         }
 
@@ -219,7 +247,7 @@ internal sealed class AutoBuyCandidateIndex
         MarkAll(AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty);
     }
 
-    public void MarkPurchaseAccepted(IAutoBuyCandidate candidate)
+    public void MarkPurchaseAttempted(IAutoBuyCandidate candidate)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
@@ -238,6 +266,47 @@ internal sealed class AutoBuyCandidateIndex
         foreach (var resourceId in entry.ResourceDependencies)
         {
             InvalidateResource(resourceId, AutoBuyResourceChange.Quantity);
+        }
+    }
+
+    public void InvalidateStructureQueues()
+    {
+        foreach (var entry in _lifecycleEntries)
+        {
+            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
+                entry.Definition.Kind == AutoBuyCandidateKind.Structure)
+            {
+                MarkSettlementPending(entry);
+                MarkDirty(
+                    entry,
+                    AutoBuyDirtyReason.AvailabilityDirty |
+                    AutoBuyDirtyReason.LevelDirty |
+                    AutoBuyDirtyReason.CostDirty |
+                    AutoBuyDirtyReason.ResourceDirty |
+                    AutoBuyDirtyReason.PriorityDirty |
+                    AutoBuyDirtyReason.CompletionDirty);
+            }
+        }
+    }
+
+    public void InvalidateCompletionEffects()
+    {
+        foreach (var entry in _lifecycleEntries)
+        {
+            if (entry.State == AutoBuyCandidateLifecycleState.Invalid)
+            {
+                continue;
+            }
+
+            MarkSettlementPending(entry);
+
+            MarkDirty(
+                entry,
+                AutoBuyDirtyReason.AvailabilityDirty |
+                AutoBuyDirtyReason.CostDirty |
+                AutoBuyDirtyReason.ResourceDirty |
+                AutoBuyDirtyReason.PriorityDirty |
+                AutoBuyDirtyReason.CompletionDirty);
         }
     }
 
@@ -337,6 +406,7 @@ internal sealed class AutoBuyCandidateIndex
         _activeRefreshCursor = 0;
         _slowRefreshCursor = 0;
         _epochValidationPending = 0;
+        _settlementValidationPending = 0;
         _epoch++;
     }
 
@@ -357,6 +427,7 @@ internal sealed class AutoBuyCandidateIndex
             var oldState = entry.State;
             rollbackDetected |= RefreshLifecycle(entry);
             CompleteEpochValidation(entry);
+            CompleteSettlementValidation(entry);
             if (entry.State == AutoBuyCandidateLifecycleState.Invalid || !entry.IsEligibleForHotSet)
             {
                 entry.DirtyReasons = AutoBuyDirtyReason.None;
@@ -460,12 +531,18 @@ internal sealed class AutoBuyCandidateIndex
                 _activeRefreshCursor = 0;
             }
 
+            var refreshed = _activeEntries[_activeRefreshCursor++];
             MarkDirty(
-                _activeEntries[_activeRefreshCursor++],
+                refreshed,
                 AutoBuyDirtyReason.AvailabilityDirty |
                 AutoBuyDirtyReason.LevelDirty |
                 AutoBuyDirtyReason.CompletionDirty |
                 AutoBuyDirtyReason.PriorityDirty);
+
+            if (refreshed.Definition.Kind == AutoBuyCandidateKind.Structure)
+            {
+                MarkDirty(refreshed, AutoBuyDirtyReason.CostDirty | AutoBuyDirtyReason.ResourceDirty);
+            }
         }
     }
 
@@ -499,6 +576,7 @@ internal sealed class AutoBuyCandidateIndex
         _activeEntries.Clear();
         _lifecycleDirty.Clear();
         _epochValidationPending = 0;
+        _settlementValidationPending = 0;
         foreach (var entry in _lifecycleEntries)
         {
             if (entry.State == AutoBuyCandidateLifecycleState.Invalid)
@@ -543,6 +621,7 @@ internal sealed class AutoBuyCandidateIndex
     private void MarkInvalid(Entry entry, string reason)
     {
         CompleteEpochValidation(entry);
+        CompleteSettlementValidation(entry);
         SetHotEligibility(entry, false);
         entry.State = AutoBuyCandidateLifecycleState.Invalid;
         entry.Epoch = _epoch;
@@ -561,6 +640,28 @@ internal sealed class AutoBuyCandidateIndex
 
         entry.NeedsEpochValidation = false;
         _epochValidationPending = Math.Max(0, _epochValidationPending - 1);
+    }
+
+    private void CompleteSettlementValidation(Entry entry)
+    {
+        if (!entry.NeedsSettlementValidation)
+        {
+            return;
+        }
+
+        entry.NeedsSettlementValidation = false;
+        _settlementValidationPending = Math.Max(0, _settlementValidationPending - 1);
+    }
+
+    private void MarkSettlementPending(Entry entry)
+    {
+        if (entry.NeedsSettlementValidation)
+        {
+            return;
+        }
+
+        entry.NeedsSettlementValidation = true;
+        _settlementValidationPending++;
     }
 
     private void SetHotEligibility(Entry entry, bool eligible)
@@ -690,6 +791,8 @@ internal sealed class AutoBuyCandidateIndex
 
         public bool NeedsEpochValidation { get; set; }
 
+        public bool NeedsSettlementValidation { get; set; }
+
         public HashSet<string> ResourceDependencies { get; } =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -710,6 +813,7 @@ internal sealed class AutoBuyCandidateIndex
             DirtyReasons = AutoBuyDirtyReason.None;
             LifecycleQueued = false;
             NeedsEpochValidation = false;
+            NeedsSettlementValidation = false;
             ResourceDependencies.Clear();
         }
 

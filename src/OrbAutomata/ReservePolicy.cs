@@ -17,7 +17,7 @@ internal sealed class ReservePolicy
     {
         if (costs.Count == 0)
         {
-            return ReserveDecision.Rejected("resource cost unavailable");
+            return ReserveDecision.Accepted(0.0, "native cost list is empty");
         }
 
         if (!BigAmount.TryParse(_config.AbsoluteReserve.Value, out var absoluteReserve))

@@ -95,13 +95,17 @@ internal interface IAutoBuyIncrementalCatalog
 {
     AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request);
 
-    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate);
+    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded);
 
     void InvalidatePolicy();
 
     void BeginMutationEvaluation();
 
-    void NotifyPurchaseAccepted(IAutoBuyCandidate candidate);
+    void NotifyPurchaseAttempted(IAutoBuyCandidate candidate);
+
+    void NotifyStructureQueueChanged();
+
+    void NotifyNativeCompletion();
 
     void InvalidateLifecycle();
 }

@@ -143,6 +143,8 @@ internal sealed class AutoBuyResourceSnapshotCache
             entry.Definition = definition;
             entry.HasSnapshot = false;
             entry.ReadEpoch = 0;
+            entry.FailureCount = 0;
+            entry.NextRetryEpoch = 0;
             _onChanged(definition.ResourceId, AutoBuyResourceChange.Identity);
         }
         else
@@ -168,20 +170,36 @@ internal sealed class AutoBuyResourceSnapshotCache
     private void ReadEntry(Entry entry)
     {
         entry.ReadEpoch = _epoch;
+        if (_epoch < entry.NextRetryEpoch)
+        {
+            return;
+        }
+
         var hadSnapshot = entry.HasSnapshot;
         var previous = entry.Snapshot;
         if (!_reader.TryRead(entry.Definition, _epoch, out var current))
         {
             entry.HasSnapshot = false;
             entry.Snapshot = default;
+            entry.FailureCount = Math.Min(16, entry.FailureCount + 1);
+            entry.NextRetryEpoch = _epoch + (1L << Math.Min(6, entry.FailureCount - 1));
             _onChanged(
                 entry.Definition.ResourceId,
                 hadSnapshot ? AutoBuyResourceChange.Unknown | AutoBuyResourceChange.Identity : AutoBuyResourceChange.Unknown);
+            if (entry.FailureCount == 1 || _epoch - entry.LastWarningEpoch >= 64)
+            {
+                entry.LastWarningEpoch = _epoch;
+                Plugin.Log?.LogWarning(
+                    $"Auto Buy quarantined resource snapshot {entry.Definition.ResourceId}; " +
+                    $"retryEpoch={entry.NextRetryEpoch}.");
+            }
             return;
         }
 
         entry.HasSnapshot = true;
         entry.Snapshot = current;
+        entry.FailureCount = 0;
+        entry.NextRetryEpoch = 0;
         var change = hadSnapshot ? Compare(previous, current) : AutoBuyResourceChange.Identity;
         if (change != AutoBuyResourceChange.None)
         {
@@ -253,6 +271,12 @@ internal sealed class AutoBuyResourceSnapshotCache
         public bool HasSnapshot { get; set; }
 
         public long ReadEpoch { get; set; }
+
+        public int FailureCount { get; set; }
+
+        public long NextRetryEpoch { get; set; }
+
+        public long LastWarningEpoch { get; set; } = long.MinValue;
     }
 }
 

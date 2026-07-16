@@ -42,6 +42,27 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    public void ResourceSnapshotFailure_UsesBoundedRetryBackoff()
+    {
+        var reader = new FakeResourceReader();
+        var cache = new AutoBuyResourceSnapshotCache(reader, (_, _) => { });
+        var missing = new AutoBuyResourceDefinition(
+            "missing",
+            "Missing",
+            new object(),
+            new BigAmount(1.0, 0));
+
+        cache.BeginLazyEpoch();
+        Assert.False(cache.TryResolve(missing, out _));
+        Assert.Equal(1, reader.ReadCalls);
+
+        cache.BeginEvaluationEpoch(_ => true);
+        Assert.Equal(2, reader.ReadCalls);
+        cache.BeginEvaluationEpoch(_ => true);
+        Assert.Equal(2, reader.ReadCalls);
+    }
+
+    [Fact]
     public void QualityChange_DirtiesAllDependentsButOnlyStructureNominalCosts()
     {
         var index = new AutoBuyCandidateIndex();
@@ -83,7 +104,7 @@ public sealed class AutoBuyDirtyResourceTests
         var dependent = Candidate("dependent", AutoBuyCandidateKind.Upgrade, "mana", available: true);
         PrimeDependencies(index, purchased, dependent);
 
-        index.MarkPurchaseAccepted(purchased);
+        index.MarkPurchaseAttempted(purchased);
 
         Assert.True(index.TryGetDirtyReasons(purchased.Uuid, out var purchasedDirty));
         Assert.True(index.TryGetDirtyReasons(dependent.Uuid, out var dependentDirty));
@@ -387,6 +408,298 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(3, second.PurchaseCalls);
     }
 
+    [Fact]
+    public void NativeCompletion_InvalidatesOtherStructureCostAndUnlockStateAsOneSettlement()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var changedStructure = Candidate("cost-scaling-target", AutoBuyCandidateKind.Structure, "mana", available: true);
+        var newlyUnlocked = Candidate("prerequisite-target", AutoBuyCandidateKind.Upgrade, "mana", available: false);
+        index.Reconcile(new[] { changedStructure, newlyUnlocked });
+        var initial = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+        foreach (var candidate in initial.DirtyCandidates)
+        {
+            index.CompleteCandidateEvaluation(candidate);
+        }
+
+        newlyUnlocked.Available = true;
+        index.InvalidateCompletionEffects();
+
+        Assert.True(index.SettlementValidationPending);
+        var settled = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+
+        Assert.False(index.SettlementValidationPending);
+        Assert.Contains(changedStructure, settled.DirtyCandidates);
+        Assert.Contains(newlyUnlocked, settled.ActiveCandidates);
+        Assert.True(index.TryGetDirtyReasons(changedStructure.Uuid, out var structureDirty));
+        Assert.True((structureDirty & AutoBuyDirtyReason.CostDirty) != 0);
+        Assert.True((structureDirty & AutoBuyDirtyReason.PriorityDirty) != 0);
+    }
+
+    [Fact]
+    public void PolicyExcludedCandidate_IsCleanUntilPolicyChanges()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var candidate = Candidate("excluded", AutoBuyCandidateKind.Upgrade, "mana", available: true);
+        candidate.CostsResolved = false;
+        index.Reconcile(new[] { candidate });
+        var first = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+        Assert.Same(candidate, Assert.Single(first.DirtyCandidates));
+
+        index.CompleteCandidateEvaluation(candidate, policyExcluded: true);
+        var unchanged = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+        Assert.Empty(unchanged.DirtyCandidates);
+
+        index.InvalidatePolicy();
+        var changed = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+        Assert.Same(candidate, Assert.Single(changed.DirtyCandidates));
+    }
+
+    [Fact]
+    public void FailedPostPurchaseVerification_StillInvalidatesCandidateAndResources()
+    {
+        var failed = new EngineCandidate("failed", 1.0) { PurchaseSucceeds = false };
+        var catalog = new IncrementalCatalog(failed, new EngineCandidate("other", 2.0));
+        var config = ActiveConfig("failed");
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(1, failed.PurchaseCalls);
+        Assert.Equal(1, catalog.PurchaseAttemptNotifications);
+    }
+
+    [Fact]
+    public void FixedStructureGroup_IsClampedToInitialFreeQueueRoom()
+    {
+        var structure = new EngineCandidate("structure", 1.0, AutoBuyCandidateKind.Structure);
+        var catalog = new IncrementalCatalog(structure, new EngineCandidate("other", 2.0))
+        {
+            RemainingRoom = 2,
+        };
+        var config = ActiveConfig("structure");
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
+        config.MaxPurchasesPerBatch.Value = 10;
+        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
+        config.FixedStructureLevelsPerCandidate.Value = 10;
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(2, structure.PurchaseCalls);
+    }
+
+    [Fact]
+    public void BulkStructureGroup_IsClampedToInitialFreeQueueRoom()
+    {
+        var structure = new EngineCandidate("structure", 1.0, AutoBuyCandidateKind.Structure);
+        var catalog = new IncrementalCatalog(structure, new EngineCandidate("other", 2.0))
+        {
+            RemainingRoom = 2,
+            BulkLevels = 25,
+        };
+        var config = ActiveConfig("structure");
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
+        config.MaxPurchasesPerBatch.Value = 10;
+        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment;
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(2, structure.PurchaseCalls);
+    }
+
+    [Fact]
+    public void ExactCostAdapter_RequiresEveryNativeTupleAndCachesSchema()
+    {
+        var mana = new ResourceSO { uuid = "mana" };
+        var valid = new ResourceCostList();
+        valid.costs.Add(new ResourceTuple(mana, new TestBigDouble(2.0, 3)));
+        valid.costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 3)));
+        var decoded = new List<DecodedResourceCost>();
+        var before = NativeResourceCostAdapter.CachedSchemaCount;
+
+        Assert.True(NativeResourceCostAdapter.TryRead(valid, decoded, out var tupleCount, out var reason), reason);
+        Assert.Equal(2, tupleCount);
+        Assert.Equal(2, decoded.Count);
+        var afterFirst = NativeResourceCostAdapter.CachedSchemaCount;
+        Assert.InRange(afterFirst, before, before + 1);
+        Assert.True(NativeResourceCostAdapter.TryRead(valid, decoded, out tupleCount, out reason), reason);
+        Assert.Equal(afterFirst, NativeResourceCostAdapter.CachedSchemaCount);
+
+        valid.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
+        Assert.False(NativeResourceCostAdapter.TryRead(valid, decoded, out tupleCount, out _));
+        Assert.Equal(3, tupleCount);
+        Assert.Empty(decoded);
+    }
+
+    [Fact]
+    public void EmptyNativeCostList_IsAResolvedFreePurchaseVector()
+    {
+        var decoded = new List<DecodedResourceCost>();
+        Assert.True(NativeResourceCostAdapter.TryRead(
+            new ResourceCostList(),
+            decoded,
+            out var tupleCount,
+            out var reason), reason);
+        Assert.Equal(0, tupleCount);
+        Assert.Empty(decoded);
+
+        var config = AutomataConfig.Bind(new ConfigFile());
+        var reserve = new ReservePolicy(config).Evaluate(Array.Empty<ResourceAdmissionCost>());
+        Assert.True(reserve.Passed);
+        Assert.Equal(0.0, reserve.MaxCostToQuantityRatio);
+    }
+
+    [Fact]
+    public void CostAdapterFailure_BacksOffBeforeRetryingNativeReflection()
+    {
+        var native = new StructureSO
+        {
+            uuid = "broken-cost",
+            Cost = new ResourceCostList(),
+        };
+        native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
+        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _) => { });
+        var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
+
+        Assert.Empty(candidate.GetCosts());
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(1, native.GetPurchaseCostCalls);
+
+        snapshots.BeginLazyEpoch();
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(2, native.GetPurchaseCostCalls);
+    }
+
+    [Fact]
+    public void UnchangedRegistryIdentity_ReusesExistingCandidateWrapper()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var candidate = Candidate("stable", AutoBuyCandidateKind.Structure, "mana", available: true);
+        index.Reconcile(new[] { candidate });
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        Assert.True(index.TryReuseObservedCandidate(
+            candidate.Uuid,
+            candidate.NativeIdentity,
+            AutoBuyCandidateKind.Structure,
+            seen,
+            out var epochChanged));
+        Assert.False(epochChanged);
+        Assert.Contains(candidate.Uuid, seen);
+        Assert.True(index.TryGetCandidate(candidate.Uuid, out var retained));
+        Assert.Same(candidate, retained);
+    }
+
+    [Fact]
+    public void StructureQueueSettlement_IsBoundedAndBlocksUntilAllCostsRefresh()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var candidates = new List<DirtyCandidate>();
+        for (var i = 0; i < 12; i++)
+        {
+            candidates.Add(Candidate($"structure-{i:00}", AutoBuyCandidateKind.Structure, "mana", available: true));
+        }
+
+        index.Reconcile(candidates);
+        index.InvalidateStructureQueues();
+        index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(20, true, true),
+            lifecycleWorkLimit: 3,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+        Assert.True(index.SettlementValidationPending);
+
+        while (index.SettlementValidationPending)
+        {
+            index.PrepareEvaluation(
+                new AutoBuyEvaluationRequest(20, true, true),
+                lifecycleWorkLimit: 3,
+                activeRefreshCount: 0,
+                slowRefreshCount: 0);
+        }
+
+        Assert.All(candidates, candidate =>
+        {
+            Assert.True(index.TryGetDirtyReasons(candidate.Uuid, out var dirty));
+            Assert.True((dirty & AutoBuyDirtyReason.CostDirty) != 0);
+        });
+    }
+
+    [Fact]
+    public void CompletionSignal_PreventsCachedMutationUntilSettlementFinishes()
+    {
+        var candidate = new EngineCandidate("candidate", 1.0);
+        var catalog = new IncrementalCatalog(candidate, new EngineCandidate("other", 2.0));
+        var config = ActiveConfig("candidate");
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.NotifyNativeCompletion();
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+        Assert.Equal(0, candidate.PurchaseCalls);
+
+        catalog.SettlementPending = false;
+        engine.Tick(0.0f);
+        Assert.Equal(1, candidate.PurchaseCalls);
+    }
+
+    private static AutomataConfig ActiveConfig(string allowedUuid)
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.AllowedAutoBuyUuids.Value = allowedUuid;
+        config.LeaveQueueSlots.Value = 0;
+        return config;
+    }
+
     private static DirtyCandidate Candidate(
         string uuid,
         AutoBuyCandidateKind kind,
@@ -466,11 +779,13 @@ public sealed class AutoBuyDirtyResourceTests
 
         public int QueuedLevels { get; set; }
 
+        public bool CostsResolved { get; set; } = true;
+
         public object NativeIdentity { get; }
 
         public IReadOnlyList<string> ResourceDependencies => _dependencies;
 
-        public bool HasResolvedCosts => true;
+        public bool HasResolvedCosts => CostsResolved;
 
         public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
@@ -529,10 +844,18 @@ public sealed class AutoBuyDirtyResourceTests
             IReadOnlyList<IAutoBuyCandidate> dirty = EvaluationCalls == 1
                 ? _active
                 : new IAutoBuyCandidate[] { _first };
-            return new AutoBuyEvaluationBatch(_active, dirty, null, false);
+            return new AutoBuyEvaluationBatch(_active, dirty, null, SettlementPending);
         }
 
-        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate)
+        public int PurchaseAttemptNotifications { get; private set; }
+
+        public int RemainingRoom { get; set; } = 10;
+
+        public int BulkLevels { get; set; } = 1;
+
+        public bool SettlementPending { get; set; }
+
+        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
         {
         }
 
@@ -544,12 +867,22 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
 
-        public void NotifyPurchaseAccepted(IAutoBuyCandidate candidate)
+        public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
         {
+            PurchaseAttemptNotifications++;
             if (ReferenceEquals(candidate, _first))
             {
                 _first.Cost = 100.0;
             }
+        }
+
+        public void NotifyStructureQueueChanged()
+        {
+        }
+
+        public void NotifyNativeCompletion()
+        {
+            SettlementPending = true;
         }
 
         public void InvalidateLifecycle()
@@ -558,13 +891,13 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool TryGetRemainingQueueRoom(out int remainingRoom)
         {
-            remainingRoom = 10;
+            remainingRoom = RemainingRoom;
             return true;
         }
 
         public bool TryGetBulkDevelopment(out int levels)
         {
-            levels = 1;
+            levels = BulkLevels;
             return true;
         }
 
@@ -608,6 +941,8 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool CostsResolved { get; set; } = true;
 
+        public bool PurchaseSucceeds { get; set; } = true;
+
         public IReadOnlyList<string> ResourceDependencies { get; } = new[] { "resource" };
 
         public bool HasResolvedCosts => CostsResolved;
@@ -639,8 +974,8 @@ public sealed class AutoBuyDirtyResourceTests
         {
             PurchaseCalls++;
             _quantity -= Cost;
-            reason = string.Empty;
-            return true;
+            reason = PurchaseSucceeds ? string.Empty : "post-purchase verification failed";
+            return PurchaseSucceeds;
         }
 
         public void MarkDirty(AutoBuyDirtyReason reasons)
@@ -651,4 +986,73 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
     }
+}
+
+internal sealed class ResourceCostList
+{
+    public List<ResourceTuple> costs = new List<ResourceTuple>();
+}
+
+internal struct ResourceTuple
+{
+    public ResourceTuple(ResourceSO resource, TestBigDouble value)
+    {
+        this.resource = resource;
+        _value = value;
+    }
+
+    public ResourceSO resource;
+
+    private TestBigDouble _value;
+
+    public TestBigDouble GetValue() => _value;
+}
+
+internal sealed class ResourceSO
+{
+    public string uuid = string.Empty;
+
+    public string GetGuid() => uuid;
+
+    public string GetName() => uuid;
+}
+
+internal readonly struct TestBigDouble
+{
+    public TestBigDouble(double mantissa, long exponent)
+    {
+        this.mantissa = mantissa;
+        this.exponent = exponent;
+    }
+
+    public readonly double mantissa;
+
+    public readonly long exponent;
+}
+
+internal sealed class StructureSO
+{
+    public string uuid = string.Empty;
+
+    public ResourceCostList Cost { get; set; } = new ResourceCostList();
+
+    public int GetPurchaseCostCalls { get; private set; }
+
+    public bool IsAvailable() => true;
+
+    public bool CanPurchase() => true;
+
+    public ResourceCostList GetPurchaseCost()
+    {
+        GetPurchaseCostCalls++;
+        return Cost;
+    }
+
+    public void Purchase(bool forceOne)
+    {
+    }
+
+    public int GetPurchaseLevel() => 0;
+
+    public int GetQueuedQuantity() => 0;
 }

@@ -69,6 +69,8 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "Purchase", false, "System.Void", "System.Boolean");
         AssertMethod(assembly, "StructureSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
+        AssertMethod(assembly, "StructureSO", "QueueBuild", false, "System.Void", "System.Int32");
+        AssertMethod(assembly, "StructureSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
@@ -80,6 +82,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "HasFiniteLevels", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
@@ -87,6 +90,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "IntVariable", "AsInt", false, "System.Int32");
         AssertMethod(assembly, "IntVariable", "SetValue", false, "System.Void", "System.Int32");
         Assert.Equal("System.Collections.Generic.List`1<ResourceTuple>", assembly.GetFieldType("ResourceCostList", "costs"));
+        AssertMethod(assembly, "ResourceCostList", "GetEntries", false, "System.Collections.Generic.List`1<ResourceTuple>");
         Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
         AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
@@ -95,6 +99,8 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "TooltipableObject", "GetName", false, "System.String");
         Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "quality"));
         Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "maxQuantity"));
         AssertMethod(assembly, "ValueModifierRecord", "GetValue", false, "BigDouble");

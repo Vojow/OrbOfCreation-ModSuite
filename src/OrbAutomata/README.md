@@ -33,6 +33,8 @@ Automata discovers native `StructureSO` and `UpgradeSO` candidates into a lifecy
 
 Resource dependencies are learned from the native current-cost result. Each referenced native resource is read once per evaluation epoch, including true quantity, quality, capacity, and effective attribute-cost modifier. Quantity or quality changes dirty only dependent candidates; save loads, gameplay-manager restarts, scene changes, and NG+ start a new lifecycle epoch. Unknown cost, resource, lifecycle, or identity state fails closed.
 
+The installed-game `ResourceCostList` and `ResourceTuple` schema is validated once per native type. Every tuple must decode before any reserve decision uses the vector; adapter failures are quarantined with bounded retry and rate-limited warnings. Empty native cost lists remain valid free actions when native `CanPurchase` accepts them. Native Structure queue and Structure/Upgrade completion hooks coalesce cost, availability, and priority settlement before cached recommendations may mutate another candidate.
+
 `AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
 
 - `BuyAll` accepts any natively affordable action that passes reserves.
@@ -53,6 +55,8 @@ This work remains on Unity's main thread because the game registries, Scriptable
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
 Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels or assign special priority to cost-reduction effects.
+
+Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
 ## Auto Cast
 

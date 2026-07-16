@@ -59,6 +59,8 @@ public sealed class Plugin : BaseUnityPlugin
             new ResourceFullnessPolicy(),
             Log);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
+        AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
+        AutoBuyLifecycleSignal.NativeCompletion += OnNativeCompletion;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
         Log.LogInfo(
@@ -91,6 +93,8 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnDestroy()
     {
         AutoBuyLifecycleSignal.Invalidated -= OnAutoBuyLifecycleInvalidated;
+        AutoBuyLifecycleSignal.StructureQueueChanged -= OnStructureQueueChanged;
+        AutoBuyLifecycleSignal.NativeCompletion -= OnNativeCompletion;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
         _autoBuyEngine = null;
@@ -114,6 +118,16 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnAutoBuyLifecycleInvalidated()
     {
         _autoBuyEngine?.InvalidateLifecycle();
+    }
+
+    private void OnStructureQueueChanged()
+    {
+        _autoBuyEngine?.NotifyStructureQueueChanged();
+    }
+
+    private void OnNativeCompletion()
+    {
+        _autoBuyEngine?.NotifyNativeCompletion();
     }
 
     private static void LogAssemblyStatus()
