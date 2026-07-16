@@ -36,21 +36,26 @@ public sealed class Plugin : BaseUnityPlugin
         var target = AccessTools.Method("SpellRecipeSO:GainMasteryExp");
         if (target is null) { _runtime.BlockPermanent("native GainMasteryExp hook unavailable"); return; }
         _harmony = new Harmony(PluginIds.MentorGuid);
-        _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain)));
-        PatchOptional("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), postfix: true);
-        PatchOptional("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), postfix: false);
-        PatchFinalizer("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick));
-        PatchOptional("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), postfix: false);
+        try { _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain))); }
+        catch (Exception ex)
+        {
+            _runtime.BlockPermanent($"native GainMasteryExp hook failed: {ex.GetBaseException().Message}");
+            return;
+        }
+        PatchDomainRequired("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), MentorDomain.Artifacts, postfix: false);
+        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick), MentorDomain.Artifacts, postfix: false, finalizer: true);
+        PatchDomainRequired("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), MentorDomain.Artifacts, postfix: false);
         PatchRequired("SpellRecipeSO:Discover", nameof(AfterSpellProgression));
         PatchRequired("SpellRecipeSO:PurchaseLevel", nameof(AfterSpellProgression));
-        PatchRequired("AlchemyRecipeSO:Discover", nameof(AfterAlchemyProgression));
-        PatchRequired("AlchemyRecipeSO:ApplyMastery", nameof(AfterAlchemyProgression));
-        PatchRequired("EquipmentSO:Discover", nameof(AfterArtifactProgression));
-        PatchRequired("EquipmentSO:Create", nameof(AfterArtifactProgression));
-        PatchRequired("EquipmentSO:GainMasteryLevels", nameof(AfterArtifactProgression));
+        PatchDomainRequired("AlchemyRecipeSO:Discover", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("AlchemyRecipeSO:ApplyMastery", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:Discover", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
+        PatchDomainRequired("EquipmentSO:Create", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
+        PatchDomainRequired("EquipmentSO:GainMasteryLevels", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
         PatchRequired("SpellRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
-        PatchRequired("AlchemyRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
-        PatchRequired("EquipmentSO:ResetData", nameof(AfterNativeProgressionReset));
+        PatchDomainRequired("AlchemyRecipeSO:ResetData", nameof(AfterAlchemyNativeReset), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:ResetData", nameof(AfterArtifactNativeReset), MentorDomain.Artifacts, postfix: true);
         PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
         PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
         SceneManager.activeSceneChanged += OnSceneChanged;
@@ -105,13 +110,22 @@ public sealed class Plugin : BaseUnityPlugin
     private static void AfterAlchemyProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy);
     private static void AfterArtifactProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts);
     private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
+    private static void AfterAlchemyNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
+    private static void AfterArtifactNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
     private static bool IsGameplayScene() => SceneManager.GetActiveScene().name == "Main";
     private void PatchOptional(string targetName, string patchName, bool postfix)
     {
         var target = AccessTools.Method(targetName);
         if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
         var patch = new HarmonyMethod(typeof(Plugin), patchName);
-        if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
+        try
+        {
+            if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Orb Mentor optional lifecycle hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
     }
     private void PatchRequired(string targetName, string patchName)
     {
@@ -121,13 +135,36 @@ public sealed class Plugin : BaseUnityPlugin
             _runtime?.BlockPermanent($"required lifecycle hook unavailable: {targetName}");
             return;
         }
-        _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), patchName));
+        try { _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), patchName)); }
+        catch (Exception ex)
+        {
+            _runtime?.BlockPermanent($"required lifecycle hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
     }
-    private void PatchFinalizer(string targetName, string patchName)
+    private void PatchDomainRequired(
+        string targetName,
+        string patchName,
+        MentorDomain domain,
+        bool postfix,
+        bool finalizer = false)
     {
         var target = AccessTools.Method(targetName);
-        if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
-        _harmony!.Patch(target, finalizer: new HarmonyMethod(typeof(Plugin), patchName));
+        if (target is null)
+        {
+            _runtime?.QuarantineDomain(domain, $"required {domain} hook unavailable: {targetName}");
+            return;
+        }
+        var patch = new HarmonyMethod(typeof(Plugin), patchName);
+        try
+        {
+            if (finalizer) _harmony!.Patch(target, finalizer: patch);
+            else if (postfix) _harmony!.Patch(target, postfix: patch);
+            else _harmony!.Patch(target, prefix: patch);
+        }
+        catch (Exception ex)
+        {
+            _runtime?.QuarantineDomain(domain, $"required {domain} hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
     }
     private void OnSceneChanged(Scene previous, Scene next) => _runtime?.ResetLifecycle();
     private void OnDestroy()

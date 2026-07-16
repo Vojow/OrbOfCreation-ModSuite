@@ -73,6 +73,7 @@ internal sealed class MentorSourceAccumulator
     }
 
     private readonly Dictionary<string, SourceAmount> _sources = new(StringComparer.Ordinal);
+    private MentorAmount _total;
 
     public int SourceCount => _sources.Count;
     public bool HasPending => _sources.Count > 0;
@@ -90,20 +91,20 @@ internal sealed class MentorSourceAccumulator
         {
             _sources.Add(sourceUuid, new SourceAmount { Amount = amount, EventCount = eventCount });
         }
+        _total = _total.Add(amount);
         EventCount += eventCount;
     }
 
     public MentorQualifiedBatch Drain()
     {
-        var total = default(MentorAmount);
-        foreach (var source in _sources.Values) total = total.Add(source.Amount);
-        var result = new MentorQualifiedBatch(total, EventCount, _sources.Count);
+        var result = new MentorQualifiedBatch(_total, EventCount, _sources.Count);
         _sources.Clear();
+        _total = default;
         EventCount = 0;
         return result;
     }
 
-    public void Cancel() { _sources.Clear(); EventCount = 0; }
+    public void Cancel() { _sources.Clear(); _total = default; EventCount = 0; }
 }
 
 internal readonly struct MentorCaptureKey : IEquatable<MentorCaptureKey>
@@ -192,11 +193,40 @@ internal sealed class MentorCaptureQueue
     public void Cancel() { _pending.Clear(); _order.Clear(); EventCount = 0; }
 }
 
+internal class MentorPendingWork
+{
+    public readonly MentorEngine Engine = new();
+    public readonly MentorCaptureQueue Captures = new();
+    public readonly MentorSourceAccumulator Sources = new();
+    public MentorPlan? ActivePlan;
+
+    public bool HasGrantBarrier => Captures.Count > 0 || Sources.HasPending || ActivePlan is not null;
+
+    public void CancelPending()
+    {
+        Captures.Cancel();
+        Sources.Cancel();
+        ActivePlan = null;
+        Engine.Cancel();
+    }
+}
+
+internal static class MentorIdentityTransition
+{
+    public static bool CancelPendingOnChange(bool identityChanged, MentorPendingWork pending)
+    {
+        if (!identityChanged) return false;
+        pending.CancelPending();
+        return true;
+    }
+}
+
 internal enum MentorDropReason
 {
     CaptureUnavailable,
     CaptureOverflow,
     SourceIdentityChanged,
+    CatalogIdentityChanged,
     StaleRelationship,
     SourceIneligible,
     NoRecipients,
@@ -241,6 +271,25 @@ internal sealed class MentorFailureState
     public void BlockPermanent(string reason) => PermanentReason ??= reason;
     public void BlockTransient(string reason) => TransientReason = reason;
     public void ResetLifecycle() => TransientReason = null;
+}
+
+internal sealed class MentorFailureRegistry
+{
+    private readonly MentorFailureState _global = new();
+    private readonly MentorFailureState[] _domains =
+    {
+        new(), new(), new(),
+    };
+
+    public MentorFailureState Global => _global;
+    public MentorFailureState For(MentorDomain domain) => _domains[(int)domain];
+    public bool IsDomainBlocked(MentorDomain domain) =>
+        domain == MentorDomain.Spells ? _global.IsBlocked : For(domain).IsBlocked;
+    public void ResetLifecycle()
+    {
+        _global.ResetLifecycle();
+        foreach (var domain in _domains) domain.ResetLifecycle();
+    }
 }
 
 internal sealed class MentorLifecycleSignal

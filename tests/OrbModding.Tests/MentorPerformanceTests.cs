@@ -160,6 +160,101 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    public void SameUuidReplacementCancelsCapturedPlannedAndExpandedXpBeforeGrant()
+    {
+        var pending = new MentorPendingWork();
+        var source = new object();
+        Assert.Equal(MentorCaptureResult.Added, pending.Captures.Capture(
+            new MentorCaptureKey(source, "source", 5, true, progressionEpoch: 3),
+            new MentorAmount(1, 3)));
+        Assert.True(pending.Captures.TryTake(out var captured));
+        pending.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+        var batch = pending.Sources.Drain();
+        pending.ActivePlan = pending.Engine.CreatePlan(
+            batch.Amount,
+            10,
+            MentorEconomyMode.SharedPool,
+            new[] { new MentorRecipe("recipient", 1, true) },
+            batch.EventCount);
+        Assert.NotNull(pending.ActivePlan);
+        Assert.True(pending.ActivePlan!.TryTake(out var expanded));
+        pending.Engine.Consolidate(expanded);
+        pending.ActivePlan = null;
+        Assert.True(pending.Engine.TryPeek(out _));
+
+        // Reconciliation found a different native object for the same UUID.
+        Assert.True(MentorIdentityTransition.CancelPendingOnChange(identityChanged: true, pending));
+
+        Assert.False(pending.Engine.TryPeek(out _));
+        Assert.Equal(0, pending.Engine.PendingCount);
+        Assert.False(pending.Sources.HasPending);
+        Assert.Equal(0, pending.Captures.Count);
+        Assert.Null(pending.ActivePlan);
+    }
+
+    [Fact]
+    public void MoreThanOnePlanningSliceIsFullyCollatedBeforeALevelingGrant()
+    {
+        var pending = new MentorPendingWork();
+        const long relationshipEpoch = 7;
+        for (var index = 0; index < 20; index++)
+        {
+            Assert.Equal(MentorCaptureResult.Added, pending.Captures.Capture(
+                new MentorCaptureKey(new object(), $"mentor-{index}", 5, true, relationshipEpoch),
+                new MentorAmount(1, 1)));
+        }
+
+        for (var index = 0; index < 16; index++)
+        {
+            Assert.True(pending.Captures.TryTake(out var captured));
+            Assert.Equal(MentorQualificationStatus.Qualified, MentorRelationshipQualification.Evaluate(
+                captured.Key, relationshipEpoch, highestMastery: 5, recipientCount: 2));
+            pending.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+        }
+
+        Assert.True(pending.HasGrantBarrier);
+        Assert.Equal(4, pending.Captures.Count);
+        Assert.Equal(0, pending.Engine.PendingCount);
+
+        while (pending.Captures.TryTake(out var captured))
+            pending.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+        var batch = pending.Sources.Drain();
+        Assert.Equal(2, batch.Amount.Mantissa, 12);
+        Assert.Equal(2, batch.Amount.Exponent);
+        pending.ActivePlan = pending.Engine.CreatePlan(
+            batch.Amount,
+            10,
+            MentorEconomyMode.SharedPool,
+            new[] { new MentorRecipe("a", 1, true), new MentorRecipe("b", 2, true) },
+            batch.EventCount);
+        while (pending.ActivePlan!.TryTake(out var grant)) pending.Engine.Consolidate(grant);
+        pending.ActivePlan = null;
+
+        Assert.False(pending.HasGrantBarrier);
+        Assert.Equal(2, pending.Engine.PendingCount);
+        Assert.True(pending.Engine.TryPeek(out var first));
+        Assert.Equal(1, first.Amount.Mantissa, 12);
+        Assert.Equal(1, first.Amount.Exponent);
+        Assert.True(pending.Engine.Complete(first.Uuid));
+
+        // An alchemy/artifact native grant may level the first recipient and
+        // advance the relationship epoch. Every source event was already
+        // represented in the expanded grant ledger, so the second grant stays.
+        long epoch = relationshipEpoch;
+        var dirty = false;
+        var mastery = 1;
+        var discovered = true;
+        Assert.True(MentorProgressionObservation.Apply(
+            ref epoch, ref dirty, ref mastery, ref discovered,
+            observedMastery: 2, observedDiscovered: true));
+        Assert.Equal(relationshipEpoch + 1, epoch);
+        Assert.True(pending.Engine.TryPeek(out var remaining));
+        Assert.Equal(1, remaining.Amount.Mantissa, 12);
+        Assert.Equal(1, remaining.Amount.Exponent);
+        Assert.Equal(1, pending.Engine.PendingCount);
+    }
+
+    [Fact]
     public void IdentityValidationRejectsDestroyedWrongAndReplacedObjects()
     {
         var candidate = new IdentityBase();
@@ -195,6 +290,21 @@ public sealed class MentorPerformanceTests
         Assert.Equal(3, diagnostics.DroppedEvents);
         Assert.Equal(2, diagnostics.DroppedGrants);
         Assert.Equal(3, diagnostics.DropCount(MentorDropReason.StaleRelationship));
+    }
+
+    [Fact]
+    public void OptionalDomainQuarantineDoesNotBlockRequiredSpellState()
+    {
+        var failures = new MentorFailureRegistry();
+
+        failures.For(MentorDomain.Artifacts).BlockPermanent("optional artifact contract");
+
+        Assert.False(failures.Global.IsBlocked);
+        Assert.False(failures.IsDomainBlocked(MentorDomain.Spells));
+        Assert.True(failures.IsDomainBlocked(MentorDomain.Artifacts));
+        Assert.False(failures.IsDomainBlocked(MentorDomain.Alchemy));
+        failures.ResetLifecycle();
+        Assert.True(failures.IsDomainBlocked(MentorDomain.Artifacts));
     }
 
     private sealed class IdentityBase { }

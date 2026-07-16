@@ -42,10 +42,10 @@ internal sealed class MentorRuntime
 
     private sealed class DomainCatalog
     {
-        public readonly List<NativeEntry> Entries = new();
-        public readonly Dictionary<string, NativeEntry> ById = new(StringComparer.Ordinal);
-        public readonly Dictionary<object, NativeEntry> ByObject = new(ReferenceComparer.Instance);
-        public readonly HashSet<string> MentorIds = new(StringComparer.Ordinal);
+        public List<NativeEntry> Entries = new();
+        public Dictionary<string, NativeEntry> ById = new(StringComparer.Ordinal);
+        public Dictionary<object, NativeEntry> ByObject = new(ReferenceComparer.Instance);
+        public HashSet<string> MentorIds = new(StringComparer.Ordinal);
         public Type? ExpectedType;
         public FieldInfo? RegistryField;
         public FieldInfo? MasteryField;
@@ -53,7 +53,7 @@ internal sealed class MentorRuntime
         public MethodInfo? IdentityMethod;
         public MethodInfo? RegistryLookupMethod;
         public MethodInfo? ArtifactContainerMethod;
-        public MentorRecipe[] Recipients = Array.Empty<MentorRecipe>();
+        public List<MentorRecipe> Recipients = new();
         public long NextLiveRefresh;
         public long NextReconcile;
         public int HighestMastery = int.MinValue;
@@ -62,18 +62,59 @@ internal sealed class MentorRuntime
         public bool NeedsReconcile = true;
         public long ProgressionEpoch;
         public long RelationshipEpoch;
+        public ReconcileWork? Reconcile;
+        public RefreshWork? Refresh;
     }
 
-    private sealed class DomainState
+    private sealed class DomainState : MentorPendingWork
     {
-        public readonly MentorEngine Engine = new();
-        public readonly MentorCaptureQueue Captures = new();
-        public readonly MentorSourceAccumulator Sources = new();
         public readonly HashSet<string> IdentityDeferrals = new(StringComparer.Ordinal);
-        public MentorPlan? ActivePlan;
         public long NextDistributionTimestamp;
         public long NextSummaryTimestamp;
         public string MentorSummary = "None";
+    }
+
+    private sealed class ReconcileWork : IDisposable
+    {
+        public ReconcileWork(IEnumerator enumerator, int initialCapacity, bool catalogWasInitialized)
+        {
+            Enumerator = enumerator;
+            Entries = new List<NativeEntry>(Math.Max(0, initialCapacity));
+            ById = new Dictionary<string, NativeEntry>(Math.Max(0, initialCapacity), StringComparer.Ordinal);
+            ByObject = new Dictionary<object, NativeEntry>(Math.Max(0, initialCapacity), ReferenceComparer.Instance);
+            CatalogWasInitialized = catalogWasInitialized;
+        }
+
+        public IEnumerator Enumerator { get; }
+        public List<NativeEntry> Entries { get; }
+        public Dictionary<string, NativeEntry> ById { get; }
+        public Dictionary<object, NativeEntry> ByObject { get; }
+        public bool CatalogWasInitialized { get; }
+        public bool IdentityChanged { get; set; }
+        public bool EnumerationComplete { get; set; }
+        public int SortIndex { get; set; } = 1;
+        public int SortCursor { get; set; }
+        public NativeEntry? SortValue { get; set; }
+        public void Dispose() => (Enumerator as IDisposable)?.Dispose();
+    }
+
+    private sealed class RefreshWork
+    {
+        public RefreshWork(long progressionEpoch, bool wasDirty)
+        {
+            ProgressionEpoch = progressionEpoch;
+            WasDirty = wasDirty;
+        }
+
+        public long ProgressionEpoch { get; set; }
+        public bool WasDirty { get; }
+        public int ReadIndex { get; set; }
+        public int BuildIndex { get; set; }
+        public int HighestMastery { get; set; } = int.MinValue;
+        public bool Changed { get; set; }
+        public bool ReadComplete { get; set; }
+        public HashSet<string> MentorIds { get; } = new(StringComparer.Ordinal);
+        public List<MentorRecipe> Recipients { get; } = new();
     }
 
     private const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -90,10 +131,11 @@ internal sealed class MentorRuntime
 
     private readonly MentorConfig _config;
     private readonly ManualLogSource _log;
-    private readonly MentorFailureState _failures = new();
+    private readonly MentorFailureRegistry _failures = new();
     private readonly MentorLifecycleSignal _lifecycleReset = new();
     private readonly Dictionary<MentorDomain, DomainState> _domains = new();
     private readonly Dictionary<MentorDomain, DomainCatalog> _catalogs = new();
+    private readonly bool[] _domainResetPending = new bool[DomainOrder.Length];
     private bool _guarded;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
@@ -121,13 +163,14 @@ internal sealed class MentorRuntime
     }
 
     internal MentorDiagnostics Diagnostics { get; }
-    public string? BlockedReason => _failures.Reason;
-    public bool IsBlocked => _failures.IsBlocked;
+    public string? BlockedReason => _failures.Global.Reason;
+    public bool IsBlocked => _failures.Global.IsBlocked;
 
     public string CurrentMentor(MentorDomain domain)
     {
         var state = _domains[domain];
-        if (!_config.Active || !DomainEnabled(domain)) return state.MentorSummary = "Inactive";
+        if (!_config.Active || !DomainConfigured(domain)) return state.MentorSummary = "Inactive";
+        if (DomainBlocked(domain)) return state.MentorSummary = "Blocked";
         var now = Stopwatch.GetTimestamp();
         if (now < state.NextSummaryTimestamp) return state.MentorSummary;
         state.NextSummaryTimestamp = now + SummaryRefreshTicks;
@@ -155,8 +198,8 @@ internal sealed class MentorRuntime
 
     public string StatusText()
     {
-        var artifact = _config.ArtifactsEnabled.Value ? $"Artifacts {_config.ArtifactSharePercent.Value:0.##}%" : "Artifacts off";
-        var alchemy = _config.AlchemyEnabled.Value ? $"Alchemy {_config.AlchemySharePercent.Value:0.##}%" : "Alchemy off";
+        var artifact = DomainStatus(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value);
+        var alchemy = DomainStatus(MentorDomain.Alchemy, _config.AlchemySharePercent.Value);
         var warning = _config.EconomyMode.Value == MentorEconomyMode.PerRecipient ? " Warning: total bonus scales with recipient count." : string.Empty;
         var drops = Diagnostics.DroppedEvents + Diagnostics.DroppedGrants;
         var dropSummary = drops > 0 ? $" Dropped work: {drops}." : string.Empty;
@@ -178,7 +221,7 @@ internal sealed class MentorRuntime
         _activeArtifact = null;
         _activeArtifactContainer = null;
         _activeArtifactXp = default;
-        if (_guarded || !_config.Active || !_config.ArtifactsEnabled.Value || IsBlocked) return;
+        if (_guarded || !_config.Active || !DomainEnabled(MentorDomain.Artifacts) || IsBlocked) return;
         var catalog = _catalogs[MentorDomain.Artifacts];
         if (!catalog.Initialized || !catalog.ByObject.TryGetValue(source, out var entry))
         {
@@ -211,13 +254,18 @@ internal sealed class MentorRuntime
 
     private void CaptureDomain(MentorDomain domain, object source, MentorAmount amount)
     {
-        if (_guarded || !_config.Active || IsBlocked || !amount.IsValidPositive) return;
+        if (_guarded || !_config.Active || IsBlocked || !DomainEnabled(domain) || !amount.IsValidPositive) return;
         if (_lifecycleReset.IsPending)
         {
             Diagnostics.RecordDrop(MentorDropReason.LifecycleReset, 1, grant: false);
             return;
         }
         var catalog = _catalogs[domain];
+        if (catalog.Reconcile?.IdentityChanged == true)
+        {
+            Diagnostics.RecordDrop(MentorDropReason.CatalogIdentityChanged, 1, grant: false);
+            return;
+        }
         if (!catalog.Initialized || catalog.ExpectedType is null || catalog.MasteryField is null ||
             catalog.AvailabilityMethod is null || catalog.IdentityMethod is null)
         {
@@ -280,6 +328,7 @@ internal sealed class MentorRuntime
 
     public void MarkRelationshipDirty(MentorDomain domain)
     {
+        if (DomainBlocked(domain)) return;
         var catalog = _catalogs[domain];
         catalog.ProgressionEpoch++;
         catalog.RelationshipDirty = true;
@@ -288,20 +337,21 @@ internal sealed class MentorRuntime
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();
+        foreach (var domain in DomainOrder)
+        {
+            var index = (int)domain;
+            if (!_domainResetPending[index]) continue;
+            _domainResetPending[index] = false;
+            CancelDomain(domain, MentorDropReason.LifecycleReset, clearCatalog: true);
+            _failures.For(domain).ResetLifecycle();
+        }
         if (!_config.Active || IsBlocked) return;
         var started = Stopwatch.GetTimestamp();
         var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
-        if (!PrepareDomain(MentorDomain.Spells, started, cpuBudget)) return;
-        if (_config.ArtifactsEnabled.Value)
-        {
-            if (!PrepareDomain(MentorDomain.Artifacts, started, cpuBudget)) return;
-        }
-        else if (_artifactWasEnabled) CancelDomain(MentorDomain.Artifacts, MentorDropReason.Disabled, clearCatalog: false);
-        if (_config.AlchemyEnabled.Value)
-        {
-            if (!PrepareDomain(MentorDomain.Alchemy, started, cpuBudget)) return;
-        }
-        else if (_alchemyWasEnabled) CancelDomain(MentorDomain.Alchemy, MentorDropReason.Disabled, clearCatalog: false);
+        if (!_config.ArtifactsEnabled.Value && _artifactWasEnabled)
+            CancelDomain(MentorDomain.Artifacts, MentorDropReason.Disabled, clearCatalog: false);
+        if (!_config.AlchemyEnabled.Value && _alchemyWasEnabled)
+            CancelDomain(MentorDomain.Alchemy, MentorDropReason.Disabled, clearCatalog: false);
         _artifactWasEnabled = _config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = _config.AlchemyEnabled.Value;
 
@@ -310,7 +360,7 @@ internal sealed class MentorRuntime
         while (planningOperations < PlanningOperationsPerFrame && ElapsedMilliseconds(started) < cpuBudget && planningEmpty < DomainOrder.Length)
         {
             var domain = DomainOrder[_nextPlanningDomain++ % DomainOrder.Length];
-            if (!DomainEnabled(domain) || !ProcessPlanningStep(domain)) { planningEmpty++; continue; }
+            if (!DomainEnabled(domain) || !ProcessDomainStep(domain, Stopwatch.GetTimestamp())) { planningEmpty++; continue; }
             planningOperations++;
             planningEmpty = 0;
         }
@@ -333,10 +383,14 @@ internal sealed class MentorRuntime
         }
     }
 
-    private bool PrepareDomain(MentorDomain domain, long started, double cpuBudget)
+    private bool ProcessDomainStep(MentorDomain domain, long now)
     {
-        if (ElapsedMilliseconds(started) >= cpuBudget) return false;
-        return EnsureCatalog(domain, Stopwatch.GetTimestamp());
+        var catalog = _catalogs[domain];
+        if (!catalog.Initialized || catalog.NeedsReconcile || catalog.Reconcile is not null || now >= catalog.NextReconcile)
+            return ProcessReconcileStep(domain, catalog, now);
+        if (catalog.RelationshipDirty || catalog.Refresh is not null || now >= catalog.NextLiveRefresh)
+            return ProcessRefreshStep(domain, catalog, now);
+        return ProcessPlanningStep(domain);
     }
 
     private bool ProcessPlanningStep(MentorDomain domain)
@@ -352,7 +406,7 @@ internal sealed class MentorRuntime
                 return true;
             }
             var qualification = MentorRelationshipQualification.Evaluate(
-                captured.Key, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Length);
+                captured.Key, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
             if (qualification == MentorQualificationStatus.StaleRelationship)
             {
                 Diagnostics.RecordDrop(MentorDropReason.StaleRelationship, captured.EventCount, grant: false);
@@ -393,7 +447,7 @@ internal sealed class MentorRuntime
         if (continuous && !DistributionDue(now, ref state.NextDistributionTimestamp, ContinuousDistributionTicks)) return;
         var batch = state.Sources.Drain();
         var recipients = _catalogs[domain].Recipients;
-        if (recipients.Length == 0)
+        if (recipients.Count == 0)
         {
             Diagnostics.RecordDrop(MentorDropReason.NoRecipients, batch.EventCount, grant: false);
             return;
@@ -407,7 +461,7 @@ internal sealed class MentorRuntime
         if (state.ActivePlan is null)
             Diagnostics.RecordDrop(MentorDropReason.ContractFailure, batch.EventCount, grant: false);
         else if (_config.DetailedLogging.Value)
-            _log.LogInfo($"Mentor {domain} batch: sources={batch.SourceCount}, events={batch.EventCount}, recipients={recipients.Length}, share={percent:0.##}%");
+            _log.LogInfo($"Mentor {domain} batch: sources={batch.SourceCount}, events={batch.EventCount}, recipients={recipients.Count}, share={percent:0.##}%");
     }
 
     private GrantResult ProcessGrant(MentorDomain domain)
@@ -415,7 +469,13 @@ internal sealed class MentorRuntime
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!state.Engine.TryPeek(out var grant)) return GrantResult.NoWork;
-        if (catalog.RelationshipDirty || catalog.NeedsReconcile)
+        if (state.HasGrantBarrier)
+        {
+            Diagnostics.RecordDeferredGrant();
+            return GrantResult.Deferred;
+        }
+        if (catalog.RelationshipDirty || catalog.NeedsReconcile ||
+            catalog.Reconcile is not null || catalog.Refresh is not null)
         {
             Diagnostics.RecordDeferredGrant();
             return GrantResult.Deferred;
@@ -470,7 +530,7 @@ internal sealed class MentorRuntime
         }
         catch (Exception ex)
         {
-            BlockTransient($"{domain} native mastery grant failed: {ex.GetBaseException().Message}");
+            BlockDomainTransient(domain, $"{domain} native mastery grant failed: {ex.GetBaseException().Message}");
             return GrantResult.Dropped;
         }
         finally { _guarded = false; }
@@ -553,24 +613,34 @@ internal sealed class MentorRuntime
     private void CancelDomain(MentorDomain domain, MentorDropReason reason, bool clearCatalog)
     {
         var state = _domains[domain];
-        if (state.Captures.EventCount > 0) Diagnostics.RecordDrop(reason, state.Captures.EventCount, grant: false);
-        if (state.Sources.EventCount > 0) Diagnostics.RecordDrop(reason, state.Sources.EventCount, grant: false);
-        if (state.ActivePlan is not null && state.ActivePlan.RemainingCount > 0)
-            Diagnostics.RecordDrop(reason, state.ActivePlan.RemainingCount, grant: true);
-        if (state.Engine.PendingCount > 0) Diagnostics.RecordDrop(reason, state.Engine.PendingCount, grant: true);
-        state.Captures.Cancel();
-        state.Sources.Cancel();
-        state.ActivePlan = null;
-        state.Engine.Cancel();
+        RecordPendingDrops(domain, reason);
+        state.CancelPending();
         state.IdentityDeferrals.Clear();
         state.NextDistributionTimestamp = 0;
-        if (!clearCatalog) return;
         var catalog = _catalogs[domain];
+        if (!clearCatalog)
+        {
+            if (catalog.Reconcile is not null)
+            {
+                catalog.Reconcile.Dispose();
+                catalog.Reconcile = null;
+                catalog.NeedsReconcile = true;
+            }
+            if (catalog.Refresh is not null)
+            {
+                catalog.Refresh = null;
+                catalog.RelationshipDirty = true;
+            }
+            return;
+        }
+        catalog.Reconcile?.Dispose();
+        catalog.Reconcile = null;
+        catalog.Refresh = null;
         catalog.Entries.Clear();
         catalog.ById.Clear();
         catalog.ByObject.Clear();
         catalog.MentorIds.Clear();
-        catalog.Recipients = Array.Empty<MentorRecipe>();
+        catalog.Recipients = new List<MentorRecipe>();
         catalog.HighestMastery = int.MinValue;
         catalog.NextLiveRefresh = 0;
         catalog.NextReconcile = 0;
@@ -581,9 +651,20 @@ internal sealed class MentorRuntime
         catalog.RelationshipEpoch = 0;
     }
 
+    private void RecordPendingDrops(MentorDomain domain, MentorDropReason reason)
+    {
+        var state = _domains[domain];
+        if (state.Captures.EventCount > 0) Diagnostics.RecordDrop(reason, state.Captures.EventCount, grant: false);
+        if (state.Sources.EventCount > 0) Diagnostics.RecordDrop(reason, state.Sources.EventCount, grant: false);
+        if (state.ActivePlan is not null && state.ActivePlan.RemainingCount > 0)
+            Diagnostics.RecordDrop(reason, state.ActivePlan.RemainingCount, grant: true);
+        if (state.Engine.PendingCount > 0) Diagnostics.RecordDrop(reason, state.Engine.PendingCount, grant: true);
+    }
+
     public void ResetLifecycle()
     {
         _lifecycleReset.TryConsume();
+        Array.Clear(_domainResetPending, 0, _domainResetPending.Length);
         Cancel(MentorDropReason.LifecycleReset);
         _failures.ResetLifecycle();
         _captureFailureLogged = false;
@@ -591,86 +672,169 @@ internal sealed class MentorRuntime
 
     public void RequestLifecycleReset() => _lifecycleReset.Request();
 
+    public void RequestDomainReset(MentorDomain domain) => _domainResetPending[(int)domain] = true;
+
     public void BlockPermanent(string reason)
     {
-        if (_failures.PermanentReason is not null) return;
-        _failures.BlockPermanent(reason);
+        if (_failures.Global.PermanentReason is not null) return;
+        _failures.Global.BlockPermanent(reason);
         Cancel(MentorDropReason.ContractFailure);
         _log.LogError($"Orb Mentor permanently blocked: {reason}");
     }
 
     private void BlockTransient(string reason)
     {
-        _failures.BlockTransient(reason);
+        _failures.Global.BlockTransient(reason);
         Cancel(MentorDropReason.ContractFailure);
         _log.LogError($"Orb Mentor blocked for this lifecycle: {reason}");
     }
 
-    private bool EnsureCatalog(MentorDomain domain, long now)
+    public void QuarantineDomain(MentorDomain domain, string reason)
+    {
+        if (domain == MentorDomain.Spells)
+        {
+            BlockPermanent(reason);
+            return;
+        }
+        var failure = _failures.For(domain);
+        if (failure.PermanentReason is not null) return;
+        failure.BlockPermanent(reason);
+        CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
+    }
+
+    private void BlockDomainTransient(MentorDomain domain, string reason)
+    {
+        if (domain == MentorDomain.Spells)
+        {
+            BlockTransient(reason);
+            return;
+        }
+        _failures.For(domain).BlockTransient(reason);
+        CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        _log.LogError($"Orb Mentor {domain} sharing blocked for this lifecycle: {reason}");
+    }
+
+    private void FailDomainContract(MentorDomain domain, string reason)
+    {
+        if (domain == MentorDomain.Spells) BlockPermanent(reason);
+        else QuarantineDomain(domain, reason);
+    }
+
+    private bool ProcessReconcileStep(MentorDomain domain, DomainCatalog catalog, long now)
     {
         try
         {
-            var catalog = _catalogs[domain];
-            if (!catalog.Initialized || catalog.NeedsReconcile || now >= catalog.NextReconcile)
+            if (catalog.Reconcile is null)
             {
-                if (!Reconcile(domain, catalog, now)) return false;
+                if (!ResolveSchema(domain, catalog)) return false;
+                var registry = catalog.RegistryField!.GetValue(null) as IEnumerable;
+                if (registry is null)
+                {
+                    FailDomainContract(domain, $"{NativeTypeName(domain)}.All is unavailable");
+                    return false;
+                }
+                var capacity = registry is ICollection collection ? collection.Count : 0;
+                catalog.Reconcile = new ReconcileWork(registry.GetEnumerator(), capacity, catalog.Initialized);
+                return true;
             }
-            if (catalog.RelationshipDirty || now >= catalog.NextLiveRefresh) RefreshLive(catalog, now);
+
+            var work = catalog.Reconcile;
+            if (!work.EnumerationComplete)
+            {
+                bool hasNext;
+                try { hasNext = work.Enumerator.MoveNext(); }
+                catch (InvalidOperationException)
+                {
+                    work.Dispose();
+                    catalog.Reconcile = null;
+                    catalog.NeedsReconcile = true;
+                    catalog.NextReconcile = now;
+                    return true;
+                }
+                if (hasNext)
+                {
+                    var value = work.Enumerator.Current;
+                    if (value is null || IsDestroyed(value)) return true;
+                    var uuid = ReadUuid(catalog.IdentityMethod!, value);
+                    if (string.IsNullOrWhiteSpace(uuid) || work.ById.ContainsKey(uuid))
+                    {
+                        FailDomainContract(domain, $"registered {domain} UUID is missing or duplicated");
+                        return false;
+                    }
+                    object? artifactContainer = null;
+                    if (domain == MentorDomain.Artifacts)
+                        artifactContainer = catalog.ArtifactContainerMethod!.Invoke(value, null);
+                    var sameIdentity = catalog.ById.TryGetValue(uuid, out var existing) &&
+                                       ReferenceEquals(existing.Item, value);
+                    if (work.CatalogWasInitialized && !sameIdentity)
+                        MarkReconcileIdentityChanged(domain, catalog, work);
+                    var entry = sameIdentity
+                        ? existing!
+                        : new NativeEntry(uuid, value, SafeName(value), artifactContainer);
+                    entry.ArtifactContainer = artifactContainer;
+                    work.Entries.Add(entry);
+                    work.ById.Add(uuid, entry);
+                    work.ByObject.Add(value, entry);
+                    return true;
+                }
+
+                work.EnumerationComplete = true;
+                if (work.CatalogWasInitialized && work.Entries.Count != catalog.Entries.Count)
+                    MarkReconcileIdentityChanged(domain, catalog, work);
+                return true;
+            }
+
+            if (work.SortIndex < work.Entries.Count)
+            {
+                if (work.SortValue is null)
+                {
+                    work.SortValue = work.Entries[work.SortIndex];
+                    work.SortCursor = work.SortIndex - 1;
+                    return true;
+                }
+                if (work.SortCursor >= 0 &&
+                    StringComparer.Ordinal.Compare(work.Entries[work.SortCursor].Uuid, work.SortValue.Uuid) > 0)
+                {
+                    work.Entries[work.SortCursor + 1] = work.Entries[work.SortCursor];
+                    work.SortCursor--;
+                    return true;
+                }
+                work.Entries[work.SortCursor + 1] = work.SortValue;
+                work.SortValue = null;
+                work.SortIndex++;
+                return true;
+            }
+
+            catalog.Entries = work.Entries;
+            catalog.ById = work.ById;
+            catalog.ByObject = work.ByObject;
+            work.Dispose();
+            catalog.Reconcile = null;
+            catalog.Refresh = null;
+            catalog.Initialized = true;
+            catalog.NeedsReconcile = false;
+            catalog.RelationshipDirty = true;
+            catalog.NextReconcile = now + ReconcileTicks;
             return true;
         }
         catch (Exception ex)
         {
-            BlockPermanent($"{domain} catalog contract failed: {ex.GetBaseException().Message}");
+            catalog.Reconcile?.Dispose();
+            catalog.Reconcile = null;
+            FailDomainContract(domain, $"{domain} catalog reconciliation failed: {ex.GetBaseException().Message}");
             return false;
         }
     }
 
-    private bool Reconcile(MentorDomain domain, DomainCatalog catalog, long now)
+    private void MarkReconcileIdentityChanged(MentorDomain domain, DomainCatalog catalog, ReconcileWork work)
     {
-        if (!ResolveSchema(domain, catalog)) return false;
-        var registry = catalog.RegistryField!.GetValue(null) as IEnumerable;
-        if (registry is null) { BlockPermanent($"{NativeTypeName(domain)}.All is unavailable"); return false; }
-        var entries = new List<NativeEntry>();
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var value in registry)
-        {
-            if (value is null || IsDestroyed(value)) continue;
-            var uuid = ReadUuid(catalog.IdentityMethod!, value);
-            if (string.IsNullOrWhiteSpace(uuid) || !ids.Add(uuid))
-            {
-                BlockPermanent($"registered {domain} UUID is missing or duplicated");
-                return false;
-            }
-            object? artifactContainer = null;
-            if (domain == MentorDomain.Artifacts) artifactContainer = catalog.ArtifactContainerMethod!.Invoke(value, null);
-            var entry = catalog.ById.TryGetValue(uuid, out var existing) && ReferenceEquals(existing.Item, value)
-                ? existing
-                : new NativeEntry(uuid, value, SafeName(value), artifactContainer);
-            entry.ArtifactContainer = artifactContainer;
-            entries.Add(entry);
-        }
-        entries.Sort((left, right) => StringComparer.Ordinal.Compare(left.Uuid, right.Uuid));
-        var identityChanged = catalog.Initialized && !SameIdentity(catalog.Entries, entries);
-        if (identityChanged) catalog.ProgressionEpoch++;
-        catalog.Entries.Clear();
-        catalog.Entries.AddRange(entries);
-        catalog.ById.Clear();
-        catalog.ByObject.Clear();
-        foreach (var entry in entries) { catalog.ById.Add(entry.Uuid, entry); catalog.ByObject.Add(entry.Item, entry); }
-        catalog.Initialized = true;
-        catalog.NeedsReconcile = false;
-        catalog.RelationshipDirty = true;
-        catalog.NextReconcile = now + ReconcileTicks;
-        return true;
-    }
-
-    private static bool SameIdentity(IReadOnlyList<NativeEntry> left, IReadOnlyList<NativeEntry> right)
-    {
-        if (left.Count != right.Count) return false;
-        for (var index = 0; index < left.Count; index++)
-            if (!string.Equals(left[index].Uuid, right[index].Uuid, StringComparison.Ordinal) ||
-                !ReferenceEquals(left[index].Item, right[index].Item)) return false;
-        return true;
+        if (work.IdentityChanged) return;
+        work.IdentityChanged = true;
+        RecordPendingDrops(domain, MentorDropReason.CatalogIdentityChanged);
+        MentorIdentityTransition.CancelPendingOnChange(true, _domains[domain]);
+        _domains[domain].IdentityDeferrals.Clear();
+        catalog.ProgressionEpoch++;
     }
 
     private bool ResolveSchema(MentorDomain domain, DomainCatalog catalog)
@@ -678,7 +842,7 @@ internal sealed class MentorRuntime
         if (catalog.ExpectedType is not null) return true;
         var expected = Type.GetType(NativeTypeName(domain) + ", Assembly-CSharp", false);
         var idType = Type.GetType("IdScriptableObject, Assembly-CSharp", false);
-        if (expected is null || idType is null) { BlockPermanent($"{domain} native type is unavailable"); return false; }
+        if (expected is null || idType is null) { FailDomainContract(domain, $"{domain} native type is unavailable"); return false; }
         catalog.ExpectedType = expected;
         catalog.RegistryField = FindField(expected, "All");
         catalog.MasteryField = FindField(expected, "masteryLevel");
@@ -703,48 +867,78 @@ internal sealed class MentorRuntime
             catalog.IdentityMethod is null || catalog.RegistryLookupMethod is null ||
             (domain == MentorDomain.Artifacts && catalog.ArtifactContainerMethod is null))
         {
-            BlockPermanent($"{domain} native catalog/accessor contract is unavailable");
+            FailDomainContract(domain, $"{domain} native catalog/accessor contract is unavailable");
             return false;
         }
         return true;
     }
 
-    private static void RefreshLive(DomainCatalog catalog, long now)
+    private bool ProcessRefreshStep(MentorDomain domain, DomainCatalog catalog, long now)
     {
-        var wasDirty = catalog.RelationshipDirty;
-        var changed = false;
-        var highest = int.MinValue;
-        foreach (var entry in catalog.Entries)
+        try
         {
-            var mastery = Convert.ToInt32(catalog.MasteryField!.GetValue(entry.Item) ?? 0);
-            var discovered = Convert.ToBoolean(catalog.AvailabilityMethod!.Invoke(entry.Item, null) ?? false);
-            changed |= mastery != entry.MasteryLevel || discovered != entry.IsDiscovered;
-            entry.MasteryLevel = mastery;
-            entry.IsDiscovered = discovered;
-            if (entry.IsDiscovered && entry.MasteryLevel > highest) highest = entry.MasteryLevel;
-        }
-        MentorProgressionObservation.AdvanceRefreshEpoch(
-            ref catalog.ProgressionEpoch,
-            catalog.RelationshipEpoch,
-            changed);
-        if (!wasDirty && !changed)
-        {
+            var work = catalog.Refresh;
+            if (work is null || work.ProgressionEpoch != catalog.ProgressionEpoch)
+            {
+                catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, catalog.RelationshipDirty);
+                return true;
+            }
+            if (!work.ReadComplete)
+            {
+                if (work.ReadIndex < catalog.Entries.Count)
+                {
+                    var entry = catalog.Entries[work.ReadIndex++];
+                    if (IsDestroyed(entry.Item))
+                    {
+                        catalog.Refresh = null;
+                        catalog.NeedsReconcile = true;
+                        return true;
+                    }
+                    var mastery = Convert.ToInt32(catalog.MasteryField!.GetValue(entry.Item) ?? 0);
+                    var discovered = Convert.ToBoolean(catalog.AvailabilityMethod!.Invoke(entry.Item, null) ?? false);
+                    work.Changed |= mastery != entry.MasteryLevel || discovered != entry.IsDiscovered;
+                    entry.MasteryLevel = mastery;
+                    entry.IsDiscovered = discovered;
+                    if (discovered && mastery > work.HighestMastery) work.HighestMastery = mastery;
+                    return true;
+                }
+                MentorProgressionObservation.AdvanceRefreshEpoch(
+                    ref catalog.ProgressionEpoch,
+                    catalog.RelationshipEpoch,
+                    work.Changed);
+                work.ProgressionEpoch = catalog.ProgressionEpoch;
+                work.ReadComplete = true;
+                if (!work.WasDirty && !work.Changed)
+                {
+                    catalog.Refresh = null;
+                    catalog.NextLiveRefresh = now + LiveRefreshTicks;
+                }
+                return true;
+            }
+            if (work.BuildIndex < catalog.Entries.Count)
+            {
+                var entry = catalog.Entries[work.BuildIndex++];
+                if (!entry.IsDiscovered) return true;
+                if (entry.MasteryLevel == work.HighestMastery) work.MentorIds.Add(entry.Uuid);
+                else if (entry.MasteryLevel < work.HighestMastery)
+                    work.Recipients.Add(new MentorRecipe(entry.Uuid, entry.MasteryLevel, true));
+                return true;
+            }
+            catalog.HighestMastery = work.HighestMastery;
+            catalog.MentorIds = work.MentorIds;
+            catalog.Recipients = work.Recipients;
+            catalog.Refresh = null;
+            catalog.RelationshipDirty = false;
+            catalog.RelationshipEpoch = catalog.ProgressionEpoch;
             catalog.NextLiveRefresh = now + LiveRefreshTicks;
-            return;
+            return true;
         }
-        catalog.HighestMastery = highest;
-        catalog.MentorIds.Clear();
-        var recipients = new List<MentorRecipe>();
-        foreach (var entry in catalog.Entries)
+        catch (Exception ex)
         {
-            if (!entry.IsDiscovered) continue;
-            if (entry.MasteryLevel == highest) catalog.MentorIds.Add(entry.Uuid);
-            else if (entry.MasteryLevel < highest) recipients.Add(new MentorRecipe(entry.Uuid, entry.MasteryLevel, true));
+            catalog.Refresh = null;
+            FailDomainContract(domain, $"{domain} live relationship refresh failed: {ex.GetBaseException().Message}");
+            return false;
         }
-        catalog.Recipients = recipients.ToArray();
-        catalog.RelationshipDirty = false;
-        catalog.RelationshipEpoch = catalog.ProgressionEpoch;
-        catalog.NextLiveRefresh = now + LiveRefreshTicks;
     }
 
     private double SharePercent(MentorDomain domain) => domain switch
@@ -754,12 +948,24 @@ internal sealed class MentorRuntime
         _ => _config.SharePercent.Value,
     };
 
-    private bool DomainEnabled(MentorDomain domain) => domain switch
+    private bool DomainConfigured(MentorDomain domain) => domain switch
     {
         MentorDomain.Artifacts => _config.ArtifactsEnabled.Value,
         MentorDomain.Alchemy => _config.AlchemyEnabled.Value,
         _ => true,
     };
+
+    private bool DomainBlocked(MentorDomain domain) =>
+        _failures.IsDomainBlocked(domain);
+
+    private bool DomainEnabled(MentorDomain domain) => DomainConfigured(domain) && !DomainBlocked(domain);
+
+    private string DomainStatus(MentorDomain domain, double percent)
+    {
+        if (!DomainConfigured(domain)) return $"{domain} off";
+        if (DomainBlocked(domain)) return $"{domain} blocked";
+        return $"{domain} {percent:0.##}%";
+    }
 
     private static string NativeTypeName(MentorDomain domain) => domain switch
     {
