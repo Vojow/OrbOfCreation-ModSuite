@@ -10,8 +10,8 @@
 - Preserve Mentor XP and capture-time recipients when XP arrives during bounded relationship/reconciliation work; use constant-time indexed source exclusion, let active refreshes finish under sustained invalidation, cap and safely compact immutable evidence history, and retain unorderable captures without guessing their route until lifecycle/native-identity cancellation.
 - Cache Mentor catalogs and native object lookups, stop repeated inactive-state cleanup, and lower its default grant and CPU budgets.
 - Schedule Auto Buy and Auto Cast through the shared suite frame budget, with at most one native automation mutation per frame and resumable multi-level purchase groups.
-- Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied leases retain pending XP, and AutoBuy plus Mentor can start only one native mutation in a Unity frame.
-- Schedule Mod Config installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
+- Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, pending XP is retained, and AutoBuy plus Mentor can start only one native mutation in a Unity frame.
+- Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15

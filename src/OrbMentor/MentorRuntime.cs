@@ -469,7 +469,7 @@ internal sealed class MentorRuntime : IDisposable
     {
         var now = Stopwatch.GetTimestamp();
         var cooperativePending = HasCooperativeWork(now);
-        var mutationPending = TryFindGrantDomain(out var mutationDomain, out var mutationIndex);
+        var mutationPending = TryFindGrantDomain(now, out var mutationDomain, out var mutationIndex);
         _coordinatorWork!.SetState(true, cooperativePending, mutationPending);
 
         if (cooperativePending)
@@ -479,7 +479,7 @@ internal sealed class MentorRuntime : IDisposable
 
         now = Stopwatch.GetTimestamp();
         cooperativePending = HasCooperativeWork(now);
-        mutationPending = TryFindGrantDomain(out mutationDomain, out mutationIndex);
+        mutationPending = TryFindGrantDomain(now, out mutationDomain, out mutationIndex);
         _coordinatorWork.SetState(true, cooperativePending, mutationPending);
         if (mutationPending)
         {
@@ -491,10 +491,11 @@ internal sealed class MentorRuntime : IDisposable
             });
         }
 
+        now = Stopwatch.GetTimestamp();
         _coordinatorWork.SetState(
             true,
-            HasCooperativeWork(Stopwatch.GetTimestamp()),
-            TryFindGrantDomain(out _, out _));
+            HasCooperativeWork(now),
+            TryFindGrantDomain(now, out _, out _));
     }
 
     private int RunCooperativeSlice()
@@ -524,17 +525,27 @@ internal sealed class MentorRuntime : IDisposable
         foreach (var domain in DomainOrder)
         {
             if (!DomainEnabled(domain)) continue;
-            var catalog = _catalogs[domain];
-            var state = _domains[domain];
-            if (!catalog.Initialized || catalog.NeedsReconcile || catalog.Reconcile is not null ||
-                now >= catalog.NextReconcile || catalog.RelationshipDirty || catalog.Refresh is not null ||
-                now >= catalog.NextLiveRefresh || state.HasCooperativePlanning)
-                return true;
+            if (DomainHasCooperativeWork(domain, now)) return true;
         }
         return false;
     }
 
-    private bool TryFindGrantDomain(out MentorDomain domain, out int domainIndex)
+    private bool DomainHasCooperativeWork(MentorDomain domain, long now)
+    {
+        var catalog = _catalogs[domain];
+        var state = _domains[domain];
+        return MentorDomainMutationEligibility.HasCooperativeWork(
+            catalog.Initialized,
+            catalog.NeedsReconcile,
+            catalog.Reconcile is not null,
+            now >= catalog.NextReconcile,
+            catalog.RelationshipDirty,
+            catalog.Refresh is not null,
+            now >= catalog.NextLiveRefresh,
+            state.HasCooperativePlanning);
+    }
+
+    private bool TryFindGrantDomain(long now, out MentorDomain domain, out int domainIndex)
     {
         for (var offset = 0; offset < DomainOrder.Length; offset++)
         {
@@ -542,10 +553,7 @@ internal sealed class MentorRuntime : IDisposable
             domain = DomainOrder[domainIndex];
             if (!DomainEnabled(domain)) continue;
             var state = _domains[domain];
-            var catalog = _catalogs[domain];
-            if (!state.Engine.TryPeek(out _, out _) || state.HasGrantBarrier ||
-                catalog.RelationshipDirty || catalog.NeedsReconcile ||
-                catalog.Reconcile is not null || catalog.Refresh is not null) continue;
+            if (!state.Engine.TryPeek(out _, out _) || DomainHasCooperativeWork(domain, now)) continue;
             return true;
         }
         domain = default;
@@ -697,13 +705,7 @@ internal sealed class MentorRuntime : IDisposable
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!state.Engine.TryPeek(out var grantUuid, out var grantAmount)) return GrantResult.NoWork;
-        if (state.HasGrantBarrier)
-        {
-            Diagnostics.RecordDeferredGrant();
-            return GrantResult.Deferred;
-        }
-        if (catalog.RelationshipDirty || catalog.NeedsReconcile ||
-            catalog.Reconcile is not null || catalog.Refresh is not null)
+        if (DomainHasCooperativeWork(domain, Stopwatch.GetTimestamp()))
         {
             Diagnostics.RecordDeferredGrant();
             return GrantResult.Deferred;
@@ -725,9 +727,23 @@ internal sealed class MentorRuntime : IDisposable
                 Diagnostics.RecordDeferredGrant();
                 return GrantResult.Deferred;
             }
-            // Recipient eligibility was frozen when the native source XP was
-            // captured. A later mastery/discovery transition may delay this
-            // grant while the live cache settles, but must not erase it.
+            if (MentorRecipientEligibility.Evaluate(
+                    discovered,
+                    mastery,
+                    catalog.HighestMastery) != MentorRecipientEligibilityStatus.Eligible)
+            {
+                // This may be a transient native transition. Keep the exact
+                // pending grant, make the relationship stale, and require a
+                // settled authoritative refresh before reconsidering it.
+                RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
+                Diagnostics.RecordDeferredGrant();
+                return GrantResult.Deferred;
+            }
+            if (DomainHasCooperativeWork(domain, Stopwatch.GetTimestamp()))
+            {
+                Diagnostics.RecordDeferredGrant();
+                return GrantResult.Deferred;
+            }
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
             var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);

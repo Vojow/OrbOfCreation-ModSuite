@@ -59,29 +59,6 @@ public sealed class Plugin : BaseUnityPlugin
         ResetSceneState(SceneManager.GetActiveScene());
     }
 
-    private void Start()
-    {
-        if (_enabled?.Value != true)
-        {
-            _uiShell?.Dispose();
-            _uiShell = null;
-            return;
-        }
-
-        // Start runs after BepInEx has constructed the other plugin components, so
-        // the catalog is not dependent on this plugin's chainloader order.
-        _catalog = ConfigCatalog.DiscoverLoaded();
-        Logger.LogInfo(
-            $"Orb Mod Config loaded. UiShell={_enableUiShell?.Value == true}; " +
-            $"DiscoveredMods={_catalog.Mods.Count}, DiscoveredSettings={_catalog.SettingCount}.");
-        foreach (var mod in _catalog.Mods)
-        {
-            Logger.LogInfo(
-                $"Mod Config catalog: {mod.Name} {mod.Version} ({mod.Guid}); " +
-                $"Sections={mod.Sections.Count}, Settings={mod.Sections.Sum(section => section.Settings.Count)}.");
-        }
-    }
-
     private void Update()
     {
         if (_enabled?.Value != true)
@@ -145,9 +122,12 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         _uiRetrySeconds = UiRetryIntervalSeconds;
-        _catalog ??= ConfigCatalog.DiscoverLoaded();
+        var catalog = ModConfigCatalogSession.GetOrDiscover(
+            ref _catalog,
+            ConfigCatalog.DiscoverLoaded,
+            LogCatalog);
         if (!ModConfigUiShell.TryCreate(
-                Logger, _catalog, out _uiShell, out var reason, MarkUiMaintenanceDue))
+                Logger, catalog, out _uiShell, out var reason, MarkUiMaintenanceDue))
         {
             if (!_uiFailureLogged)
             {
@@ -158,6 +138,19 @@ public sealed class Plugin : BaseUnityPlugin
         }
         _uiFailureLogged = false;
         _uiIntegritySeconds = UiIntegrityIntervalSeconds;
+    }
+
+    private void LogCatalog(ConfigCatalogSnapshot catalog)
+    {
+        Logger.LogInfo(
+            $"Orb Mod Config loaded. UiShell={_enableUiShell?.Value == true}; " +
+            $"DiscoveredMods={catalog.Mods.Count}, DiscoveredSettings={catalog.SettingCount}.");
+        foreach (var mod in catalog.Mods)
+        {
+            Logger.LogInfo(
+                $"Mod Config catalog: {mod.Name} {mod.Version} ({mod.Guid}); " +
+                $"Sections={mod.Sections.Count}, Settings={mod.Sections.Sum(section => section.Settings.Count)}.");
+        }
     }
 
     private void MarkUiMaintenanceDue() => _uiMaintenanceDue = true;

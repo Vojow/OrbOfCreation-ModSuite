@@ -51,6 +51,50 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
+    public void CatalogDiscoveryAndLoggingRunOnceOnlyAfterUiLeaseAdmission()
+    {
+        var coordinator = new SuitePerformanceCoordinator(
+            StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
+        long frame = 31;
+        using var blocker = coordinator.Register("test", "earlier UI work");
+        blocker.SetPending(true);
+        using var ui = new ModConfigCoordinatorWork(coordinator, () => frame);
+        ConfigCatalogSnapshot? catalog = null;
+        var discoveryCalls = 0;
+        var logCalls = 0;
+        void DiscoverAndLog()
+        {
+            ModConfigCatalogSession.GetOrDiscover(
+                ref catalog,
+                () =>
+                {
+                    discoveryCalls++;
+                    return new ConfigCatalogSnapshot(Array.Empty<ModConfigDescriptor>());
+                },
+                _ => logCalls++);
+        }
+
+        Assert.False(ui.TryRun(true, pending: true, DiscoverAndLog));
+        Assert.Null(catalog);
+        Assert.Equal(0, discoveryCalls);
+        Assert.Equal(0, logCalls);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
+        lease.Complete();
+        blocker.SetPending(false);
+        frame++;
+        Assert.True(ui.TryRun(true, pending: true, DiscoverAndLog));
+        Assert.NotNull(catalog);
+        Assert.Equal(1, discoveryCalls);
+        Assert.Equal(1, logCalls);
+
+        frame++;
+        Assert.True(ui.TryRun(true, pending: true, DiscoverAndLog));
+        Assert.Equal(1, discoveryCalls);
+        Assert.Equal(1, logCalls);
+    }
+
+    [Fact]
     public void NavigationIntegrityCadenceDoesNotRunEveryFrame()
     {
         var remaining = 5.0f;

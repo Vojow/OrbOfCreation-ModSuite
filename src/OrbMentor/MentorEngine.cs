@@ -960,6 +960,44 @@ internal static class MentorProgressionObservation
     }
 }
 
+internal enum MentorRecipientEligibilityStatus
+{
+    Eligible,
+    Undiscovered,
+    NotBelowHighestMastery,
+}
+
+internal static class MentorRecipientEligibility
+{
+    public static MentorRecipientEligibilityStatus Evaluate(
+        bool discovered,
+        int mastery,
+        int highestMastery)
+    {
+        if (!discovered) return MentorRecipientEligibilityStatus.Undiscovered;
+        return mastery < highestMastery
+            ? MentorRecipientEligibilityStatus.Eligible
+            : MentorRecipientEligibilityStatus.NotBelowHighestMastery;
+    }
+}
+
+internal static class MentorDomainMutationEligibility
+{
+    public static bool HasCooperativeWork(
+        bool initialized,
+        bool needsReconcile,
+        bool reconcileActive,
+        bool reconcileDue,
+        bool relationshipDirty,
+        bool refreshActive,
+        bool liveRefreshDue,
+        bool planningActive)
+    {
+        return !initialized || needsReconcile || reconcileActive || reconcileDue ||
+               relationshipDirty || refreshActive || liveRefreshDue || planningActive;
+    }
+}
+
 internal static class MentorIdentityValidation
 {
     public static MentorIdentityStatus Validate(
