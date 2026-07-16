@@ -757,9 +757,13 @@ internal sealed class ReflectionAutoBuyCandidate :
 
 internal sealed class NativeMultiBuyScope : IDisposable
 {
+    private static readonly DecisionLogGate FailureLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
+    private static readonly System.Diagnostics.Stopwatch Lifetime = System.Diagnostics.Stopwatch.StartNew();
     private readonly object _variable;
     private readonly MethodInfo _setValue;
     private readonly int _originalValue;
+    private static bool _mutationQuarantined;
+    private static string _quarantineReason = string.Empty;
     private bool _disposed;
 
     private NativeMultiBuyScope(object variable, MethodInfo setValue, int originalValue)
@@ -773,6 +777,12 @@ internal sealed class NativeMultiBuyScope : IDisposable
     {
         scope = null!;
         reason = string.Empty;
+        if (_mutationQuarantined)
+        {
+            reason = $"global multi-buy mutation is quarantined: {_quarantineReason}";
+            return false;
+        }
+
         var globals = ReflectionUtil.FindLoadedType("GlobalVariables");
         var getMultiBuy = globals?.GetMethod("GetMultiBuy", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
         object? variable;
@@ -799,17 +809,46 @@ internal sealed class NativeMultiBuyScope : IDisposable
             return false;
         }
 
+        var originalValue = (int)original;
         try
         {
             setValue.Invoke(variable, new object[] { 1 });
-            scope = new NativeMultiBuyScope(variable, setValue, (int)original);
-            return true;
         }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        catch (Exception ex)
         {
-            reason = ex.Message;
+            var originalFailure = DescribeException(ex);
+            var restored = TryRestore(variable, setValue, originalValue, out var restorationDetail);
+            reason = $"global multi-buy SetValue(1) failed: {originalFailure}; {restorationDetail}";
+            if (!restored)
+            {
+                Quarantine(reason);
+            }
+            else
+            {
+                LogFailure(reason);
+            }
+
             return false;
         }
+
+        if (!ReflectionUtil.TryReadNumeric(variable, out var enteredValue, "AsInt") || enteredValue != 1)
+        {
+            var restored = TryRestore(variable, setValue, originalValue, out var restorationDetail);
+            reason = $"global multi-buy SetValue(1) could not be verified; {restorationDetail}";
+            if (!restored)
+            {
+                Quarantine(reason);
+            }
+            else
+            {
+                LogFailure(reason);
+            }
+
+            return false;
+        }
+
+        scope = new NativeMultiBuyScope(variable, setValue, originalValue);
+        return true;
     }
 
     public void Dispose()
@@ -820,13 +859,73 @@ internal sealed class NativeMultiBuyScope : IDisposable
         }
 
         _disposed = true;
+        if (!TryRestore(_variable, _setValue, _originalValue, out var restorationDetail))
+        {
+            Quarantine($"global multi-buy cleanup failed: {restorationDetail}");
+        }
+        else if (restorationDetail.Contains("threw", StringComparison.OrdinalIgnoreCase))
+        {
+            LogFailure($"global multi-buy cleanup recovered after an exception: {restorationDetail}");
+        }
+    }
+
+    internal static bool IsMutationQuarantined => _mutationQuarantined;
+
+    internal static void ResetQuarantineForTests()
+    {
+        _mutationQuarantined = false;
+        _quarantineReason = string.Empty;
+    }
+
+    private static bool TryRestore(
+        object variable,
+        MethodInfo setValue,
+        int originalValue,
+        out string detail)
+    {
+        string? setterFailure = null;
         try
         {
-            _setValue.Invoke(_variable, new object[] { _originalValue });
+            setValue.Invoke(variable, new object[] { originalValue });
         }
-        catch
+        catch (Exception ex)
         {
-            Plugin.Log?.LogError("Automata could not restore the global multi-buy value after an UpgradeSO purchase.");
+            setterFailure = DescribeException(ex);
+        }
+
+        if (ReflectionUtil.TryReadNumeric(variable, out var restoredValue, "AsInt") && restoredValue == originalValue)
+        {
+            detail = setterFailure is null
+                ? $"restoration to {originalValue} verified"
+                : $"restoration setter threw ({setterFailure}) but value {originalValue} was verified";
+            return true;
+        }
+
+        detail = setterFailure is null
+            ? $"restoration to {originalValue} could not be verified"
+            : $"restoration setter threw ({setterFailure}) and value {originalValue} could not be verified";
+        return false;
+    }
+
+    private static string DescribeException(Exception exception)
+    {
+        return exception is TargetInvocationException { InnerException: not null } target
+            ? target.InnerException.Message
+            : exception.Message;
+    }
+
+    private static void Quarantine(string reason)
+    {
+        _mutationQuarantined = true;
+        _quarantineReason = reason;
+        LogFailure($"Auto Buy quarantined Upgrade mutations because native multi-buy state is unknown: {reason}");
+    }
+
+    private static void LogFailure(string message)
+    {
+        if (FailureLogGate.ShouldLog("native-multi-buy-failure", Lifetime.Elapsed))
+        {
+            Plugin.Log?.LogError(message);
         }
     }
 }

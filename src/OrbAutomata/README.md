@@ -44,6 +44,8 @@ Reserves are an optional second policy. After each level, Automata requires enou
 
 When `RespectActionMultiplier=true`, Automata reads the game's current action multiplier, caps it to free queue room, and submits that many one-level native purchases. It does not pass an uncapped multiplier into `UpgradeSO.Purchase()`, whose native implementation does not cap itself to remaining queue room. Holding a modifier key can change the live multiplier, so the option remains off by default.
 
+Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process. Structure purchases do not use that global and remain independently validated.
+
 When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
 
 ### Queue scheduling
@@ -63,6 +65,8 @@ Active membership and ranked recommendation views use reused buffers and determi
 ## Auto Cast
 
 Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. It skips empty and charged slots, treats an active aura as already satisfied, pauses while a channel is active, respects native readiness and targeting, and never turns persistent spells off.
+
+A cast deferred by the shared coordinator is treated as a short-lived plan. Before firing, Automata rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 

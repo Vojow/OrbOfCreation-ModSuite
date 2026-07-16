@@ -162,6 +162,107 @@ public sealed class AutomataCoordinatorTests
         }
     }
 
+    [Fact]
+    public void DeferredCastCancelsWhenCurrentSlotIdentityChanges()
+    {
+        var coordinator = Coordinator();
+        long frame = 20;
+        var blocker = coordinator.Register(
+            "test",
+            "mutation blocker",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var blockerLease));
+        blockerLease.Complete();
+        blocker.SetPending(false);
+
+        var config = Config();
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var original = new CastCandidate();
+        var replacement = new CastCandidate();
+        var catalog = new CastCatalog(original);
+        using var engine = CastEngine(config, catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        Assert.Equal(0, original.FireCalls);
+        catalog.Replace(replacement);
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal(0, original.FireCalls);
+        Assert.Equal(0, replacement.FireCalls);
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal(0, original.FireCalls);
+        Assert.Equal(1, replacement.FireCalls);
+        blocker.Dispose();
+    }
+
+    [Fact]
+    public void LifecycleInvalidationDiscardsDeferredCastAndReplansCurrentSlot()
+    {
+        var coordinator = Coordinator();
+        long frame = 30;
+        var blocker = coordinator.Register(
+            "test",
+            "mutation blocker",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var blockerLease));
+        blockerLease.Complete();
+        blocker.SetPending(false);
+
+        var config = Config();
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var stale = new CastCandidate();
+        var current = new CastCandidate();
+        var catalog = new CastCatalog(stale);
+        using var engine = CastEngine(config, catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        engine.InvalidateLifecycle();
+        catalog.Replace(current);
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal(0, stale.FireCalls);
+        Assert.Equal(1, current.FireCalls);
+        blocker.Dispose();
+    }
+
+    [Fact]
+    public void QueueWaitPollUsesReadLeaseAndLeavesMutationAdmissionAvailable()
+    {
+        var coordinator = Coordinator();
+        long frame = 50;
+        var candidate = new BuyCandidate("queue-wait", AutoBuyCandidateKind.Upgrade);
+        var catalog = new BuyCatalog(1, candidate)
+        {
+            QueueRooms = new Queue<int>(new[] { 4, 1, 1 }),
+        };
+        using var engine = BuyEngine(Config(), catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        Assert.Equal(0, candidate.PurchaseCalls);
+
+        frame++;
+        engine.Tick(0.1f);
+        Assert.Equal(0, candidate.PurchaseCalls);
+
+        var probe = coordinator.Register(
+            "test",
+            "mutation probe",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        probe.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(probe, frame, out var lease));
+        lease.Complete();
+        probe.Dispose();
+    }
+
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
 
@@ -219,6 +320,8 @@ public sealed class AutomataCoordinatorTests
 
         public int ActionMultiplier { get; set; } = 1;
 
+        public Queue<int>? QueueRooms { get; set; }
+
         public int DiscoverCalls { get; private set; }
 
         public IEnumerable<IAutoBuyCandidate> Discover()
@@ -229,7 +332,7 @@ public sealed class AutomataCoordinatorTests
 
         public bool TryGetRemainingQueueRoom(out int remainingRoom)
         {
-            remainingRoom = _queueRoom;
+            remainingRoom = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : _queueRoom;
             return true;
         }
 
@@ -283,7 +386,7 @@ public sealed class AutomataCoordinatorTests
 
     private sealed class CastCatalog : IAutoCastCatalog
     {
-        private readonly IAutoCastCandidate[] _candidates;
+        private IAutoCastCandidate[] _candidates;
 
         public CastCatalog(params IAutoCastCandidate[] candidates)
         {
@@ -298,6 +401,11 @@ public sealed class AutomataCoordinatorTests
             return _candidates;
         }
 
+        public void Replace(params IAutoCastCandidate[] candidates)
+        {
+            _candidates = candidates;
+        }
+
         public bool IsNativeCastBusy() => false;
 
         public bool IsTargeting() => false;
@@ -309,6 +417,8 @@ public sealed class AutomataCoordinatorTests
 
     private sealed class CastCandidate : IAutoCastCandidate
     {
+        private readonly object _nativeIdentity = new object();
+
         public int SlotIndex => 0;
 
         public string DisplayName => "spell";
@@ -362,6 +472,13 @@ public sealed class AutomataCoordinatorTests
                 FireCalls++;
             }
 
+            reason = string.Empty;
+            return true;
+        }
+
+        public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
+        {
+            identity = new AutoCastCandidateIdentity(DisplayName, _nativeIdentity, GetType(), SlotIndex);
             reason = string.Empty;
             return true;
         }

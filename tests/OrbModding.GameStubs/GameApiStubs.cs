@@ -12,6 +12,38 @@ public struct BigDouble
     public long exponent;
 }
 
+public sealed class IntVariable
+{
+    public int Value { get; set; } = 1;
+
+    public int? ThrowBeforeWriteFor { get; set; }
+
+    public int? ThrowAfterWriteFor { get; set; }
+
+    public int AsInt() => Value;
+
+    public void SetValue(int value)
+    {
+        if (ThrowBeforeWriteFor == value)
+        {
+            throw new InvalidOperationException($"setter rejected {value} before write");
+        }
+
+        Value = value;
+        if (ThrowAfterWriteFor == value)
+        {
+            throw new InvalidOperationException($"setter rejected {value} after write");
+        }
+    }
+}
+
+public static class GlobalVariables
+{
+    public static IntVariable MultiBuy { get; set; } = new IntVariable();
+
+    public static IntVariable GetMultiBuy() => MultiBuy;
+}
+
 public class SpellRecipeSO
 {
     public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();

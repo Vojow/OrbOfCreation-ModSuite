@@ -255,6 +255,22 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
     public bool TryFireAndResolveTargets(out string reason) => _catalog.FireSlotAndResolveTargets(SlotIndex, out reason);
 
+    public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
+    {
+        var reference = ReflectionUtil.ReadMember(_spell, "reference");
+        var uuid = reference is null ? null : ReflectionUtil.ReadStableId(reference);
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            identity = default;
+            reason = "stable spell recipe UUID unavailable";
+            return false;
+        }
+
+        identity = new AutoCastCandidateIdentity(uuid, _spell, _spell.GetType(), SlotIndex);
+        reason = string.Empty;
+        return true;
+    }
+
     private bool TryGetCosts(string methodName, out IReadOnlyList<ResourceAdmissionCost> costs)
     {
         var container = ReflectionUtil.InvokeNoArgs(_spell, methodName);

@@ -119,11 +119,13 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnActiveSceneChanged(Scene previous, Scene next)
     {
         _autoBuyEngine?.InvalidateLifecycle();
+        _autoCastEngine?.InvalidateLifecycle();
     }
 
     private void OnAutoBuyLifecycleInvalidated()
     {
         _autoBuyEngine?.InvalidateLifecycle();
+        _autoCastEngine?.InvalidateLifecycle();
     }
 
     private void OnStructureQueueChanged(object nativeIdentity)

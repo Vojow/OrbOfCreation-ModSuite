@@ -44,6 +44,35 @@ internal interface IAutoCastCandidate
     bool HasValidTargets(out string reason);
 
     bool TryFireAndResolveTargets(out string reason);
+
+    bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason);
+}
+
+internal readonly struct AutoCastCandidateIdentity
+{
+    public AutoCastCandidateIdentity(string uuid, object nativeReference, Type nativeType, int slotIndex)
+    {
+        Uuid = uuid;
+        NativeReference = nativeReference;
+        NativeType = nativeType;
+        SlotIndex = slotIndex;
+    }
+
+    public string Uuid { get; }
+
+    public object NativeReference { get; }
+
+    public Type NativeType { get; }
+
+    public int SlotIndex { get; }
+
+    public bool Matches(AutoCastCandidateIdentity other)
+    {
+        return SlotIndex == other.SlotIndex &&
+               string.Equals(Uuid, other.Uuid, StringComparison.OrdinalIgnoreCase) &&
+               NativeType == other.NativeType &&
+               ReferenceEquals(NativeReference, other.NativeReference);
+    }
 }
 
 internal sealed class ResourceFullnessPolicy

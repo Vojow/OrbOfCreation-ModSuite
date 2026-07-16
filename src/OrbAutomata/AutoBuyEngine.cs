@@ -211,6 +211,7 @@ internal sealed class AutoBuyEngine : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         var readDue = false;
         var mutationDue = false;
+        var queuePollDue = false;
         if (_pendingPurchaseRecommendations is not null)
         {
             if (mode != AutoBuyOperationMode.Active)
@@ -220,7 +221,8 @@ internal sealed class AutoBuyEngine : IDisposable
             else if (_pendingWaitingForQueue)
             {
                 _secondsUntilQueuePoll -= elapsed;
-                mutationDue = _secondsUntilQueuePoll <= 0.0f;
+                queuePollDue = _secondsUntilQueuePoll <= 0.0f;
+                readDue = queuePollDue;
             }
             else
             {
@@ -243,12 +245,19 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             using (readLease)
             {
-                if (_pendingCandidates is null)
+                if (queuePollDue)
                 {
-                    _secondsUntilEvaluation = ClampInterval(_config.AutoBuyIntervalSeconds.Value);
+                    PollPendingQueueRoom();
                 }
+                else
+                {
+                    if (_pendingCandidates is null)
+                    {
+                        _secondsUntilEvaluation = ClampInterval(_config.AutoBuyIntervalSeconds.Value);
+                    }
 
-                EvaluateBatch();
+                    EvaluateBatch();
+                }
                 readLease.Complete();
                 readCompleted = true;
             }
@@ -258,11 +267,6 @@ internal sealed class AutoBuyEngine : IDisposable
         mutationDue = _pendingPurchaseRecommendations is not null &&
                       !_pendingWaitingForQueue &&
                       mode == AutoBuyOperationMode.Active;
-        if (_pendingWaitingForQueue && _secondsUntilQueuePoll <= 0.0f)
-        {
-            mutationDue = true;
-        }
-
         SetCoordinatorPending(
             (!readCompleted && readDue) || _pendingCandidates is not null,
             mutationDue);
@@ -286,6 +290,16 @@ internal sealed class AutoBuyEngine : IDisposable
             (!readCompleted && readDue) || _pendingCandidates is not null,
             (!mutationCompleted && mutationDue) ||
             (_pendingPurchaseRecommendations is not null && !_pendingWaitingForQueue));
+    }
+
+    private void PollPendingQueueRoom()
+    {
+        _secondsUntilQueuePoll = QueuePollIntervalSeconds;
+        var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
+        if (_catalog.TryGetRemainingQueueRoom(out var room) && room > queueReserve)
+        {
+            _pendingWaitingForQueue = false;
+        }
     }
 
     private void RefreshPolicyIfNeeded()
@@ -363,6 +377,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _nativeStateSignalPending = false;
         _incrementalCatalog?.InvalidateLifecycle();
         _secondsUntilEvaluation = 0.0f;
+        SetCoordinatorPending(false, false);
     }
 
     public void NotifyStructureQueueChanged(object nativeIdentity)

@@ -27,6 +27,7 @@ internal sealed class AutoCastEngine : IDisposable
     private int _nextSlotIndex;
     private bool _operationalLoggingWasEnabled;
     private IAutoCastCandidate? _pendingCandidate;
+    private AutoCastCandidateIdentity _pendingIdentity;
     private string _pendingResourceSummary = string.Empty;
 
     public AutoCastEngine(
@@ -192,9 +193,15 @@ internal sealed class AutoCastEngine : IDisposable
                 continue;
             }
 
-            _pendingCandidate = candidate;
-            _pendingResourceSummary = resourceSummary;
-            return;
+            if (candidate.TryGetIdentity(out var identity, out reason))
+            {
+                _pendingCandidate = candidate;
+                _pendingIdentity = identity;
+                _pendingResourceSummary = resourceSummary;
+                return;
+            }
+
+            LogVerboseRejection(candidate, reason);
         }
     }
 
@@ -215,6 +222,13 @@ internal sealed class AutoCastEngine : IDisposable
                 !_config.CanStartAutoCastActively ||
                 _catalog.IsNativeCastBusy())
             {
+                return;
+            }
+
+            if (!TryResolvePreparedCandidate(out candidate, out var identityReason))
+            {
+                _secondsUntilEvaluation = 0.0f;
+                LogVerboseRejection(_pendingCandidate!, identityReason);
                 return;
             }
 
@@ -240,6 +254,48 @@ internal sealed class AutoCastEngine : IDisposable
         {
             ClearPendingCandidate();
         }
+    }
+
+    private bool TryResolvePreparedCandidate(out IAutoCastCandidate candidate, out string reason)
+    {
+        candidate = null!;
+        IReadOnlyList<IAutoCastCandidate> loadout;
+        try
+        {
+            loadout = _catalog.DiscoverActiveLoadout();
+        }
+        catch (Exception ex)
+        {
+            reason = $"active loadout refresh failed: {ex.Message}";
+            return false;
+        }
+
+        for (var index = 0; index < loadout.Count; index++)
+        {
+            var current = loadout[index];
+            if (current.SlotIndex != _pendingIdentity.SlotIndex)
+            {
+                continue;
+            }
+
+            if (!current.TryGetIdentity(out var identity, out reason))
+            {
+                return false;
+            }
+
+            if (!_pendingIdentity.Matches(identity))
+            {
+                reason = "prepared spell identity changed before mutation";
+                return false;
+            }
+
+            candidate = current;
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = "prepared spell slot is no longer equipped";
+        return false;
     }
 
     private bool TryAcquire(SuiteWorkRegistration? registration, out SuiteWorkLease lease)
@@ -278,6 +334,7 @@ internal sealed class AutoCastEngine : IDisposable
     private void ClearPendingCandidate()
     {
         _pendingCandidate = null;
+        _pendingIdentity = default;
         _pendingResourceSummary = string.Empty;
     }
 
@@ -289,6 +346,13 @@ internal sealed class AutoCastEngine : IDisposable
         _readWork?.Dispose();
         _mutationWork?.Dispose();
         _catalog.Dispose();
+    }
+
+    public void InvalidateLifecycle()
+    {
+        ClearPendingCandidate();
+        SetCoordinatorPending(false, false);
+        _secondsUntilEvaluation = 0.0f;
     }
 
     private void Evaluate()

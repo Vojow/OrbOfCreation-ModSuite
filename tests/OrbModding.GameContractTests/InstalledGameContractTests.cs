@@ -134,6 +134,8 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "Spell", "GetCost", false, "ResourceCostList");
         AssertMethod(assembly, "Spell", "GetDrainCost", false, "ResourceCostList");
         AssertMethod(assembly, "Spell", "GetScalingInfo", false, "ScalingInfo");
+        Assert.Equal("IdObjectRef`1<SpellRecipeSO>", assembly.GetFieldType("Spell", "referenceObj"));
+        AssertMethod(assembly, "Spell", "get_reference", false, "SpellRecipeSO");
 
         Assert.Equal("SpellRecipeSO+CastType", assembly.GetFieldType("SpellRecipeSO", "castType"));
         Assert.Equal("System.Collections.Generic.List`1<InstantEffectBlock>", assembly.GetFieldType("SpellRecipeSO", "onCastEffects"));

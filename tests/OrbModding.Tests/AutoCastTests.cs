@@ -452,6 +452,7 @@ public sealed class AutoCastTests
     {
         private readonly IReadOnlyList<ResourceAdmissionCost> _immediate;
         private readonly IReadOnlyList<ResourceAdmissionCost> _drain;
+        private readonly object _nativeIdentity = new object();
 
         public FakeSpell(
             string name,
@@ -519,6 +520,13 @@ public sealed class AutoCastTests
         {
             FireCalls++;
             reason = "fired";
+            return true;
+        }
+
+        public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
+        {
+            identity = new AutoCastCandidateIdentity(DisplayName, _nativeIdentity, GetType(), SlotIndex);
+            reason = string.Empty;
             return true;
         }
     }
