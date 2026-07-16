@@ -8,6 +8,7 @@ These documents record design intent, implementation sequencing, or historical d
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
 | [Orb Automata](automata.md) | Implemented / evolving | Core Auto Buy and Auto Cast are in public beta; later work remains. |
+| [Mod suite performance](performance-suite.md) | Planned / hotfix groundwork implemented | Shared scheduling, lifecycle-aware indexes, dirty updates, and Steam Deck performance validation. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI is in public beta. |
 | [Orb Chronomancer](chronomancer.md) | Experimental | Code exists but is not in the Automata release archive. |

@@ -35,6 +35,7 @@ Research pages distinguish **Verified**, **Inferred**, and **Candidate** finding
 
 - [Project roadmap](plans/roadmap.md)
 - [Plan index and lifecycle status](plans/README.md)
+- [Mod suite performance architecture](plans/performance-suite.md)
 - [Orb Mentor artifacts and alchemy design](plans/mentor-artifacts-alchemy.md)
 
 Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.

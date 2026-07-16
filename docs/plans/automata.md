@@ -152,9 +152,11 @@ Rejected actions should have a concise reason: locked, insufficient queue space,
 
 ## Performance controls
 
+The cross-plugin target architecture and lifecycle rules are maintained in the [mod suite performance plan](performance-suite.md).
+
 - Evaluation interval defaults to 0.5 seconds of unscaled time.
 - Maximum actions per evaluation defaults to 1.
-- CPU budget defaults to 25% of a 60 FPS frame.
+- The current AutoBuy hotfix caps scan and purchase slices at 1 ms; a later shared coordinator will bound combined suite work.
 - Cache static candidate lists and invalidate on relevant observable changes.
 - Never scan and sort every game object every frame.
 
