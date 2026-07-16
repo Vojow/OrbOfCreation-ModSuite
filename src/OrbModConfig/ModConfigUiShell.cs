@@ -31,11 +31,13 @@ internal sealed class ModConfigUiShell : IDisposable
     private readonly Sprite? _buttonActiveSprite;
     private readonly Type _nativeButtonType;
     private readonly Transform _buttonParent;
+    private readonly Transform _panelParent;
     private readonly List<object> _nativeViews;
     private readonly List<(Button Button, UnityAction Listener)> _nativeCloseListeners;
     private ModConfigNavigationObserver? _navigationObserver;
     private bool _disposed;
     private bool _open;
+    private bool _repairRequired;
     private object? _previousNativeView;
 
     private ModConfigUiShell(
@@ -48,6 +50,7 @@ internal sealed class ModConfigUiShell : IDisposable
         Sprite? buttonActiveSprite,
         Type nativeButtonType,
         Transform buttonParent,
+        Transform panelParent,
         List<object> nativeViews,
         List<(Button Button, UnityAction Listener)> nativeCloseListeners)
     {
@@ -61,11 +64,18 @@ internal sealed class ModConfigUiShell : IDisposable
         _buttonActiveSprite = buttonActiveSprite;
         _nativeButtonType = nativeButtonType;
         _buttonParent = buttonParent;
+        _panelParent = panelParent;
         _nativeViews = nativeViews;
         _nativeCloseListeners = nativeCloseListeners;
     }
 
-    public bool IsAlive => !_disposed && _buttonObject != null && _buttonObject.transform.parent != null;
+    public bool IsAlive => HostsAlive(
+        !_disposed && !_repairRequired,
+        IsUnityObjectAlive(_buttonObject) && IsUnityObjectAlive(_buttonObject.transform.parent) &&
+            ReferenceEquals(_buttonObject.transform.parent, _buttonParent),
+        IsUnityObjectAlive(_panel.Root) && IsUnityObjectAlive(_panel.Root.transform.parent) &&
+            ReferenceEquals(_panel.Root.transform.parent, _panelParent),
+        IsUnityObjectAlive(_buttonParent) && IsUnityObjectAlive(_panelParent));
 
     public static bool TryCreate(
         ManualLogSource log,
@@ -196,6 +206,7 @@ internal sealed class ModConfigUiShell : IDisposable
                 activeSprite,
                 buttonType,
                 buttonParent,
+                screenContent.transform,
                 nativeViews,
                 nativeCloseListeners);
             button.onClick.AddListener(shell.Toggle);
@@ -370,8 +381,37 @@ internal sealed class ModConfigUiShell : IDisposable
     private void TrySetOpen(bool open, bool restorePreviousNativeView)
     {
         try { SetOpen(open, restorePreviousNativeView); }
-        catch { _open = false; _previousNativeView = null; }
+        catch (Exception ex)
+        {
+            try { _panel.SetActive(false); } catch { }
+            var recovery = OpenFailureRecovery(
+                opening: open,
+                previousAlive: IsUnityObjectAlive(_previousNativeView),
+                anyNativeActive: _nativeViews.Any(IsNativeViewActive));
+            try
+            {
+                if (recovery.RestorePrevious && _previousNativeView is not null)
+                    SetNativeViewActive(_previousNativeView, true);
+            }
+            catch { }
+            _open = false;
+            _previousNativeView = null;
+            _repairRequired = recovery.RepairRequired;
+            _log.LogWarning($"Mod Config UI open/close failed; scheduling shell repair: {ex.GetBaseException().Message}");
+        }
     }
+
+    internal static bool HostsAlive(bool shellHealthy, bool buttonAlive, bool panelAlive, bool parentsAlive) =>
+        shellHealthy && buttonAlive && panelAlive && parentsAlive;
+
+    internal static bool ShouldRestoreNativeView(bool previousAlive, bool anyNativeActive) =>
+        previousAlive && !anyNativeActive;
+
+    internal static (bool RestorePrevious, bool RepairRequired) OpenFailureRecovery(
+        bool opening,
+        bool previousAlive,
+        bool anyNativeActive) =>
+        (opening && ShouldRestoreNativeView(previousAlive, anyNativeActive), true);
 
     private void PruneNativeReferences()
     {

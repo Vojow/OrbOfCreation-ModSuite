@@ -46,5 +46,28 @@ public sealed class ModConfigPerformanceTests
         Assert.Equal(2, detached.Count);
     }
 
+    [Fact]
+    public void PanelLossInvalidatesShellEvenWhenButtonSurvives()
+    {
+        Assert.False(ModConfigUiShell.HostsAlive(
+            shellHealthy: true, buttonAlive: true, panelAlive: false, parentsAlive: true));
+        Assert.True(ModConfigUiShell.HostsAlive(
+            shellHealthy: true, buttonAlive: true, panelAlive: true, parentsAlive: true));
+    }
+
+    [Fact]
+    public void OpenFailureRestoresPreviousNativeViewAndRequestsRepair()
+    {
+        var recovery = ModConfigUiShell.OpenFailureRecovery(
+            opening: true, previousAlive: true, anyNativeActive: false);
+
+        Assert.True(recovery.RestorePrevious);
+        Assert.True(recovery.RepairRequired);
+        Assert.False(ModConfigUiShell.OpenFailureRecovery(
+            opening: true, previousAlive: true, anyNativeActive: true).RestorePrevious);
+        Assert.False(ModConfigUiShell.HostsAlive(
+            shellHealthy: !recovery.RepairRequired, buttonAlive: true, panelAlive: true, parentsAlive: true));
+    }
+
     private sealed record FakeReference(bool Alive, string Name);
 }

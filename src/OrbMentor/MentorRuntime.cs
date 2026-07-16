@@ -52,8 +52,10 @@ internal sealed class MentorRuntime
         public MethodInfo? AvailabilityMethod;
         public MethodInfo? IdentityMethod;
         public MethodInfo? RegistryLookupMethod;
+        public readonly object?[] RegistryLookupArguments = new object?[1];
         public MethodInfo? ArtifactContainerMethod;
         public List<MentorRecipe> Recipients = new();
+        public MentorRelationshipSnapshot? Relationship;
         public long NextLiveRefresh;
         public long NextReconcile;
         public int HighestMastery = int.MinValue;
@@ -111,11 +113,14 @@ internal sealed class MentorRuntime
 
     private sealed class RefreshWork
     {
-        public RefreshWork(long progressionEpoch, long requestGeneration, bool wasDirty)
+        public RefreshWork(long progressionEpoch, long requestGeneration, bool wasDirty, int capacity)
         {
             ProgressionEpoch = progressionEpoch;
             RequestGeneration = requestGeneration;
             WasDirty = wasDirty;
+            MentorIds = new HashSet<string>(Math.Max(0, capacity), StringComparer.Ordinal);
+            Recipients = new List<MentorRecipe>(Math.Max(0, capacity));
+            Discovered = new List<MentorRecipe>(Math.Max(0, capacity));
         }
 
         public long ProgressionEpoch { get; set; }
@@ -126,8 +131,9 @@ internal sealed class MentorRuntime
         public int HighestMastery { get; set; } = int.MinValue;
         public bool Changed { get; set; }
         public bool ReadComplete { get; set; }
-        public HashSet<string> MentorIds { get; } = new(StringComparer.Ordinal);
-        public List<MentorRecipe> Recipients { get; } = new();
+        public HashSet<string> MentorIds { get; }
+        public List<MentorRecipe> Recipients { get; }
+        public List<MentorRecipe> Discovered { get; }
     }
 
     private const BindingFlags AllFlags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -288,6 +294,10 @@ internal sealed class MentorRuntime
         }
         try
         {
+            var relationshipAtCapture = !catalog.RelationshipDirty && !catalog.NeedsReconcile &&
+                catalog.Reconcile is null && catalog.Refresh is null
+                ? catalog.Relationship
+                : null;
             if (IsDestroyed(source) || !catalog.ExpectedType.IsInstanceOfType(source))
             {
                 Diagnostics.RecordDrop(MentorDropReason.SourceIdentityChanged, 1, grant: false);
@@ -310,8 +320,14 @@ internal sealed class MentorRuntime
                     discovered,
                     epochAlreadyAdvanced: catalog.ProgressionEpoch != catalog.RelationshipEpoch);
             }
+            var relationship = relationshipAtCapture;
+            if (relationship is null)
+            {
+                Diagnostics.RecordDrop(MentorDropReason.CaptureUnavailable, 1, grant: false);
+                return;
+            }
             var result = _domains[domain].Captures.Capture(
-                new MentorCaptureKey(source, uuid, mastery, discovered, catalog.ProgressionEpoch), amount);
+                new MentorCaptureKey(source, uuid, mastery, discovered, catalog.ProgressionEpoch, relationship), amount);
             if (result == MentorCaptureResult.Overflow)
             {
                 Diagnostics.RecordDrop(MentorDropReason.CaptureOverflow, 1, grant: false);
@@ -419,11 +435,6 @@ internal sealed class MentorRuntime
             }
             var qualification = MentorRelationshipQualification.Evaluate(
                 captured.Key, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
-            if (qualification == MentorQualificationStatus.StaleRelationship)
-            {
-                Diagnostics.RecordDrop(MentorDropReason.StaleRelationship, captured.EventCount, grant: false);
-                return true;
-            }
             if (qualification == MentorQualificationStatus.NoRecipients)
             {
                 Diagnostics.RecordDrop(MentorDropReason.NoRecipients, captured.EventCount, grant: false);
@@ -434,7 +445,8 @@ internal sealed class MentorRuntime
                 Diagnostics.RecordDrop(MentorDropReason.SourceIneligible, captured.EventCount, grant: false);
                 return true;
             }
-            state.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+            var capturedRelationship = captured.Key.Relationship!.ForCapture(captured.Key);
+            state.Sources.Capture(capturedRelationship, captured.Key.Uuid, captured.Amount, captured.EventCount);
             Diagnostics.RecordQualified(captured.EventCount);
             return true;
         }
@@ -458,7 +470,7 @@ internal sealed class MentorRuntime
         var now = Stopwatch.GetTimestamp();
         if (continuous && !DistributionDue(now, ref state.NextDistributionTimestamp, ContinuousDistributionTicks)) return;
         var batch = state.Sources.Drain();
-        var recipients = _catalogs[domain].Recipients;
+        var recipients = batch.Relationship?.Recipients ?? _catalogs[domain].Recipients;
         if (recipients.Count == 0)
         {
             Diagnostics.RecordDrop(MentorDropReason.NoRecipients, batch.EventCount, grant: false);
@@ -480,7 +492,7 @@ internal sealed class MentorRuntime
     {
         var state = _domains[domain];
         var catalog = _catalogs[domain];
-        if (!state.Engine.TryPeek(out var grant)) return GrantResult.NoWork;
+        if (!state.Engine.TryPeek(out var grantUuid, out var grantAmount)) return GrantResult.NoWork;
         if (state.HasGrantBarrier)
         {
             Diagnostics.RecordDeferredGrant();
@@ -492,14 +504,14 @@ internal sealed class MentorRuntime
             Diagnostics.RecordDeferredGrant();
             return GrantResult.Deferred;
         }
-        if (!catalog.ById.TryGetValue(grant.Uuid, out var entry))
-            return DeferOrDropIdentity(domain, grant, state, catalog);
+        if (!catalog.ById.TryGetValue(grantUuid, out var entry))
+            return DeferOrDropIdentity(grantUuid, state, catalog);
         MentorIdentityStatus identity;
         try { identity = ValidateCurrentIdentity(catalog, entry); }
         catch { identity = MentorIdentityStatus.RegistryMismatch; }
         if (identity != MentorIdentityStatus.Valid)
-            return DeferOrDropIdentity(domain, grant, state, catalog);
-        state.IdentityDeferrals.Remove(grant.Uuid);
+            return DeferOrDropIdentity(grantUuid, state, catalog);
+        state.IdentityDeferrals.Remove(grantUuid);
         try
         {
             var discovered = Convert.ToBoolean(catalog.AvailabilityMethod!.Invoke(entry.Item, null) ?? false);
@@ -509,15 +521,12 @@ internal sealed class MentorRuntime
                 Diagnostics.RecordDeferredGrant();
                 return GrantResult.Deferred;
             }
-            if (!discovered || mastery >= catalog.HighestMastery)
-            {
-                state.Engine.Complete(grant.Uuid);
-                Diagnostics.RecordDrop(MentorDropReason.RecipientIneligible, 1, grant: true);
-                return GrantResult.Dropped;
-            }
+            // Recipient eligibility was frozen when the native source XP was
+            // captured. A later mastery/discovery transition may delay this
+            // grant while the live cache settles, but must not erase it.
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
-            var value = new BigDouble(grant.Amount.Mantissa, grant.Amount.Exponent);
+            var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);
             if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
             else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
             else GrantArtifact(entry.Item, value);
@@ -534,10 +543,10 @@ internal sealed class MentorRuntime
                 masteryAfterGrant,
                 discoveredAfterGrant,
                 epochAlreadyAdvanced: catalog.ProgressionEpoch != progressionEpochBeforeGrant);
-            state.Engine.Complete(grant.Uuid);
+            state.Engine.Complete(grantUuid);
             Diagnostics.RecordGrant();
             if (_config.DetailedLogging.Value)
-                _log.LogInfo($"Mentor {domain} grant: recipient={entry.DisplayName} ({grant.Uuid}), amount={grant.Amount.Mantissa}e{grant.Amount.Exponent}");
+                _log.LogInfo($"Mentor {domain} grant: recipient={entry.DisplayName} ({grantUuid}), amount={grantAmount.Mantissa}e{grantAmount.Exponent}");
             return GrantResult.Granted;
         }
         catch (Exception ex)
@@ -585,16 +594,16 @@ internal sealed class MentorRuntime
         catalog.RelationshipDirty = true;
     }
 
-    private GrantResult DeferOrDropIdentity(MentorDomain domain, MentorGrant grant, DomainState state, DomainCatalog catalog)
+    private GrantResult DeferOrDropIdentity(string grantUuid, DomainState state, DomainCatalog catalog)
     {
-        if (state.IdentityDeferrals.Add(grant.Uuid))
+        if (state.IdentityDeferrals.Add(grantUuid))
         {
             RequestReconcile(catalog);
             Diagnostics.RecordDeferredGrant();
             return GrantResult.Deferred;
         }
-        state.IdentityDeferrals.Remove(grant.Uuid);
-        state.Engine.Complete(grant.Uuid);
+        state.IdentityDeferrals.Remove(grantUuid);
+        state.Engine.Complete(grantUuid);
         Diagnostics.RecordDrop(MentorDropReason.RecipientIdentityChanged, 1, grant: true);
         return GrantResult.Dropped;
     }
@@ -612,7 +621,11 @@ internal sealed class MentorRuntime
         var observedUuid = ReadUuid(catalog.IdentityMethod!, entry.Item);
         object? current = null;
         if (Guid.TryParse(entry.Uuid, out var guid))
-            current = catalog.RegistryLookupMethod!.Invoke(null, new object[] { guid });
+        {
+            catalog.RegistryLookupArguments[0] = guid;
+            try { current = catalog.RegistryLookupMethod!.Invoke(null, catalog.RegistryLookupArguments); }
+            finally { catalog.RegistryLookupArguments[0] = null; }
+        }
         return MentorIdentityValidation.Validate(
             catalog.ExpectedType!, entry.Uuid, entry.Item, current, observedUuid, IsDestroyed(entry.Item));
     }
@@ -667,6 +680,7 @@ internal sealed class MentorRuntime
         catalog.ByObject.Clear();
         catalog.MentorIds.Clear();
         catalog.Recipients = new List<MentorRecipe>();
+        catalog.Relationship = null;
         catalog.HighestMastery = int.MinValue;
         catalog.NextLiveRefresh = 0;
         catalog.NextReconcile = 0;
@@ -910,7 +924,7 @@ internal sealed class MentorRuntime
                 var requestGeneration = catalog.RelationshipRequests.Current;
                 var wasDirty = catalog.RelationshipDirty;
                 catalog.RelationshipDirty = false;
-                catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, requestGeneration, wasDirty);
+                catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, requestGeneration, wasDirty, catalog.Entries.Count);
                 return true;
             }
             if (!work.ReadComplete)
@@ -950,14 +964,18 @@ internal sealed class MentorRuntime
             {
                 var entry = catalog.Entries[work.BuildIndex++];
                 if (!entry.IsDiscovered) return true;
+                var recipe = new MentorRecipe(entry.Uuid, entry.MasteryLevel, true);
+                work.Discovered.Add(recipe);
                 if (entry.MasteryLevel == work.HighestMastery) work.MentorIds.Add(entry.Uuid);
                 else if (entry.MasteryLevel < work.HighestMastery)
-                    work.Recipients.Add(new MentorRecipe(entry.Uuid, entry.MasteryLevel, true));
+                    work.Recipients.Add(recipe);
                 return true;
             }
             catalog.HighestMastery = work.HighestMastery;
             catalog.MentorIds = work.MentorIds;
             catalog.Recipients = work.Recipients;
+            catalog.Relationship = new MentorRelationshipSnapshot(
+                work.ProgressionEpoch, work.HighestMastery, work.Discovered, work.Recipients);
             catalog.Refresh = null;
             catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
             catalog.RelationshipEpoch = catalog.ProgressionEpoch;

@@ -27,6 +27,6 @@ The underlying editor continues to provide:
 
 `0.3.2` makes Mods participate in the top-level navigation state: opening it temporarily deactivates the selected native tab, toggling Mods closed restores that tab, and choosing another native tab closes Mods without restoring the prior selection.
 
-`0.5.2` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+, keeps it last in the native navigation row, and retries installation while slower UI hierarchies finish loading.
+`0.5.2` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+, keeps it last in the native navigation row, and retries installation while slower UI hierarchies finish loading. Shell liveness includes both the button and its ScreenContent panel; losing either host or failing to open the panel restores the prior native view when possible and schedules a clean reinstall.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

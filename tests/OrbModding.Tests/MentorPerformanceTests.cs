@@ -48,22 +48,25 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
-    public void LaterProgressionCannotRetroactivelyQualifyAnEarlierSource()
+    public void CaptureTimeRelationshipCannotBeRequalifiedByLaterProgression()
     {
         var source = new object();
-        var atEvent = new MentorCaptureKey(source, "source", 5, true, progressionEpoch: 7);
+        var recipients = new[] { new MentorRecipe("recipient", 1, true) };
+        var ineligibleAtCapture = new MentorRelationshipSnapshot(
+            7, 6, new[] { new MentorRecipe("source", 5, true), recipients[0] }, recipients);
+        var qualifiedAtCapture = new MentorRelationshipSnapshot(
+            7, 5, new[] { new MentorRecipe("source", 5, true), recipients[0] }, recipients);
 
-        // Another recipe was level 6 at capture time, then fell below this
-        // source before processing. Final-state-only qualification would grant.
-        Assert.Equal(
-            MentorQualificationStatus.StaleRelationship,
-            MentorRelationshipQualification.Evaluate(atEvent, relationshipEpoch: 8, highestMastery: 5, recipientCount: 2));
-        Assert.Equal(
-            MentorQualificationStatus.Qualified,
-            MentorRelationshipQualification.Evaluate(atEvent, relationshipEpoch: 7, highestMastery: 5, recipientCount: 2));
         Assert.Equal(
             MentorQualificationStatus.SourceIneligible,
-            MentorRelationshipQualification.Evaluate(atEvent, relationshipEpoch: 7, highestMastery: 6, recipientCount: 2));
+            MentorRelationshipQualification.Evaluate(
+                new MentorCaptureKey(source, "source", 5, true, 7, ineligibleAtCapture),
+                relationshipEpoch: 8, highestMastery: 5, recipientCount: 2));
+        Assert.Equal(
+            MentorQualificationStatus.Qualified,
+            MentorRelationshipQualification.Evaluate(
+                new MentorCaptureKey(source, "source", 5, true, 7, qualifiedAtCapture),
+                relationshipEpoch: 99, highestMastery: 99, recipientCount: 0));
     }
 
     [Fact]
@@ -76,16 +79,19 @@ public sealed class MentorPerformanceTests
 
         Assert.True(MentorProgressionObservation.Apply(
             ref epoch, ref dirty, ref cachedMastery, ref cachedDiscovered, observedMastery: 6, observedDiscovered: true));
-        var captured = new MentorCaptureKey(new object(), "source", cachedMastery, cachedDiscovered, epoch);
+        var relationship = new MentorRelationshipSnapshot(
+            3,
+            5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        var captured = new MentorCaptureKey(
+            new object(), "source", cachedMastery, cachedDiscovered, epoch, relationship);
 
         Assert.Equal(4, epoch);
         Assert.True(dirty);
         Assert.Equal(
-            MentorQualificationStatus.StaleRelationship,
-            MentorRelationshipQualification.Evaluate(captured, relationshipEpoch: 3, highestMastery: 5, recipientCount: 1));
-        Assert.Equal(
             MentorQualificationStatus.Qualified,
-            MentorRelationshipQualification.Evaluate(captured, relationshipEpoch: 4, highestMastery: 6, recipientCount: 1));
+            MentorRelationshipQualification.Evaluate(captured, relationshipEpoch: 99, highestMastery: 99, recipientCount: 0));
         Assert.False(MentorProgressionObservation.Apply(
             ref epoch, ref dirty, ref cachedMastery, ref cachedDiscovered, observedMastery: 6, observedDiscovered: true));
         Assert.Equal(4, epoch);
@@ -153,6 +159,9 @@ public sealed class MentorPerformanceTests
         var engine = new MentorEngine();
         engine.Consolidate(new MentorGrant("recipient", new MentorAmount(2, 4)));
 
+        Assert.True(engine.TryPeek(out var uuid, out var amount));
+        Assert.Equal("recipient", uuid);
+        Assert.Equal(new MentorAmount(2, 4), amount);
         Assert.True(engine.TryPeek(out var first));
         Assert.True(engine.TryPeek(out var second));
         Assert.Equal(first.Amount, second.Amount);
@@ -243,10 +252,13 @@ public sealed class MentorPerformanceTests
     {
         var pending = new MentorPendingWork();
         const long relationshipEpoch = 7;
+        var recipients = new[] { new MentorRecipe("a", 1, true), new MentorRecipe("b", 2, true) };
+        var relationship = new MentorRelationshipSnapshot(
+            relationshipEpoch, 5, recipients, recipients);
         for (var index = 0; index < 20; index++)
         {
             Assert.Equal(MentorCaptureResult.Added, pending.Captures.Capture(
-                new MentorCaptureKey(new object(), $"mentor-{index}", 5, true, relationshipEpoch),
+                new MentorCaptureKey(new object(), $"mentor-{index}", 5, true, relationshipEpoch, relationship),
                 new MentorAmount(1, 1)));
         }
 
@@ -255,15 +267,29 @@ public sealed class MentorPerformanceTests
             Assert.True(pending.Captures.TryTake(out var captured));
             Assert.Equal(MentorQualificationStatus.Qualified, MentorRelationshipQualification.Evaluate(
                 captured.Key, relationshipEpoch, highestMastery: 5, recipientCount: 2));
-            pending.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+            pending.Sources.Capture(captured.Key.Relationship!, captured.Key.Uuid, captured.Amount, captured.EventCount);
         }
 
         Assert.True(pending.HasGrantBarrier);
         Assert.Equal(4, pending.Captures.Count);
         Assert.Equal(0, pending.Engine.PendingCount);
 
+        // An unrelated later transition advances the live epoch before the
+        // second bounded slice. Capture-time qualification must remain valid.
+        long epoch = relationshipEpoch;
+        var dirty = false;
+        var mastery = 1;
+        var discovered = true;
+        Assert.True(MentorProgressionObservation.Apply(
+            ref epoch, ref dirty, ref mastery, ref discovered,
+            observedMastery: 2, observedDiscovered: true));
+        Assert.Equal(relationshipEpoch + 1, epoch);
         while (pending.Captures.TryTake(out var captured))
-            pending.Sources.Capture(captured.Key.Uuid, captured.Amount, qualifiesAtEvent: true, captured.EventCount);
+        {
+            Assert.Equal(MentorQualificationStatus.Qualified, MentorRelationshipQualification.Evaluate(
+                captured.Key, epoch, highestMastery: 6, recipientCount: 0));
+            pending.Sources.Capture(captured.Key.Relationship!, captured.Key.Uuid, captured.Amount, captured.EventCount);
+        }
         var batch = pending.Sources.Drain();
         Assert.Equal(2, batch.Amount.Mantissa, 12);
         Assert.Equal(2, batch.Amount.Exponent);
@@ -271,7 +297,7 @@ public sealed class MentorPerformanceTests
             batch.Amount,
             10,
             MentorEconomyMode.SharedPool,
-            new[] { new MentorRecipe("a", 1, true), new MentorRecipe("b", 2, true) },
+            batch.Relationship!.Recipients,
             batch.EventCount);
         while (pending.ActivePlan!.TryTake(out var grant)) pending.Engine.Consolidate(grant);
         pending.ActivePlan = null;
@@ -283,21 +309,12 @@ public sealed class MentorPerformanceTests
         Assert.Equal(1, first.Amount.Exponent);
         Assert.True(pending.Engine.Complete(first.Uuid));
 
-        // An alchemy/artifact native grant may level the first recipient and
-        // advance the relationship epoch. Every source event was already
-        // represented in the expanded grant ledger, so the second grant stays.
-        long epoch = relationshipEpoch;
-        var dirty = false;
-        var mastery = 1;
-        var discovered = true;
-        Assert.True(MentorProgressionObservation.Apply(
-            ref epoch, ref dirty, ref mastery, ref discovered,
-            observedMastery: 2, observedDiscovered: true));
-        Assert.Equal(relationshipEpoch + 1, epoch);
         Assert.True(pending.Engine.TryPeek(out var remaining));
         Assert.Equal(1, remaining.Amount.Mantissa, 12);
         Assert.Equal(1, remaining.Amount.Exponent);
         Assert.Equal(1, pending.Engine.PendingCount);
+        Assert.True(pending.Engine.Complete(remaining.Uuid));
+        Assert.False(pending.Engine.TryPeek(out _));
     }
 
     [Fact]
@@ -331,11 +348,11 @@ public sealed class MentorPerformanceTests
         Assert.Null(failure.TransientReason);
 
         var diagnostics = new MentorDiagnostics();
-        diagnostics.RecordDrop(MentorDropReason.StaleRelationship, 3, grant: false);
+        diagnostics.RecordDrop(MentorDropReason.SourceIneligible, 3, grant: false);
         diagnostics.RecordDrop(MentorDropReason.RecipientIdentityChanged, 2, grant: true);
         Assert.Equal(3, diagnostics.DroppedEvents);
         Assert.Equal(2, diagnostics.DroppedGrants);
-        Assert.Equal(3, diagnostics.DropCount(MentorDropReason.StaleRelationship));
+        Assert.Equal(3, diagnostics.DropCount(MentorDropReason.SourceIneligible));
     }
 
     [Fact]
