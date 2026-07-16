@@ -20,6 +20,35 @@ internal enum AutoBuyCandidateLifecycleState
     Invalid,
 }
 
+[Flags]
+internal enum AutoBuyDirtyReason
+{
+    None = 0,
+    IdentityDirty = 1 << 0,
+    AvailabilityDirty = 1 << 1,
+    LevelDirty = 1 << 2,
+    CostDirty = 1 << 3,
+    ResourceDirty = 1 << 4,
+    PriorityDirty = 1 << 5,
+    CompletionDirty = 1 << 6,
+    LifecycleDirty = IdentityDirty | AvailabilityDirty | LevelDirty | CompletionDirty,
+    EvaluationDirty = CostDirty | ResourceDirty | PriorityDirty,
+    All = LifecycleDirty | EvaluationDirty,
+}
+
+[Flags]
+internal enum AutoBuyResourceChange
+{
+    None = 0,
+    Quantity = 1 << 0,
+    Capacity = 1 << 1,
+    Quality = 1 << 2,
+    AttributeCost = 1 << 3,
+    Availability = 1 << 4,
+    Identity = 1 << 5,
+    Unknown = 1 << 6,
+}
+
 internal readonly struct AutoBuyLifecycleEvidence
 {
     public AutoBuyLifecycleEvidence(
@@ -62,6 +91,60 @@ internal interface IAutoBuyCatalog : IDisposable
     bool TryGetActionMultiplier(out int multiplier);
 }
 
+internal interface IAutoBuyIncrementalCatalog
+{
+    AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request);
+
+    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate);
+
+    void InvalidatePolicy();
+
+    void BeginMutationEvaluation();
+
+    void NotifyPurchaseAccepted(IAutoBuyCandidate candidate);
+
+    void InvalidateLifecycle();
+}
+
+internal readonly struct AutoBuyEvaluationRequest
+{
+    public AutoBuyEvaluationRequest(int candidateLimit, bool includeStructures, bool includeUpgrades)
+    {
+        CandidateLimit = candidateLimit;
+        IncludeStructures = includeStructures;
+        IncludeUpgrades = includeUpgrades;
+    }
+
+    public int CandidateLimit { get; }
+
+    public bool IncludeStructures { get; }
+
+    public bool IncludeUpgrades { get; }
+}
+
+internal sealed class AutoBuyEvaluationBatch
+{
+    public AutoBuyEvaluationBatch(
+        IReadOnlyList<IAutoBuyCandidate> activeCandidates,
+        IReadOnlyList<IAutoBuyCandidate> dirtyCandidates,
+        IAutoBuyCandidate? firstExcludedCandidate,
+        bool reconciliationPending)
+    {
+        ActiveCandidates = activeCandidates;
+        DirtyCandidates = dirtyCandidates;
+        FirstExcludedCandidate = firstExcludedCandidate;
+        ReconciliationPending = reconciliationPending;
+    }
+
+    public IReadOnlyList<IAutoBuyCandidate> ActiveCandidates { get; }
+
+    public IReadOnlyList<IAutoBuyCandidate> DirtyCandidates { get; }
+
+    public IAutoBuyCandidate? FirstExcludedCandidate { get; }
+
+    public bool ReconciliationPending { get; }
+}
+
 internal interface IAutoBuyCandidate
 {
     AutoBuyCandidateSnapshot Snapshot();
@@ -83,6 +166,17 @@ internal interface IAutoBuyNativeIdentity
 internal interface IAutoBuyLifecycleCandidate
 {
     bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason);
+}
+
+internal interface IAutoBuyDirtyCandidate
+{
+    IReadOnlyList<string> ResourceDependencies { get; }
+
+    bool HasResolvedCosts { get; }
+
+    void MarkDirty(AutoBuyDirtyReason reasons);
+
+    void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence);
 }
 
 internal sealed class AutoBuyCandidateSnapshot

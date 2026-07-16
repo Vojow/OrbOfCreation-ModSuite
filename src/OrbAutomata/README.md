@@ -29,7 +29,9 @@ The former runtime-probe, per-session purchase-limit, DryRun, expert-override, a
 
 ## Auto Buy
 
-Automata discovers native `StructureSO` and `UpgradeSO` candidates, evaluates the complete bounded set, ranks eligible purchases by their highest cost-to-current-resource ratio, and revalidates every level immediately before calling the native purchase method.
+Automata discovers native `StructureSO` and `UpgradeSO` candidates into a lifecycle-aware UUID index. It keeps locked content for bounded retry, quarantines missing or contradictory native identities, and reconciles the native registries incrementally. Ordinary evaluations refresh only dirty candidates, maintain deterministic cached ranking, and revalidate every level immediately before calling the native purchase method.
+
+Resource dependencies are learned from the native current-cost result. Each referenced native resource is read once per evaluation epoch, including true quantity, quality, capacity, and effective attribute-cost modifier. Quantity or quality changes dirty only dependent candidates; save loads, gameplay-manager restarts, scene changes, and NG+ start a new lifecycle epoch. Unknown cost, resource, lifecycle, or identity state fails closed.
 
 `AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
 
@@ -49,6 +51,8 @@ The configured evaluation interval applies only while Auto Buy is idle. Once a s
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
+
+Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels or assign special priority to cost-reduction effects.
 
 ## Auto Cast
 

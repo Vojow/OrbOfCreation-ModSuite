@@ -89,8 +89,15 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Collections.Generic.List`1<ResourceTuple>", assembly.GetFieldType("ResourceCostList", "costs"));
         Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
         AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
+        Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "quality"));
+        Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "maxQuantity"));
+        AssertMethod(assembly, "ValueModifierRecord", "GetValue", false, "BigDouble");
     }
 
     [GameAssemblyFact]

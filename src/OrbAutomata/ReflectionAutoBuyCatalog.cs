@@ -8,26 +8,76 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
+internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
+    private const int RegistryItemsPerEvaluation = 32;
+    private const int LifecycleItemsPerEvaluation = 32;
+    private const int ActiveLifecycleRefreshPerEvaluation = 16;
+    private const int SlowLifecycleRefreshPerEvaluation = 32;
     private readonly AutoBuyCandidateIndex _index = new AutoBuyCandidateIndex();
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
-    private IReadOnlyList<IAutoBuyCandidate>? _registeredCandidates;
+    private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
+    private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
+
+    public ReflectionAutoBuyCatalog()
+    {
+        _resourceSnapshots = new AutoBuyResourceSnapshotCache(
+            new ReflectionAutoBuyResourceSnapshotReader(),
+            _index.InvalidateResource);
+    }
 
     public IEnumerable<IAutoBuyCandidate> Discover()
     {
-        if (_registeredCandidates is null || _lifetime.Elapsed >= _nextRegistryReconciliation)
-        {
-            _registeredCandidates = EnumerateStaticList("StructureSO", "All", AutoBuyCandidateKind.Structure)
-                .Concat(EnumerateStaticList("UpgradeSO", "All", AutoBuyCandidateKind.Upgrade))
-                .OrderBy(candidate => candidate.Snapshot().Uuid, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            _nextRegistryReconciliation = _lifetime.Elapsed + RegistryReconciliationInterval;
-        }
+        return BeginEvaluation(new AutoBuyEvaluationRequest(int.MaxValue, true, true)).ActiveCandidates;
+    }
 
-        return _index.Reconcile(_registeredCandidates);
+    public AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request)
+    {
+        StartRegistryReconciliationIfDue();
+        ProcessRegistryReconciliationSlice();
+        _resourceSnapshots.BeginEvaluationEpoch(_index.HasResourceDependents);
+
+        var batch = _index.PrepareEvaluation(
+            request,
+            LifecycleItemsPerEvaluation,
+            ActiveLifecycleRefreshPerEvaluation,
+            SlowLifecycleRefreshPerEvaluation);
+        return new AutoBuyEvaluationBatch(
+            batch.ActiveCandidates,
+            batch.DirtyCandidates,
+            batch.FirstExcludedCandidate,
+            _registryReconciliation is not null || _index.EpochValidationPending);
+    }
+
+    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate)
+    {
+        _index.CompleteCandidateEvaluation(candidate);
+    }
+
+    public void InvalidatePolicy()
+    {
+        _index.InvalidatePolicy();
+    }
+
+    public void BeginMutationEvaluation()
+    {
+        _resourceSnapshots.BeginLazyEpoch();
+    }
+
+    public void NotifyPurchaseAccepted(IAutoBuyCandidate candidate)
+    {
+        _index.MarkPurchaseAccepted(candidate);
+        _resourceSnapshots.BeginLazyEpoch();
+    }
+
+    public void InvalidateLifecycle()
+    {
+        _resourceSnapshots.Clear();
+        _registryReconciliation = null;
+        _nextRegistryReconciliation = TimeSpan.Zero;
+        _index.InvalidateLifecycleIncrementally();
     }
 
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
@@ -95,36 +145,138 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
 
     public void Dispose()
     {
-        _registeredCandidates = null;
+        _registryReconciliation = null;
+        _resourceSnapshots.Clear();
         _index.Clear();
     }
 
-    private static IEnumerable<IAutoBuyCandidate> EnumerateStaticList(
-        string typeName,
-        string memberName,
-        AutoBuyCandidateKind kind)
+    private void StartRegistryReconciliationIfDue()
+    {
+        if (_registryReconciliation is not null || _lifetime.Elapsed < _nextRegistryReconciliation)
+        {
+            return;
+        }
+
+        _registryReconciliation = new RegistryReconciliation(
+            ReadStaticList("StructureSO", "All"),
+            ReadStaticList("UpgradeSO", "All"));
+    }
+
+    private void ProcessRegistryReconciliationSlice()
+    {
+        var reconciliation = _registryReconciliation;
+        if (reconciliation is null)
+        {
+            return;
+        }
+
+        var remaining = RegistryItemsPerEvaluation;
+        while (remaining > 0 && reconciliation.TryTakeNext(out var source, out var kind))
+        {
+            remaining--;
+            if (source is null)
+            {
+                continue;
+            }
+
+            var candidate = new ReflectionAutoBuyCandidate(source, kind, _resourceSnapshots);
+            if (_index.ObserveCandidate(candidate, reconciliation.Seen))
+            {
+                reconciliation.ReplacementDetected = true;
+            }
+        }
+
+        if (!reconciliation.IsComplete)
+        {
+            return;
+        }
+
+        if (!reconciliation.CompletionStarted)
+        {
+            reconciliation.CompletionStarted = true;
+            _index.BeginRegistryCompletion(reconciliation.Seen);
+        }
+
+        if (remaining <= 0)
+        {
+            return;
+        }
+
+        _index.ProcessRegistryCompletion(remaining);
+        if (_index.RegistryCompletionPending)
+        {
+            return;
+        }
+
+        if (reconciliation.ReplacementDetected)
+        {
+            // Coalesce any number of recreated native objects into one epoch.
+            _index.InvalidateLifecycleIncrementally();
+        }
+
+        _registryReconciliation = null;
+        _nextRegistryReconciliation = _lifetime.Elapsed + RegistryReconciliationInterval;
+    }
+
+    private static IList ReadStaticList(string typeName, string memberName)
     {
         var type = ReflectionUtil.FindLoadedType(typeName);
-        if (type is null)
+        object? value = type?.GetField(memberName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null) ??
+                        type?.GetProperty(memberName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null, null);
+        return value as IList ?? Array.Empty<object>();
+    }
+
+    private sealed class RegistryReconciliation
+    {
+        private readonly IList _structures;
+        private readonly IList _upgrades;
+        private int _structureIndex;
+        private int _upgradeIndex;
+
+        public RegistryReconciliation(IList structures, IList upgrades)
         {
-            return Array.Empty<IAutoBuyCandidate>();
+            _structures = structures;
+            _upgrades = upgrades;
         }
 
-        object? value = type.GetField(memberName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null) ??
-                        type.GetProperty(memberName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null, null);
-        if (value is not IEnumerable items)
-        {
-            return Array.Empty<IAutoBuyCandidate>();
-        }
+        public HashSet<string> Seen { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        return items.Cast<object?>()
-            .Where(item => item is not null)
-            .Select(item => (IAutoBuyCandidate)new ReflectionAutoBuyCandidate(item!, kind))
-            .ToArray();
+        public bool IsComplete => _structureIndex >= _structures.Count && _upgradeIndex >= _upgrades.Count;
+
+        public bool CompletionStarted { get; set; }
+
+        public bool ReplacementDetected { get; set; }
+
+        public bool TryTakeNext(out object source, out AutoBuyCandidateKind kind)
+        {
+            if (_structureIndex < _structures.Count)
+            {
+                var candidate = _structures[_structureIndex++];
+                source = candidate!;
+                kind = AutoBuyCandidateKind.Structure;
+                return true;
+            }
+
+            if (_upgradeIndex < _upgrades.Count)
+            {
+                var candidate = _upgrades[_upgradeIndex++];
+                source = candidate!;
+                kind = AutoBuyCandidateKind.Upgrade;
+                return true;
+            }
+
+            source = null!;
+            kind = default;
+            return false;
+        }
     }
 }
 
-internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLifecycleCandidate, IAutoBuyNativeIdentity
+internal sealed class ReflectionAutoBuyCandidate :
+    IAutoBuyCandidate,
+    IAutoBuyLifecycleCandidate,
+    IAutoBuyNativeIdentity,
+    IAutoBuyDirtyCandidate
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
@@ -139,12 +291,24 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLi
     private readonly MethodInfo? _isMaxLevel;
     private readonly MethodInfo? _isMaxQueuedLevel;
     private readonly bool _expectedNativeType;
+    private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
+    private readonly List<AutoBuyResourceDefinition> _costDefinitions = new List<AutoBuyResourceDefinition>();
+    private readonly List<ResourceAdmissionCost> _admissionCosts = new List<ResourceAdmissionCost>();
+    private readonly List<string> _resourceDependencies = new List<string>();
     private AutoBuyCandidateSnapshot? _snapshot;
+    private bool _costDirty = true;
+    private bool _hasResolvedCosts;
+    private bool _hasCachedAvailability;
+    private bool _cachedAvailability;
 
-    public ReflectionAutoBuyCandidate(object source, AutoBuyCandidateKind kind)
+    public ReflectionAutoBuyCandidate(
+        object source,
+        AutoBuyCandidateKind kind,
+        AutoBuyResourceSnapshotCache resourceSnapshots)
     {
         _source = source;
         _kind = kind;
+        _resourceSnapshots = resourceSnapshots;
         _sourceType = source.GetType();
         _expectedNativeType = HasExpectedNativeType(_sourceType, kind);
         _isAvailable = FindNoArgMethod("IsAvailable", typeof(bool));
@@ -167,6 +331,10 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLi
 
     public object NativeIdentity => _source;
 
+    public IReadOnlyList<string> ResourceDependencies => _resourceDependencies;
+
+    public bool HasResolvedCosts => !_costDirty && _hasResolvedCosts;
+
     public AutoBuyCandidateSnapshot Snapshot()
     {
         return _snapshot ??= new AutoBuyCandidateSnapshot(
@@ -179,7 +347,9 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLi
 
     public bool IsAvailable()
     {
-        return TryInvoke(_isAvailable, out bool available) && available;
+        return _hasCachedAvailability
+            ? _cachedAvailability
+            : TryInvoke(_isAvailable, out bool available) && available;
     }
 
     public bool CanPurchase(out string reason)
@@ -196,8 +366,65 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLi
 
     public IReadOnlyList<ResourceAdmissionCost> GetCosts()
     {
-        var container = Invoke(_getPurchaseCost);
-        return ReflectionCostReader.Read(container);
+        if (_costDirty)
+        {
+            _costDefinitions.Clear();
+            _resourceDependencies.Clear();
+            _hasResolvedCosts = false;
+            var costContainer = Invoke(_getPurchaseCost);
+            if (costContainer is null)
+            {
+                _admissionCosts.Clear();
+                return _admissionCosts;
+            }
+
+            var definitions = ReflectionCostReader.ReadDefinitions(costContainer);
+            for (var i = 0; i < definitions.Count; i++)
+            {
+                _costDefinitions.Add(definitions[i]);
+                _resourceDependencies.Add(definitions[i].ResourceId);
+            }
+
+            // An empty native ResourceCostList is a valid zero-cost result.
+            _costDirty = false;
+            _hasResolvedCosts = true;
+        }
+
+        _admissionCosts.Clear();
+        for (var i = 0; i < _costDefinitions.Count; i++)
+        {
+            var definition = _costDefinitions[i];
+            if (!_resourceSnapshots.TryResolve(definition, out var resource))
+            {
+                _hasResolvedCosts = false;
+                _admissionCosts.Clear();
+                return _admissionCosts;
+            }
+
+            _admissionCosts.Add(new ResourceAdmissionCost(
+                definition.ResourceId,
+                definition.ResourceName,
+                definition.NominalCost,
+                resource.TrueQuantity,
+                resource.Capacity));
+        }
+
+        return _admissionCosts;
+    }
+
+    public void MarkDirty(AutoBuyDirtyReason reasons)
+    {
+        if ((reasons & AutoBuyDirtyReason.CostDirty) != 0)
+        {
+            _costDirty = true;
+            _hasResolvedCosts = false;
+        }
+    }
+
+    public void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence)
+    {
+        _cachedAvailability = evidence.IsAvailable;
+        _hasCachedAvailability = true;
     }
 
     public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
@@ -222,6 +449,9 @@ internal sealed class ReflectionAutoBuyCandidate : IAutoBuyCandidate, IAutoBuyLi
             reason = "required native lifecycle method was unavailable";
             return false;
         }
+
+        _cachedAvailability = available;
+        _hasCachedAvailability = true;
 
         if (_kind == AutoBuyCandidateKind.Structure)
         {

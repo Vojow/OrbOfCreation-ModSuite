@@ -13,6 +13,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private const float QueuePollIntervalSeconds = 0.1f;
     private readonly AutomataConfig _config;
     private readonly IAutoBuyCatalog _catalog;
+    private readonly IAutoBuyIncrementalCatalog? _incrementalCatalog;
     private readonly ReservePolicy _reservePolicy;
     private readonly ManualLogSource _log;
     private readonly Func<Stopwatch, double> _readElapsedMilliseconds;
@@ -21,9 +22,21 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly DecisionLogGate _scanProgressLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
     private IReadOnlyList<IAutoBuyCandidate>? _pendingCandidates;
+    private IReadOnlyList<IAutoBuyCandidate>? _pendingActiveCandidates;
     private readonly List<AutoBuyDecision> _pendingDecisions = new List<AutoBuyDecision>();
-    private HashSet<string>? _pendingAllowedUuids;
-    private HashSet<string>? _pendingBlockedUuids;
+    private readonly Dictionary<string, AutoBuyDecision> _cachedDecisions =
+        new Dictionary<string, AutoBuyDecision>(StringComparer.OrdinalIgnoreCase);
+    private readonly SortedSet<AutoBuyDecision> _rankedRecommendations =
+        new SortedSet<AutoBuyDecision>(AutoBuyDecisionComparer.Instance);
+    private readonly HashSet<string> _activeCandidateUuids =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _inactiveCandidateUuids = new List<string>();
+    private readonly List<AutoBuyDecision> _activeDecisionBuffer = new List<AutoBuyDecision>();
+    private readonly List<AutoBuyDecision> _recommendationBuffer = new List<AutoBuyDecision>();
+    private readonly HashSet<string> _allowedUuids =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _blockedUuids =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private int _pendingIndex;
     private IReadOnlyList<AutoBuyDecision>? _pendingPurchaseRecommendations;
     private int _pendingPurchaseIndex;
@@ -39,6 +52,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private float _secondsUntilQueuePoll;
     private bool _queueWaitingLogged;
     private int _successfulPurchasesThisSession;
+    private bool _registryReconciliationPending;
+    private AutoBuyPolicyFingerprint? _lastPolicy;
 
     public AutoBuyEngine(
         AutomataConfig config,
@@ -50,6 +65,7 @@ internal sealed class AutoBuyEngine : IDisposable
     {
         _config = config;
         _catalog = catalog;
+        _incrementalCatalog = catalog as IAutoBuyIncrementalCatalog;
         _reservePolicy = reservePolicy;
         _log = log;
         _readElapsedMilliseconds = readElapsedMilliseconds ?? (stopwatch => stopwatch.Elapsed.TotalMilliseconds);
@@ -70,6 +86,22 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             ResetAllPendingWork();
             return;
+        }
+
+        if (_incrementalCatalog is not null)
+        {
+            var policy = AutoBuyPolicyFingerprint.Capture(_config);
+            if (!_lastPolicy.HasValue || !_lastPolicy.Value.Equals(policy))
+            {
+                _lastPolicy = policy;
+                _cachedDecisions.Clear();
+                _rankedRecommendations.Clear();
+                PopulateUuidSet(_allowedUuids, _config.AllowedAutoBuyUuids.Value);
+                PopulateUuidSet(_blockedUuids, _config.BlockedAutoBuyUuids.Value);
+                _incrementalCatalog.InvalidatePolicy();
+                ResetAllPendingWork();
+                _secondsUntilEvaluation = 0.0f;
+            }
         }
 
         if (_pendingPurchaseRecommendations is not null)
@@ -120,6 +152,17 @@ internal sealed class AutoBuyEngine : IDisposable
         _catalog.Dispose();
     }
 
+    public void InvalidateLifecycle()
+    {
+        ResetAllPendingWork();
+        _cachedDecisions.Clear();
+        _rankedRecommendations.Clear();
+        _lastPolicy = null;
+        _registryReconciliationPending = false;
+        _incrementalCatalog?.InvalidateLifecycle();
+        _secondsUntilEvaluation = 0.0f;
+    }
+
     private void EvaluateBatch()
     {
         var stopwatch = Stopwatch.StartNew();
@@ -132,7 +175,13 @@ internal sealed class AutoBuyEngine : IDisposable
         while (_pendingCandidates is not null && _pendingIndex < _pendingCandidates.Count)
         {
             var candidate = _pendingCandidates[_pendingIndex];
-            _pendingDecisions.Add(EvaluateCandidate(candidate));
+            var decision = EvaluateCandidate(candidate);
+            _pendingDecisions.Add(decision);
+            if (_incrementalCatalog is not null)
+            {
+                UpdateCachedDecision(decision);
+                _incrementalCatalog.CompleteCandidateEvaluation(candidate);
+            }
             _pendingIndex++;
 
             if (_pendingIndex < _pendingCandidates.Count && _readElapsedMilliseconds(stopwatch) >= budget)
@@ -172,20 +221,43 @@ internal sealed class AutoBuyEngine : IDisposable
         }
 
         var limit = Math.Max(1, _config.AutoBuyMaxCandidatesPerScan.Value);
-        var discovered = _catalog.Discover()
-            .Where(IsIncludedKind)
-            .Take(limit + 1)
-            .ToArray();
-        _pendingCandidates = discovered.Take(limit).ToArray();
-        _pendingAllowedUuids = ParseUuidSet(_config.AllowedAutoBuyUuids.Value);
-        _pendingBlockedUuids = ParseUuidSet(_config.BlockedAutoBuyUuids.Value);
-        _pendingIndex = 0;
-        _pendingDecisions.Clear();
-
-        if (discovered.Length > limit)
+        if (_incrementalCatalog is not null)
         {
-            _pendingDecisions.Add(AutoBuyDecision.Rejected(discovered[limit].Snapshot(), "candidate scan limit reached"));
+            var batch = _incrementalCatalog.BeginEvaluation(new AutoBuyEvaluationRequest(
+                limit,
+                _config.AutoBuyStructures.Value,
+                _config.AutoBuyUpgrades.Value));
+            _pendingCandidates = batch.DirtyCandidates;
+            _pendingActiveCandidates = batch.ActiveCandidates;
+            _registryReconciliationPending = batch.ReconciliationPending;
+            RemoveInactiveCachedDecisions(batch.ActiveCandidates);
+            if (batch.FirstExcludedCandidate is not null)
+            {
+                _pendingDecisions.Add(AutoBuyDecision.Rejected(
+                    batch.FirstExcludedCandidate.Snapshot(),
+                    "candidate scan limit reached"));
+            }
         }
+        else
+        {
+            var discovered = _catalog.Discover()
+                .Where(IsIncludedKind)
+                .Take(limit + 1)
+                .ToArray();
+            _pendingCandidates = discovered.Take(limit).ToArray();
+            if (discovered.Length > limit)
+            {
+                _pendingDecisions.Add(AutoBuyDecision.Rejected(discovered[limit].Snapshot(), "candidate scan limit reached"));
+            }
+        }
+
+        if (_incrementalCatalog is null)
+        {
+            PopulateUuidSet(_allowedUuids, _config.AllowedAutoBuyUuids.Value);
+            PopulateUuidSet(_blockedUuids, _config.BlockedAutoBuyUuids.Value);
+        }
+
+        _pendingIndex = 0;
 
         return true;
     }
@@ -193,12 +265,12 @@ internal sealed class AutoBuyEngine : IDisposable
     private AutoBuyDecision EvaluateCandidate(IAutoBuyCandidate candidate)
     {
         var snapshot = candidate.Snapshot();
-        if (_pendingAllowedUuids is { Count: > 0 } && !_pendingAllowedUuids.Contains(snapshot.Uuid))
+        if (_allowedUuids.Count > 0 && !_allowedUuids.Contains(snapshot.Uuid))
         {
             return AutoBuyDecision.Rejected(snapshot, "not included in the configured allowlist");
         }
 
-        if (_pendingBlockedUuids?.Contains(snapshot.Uuid) == true)
+        if (_blockedUuids.Contains(snapshot.Uuid))
         {
             return AutoBuyDecision.Rejected(snapshot, "blocked by configuration");
         }
@@ -208,12 +280,25 @@ internal sealed class AutoBuyEngine : IDisposable
             return AutoBuyDecision.Rejected(snapshot, "not available");
         }
 
+        // The optimized catalog must learn resource dependencies even when
+        // native CanPurchase currently rejects for affordability. The native
+        // result remains authoritative and is still evaluated before policy.
+        var costs = _incrementalCatalog is not null ? candidate.GetCosts() : null;
+        var costsResolved = candidate is not IAutoBuyDirtyCandidate dirtyCandidate ||
+                            dirtyCandidate.HasResolvedCosts;
+
         if (!candidate.CanPurchase(out var nativeReason))
         {
             return AutoBuyDecision.Rejected(snapshot, nativeReason);
         }
 
-        var reserve = _reservePolicy.Evaluate(candidate.GetCosts());
+        if (!costsResolved)
+        {
+            return AutoBuyDecision.Rejected(snapshot, "native cost or resource snapshot unavailable");
+        }
+
+        costs ??= candidate.GetCosts();
+        var reserve = _reservePolicy.Evaluate(costs);
         if (!reserve.Passed)
         {
             return AutoBuyDecision.Rejected(snapshot, reserve.Reason);
@@ -237,20 +322,56 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private void CompleteScan(double elapsedMilliseconds)
     {
-        var decisions = _pendingDecisions.ToArray();
+        IReadOnlyList<AutoBuyDecision> decisions;
+        if (_incrementalCatalog is not null && _pendingActiveCandidates is not null)
+        {
+            _activeDecisionBuffer.Clear();
+            for (var i = 0; i < _pendingActiveCandidates.Count; i++)
+            {
+                var uuid = _pendingActiveCandidates[i].Snapshot().Uuid;
+                if (_cachedDecisions.TryGetValue(uuid, out var cached))
+                {
+                    _activeDecisionBuffer.Add(cached);
+                }
+            }
+
+            decisions = _activeDecisionBuffer;
+        }
+        else
+        {
+            decisions = _pendingDecisions.ToArray();
+        }
+
         var scanned = _pendingIndex;
-        var recommendations = decisions
-            .Where(decision => decision.Kind == AutoBuyDecisionKind.Recommendation)
-            .OrderBy(decision => decision.CostRatio)
-            .ThenBy(decision => decision.Candidate.Uuid, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var recommendation = recommendations.FirstOrDefault();
+        IReadOnlyList<AutoBuyDecision> recommendations;
+        if (_incrementalCatalog is not null)
+        {
+            _recommendationBuffer.Clear();
+            foreach (var ranked in _rankedRecommendations)
+            {
+                _recommendationBuffer.Add(ranked);
+            }
+
+            recommendations = _recommendationBuffer;
+        }
+        else
+        {
+            recommendations = decisions
+                .Where(decision => decision.Kind == AutoBuyDecisionKind.Recommendation)
+                .OrderBy(decision => decision.CostRatio)
+                .ThenBy(decision => decision.Candidate.Uuid, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        var recommendation = recommendations.Count > 0 ? recommendations[0] : null;
 
         try
         {
             LogDecision(scanned, elapsedMilliseconds, recommendation, decisions);
 
-            if (recommendation is null || _config.AutoBuyMode.Value != AutoBuyOperationMode.Active)
+            if (_registryReconciliationPending ||
+                recommendation is null ||
+                _config.AutoBuyMode.Value != AutoBuyOperationMode.Active)
             {
                 return;
             }
@@ -260,6 +381,11 @@ internal sealed class AutoBuyEngine : IDisposable
         finally
         {
             ResetPendingScan();
+            if (_registryReconciliationPending)
+            {
+                _registryReconciliationPending = false;
+                _secondsUntilEvaluation = 0.0f;
+            }
         }
     }
 
@@ -273,6 +399,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingBatchCpuSliced = false;
         _pendingBatchQueueWaitLogged = false;
         _pendingWaitingForQueue = false;
+        _incrementalCatalog?.BeginMutationEvaluation();
         ContinueRankedBatch();
     }
 
@@ -335,6 +462,7 @@ internal sealed class AutoBuyEngine : IDisposable
             _pendingBatchAttempted++;
             if (recommendation.Candidate.Source.TryPurchaseOne(out var reason))
             {
+                _incrementalCatalog?.NotifyPurchaseAccepted(recommendation.Candidate.Source);
                 _pendingBatchPurchased++;
                 _successfulPurchasesThisSession++;
                 _pendingCandidateRepeats++;
@@ -350,6 +478,15 @@ internal sealed class AutoBuyEngine : IDisposable
                 if (_pendingCandidateRepeats >= _pendingCandidateRepeatLimit)
                 {
                     AdvancePurchaseCandidate();
+                    if (_incrementalCatalog is not null &&
+                        _pendingPurchaseIndex < recommendations.Count &&
+                        _pendingBatchPurchased < maximumPurchases)
+                    {
+                        // Preserve the configured repeat group, then settle
+                        // resource invalidations and rerank dirty dependents
+                        // before another cached candidate can mutate state.
+                        _pendingPurchaseIndex = recommendations.Count;
+                    }
                 }
             }
             else
@@ -525,10 +662,59 @@ internal sealed class AutoBuyEngine : IDisposable
     private void ResetPendingScan()
     {
         _pendingCandidates = null;
-        _pendingAllowedUuids = null;
-        _pendingBlockedUuids = null;
+        _pendingActiveCandidates = null;
         _pendingIndex = 0;
         _pendingDecisions.Clear();
+    }
+
+    private void RemoveInactiveCachedDecisions(IReadOnlyList<IAutoBuyCandidate> activeCandidates)
+    {
+        if (_cachedDecisions.Count == 0)
+        {
+            return;
+        }
+
+        _activeCandidateUuids.Clear();
+        for (var i = 0; i < activeCandidates.Count; i++)
+        {
+            _activeCandidateUuids.Add(activeCandidates[i].Snapshot().Uuid);
+        }
+
+        _inactiveCandidateUuids.Clear();
+        foreach (var uuid in _cachedDecisions.Keys)
+        {
+            if (!_activeCandidateUuids.Contains(uuid))
+            {
+                _inactiveCandidateUuids.Add(uuid);
+            }
+        }
+
+        for (var i = 0; i < _inactiveCandidateUuids.Count; i++)
+        {
+            var uuid = _inactiveCandidateUuids[i];
+            if (_cachedDecisions.TryGetValue(uuid, out var previous) &&
+                previous.Kind == AutoBuyDecisionKind.Recommendation)
+            {
+                _rankedRecommendations.Remove(previous);
+            }
+
+            _cachedDecisions.Remove(uuid);
+        }
+    }
+
+    private void UpdateCachedDecision(AutoBuyDecision decision)
+    {
+        if (_cachedDecisions.TryGetValue(decision.Candidate.Uuid, out var previous) &&
+            previous.Kind == AutoBuyDecisionKind.Recommendation)
+        {
+            _rankedRecommendations.Remove(previous);
+        }
+
+        _cachedDecisions[decision.Candidate.Uuid] = decision;
+        if (decision.Kind == AutoBuyDecisionKind.Recommendation)
+        {
+            _rankedRecommendations.Add(decision);
+        }
     }
 
     private void ResetPendingPurchaseBatch()
@@ -552,13 +738,27 @@ internal sealed class AutoBuyEngine : IDisposable
         ResetPendingPurchaseBatch();
     }
 
-    private static HashSet<string> ParseUuidSet(string value)
+    private static void PopulateUuidSet(HashSet<string> destination, string value)
     {
-        return new HashSet<string>(
-            value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(item => item.Trim())
-                .Where(item => item.Length > 0),
-            StringComparer.OrdinalIgnoreCase);
+        destination.Clear();
+        var start = 0;
+        while (start <= value.Length)
+        {
+            var separator = value.IndexOf(',', start);
+            var end = separator >= 0 ? separator : value.Length;
+            var item = value.Substring(start, end - start).Trim();
+            if (item.Length > 0)
+            {
+                destination.Add(item);
+            }
+
+            if (separator < 0)
+            {
+                break;
+            }
+
+            start = separator + 1;
+        }
     }
 
     private static double MaximumAllowedCostRatio(AutoBuyAffordabilityMode mode)
@@ -581,6 +781,121 @@ internal sealed class AutoBuyEngine : IDisposable
     internal static double EffectiveCpuBudget(double configuredMilliseconds)
     {
         return Math.Min(MaximumCpuBudgetMilliseconds, Math.Max(0.1, configuredMilliseconds));
+    }
+
+    private readonly struct AutoBuyPolicyFingerprint : IEquatable<AutoBuyPolicyFingerprint>
+    {
+        private AutoBuyPolicyFingerprint(
+            bool includeStructures,
+            bool includeUpgrades,
+            AutoBuyAffordabilityMode structureAffordability,
+            AutoBuyAffordabilityMode upgradeAffordability,
+            string absoluteReserve,
+            float relativeReserve,
+            string allowedUuids,
+            string blockedUuids,
+            bool respectActionMultiplier,
+            AutoBuyBatchSizingMode batchSizing,
+            int batchSize,
+            AutoBuyStructureRepeatMode repeatMode,
+            int fixedRepeats,
+            int leaveQueueSlots)
+        {
+            IncludeStructures = includeStructures;
+            IncludeUpgrades = includeUpgrades;
+            StructureAffordability = structureAffordability;
+            UpgradeAffordability = upgradeAffordability;
+            AbsoluteReserve = absoluteReserve;
+            RelativeReserve = relativeReserve;
+            AllowedUuids = allowedUuids;
+            BlockedUuids = blockedUuids;
+            RespectActionMultiplier = respectActionMultiplier;
+            BatchSizing = batchSizing;
+            BatchSize = batchSize;
+            RepeatMode = repeatMode;
+            FixedRepeats = fixedRepeats;
+            LeaveQueueSlots = leaveQueueSlots;
+        }
+
+        private bool IncludeStructures { get; }
+        private bool IncludeUpgrades { get; }
+        private AutoBuyAffordabilityMode StructureAffordability { get; }
+        private AutoBuyAffordabilityMode UpgradeAffordability { get; }
+        private string AbsoluteReserve { get; }
+        private float RelativeReserve { get; }
+        private string AllowedUuids { get; }
+        private string BlockedUuids { get; }
+        private bool RespectActionMultiplier { get; }
+        private AutoBuyBatchSizingMode BatchSizing { get; }
+        private int BatchSize { get; }
+        private AutoBuyStructureRepeatMode RepeatMode { get; }
+        private int FixedRepeats { get; }
+        private int LeaveQueueSlots { get; }
+
+        public static AutoBuyPolicyFingerprint Capture(AutomataConfig config)
+        {
+            return new AutoBuyPolicyFingerprint(
+                config.AutoBuyStructures.Value,
+                config.AutoBuyUpgrades.Value,
+                config.AutoBuyAffordability.Value,
+                config.UpgradeAffordability.Value,
+                config.AbsoluteReserve.Value,
+                config.RelativeReserveMultiplier.Value,
+                config.AllowedAutoBuyUuids.Value,
+                config.BlockedAutoBuyUuids.Value,
+                config.RespectActionMultiplier.Value,
+                config.AutoBuyBatchSizing.Value,
+                config.MaxPurchasesPerBatch.Value,
+                config.StructureRepeatMode.Value,
+                config.FixedStructureLevelsPerCandidate.Value,
+                config.LeaveQueueSlots.Value);
+        }
+
+        public bool Equals(AutoBuyPolicyFingerprint other)
+        {
+            return IncludeStructures == other.IncludeStructures &&
+                   IncludeUpgrades == other.IncludeUpgrades &&
+                   StructureAffordability == other.StructureAffordability &&
+                   UpgradeAffordability == other.UpgradeAffordability &&
+                   string.Equals(AbsoluteReserve, other.AbsoluteReserve, StringComparison.Ordinal) &&
+                   RelativeReserve.Equals(other.RelativeReserve) &&
+                   string.Equals(AllowedUuids, other.AllowedUuids, StringComparison.Ordinal) &&
+                   string.Equals(BlockedUuids, other.BlockedUuids, StringComparison.Ordinal) &&
+                   RespectActionMultiplier == other.RespectActionMultiplier &&
+                   BatchSizing == other.BatchSizing &&
+                   BatchSize == other.BatchSize &&
+                   RepeatMode == other.RepeatMode &&
+                   FixedRepeats == other.FixedRepeats &&
+                   LeaveQueueSlots == other.LeaveQueueSlots;
+        }
+    }
+
+    private sealed class AutoBuyDecisionComparer : IComparer<AutoBuyDecision>
+    {
+        public static readonly AutoBuyDecisionComparer Instance = new AutoBuyDecisionComparer();
+
+        public int Compare(AutoBuyDecision? left, AutoBuyDecision? right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return 0;
+            }
+
+            if (left is null)
+            {
+                return -1;
+            }
+
+            if (right is null)
+            {
+                return 1;
+            }
+
+            var ratio = left.CostRatio.CompareTo(right.CostRatio);
+            return ratio != 0
+                ? ratio
+                : StringComparer.OrdinalIgnoreCase.Compare(left.Candidate.Uuid, right.Candidate.Uuid);
+        }
     }
 
 }

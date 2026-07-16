@@ -58,6 +58,8 @@ public sealed class Plugin : BaseUnityPlugin
             reservePolicy,
             new ResourceFullnessPolicy(),
             Log);
+        AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
+        SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
         Log.LogInfo(
             $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
@@ -88,6 +90,8 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        AutoBuyLifecycleSignal.Invalidated -= OnAutoBuyLifecycleInvalidated;
+        SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
         _autoBuyEngine = null;
         _autoCastEngine?.Dispose();
@@ -100,6 +104,16 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyToggleControl = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
+    }
+
+    private void OnActiveSceneChanged(Scene previous, Scene next)
+    {
+        _autoBuyEngine?.InvalidateLifecycle();
+    }
+
+    private void OnAutoBuyLifecycleInvalidated()
+    {
+        _autoBuyEngine?.InvalidateLifecycle();
     }
 
     private static void LogAssemblyStatus()
