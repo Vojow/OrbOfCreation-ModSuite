@@ -76,6 +76,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "CanPurchase", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "GetPurchaseCost", false, "ResourceCostList");
+        AssertMethod(assembly, "UpgradeSO", "GetLeveledCostList", false, "ResourceCostList", "System.Int32");
         AssertMethod(assembly, "UpgradeSO", "Purchase", false, "System.Void");
         AssertMethod(assembly, "UpgradeSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "UpgradeSO", "GetQueuedPurchaseLevel", false, "System.Int32");

@@ -33,7 +33,7 @@ Automata discovers native `StructureSO` and `UpgradeSO` candidates into a lifecy
 
 Resource dependencies are learned from the native current-cost result. Each referenced native resource is read once per evaluation epoch, including true quantity, quality, capacity, and effective attribute-cost modifier. Quantity or quality changes dirty only dependent candidates; save loads, gameplay-manager restarts, scene changes, and NG+ start a new lifecycle epoch. Unknown cost, resource, lifecycle, or identity state fails closed.
 
-The installed-game `ResourceCostList` and `ResourceTuple` schema is validated once per native type. Every tuple must decode before any reserve decision uses the vector; adapter failures are quarantined with bounded retry and rate-limited warnings. Empty native cost lists remain valid free actions when native `CanPurchase` accepts them. Native Structure queue and Structure/Upgrade completion hooks coalesce cost, availability, and priority settlement before cached recommendations may mutate another candidate.
+The installed-game `ResourceCostList` and `ResourceTuple` schema is validated once per native type. Every tuple must decode before any reserve decision uses the vector; adapter failures are quarantined with bounded retry and rate-limited warnings. Empty native cost lists remain valid free actions when native `CanPurchase` accepts them. Native Structure queue, Upgrade purchase/queue, and Structure/Upgrade completion hooks coalesce cost, availability, and priority settlement before cached recommendations may mutate another candidate.
 
 `AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
 

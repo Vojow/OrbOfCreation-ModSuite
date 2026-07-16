@@ -105,6 +105,8 @@ internal interface IAutoBuyIncrementalCatalog
 
     void NotifyStructureQueueChanged();
 
+    void NotifyUpgradeQueueChanged();
+
     void NotifyNativeCompletion();
 
     void InvalidateLifecycle();

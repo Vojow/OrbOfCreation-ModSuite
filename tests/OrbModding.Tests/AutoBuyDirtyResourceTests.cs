@@ -687,6 +687,65 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(1, candidate.PurchaseCalls);
     }
 
+    [Fact]
+    public void LargeCompletionSettlement_WithEngineEvaluation_ReachesZeroAndResumesMutation()
+    {
+        AssertLargeSettlementResumes(
+            AutoBuyCandidateKind.Structure,
+            (engine, _) => engine.NotifyNativeCompletion());
+    }
+
+    [Fact]
+    public void LargeStructureQueueSettlement_WithEngineEvaluation_ReachesZeroAndResumesMutation()
+    {
+        AssertLargeSettlementResumes(
+            AutoBuyCandidateKind.Structure,
+            (engine, _) => engine.NotifyStructureQueueChanged());
+    }
+
+    [Fact]
+    public void ManualUpgradeQueueOutsideFirstSlice_RefreshesCostAndResumesMutation()
+    {
+        AssertLargeSettlementResumes(
+            AutoBuyCandidateKind.Upgrade,
+            (engine, target) =>
+            {
+                target.QueuedLevels = 1;
+                engine.NotifyUpgradeQueueChanged();
+            });
+    }
+
+    private static void AssertLargeSettlementResumes(
+        AutoBuyCandidateKind kind,
+        Action<AutoBuyEngine, DirtyCandidate> signal)
+    {
+        var candidates = new List<DirtyCandidate>();
+        for (var i = 0; i < 65; i++)
+        {
+            candidates.Add(Candidate($"candidate-{i:00}", kind, "mana", available: true));
+        }
+
+        var target = candidates[candidates.Count - 1];
+        using var catalog = new IndexedCatalog(candidates);
+        var config = ActiveConfig(target.Uuid);
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        signal(engine, target);
+        for (var frame = 0; frame < 10 && target.PurchaseCalls == 0; frame++)
+        {
+            engine.Tick(frame == 0 ? config.AutoBuyIntervalSeconds.Value : 0.0f);
+        }
+
+        Assert.False(catalog.Index.SettlementValidationPending);
+        Assert.Equal(1, target.PurchaseCalls);
+    }
+
     private static AutomataConfig ActiveConfig(string allowedUuid)
     {
         var config = AutomataConfig.Bind(new ConfigFile());
@@ -781,6 +840,8 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool CostsResolved { get; set; } = true;
 
+        public int PurchaseCalls { get; private set; }
+
         public object NativeIdentity { get; }
 
         public IReadOnlyList<string> ResourceDependencies => _dependencies;
@@ -801,6 +862,7 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool TryPurchaseOne(out string reason)
         {
+            PurchaseCalls++;
             reason = string.Empty;
             return true;
         }
@@ -880,6 +942,10 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
 
+        public void NotifyUpgradeQueueChanged()
+        {
+        }
+
         public void NotifyNativeCompletion()
         {
             SettlementPending = true;
@@ -898,6 +964,87 @@ public sealed class AutoBuyDirtyResourceTests
         public bool TryGetBulkDevelopment(out int levels)
         {
             levels = BulkLevels;
+            return true;
+        }
+
+        public bool TryGetActionMultiplier(out int multiplier)
+        {
+            multiplier = 1;
+            return true;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class IndexedCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
+    {
+        private readonly IReadOnlyList<IAutoBuyCandidate> _candidates;
+
+        public IndexedCatalog(IReadOnlyList<DirtyCandidate> candidates)
+        {
+            _candidates = candidates;
+            Index.Reconcile(candidates);
+            var initial = Index.PrepareEvaluation(
+                new AutoBuyEvaluationRequest(1024, true, true),
+                lifecycleWorkLimit: 1024,
+                activeRefreshCount: 0,
+                slowRefreshCount: 0);
+            foreach (var candidate in initial.DirtyCandidates)
+            {
+                Index.CompleteCandidateEvaluation(candidate);
+            }
+        }
+
+        public AutoBuyCandidateIndex Index { get; } = new AutoBuyCandidateIndex();
+
+        public IEnumerable<IAutoBuyCandidate> Discover() => _candidates;
+
+        public AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request)
+        {
+            var batch = Index.PrepareEvaluation(
+                request,
+                lifecycleWorkLimit: 32,
+                activeRefreshCount: 0,
+                slowRefreshCount: 0);
+            return new AutoBuyEvaluationBatch(
+                batch.ActiveCandidates,
+                batch.DirtyCandidates,
+                batch.FirstExcludedCandidate,
+                Index.SettlementValidationPending);
+        }
+
+        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
+        {
+            Index.CompleteCandidateEvaluation(candidate, policyExcluded);
+        }
+
+        public void InvalidatePolicy() => Index.InvalidatePolicy();
+
+        public void BeginMutationEvaluation()
+        {
+        }
+
+        public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate) => Index.MarkPurchaseAttempted(candidate);
+
+        public void NotifyStructureQueueChanged() => Index.InvalidateStructureQueues();
+
+        public void NotifyUpgradeQueueChanged() => Index.InvalidateUpgradeQueues();
+
+        public void NotifyNativeCompletion() => Index.InvalidateCompletionEffects();
+
+        public void InvalidateLifecycle() => Index.BeginLifecycleEpoch();
+
+        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        {
+            remainingRoom = 128;
+            return true;
+        }
+
+        public bool TryGetBulkDevelopment(out int levels)
+        {
+            levels = 1;
             return true;
         }
 

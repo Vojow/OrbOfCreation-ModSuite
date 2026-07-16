@@ -178,6 +178,12 @@ internal sealed class AutoBuyEngine : IDisposable
         _nativeStateSignalPending = true;
     }
 
+    public void NotifyUpgradeQueueChanged()
+    {
+        _incrementalCatalog?.NotifyUpgradeQueueChanged();
+        _nativeStateSignalPending = true;
+    }
+
     public void NotifyNativeCompletion()
     {
         _incrementalCatalog?.NotifyNativeCompletion();

@@ -92,6 +92,8 @@ internal sealed class AutoBuyCandidateIndex
 
         if (!ReferenceEquals(GetNativeIdentity(entry.Candidate), GetNativeIdentity(candidate)))
         {
+            CompleteEpochValidation(entry);
+            CompleteSettlementValidation(entry);
             RemoveDependencies(entry);
             SetHotEligibility(entry, false);
             entry.Replace(candidate, _epoch + 1);
@@ -200,6 +202,11 @@ internal sealed class AutoBuyCandidateIndex
                 continue;
             }
 
+            if (entry.NeedsEpochValidation || entry.NeedsSettlementValidation)
+            {
+                continue;
+            }
+
             if (_active.Count >= limit)
             {
                 firstExcluded ??= entry.Candidate;
@@ -220,6 +227,11 @@ internal sealed class AutoBuyCandidateIndex
     public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded = false)
     {
         if (!TryGetEntry(candidate, out var entry))
+        {
+            return;
+        }
+
+        if (entry.NeedsEpochValidation || entry.NeedsSettlementValidation)
         {
             return;
         }
@@ -275,6 +287,26 @@ internal sealed class AutoBuyCandidateIndex
         {
             if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
                 entry.Definition.Kind == AutoBuyCandidateKind.Structure)
+            {
+                MarkSettlementPending(entry);
+                MarkDirty(
+                    entry,
+                    AutoBuyDirtyReason.AvailabilityDirty |
+                    AutoBuyDirtyReason.LevelDirty |
+                    AutoBuyDirtyReason.CostDirty |
+                    AutoBuyDirtyReason.ResourceDirty |
+                    AutoBuyDirtyReason.PriorityDirty |
+                    AutoBuyDirtyReason.CompletionDirty);
+            }
+        }
+    }
+
+    public void InvalidateUpgradeQueues()
+    {
+        foreach (var entry in _lifecycleEntries)
+        {
+            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
+                entry.Definition.Kind == AutoBuyCandidateKind.Upgrade)
             {
                 MarkSettlementPending(entry);
                 MarkDirty(
@@ -420,6 +452,8 @@ internal sealed class AutoBuyCandidateIndex
             entry.LifecycleQueued = false;
             if ((entry.DirtyReasons & AutoBuyDirtyReason.LifecycleDirty) == 0)
             {
+                CompleteEpochValidation(entry);
+                CompleteSettlementValidation(entry);
                 continue;
             }
 

@@ -11,6 +11,8 @@ internal static class AutoBuyLifecycleSignal
 
     public static event Action? StructureQueueChanged;
 
+    public static event Action? UpgradeQueueChanged;
+
     public static event Action? NativeCompletion;
 
     public static void Raise()
@@ -21,6 +23,11 @@ internal static class AutoBuyLifecycleSignal
     public static void RaiseStructureQueueChanged()
     {
         StructureQueueChanged?.Invoke();
+    }
+
+    public static void RaiseUpgradeQueueChanged()
+    {
+        UpgradeQueueChanged?.Invoke();
     }
 
     public static void RaiseNativeCompletion()
@@ -45,6 +52,25 @@ internal static class AutoBuyStructureQueuePatch
     private static void Postfix()
     {
         AutoBuyLifecycleSignal.RaiseStructureQueueChanged();
+    }
+}
+
+[HarmonyPatch]
+internal static class AutoBuyUpgradeQueuePatch
+{
+    private static MethodBase? TargetMethod()
+    {
+        return AccessTools.TypeByName("UpgradeSO")?.GetMethod(
+            "Purchase",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
+    }
+
+    private static void Postfix()
+    {
+        AutoBuyLifecycleSignal.RaiseUpgradeQueueChanged();
     }
 }
 

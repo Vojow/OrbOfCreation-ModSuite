@@ -21,6 +21,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
     private bool _structureQueuesDirty;
+    private bool _upgradeQueuesDirty;
     private bool _completionEffectsDirty;
 
     public ReflectionAutoBuyCatalog()
@@ -47,6 +48,12 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         {
             _structureQueuesDirty = false;
             _index.InvalidateStructureQueues();
+        }
+
+        if (_upgradeQueuesDirty)
+        {
+            _upgradeQueuesDirty = false;
+            _index.InvalidateUpgradeQueues();
         }
 
         StartRegistryReconciliationIfDue();
@@ -93,6 +100,11 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _structureQueuesDirty = true;
     }
 
+    public void NotifyUpgradeQueueChanged()
+    {
+        _upgradeQueuesDirty = true;
+    }
+
     public void NotifyNativeCompletion()
     {
         _completionEffectsDirty = true;
@@ -103,6 +115,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
         _structureQueuesDirty = false;
+        _upgradeQueuesDirty = false;
         _completionEffectsDirty = false;
         _nextRegistryReconciliation = TimeSpan.Zero;
         _index.InvalidateLifecycleIncrementally();
