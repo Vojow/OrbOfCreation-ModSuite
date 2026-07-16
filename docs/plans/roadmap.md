@@ -6,7 +6,7 @@
 
 ## Product direction
 
-The project will produce six focused gameplay BepInEx 5 plugins plus an optional in-game configuration UI:
+The project will produce seven focused gameplay BepInEx 5 plugins plus an optional in-game configuration UI:
 
 1. **Orb Chronomancer** — controls simulation speed while keeping input and UI usable.
 2. **Orb Automata** — automates repetitive progression decisions through configurable rules.
@@ -14,6 +14,7 @@ The project will produce six focused gameplay BepInEx 5 plugins plus an optional
 4. **Orb Toolbox** — provides explicit resource/debug operations and development safeguards.
 5. **Orb Achievement Resonance** — extends Achievement Strength through the game's native persistent-effect pipeline.
 6. **Orb Mentor** — shares a controlled portion of earned mastery experience with lower-level discovered spells, with artifacts and alchemy deferred to separately audited extensions.
+7. **Orb Chronicle** — records read-only run timing across major progression stages and optional audited discovery sub-splits.
 
 **Orb Mod Config** is optional shared UI infrastructure that exposes loaded BepInEx configuration inside the game without becoming a dependency of the gameplay plugins.
 
@@ -40,6 +41,7 @@ flowchart TD
     Bep --> Toolbox["Orb Toolbox"]
     Bep --> Resonance["Orb Achievement Resonance"]
     Bep --> Sharing["Orb Mentor"]
+    Bep --> Chronicle["Orb Chronicle"]
     Bep --> ModConfig["Orb Mod Config"]
     Game["Assembly-CSharp APIs"] --> Chrono
     Game --> Automata
@@ -47,6 +49,7 @@ flowchart TD
     Game --> Toolbox
     Game --> Resonance
     Game --> Sharing
+    Game --> Chronicle
     Game --> ModConfig
     Common["Orb Modding Common"] -. "extract only after duplication" .-> Chrono
     Common -. "extract only after duplication" .-> Automata
@@ -54,10 +57,12 @@ flowchart TD
     Common -. "extract only after duplication" .-> Toolbox
     Common -. "extract only after duplication" .-> Resonance
     Common -. "extract only after duplication" .-> Sharing
+    Common -. "extract only after duplication" .-> Chronicle
     ModConfig -. "optional config discovery" .-> Chrono
     ModConfig -. "optional config discovery" .-> Automata
     ModConfig -. "optional config discovery" .-> Resonance
     ModConfig -. "optional config discovery" .-> Sharing
+    ModConfig -. "optional config discovery" .-> Chronicle
 ```
 
 Do not create a shared library on day one. First prove both plugins independently. Extract only stable duplicated code such as keybind parsing, game-state detection, diagnostics, and status overlays.
@@ -147,6 +152,18 @@ Exit criterion: bonuses update immediately when achievements change, never dupli
 See [Orb Mentor plan](mentor.md) for the resolved spell MVP contract, verified native XP path, delivery stages, and verification requirements.
 
 Exit criterion: every discovered lower-mastery spell receives exactly the configured XP through native progression behavior, grants never recurse or directly modify spell-type XP, and saves remain stable across extended sessions and plugin removal.
+
+### Phase 4e — Orb Chronicle
+
+- Audit exact native completion predicates for Magic through Restoration.
+- Implement a monotonic, Chronomancer-independent clock and portable split engine.
+- Add bounded native event capture, lifecycle reconciliation, and a compact/expanded overlay.
+- Persist run data in a versioned sidecar without editing active game saves.
+- Add curated element and feature sub-splits only after their UUID/type/predicate contracts are verified.
+
+See [Orb Chronicle plan](chronicle.md) for clock semantics, milestone candidates, lifecycle architecture, delivery increments, and verification gates.
+
+Exit criterion: a fresh run records each major split exactly once at its audited native boundary, survives supported lifecycle transitions without mixing saves, and freezes when Restoration completes.
 
 ### Phase 5 — In-game mod configuration UI
 

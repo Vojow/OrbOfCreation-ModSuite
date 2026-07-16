@@ -11,6 +11,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI is in public beta. |
 | [Orb Chronomancer](chronomancer.md) | Experimental | Code exists but is not in the Automata release archive. |
+| [Orb Chronicle](chronicle.md) | Planned | Read-only run timer with major progression splits and optional audited sub-splits. |
 | [Orb Achievement Resonance](achievement-resonance.md) | Experimental | Native mutation remains disabled by default. |
 | [Orb Mentor](mentor.md) | Implemented / beta candidate | Spells-only implementation awaits interactive validation before release. |
 | [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) | Planned | Separately audited future vertical slices. |
