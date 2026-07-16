@@ -109,6 +109,8 @@ Exit criterion: Auto Buy runs for an extended session without overspending reser
 - Reuse the same rule engine and diagnostics.
 - Add enhanced tooltips explaining automation state.
 
+Auto Concept's Scholar mastery-balancing, dynamic acquired-slot, ownership, continuous-drain, and performance contracts are specified in the [Auto Concept plan](auto-concept.md).
+
 ### Phase 4a — Orb Insights
 
 - Extend native resource tooltips with exact values and UUIDs.

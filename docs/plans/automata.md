@@ -16,7 +16,7 @@ Automata now prioritizes the actions that players repeat most often:
 
 1. **Auto Buy** — attributes/structures first, then verified upgrades and other levelable purchases.
 2. **Auto Cast** — selected player spells, subject to readiness, targeting, cooldown, channel, and reserve rules.
-3. **Auto Concept** — maintain selected concept recipes and levels through the game's concept/alchemy pipeline.
+3. **Auto Concept** — balance Scholar Concept mastery across acquired slots without exhausting continuously drained resources.
 4. **Auto Harvest** — execute selected ready harvest actions without taking over planting or plot strategy in the first slice.
 5. **Original expansion modules** — crafting, scribing, ordinary alchemy, and finally optional auto-research.
 
@@ -117,9 +117,11 @@ Concepts reuse alchemy runtime types in this build:
 - Study/Learning concept definitions are `AlchemyRecipeSO` assets.
 - `ConceptRecipes` is an `AlchemyRecipeListVariable` and `ActiveConcepts` is an `AlchemyInstanceListVariable`.
 
-The module must filter the concept registries rather than treating all alchemy recipes as concepts. Its first slice maintains a user-selected concept and conservative level/drain target. Automatic discovery, loadout swapping, mastery optimization, and multi-concept balancing come later.
+The module must filter the concept registries rather than treating all alchemy recipes as concepts. It periodically ranks discovered concepts by confirmed mastery plus progress toward the next mastery level, fills the currently acquired compatible Active Concept slots with the lowest-progress concepts, and assigns as many instances as native mastery limits and conservative aggregate resource headroom allow. The training-assignment count follows live acquired slots rather than a fixed maximum.
 
-Exit: a selected unlocked concept is loaded or maintained through the native concept/alchemy API, with capacity and resource drains respected and no ordinary alchemy recipe touched.
+The detailed ownership, resource-rate, scheduling, lifecycle, and validation design is specified in [Auto Concept mastery-balancing plan](auto-concept.md). Automatic discovery, effect-value optimization, ordinary alchemy automation, and a global economic loadout optimizer remain outside the first supported slice.
+
+Exit: validated discovered concepts are balanced through the native concept runtime, manual quantities remain owned by the player, acquired compatible slots and native `masteryLevel + 1` instance limits are respected, aggregate continuous drains retain configured resource headroom, and no ordinary alchemy recipe is touched.
 
 ### A4 — Auto Harvest
 
@@ -164,7 +166,7 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.
-- Auto Concept supports one explicitly selected concept-maintenance policy.
+- Auto Concept balances validated discovered concepts across live compatible acquired slots while preserving manual quantities and conservative aggregate resource headroom.
 - Auto Harvest supports one explicitly selected non-destructive harvest policy.
 - Every module rejects unknown state, cost, or action contracts instead of guessing.
 - Automata never starts an action whose conservative admission calculation would cross configured reserves.
