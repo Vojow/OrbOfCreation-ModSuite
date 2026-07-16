@@ -12,6 +12,7 @@ namespace OrbModConfig;
 
 internal sealed class ModConfigUiShell : IDisposable
 {
+    private const float ExternalRefreshIntervalSeconds = 0.1f;
     internal const string ButtonObjectName = "OrbModConfig.ModsButton";
     internal const string PanelObjectName = "OrbModConfig.Panel";
 
@@ -28,6 +29,7 @@ internal sealed class ModConfigUiShell : IDisposable
     private bool _disposed;
     private bool _open;
     private object? _previousNativeView;
+    private float _externalRefreshSeconds;
 
     private ModConfigUiShell(
         ManualLogSource log,
@@ -229,6 +231,25 @@ internal sealed class ModConfigUiShell : IDisposable
         {
             _buttonObject.transform.SetSiblingIndex(parent.childCount - 1);
         }
+    }
+
+    public void Tick(float unscaledDeltaTime)
+    {
+        EnsureButtonIsLast();
+        if (_disposed || !_open)
+        {
+            _externalRefreshSeconds = 0f;
+            return;
+        }
+
+        _externalRefreshSeconds -= Math.Max(0f, unscaledDeltaTime);
+        if (_externalRefreshSeconds > 0f)
+        {
+            return;
+        }
+
+        _externalRefreshSeconds = ExternalRefreshIntervalSeconds;
+        _panel.RefreshExternalValues();
     }
 
     public void Close()

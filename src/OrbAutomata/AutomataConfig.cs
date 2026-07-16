@@ -28,6 +28,7 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoCastIntervalSeconds,
         ConfigEntry<float> autoCastStartResourcePercent,
         ConfigEntry<float> autoCastManualPauseSeconds,
+        ConfigEntry<bool> autoCastFullCharge,
         ConfigEntry<bool> emergencyDisable,
         ConfigEntry<float> cpuBudgetMilliseconds,
         ConfigEntry<bool> enableOperationalLogging,
@@ -58,6 +59,7 @@ internal sealed class AutomataConfig
         AutoCastIntervalSeconds = autoCastIntervalSeconds;
         AutoCastStartResourcePercent = autoCastStartResourcePercent;
         AutoCastManualPauseSeconds = autoCastManualPauseSeconds;
+        AutoCastFullCharge = autoCastFullCharge;
         EmergencyDisable = emergencyDisable;
         CpuBudgetMilliseconds = cpuBudgetMilliseconds;
         EnableOperationalLogging = enableOperationalLogging;
@@ -110,6 +112,8 @@ internal sealed class AutomataConfig
     public ConfigEntry<float> AutoCastStartResourcePercent { get; }
 
     public ConfigEntry<float> AutoCastManualPauseSeconds { get; }
+
+    public ConfigEntry<bool> AutoCastFullCharge { get; }
 
     public ConfigEntry<bool> EmergencyDisable { get; }
 
@@ -180,6 +184,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "EvaluationIntervalSeconds", 0.25f, "Unscaled seconds between Auto Cast evaluations.", 15, 10, new AcceptableValueRange<float>(0.1f, 10.0f)),
                 Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
+                Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
                 Bind(config, "Performance", "CpuBudgetMilliseconds", 4.0f, "Soft CPU budget for each scan or per-frame purchase slice. Higher values fill the queue faster but may reduce frame rate.", 30, 0),
                 Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal Auto Buy and Auto Cast decisions to the BepInEx log. Startup, warnings, and errors are always logged.", 50, 0),

@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.4.1` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.5.0` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
 
 ## Build
 
@@ -52,7 +52,9 @@ Automata is designed to be the only auto-buy plugin in the installation. Running
 
 ## Auto Cast
 
-Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. It skips empty and charged slots, treats an active aura as already satisfied, pauses while a channel is active, respects native readiness and targeting, and never turns persistent spells off.
+Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically.
+
+`FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Automata owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 

@@ -54,6 +54,25 @@ internal sealed class ConfigEditValue
         StagedSerialized = OriginalSerialized;
         Error = string.Empty;
     }
+
+    public bool RefreshExternalValue()
+    {
+        if (IsDirty)
+        {
+            return false;
+        }
+
+        var current = Setting.Source.GetSerializedValue();
+        if (string.Equals(current, OriginalSerialized, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        OriginalSerialized = current;
+        StagedSerialized = current;
+        Error = string.Empty;
+        return true;
+    }
 }
 
 internal sealed class ConfigEditSession
@@ -90,6 +109,17 @@ internal sealed class ConfigEditSession
         {
             value.Revert();
         }
+    }
+
+    public bool RefreshExternalValues()
+    {
+        var changed = false;
+        foreach (var value in _values.Values)
+        {
+            changed |= value.RefreshExternalValue();
+        }
+
+        return changed;
     }
 
     public bool Apply(out string error)
