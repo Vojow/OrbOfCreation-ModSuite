@@ -6,7 +6,7 @@
 - Repair Mod Config when its ScreenContent panel is destroyed even if the Mods button survives, restore a usable native view after failed open/close, and detach the old navigation listeners before reinstalling.
 - Throttle missing native-control discovery to avoid scanning the complete Unity object registry every frame before autoqueue unlock.
 - Cache Auto Buy's static candidate registry, cap its reflective CPU slice to 1 ms, and poll full queues at 10 Hz instead of every frame.
-- Preserve Mentor XP and capture-time recipients when XP arrives during a bounded relationship/reconciliation pass or before unrelated later progression refreshes, while retaining lifecycle and native-identity cancellation.
+- Preserve Mentor XP and capture-time recipients when XP arrives during a bounded relationship/reconciliation pass or before unrelated later progression refreshes; use constant-time indexed source exclusion and retain unorderable captures without guessing their route until lifecycle/native-identity cancellation.
 - Cache Mentor catalogs and native object lookups, stop repeated inactive-state cleanup, and lower its default grant and CPU budgets.
 - Schedule Auto Buy and Auto Cast through the shared suite frame budget, with at most one native automation mutation per frame and resumable multi-level purchase groups.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.

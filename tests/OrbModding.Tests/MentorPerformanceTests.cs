@@ -276,7 +276,9 @@ public sealed class MentorPerformanceTests
             Assert.True(pending.Captures.TryTake(out var captured));
             Assert.Equal(MentorQualificationStatus.Qualified, MentorRelationshipQualification.Evaluate(
                 captured.Key, relationshipEpoch, highestMastery: 5, recipientCount: 2));
-            pending.Sources.Capture(captured.Key.Relationship!, captured.Key.Uuid, captured.Amount, captured.EventCount);
+            pending.Sources.Capture(
+                captured.Key.Relationship!.ForCapture(captured.Key),
+                captured.Key.Uuid, captured.Amount, captured.EventCount);
         }
 
         Assert.True(pending.HasGrantBarrier);
@@ -297,7 +299,9 @@ public sealed class MentorPerformanceTests
         {
             Assert.Equal(MentorQualificationStatus.Qualified, MentorRelationshipQualification.Evaluate(
                 captured.Key, epoch, highestMastery: 6, recipientCount: 0));
-            pending.Sources.Capture(captured.Key.Relationship!, captured.Key.Uuid, captured.Amount, captured.EventCount);
+            pending.Sources.Capture(
+                captured.Key.Relationship!.ForCapture(captured.Key),
+                captured.Key.Uuid, captured.Amount, captured.EventCount);
         }
         var batch = pending.Sources.Drain();
         Assert.Equal(2, batch.Amount.Mantissa, 12);
@@ -386,6 +390,115 @@ public sealed class MentorPerformanceTests
         Assert.Equal(1, amount.Exponent);
         Assert.True(pending.Engine.Complete(uuid));
         Assert.False(pending.Engine.TryPeek(out _, out _));
+    }
+
+    [Fact]
+    public void CrossingSourceDerivationIsConstantTimeAndRecipientPlanningRemainsBounded()
+    {
+        const int lowerRecipientCount = 4096;
+        var source = new MentorRecipe("crossing-source", 5, true);
+        var oldMentor = new MentorRecipe("old-mentor", 10, true);
+        var discovered = new List<MentorRecipe>(lowerRecipientCount + 2) { oldMentor, source };
+        for (var index = 0; index < lowerRecipientCount; index++)
+            discovered.Add(new MentorRecipe($"lower-{index:D4}", 1, true));
+        var oldRecipients = discovered.Where(recipe => recipe.MasteryLevel < 10).ToArray();
+        var relationship = new MentorRelationshipSnapshot(12, 10, discovered, oldRecipients);
+        var captured = new MentorCaptureKey(
+            new object(), source.Uuid, 11, true, 13, relationship);
+
+        Assert.Equal(MentorQualificationStatus.Qualified,
+            MentorRelationshipQualification.Evaluate(captured, 99, 99, 0));
+        var derived = relationship.ForCapture(captured);
+        Assert.InRange(derived.DerivationSteps, 0, 1);
+        Assert.Equal(discovered.Count - 1, derived.Recipients.Count);
+        Assert.DoesNotContain(derived.Recipients, recipe => recipe.Uuid == source.Uuid);
+        Assert.Contains(derived.Recipients, recipe => recipe.Uuid == oldMentor.Uuid);
+
+        var engine = new MentorEngine();
+        var plan = Assert.IsType<MentorPlan>(engine.CreatePlan(
+            new MentorAmount(1, 2), 10, MentorEconomyMode.SharedPool, derived.Recipients));
+        var total = default(MentorAmount);
+        var processed = 0;
+        for (; processed < 16; processed++)
+        {
+            Assert.True(plan.TryTake(out var grant));
+            total = total.Add(grant.Amount);
+        }
+        Assert.Equal(derived.Recipients.Count - 16, plan.RemainingCount);
+        while (plan.TryTake(out var grant))
+        {
+            total = total.Add(grant.Amount);
+            processed++;
+        }
+        Assert.Equal(derived.Recipients.Count, processed);
+        Assert.Equal(10, total.Mantissa, 10);
+        Assert.Equal(0, total.Exponent);
+    }
+
+    [Fact]
+    public void RefreshObservationEvidencePrecedesInterleavedCaptureAndCommit()
+    {
+        var crossing = new MentorRecipe("crossing", 4, true);
+        var oldMentor = new MentorRecipe("old-mentor", 5, true);
+        var lower = new MentorRecipe("lower", 1, true);
+        var basis = new MentorRelationshipSnapshot(
+            20, 5, new[] { crossing, oldMentor, lower }, new[] { crossing, lower });
+
+        // ProcessRefreshStep observes the native 4 -> 6 delta and appends this
+        // immutable node before mutating the cached NativeEntry.
+        var beforeReadRequirement = new MentorRelationshipRequirement(requestGeneration: 11);
+        MentorRelationshipRequirement? currentRequirement = beforeReadRequirement;
+        MentorRefreshCaptureOrdering.ObserveDelta(ref currentRequirement, requestGeneration: 11);
+        Assert.Null(currentRequirement);
+        var observedEvidence = MentorRelationshipEvidence.FromSnapshot(basis)
+            .WithChange(crossing.Uuid, 6, discovered: true, epoch: 20);
+        var requirement = new MentorRelationshipRequirement(requestGeneration: 11);
+        var captured = new MentorCaptureKey(
+            new object(), crossing.Uuid, 6, true, 20,
+            relationship: null, evidence: null, requirement: requirement);
+        var committed = ResolveEvidence(observedEvidence);
+        MentorRefreshCaptureOrdering.Commit(beforeReadRequirement, 11, committed);
+        MentorRefreshCaptureOrdering.Commit(requirement, 11, committed);
+        Assert.Null(beforeReadRequirement.Resolved);
+        Assert.Same(committed, requirement.Resolved);
+
+        var resolvedCapture = new MentorCaptureKey(
+            captured.Source, captured.Uuid, captured.MasteryLevel, captured.Discovered,
+            captured.ProgressionEpoch, committed);
+        Assert.Equal(MentorQualificationStatus.Qualified,
+            MentorRelationshipQualification.Evaluate(resolvedCapture, 21, 6, 2));
+        var recipients = committed.ForCapture(resolvedCapture).Recipients;
+        Assert.Equal(new[] { "lower", "old-mentor" }, recipients.Select(recipe => recipe.Uuid));
+        Assert.DoesNotContain(recipients, recipe => recipe.Uuid == crossing.Uuid);
+    }
+
+    [Fact]
+    public void UncertainRequirementRetainsXpUntilLifecycleCancellationWithoutRouting()
+    {
+        var requirement = new MentorRelationshipRequirement(requestGeneration: 7);
+        var captured = new MentorCapturedEvent(
+            new MentorCaptureKey(
+                new object(), "source", 5, true, 3,
+                relationship: null, evidence: null, requirement: requirement),
+            new MentorAmount(4, 2));
+        var pending = new MentorPendingWork();
+
+        requirement.MarkUncertain();
+        requirement.Resolve(new MentorRelationshipSnapshot(
+            4, 5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) }));
+        Assert.Null(requirement.Resolved);
+        Assert.True(pending.Unroutable.Retain(captured));
+        Assert.Equal(1, pending.Unroutable.EventCount);
+        Assert.Equal(4, pending.Unroutable.TotalAmount.Mantissa, 12);
+        Assert.Equal(2, pending.Unroutable.TotalAmount.Exponent);
+        Assert.Equal(0, pending.Engine.PendingCount);
+
+        pending.CancelPending();
+        Assert.Equal(0, pending.Unroutable.EventCount);
+        Assert.False(pending.Unroutable.TotalAmount.IsValidPositive);
+        Assert.Equal(0, pending.Engine.PendingCount);
     }
 
     [Fact]
