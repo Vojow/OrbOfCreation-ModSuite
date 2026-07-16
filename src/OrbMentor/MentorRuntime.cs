@@ -56,7 +56,8 @@ internal sealed class MentorRuntime
         public MethodInfo? ArtifactContainerMethod;
         public List<MentorRecipe> Recipients = new();
         public MentorRelationshipSnapshot? Relationship;
-        public MentorRelationshipEvidence? Evidence;
+        public readonly MentorRelationshipEvidenceBuffer EvidenceBuffer = new();
+        public MentorRelationshipEvidence? Evidence => EvidenceBuffer.Head;
         public MentorRelationshipRequirement? Requirement;
         public long NextLiveRefresh;
         public long NextReconcile;
@@ -322,7 +323,7 @@ internal sealed class MentorRuntime
                     mastery,
                     discovered,
                     epochAlreadyAdvanced: catalog.ProgressionEpoch != catalog.RelationshipEpoch);
-                if (sourceChanged) AppendRelationshipEvidence(catalog, uuid, mastery, discovered);
+                if (sourceChanged) AppendRelationshipEvidence(domain, catalog, uuid, mastery, discovered);
             }
             var relationship = !catalog.RelationshipDirty && !catalog.NeedsReconcile &&
                 catalog.Reconcile is null && catalog.Refresh is null
@@ -384,7 +385,7 @@ internal sealed class MentorRuntime
             var mastery = Convert.ToInt32(catalog.MasteryField.GetValue(changedSource) ?? 0);
             var discovered = Convert.ToBoolean(catalog.AvailabilityMethod.Invoke(changedSource, null) ?? false);
             if (entry is null || entry.MasteryLevel != mastery || entry.IsDiscovered != discovered)
-                AppendRelationshipEvidence(catalog, uuid, mastery, discovered);
+                AppendRelationshipEvidence(domain, catalog, uuid, mastery, discovered);
             if (entry is not null)
             {
                 entry.MasteryLevel = mastery;
@@ -467,20 +468,25 @@ internal sealed class MentorRuntime
             state.RelationshipResolution.Dispose();
             state.RelationshipResolution = null;
             state.ResolvingCapture = null;
-            QualifyCaptured(state, catalog, resolvedCapture, relationship);
+            try { QualifyCaptured(state, catalog, resolvedCapture, relationship); }
+            finally { ReleaseEvidenceCapture(catalog, resolvedCapture); }
             return true;
         }
         if (state.Captures.TryTake(out var captured))
         {
             if (!TryValidateCapturedSource(catalog, captured))
             {
+                ReleaseEvidenceCapture(catalog, captured);
                 Diagnostics.RecordDrop(MentorDropReason.SourceIdentityChanged, captured.EventCount, grant: false);
                 return true;
             }
             if (captured.Key.Relationship is not null)
                 QualifyCaptured(state, catalog, captured, captured.Key.Relationship);
             else if (captured.Key.Evidence?.Resolved is not null)
-                QualifyCaptured(state, catalog, captured, captured.Key.Evidence.Resolved);
+            {
+                try { QualifyCaptured(state, catalog, captured, captured.Key.Evidence.Resolved); }
+                finally { ReleaseEvidenceCapture(catalog, captured); }
+            }
             else if (captured.Key.Evidence is not null)
             {
                 state.ResolvingCapture = captured;
@@ -542,6 +548,15 @@ internal sealed class MentorRuntime
         var capturedRelationship = relationship.ForCapture(resolvedKey);
         state.Sources.Capture(capturedRelationship, captured.Key.Uuid, captured.Amount, captured.EventCount);
         Diagnostics.RecordQualified(captured.EventCount);
+    }
+
+    private static void ReleaseEvidenceCapture(DomainCatalog catalog, MentorCapturedEvent captured)
+    {
+        captured.ReleaseEvidence();
+        if (catalog.EvidenceBuffer.CaptureReferences != 0 || catalog.Relationship is null ||
+            catalog.RelationshipDirty || catalog.NeedsReconcile ||
+            catalog.Refresh is not null || catalog.Reconcile is not null) return;
+        catalog.EvidenceBuffer.Rebase(catalog.Relationship);
     }
 
     private void BeginPlan(MentorDomain domain, double percent, bool continuous)
@@ -676,19 +691,51 @@ internal sealed class MentorRuntime
         catalog.RelationshipDirty = true;
     }
 
-    private static void AppendRelationshipEvidence(
+    private void AppendRelationshipEvidence(
+        MentorDomain domain,
         DomainCatalog catalog,
         string uuid,
         int mastery,
         bool discovered)
     {
-        if (catalog.Evidence is null)
+        if (catalog.EvidenceBuffer.Head is null)
         {
             if (catalog.Relationship is null) return;
-            catalog.Evidence = MentorRelationshipEvidence.FromSnapshot(catalog.Relationship);
+            catalog.EvidenceBuffer.Rebase(catalog.Relationship);
         }
-        catalog.Evidence = catalog.Evidence.WithChange(
+        var result = catalog.EvidenceBuffer.Append(
             uuid, mastery, discovered, catalog.ProgressionEpoch);
+        if (result != MentorEvidenceAppendResult.Overflow) return;
+
+        var state = _domains[domain];
+        var overflowEvents = state.Captures.TransferEvidence(catalog.EvidenceBuffer, state.Unroutable);
+        if (state.ResolvingCapture?.Key.Evidence is not null &&
+            state.ResolvingCapture.Key.Evidence.BelongsTo(catalog.EvidenceBuffer))
+        {
+            var resolving = state.ResolvingCapture;
+            state.RelationshipResolution?.Dispose();
+            state.RelationshipResolution = null;
+            state.ResolvingCapture = null;
+            if (resolving.Key.Evidence.Resolved is not null)
+            {
+                if (!state.Captures.RequeueResolved(resolving, resolving.Key.Evidence.Resolved))
+                    overflowEvents += resolving.EventCount;
+            }
+            else if (!state.Unroutable.Retain(resolving)) overflowEvents += resolving.EventCount;
+            resolving.ReleaseEvidence();
+        }
+        if (overflowEvents > 0)
+            Diagnostics.RecordDrop(MentorDropReason.CaptureOverflow, overflowEvents, grant: false);
+
+        // Every immutable head backed by this buffer is now either resolved or
+        // retained without routing. Drop the unsafe history and let the active
+        // bounded pass finish; the new request forces an immediate authoritative
+        // follow-up before a fresh evidence basis is published.
+        catalog.EvidenceBuffer.Invalidate();
+        catalog.Requirement?.MarkUncertain();
+        catalog.Requirement = null;
+        catalog.RelationshipRequests.Request();
+        catalog.RelationshipDirty = true;
     }
 
     private static MentorRelationshipRequirement GetRelationshipRequirement(
@@ -788,7 +835,7 @@ internal sealed class MentorRuntime
         catalog.MentorIds.Clear();
         catalog.Recipients = new List<MentorRecipe>();
         catalog.Relationship = null;
-        catalog.Evidence = null;
+        catalog.EvidenceBuffer.Invalidate();
         catalog.Requirement = null;
         catalog.HighestMastery = int.MinValue;
         catalog.NextLiveRefresh = 0;
@@ -1031,8 +1078,7 @@ internal sealed class MentorRuntime
         try
         {
             var work = catalog.Refresh;
-            if (work is null || work.ProgressionEpoch != catalog.ProgressionEpoch ||
-                !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration))
+            if (MentorRefreshPassContinuity.ShouldStartNewPass(work is not null))
             {
                 var requestGeneration = catalog.RelationshipRequests.Current;
                 var wasDirty = catalog.RelationshipDirty;
@@ -1040,6 +1086,7 @@ internal sealed class MentorRuntime
                 catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, requestGeneration, wasDirty, catalog.Entries.Count);
                 return true;
             }
+            work = catalog.Refresh!;
             if (!work.ReadComplete)
             {
                 if (work.ReadIndex < catalog.Entries.Count)
@@ -1062,7 +1109,7 @@ internal sealed class MentorRuntime
                         // after this exact observation receive a fresh token.
                         MentorRefreshCaptureOrdering.ObserveDelta(
                             ref catalog.Requirement, work.RequestGeneration);
-                        AppendRelationshipEvidence(catalog, entry.Uuid, mastery, discovered);
+                        AppendRelationshipEvidence(domain, catalog, entry.Uuid, mastery, discovered);
                     }
                     work.Changed |= changed;
                     entry.MasteryLevel = mastery;
@@ -1107,10 +1154,13 @@ internal sealed class MentorRuntime
                 work.DiscoveredIndices, work.RecipientIndices);
             MentorRefreshCaptureOrdering.Commit(
                 catalog.Requirement, work.RequestGeneration, catalog.Relationship);
-            catalog.Evidence = MentorRelationshipEvidence.FromSnapshot(catalog.Relationship);
+            var passIsCurrent = !MentorRefreshPassContinuity.RequiresFollowUp(
+                catalog.RelationshipRequests, work.RequestGeneration);
+            if (passIsCurrent && catalog.EvidenceBuffer.CaptureReferences == 0)
+                catalog.EvidenceBuffer.Rebase(catalog.Relationship);
             catalog.Refresh = null;
-            catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
-            catalog.RelationshipEpoch = catalog.ProgressionEpoch;
+            catalog.RelationshipDirty = !passIsCurrent;
+            catalog.RelationshipEpoch = work.ProgressionEpoch;
             catalog.NextLiveRefresh = catalog.RelationshipDirty ? now : now + LiveRefreshTicks;
             return true;
         }

@@ -193,6 +193,8 @@ internal sealed class MentorRelationshipSnapshot
 
 internal sealed class MentorRelationshipEvidence
 {
+    private readonly MentorRelationshipEvidenceBuffer? _buffer;
+    private int _captureReferences;
     private MentorRelationshipSnapshot? _resolved;
     private MentorRelationshipEvidence(
         MentorRelationshipSnapshot basis,
@@ -200,7 +202,8 @@ internal sealed class MentorRelationshipEvidence
         string? changedUuid,
         int changedMastery,
         bool changedDiscovered,
-        long epoch)
+        long epoch,
+        MentorRelationshipEvidenceBuffer? buffer = null)
     {
         Basis = basis;
         Parent = parent;
@@ -208,6 +211,7 @@ internal sealed class MentorRelationshipEvidence
         ChangedMastery = changedMastery;
         ChangedDiscovered = changedDiscovered;
         Epoch = epoch;
+        _buffer = buffer;
     }
 
     public MentorRelationshipSnapshot Basis { get; }
@@ -217,15 +221,94 @@ internal sealed class MentorRelationshipEvidence
     public bool ChangedDiscovered { get; }
     public long Epoch { get; }
     public MentorRelationshipSnapshot? Resolved => _resolved;
+    internal int CaptureReferences => _captureReferences;
 
     public static MentorRelationshipEvidence FromSnapshot(MentorRelationshipSnapshot snapshot) =>
         new(snapshot, null, null, 0, false, snapshot.Epoch);
 
     public MentorRelationshipEvidence WithChange(string uuid, int mastery, bool discovered, long epoch) =>
-        new(Basis, this, uuid, mastery, discovered, epoch);
+        new(Basis, this, uuid, mastery, discovered, epoch, _buffer);
+
+    internal static MentorRelationshipEvidence CreateBasis(
+        MentorRelationshipSnapshot snapshot,
+        MentorRelationshipEvidenceBuffer buffer) =>
+        new(snapshot, null, null, 0, false, snapshot.Epoch, buffer);
+
+    internal MentorRelationshipEvidence Append(string uuid, int mastery, bool discovered, long epoch) =>
+        new(Basis, this, uuid, mastery, discovered, epoch, _buffer);
+
+    internal MentorRelationshipEvidence ReplaceLatest(string uuid, int mastery, bool discovered, long epoch) =>
+        new(Basis, Parent, uuid, mastery, discovered, epoch, _buffer);
+
+    internal bool BelongsTo(MentorRelationshipEvidenceBuffer buffer) => ReferenceEquals(_buffer, buffer);
+    internal void RetainCapture()
+    {
+        _captureReferences++;
+        _buffer?.RetainCapture();
+    }
+
+    internal void ReleaseCapture()
+    {
+        if (_captureReferences <= 0) return;
+        _captureReferences--;
+        _buffer?.ReleaseCapture();
+    }
 
     public MentorRelationshipSnapshot Publish(MentorRelationshipSnapshot snapshot) =>
         _resolved ??= snapshot;
+}
+
+internal enum MentorEvidenceAppendResult { Added, Coalesced, Overflow, MissingBasis }
+
+internal sealed class MentorRelationshipEvidenceBuffer
+{
+    public const int DefaultCapacity = 64;
+    private readonly int _capacity;
+    private int _captureReferences;
+
+    public MentorRelationshipEvidenceBuffer(int capacity = DefaultCapacity) =>
+        _capacity = Math.Max(2, capacity);
+
+    public MentorRelationshipEvidence? Head { get; private set; }
+    public int VersionCount { get; private set; }
+    public int Capacity => _capacity;
+    public int CaptureReferences => _captureReferences;
+
+    public void Rebase(MentorRelationshipSnapshot snapshot)
+    {
+        if (_captureReferences != 0)
+            throw new InvalidOperationException("Cannot replace evidence while captures retain immutable heads.");
+        Head = MentorRelationshipEvidence.CreateBasis(snapshot, this);
+        VersionCount = 1;
+    }
+
+    public void Invalidate()
+    {
+        if (_captureReferences != 0)
+            throw new InvalidOperationException("Cannot invalidate evidence while captures retain immutable heads.");
+        Head = null;
+        VersionCount = 0;
+    }
+
+    public MentorEvidenceAppendResult Append(string uuid, int mastery, bool discovered, long epoch)
+    {
+        if (Head is null) return MentorEvidenceAppendResult.MissingBasis;
+        if (string.Equals(Head.ChangedUuid, uuid, StringComparison.Ordinal) && Head.CaptureReferences == 0)
+        {
+            Head = Head.ReplaceLatest(uuid, mastery, discovered, epoch);
+            return MentorEvidenceAppendResult.Coalesced;
+        }
+        if (VersionCount >= _capacity) return MentorEvidenceAppendResult.Overflow;
+        Head = Head.Append(uuid, mastery, discovered, epoch);
+        VersionCount++;
+        return MentorEvidenceAppendResult.Added;
+    }
+
+    internal void RetainCapture() => _captureReferences++;
+    internal void ReleaseCapture()
+    {
+        if (_captureReferences > 0) _captureReferences--;
+    }
 }
 
 internal sealed class MentorRelationshipRequirement
@@ -491,6 +574,34 @@ internal sealed class MentorCapturedEvent
     public MentorCaptureKey Key { get; }
     public MentorAmount Amount { get; set; }
     public int EventCount { get; set; }
+
+    public MentorCapturedEvent WithoutRouting()
+    {
+        var result = new MentorCapturedEvent(
+            new MentorCaptureKey(
+                Key.Source, Key.Uuid, Key.MasteryLevel, Key.Discovered, Key.ProgressionEpoch),
+            Amount)
+        {
+            EventCount = EventCount,
+        };
+        return result;
+    }
+
+    public MentorCapturedEvent WithRelationship(MentorRelationshipSnapshot relationship)
+    {
+        var result = new MentorCapturedEvent(
+            new MentorCaptureKey(
+                Key.Source, Key.Uuid, Key.MasteryLevel, Key.Discovered,
+                Key.ProgressionEpoch, relationship),
+            Amount)
+        {
+            EventCount = EventCount,
+        };
+        return result;
+    }
+
+    public void RetainEvidence() => Key.Evidence?.RetainCapture();
+    public void ReleaseEvidence() => Key.Evidence?.ReleaseCapture();
 }
 
 internal enum MentorCaptureResult { Added, Coalesced, Overflow, Invalid }
@@ -522,7 +633,9 @@ internal sealed class MentorCaptureQueue
             return MentorCaptureResult.Coalesced;
         }
         if (_pending.Count >= _capacity) return MentorCaptureResult.Overflow;
-        _pending.Add(key, new MentorCapturedEvent(key, amount));
+        var captured = new MentorCapturedEvent(key, amount);
+        captured.RetainEvidence();
+        _pending.Add(key, captured);
         _order.Enqueue(key);
         EventCount++;
         return MentorCaptureResult.Added;
@@ -541,7 +654,56 @@ internal sealed class MentorCaptureQueue
         return false;
     }
 
-    public void Cancel() { _pending.Clear(); _order.Clear(); EventCount = 0; }
+    public int TransferEvidence(MentorRelationshipEvidenceBuffer buffer, MentorUnroutableLedger destination)
+    {
+        var overflowEvents = 0;
+        var queued = _order.Count;
+        for (var index = 0; index < queued; index++)
+        {
+            var key = _order.Dequeue();
+            if (!_pending.TryGetValue(key, out var captured)) continue;
+            if (captured.Key.Evidence is null || !captured.Key.Evidence.BelongsTo(buffer))
+            {
+                _order.Enqueue(key);
+                continue;
+            }
+            _pending.Remove(key);
+            EventCount -= captured.EventCount;
+            if (captured.Key.Evidence.Resolved is not null)
+            {
+                if (!RequeueResolved(captured, captured.Key.Evidence.Resolved))
+                    overflowEvents += captured.EventCount;
+            }
+            else if (!destination.Retain(captured)) overflowEvents += captured.EventCount;
+            captured.ReleaseEvidence();
+        }
+        return overflowEvents;
+    }
+
+    public bool RequeueResolved(MentorCapturedEvent captured, MentorRelationshipSnapshot relationship)
+    {
+        var rebound = captured.WithRelationship(relationship);
+        if (_pending.TryGetValue(rebound.Key, out var current))
+        {
+            current.Amount = current.Amount.Add(rebound.Amount);
+            current.EventCount += rebound.EventCount;
+            EventCount += rebound.EventCount;
+            return true;
+        }
+        if (_pending.Count >= _capacity) return false;
+        _pending.Add(rebound.Key, rebound);
+        _order.Enqueue(rebound.Key);
+        EventCount += rebound.EventCount;
+        return true;
+    }
+
+    public void Cancel()
+    {
+        foreach (var captured in _pending.Values) captured.ReleaseEvidence();
+        _pending.Clear();
+        _order.Clear();
+        EventCount = 0;
+    }
 }
 
 internal sealed class MentorUnroutableLedger
@@ -561,6 +723,7 @@ internal sealed class MentorUnroutableLedger
 
     public bool Retain(MentorCapturedEvent captured)
     {
+        captured = captured.WithoutRouting();
         if (_pending.TryGetValue(captured.Key, out var current))
         {
             current.Amount = current.Amount.Add(captured.Amount);
@@ -603,6 +766,7 @@ internal class MentorPendingWork
         Sources.Cancel();
         Unroutable.Cancel();
         ActivePlan = null;
+        ResolvingCapture?.ReleaseEvidence();
         RelationshipResolution?.Dispose();
         RelationshipResolution = null;
         ResolvingCapture = null;
@@ -626,6 +790,13 @@ internal sealed class MentorWorkGeneration
     public long Current => _requested;
     public long Request() => ++_requested;
     public bool IsCurrent(long consumed) => consumed == _requested;
+}
+
+internal static class MentorRefreshPassContinuity
+{
+    public static bool ShouldStartNewPass(bool hasActivePass) => !hasActivePass;
+    public static bool RequiresFollowUp(MentorWorkGeneration requests, long passGeneration) =>
+        !requests.IsCurrent(passGeneration);
 }
 
 internal sealed class MentorIncrementalOrder<T> : IDisposable

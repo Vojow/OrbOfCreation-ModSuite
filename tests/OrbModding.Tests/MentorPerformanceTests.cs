@@ -502,6 +502,209 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    public void EvidenceBufferCoalescesOnlyUnpinnedLatestUuidAndPreservesCapturedHead()
+    {
+        var basis = new MentorRelationshipSnapshot(
+            1, 5,
+            new[] { new MentorRecipe("mentor", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        var buffer = new MentorRelationshipEvidenceBuffer(capacity: 4);
+        var pending = new MentorPendingWork();
+        buffer.Rebase(basis);
+
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("changed", 6, true, 2));
+        Assert.Equal(MentorEvidenceAppendResult.Coalesced, buffer.Append("changed", 7, true, 3));
+        Assert.Equal(2, buffer.VersionCount);
+        var capturedHead = buffer.Head!;
+        Assert.Equal(MentorCaptureResult.Added, pending.Captures.Capture(
+            new MentorCaptureKey(new object(), "mentor", 5, true, 3, evidence: capturedHead),
+            new MentorAmount(1, 0)));
+
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("changed", 8, true, 4));
+        Assert.Equal(3, buffer.VersionCount);
+        Assert.NotSame(capturedHead, buffer.Head);
+        Assert.Equal(7, ResolveEvidence(capturedHead).HighestMastery);
+        Assert.Equal(8, ResolveEvidence(buffer.Head!).HighestMastery);
+
+        pending.Captures.Cancel();
+        Assert.Equal(0, buffer.CaptureReferences);
+    }
+
+    [Fact]
+    public void SustainedInvalidationKeepsEvidenceBoundedAndTransfersExactXpPerDomain()
+    {
+        const int evidenceCapacity = 8;
+        const int invalidations = 4096;
+        var basis = new MentorRelationshipSnapshot(
+            1, 5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        var spellBuffer = new MentorRelationshipEvidenceBuffer(evidenceCapacity);
+        var artifactBuffer = new MentorRelationshipEvidenceBuffer(evidenceCapacity);
+        var spellPending = new MentorPendingWork();
+        var artifactPending = new MentorPendingWork();
+        var spellSource = new object();
+        spellBuffer.Rebase(basis);
+        artifactBuffer.Rebase(basis);
+        Assert.Equal(MentorEvidenceAppendResult.Added, artifactBuffer.Append("artifact-change", 6, true, 2));
+        Assert.Equal(MentorCaptureResult.Added, artifactPending.Captures.Capture(
+            new MentorCaptureKey(new object(), "source", 5, true, 2, evidence: artifactBuffer.Head),
+            new MentorAmount(2, 0)));
+
+        var controlledRebases = 0;
+        var overflowEvents = 0;
+        for (var index = 0; index < invalidations; index++)
+        {
+            var result = spellBuffer.Append($"change-{index % 17:D2}", index + 6, true, index + 2);
+            if (result == MentorEvidenceAppendResult.Overflow)
+            {
+                overflowEvents += spellPending.Captures.TransferEvidence(spellBuffer, spellPending.Unroutable);
+                Assert.Equal(0, spellBuffer.CaptureReferences);
+                spellBuffer.Invalidate();
+                // Models the controlled authoritative commit that publishes a
+                // fresh basis after the active bounded pass finishes.
+                spellBuffer.Rebase(basis);
+                controlledRebases++;
+                result = spellBuffer.Append($"change-{index % 17:D2}", index + 6, true, index + 2);
+            }
+            Assert.Equal(MentorEvidenceAppendResult.Added, result);
+            Assert.InRange(spellBuffer.VersionCount, 2, evidenceCapacity);
+            Assert.Equal(MentorCaptureResult.Added, spellPending.Captures.Capture(
+                new MentorCaptureKey(spellSource, "source", 5, true, 1, evidence: spellBuffer.Head),
+                new MentorAmount(1, 0)));
+
+            Assert.Equal(2, artifactBuffer.VersionCount);
+            Assert.Equal(1, artifactBuffer.CaptureReferences);
+            Assert.Equal(0, artifactPending.Unroutable.EventCount);
+        }
+
+        overflowEvents += spellPending.Captures.TransferEvidence(spellBuffer, spellPending.Unroutable);
+        Assert.True(controlledRebases > 100);
+        Assert.Equal(0, overflowEvents);
+        Assert.Equal(0, spellBuffer.CaptureReferences);
+        Assert.Equal(invalidations, spellPending.Unroutable.EventCount);
+        Assert.Equal(4.096, spellPending.Unroutable.TotalAmount.Mantissa, 12);
+        Assert.Equal(3, spellPending.Unroutable.TotalAmount.Exponent);
+        Assert.Equal(1, artifactPending.Captures.EventCount);
+        Assert.Equal(0, artifactPending.Unroutable.EventCount);
+
+        spellBuffer.Invalidate();
+        artifactPending.CancelPending();
+        Assert.Equal(0, artifactBuffer.CaptureReferences);
+    }
+
+    [Fact]
+    public void SustainedRequestsDoNotRestartAnActiveRefreshPass()
+    {
+        const int passSteps = 31;
+        const int invalidations = 4096;
+        var requests = new MentorWorkGeneration();
+        var passGeneration = requests.Current;
+        var progress = 0;
+        var commits = 0;
+        var hasActivePass = true;
+
+        for (var index = 0; index < invalidations; index++)
+        {
+            requests.Request();
+            Assert.False(MentorRefreshPassContinuity.ShouldStartNewPass(hasActivePass));
+            progress++;
+            if (progress != passSteps) continue;
+
+            commits++;
+            Assert.True(MentorRefreshPassContinuity.RequiresFollowUp(requests, passGeneration));
+            hasActivePass = false;
+            Assert.True(MentorRefreshPassContinuity.ShouldStartNewPass(hasActivePass));
+            passGeneration = requests.Current;
+            progress = 0;
+            hasActivePass = true;
+        }
+
+        Assert.True(commits > 100);
+        // Finish the superseded pass, then an immediate quiet follow-up. The
+        // latter is authoritative and needs no third pass.
+        while (progress++ < passSteps - 1) { }
+        Assert.True(MentorRefreshPassContinuity.RequiresFollowUp(requests, passGeneration));
+        hasActivePass = false;
+        Assert.True(MentorRefreshPassContinuity.ShouldStartNewPass(hasActivePass));
+        passGeneration = requests.Current;
+        hasActivePass = true;
+        for (var step = 0; step < passSteps; step++)
+            Assert.False(MentorRefreshPassContinuity.ShouldStartNewPass(hasActivePass));
+        Assert.False(MentorRefreshPassContinuity.RequiresFollowUp(requests, passGeneration));
+    }
+
+    [Fact]
+    public void EvidenceTransferReportsOnlyXpBeyondTheBoundedUnroutableLedger()
+    {
+        var basis = new MentorRelationshipSnapshot(
+            1, 5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        var buffer = new MentorRelationshipEvidenceBuffer(capacity: 3);
+        var captures = new MentorCaptureQueue(capacity: 2);
+        var ledger = new MentorUnroutableLedger(capacity: 1);
+        var diagnostics = new MentorDiagnostics();
+        buffer.Rebase(basis);
+
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("first", 6, true, 2));
+        Assert.Equal(MentorCaptureResult.Added, captures.Capture(
+            new MentorCaptureKey(new object(), "source-a", 5, true, 2, evidence: buffer.Head),
+            new MentorAmount(2, 1)));
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("second", 7, true, 3));
+        Assert.Equal(MentorCaptureResult.Added, captures.Capture(
+            new MentorCaptureKey(new object(), "source-b", 5, true, 3, evidence: buffer.Head),
+            new MentorAmount(3, 1)));
+
+        var overflowEvents = captures.TransferEvidence(buffer, ledger);
+        diagnostics.RecordDrop(MentorDropReason.CaptureOverflow, overflowEvents, grant: false);
+
+        Assert.Equal(1, ledger.EventCount);
+        Assert.Equal(1, overflowEvents);
+        Assert.Equal(1, diagnostics.DropCount(MentorDropReason.CaptureOverflow));
+        Assert.Equal(2, ledger.TotalAmount.Mantissa, 12);
+        Assert.Equal(1, ledger.TotalAmount.Exponent);
+        Assert.Equal(0, buffer.CaptureReferences);
+        Assert.Equal(0, captures.EventCount);
+    }
+
+    [Fact]
+    public void EvidenceTransferRequeuesResolvedHeadsAndRetainsOnlyUnresolvedXp()
+    {
+        var basis = new MentorRelationshipSnapshot(
+            1, 5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        var buffer = new MentorRelationshipEvidenceBuffer(capacity: 4);
+        var captures = new MentorCaptureQueue(capacity: 4);
+        var ledger = new MentorUnroutableLedger(capacity: 4);
+        buffer.Rebase(basis);
+
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("resolved-change", 6, true, 2));
+        var resolvedHead = buffer.Head!;
+        Assert.Equal(MentorCaptureResult.Added, captures.Capture(
+            new MentorCaptureKey(new object(), "resolved-source", 6, true, 2, evidence: resolvedHead),
+            new MentorAmount(2, 0)));
+        ResolveEvidence(resolvedHead);
+        Assert.NotNull(resolvedHead.Resolved);
+
+        Assert.Equal(MentorEvidenceAppendResult.Added, buffer.Append("unresolved-change", 7, true, 3));
+        Assert.Equal(MentorCaptureResult.Added, captures.Capture(
+            new MentorCaptureKey(new object(), "unresolved-source", 7, true, 3, evidence: buffer.Head),
+            new MentorAmount(3, 0)));
+
+        Assert.Equal(0, captures.TransferEvidence(buffer, ledger));
+        Assert.Equal(0, buffer.CaptureReferences);
+        Assert.Equal(1, ledger.EventCount);
+        Assert.Equal(3, ledger.TotalAmount.Mantissa, 12);
+        Assert.True(captures.TryTake(out var rebound));
+        Assert.NotNull(rebound.Key.Relationship);
+        Assert.Null(rebound.Key.Evidence);
+        Assert.Equal(2, rebound.Amount.Mantissa, 12);
+        Assert.False(captures.TryTake(out _));
+    }
+
+    [Fact]
     public void IdentityValidationRejectsDestroyedWrongAndReplacedObjects()
     {
         var candidate = new IdentityBase();

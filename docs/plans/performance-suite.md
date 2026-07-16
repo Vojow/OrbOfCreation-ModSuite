@@ -417,6 +417,9 @@ Mentor is event-driven and should not rebuild recipient catalogs for every XP gr
 - Recalculate the mentor/recipient relationship only when mastery level, discovery state, domain configuration, or lifecycle epoch changes.
 - Process native grants through the shared scheduler.
 - Budget limits may delay grants but must not reduce or discard calculated XP.
+- Let an active bounded relationship pass finish when newer invalidations arrive, then run the latest requested follow-up immediately; do not restart the current pass on every generation.
+- Cap immutable relationship evidence per domain. Coalesce only an unpinned latest UUID delta, and move captures holding unsafe heads to bounded fail-closed storage before controlled rebasing.
+- Count XP only when that bounded storage itself overflows; never redirect a capture to a newer relationship merely to reclaim evidence history.
 - Clear pending generated work on disable, emergency stop, save load, reset, or invalid native identity.
 
 Artifact and alchemy domains must use separate adapters because their discovery, active-instance, and completion rules differ from spells.
