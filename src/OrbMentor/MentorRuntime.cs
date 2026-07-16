@@ -56,6 +56,7 @@ internal sealed class MentorRuntime
         public MethodInfo? ArtifactContainerMethod;
         public List<MentorRecipe> Recipients = new();
         public MentorRelationshipSnapshot? Relationship;
+        public MentorRelationshipEvidence? Evidence;
         public long NextLiveRefresh;
         public long NextReconcile;
         public int HighestMastery = int.MinValue;
@@ -119,6 +120,8 @@ internal sealed class MentorRuntime
             RequestGeneration = requestGeneration;
             WasDirty = wasDirty;
             MentorIds = new HashSet<string>(Math.Max(0, capacity), StringComparer.Ordinal);
+            DiscoveredIds = new HashSet<string>(Math.Max(0, capacity), StringComparer.Ordinal);
+            RecipientIds = new HashSet<string>(Math.Max(0, capacity), StringComparer.Ordinal);
             Recipients = new List<MentorRecipe>(Math.Max(0, capacity));
             Discovered = new List<MentorRecipe>(Math.Max(0, capacity));
         }
@@ -132,6 +135,8 @@ internal sealed class MentorRuntime
         public bool Changed { get; set; }
         public bool ReadComplete { get; set; }
         public HashSet<string> MentorIds { get; }
+        public HashSet<string> DiscoveredIds { get; }
+        public HashSet<string> RecipientIds { get; }
         public List<MentorRecipe> Recipients { get; }
         public List<MentorRecipe> Discovered { get; }
     }
@@ -294,10 +299,6 @@ internal sealed class MentorRuntime
         }
         try
         {
-            var relationshipAtCapture = !catalog.RelationshipDirty && !catalog.NeedsReconcile &&
-                catalog.Reconcile is null && catalog.Refresh is null
-                ? catalog.Relationship
-                : null;
             if (IsDestroyed(source) || !catalog.ExpectedType.IsInstanceOfType(source))
             {
                 Diagnostics.RecordDrop(MentorDropReason.SourceIdentityChanged, 1, grant: false);
@@ -313,21 +314,28 @@ internal sealed class MentorRuntime
             }
             if (entry is not null)
             {
+                var sourceChanged = entry.MasteryLevel != mastery || entry.IsDiscovered != discovered;
                 ObserveLiveProgression(
                     catalog,
                     entry,
                     mastery,
                     discovered,
                     epochAlreadyAdvanced: catalog.ProgressionEpoch != catalog.RelationshipEpoch);
+                if (sourceChanged) AppendRelationshipEvidence(catalog, uuid, mastery, discovered);
             }
-            var relationship = relationshipAtCapture;
-            if (relationship is null)
+            var relationship = !catalog.RelationshipDirty && !catalog.NeedsReconcile &&
+                catalog.Reconcile is null && catalog.Refresh is null
+                ? catalog.Relationship
+                : null;
+            var evidence = relationship is null ? catalog.Evidence : null;
+            if (relationship is null && evidence is null)
             {
                 Diagnostics.RecordDrop(MentorDropReason.CaptureUnavailable, 1, grant: false);
                 return;
             }
             var result = _domains[domain].Captures.Capture(
-                new MentorCaptureKey(source, uuid, mastery, discovered, catalog.ProgressionEpoch, relationship), amount);
+                new MentorCaptureKey(
+                    source, uuid, mastery, discovered, catalog.ProgressionEpoch, relationship, evidence), amount);
             if (result == MentorCaptureResult.Overflow)
             {
                 Diagnostics.RecordDrop(MentorDropReason.CaptureOverflow, 1, grant: false);
@@ -356,10 +364,31 @@ internal sealed class MentorRuntime
         }
     }
 
-    public void MarkRelationshipDirty(MentorDomain domain)
+    public void MarkRelationshipDirty(MentorDomain domain, object? changedSource = null)
     {
         if (DomainBlocked(domain)) return;
-        RequestRelationshipRefresh(_catalogs[domain], advanceProgressionEpoch: true);
+        var catalog = _catalogs[domain];
+        RequestRelationshipRefresh(catalog, advanceProgressionEpoch: true);
+        if (changedSource is null || catalog.ExpectedType is null || catalog.MasteryField is null ||
+            catalog.AvailabilityMethod is null || catalog.IdentityMethod is null ||
+            IsDestroyed(changedSource) || !catalog.ExpectedType.IsInstanceOfType(changedSource)) return;
+        try
+        {
+            var uuid = catalog.ByObject.TryGetValue(changedSource, out var entry)
+                ? entry.Uuid
+                : ReadUuid(catalog.IdentityMethod, changedSource);
+            if (string.IsNullOrWhiteSpace(uuid)) return;
+            var mastery = Convert.ToInt32(catalog.MasteryField.GetValue(changedSource) ?? 0);
+            var discovered = Convert.ToBoolean(catalog.AvailabilityMethod.Invoke(changedSource, null) ?? false);
+            if (entry is null || entry.MasteryLevel != mastery || entry.IsDiscovered != discovered)
+                AppendRelationshipEvidence(catalog, uuid, mastery, discovered);
+            if (entry is not null)
+            {
+                entry.MasteryLevel = mastery;
+                entry.IsDiscovered = discovered;
+            }
+        }
+        catch { }
     }
 
     public void LateTick()
@@ -426,6 +455,18 @@ internal sealed class MentorRuntime
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!catalog.Initialized || catalog.RelationshipDirty || catalog.NeedsReconcile) return false;
+        if (state.RelationshipResolution is not null)
+        {
+            state.RelationshipResolution.Step();
+            if (!state.RelationshipResolution.IsComplete) return true;
+            var resolvedCapture = state.ResolvingCapture!;
+            var relationship = state.RelationshipResolution.Result!;
+            state.RelationshipResolution.Dispose();
+            state.RelationshipResolution = null;
+            state.ResolvingCapture = null;
+            QualifyCaptured(state, catalog, resolvedCapture, relationship);
+            return true;
+        }
         if (state.Captures.TryTake(out var captured))
         {
             if (!TryValidateCapturedSource(catalog, captured))
@@ -433,21 +474,17 @@ internal sealed class MentorRuntime
                 Diagnostics.RecordDrop(MentorDropReason.SourceIdentityChanged, captured.EventCount, grant: false);
                 return true;
             }
-            var qualification = MentorRelationshipQualification.Evaluate(
-                captured.Key, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
-            if (qualification == MentorQualificationStatus.NoRecipients)
+            if (captured.Key.Relationship is not null)
+                QualifyCaptured(state, catalog, captured, captured.Key.Relationship);
+            else if (captured.Key.Evidence?.Resolved is not null)
+                QualifyCaptured(state, catalog, captured, captured.Key.Evidence.Resolved);
+            else if (captured.Key.Evidence is not null)
             {
-                Diagnostics.RecordDrop(MentorDropReason.NoRecipients, captured.EventCount, grant: false);
-                return true;
+                state.ResolvingCapture = captured;
+                state.RelationshipResolution = new MentorRelationshipResolutionWork(captured.Key.Evidence);
             }
-            if (qualification != MentorQualificationStatus.Qualified)
-            {
-                Diagnostics.RecordDrop(MentorDropReason.SourceIneligible, captured.EventCount, grant: false);
-                return true;
-            }
-            var capturedRelationship = captured.Key.Relationship!.ForCapture(captured.Key);
-            state.Sources.Capture(capturedRelationship, captured.Key.Uuid, captured.Amount, captured.EventCount);
-            Diagnostics.RecordQualified(captured.EventCount);
+            else
+                Diagnostics.RecordDrop(MentorDropReason.CaptureUnavailable, captured.EventCount, grant: false);
             return true;
         }
         if (state.ActivePlan is null && state.Sources.HasPending)
@@ -462,6 +499,36 @@ internal sealed class MentorRuntime
             return true;
         }
         return false;
+    }
+
+    private void QualifyCaptured(
+        DomainState state,
+        DomainCatalog catalog,
+        MentorCapturedEvent captured,
+        MentorRelationshipSnapshot relationship)
+    {
+        var resolvedKey = new MentorCaptureKey(
+            captured.Key.Source,
+            captured.Key.Uuid,
+            captured.Key.MasteryLevel,
+            captured.Key.Discovered,
+            captured.Key.ProgressionEpoch,
+            relationship);
+        var qualification = MentorRelationshipQualification.Evaluate(
+            resolvedKey, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
+        if (qualification == MentorQualificationStatus.NoRecipients)
+        {
+            Diagnostics.RecordDrop(MentorDropReason.NoRecipients, captured.EventCount, grant: false);
+            return;
+        }
+        if (qualification != MentorQualificationStatus.Qualified)
+        {
+            Diagnostics.RecordDrop(MentorDropReason.SourceIneligible, captured.EventCount, grant: false);
+            return;
+        }
+        var capturedRelationship = relationship.ForCapture(resolvedKey);
+        state.Sources.Capture(capturedRelationship, captured.Key.Uuid, captured.Amount, captured.EventCount);
+        Diagnostics.RecordQualified(captured.EventCount);
     }
 
     private void BeginPlan(MentorDomain domain, double percent, bool continuous)
@@ -594,6 +661,21 @@ internal sealed class MentorRuntime
         catalog.RelationshipDirty = true;
     }
 
+    private static void AppendRelationshipEvidence(
+        DomainCatalog catalog,
+        string uuid,
+        int mastery,
+        bool discovered)
+    {
+        if (catalog.Evidence is null)
+        {
+            if (catalog.Relationship is null) return;
+            catalog.Evidence = MentorRelationshipEvidence.FromSnapshot(catalog.Relationship);
+        }
+        catalog.Evidence = catalog.Evidence.WithChange(
+            uuid, mastery, discovered, catalog.ProgressionEpoch);
+    }
+
     private GrantResult DeferOrDropIdentity(string grantUuid, DomainState state, DomainCatalog catalog)
     {
         if (state.IdentityDeferrals.Add(grantUuid))
@@ -681,6 +763,7 @@ internal sealed class MentorRuntime
         catalog.MentorIds.Clear();
         catalog.Recipients = new List<MentorRecipe>();
         catalog.Relationship = null;
+        catalog.Evidence = null;
         catalog.HighestMastery = int.MinValue;
         catalog.NextLiveRefresh = 0;
         catalog.NextReconcile = 0;
@@ -695,6 +778,8 @@ internal sealed class MentorRuntime
     {
         var state = _domains[domain];
         if (state.Captures.EventCount > 0) Diagnostics.RecordDrop(reason, state.Captures.EventCount, grant: false);
+        if (state.ResolvingCapture is not null)
+            Diagnostics.RecordDrop(reason, state.ResolvingCapture.EventCount, grant: false);
         if (state.Sources.EventCount > 0) Diagnostics.RecordDrop(reason, state.Sources.EventCount, grant: false);
         if (state.ActivePlan is not null && state.ActivePlan.RemainingCount > 0)
             Diagnostics.RecordDrop(reason, state.ActivePlan.RemainingCount, grant: true);
@@ -966,16 +1051,22 @@ internal sealed class MentorRuntime
                 if (!entry.IsDiscovered) return true;
                 var recipe = new MentorRecipe(entry.Uuid, entry.MasteryLevel, true);
                 work.Discovered.Add(recipe);
+                work.DiscoveredIds.Add(recipe.Uuid);
                 if (entry.MasteryLevel == work.HighestMastery) work.MentorIds.Add(entry.Uuid);
                 else if (entry.MasteryLevel < work.HighestMastery)
+                {
                     work.Recipients.Add(recipe);
+                    work.RecipientIds.Add(recipe.Uuid);
+                }
                 return true;
             }
             catalog.HighestMastery = work.HighestMastery;
             catalog.MentorIds = work.MentorIds;
             catalog.Recipients = work.Recipients;
-            catalog.Relationship = new MentorRelationshipSnapshot(
-                work.ProgressionEpoch, work.HighestMastery, work.Discovered, work.Recipients);
+            catalog.Relationship = MentorRelationshipSnapshot.CreatePreindexed(
+                work.ProgressionEpoch, work.HighestMastery, work.Discovered, work.Recipients,
+                work.DiscoveredIds, work.RecipientIds);
+            catalog.Evidence = MentorRelationshipEvidence.FromSnapshot(catalog.Relationship);
             catalog.Refresh = null;
             catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
             catalog.RelationshipEpoch = catalog.ProgressionEpoch;

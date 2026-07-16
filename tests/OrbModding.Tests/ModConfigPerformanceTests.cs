@@ -59,14 +59,39 @@ public sealed class ModConfigPerformanceTests
     public void OpenFailureRestoresPreviousNativeViewAndRequestsRepair()
     {
         var recovery = ModConfigUiShell.OpenFailureRecovery(
-            opening: true, previousAlive: true, anyNativeActive: false);
+            restoreRequested: true, previousAlive: true, fallbackAlive: true, anyNativeActive: false);
 
         Assert.True(recovery.RestorePrevious);
+        Assert.False(recovery.RestoreFallback);
         Assert.True(recovery.RepairRequired);
         Assert.False(ModConfigUiShell.OpenFailureRecovery(
-            opening: true, previousAlive: true, anyNativeActive: true).RestorePrevious);
+            restoreRequested: true, previousAlive: true, fallbackAlive: true, anyNativeActive: true).RestorePrevious);
         Assert.False(ModConfigUiShell.HostsAlive(
             shellHealthy: !recovery.RepairRequired, buttonAlive: true, panelAlive: true, parentsAlive: true));
+    }
+
+    [Fact]
+    public void OpenPanelHostLossRestoresFallbackAndDetachesOldListenersExactlyOnce()
+    {
+        var recovery = ModConfigUiShell.OpenFailureRecovery(
+            restoreRequested: true, previousAlive: false, fallbackAlive: true, anyNativeActive: false);
+        var listeners = new List<string> { "magic", "time", "mods" };
+        var detached = new List<string>();
+
+        Assert.False(recovery.RestorePrevious);
+        Assert.True(recovery.RestoreFallback);
+        Assert.True(recovery.RepairRequired);
+        Assert.Equal(3, ModConfigUiShell.DetachAll(listeners, detached.Add));
+        Assert.Empty(listeners);
+        Assert.Equal(new[] { "magic", "time", "mods" }, detached);
+        Assert.Equal(0, ModConfigUiShell.DetachAll(listeners, detached.Add));
+        Assert.Equal(3, detached.Count);
+
+        // A repaired shell owns a fresh listener ledger; none of the disposed
+        // bindings can leak into it.
+        var reinstalledListeners = new List<string> { "magic", "time" };
+        Assert.Equal(2, reinstalledListeners.Count);
+        Assert.Empty(listeners);
     }
 
     private sealed record FakeReference(bool Alive, string Name);

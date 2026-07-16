@@ -106,9 +106,12 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance?._runtime?.RequestLifecycleReset();
     }
-    private static void AfterSpellProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells);
-    private static void AfterAlchemyProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy);
-    private static void AfterArtifactProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts);
+    private static void AfterSpellProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells, __instance);
+    private static void AfterAlchemyProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy, __instance);
+    private static void AfterArtifactProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts, __instance);
     private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
     private static void AfterAlchemyNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
     private static void AfterArtifactNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Artifacts);

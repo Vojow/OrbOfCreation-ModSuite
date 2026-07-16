@@ -101,6 +101,10 @@ public sealed class Plugin : BaseUnityPlugin
                 _uiShell.Dispose();
                 _uiShell = null;
                 _uiRetrySeconds = 0f;
+                // Unity destruction is deferred until the end of the frame.
+                // Reinstall on the next update so the old observer/button
+                // cannot be rebound while pending destruction.
+                return;
             }
 
             if (_uiShell is null)

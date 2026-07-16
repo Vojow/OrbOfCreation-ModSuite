@@ -286,8 +286,7 @@ internal sealed class ModConfigUiShell : IDisposable
         if (_open) TrySetOpen(false, restorePreviousNativeView: true);
         _disposed = true;
         TryRemoveListener(_button, Toggle);
-        foreach (var binding in _nativeCloseListeners) TryRemoveListener(binding.Button, binding.Listener);
-        _nativeCloseListeners.Clear();
+        DetachAll(_nativeCloseListeners, binding => TryRemoveListener(binding.Button, binding.Listener));
         _nativeViews.Clear();
 
         if (_navigationObserver != null)
@@ -384,14 +383,18 @@ internal sealed class ModConfigUiShell : IDisposable
         catch (Exception ex)
         {
             try { _panel.SetActive(false); } catch { }
+            var fallbackNativeView = _nativeViews.FirstOrDefault(IsUnityObjectAlive);
             var recovery = OpenFailureRecovery(
-                opening: open,
+                restoreRequested: open || restorePreviousNativeView,
                 previousAlive: IsUnityObjectAlive(_previousNativeView),
+                fallbackAlive: IsUnityObjectAlive(fallbackNativeView),
                 anyNativeActive: _nativeViews.Any(IsNativeViewActive));
             try
             {
-                if (recovery.RestorePrevious && _previousNativeView is not null)
-                    SetNativeViewActive(_previousNativeView, true);
+                var restoreTarget = recovery.RestorePrevious ? _previousNativeView :
+                    recovery.RestoreFallback ? fallbackNativeView : null;
+                if (recovery.RestorePrevious || recovery.RestoreFallback)
+                    RestoreUsableNativeView(restoreTarget);
             }
             catch { }
             _open = false;
@@ -407,11 +410,14 @@ internal sealed class ModConfigUiShell : IDisposable
     internal static bool ShouldRestoreNativeView(bool previousAlive, bool anyNativeActive) =>
         previousAlive && !anyNativeActive;
 
-    internal static (bool RestorePrevious, bool RepairRequired) OpenFailureRecovery(
-        bool opening,
+    internal static (bool RestorePrevious, bool RestoreFallback, bool RepairRequired) OpenFailureRecovery(
+        bool restoreRequested,
         bool previousAlive,
+        bool fallbackAlive,
         bool anyNativeActive) =>
-        (opening && ShouldRestoreNativeView(previousAlive, anyNativeActive), true);
+        (restoreRequested && ShouldRestoreNativeView(previousAlive, anyNativeActive),
+            restoreRequested && !previousAlive && fallbackAlive && !anyNativeActive,
+            true);
 
     private void PruneNativeReferences()
     {
@@ -435,6 +441,33 @@ internal sealed class ModConfigUiShell : IDisposable
             try { onRemoved?.Invoke(item); } catch { }
         }
         return removed;
+    }
+
+    internal static int DetachAll<T>(List<T> items, Action<T> detach)
+    {
+        var detached = 0;
+        foreach (var item in items)
+        {
+            try { detach(item); } catch { }
+            detached++;
+        }
+        items.Clear();
+        return detached;
+    }
+
+    private void RestoreUsableNativeView(object? preferred)
+    {
+        if (IsUnityObjectAlive(preferred))
+        {
+            SetNativeViewActive(preferred!, true);
+            if (IsNativeViewActive(preferred!)) return;
+        }
+        foreach (var nativeView in _nativeViews)
+        {
+            if (!IsUnityObjectAlive(nativeView) || ReferenceEquals(nativeView, preferred)) continue;
+            SetNativeViewActive(nativeView, true);
+            if (IsNativeViewActive(nativeView)) return;
+        }
     }
 
     private static bool IsUnityObjectAlive(object? value)

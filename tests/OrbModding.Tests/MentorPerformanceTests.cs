@@ -192,6 +192,13 @@ public sealed class MentorPerformanceTests
         pending.Engine.Consolidate(expanded);
         pending.ActivePlan = null;
         Assert.True(pending.Engine.TryPeek(out _));
+        var relationship = new MentorRelationshipSnapshot(
+            3, 5,
+            new[] { new MentorRecipe("source", 5, true), new MentorRecipe("recipient", 1, true) },
+            new[] { new MentorRecipe("recipient", 1, true) });
+        pending.ResolvingCapture = captured;
+        pending.RelationshipResolution = new MentorRelationshipResolutionWork(
+            MentorRelationshipEvidence.FromSnapshot(relationship));
 
         // Reconciliation found a different native object for the same UUID.
         Assert.True(MentorIdentityTransition.CancelPendingOnChange(identityChanged: true, pending));
@@ -201,6 +208,8 @@ public sealed class MentorPerformanceTests
         Assert.False(pending.Sources.HasPending);
         Assert.Equal(0, pending.Captures.Count);
         Assert.Null(pending.ActivePlan);
+        Assert.Null(pending.ResolvingCapture);
+        Assert.Null(pending.RelationshipResolution);
     }
 
     [Fact]
@@ -318,6 +327,68 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    public void DirtyWindowCapturesBindToTheirEvidenceAcrossLaterInvalidation()
+    {
+        var recipient = new MentorRecipe("recipient", 1, true);
+        var discovered = Enumerable.Range(0, 20)
+            .Select(index => new MentorRecipe($"source-{index}", 5, true))
+            .Append(new MentorRecipe("existing-mentor", 5, true))
+            .Append(recipient)
+            .ToArray();
+        var basis = new MentorRelationshipSnapshot(
+            7,
+            5,
+            discovered,
+            new[] { recipient });
+        var dirtyGeneration = MentorRelationshipEvidence.FromSnapshot(basis)
+            .WithChange("discovered-mentor", 5, discovered: true, epoch: 8);
+        var pending = new MentorPendingWork();
+
+        // Discover/PurchaseLevel has made the live cache dirty and its refresh
+        // takes multiple frames. More than one planning slice arrives meanwhile.
+        for (var index = 0; index < 20; index++)
+        {
+            Assert.Equal(MentorCaptureResult.Added, pending.Captures.Capture(
+                new MentorCaptureKey(
+                    new object(), $"source-{index}", 5, true, 8,
+                    relationship: null, evidence: dirtyGeneration),
+                new MentorAmount(1, 1)));
+        }
+
+        for (var index = 0; index < 16; index++)
+            ResolveNextCapturedEvidence(pending);
+        Assert.Equal(4, pending.Captures.Count);
+
+        // A later mastery transition would make the captured sources
+        // ineligible if they were redirected to the newest live relationship.
+        var laterGeneration = dirtyGeneration.WithChange(
+            "later-mentor", 6, discovered: true, epoch: 9);
+        var laterSnapshot = ResolveEvidence(laterGeneration);
+        Assert.Equal(6, laterSnapshot.HighestMastery);
+
+        while (pending.Captures.Count > 0) ResolveNextCapturedEvidence(pending);
+        Assert.Equal(20, pending.Sources.EventCount);
+        var batch = pending.Sources.Drain();
+        Assert.Equal(5, batch.Relationship!.HighestMastery);
+        Assert.Equal(new[] { "recipient" }, batch.Relationship.Recipients.Select(item => item.Uuid));
+        Assert.Equal(2, batch.Amount.Mantissa, 12);
+        Assert.Equal(2, batch.Amount.Exponent);
+
+        pending.ActivePlan = pending.Engine.CreatePlan(
+            batch.Amount, 10, MentorEconomyMode.SharedPool,
+            batch.Relationship.Recipients, batch.EventCount);
+        while (pending.ActivePlan!.TryTake(out var grant)) pending.Engine.Consolidate(grant);
+        pending.ActivePlan = null;
+
+        Assert.True(pending.Engine.TryPeek(out var uuid, out var amount));
+        Assert.Equal("recipient", uuid);
+        Assert.Equal(2, amount.Mantissa, 12);
+        Assert.Equal(1, amount.Exponent);
+        Assert.True(pending.Engine.Complete(uuid));
+        Assert.False(pending.Engine.TryPeek(out _, out _));
+    }
+
+    [Fact]
     public void IdentityValidationRejectsDestroyedWrongAndReplacedObjects()
     {
         var candidate = new IdentityBase();
@@ -371,6 +442,25 @@ public sealed class MentorPerformanceTests
     }
 
     private sealed class IdentityBase { }
+
+    private static void ResolveNextCapturedEvidence(MentorPendingWork pending)
+    {
+        Assert.True(pending.Captures.TryTake(out var captured));
+        var snapshot = ResolveEvidence(captured.Key.Evidence!);
+        var resolved = new MentorCaptureKey(
+            captured.Key.Source, captured.Key.Uuid, captured.Key.MasteryLevel,
+            captured.Key.Discovered, captured.Key.ProgressionEpoch, snapshot);
+        Assert.Equal(MentorQualificationStatus.Qualified,
+            MentorRelationshipQualification.Evaluate(resolved, 99, 99, 0));
+        pending.Sources.Capture(snapshot.ForCapture(resolved), resolved.Uuid, captured.Amount, captured.EventCount);
+    }
+
+    private static MentorRelationshipSnapshot ResolveEvidence(MentorRelationshipEvidence evidence)
+    {
+        using var work = new MentorRelationshipResolutionWork(evidence);
+        while (!work.IsComplete) work.Step();
+        return work.Result!;
+    }
 
     [Fact]
     public void RecipientPlanResumesWithoutDroppingUnexpandedWork()

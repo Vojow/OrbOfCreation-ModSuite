@@ -76,21 +76,39 @@ internal sealed class MentorRelationshipSnapshot
         int highestMastery,
         IReadOnlyList<MentorRecipe> discovered,
         IReadOnlyList<MentorRecipe> recipients)
+        : this(epoch, highestMastery, discovered, recipients, null, null)
+    {
+    }
+
+    private MentorRelationshipSnapshot(
+        long epoch,
+        int highestMastery,
+        IReadOnlyList<MentorRecipe> discovered,
+        IReadOnlyList<MentorRecipe> recipients,
+        HashSet<string>? discoveredIds,
+        HashSet<string>? recipientIds)
     {
         Epoch = epoch;
         HighestMastery = highestMastery;
         Discovered = discovered;
         Recipients = recipients;
-        _discoveredIds = new HashSet<string>(StringComparer.Ordinal);
-        _recipientIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var recipe in discovered) _discoveredIds.Add(recipe.Uuid);
-        foreach (var recipe in recipients) _recipientIds.Add(recipe.Uuid);
+        _discoveredIds = discoveredIds ?? BuildIds(discovered);
+        _recipientIds = recipientIds ?? BuildIds(recipients);
     }
 
     public long Epoch { get; }
     public int HighestMastery { get; }
     public IReadOnlyList<MentorRecipe> Discovered { get; }
     public IReadOnlyList<MentorRecipe> Recipients { get; }
+
+    internal static MentorRelationshipSnapshot CreatePreindexed(
+        long epoch,
+        int highestMastery,
+        IReadOnlyList<MentorRecipe> discovered,
+        IReadOnlyList<MentorRecipe> recipients,
+        HashSet<string> discoveredIds,
+        HashSet<string> recipientIds) =>
+        new(epoch, highestMastery, discovered, recipients, discoveredIds, recipientIds);
 
     public MentorQualificationStatus Qualify(MentorCaptureKey captured) =>
         !captured.Discovered || captured.MasteryLevel < HighestMastery
@@ -124,6 +142,159 @@ internal sealed class MentorRelationshipSnapshot
     private int RecipientAdjustment(MentorCaptureKey captured)
     {
         return (captured.MasteryLevel > HighestMastery ? _discoveredIds : _recipientIds).Contains(captured.Uuid) ? 1 : 0;
+    }
+
+    private static HashSet<string> BuildIds(IReadOnlyList<MentorRecipe> recipes)
+    {
+        var result = new HashSet<string>(recipes.Count, StringComparer.Ordinal);
+        foreach (var recipe in recipes) result.Add(recipe.Uuid);
+        return result;
+    }
+}
+
+internal sealed class MentorRelationshipEvidence
+{
+    private MentorRelationshipSnapshot? _resolved;
+    private MentorRelationshipEvidence(
+        MentorRelationshipSnapshot basis,
+        MentorRelationshipEvidence? parent,
+        string? changedUuid,
+        int changedMastery,
+        bool changedDiscovered,
+        long epoch)
+    {
+        Basis = basis;
+        Parent = parent;
+        ChangedUuid = changedUuid;
+        ChangedMastery = changedMastery;
+        ChangedDiscovered = changedDiscovered;
+        Epoch = epoch;
+    }
+
+    public MentorRelationshipSnapshot Basis { get; }
+    public MentorRelationshipEvidence? Parent { get; }
+    public string? ChangedUuid { get; }
+    public int ChangedMastery { get; }
+    public bool ChangedDiscovered { get; }
+    public long Epoch { get; }
+    public MentorRelationshipSnapshot? Resolved => _resolved;
+
+    public static MentorRelationshipEvidence FromSnapshot(MentorRelationshipSnapshot snapshot) =>
+        new(snapshot, null, null, 0, false, snapshot.Epoch);
+
+    public MentorRelationshipEvidence WithChange(string uuid, int mastery, bool discovered, long epoch) =>
+        new(Basis, this, uuid, mastery, discovered, epoch);
+
+    public MentorRelationshipSnapshot Publish(MentorRelationshipSnapshot snapshot) =>
+        _resolved ??= snapshot;
+}
+
+internal sealed class MentorRelationshipResolutionWork : IDisposable
+{
+    private enum Phase { GatherChanges, ReadBasis, ReadChanges, Order, BuildRecipients, Complete }
+
+    private readonly MentorRelationshipEvidence _evidence;
+    private readonly Dictionary<string, MentorRecipe> _changes = new(StringComparer.Ordinal);
+    private readonly MentorIncrementalOrder<MentorRecipe> _order = new();
+    private MentorRelationshipEvidence? _cursor;
+    private IEnumerator<KeyValuePair<string, MentorRecipe>>? _changeEnumerator;
+    private int _basisIndex;
+    private int _recipientIndex;
+    private Phase _phase;
+    private readonly List<MentorRecipe> _discovered;
+    private readonly List<MentorRecipe> _recipients;
+    private readonly HashSet<string> _discoveredIds;
+    private readonly HashSet<string> _recipientIds;
+    private int _highestMastery = int.MinValue;
+
+    public MentorRelationshipResolutionWork(MentorRelationshipEvidence evidence)
+    {
+        _evidence = evidence;
+        _cursor = evidence;
+        _discovered = new List<MentorRecipe>(evidence.Basis.Discovered.Count);
+        _recipients = new List<MentorRecipe>(evidence.Basis.Discovered.Count);
+        _discoveredIds = new HashSet<string>(evidence.Basis.Discovered.Count, StringComparer.Ordinal);
+        _recipientIds = new HashSet<string>(evidence.Basis.Discovered.Count, StringComparer.Ordinal);
+        if (evidence.Resolved is not null)
+        {
+            Result = evidence.Resolved;
+            _phase = Phase.Complete;
+        }
+    }
+
+    public MentorRelationshipSnapshot? Result { get; private set; }
+    public bool IsComplete => _phase == Phase.Complete;
+
+    public void Step()
+    {
+        switch (_phase)
+        {
+            case Phase.GatherChanges:
+                if (_cursor is not null)
+                {
+                    if (_cursor.ChangedUuid is not null && !_changes.ContainsKey(_cursor.ChangedUuid))
+                        _changes.Add(_cursor.ChangedUuid, new MentorRecipe(
+                            _cursor.ChangedUuid, _cursor.ChangedMastery, _cursor.ChangedDiscovered));
+                    _cursor = _cursor.Parent;
+                    return;
+                }
+                _phase = Phase.ReadBasis;
+                return;
+            case Phase.ReadBasis:
+                if (_basisIndex < _evidence.Basis.Discovered.Count)
+                {
+                    var basis = _evidence.Basis.Discovered[_basisIndex++];
+                    if (_changes.Remove(basis.Uuid, out var changed)) basis = changed;
+                    if (basis.IsDiscovered) _order.TryAdd(basis.Uuid, basis);
+                    return;
+                }
+                _changeEnumerator = _changes.GetEnumerator();
+                _phase = Phase.ReadChanges;
+                return;
+            case Phase.ReadChanges:
+                if (_changeEnumerator!.MoveNext())
+                {
+                    var changed = _changeEnumerator.Current.Value;
+                    if (changed.IsDiscovered) _order.TryAdd(changed.Uuid, changed);
+                    return;
+                }
+                _changeEnumerator.Dispose();
+                _changeEnumerator = null;
+                _phase = Phase.Order;
+                return;
+            case Phase.Order:
+                if (_order.TryTakeNext(out var orderedRecipe))
+                {
+                    _discovered.Add(orderedRecipe);
+                    _discoveredIds.Add(orderedRecipe.Uuid);
+                    if (orderedRecipe.MasteryLevel > _highestMastery) _highestMastery = orderedRecipe.MasteryLevel;
+                    return;
+                }
+                _phase = Phase.BuildRecipients;
+                return;
+            case Phase.BuildRecipients:
+                if (_recipientIndex < _discovered.Count)
+                {
+                    var recipientRecipe = _discovered[_recipientIndex++];
+                    if (recipientRecipe.MasteryLevel < _highestMastery)
+                    {
+                        _recipients.Add(recipientRecipe);
+                        _recipientIds.Add(recipientRecipe.Uuid);
+                    }
+                    return;
+                }
+                Result = _evidence.Publish(MentorRelationshipSnapshot.CreatePreindexed(
+                    _evidence.Epoch, _highestMastery, _discovered, _recipients,
+                    _discoveredIds, _recipientIds));
+                _phase = Phase.Complete;
+                return;
+        }
+    }
+
+    public void Dispose()
+    {
+        _changeEnumerator?.Dispose();
+        _order.Dispose();
     }
 }
 
@@ -195,7 +366,8 @@ internal readonly struct MentorCaptureKey : IEquatable<MentorCaptureKey>
         int masteryLevel,
         bool discovered,
         long progressionEpoch = 0,
-        MentorRelationshipSnapshot? relationship = null)
+        MentorRelationshipSnapshot? relationship = null,
+        MentorRelationshipEvidence? evidence = null)
     {
         Source = source;
         Uuid = uuid;
@@ -203,6 +375,7 @@ internal readonly struct MentorCaptureKey : IEquatable<MentorCaptureKey>
         Discovered = discovered;
         ProgressionEpoch = progressionEpoch;
         Relationship = relationship;
+        Evidence = evidence;
     }
 
     public object Source { get; }
@@ -211,17 +384,20 @@ internal readonly struct MentorCaptureKey : IEquatable<MentorCaptureKey>
     public bool Discovered { get; }
     public long ProgressionEpoch { get; }
     public MentorRelationshipSnapshot? Relationship { get; }
+    public MentorRelationshipEvidence? Evidence { get; }
     public bool Equals(MentorCaptureKey other) =>
         ReferenceEquals(Source, other.Source) &&
         MasteryLevel == other.MasteryLevel &&
         Discovered == other.Discovered &&
         ProgressionEpoch == other.ProgressionEpoch &&
         ReferenceEquals(Relationship, other.Relationship) &&
+        ReferenceEquals(Evidence, other.Evidence) &&
         string.Equals(Uuid, other.Uuid, StringComparison.Ordinal);
     public override bool Equals(object? obj) => obj is MentorCaptureKey other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(
         RuntimeHelpers.GetHashCode(Source), Uuid, MasteryLevel, Discovered, ProgressionEpoch,
-        Relationship is null ? 0 : RuntimeHelpers.GetHashCode(Relationship));
+        Relationship is null ? 0 : RuntimeHelpers.GetHashCode(Relationship),
+        Evidence is null ? 0 : RuntimeHelpers.GetHashCode(Evidence));
 }
 
 internal sealed class MentorCapturedEvent
@@ -295,14 +471,20 @@ internal class MentorPendingWork
     public readonly MentorCaptureQueue Captures = new();
     public readonly MentorSourceAccumulator Sources = new();
     public MentorPlan? ActivePlan;
+    public MentorCapturedEvent? ResolvingCapture;
+    public MentorRelationshipResolutionWork? RelationshipResolution;
 
-    public bool HasGrantBarrier => Captures.Count > 0 || Sources.HasPending || ActivePlan is not null;
+    public bool HasGrantBarrier => Captures.Count > 0 || Sources.HasPending || ActivePlan is not null ||
+        ResolvingCapture is not null || RelationshipResolution is not null;
 
     public void CancelPending()
     {
         Captures.Cancel();
         Sources.Cancel();
         ActivePlan = null;
+        RelationshipResolution?.Dispose();
+        RelationshipResolution = null;
+        ResolvingCapture = null;
         Engine.Cancel();
     }
 }
