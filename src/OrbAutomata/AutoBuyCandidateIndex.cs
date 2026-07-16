@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace OrbAutomata;
 
@@ -7,6 +8,8 @@ internal sealed class AutoBuyCandidateIndex
 {
     private readonly Dictionary<string, Entry> _entries =
         new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<object, Entry> _nativeEntries =
+        new Dictionary<object, Entry>(NativeIdentityComparer.Instance);
     private readonly Dictionary<string, HashSet<Entry>> _resourceDependents =
         new Dictionary<string, HashSet<Entry>>(StringComparer.OrdinalIgnoreCase);
     private readonly List<Entry> _activeEntries = new List<Entry>();
@@ -78,6 +81,7 @@ internal sealed class AutoBuyCandidateIndex
         {
             entry = new Entry(candidate, snapshot, _epoch);
             _entries.Add(snapshot.Uuid, entry);
+            _nativeEntries[GetNativeIdentity(candidate)] = entry;
             _lifecycleEntries.Add(entry);
             MarkDirty(entry, AutoBuyDirtyReason.All);
             return false;
@@ -92,11 +96,13 @@ internal sealed class AutoBuyCandidateIndex
 
         if (!ReferenceEquals(GetNativeIdentity(entry.Candidate), GetNativeIdentity(candidate)))
         {
+            _nativeEntries.Remove(GetNativeIdentity(entry.Candidate));
             CompleteEpochValidation(entry);
             CompleteSettlementValidation(entry);
             RemoveDependencies(entry);
             SetHotEligibility(entry, false);
             entry.Replace(candidate, _epoch + 1);
+            _nativeEntries[GetNativeIdentity(candidate)] = entry;
             MarkDirty(entry, AutoBuyDirtyReason.All);
             return true;
         }
@@ -281,44 +287,26 @@ internal sealed class AutoBuyCandidateIndex
         }
     }
 
-    public void InvalidateStructureQueues()
+    public bool InvalidateQueue(object nativeIdentity, AutoBuyCandidateKind kind)
     {
-        foreach (var entry in _lifecycleEntries)
+        if (!_nativeEntries.TryGetValue(nativeIdentity, out var entry) ||
+            entry.State == AutoBuyCandidateLifecycleState.Invalid ||
+            entry.Definition.Kind != kind ||
+            !ReferenceEquals(GetNativeIdentity(entry.Candidate), nativeIdentity))
         {
-            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
-                entry.Definition.Kind == AutoBuyCandidateKind.Structure)
-            {
-                MarkSettlementPending(entry);
-                MarkDirty(
-                    entry,
-                    AutoBuyDirtyReason.AvailabilityDirty |
-                    AutoBuyDirtyReason.LevelDirty |
-                    AutoBuyDirtyReason.CostDirty |
-                    AutoBuyDirtyReason.ResourceDirty |
-                    AutoBuyDirtyReason.PriorityDirty |
-                    AutoBuyDirtyReason.CompletionDirty);
-            }
+            return false;
         }
-    }
 
-    public void InvalidateUpgradeQueues()
-    {
-        foreach (var entry in _lifecycleEntries)
-        {
-            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
-                entry.Definition.Kind == AutoBuyCandidateKind.Upgrade)
-            {
-                MarkSettlementPending(entry);
-                MarkDirty(
-                    entry,
-                    AutoBuyDirtyReason.AvailabilityDirty |
-                    AutoBuyDirtyReason.LevelDirty |
-                    AutoBuyDirtyReason.CostDirty |
-                    AutoBuyDirtyReason.ResourceDirty |
-                    AutoBuyDirtyReason.PriorityDirty |
-                    AutoBuyDirtyReason.CompletionDirty);
-            }
-        }
+        MarkSettlementPending(entry);
+        MarkDirty(
+            entry,
+            AutoBuyDirtyReason.AvailabilityDirty |
+            AutoBuyDirtyReason.LevelDirty |
+            AutoBuyDirtyReason.CostDirty |
+            AutoBuyDirtyReason.ResourceDirty |
+            AutoBuyDirtyReason.PriorityDirty |
+            AutoBuyDirtyReason.CompletionDirty);
+        return true;
     }
 
     public void InvalidateCompletionEffects()
@@ -426,6 +414,7 @@ internal sealed class AutoBuyCandidateIndex
     public void Clear()
     {
         _entries.Clear();
+        _nativeEntries.Clear();
         _resourceDependents.Clear();
         _activeEntries.Clear();
         _lifecycleEntries.Clear();
@@ -858,6 +847,15 @@ internal sealed class AutoBuyCandidateIndex
             InvalidReason = string.Empty;
             IsEligibleForHotSet = false;
         }
+    }
+
+    private sealed class NativeIdentityComparer : IEqualityComparer<object>
+    {
+        public static NativeIdentityComparer Instance { get; } = new NativeIdentityComparer();
+
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
     private sealed class Definition

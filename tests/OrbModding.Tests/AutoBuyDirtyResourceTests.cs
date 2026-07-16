@@ -547,6 +547,191 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    public void CpuSlicedFixedStructureGroup_IgnoresItsOwnQueueSignalAndResumesToInitialClamp()
+    {
+        AssertCpuSlicedSelfSignalingGroupCompletes(
+            AutoBuyCandidateKind.Structure,
+            config =>
+            {
+                config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
+                config.FixedStructureLevelsPerCandidate.Value = 25;
+            });
+    }
+
+    [Fact]
+    public void CpuSlicedBulkStructureGroup_IgnoresItsOwnQueueSignalAndResumesToInitialClamp()
+    {
+        AssertCpuSlicedSelfSignalingGroupCompletes(
+            AutoBuyCandidateKind.Structure,
+            config => config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment);
+    }
+
+    [Fact]
+    public void CpuSlicedUpgradeMultiplierGroup_IgnoresItsOwnQueueSignalAndResumesToInitialClamp()
+    {
+        AssertCpuSlicedSelfSignalingGroupCompletes(
+            AutoBuyCandidateKind.Upgrade,
+            config => config.RespectActionMultiplier.Value = true);
+    }
+
+    [Fact]
+    public void ManualQueueSignal_CancelsCpuSlicedRepeatGroupAndForcesFreshEvaluation()
+    {
+        var structure = new EngineCandidate("structure", 1.0, AutoBuyCandidateKind.Structure)
+        {
+            RaiseQueueSignalOnPurchase = true,
+        };
+        var catalog = new IncrementalCatalog(structure, new EngineCandidate("other", 2.0))
+        {
+            RemainingRoom = 3,
+        };
+        var config = ActiveConfig("structure");
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
+        config.MaxPurchasesPerBatch.Value = 10;
+        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
+        config.FixedStructureLevelsPerCandidate.Value = 10;
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => double.PositiveInfinity);
+        Action<object> handler = engine.NotifyStructureQueueChanged;
+        AutoBuyLifecycleSignal.StructureQueueChanged += handler;
+        try
+        {
+            engine.Tick(config.AutoBuyIntervalSeconds.Value);
+            Assert.Equal(1, structure.PurchaseCalls);
+            Assert.Equal(1, catalog.EvaluationCalls);
+
+            structure.CanPurchaseValue = false;
+            AutoBuyLifecycleSignal.RaiseStructureQueueChanged(structure.NativeIdentity);
+            engine.Tick(0.0f);
+
+            Assert.Equal(1, structure.PurchaseCalls);
+            Assert.Equal(2, catalog.EvaluationCalls);
+        }
+        finally
+        {
+            AutoBuyLifecycleSignal.StructureQueueChanged -= handler;
+        }
+    }
+
+    [Fact]
+    public void AutomatedMutationScope_RestoresExternalSignalsAfterException()
+    {
+        var nativeIdentity = new object();
+        var unrelatedIdentity = new object();
+        var signals = 0;
+        Action<object> handler = _ => signals++;
+        AutoBuyLifecycleSignal.StructureQueueChanged += handler;
+        try
+        {
+            Assert.Throws<InvalidOperationException>((Action)(() =>
+            {
+                using (AutoBuyLifecycleSignal.EnterAutomatedMutation(nativeIdentity))
+                {
+                    AutoBuyLifecycleSignal.RaiseStructureQueueChanged(nativeIdentity);
+                    AutoBuyLifecycleSignal.RaiseStructureQueueChanged(unrelatedIdentity);
+                    throw new InvalidOperationException("simulated native failure");
+                }
+            }));
+
+            AutoBuyLifecycleSignal.RaiseStructureQueueChanged(nativeIdentity);
+            Assert.Equal(2, signals);
+        }
+        finally
+        {
+            AutoBuyLifecycleSignal.StructureQueueChanged -= handler;
+        }
+    }
+
+    [Theory]
+    [InlineData((int)AutoBuyCandidateKind.Structure)]
+    [InlineData((int)AutoBuyCandidateKind.Upgrade)]
+    public void QueueSignal_DirtiesOnlyExactNativeCandidate(int kindValue)
+    {
+        var kind = (AutoBuyCandidateKind)kindValue;
+        var target = Candidate("target", kind, "mana", available: true);
+        var unaffected = Candidate("unaffected", kind, "dust", available: true);
+        var index = new AutoBuyCandidateIndex();
+        PrimeDependencies(index, target, unaffected);
+        target.QueuedLevels = 1;
+
+        Assert.True(index.InvalidateQueue(target.NativeIdentity, kind));
+        var batch = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+
+        Assert.Same(target, Assert.Single(batch.DirtyCandidates));
+        Assert.True(index.TryGetDirtyReasons(unaffected.Uuid, out var unaffectedDirty));
+        Assert.Equal(AutoBuyDirtyReason.None, unaffectedDirty);
+    }
+
+    private static void AssertCpuSlicedSelfSignalingGroupCompletes(
+        AutoBuyCandidateKind kind,
+        Action<AutomataConfig> configure)
+    {
+        var candidate = new EngineCandidate("candidate", 1.0, kind)
+        {
+            RaiseQueueSignalOnPurchase = true,
+        };
+        var catalog = new IncrementalCatalog(candidate, new EngineCandidate("other", 2.0))
+        {
+            RemainingRoom = 3,
+            BulkLevels = 25,
+            ActionMultiplier = 25,
+        };
+        var config = ActiveConfig("candidate");
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
+        config.MaxPurchasesPerBatch.Value = 10;
+        configure(config);
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => double.PositiveInfinity);
+        Action<object> handler = kind == AutoBuyCandidateKind.Structure
+            ? engine.NotifyStructureQueueChanged
+            : engine.NotifyUpgradeQueueChanged;
+        if (kind == AutoBuyCandidateKind.Structure)
+        {
+            AutoBuyLifecycleSignal.StructureQueueChanged += handler;
+        }
+        else
+        {
+            AutoBuyLifecycleSignal.UpgradeQueueChanged += handler;
+        }
+
+        try
+        {
+            for (var frame = 1; frame <= 3; frame++)
+            {
+                engine.Tick(frame == 1 ? config.AutoBuyIntervalSeconds.Value : 0.0f);
+                Assert.Equal(frame, candidate.PurchaseCalls);
+            }
+
+            Assert.Equal(1, catalog.EvaluationCalls);
+        }
+        finally
+        {
+            if (kind == AutoBuyCandidateKind.Structure)
+            {
+                AutoBuyLifecycleSignal.StructureQueueChanged -= handler;
+            }
+            else
+            {
+                AutoBuyLifecycleSignal.UpgradeQueueChanged -= handler;
+            }
+        }
+    }
+
+    [Fact]
     public void ExactCostAdapter_RequiresEveryNativeTupleAndCachesSchema()
     {
         var mana = new ResourceSO { uuid = "mana" };
@@ -640,7 +825,10 @@ public sealed class AutoBuyDirtyResourceTests
         }
 
         index.Reconcile(candidates);
-        index.InvalidateStructureQueues();
+        foreach (var candidate in candidates)
+        {
+            index.InvalidateQueue(candidate.NativeIdentity, AutoBuyCandidateKind.Structure);
+        }
         index.PrepareEvaluation(
             new AutoBuyEvaluationRequest(20, true, true),
             lifecycleWorkLimit: 3,
@@ -700,7 +888,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         AssertLargeSettlementResumes(
             AutoBuyCandidateKind.Structure,
-            (engine, _) => engine.NotifyStructureQueueChanged());
+            (engine, target) => engine.NotifyStructureQueueChanged(target.NativeIdentity));
     }
 
     [Fact]
@@ -711,7 +899,7 @@ public sealed class AutoBuyDirtyResourceTests
             (engine, target) =>
             {
                 target.QueuedLevels = 1;
-                engine.NotifyUpgradeQueueChanged();
+                engine.NotifyUpgradeQueueChanged(target.NativeIdentity);
             });
     }
 
@@ -915,6 +1103,8 @@ public sealed class AutoBuyDirtyResourceTests
 
         public int BulkLevels { get; set; } = 1;
 
+        public int ActionMultiplier { get; set; } = 1;
+
         public bool SettlementPending { get; set; }
 
         public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
@@ -938,11 +1128,11 @@ public sealed class AutoBuyDirtyResourceTests
             }
         }
 
-        public void NotifyStructureQueueChanged()
+        public void NotifyStructureQueueChanged(object nativeIdentity)
         {
         }
 
-        public void NotifyUpgradeQueueChanged()
+        public void NotifyUpgradeQueueChanged(object nativeIdentity)
         {
         }
 
@@ -969,7 +1159,7 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool TryGetActionMultiplier(out int multiplier)
         {
-            multiplier = 1;
+            multiplier = ActionMultiplier;
             return true;
         }
 
@@ -1028,9 +1218,11 @@ public sealed class AutoBuyDirtyResourceTests
 
         public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate) => Index.MarkPurchaseAttempted(candidate);
 
-        public void NotifyStructureQueueChanged() => Index.InvalidateStructureQueues();
+        public void NotifyStructureQueueChanged(object nativeIdentity) =>
+            Index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Structure);
 
-        public void NotifyUpgradeQueueChanged() => Index.InvalidateUpgradeQueues();
+        public void NotifyUpgradeQueueChanged(object nativeIdentity) =>
+            Index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Upgrade);
 
         public void NotifyNativeCompletion() => Index.InvalidateCompletionEffects();
 
@@ -1059,9 +1251,10 @@ public sealed class AutoBuyDirtyResourceTests
         }
     }
 
-    private sealed class EngineCandidate : IAutoBuyCandidate, IAutoBuyDirtyCandidate
+    private sealed class EngineCandidate : IAutoBuyCandidate, IAutoBuyNativeIdentity, IAutoBuyDirtyCandidate
     {
         private readonly AutoBuyCandidateSnapshot _snapshot;
+        private readonly AutoBuyCandidateKind _kind;
         private double _quantity = 1_000.0;
 
         public EngineCandidate(
@@ -1070,6 +1263,8 @@ public sealed class AutoBuyDirtyResourceTests
             AutoBuyCandidateKind kind = AutoBuyCandidateKind.Upgrade)
         {
             Cost = cost;
+            _kind = kind;
+            NativeIdentity = new object();
             _snapshot = new AutoBuyCandidateSnapshot(
                 this,
                 uuid,
@@ -1089,6 +1284,10 @@ public sealed class AutoBuyDirtyResourceTests
         public bool CostsResolved { get; set; } = true;
 
         public bool PurchaseSucceeds { get; set; } = true;
+
+        public bool RaiseQueueSignalOnPurchase { get; set; }
+
+        public object NativeIdentity { get; }
 
         public IReadOnlyList<string> ResourceDependencies { get; } = new[] { "resource" };
 
@@ -1121,6 +1320,18 @@ public sealed class AutoBuyDirtyResourceTests
         {
             PurchaseCalls++;
             _quantity -= Cost;
+            if (RaiseQueueSignalOnPurchase)
+            {
+                if (_kind == AutoBuyCandidateKind.Structure)
+                {
+                    AutoBuyLifecycleSignal.RaiseStructureQueueChanged(NativeIdentity);
+                }
+                else
+                {
+                    AutoBuyLifecycleSignal.RaiseUpgradeQueueChanged(NativeIdentity);
+                }
+            }
+
             reason = PurchaseSucceeds ? string.Empty : "post-purchase verification failed";
             return PurchaseSucceeds;
         }

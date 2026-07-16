@@ -122,9 +122,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.InvalidateLifecycle();
     }
 
-    private void OnStructureQueueChanged()
+    private void OnStructureQueueChanged(object nativeIdentity)
     {
-        _autoBuyEngine?.NotifyStructureQueueChanged();
+        _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
     }
 
     private void OnNativeCompletion()
@@ -132,9 +132,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.NotifyNativeCompletion();
     }
 
-    private void OnUpgradeQueueChanged()
+    private void OnUpgradeQueueChanged(object nativeIdentity)
     {
-        _autoBuyEngine?.NotifyUpgradeQueueChanged();
+        _autoBuyEngine?.NotifyUpgradeQueueChanged(nativeIdentity);
     }
 
     private static void LogAssemblyStatus()

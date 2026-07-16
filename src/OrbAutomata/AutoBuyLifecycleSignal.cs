@@ -7,11 +7,17 @@ namespace OrbAutomata;
 
 internal static class AutoBuyLifecycleSignal
 {
+    [ThreadStatic]
+    private static object? _automatedMutationIdentity;
+
+    [ThreadStatic]
+    private static int _automatedMutationDepth;
+
     public static event Action? Invalidated;
 
-    public static event Action? StructureQueueChanged;
+    public static event Action<object>? StructureQueueChanged;
 
-    public static event Action? UpgradeQueueChanged;
+    public static event Action<object>? UpgradeQueueChanged;
 
     public static event Action? NativeCompletion;
 
@@ -20,19 +26,56 @@ internal static class AutoBuyLifecycleSignal
         Invalidated?.Invoke();
     }
 
-    public static void RaiseStructureQueueChanged()
+    public static AutomatedMutationScope EnterAutomatedMutation(object nativeIdentity)
     {
-        StructureQueueChanged?.Invoke();
+        return new AutomatedMutationScope(nativeIdentity);
     }
 
-    public static void RaiseUpgradeQueueChanged()
+    public static void RaiseStructureQueueChanged(object nativeIdentity)
     {
-        UpgradeQueueChanged?.Invoke();
+        if (!IsAutomatedMutation(nativeIdentity))
+        {
+            StructureQueueChanged?.Invoke(nativeIdentity);
+        }
+    }
+
+    public static void RaiseUpgradeQueueChanged(object nativeIdentity)
+    {
+        if (!IsAutomatedMutation(nativeIdentity))
+        {
+            UpgradeQueueChanged?.Invoke(nativeIdentity);
+        }
     }
 
     public static void RaiseNativeCompletion()
     {
         NativeCompletion?.Invoke();
+    }
+
+    private static bool IsAutomatedMutation(object nativeIdentity)
+    {
+        return _automatedMutationDepth > 0 &&
+               ReferenceEquals(_automatedMutationIdentity, nativeIdentity);
+    }
+
+    internal readonly struct AutomatedMutationScope : IDisposable
+    {
+        private readonly object? _previousIdentity;
+        private readonly int _previousDepth;
+
+        public AutomatedMutationScope(object nativeIdentity)
+        {
+            _previousIdentity = _automatedMutationIdentity;
+            _previousDepth = _automatedMutationDepth;
+            _automatedMutationIdentity = nativeIdentity;
+            _automatedMutationDepth = _previousDepth + 1;
+        }
+
+        public void Dispose()
+        {
+            _automatedMutationIdentity = _previousIdentity;
+            _automatedMutationDepth = _previousDepth;
+        }
     }
 }
 
@@ -49,9 +92,9 @@ internal static class AutoBuyStructureQueuePatch
             null);
     }
 
-    private static void Postfix()
+    private static void Postfix(object __instance)
     {
-        AutoBuyLifecycleSignal.RaiseStructureQueueChanged();
+        AutoBuyLifecycleSignal.RaiseStructureQueueChanged(__instance);
     }
 }
 
@@ -68,9 +111,9 @@ internal static class AutoBuyUpgradeQueuePatch
             null);
     }
 
-    private static void Postfix()
+    private static void Postfix(object __instance)
     {
-        AutoBuyLifecycleSignal.RaiseUpgradeQueueChanged();
+        AutoBuyLifecycleSignal.RaiseUpgradeQueueChanged(__instance);
     }
 }
 

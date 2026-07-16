@@ -103,9 +103,9 @@ internal interface IAutoBuyIncrementalCatalog
 
     void NotifyPurchaseAttempted(IAutoBuyCandidate candidate);
 
-    void NotifyStructureQueueChanged();
+    void NotifyStructureQueueChanged(object nativeIdentity);
 
-    void NotifyUpgradeQueueChanged();
+    void NotifyUpgradeQueueChanged(object nativeIdentity);
 
     void NotifyNativeCompletion();
 

@@ -20,8 +20,6 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
-    private bool _structureQueuesDirty;
-    private bool _upgradeQueuesDirty;
     private bool _completionEffectsDirty;
 
     public ReflectionAutoBuyCatalog()
@@ -42,18 +40,6 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         {
             _completionEffectsDirty = false;
             _index.InvalidateCompletionEffects();
-        }
-
-        if (_structureQueuesDirty)
-        {
-            _structureQueuesDirty = false;
-            _index.InvalidateStructureQueues();
-        }
-
-        if (_upgradeQueuesDirty)
-        {
-            _upgradeQueuesDirty = false;
-            _index.InvalidateUpgradeQueues();
         }
 
         StartRegistryReconciliationIfDue();
@@ -95,14 +81,16 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _resourceSnapshots.BeginLazyEpoch();
     }
 
-    public void NotifyStructureQueueChanged()
+    public void NotifyStructureQueueChanged(object nativeIdentity)
     {
-        _structureQueuesDirty = true;
+        _index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Structure);
+        _resourceSnapshots.BeginLazyEpoch();
     }
 
-    public void NotifyUpgradeQueueChanged()
+    public void NotifyUpgradeQueueChanged(object nativeIdentity)
     {
-        _upgradeQueuesDirty = true;
+        _index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Upgrade);
+        _resourceSnapshots.BeginLazyEpoch();
     }
 
     public void NotifyNativeCompletion()
@@ -114,8 +102,6 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     {
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
-        _structureQueuesDirty = false;
-        _upgradeQueuesDirty = false;
         _completionEffectsDirty = false;
         _nextRegistryReconciliation = TimeSpan.Zero;
         _index.InvalidateLifecycleIncrementally();

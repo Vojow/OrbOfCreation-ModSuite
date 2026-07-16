@@ -172,15 +172,15 @@ internal sealed class AutoBuyEngine : IDisposable
         _secondsUntilEvaluation = 0.0f;
     }
 
-    public void NotifyStructureQueueChanged()
+    public void NotifyStructureQueueChanged(object nativeIdentity)
     {
-        _incrementalCatalog?.NotifyStructureQueueChanged();
+        _incrementalCatalog?.NotifyStructureQueueChanged(nativeIdentity);
         _nativeStateSignalPending = true;
     }
 
-    public void NotifyUpgradeQueueChanged()
+    public void NotifyUpgradeQueueChanged(object nativeIdentity)
     {
-        _incrementalCatalog?.NotifyUpgradeQueueChanged();
+        _incrementalCatalog?.NotifyUpgradeQueueChanged(nativeIdentity);
         _nativeStateSignalPending = true;
     }
 
@@ -495,7 +495,13 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             _pendingBatchAttempted++;
-            var purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out var reason);
+            bool purchaseSucceeded;
+            string reason;
+            using (AutoBuyLifecycleSignal.EnterAutomatedMutation(
+                       GetNativeIdentity(recommendation.Candidate.Source)))
+            {
+                purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out reason);
+            }
             _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
             if (purchaseSucceeded)
             {
@@ -626,6 +632,11 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingPurchaseIndex++;
         _pendingCandidateRepeats = 0;
         _pendingCandidateRepeatLimit = 0;
+    }
+
+    private static object GetNativeIdentity(IAutoBuyCandidate candidate)
+    {
+        return candidate is IAutoBuyNativeIdentity identity ? identity.NativeIdentity : candidate;
     }
 
     private void LogDecision(
