@@ -64,6 +64,12 @@ internal sealed class AutoBuyEngine : IDisposable
     private bool _nativeStateSignalPending;
     private bool _upgradeQuarantineObserved;
 
+    internal int UpgradeQuarantinePurgePasses { get; private set; }
+
+    internal int UpgradeQuarantineCacheEntriesInspected { get; private set; }
+
+    internal int UpgradeQuarantineDecisionsRemoved { get; private set; }
+
     public AutoBuyEngine(
         AutomataConfig config,
         IAutoBuyCatalog catalog,
@@ -1013,6 +1019,19 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private void UpdateCachedDecision(AutoBuyDecision decision)
     {
+        if (decision.Candidate.Kind == AutoBuyCandidateKind.Upgrade &&
+            (_upgradeQuarantineObserved || NativeMultiBuyScope.TryGetMutationQuarantine(out _)))
+        {
+            if (_cachedDecisions.TryGetValue(decision.Candidate.Uuid, out var quarantinedPrevious) &&
+                quarantinedPrevious.Kind == AutoBuyDecisionKind.Recommendation)
+            {
+                _rankedRecommendations.Remove(quarantinedPrevious);
+            }
+
+            _cachedDecisions.Remove(decision.Candidate.Uuid);
+            return;
+        }
+
         if (_cachedDecisions.TryGetValue(decision.Candidate.Uuid, out var previous) &&
             previous.Kind == AutoBuyDecisionKind.Recommendation)
         {
@@ -1033,13 +1052,18 @@ internal sealed class AutoBuyEngine : IDisposable
             return false;
         }
 
-        var firstObservation = !_upgradeQuarantineObserved;
-        var stateChanged = firstObservation;
+        if (_upgradeQuarantineObserved)
+        {
+            return true;
+        }
+
         _upgradeQuarantineObserved = true;
+        UpgradeQuarantinePurgePasses++;
 
         _quarantinedUpgradeUuids.Clear();
         foreach (var pair in _cachedDecisions)
         {
+            UpgradeQuarantineCacheEntriesInspected++;
             if (pair.Value.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
             {
                 _quarantinedUpgradeUuids.Add(pair.Key);
@@ -1056,27 +1080,22 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             _cachedDecisions.Remove(uuid);
-            stateChanged = true;
+            UpgradeQuarantineDecisionsRemoved++;
         }
 
         if (cancelPendingBatch && PendingBatchContainsUpgrade())
         {
             ResetPendingPurchaseBatch();
-            stateChanged = true;
         }
 
-        if (firstObservation &&
-            _upgradeQuarantineLogGate.ShouldLog("upgrade-mutation-quarantine", _lifetime.Elapsed))
+        if (_upgradeQuarantineLogGate.ShouldLog("upgrade-mutation-quarantine", _lifetime.Elapsed))
         {
             _log.LogError(
                 "Auto Buy removed automated Upgrades from admission and ranking because native " +
                 $"multi-buy restoration is unverified; Structures remain eligible. {reason}");
         }
 
-        if (stateChanged)
-        {
-            _secondsUntilEvaluation = 0.0f;
-        }
+        _secondsUntilEvaluation = 0.0f;
 
         return true;
     }

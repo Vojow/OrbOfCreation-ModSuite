@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
@@ -314,6 +315,86 @@ public sealed class AutomataCoordinatorTests
         }
     }
 
+    [Fact]
+    public void MultiBuyQuarantinePurgesLargeCacheOnceThenUsesConstantTimeTickCheck()
+    {
+        NativeMultiBuyScope.ResetQuarantineForTests();
+        GlobalVariables.MultiBuy = new IntVariable { Value = 7 };
+        try
+        {
+            const int upgradeCount = 256;
+            var coordinator = Coordinator();
+            long frame = 100;
+            var log = new ManualLogSource();
+            var quarantineUpgrade = new QuarantiningUpgradeCandidate("a-quarantine");
+            var replayedUpgrade = new BuyCandidate("u-000", AutoBuyCandidateKind.Upgrade);
+            var structure = new OneShotStructureCandidate("z-structure");
+            var candidates = new List<IAutoBuyCandidate>(upgradeCount + 1)
+            {
+                quarantineUpgrade,
+                replayedUpgrade,
+            };
+            for (var i = 1; i < upgradeCount - 1; i++)
+            {
+                candidates.Add(new BuyCandidate($"u-{i:000}", AutoBuyCandidateKind.Upgrade));
+            }
+            candidates.Add(structure);
+
+            var catalog = new ReplayIncrementalCatalog(
+                candidates.ToArray(),
+                new IAutoBuyCandidate[] { replayedUpgrade, structure });
+            using var engine = BuyEngine(
+                Config(),
+                catalog,
+                coordinator,
+                () => frame,
+                log,
+                _ => 0.0);
+
+            engine.Tick(1.0f);
+
+            Assert.Equal(1, engine.UpgradeQuarantinePurgePasses);
+            Assert.Equal(upgradeCount + 1, engine.UpgradeQuarantineCacheEntriesInspected);
+            Assert.Equal(upgradeCount, engine.UpgradeQuarantineDecisionsRemoved);
+
+            frame++;
+            engine.Tick(0.0f);
+            Assert.Equal(1, structure.PurchaseCalls);
+
+            // Settle the purchased Structure, then exercise the steady-state
+            // quarantine check across many active scans. The catalog
+            // deliberately replays an Upgrade as dirty to verify it cannot
+            // re-enter the cached ranking.
+            frame++;
+            engine.Tick(0.0f);
+            for (var i = 0; i < 64; i++)
+            {
+                frame++;
+                engine.Tick(1.0f);
+            }
+
+            Assert.Equal(1, engine.UpgradeQuarantinePurgePasses);
+            Assert.Equal(upgradeCount + 1, engine.UpgradeQuarantineCacheEntriesInspected);
+            Assert.Equal(upgradeCount, engine.UpgradeQuarantineDecisionsRemoved);
+            Assert.Equal(1, quarantineUpgrade.PurchaseCalls);
+            Assert.Equal(0, replayedUpgrade.PurchaseCalls);
+            Assert.Equal(2, GlobalVariables.MultiBuy.SetCalls);
+            Assert.True(catalog.EvaluationCalls >= 66);
+            Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoBuy", out var snapshot));
+            Assert.Equal(2, snapshot.NativeMutationsStarted);
+            Assert.Single(
+                log.Entries,
+                entry => entry?.ToString()?.Contains(
+                    "removed automated Upgrades from admission and ranking",
+                    StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            NativeMultiBuyScope.ResetQuarantineForTests();
+            GlobalVariables.MultiBuy = new IntVariable();
+        }
+    }
+
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
 
@@ -333,12 +414,14 @@ public sealed class AutomataCoordinatorTests
         IAutoBuyCatalog catalog,
         SuitePerformanceCoordinator coordinator,
         Func<long> frameIdentity,
-        ManualLogSource? log = null) =>
+        ManualLogSource? log = null,
+        Func<Stopwatch, double>? readElapsedMilliseconds = null) =>
         new(
             config,
             catalog,
             new ReservePolicy(config),
             log ?? new ManualLogSource(),
+            readElapsedMilliseconds: readElapsedMilliseconds,
             coordinator: coordinator,
             readFrameIdentity: frameIdentity);
 
@@ -476,6 +559,124 @@ public sealed class AutomataCoordinatorTests
             scope.Dispose();
             reason = "forced unverified restoration";
             return false;
+        }
+    }
+
+    private sealed class OneShotStructureCandidate : IAutoBuyCandidate
+    {
+        private readonly AutoBuyCandidateSnapshot _snapshot;
+
+        public OneShotStructureCandidate(string uuid)
+        {
+            _snapshot = new AutoBuyCandidateSnapshot(
+                this,
+                uuid,
+                uuid,
+                AutoBuyCandidateKind.Structure,
+                GetType().Name);
+        }
+
+        public int PurchaseCalls { get; private set; }
+
+        public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
+
+        public bool IsAvailable() => PurchaseCalls == 0;
+
+        public bool CanPurchase(out string reason)
+        {
+            reason = string.Empty;
+            return PurchaseCalls == 0;
+        }
+
+        public IReadOnlyList<ResourceAdmissionCost> GetCosts() => Array.Empty<ResourceAdmissionCost>();
+
+        public bool TryPurchaseOne(out string reason)
+        {
+            PurchaseCalls++;
+            reason = string.Empty;
+            return true;
+        }
+    }
+
+    private sealed class ReplayIncrementalCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
+    {
+        private readonly IAutoBuyCandidate[] _active;
+        private readonly IAutoBuyCandidate[] _steadyDirty;
+
+        public ReplayIncrementalCatalog(
+            IAutoBuyCandidate[] active,
+            IAutoBuyCandidate[] steadyDirty)
+        {
+            _active = active;
+            _steadyDirty = steadyDirty;
+        }
+
+        public int EvaluationCalls { get; private set; }
+
+        public IEnumerable<IAutoBuyCandidate> Discover() => _active;
+
+        public AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request)
+        {
+            EvaluationCalls++;
+            return new AutoBuyEvaluationBatch(
+                _active,
+                EvaluationCalls == 1 ? _active : _steadyDirty,
+                null,
+                false);
+        }
+
+        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
+        {
+        }
+
+        public void InvalidatePolicy()
+        {
+        }
+
+        public void BeginMutationEvaluation()
+        {
+        }
+
+        public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
+        {
+        }
+
+        public void NotifyStructureQueueChanged(object nativeIdentity)
+        {
+        }
+
+        public void NotifyUpgradeQueueChanged(object nativeIdentity)
+        {
+        }
+
+        public void NotifyNativeCompletion()
+        {
+        }
+
+        public void InvalidateLifecycle()
+        {
+        }
+
+        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        {
+            remainingRoom = 4;
+            return true;
+        }
+
+        public bool TryGetBulkDevelopment(out int levels)
+        {
+            levels = 1;
+            return true;
+        }
+
+        public bool TryGetActionMultiplier(out int multiplier)
+        {
+            multiplier = 1;
+            return true;
+        }
+
+        public void Dispose()
+        {
         }
     }
 
