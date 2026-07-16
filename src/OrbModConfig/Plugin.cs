@@ -13,11 +13,13 @@ public sealed class Plugin : BaseUnityPlugin
 {
     private const float UiInstallDelaySeconds = 2f;
     private const float UiRetryIntervalSeconds = 5f;
+    private const float UiIntegrityIntervalSeconds = 5f;
 
     private ConfigEntry<bool>? _enabled;
     private ConfigEntry<bool>? _enableUiShell;
     private float _mainSceneElapsed;
     private float _uiRetrySeconds;
+    private float _uiIntegritySeconds;
     private bool _uiFailureLogged;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
@@ -94,6 +96,13 @@ public sealed class Plugin : BaseUnityPlugin
 
         if (_enableUiShell?.Value == true)
         {
+            if (_uiShell is not null && !_uiShell.IsAlive)
+            {
+                _uiShell.Dispose();
+                _uiShell = null;
+                _uiRetrySeconds = 0f;
+            }
+
             if (_uiShell is null)
             {
                 _uiRetrySeconds -= Math.Max(0.0f, Time.unscaledDeltaTime);
@@ -112,11 +121,14 @@ public sealed class Plugin : BaseUnityPlugin
                     else
                     {
                         _uiFailureLogged = false;
+                        _uiIntegritySeconds = UiIntegrityIntervalSeconds;
                     }
                 }
             }
-
-            _uiShell?.EnsureButtonIsLast();
+            else if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
+            {
+                _uiShell.RefreshNavigation();
+            }
         }
         else if (_uiShell is not null)
         {
@@ -145,6 +157,15 @@ public sealed class Plugin : BaseUnityPlugin
     {
         _mainSceneElapsed = 0f;
         _uiRetrySeconds = 0f;
+        _uiIntegritySeconds = 0f;
         _uiFailureLogged = false;
+    }
+
+    internal static bool AdvanceCadence(ref float remainingSeconds, float elapsedSeconds, float intervalSeconds)
+    {
+        remainingSeconds -= Math.Max(0.0f, elapsedSeconds);
+        if (remainingSeconds > 0.0f) return false;
+        remainingSeconds = Math.Max(0.1f, intervalSeconds);
+        return true;
     }
 }

@@ -10,6 +10,12 @@ using UnityEngine.UI;
 
 namespace OrbModConfig;
 
+internal sealed class ModConfigNavigationObserver : MonoBehaviour
+{
+    public Action? Changed { get; set; }
+    private void OnTransformChildrenChanged() => Changed?.Invoke();
+}
+
 internal sealed class ModConfigUiShell : IDisposable
 {
     internal const string ButtonObjectName = "OrbModConfig.ModsButton";
@@ -23,8 +29,11 @@ internal sealed class ModConfigUiShell : IDisposable
     private readonly Color _buttonBaseColor;
     private readonly Sprite? _buttonInactiveSprite;
     private readonly Sprite? _buttonActiveSprite;
-    private readonly IReadOnlyList<object> _nativeViews;
+    private readonly Type _nativeButtonType;
+    private readonly Transform _buttonParent;
+    private readonly List<object> _nativeViews;
     private readonly List<(Button Button, UnityAction Listener)> _nativeCloseListeners;
+    private ModConfigNavigationObserver? _navigationObserver;
     private bool _disposed;
     private bool _open;
     private object? _previousNativeView;
@@ -37,7 +46,9 @@ internal sealed class ModConfigUiShell : IDisposable
         Image? buttonImage,
         Sprite? buttonInactiveSprite,
         Sprite? buttonActiveSprite,
-        IReadOnlyList<object> nativeViews,
+        Type nativeButtonType,
+        Transform buttonParent,
+        List<object> nativeViews,
         List<(Button Button, UnityAction Listener)> nativeCloseListeners)
     {
         _log = log;
@@ -48,9 +59,13 @@ internal sealed class ModConfigUiShell : IDisposable
         _buttonBaseColor = buttonImage?.color ?? Color.white;
         _buttonInactiveSprite = buttonInactiveSprite;
         _buttonActiveSprite = buttonActiveSprite;
+        _nativeButtonType = nativeButtonType;
+        _buttonParent = buttonParent;
         _nativeViews = nativeViews;
         _nativeCloseListeners = nativeCloseListeners;
     }
+
+    public bool IsAlive => !_disposed && _buttonObject != null && _buttonObject.transform.parent != null;
 
     public static bool TryCreate(
         ManualLogSource log,
@@ -118,7 +133,7 @@ internal sealed class ModConfigUiShell : IDisposable
                 .Where(view => view is not null)
                 .Cast<object>()
                 .Distinct()
-                .ToArray();
+                .ToList();
             buttonObject = UnityEngine.Object.Instantiate(cloneSource.gameObject, buttonParent, false);
             buttonObject.name = ButtonObjectName;
             buttonObject.SetActive(true);
@@ -179,18 +194,17 @@ internal sealed class ModConfigUiShell : IDisposable
                 image,
                 inactiveSprite,
                 activeSprite,
+                buttonType,
+                buttonParent,
                 nativeViews,
                 nativeCloseListeners);
             button.onClick.AddListener(shell.Toggle);
 
-            foreach (var nativeButton in nativeButtons
-                         .Select(component => component.GetComponent<Button>())
-                         .Where(nativeButton => nativeButton is not null))
-            {
-                UnityAction listener = shell.CloseFromNativeTab;
-                nativeButton!.onClick.AddListener(listener);
-                nativeCloseListeners.Add((nativeButton, listener));
-            }
+            foreach (var nativeButton in nativeButtons) shell.BindNativeButton(nativeButton);
+            var observer = buttonParent.gameObject.GetComponent<ModConfigNavigationObserver>() ??
+                           buttonParent.gameObject.AddComponent<ModConfigNavigationObserver>();
+            observer.Changed = shell.RefreshNavigation;
+            shell._navigationObserver = observer;
 
             log.LogInfo(
                 $"Mod Config UI shell installed. ButtonPath={NavigationProbe.BuildObjectPath(buttonObject)}; " +
@@ -200,6 +214,13 @@ internal sealed class ModConfigUiShell : IDisposable
         }
         catch (Exception ex)
         {
+            if (shell?._navigationObserver != null)
+            {
+                shell._navigationObserver.Changed = null;
+                UnityEngine.Object.Destroy(shell._navigationObserver);
+                shell._navigationObserver = null;
+            }
+
             foreach (var binding in nativeCloseListeners)
             {
                 binding.Button.onClick.RemoveListener(binding.Listener);
@@ -211,6 +232,7 @@ internal sealed class ModConfigUiShell : IDisposable
             }
 
             panel?.Dispose();
+            shell = null;
 
             reason = ex.GetBaseException().Message;
             return false;
@@ -222,12 +244,16 @@ internal sealed class ModConfigUiShell : IDisposable
         SetOpen(!_open, restorePreviousNativeView: _open);
     }
 
-    public void EnsureButtonIsLast()
+    public void RefreshNavigation()
     {
-        if (!_disposed && _buttonObject.transform.parent is { } parent &&
-            _buttonObject.transform.GetSiblingIndex() != parent.childCount - 1)
+        if (_disposed || !IsAlive) return;
+        EnsureButtonIsLast();
+        for (var index = 0; index < _buttonParent.childCount; index++)
         {
-            _buttonObject.transform.SetSiblingIndex(parent.childCount - 1);
+            var child = _buttonParent.GetChild(index);
+            if (ReferenceEquals(child.gameObject, _buttonObject)) continue;
+            var nativeButton = child.gameObject.GetComponent(_nativeButtonType);
+            if (nativeButton is Component component) BindNativeButton(component);
         }
     }
 
@@ -255,13 +281,40 @@ internal sealed class ModConfigUiShell : IDisposable
             binding.Button.onClick.RemoveListener(binding.Listener);
         }
 
+        if (_navigationObserver is not null)
+        {
+            _navigationObserver.Changed = null;
+            UnityEngine.Object.Destroy(_navigationObserver);
+            _navigationObserver = null;
+        }
+
         _panel.Dispose();
         UnityEngine.Object.Destroy(_buttonObject);
     }
 
     private void CloseFromNativeTab()
     {
+        EnsureButtonIsLast();
         SetOpen(false, restorePreviousNativeView: false);
+    }
+
+    private void EnsureButtonIsLast()
+    {
+        if (_buttonObject.transform.GetSiblingIndex() != _buttonParent.childCount - 1)
+            _buttonObject.transform.SetSiblingIndex(_buttonParent.childCount - 1);
+    }
+
+    private void BindNativeButton(Component component)
+    {
+        var view = ReadNativeView(component);
+        if (view is not null && !_nativeViews.Any(existing => ReferenceEquals(existing, view)))
+            _nativeViews.Add(view);
+
+        var button = component.GetComponent<Button>();
+        if (button is null || _nativeCloseListeners.Any(binding => ReferenceEquals(binding.Button, button))) return;
+        UnityAction listener = CloseFromNativeTab;
+        button.onClick.AddListener(listener);
+        _nativeCloseListeners.Add((button, listener));
     }
 
     private void SetOpen(bool open, bool restorePreviousNativeView)

@@ -41,6 +41,8 @@ public sealed class Plugin : BaseUnityPlugin
         PatchOptional("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), postfix: false);
         PatchFinalizer("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick));
         PatchOptional("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), postfix: false);
+        PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
+        PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
         SceneManager.activeSceneChanged += OnSceneChanged;
         Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
     }
@@ -64,12 +66,33 @@ public sealed class Plugin : BaseUnityPlugin
         if (_uiRetry <= 0) { _uiRetry = UiRetryIntervalSeconds; MentorToggleButton.TryCreate(_config, _runtime, out _button); }
     }
 
-    private void LateUpdate() => _runtime?.LateTick();
-    private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp) => Instance?._runtime?.Observe(__instance, exp);
-    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp) => Instance?._runtime?.ObserveAlchemy(__instance, exp);
-    private static void BeforeArtifactTick(object __instance) => Instance?._runtime?.BeginArtifactTick(__instance);
+    private void LateUpdate()
+    {
+        if (SceneManager.GetActiveScene().name == "Main") _runtime?.LateTick();
+    }
+    private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.Observe(__instance, exp);
+    }
+    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.ObserveAlchemy(__instance, exp);
+    }
+    private static void BeforeArtifactTick(object __instance)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.BeginArtifactTick(__instance);
+    }
     private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(); return __exception; }
-    private static void BeforeContainerGain(object __instance, BigDouble __0) => Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
+    private static void BeforeContainerGain(object __instance, BigDouble __0)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
+    }
+    private static void AfterLifecycleReset()
+    {
+        Instance?._runtime?.Cancel();
+        Instance?._runtime?.ClearBlock();
+    }
+    private static bool IsGameplayScene() => SceneManager.GetActiveScene().name == "Main";
     private void PatchOptional(string targetName, string patchName, bool postfix)
     {
         var target = AccessTools.Method(targetName);

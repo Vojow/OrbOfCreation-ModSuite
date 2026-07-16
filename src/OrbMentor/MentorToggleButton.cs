@@ -15,6 +15,7 @@ internal sealed class MentorToggleButton : IDisposable
     private readonly Image? _icon;
     private readonly MentorConfig _config;
     private readonly MentorRuntime _runtime;
+    private int _lastVisualState = -1;
 
     private MentorToggleButton(GameObject root, Button button, TextMeshProUGUI? text, Image? icon, MentorConfig config, MentorRuntime runtime)
     { _root = root; _button = button; _text = text; _icon = icon; _config = config; _runtime = runtime; }
@@ -76,8 +77,11 @@ internal sealed class MentorToggleButton : IDisposable
 
     public void Render()
     {
-        var state = _runtime.IsBlocked ? "BLOCKED" : _config.Active ? "ON" : "OFF";
-        var color = _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+        var visualState = _runtime.IsBlocked ? 2 : _config.Active ? 1 : 0;
+        if (_lastVisualState == visualState) return;
+        _lastVisualState = visualState;
+        var state = visualState == 2 ? "BLOCKED" : visualState == 1 ? "ON" : "OFF";
+        var color = visualState == 2 ? new Color(1, .3f, .25f) : visualState == 1 ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
         if (_text is not null)
         {
             _text.text = $"M {state}";
