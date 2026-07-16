@@ -257,6 +257,21 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    public void NativeFireAndHoldReleaseFailuresAreBothReported()
+    {
+        var charged = Spell("charged", charged: true);
+        charged.FireResult = false;
+        charged.HoldReleaseResult = false;
+        using var fixture = Create(charged);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("could not release full-charge hold", StringComparison.Ordinal));
+        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("could not fire", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void VerboseLoggingSuppressesEmptySlotsAndRepeatedRejectionsUntilStateChanges()
     {
         var rejected = Spell("cooling down");
@@ -650,6 +665,8 @@ public sealed class AutoCastTests
 
         public bool HoldStartResult { get; set; } = true;
 
+        public bool HoldReleaseResult { get; set; } = true;
+
         public bool TargetsValid { get; set; } = true;
 
         public bool CanCastResult { get; set; } = true;
@@ -690,7 +707,7 @@ public sealed class AutoCastTests
         public bool TrySetChargeHold(bool isHolding, out string reason)
         {
             ChargeHoldChanges.Add(isHolding);
-            var succeeded = !isHolding || HoldStartResult;
+            var succeeded = isHolding ? HoldStartResult : HoldReleaseResult;
             reason = succeeded ? (isHolding ? "held" : "released") : "native hold failed";
             return succeeded;
         }

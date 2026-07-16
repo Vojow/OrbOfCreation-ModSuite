@@ -136,19 +136,19 @@ internal sealed class AutoCastEngine : IDisposable
                 return;
             }
 
+            if (shouldFullCharge)
+            {
+                _fullChargeCandidate = candidate;
+            }
+
             if (!candidate.TryFireAndResolveTargets(out reason))
             {
                 if (shouldFullCharge)
                 {
-                    candidate.TrySetChargeHold(false, out _);
+                    ReleaseFullChargeHold("native fire or target resolution failed");
                 }
                 _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
-            }
-
-            if (shouldFullCharge)
-            {
-                _fullChargeCandidate = candidate;
             }
 
             MarkSlotState(candidate, "active fired");
