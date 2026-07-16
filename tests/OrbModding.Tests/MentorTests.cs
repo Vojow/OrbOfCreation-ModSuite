@@ -127,6 +127,8 @@ public sealed class MentorTests
         Assert.Equal(10.0, config.ArtifactSharePercent.Value);
         Assert.False(config.AlchemyEnabled.Value);
         Assert.Equal(10.0, config.AlchemySharePercent.Value);
+        Assert.Equal(2, config.OperationsPerFrame.Value);
+        Assert.Equal(0.5, config.CpuBudgetMilliseconds.Value);
     }
 
     [Fact]

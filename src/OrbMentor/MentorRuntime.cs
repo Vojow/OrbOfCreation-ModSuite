@@ -26,8 +26,11 @@ internal sealed class MentorRuntime
     private readonly ManualLogSource _log;
     private readonly Dictionary<MentorDomain, DomainState> _domains = Enum.GetValues(typeof(MentorDomain)).Cast<MentorDomain>().ToDictionary(d => d, _ => new DomainState());
     private readonly Dictionary<MentorDomain, MentorRecipe[]> _catalogCache = new();
+    private readonly Dictionary<MentorDomain, long> _catalogCacheExpiry = new();
+    private readonly Dictionary<MentorDomain, Dictionary<string, object>> _itemCache = new();
     private static readonly long ContinuousDistributionTicks = Math.Max(1, Stopwatch.Frequency / 4);
     private static readonly long SummaryRefreshTicks = Math.Max(1, Stopwatch.Frequency);
+    private static readonly long CatalogCacheTicks = Math.Max(1, Stopwatch.Frequency);
     private bool _guarded;
     private int _nextDomain;
     private string? _blockedReason;
@@ -75,7 +78,8 @@ internal sealed class MentorRuntime
         if (_config.AlchemyEnabled.Value) ObserveDomain(MentorDomain.Alchemy, source, xp);
     }
 
-    public void BeginArtifactTick(object source) => _activeArtifact = _guarded ? null : source;
+    public void BeginArtifactTick(object source) =>
+        _activeArtifact = !_guarded && _config.Active && _config.ArtifactsEnabled.Value ? source : null;
     public void EndArtifactTick() => _activeArtifact = null;
     public void ObserveExperienceContainer(object container, BigDouble xp)
     {
@@ -99,7 +103,7 @@ internal sealed class MentorRuntime
 
     public void LateTick()
     {
-        if (!_config.Active || IsBlocked) { Cancel(); return; }
+        if (!_config.Active || IsBlocked) return;
         PlanDomain(MentorDomain.Spells, _config.SharePercent.Value, continuous: false);
         if (_config.ArtifactsEnabled.Value) PlanDomain(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value, continuous: true); else CancelDomain(MentorDomain.Artifacts);
         if (_config.AlchemyEnabled.Value) PlanDomain(MentorDomain.Alchemy, _config.AlchemySharePercent.Value, continuous: true); else CancelDomain(MentorDomain.Alchemy);
@@ -121,7 +125,6 @@ internal sealed class MentorRuntime
             operation++;
             Grant(domain, grants[0]);
         }
-        _catalogCache.Clear();
     }
 
     private void PlanDomain(MentorDomain domain, double percent, bool continuous)
@@ -177,32 +180,40 @@ internal sealed class MentorRuntime
         savedXp.SetValue(equipment, current);
     }
 
-    public void Cancel() { foreach (var domain in _domains.Keys.ToArray()) CancelDomain(domain); _activeArtifact = null; _catalogCache.Clear(); }
-    private void CancelDomain(MentorDomain domain) { _domains[domain].FrameXp = default; _domains[domain].NextDistributionTimestamp = 0; _domains[domain].Engine.Cancel(); _catalogCache.Remove(domain); }
+    public void Cancel() { foreach (var domain in _domains.Keys.ToArray()) CancelDomain(domain); _activeArtifact = null; _catalogCache.Clear(); _catalogCacheExpiry.Clear(); _itemCache.Clear(); }
+    private void CancelDomain(MentorDomain domain) { _domains[domain].FrameXp = default; _domains[domain].NextDistributionTimestamp = 0; _domains[domain].Engine.Cancel(); _catalogCache.Remove(domain); _catalogCacheExpiry.Remove(domain); }
     public void ClearBlock() => _blockedReason = null;
     private void Block(string reason) { if (_blockedReason == reason) return; _blockedReason = reason; Cancel(); _log.LogError($"Orb Mentor blocked: {reason}"); }
 
     private bool TryCatalog(MentorDomain domain, out MentorRecipe[] catalog)
     {
-        if (_catalogCache.TryGetValue(domain, out catalog!)) return true;
+        var now = Stopwatch.GetTimestamp();
+        if (_catalogCache.TryGetValue(domain, out catalog!) &&
+            _catalogCacheExpiry.TryGetValue(domain, out var expiry) && now < expiry) return true;
         var typeName = domain switch { MentorDomain.Spells => "SpellRecipeSO", MentorDomain.Artifacts => "EquipmentSO", _ => "AlchemyRecipeSO" };
         var type = Type.GetType(typeName + ", Assembly-CSharp", false);
         var list = type is null ? null : FindField(type, "All")?.GetValue(null) as IEnumerable;
         if (list is null) { catalog = Array.Empty<MentorRecipe>(); Block($"{typeName}.All is unavailable"); return false; }
         var result = new List<MentorRecipe>();
+        var itemsById = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var item in list.Cast<object>().Where(x => x is not null))
         {
             var id = StableId(item);
             if (id is null) { catalog = Array.Empty<MentorRecipe>(); Block($"registered {domain} item has no stable UUID"); return false; }
             result.Add(new MentorRecipe(id, ReadInt(item, MasteryField(domain)), IsDiscovered(domain, item)));
+            itemsById[id] = item;
         }
         catalog = result.ToArray();
         _catalogCache[domain] = catalog;
+        _catalogCacheExpiry[domain] = now + CatalogCacheTicks;
+        _itemCache[domain] = itemsById;
         return true;
     }
 
-    private static object? Resolve(MentorDomain domain, string id)
+    private object? Resolve(MentorDomain domain, string id)
     {
+        if (_itemCache.TryGetValue(domain, out var cached) && cached.TryGetValue(id, out var item)) return item;
+        if (TryCatalog(domain, out _) && _itemCache.TryGetValue(domain, out cached) && cached.TryGetValue(id, out item)) return item;
         var typeName = domain switch { MentorDomain.Spells => "SpellRecipeSO", MentorDomain.Artifacts => "EquipmentSO", _ => "AlchemyRecipeSO" };
         var type = Type.GetType(typeName + ", Assembly-CSharp", false);
         var list = type is null ? null : FindField(type, "All")?.GetValue(null) as IEnumerable;

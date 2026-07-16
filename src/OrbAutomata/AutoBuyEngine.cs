@@ -9,6 +9,8 @@ namespace OrbAutomata;
 
 internal sealed class AutoBuyEngine : IDisposable
 {
+    private const double MaximumCpuBudgetMilliseconds = 1.0;
+    private const float QueuePollIntervalSeconds = 0.1f;
     private readonly AutomataConfig _config;
     private readonly IAutoBuyCatalog _catalog;
     private readonly ReservePolicy _reservePolicy;
@@ -32,7 +34,9 @@ internal sealed class AutoBuyEngine : IDisposable
     private double _pendingBatchElapsedMilliseconds;
     private bool _pendingBatchCpuSliced;
     private bool _pendingBatchQueueWaitLogged;
+    private bool _pendingWaitingForQueue;
     private float _secondsUntilEvaluation;
+    private float _secondsUntilQueuePoll;
     private bool _queueWaitingLogged;
     private int _successfulPurchasesThisSession;
 
@@ -76,7 +80,19 @@ internal sealed class AutoBuyEngine : IDisposable
                 return;
             }
 
-            ContinueRankedBatch();
+            if (!_pendingWaitingForQueue)
+            {
+                ContinueRankedBatch();
+            }
+            else
+            {
+                _secondsUntilQueuePoll -= Math.Max(0.0f, unscaledDeltaTime);
+                if (_secondsUntilQueuePoll <= 0.0f)
+                {
+                    _secondsUntilQueuePoll = QueuePollIntervalSeconds;
+                    ContinueRankedBatch();
+                }
+            }
             return;
         }
 
@@ -112,7 +128,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        var budget = Math.Max(0.1f, _config.CpuBudgetMilliseconds.Value);
+        var budget = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
         while (_pendingCandidates is not null && _pendingIndex < _pendingCandidates.Count)
         {
             var candidate = _pendingCandidates[_pendingIndex];
@@ -256,6 +272,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingBatchElapsedMilliseconds = 0.0;
         _pendingBatchCpuSliced = false;
         _pendingBatchQueueWaitLogged = false;
+        _pendingWaitingForQueue = false;
         ContinueRankedBatch();
     }
 
@@ -272,9 +289,10 @@ internal sealed class AutoBuyEngine : IDisposable
             : Math.Max(1, _config.MaxPurchasesPerBatch.Value);
         var targetLabel = maximumPurchases == int.MaxValue ? "queue" : maximumPurchases.ToString(CultureInfo.InvariantCulture);
         var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
-        var cpuBudget = Math.Max(0.1f, _config.CpuBudgetMilliseconds.Value);
+        var cpuBudget = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
         var stopwatch = Stopwatch.StartNew();
         var stoppedByQueue = false;
+        _pendingWaitingForQueue = false;
 
         while (_pendingPurchaseIndex < recommendations.Count && _pendingBatchPurchased < maximumPurchases)
         {
@@ -354,6 +372,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingBatchElapsedMilliseconds += _readPurchaseElapsedMilliseconds(stopwatch);
         if (stoppedByQueue)
         {
+            _pendingWaitingForQueue = true;
             if (!_pendingBatchQueueWaitLogged)
             {
                 _pendingBatchQueueWaitLogged = true;
@@ -523,6 +542,8 @@ internal sealed class AutoBuyEngine : IDisposable
         _pendingBatchElapsedMilliseconds = 0.0;
         _pendingBatchCpuSliced = false;
         _pendingBatchQueueWaitLogged = false;
+        _pendingWaitingForQueue = false;
+        _secondsUntilQueuePoll = 0.0f;
     }
 
     private void ResetAllPendingWork()
@@ -555,6 +576,11 @@ internal sealed class AutoBuyEngine : IDisposable
     private static float ClampInterval(float value)
     {
         return Math.Max(0.1f, value);
+    }
+
+    internal static double EffectiveCpuBudget(double configuredMilliseconds)
+    {
+        return Math.Min(MaximumCpuBudgetMilliseconds, Math.Max(0.1, configuredMilliseconds));
     }
 
 }

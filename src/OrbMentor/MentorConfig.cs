@@ -50,8 +50,8 @@ internal sealed class MentorConfig
         Bind(file, "Artifacts", "SharePercent", 10.0, "Artifact mastery XP percentage, clamped to 0-100.", 10, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Artifacts", displayName: "Artifact share percent", dependencySection: "Artifacts", dependencyKey: "Enabled"),
         Bind(file, "Alchemy", "Enabled", false, "Share alchemy mastery XP with lower-mastery discovered recipes.", 20, 0, displaySection: "Alchemy", displayName: "Alchemy sharing"),
         Bind(file, "Alchemy", "SharePercent", 10.0, "Alchemy mastery XP percentage, clamped to 0-100.", 20, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Alchemy", displayName: "Alchemy share percent", dependencySection: "Alchemy", dependencyKey: "Enabled"),
-        Bind(file, "Performance", "OperationsPerFrame", 8, "Maximum native recipient grants per frame.", 30, 30, new AcceptableValueRange<int>(1, 128), displaySection: "Advanced", displayName: "Operations per frame"),
-        Bind(file, "Performance", "CpuBudgetMilliseconds", 2.0, "Soft unscaled CPU-time budget per frame.", 30, 40, new AcceptableValueRange<double>(0.1, 10), displaySection: "Advanced", displayName: "CPU budget (ms)"),
+        Bind(file, "Performance", "OperationsPerFrame", 2, "Maximum native recipient grants per frame.", 30, 30, new AcceptableValueRange<int>(1, 8), displaySection: "Advanced", displayName: "Operations per frame"),
+        Bind(file, "Performance", "CpuBudgetMilliseconds", 0.5, "Soft unscaled CPU-time budget per frame, capped at 1 ms.", 30, 40, new AcceptableValueRange<double>(0.1, 1.0), displaySection: "Advanced", displayName: "CPU budget (ms)"),
         Bind(file, "Diagnostics", "DetailedLogging", false, "Log mentor events, batches, recipients, and amounts.", 30, 50, displaySection: "Advanced", displayName: "Detailed logging"),
         BindDevelopmentProbe(file));
 

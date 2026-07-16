@@ -1,5 +1,9 @@
 # Troubleshooting
 
+## Steam Deck UI or severe frame-rate loss
+
+Version 0.1.1 throttles native UI discovery while autoqueue is locked, retries the Mods UI while Proton finishes constructing the scene, and applies conservative CPU limits to Auto Buy and Mentor. If an older configuration is present, Automata's CPU budget is clamped to 1 ms and Mentor is clamped to two grants and 1 ms per frame (0.5 ms by default). If the problem persists, disable Auto Buy and Mentor with their shortcuts or configuration modes and attach `BepInEx/LogOutput.log` to the report; include whether the native autoqueue and NG+ tabs were unlocked.
+
 [Back to documentation](../README.md) · [Installation](installation.md)
 
 ## No `LogOutput.log`

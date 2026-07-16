@@ -11,6 +11,7 @@ namespace OrbAutomata;
 [BepInPlugin(PluginIds.AutomataGuid, PluginIds.AutomataName, PluginIds.AutomataVersion)]
 public sealed class Plugin : BaseUnityPlugin
 {
+    private const float UiRetryIntervalSeconds = 5.0f;
     private Harmony? _harmony;
     private AutomataConfig? _config;
     private AutoBuyEngine? _autoBuyEngine;
@@ -20,6 +21,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoBuyToggleControl? _autoBuyToggleControl;
     private AutoBuyToggleButton? _autoBuyToggleButton;
     private float _autoCastUiRetrySeconds;
+    private float _autoBuyUiRetrySeconds;
     private float _autoCastUiFailureSeconds;
     private bool _autoCastUiFailureLogged;
     private string _autoCastUiFailureReason = string.Empty;
@@ -76,9 +78,12 @@ public sealed class Plugin : BaseUnityPlugin
     {
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
-        UpdateAutoBuyControl();
-        _autoBuyEngine?.Tick(deltaTime);
-        _autoCastEngine?.Tick(deltaTime);
+        UpdateAutoBuyControl(deltaTime);
+        if (SceneManager.GetActiveScene().name == "Main")
+        {
+            _autoBuyEngine?.Tick(deltaTime);
+            _autoCastEngine?.Tick(deltaTime);
+        }
     }
 
     private void OnDestroy()
@@ -153,7 +158,7 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
-        _autoCastUiRetrySeconds = 1.0f;
+        _autoCastUiRetrySeconds = UiRetryIntervalSeconds;
         if (AutoCastToggleButton.TryCreate(_autoCastToggleControl, Log, out var toggle, out var reason))
         {
             _autoCastToggleButton = toggle;
@@ -179,13 +184,14 @@ public sealed class Plugin : BaseUnityPlugin
         Log.LogWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
     }
 
-    private void UpdateAutoBuyControl()
+    private void UpdateAutoBuyControl(float unscaledDeltaTime)
     {
         if (_autoBuyToggleControl is null) return;
         if (SceneManager.GetActiveScene().name != "Main")
         {
             _autoBuyToggleButton?.Dispose();
             _autoBuyToggleButton = null;
+            _autoBuyUiRetrySeconds = 0.0f;
             return;
         }
         if (_autoBuyToggleButton is not null && !_autoBuyToggleButton.IsAlive)
@@ -194,6 +200,9 @@ public sealed class Plugin : BaseUnityPlugin
             _autoBuyToggleButton = null;
         }
         if (_autoBuyToggleButton is not null) { _autoBuyToggleButton.Render(); return; }
+        _autoBuyUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
+        if (_autoBuyUiRetrySeconds > 0.0f) return;
+        _autoBuyUiRetrySeconds = UiRetryIntervalSeconds;
         AutoBuyToggleButton.TryCreate(_autoBuyToggleControl, out _autoBuyToggleButton);
     }
 

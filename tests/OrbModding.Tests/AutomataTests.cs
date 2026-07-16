@@ -59,8 +59,29 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.False(config.EnableOperationalLogging.Value);
+        Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.True(config.CanStartAutoBuyActively);
         Assert.False(config.CanStartAutoCastActively);
+    }
+
+    [Theory]
+    [InlineData(-1.0, 0.1)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(4.0, 1.0)]
+    public void AutoBuyCpuBudgetIsHardCappedForFrameSafety(double configured, double expected)
+    {
+        Assert.Equal(expected, AutoBuyEngine.EffectiveCpuBudget(configured), 6);
+    }
+
+    [Fact]
+    public void ReflectionAutoBuyCatalogCachesTheStaticRegistry()
+    {
+        using var catalog = new ReflectionAutoBuyCatalog();
+
+        var first = catalog.Discover();
+        var second = catalog.Discover();
+
+        Assert.Same(first, second);
     }
 
     [Fact]

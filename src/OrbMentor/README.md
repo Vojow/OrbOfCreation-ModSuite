@@ -1,4 +1,4 @@
-# Orb Mentor 0.1.0 beta candidate
+# Orb Mentor 0.1.1 beta candidate
 
 Orb Mentor shares configurable percentages of native mastery XP from the highest-mastery source with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and available alchemy recipes. Artifact and alchemy sharing are opt-in.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased performance hotfix
+
+- Retry Mod Config UI installation on slower Steam Deck/Proton scene startup instead of permanently giving up after one attempt.
+- Throttle missing native-control discovery to avoid scanning the complete Unity object registry every frame before autoqueue unlock.
+- Cache Auto Buy's static candidate registry, cap its reflective CPU slice to 1 ms, and poll full queues at 10 Hz instead of every frame.
+- Cache Mentor catalogs and native object lookups, stop repeated inactive-state cleanup, and lower its default grant and CPU budgets.
+
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 
 - Added the supported suite package with Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. Experimental plugins remain excluded.

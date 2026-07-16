@@ -12,11 +12,11 @@ The current public beta centers on Orb Automata: queue-aware Auto Buy, safe Auto
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.4.1** | Beta | Auto Buy and Auto Cast with affordability, reserves, and queue ownership. |
-| **Orb Mod Config 0.5.1** | Beta | Simplified in-game Mods tab, available from the start, with typed editors and Steam Deck keyboard support. |
+| **Orb Automata 0.4.2** | Beta | Auto Buy and Auto Cast with affordability, reserves, and queue ownership. |
+| **Orb Mod Config 0.5.2** | Beta | Simplified in-game Mods tab, available from the start, with typed editors and Steam Deck keyboard support. |
 | **Orb Chronomancer** | Experimental | Simulation-speed controls; excluded from the Automata release archive. |
 | **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation is disabled by default. |
-| **Orb Mentor 0.1.0** | Beta candidate | Highest-mastery spells share final native mastery XP with lower-level discovered spells; interactive validation remains before release. |
+| **Orb Mentor 0.1.1** | Beta candidate | Highest-mastery spells share final native mastery XP with lower-level discovered spells; interactive validation remains before release. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is supported only through the Windows game under Proton with BepInEx 5.

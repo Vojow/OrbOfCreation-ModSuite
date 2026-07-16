@@ -181,7 +181,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
-                Bind(config, "Performance", "CpuBudgetMilliseconds", 4.0f, "Soft CPU budget for each scan or per-frame purchase slice. Higher values fill the queue faster but may reduce frame rate.", 30, 0),
+                Bind(config, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft CPU budget for each scan or purchase slice, capped at 1 ms for frame-time safety.", 30, 0, new AcceptableValueRange<float>(0.1f, 1.0f)),
                 Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal Auto Buy and Auto Cast decisions to the BepInEx log. Startup, warnings, and errors are always logged.", 50, 0),
                 Bind(config, "Diagnostics", "MaxLoggedRejections", 12, "Maximum rejected candidates written per verbose evaluation when operational logging is enabled.", 50, 20),
                 Bind(config, "Diagnostics", "DecisionLogLevel", AutomataDecisionLogLevel.Summary, "Recommendation detail when operational logging is enabled.", 50, 10),

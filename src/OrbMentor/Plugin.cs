@@ -14,11 +14,13 @@ namespace OrbMentor;
 [BepInPlugin(PluginIds.MentorGuid, PluginIds.MentorName, PluginIds.MentorVersion)]
 public sealed class Plugin : BaseUnityPlugin
 {
+    private const float UiRetryIntervalSeconds = 5.0f;
     private Harmony? _harmony;
     private MentorConfig? _config;
     private MentorRuntime? _runtime;
     private MentorToggleButton? _button;
     private float _uiRetry;
+    private bool _wasActive;
     internal static Plugin? Instance { get; private set; }
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -28,6 +30,7 @@ public sealed class Plugin : BaseUnityPlugin
         Log = Logger;
         _config = MentorConfig.Bind(Config);
         _runtime = new MentorRuntime(_config, Logger);
+        _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
         var target = AccessTools.Method("SpellRecipeSO:GainMasteryExp");
@@ -51,12 +54,14 @@ public sealed class Plugin : BaseUnityPlugin
             _runtime.Cancel();
             Logger.LogInfo($"Orb Mentor is now {_config.Mode.Value}.");
         }
-        if (!_config.Active) _runtime.Cancel();
+        var active = _config.Active;
+        if (_wasActive && !active) _runtime.Cancel();
+        _wasActive = active;
         if (SceneManager.GetActiveScene().name != "Main") { _button?.Dispose(); _button = null; return; }
         if (_button is not null && !_button.IsAlive) { _button.Dispose(); _button = null; }
         if (_button is not null) { _button.Render(); return; }
         _uiRetry -= Time.unscaledDeltaTime;
-        if (_uiRetry <= 0) { _uiRetry = 1; MentorToggleButton.TryCreate(_config, _runtime, out _button); }
+        if (_uiRetry <= 0) { _uiRetry = UiRetryIntervalSeconds; MentorToggleButton.TryCreate(_config, _runtime, out _button); }
     }
 
     private void LateUpdate() => _runtime?.LateTick();

@@ -8,9 +8,11 @@ namespace OrbAutomata;
 
 internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
 {
+    private IReadOnlyList<IAutoBuyCandidate>? _cachedCandidates;
+
     public IEnumerable<IAutoBuyCandidate> Discover()
     {
-        return EnumerateStaticList("StructureSO", "All", AutoBuyCandidateKind.Structure)
+        return _cachedCandidates ??= EnumerateStaticList("StructureSO", "All", AutoBuyCandidateKind.Structure)
             .Concat(EnumerateStaticList("UpgradeSO", "All", AutoBuyCandidateKind.Upgrade))
             .OrderBy(candidate => candidate.Snapshot().Uuid, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -81,6 +83,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog
 
     public void Dispose()
     {
+        _cachedCandidates = null;
     }
 
     private static IEnumerable<IAutoBuyCandidate> EnumerateStaticList(

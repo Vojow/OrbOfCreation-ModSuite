@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
@@ -11,11 +12,13 @@ namespace OrbModConfig;
 public sealed class Plugin : BaseUnityPlugin
 {
     private const float UiInstallDelaySeconds = 2f;
+    private const float UiRetryIntervalSeconds = 5f;
 
     private ConfigEntry<bool>? _enabled;
     private ConfigEntry<bool>? _enableUiShell;
     private float _mainSceneElapsed;
-    private bool _shellInstallAttempted;
+    private float _uiRetrySeconds;
+    private bool _uiFailureLogged;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
 
@@ -91,13 +94,25 @@ public sealed class Plugin : BaseUnityPlugin
 
         if (_enableUiShell?.Value == true)
         {
-            if (_uiShell is null && !_shellInstallAttempted)
+            if (_uiShell is null)
             {
-                _shellInstallAttempted = true;
-                _catalog ??= ConfigCatalog.DiscoverLoaded();
-                if (!ModConfigUiShell.TryCreate(Logger, _catalog, out _uiShell, out var reason))
+                _uiRetrySeconds -= Math.Max(0.0f, Time.unscaledDeltaTime);
+                if (_uiRetrySeconds <= 0.0f)
                 {
-                    Logger.LogWarning("Mod Config UI shell was not installed: " + reason);
+                    _uiRetrySeconds = UiRetryIntervalSeconds;
+                    _catalog ??= ConfigCatalog.DiscoverLoaded();
+                    if (!ModConfigUiShell.TryCreate(Logger, _catalog, out _uiShell, out var reason))
+                    {
+                        if (!_uiFailureLogged)
+                        {
+                            _uiFailureLogged = true;
+                            Logger.LogWarning("Mod Config UI is not ready; installation will retry: " + reason);
+                        }
+                    }
+                    else
+                    {
+                        _uiFailureLogged = false;
+                    }
                 }
             }
 
@@ -107,7 +122,8 @@ public sealed class Plugin : BaseUnityPlugin
         {
             _uiShell.Dispose();
             _uiShell = null;
-            _shellInstallAttempted = false;
+            _uiRetrySeconds = 0f;
+            _uiFailureLogged = false;
         }
     }
 
@@ -128,6 +144,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void ResetSceneState(Scene scene)
     {
         _mainSceneElapsed = 0f;
-        _shellInstallAttempted = scene.name != "Main";
+        _uiRetrySeconds = 0f;
+        _uiFailureLogged = false;
     }
 }

@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.4.1` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.4.2` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
 
 ## Build
 
