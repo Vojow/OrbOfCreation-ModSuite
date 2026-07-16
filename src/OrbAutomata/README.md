@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.5.1` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.5.2` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
 
 ## Build
 
@@ -20,6 +20,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Both mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - Structure repeat follows the live Bulk Development value.
+- Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Operational decision logging is off; startup, warning, and error records remain enabled.
@@ -48,19 +49,27 @@ Upgrade submission temporarily forces the native global multi-buy value to one a
 
 When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
 
+`PrioritizeCostAndQualityStructures=true` adds one purchase-priority tier above ordinary cost-ratio ordering. A Structure receives that tier only when its stable native effect definition and a non-mutating `ValueModifier.Adjust(1)` preview prove that it reduces `Cost`, `CostScaling`, or resource `AttributeCost`, or increases resource `Quality`. Dynamic targets, unknown properties, unreadable modifiers, and effects with the wrong direction receive no boost. The option changes ranking only after native availability, `CanPurchase`, exact current cost, affordability, reserves, allow/block lists, and queue safety have passed; it never makes a locked or unaffordable Structure eligible. Classification is lazy and cached, so it is not performed while the option is off and is not repeated in the per-frame evaluation path.
+
 ### Queue scheduling
 
 The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. Once a ranked batch is prepared, it also checks queue room every frame and feeds the first newly available slot without waiting for the queue to become nearly empty or performing another scan. After a successful batch, the following scan begins on the next frame while existing native actions continue.
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
-Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level, fired spell, or normal full-charge release requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. A denied lease retains the pending candidate, repeat count, or owned charge hold, so Fixed, Bulk Development, action-multiplier groups, and charge release continue without restarting or overlapping another suite mutation. Disabled automation clears pending work and stops requesting leases; manual input, scene exit, emergency stop, and unload still release an owned charge hold immediately to avoid trapping player control.
+Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level, fired spell, or normal full-charge release requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. Auto Buy receives a bounded three-turn scheduling weight while it has continuous work, then yields to the next waiting subsystem; this improves queue filling without starving Mentor or Auto Cast. A denied lease retains the pending candidate, repeat count, or owned charge hold, so Fixed, Bulk Development, action-multiplier groups, and charge release continue without restarting or overlapping another suite mutation. Disabled automation clears pending work and stops requesting leases; manual input, scene exit, emergency stop, and unload still release an owned charge hold immediately to avoid trapping player control.
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
-Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels or assign special priority to cost-reduction effects.
+Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels that group buys.
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
+
+Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
+
+Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
+
+Structures must pass native availability before Automata reads costs or calls the purchase contract. Upgrades must first pass native `CanPurchase()`; a rejected Upgrade is removed from high-frequency resource dependency updates and retried by bounded lifecycle maintenance or the next coalesced completion settlement. Once it becomes buyable, its exact cost dependencies are restored before ranking.
 
 ## Auto Cast
 
@@ -76,6 +85,6 @@ The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active con
 
 ## Diagnostics
 
-Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. Summary mode records recommendations, successful work, batches, and queue waits. Verbose mode also records bounded candidate rejections and detailed Auto Cast resource snapshots.
+Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
 
 Orb of Creation's LeanTween pool defaults to 400 simultaneous tweens. AutobuyOrb raises that capacity because very large purchase bursts can create enough UI popups to exhaust it. This is separate from queue scheduling; Automata does not currently override the global tween pool. If the BepInEx log reports LeanTween exhaustion or UI animations begin disappearing during unusually large batches, treat a restart-time tween-capacity option as a separate performance feature.

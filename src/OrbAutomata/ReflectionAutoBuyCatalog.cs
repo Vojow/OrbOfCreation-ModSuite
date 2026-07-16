@@ -11,19 +11,32 @@ namespace OrbAutomata;
 internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan LifecycleMaintenanceInterval = TimeSpan.FromMilliseconds(250);
     private const int RegistryItemsPerEvaluation = 32;
     private const int LifecycleItemsPerEvaluation = 32;
-    private const int ActiveLifecycleRefreshPerEvaluation = 16;
-    private const int SlowLifecycleRefreshPerEvaluation = 32;
+    private const int ActiveLifecycleRefreshPerMaintenance = 8;
+    private const int SlowLifecycleRefreshPerMaintenance = 16;
     private readonly AutoBuyCandidateIndex _index = new AutoBuyCandidateIndex();
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
+    private readonly Func<TimeSpan>? _readElapsed;
+    private readonly AutoBuyMaintenanceCadence _maintenanceCadence;
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
     private bool _completionEffectsDirty;
 
     public ReflectionAutoBuyCatalog()
+        : this(null)
     {
+    }
+
+    internal ReflectionAutoBuyCatalog(Func<TimeSpan>? readElapsed)
+    {
+        _readElapsed = readElapsed;
+        _maintenanceCadence = new AutoBuyMaintenanceCadence(
+            LifecycleMaintenanceInterval,
+            ActiveLifecycleRefreshPerMaintenance,
+            SlowLifecycleRefreshPerMaintenance);
         _resourceSnapshots = new AutoBuyResourceSnapshotCache(
             new ReflectionAutoBuyResourceSnapshotReader(),
             _index.InvalidateResource);
@@ -46,11 +59,15 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         ProcessRegistryReconciliationSlice();
         _resourceSnapshots.BeginEvaluationEpoch(_index.HasResourceDependents);
 
+        _maintenanceCadence.TryTake(
+            Elapsed,
+            out var activeRefreshCount,
+            out var slowRefreshCount);
         var batch = _index.PrepareEvaluation(
             request,
             LifecycleItemsPerEvaluation,
-            ActiveLifecycleRefreshPerEvaluation,
-            SlowLifecycleRefreshPerEvaluation);
+            activeRefreshCount,
+            slowRefreshCount);
         return new AutoBuyEvaluationBatch(
             batch.ActiveCandidates,
             batch.DirtyCandidates,
@@ -60,9 +77,9 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             _index.SettlementValidationPending);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
+    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking)
     {
-        _index.CompleteCandidateEvaluation(candidate, policyExcluded);
+        _index.CompleteCandidateEvaluation(candidate, suppressResourceTracking);
     }
 
     public void InvalidatePolicy()
@@ -104,6 +121,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _registryReconciliation = null;
         _completionEffectsDirty = false;
         _nextRegistryReconciliation = TimeSpan.Zero;
+        _maintenanceCadence.Reset(Elapsed);
         _index.InvalidateLifecycleIncrementally();
     }
 
@@ -177,9 +195,11 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _index.Clear();
     }
 
+    private TimeSpan Elapsed => _readElapsed?.Invoke() ?? _lifetime.Elapsed;
+
     private void StartRegistryReconciliationIfDue()
     {
-        if (_registryReconciliation is not null || _lifetime.Elapsed < _nextRegistryReconciliation)
+        if (_registryReconciliation is not null || Elapsed < _nextRegistryReconciliation)
         {
             return;
         }
@@ -255,7 +275,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         }
 
         _registryReconciliation = null;
-        _nextRegistryReconciliation = _lifetime.Elapsed + RegistryReconciliationInterval;
+        _nextRegistryReconciliation = Elapsed + RegistryReconciliationInterval;
     }
 
     private static IList ReadStaticList(string typeName, string memberName)
@@ -316,7 +336,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     IAutoBuyCandidate,
     IAutoBuyLifecycleCandidate,
     IAutoBuyNativeIdentity,
-    IAutoBuyDirtyCandidate
+    IAutoBuyDirtyCandidate,
+    IAutoBuyPriorityCandidate
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
@@ -332,6 +353,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     private readonly MethodInfo? _isMaxQueuedLevel;
     private readonly bool _expectedNativeType;
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
+    private AutoBuyEconomicPriority _economicPriority;
+    private bool _economicPriorityClassified;
     private readonly List<AutoBuyResourceDefinition> _costDefinitions = new List<AutoBuyResourceDefinition>();
     private readonly List<DecodedResourceCost> _decodedCosts = new List<DecodedResourceCost>();
     private readonly List<DecodedResourceCost> _combinedCosts = new List<DecodedResourceCost>();
@@ -375,6 +398,22 @@ internal sealed class ReflectionAutoBuyCandidate :
     }
 
     public object NativeIdentity => _source;
+
+    public AutoBuyEconomicPriority EconomicPriority
+    {
+        get
+        {
+            if (!_economicPriorityClassified)
+            {
+                _economicPriority = _kind == AutoBuyCandidateKind.Structure && _expectedNativeType
+                    ? NativeStructurePriorityClassifier.Classify(_source)
+                    : AutoBuyEconomicPriority.None;
+                _economicPriorityClassified = true;
+            }
+
+            return _economicPriority;
+        }
+    }
 
     public IReadOnlyList<string> ResourceDependencies => _resourceDependencies;
 

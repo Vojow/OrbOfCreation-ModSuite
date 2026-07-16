@@ -109,7 +109,6 @@ public sealed class AutoCastTests
         fixture.Engine.Tick(1.0f);
 
         Assert.Equal(new[] { true, false }, charged.ChargeHoldChanges);
-        Assert.Contains(fixture.Log.Entries, entry => entry.ToString()!.Contains("first", StringComparison.Ordinal));
         Assert.Equal(1, first.FireCalls);
     }
 
@@ -125,6 +124,21 @@ public sealed class AutoCastTests
 
         Assert.Equal(1, charged.FireCalls);
         Assert.Empty(charged.ChargeHoldChanges);
+    }
+
+    [Fact]
+    public void DecisionLogLevelOffSuppressesOperationalCastLogs()
+    {
+        var spell = Spell("quiet");
+        using var fixture = Create(spell);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.EnableOperationalLogging.Value = true;
+        fixture.Config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Off;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(1, spell.FireCalls);
+        Assert.Empty(fixture.Log.Entries);
     }
 
     [Fact]

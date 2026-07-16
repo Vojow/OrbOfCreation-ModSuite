@@ -20,6 +20,7 @@ internal sealed class AutomataConfig
         ConfigEntry<int> maxPurchasesPerBatch,
         ConfigEntry<AutoBuyStructureRepeatMode> structureRepeatMode,
         ConfigEntry<int> fixedStructureLevelsPerCandidate,
+        ConfigEntry<bool> prioritizeCostAndQualityStructures,
         ConfigEntry<string> allowedAutoBuyUuids,
         ConfigEntry<string> blockedAutoBuyUuids,
         ConfigEntry<AutoCastOperationMode> autoCastMode,
@@ -51,6 +52,7 @@ internal sealed class AutomataConfig
         MaxPurchasesPerBatch = maxPurchasesPerBatch;
         StructureRepeatMode = structureRepeatMode;
         FixedStructureLevelsPerCandidate = fixedStructureLevelsPerCandidate;
+        PrioritizeCostAndQualityStructures = prioritizeCostAndQualityStructures;
         AllowedAutoBuyUuids = allowedAutoBuyUuids;
         BlockedAutoBuyUuids = blockedAutoBuyUuids;
         AutoCastMode = autoCastMode;
@@ -97,6 +99,8 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<int> FixedStructureLevelsPerCandidate { get; }
 
+    public ConfigEntry<bool> PrioritizeCostAndQualityStructures { get; }
+
     public ConfigEntry<string> AllowedAutoBuyUuids { get; }
 
     public ConfigEntry<string> BlockedAutoBuyUuids { get; }
@@ -128,6 +132,10 @@ internal sealed class AutomataConfig
     public ConfigEntry<string> AbsoluteReserve { get; }
 
     public ConfigEntry<float> RelativeReserveMultiplier { get; }
+
+    public bool IsOperationalLoggingEnabled =>
+        EnableOperationalLogging.Value &&
+        DecisionLogLevel.Value != AutomataDecisionLogLevel.Off;
 
     public bool CanStartAutoBuyActively =>
         AutoBuyMode.Value == AutoBuyOperationMode.Active &&
@@ -176,6 +184,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum queued levels from one completed scan when BatchSizingMode is Fixed.", 10, 50),
                 Bind(config, "AutoBuy", "StructureRepeatMode", AutoBuyStructureRepeatMode.BulkDevelopment, "Used when RespectActionMultiplier is disabled. BulkDevelopment follows the live Player Bulk Development value; Fixed uses FixedStructureLevelsPerCandidate; Single queues each ranked structure once.", 10, 60),
                 Bind(config, "AutoBuy", "FixedStructureLevelsPerCandidate", 2, "Maximum consecutive one-level structure purchases only when StructureRepeatMode is Fixed. Ignored by BulkDevelopment and Single.", 10, 61, new AcceptableValueRange<int>(1, 100)),
+                Bind(config, "AutoBuy", "PrioritizeCostAndQualityStructures", false, "When enabled, unlocked and affordable Structures with native effects proven to reduce costs or increase resource quality rank before ordinary candidates. Unknown effects receive no priority.", 10, 65),
                 Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120),
                 Bind(config, "AutoBuy", "BlockedUuids", string.Empty, "Comma-separated StructureSO or UpgradeSO UUIDs Automata must never buy.", 10, 130),
                 autoCastMode,

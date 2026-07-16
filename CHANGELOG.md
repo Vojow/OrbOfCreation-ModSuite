@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-- Bump Orb Automata to 0.5.1, Orb Mentor to 0.1.2, Orb Mod Config to 0.5.3, and Orb Modding Common to 0.2.0 for the combined full-charge and shared-coordinator changes.
+- Bump Orb Automata to 0.5.2, Orb Mentor to 0.1.2, Orb Mod Config to 0.5.3, and Orb Modding Common to 0.2.1 for the combined full-charge, coordinator, and Auto Buy performance changes.
+- Preserve CPU-sliced Structure repeat groups across coalesced native completion signals, while still settling broad completion effects before selecting the next ranked group.
+- Move routine Auto Buy lifecycle probes to fixed 250 ms bounded slices so purchase frequency cannot multiply locked/active reflection work.
+- Keep locked Structures out before cost or purchase checks, and park Upgrades rejected by native `CanPurchase()` outside high-frequency resource invalidation until a bounded lifecycle or completion retry.
+- Add an opt-in `PrioritizeCostAndQualityStructures` Auto Buy policy. It ranks unlocked, affordable Structures first only when a one-time native effect preview proves a cost reduction or resource-quality increase; unknown effects keep normal cost ordering.
+- Give continuously pending Auto Buy work a bounded three-turn coordinator weight before yielding to Mentor, Auto Cast, or UI work.
+- Make `DecisionLogLevel=Off` suppress all operational Auto Buy and Auto Cast records, rate-limit summary logging, and reserve per-purchase messages for verbose diagnostics.
 - Synchronize clean Mod Config fields with live changes made by native status buttons or shortcuts without overwriting staged edits.
 - Add configurable Auto Cast support for charge-capable spells: fully charge through the native hold contract by default, or fire immediately when full charging is disabled.
 - Retry Mod Config UI installation on slower Steam Deck/Proton scene startup instead of permanently giving up after one attempt.

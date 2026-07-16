@@ -19,6 +19,7 @@ internal sealed class AutoCastEngine : IDisposable
     private readonly Func<long>? _readFrameIdentity;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
+    private readonly DecisionLogGate _operationLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly Dictionary<int, DecisionLogGate> _slotLogGates = new Dictionary<int, DecisionLogGate>();
     private readonly Dictionary<int, string> _activeChannels = new Dictionary<int, string>();
     private float _secondsUntilEvaluation;
@@ -64,7 +65,7 @@ internal sealed class AutoCastEngine : IDisposable
                 SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
         }
         _secondsUntilEvaluation = ClampInterval(config.AutoCastIntervalSeconds.Value);
-        _operationalLoggingWasEnabled = config.EnableOperationalLogging.Value;
+        _operationalLoggingWasEnabled = config.IsOperationalLoggingEnabled;
         AutoCastManualSignal.ManualSpellFired += OnManualSpellFired;
     }
 
@@ -593,7 +594,21 @@ internal sealed class AutoCastEngine : IDisposable
 
     private void LogOperation(string message)
     {
-        if (_config.EnableOperationalLogging.Value)
+        if (!_config.IsOperationalLoggingEnabled)
+        {
+            return;
+        }
+
+        if (_config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose ||
+            _operationLogGate.ShouldLog("autocast-operation", TimeSpan.FromSeconds(_elapsedSeconds)))
+        {
+            _log.LogInfo(message);
+        }
+    }
+
+    private void LogStateTransition(string message)
+    {
+        if (_config.IsOperationalLoggingEnabled)
         {
             _log.LogInfo(message);
         }
@@ -608,7 +623,7 @@ internal sealed class AutoCastEngine : IDisposable
             return;
         }
 
-        if (_config.EnableOperationalLogging.Value &&
+        if (_config.IsOperationalLoggingEnabled &&
             _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose &&
             ShouldLogSlotState(candidate, state))
         {
@@ -621,12 +636,12 @@ internal sealed class AutoCastEngine : IDisposable
         var current = activeChannels.ToDictionary(channel => channel.SlotIndex, channel => channel.DisplayName);
         foreach (var ended in _activeChannels.Where(channel => !current.ContainsKey(channel.Key)).ToArray())
         {
-            LogOperation($"Auto Cast channel ended: slot {ended.Key + 1}, {ended.Value}; rotation resumed.");
+            LogStateTransition($"Auto Cast channel ended: slot {ended.Key + 1}, {ended.Value}; rotation resumed.");
         }
 
         foreach (var started in current.Where(channel => !_activeChannels.ContainsKey(channel.Key)))
         {
-            LogOperation($"Auto Cast channel active: slot {started.Key + 1}, {started.Value}; rotation paused.");
+            LogStateTransition($"Auto Cast channel active: slot {started.Key + 1}, {started.Value}; rotation paused.");
         }
 
         _activeChannels.Clear();
@@ -656,7 +671,7 @@ internal sealed class AutoCastEngine : IDisposable
 
     private void ResetDiagnosticStateWhenLoggingIsEnabled()
     {
-        var enabled = _config.EnableOperationalLogging.Value;
+        var enabled = _config.IsOperationalLoggingEnabled;
         if (enabled && !_operationalLoggingWasEnabled)
         {
             _slotLogGates.Clear();

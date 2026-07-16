@@ -230,7 +230,7 @@ internal sealed class AutoBuyCandidateIndex
         return new AutoBuyEvaluationBatch(_active, _dirty, firstExcluded, reconciliationPending: false);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded = false)
+    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking = false)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
@@ -242,8 +242,9 @@ internal sealed class AutoBuyCandidateIndex
             return;
         }
 
-        if (policyExcluded)
+        if (suppressResourceTracking)
         {
+            RemoveDependencies(entry);
             entry.DirtyReasons = AutoBuyDirtyReason.None;
             return;
         }

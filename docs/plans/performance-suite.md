@@ -43,7 +43,7 @@ No candidate may be permanently discarded solely because it was locked or unavai
 - Do not bypass native `CanPurchase`, queue, cost, or completion behavior.
 - Do not optimize by reducing or silently dropping Mentor XP.
 - Do not make Steam Deck behavior a separate code path when adaptive scheduling can solve the same problem for every platform.
-- Do not make cost-reducer investment strategy a requirement of the initial performance architecture. Effect classification and special purchase priority remain deferred until profiling proves they are needed and gameplay policy is approved separately.
+- Do not prioritize unknown cost/quality effects or make reducer investment mandatory. The narrow verified Structure tier is explicit and defaults off; broader impact planning remains deferred.
 
 ## Current groundwork
 
@@ -59,7 +59,7 @@ The Steam Deck hotfix already establishes the first safety layer:
 - AutoBuy, AutoCast, Mentor, and Mod Config now use one process-wide coordinator and the same Unity frame identity. Cooperative work is round-robin budgeted, while AutoBuy, AutoCast, and Mentor share a one-native-mutation-per-frame gate. Mentor domains with due, active, denied, or follow-up cooperative work cannot request a stale mutation lease. A final-validation miss parks that UUID in a bounded ledger until a later completed authoritative refresh, avoiding hot retry loops and head-of-line blocking.
 - Mod Config marks cooperative UI work pending only for delayed install/retry, integrity cadence, navigation events, or detected shell repair. Loaded-plugin catalog enumeration and catalog logging occur once inside the first admitted installation lease.
 
-P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate indexing, dirty updates, incremental recommendation maintenance, and resource snapshots. P4 bounded future-cost prediction and cost-reducer purchase policy remain deferred until runtime measurements justify them.
+P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate indexing, dirty updates, incremental recommendation maintenance, and resource snapshots. A separately approved, opt-in Structure priority tier classifies proven cost reductions and quality increases once from native effect definitions. P4 bounded future-cost prediction and broader impact planning remain deferred until runtime measurements justify them.
 
 ## Candidate lifecycle model
 
@@ -244,15 +244,15 @@ This timing allows a settling policy:
 
 - Newly unlocked candidates should always receive prompt evaluation because the frontier is small and their state may invalidate old assumptions.
 - They must not automatically be purchased ahead of every older candidate. A newly unlocked item can be expensive, irrelevant to cost scaling, or compete for reserved resources.
-- A future optional purchase policy may boost candidates whose audited effect metadata proves they alter costs, unlock dependencies, or materially expand production.
+- The optional `PrioritizeCostAndQualityStructures` policy boosts Structures whose audited effect metadata and native modifier preview prove a cost reduction or quality increase.
 - Unknown-impact candidates retain normal deterministic economic priority. Do not guess their impact from display names or unlock order.
 - Reserves, user allowlists/blocklists, queue room, and final native validation always override any frontier or impact boost.
 
 The expected performance win comes from evaluating a small frontier and postponing/coalescing dependent recalculation. Buying newly unlocked content indiscriminately is a gameplay strategy and is not required for the optimization.
 
-### Future note: cost-reduction impact flags
+### Implemented narrow tier and future impact flags
 
-> **Deferred.** Do not implement this classification in phases P0–P3. Revisit it only if the lifecycle-aware index, dirty updates, resource snapshots, and shared scheduler still leave a material AutoBuy bottleneck, and only after the desired gameplay priority is approved separately.
+The approved narrow tier is implemented behind `AutoBuy.PrioritizeCostAndQualityStructures`, default `false`. It classifies stable Structure definitions once, uses exact native target/property contracts, and previews `ValueModifier.Adjust(1)` to prove direction. It does not yet build scoped dependency graphs or predict future purchases; those broader impact records remain deferred.
 
 Flagging verified cost reducers is preferable to treating all newly unlocked content as high priority. Keep effect target, direction, and scope separate:
 
@@ -522,9 +522,11 @@ Exit: startup state is not assumed final, and completed upgrades no longer remai
 
 Exit: ordinary resource or queue changes do not trigger full candidate reflection and sorting.
 
+Runtime hotfix follow-up: completion events observed during one prepared repeat group are coalesced and settled after that group instead of cancelling it level by level. Routine active/locked lifecycle probes are scheduled by elapsed time in bounded 250 ms slices rather than by evaluation count, and continuously pending Auto Buy work receives a bounded three-turn coordinator weight before fairness advances to another subsystem. Locked Structures are rejected before cost work; Upgrades rejected by native `CanPurchase()` are parked outside resource-tick invalidation and retried through bounded lifecycle/completion work. Normal operational logging is both decision-level aware and rate-limited.
+
 ### P4 — Bounded purchase planning
 
-Begin this phase only if P0–P3 runtime measurements show that planning or repeated cost evaluation remains a material bottleneck. Cost-reducer detection and special investment priority are an optional later P4b policy, not part of the P4 exit requirement.
+Begin this phase only if P0–P3 runtime measurements show that planning or repeated cost evaluation remains a material bottleneck. The existing opt-in Structure tier does not require P4 prediction; scoped impact planning and future-cost investment strategy remain optional later work, not part of the P4 exit requirement.
 
 - Add provisional resource deductions.
 - Predict Upgrade future costs through audited native methods.

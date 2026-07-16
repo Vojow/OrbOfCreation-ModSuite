@@ -139,6 +139,64 @@ public sealed class PerformanceFoundationTests
     }
 
     [Fact]
+    public void WeightedAdmissionProvidesBoundedBurstThenYields()
+    {
+        var clock = new ManualPerformanceClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 10.0, 10.0, 8);
+        using var autoBuy = coordinator.RegisterWeighted(
+            "Automata",
+            "Queue purchase",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation,
+            schedulingWeight: 3);
+        using var mentor = coordinator.Register(
+            "Mentor",
+            "Grant XP",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        autoBuy.SetPending(true);
+        mentor.SetPending(true);
+
+        for (var frame = 1; frame <= 3; frame++)
+        {
+            AssertGrantedAndComplete(coordinator, autoBuy, frame);
+            Assert.Equal(
+                SuiteWorkAdmission.NativeMutationAlreadyAdmitted,
+                coordinator.RequestWork(mentor, frame, out _));
+        }
+
+        Assert.Equal(
+            SuiteWorkAdmission.WaitingForTurn,
+            coordinator.RequestWork(autoBuy, 4, out _));
+        AssertGrantedAndComplete(coordinator, mentor, 4);
+        AssertGrantedAndComplete(coordinator, autoBuy, 5);
+
+        Assert.Equal(3, autoBuy.SchedulingWeight);
+        Assert.Equal(1, mentor.SchedulingWeight);
+    }
+
+    [Fact]
+    public void SchedulingWeightIsBounded()
+    {
+        var coordinator = new SuitePerformanceCoordinator(new ManualPerformanceClock());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            coordinator.RegisterWeighted(
+                "Automata",
+                "Invalid",
+                SuiteBudgetClass.SoftLimited,
+                SuiteWorkExecutionKind.Cooperative,
+                schedulingWeight: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            coordinator.RegisterWeighted(
+                "Automata",
+                "Invalid",
+                SuiteBudgetClass.SoftLimited,
+                SuiteWorkExecutionKind.Cooperative,
+                schedulingWeight: 9));
+    }
+
+    [Fact]
     public void HardLimitedWorkCanRunBetweenSoftAndHardLimits()
     {
         var clock = new ManualPerformanceClock();

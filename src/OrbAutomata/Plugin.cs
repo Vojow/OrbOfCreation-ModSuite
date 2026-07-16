@@ -81,7 +81,9 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
-            $"OperationalLogging={_config.EnableOperationalLogging.Value}.");
+            $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
+            $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
+            $"DecisionLogLevel={_config.DecisionLogLevel.Value}.");
     }
 
     private void Update()

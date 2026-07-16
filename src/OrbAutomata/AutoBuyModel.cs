@@ -9,6 +9,14 @@ internal enum AutoBuyCandidateKind
     Upgrade
 }
 
+[Flags]
+internal enum AutoBuyEconomicPriority
+{
+    None = 0,
+    CostReduction = 1 << 0,
+    QualityIncrease = 1 << 1,
+}
+
 internal enum AutoBuyCandidateLifecycleState
 {
     Registered,
@@ -95,7 +103,7 @@ internal interface IAutoBuyIncrementalCatalog
 {
     AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request);
 
-    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded);
+    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking);
 
     void InvalidatePolicy();
 
@@ -185,6 +193,11 @@ internal interface IAutoBuyDirtyCandidate
     void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence);
 }
 
+internal interface IAutoBuyPriorityCandidate
+{
+    AutoBuyEconomicPriority EconomicPriority { get; }
+}
+
 internal sealed class AutoBuyCandidateSnapshot
 {
     public AutoBuyCandidateSnapshot(
@@ -224,11 +237,13 @@ internal sealed class AutoBuyDecision
         AutoBuyDecisionKind kind,
         AutoBuyCandidateSnapshot candidate,
         double costRatio,
+        int priorityRank,
         string detail)
     {
         Kind = kind;
         Candidate = candidate;
         CostRatio = costRatio;
+        PriorityRank = priorityRank;
         Detail = detail;
     }
 
@@ -238,15 +253,21 @@ internal sealed class AutoBuyDecision
 
     public double CostRatio { get; }
 
+    public int PriorityRank { get; }
+
     public string Detail { get; }
 
-    public static AutoBuyDecision Recommended(AutoBuyCandidateSnapshot candidate, double costRatio, string detail)
+    public static AutoBuyDecision Recommended(
+        AutoBuyCandidateSnapshot candidate,
+        double costRatio,
+        string detail,
+        int priorityRank = 0)
     {
-        return new AutoBuyDecision(AutoBuyDecisionKind.Recommendation, candidate, costRatio, detail);
+        return new AutoBuyDecision(AutoBuyDecisionKind.Recommendation, candidate, costRatio, priorityRank, detail);
     }
 
     public static AutoBuyDecision Rejected(AutoBuyCandidateSnapshot candidate, string detail)
     {
-        return new AutoBuyDecision(AutoBuyDecisionKind.Rejection, candidate, double.PositiveInfinity, detail);
+        return new AutoBuyDecision(AutoBuyDecisionKind.Rejection, candidate, double.PositiveInfinity, 0, detail);
     }
 }

@@ -64,7 +64,7 @@ public enum SuiteWorkAdmission
 
 /// <summary>
 /// Cooperative, main-thread frame budget shared by suite plugins through the
-/// Common assembly. Work is admitted in round-robin registration order. The
+/// Common assembly. Work is admitted in bounded weighted round-robin order. The
 /// coordinator does not own gameplay work and never invokes Unity APIs itself.
 /// </summary>
 public sealed class SuitePerformanceCoordinator
@@ -149,6 +149,26 @@ public sealed class SuitePerformanceCoordinator
         SuiteBudgetClass budgetClass = SuiteBudgetClass.SoftLimited,
         SuiteWorkExecutionKind executionKind = SuiteWorkExecutionKind.Cooperative)
     {
+        return RegisterCore(subsystem, workName, budgetClass, executionKind, schedulingWeight: 1);
+    }
+
+    public SuiteWorkRegistration RegisterWeighted(
+        string subsystem,
+        string workName,
+        SuiteBudgetClass budgetClass,
+        SuiteWorkExecutionKind executionKind,
+        int schedulingWeight)
+    {
+        return RegisterCore(subsystem, workName, budgetClass, executionKind, schedulingWeight);
+    }
+
+    private SuiteWorkRegistration RegisterCore(
+        string subsystem,
+        string workName,
+        SuiteBudgetClass budgetClass,
+        SuiteWorkExecutionKind executionKind,
+        int schedulingWeight)
+    {
         EnsureOwnerThread();
         if (string.IsNullOrWhiteSpace(subsystem))
         {
@@ -162,6 +182,12 @@ public sealed class SuitePerformanceCoordinator
 
         ValidateBudgetClass(budgetClass);
         ValidateExecutionKind(executionKind);
+        if (schedulingWeight < 1 || schedulingWeight > 8)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(schedulingWeight),
+                "Scheduling weight must be between 1 and 8.");
+        }
 
         if (!_subsystems.TryGetValue(subsystem, out var subsystemState))
         {
@@ -176,6 +202,7 @@ public sealed class SuitePerformanceCoordinator
             workName,
             budgetClass,
             executionKind,
+            schedulingWeight,
             _frameEpoch,
             subsystemState);
         _registrations.Add(registration);
@@ -283,7 +310,7 @@ public sealed class SuitePerformanceCoordinator
             throw;
         }
 
-        _roundRobinIndex = (nextIndex + 1) % _registrations.Count;
+        AdvanceWeightedRoundRobin(registration, nextIndex);
         _activeRegistration = registration;
         _activeStartTimestamp = startTimestamp;
         _activeExecutionKind = registration.ExecutionKind;
@@ -568,6 +595,20 @@ public sealed class SuitePerformanceCoordinator
         return -1;
     }
 
+    private void AdvanceWeightedRoundRobin(SuiteWorkRegistration registration, int grantedIndex)
+    {
+        if (registration.SchedulingWeight > 1 &&
+            registration.ConsecutiveWeightedGrants + 1 < registration.SchedulingWeight)
+        {
+            registration.ConsecutiveWeightedGrants++;
+            _roundRobinIndex = grantedIndex;
+            return;
+        }
+
+        registration.ConsecutiveWeightedGrants = 0;
+        _roundRobinIndex = (grantedIndex + 1) % _registrations.Count;
+    }
+
     private bool IsMissedRequestExpired(SuiteWorkRegistration registration)
     {
         var mostRecentInterest = Math.Max(
@@ -729,6 +770,7 @@ public sealed class SuiteWorkRegistration : IDisposable
         string workName,
         SuiteBudgetClass budgetClass,
         SuiteWorkExecutionKind executionKind,
+        int schedulingWeight,
         long registeredEpoch,
         SuitePerformanceCoordinator.SubsystemState subsystemState)
     {
@@ -738,6 +780,7 @@ public sealed class SuiteWorkRegistration : IDisposable
         WorkName = workName;
         BudgetClass = budgetClass;
         ExecutionKind = executionKind;
+        SchedulingWeight = schedulingWeight;
         PendingSinceEpoch = registeredEpoch;
         LastRequestEpoch = registeredEpoch;
         SubsystemState = subsystemState;
@@ -760,6 +803,8 @@ public sealed class SuiteWorkRegistration : IDisposable
 
     internal long LastMissedRequestExpiryEpoch { get; set; } = -1;
 
+    internal int ConsecutiveWeightedGrants { get; set; }
+
     public int RegistrationId { get; }
 
     public string Subsystem { get; }
@@ -769,6 +814,8 @@ public sealed class SuiteWorkRegistration : IDisposable
     public SuiteBudgetClass BudgetClass { get; }
 
     public SuiteWorkExecutionKind ExecutionKind { get; }
+
+    public int SchedulingWeight { get; }
 
     public bool IsEnabled => Enabled && !IsDisposed;
 
