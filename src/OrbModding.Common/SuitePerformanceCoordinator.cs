@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 
 namespace OrbModding.Common;
 
@@ -45,6 +46,7 @@ public enum SuiteWorkExecutionKind
 {
     Cooperative,
     NonPreemptibleNative,
+    NonPreemptibleNativeMutation,
 }
 
 public enum SuiteWorkAdmission
@@ -57,6 +59,7 @@ public enum SuiteWorkAdmission
     WaitingForTurn,
     SoftBudgetExhausted,
     HardBudgetExhausted,
+    NativeMutationAlreadyAdmitted,
 }
 
 /// <summary>
@@ -67,15 +70,19 @@ public enum SuiteWorkAdmission
 public sealed class SuitePerformanceCoordinator
 {
     private const int DefaultMetricsWindow = 300;
+    private const int DefaultMissedRequestFrames = 2;
     private readonly IPerformanceClock _clock;
+    private readonly int _ownerThreadId;
     private readonly List<SuiteWorkRegistration> _registrations = new();
     private readonly Dictionary<string, SubsystemState> _subsystems =
         new(StringComparer.Ordinal);
     private readonly RollingPerformanceMetrics _suiteFrameMetrics;
     private readonly int _metricsWindow;
+    private readonly int _missedRequestFrames;
     private int _nextRegistrationId;
     private int _roundRobinIndex;
     private long _frameIdentity;
+    private long _frameEpoch;
     private bool _hasFrame;
     private bool _frameHadWork;
     private double _frameElapsedMilliseconds;
@@ -83,12 +90,14 @@ public sealed class SuitePerformanceCoordinator
     private SuiteWorkRegistration? _activeRegistration;
     private long _activeStartTimestamp;
     private SuiteWorkExecutionKind _activeExecutionKind;
+    private bool _nativeMutationAdmitted;
 
     public SuitePerformanceCoordinator(
         IPerformanceClock clock,
         double softBudgetMilliseconds = 0.75,
         double hardBudgetMilliseconds = 1.0,
-        int metricsWindow = DefaultMetricsWindow)
+        int metricsWindow = DefaultMetricsWindow,
+        int missedRequestFrames = DefaultMissedRequestFrames)
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         ValidateBudgets(softBudgetMilliseconds, hardBudgetMilliseconds);
@@ -97,9 +106,18 @@ public sealed class SuitePerformanceCoordinator
             throw new ArgumentOutOfRangeException(nameof(metricsWindow), "The metrics window must be positive.");
         }
 
+        if (missedRequestFrames <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(missedRequestFrames),
+                "The missed-request watchdog must allow at least one frame.");
+        }
+
+        _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
         SoftBudgetMilliseconds = softBudgetMilliseconds;
         HardBudgetMilliseconds = hardBudgetMilliseconds;
         _metricsWindow = metricsWindow;
+        _missedRequestFrames = missedRequestFrames;
         _suiteFrameMetrics = new RollingPerformanceMetrics(metricsWindow);
     }
 
@@ -123,11 +141,15 @@ public sealed class SuitePerformanceCoordinator
     public bool IsHardBudgetExceeded =>
         _hasFrame && _frameElapsedMilliseconds >= HardBudgetMilliseconds;
 
+    public bool NativeMutationAdmittedThisFrame => _nativeMutationAdmitted;
+
     public SuiteWorkRegistration Register(
         string subsystem,
         string workName,
-        SuiteBudgetClass budgetClass = SuiteBudgetClass.SoftLimited)
+        SuiteBudgetClass budgetClass = SuiteBudgetClass.SoftLimited,
+        SuiteWorkExecutionKind executionKind = SuiteWorkExecutionKind.Cooperative)
     {
+        EnsureOwnerThread();
         if (string.IsNullOrWhiteSpace(subsystem))
         {
             throw new ArgumentException("A subsystem name is required.", nameof(subsystem));
@@ -137,6 +159,9 @@ public sealed class SuitePerformanceCoordinator
         {
             throw new ArgumentException("A work item name is required.", nameof(workName));
         }
+
+        ValidateBudgetClass(budgetClass);
+        ValidateExecutionKind(executionKind);
 
         if (!_subsystems.TryGetValue(subsystem, out var subsystemState))
         {
@@ -150,6 +175,8 @@ public sealed class SuitePerformanceCoordinator
             subsystem,
             workName,
             budgetClass,
+            executionKind,
+            _frameEpoch,
             subsystemState);
         _registrations.Add(registration);
         return registration;
@@ -157,6 +184,7 @@ public sealed class SuitePerformanceCoordinator
 
     public void SetBudgets(double softBudgetMilliseconds, double hardBudgetMilliseconds)
     {
+        EnsureOwnerThread();
         ValidateBudgets(softBudgetMilliseconds, hardBudgetMilliseconds);
         SoftBudgetMilliseconds = softBudgetMilliseconds;
         HardBudgetMilliseconds = hardBudgetMilliseconds;
@@ -168,36 +196,38 @@ public sealed class SuitePerformanceCoordinator
     /// </summary>
     public void BeginFrame(long frameIdentity)
     {
+        EnsureOwnerThread();
         if (_hasFrame && _frameIdentity == frameIdentity)
         {
             return;
         }
 
-        if (_activeRegistration is not null)
-        {
-            throw new InvalidOperationException("A work lease cannot span coordinator frames.");
-        }
+        RecoverAbandonedLease();
 
         FlushFrameMetrics();
         _frameIdentity = frameIdentity;
+        _frameEpoch++;
         _hasFrame = true;
         _frameHadWork = false;
         _frameElapsedMilliseconds = 0.0;
+        _nativeMutationAdmitted = false;
     }
 
     public SuiteWorkAdmission RequestWork(
         SuiteWorkRegistration registration,
         long frameIdentity,
-        SuiteWorkExecutionKind executionKind,
         out SuiteWorkLease lease)
     {
+        EnsureOwnerThread();
         lease = default;
-        BeginFrame(frameIdentity);
 
         if (!IsRegistered(registration))
         {
             return SuiteWorkAdmission.Unregistered;
         }
+
+        BeginFrame(frameIdentity);
+        registration.LastRequestEpoch = _frameEpoch;
 
         if (!registration.Enabled)
         {
@@ -228,22 +258,46 @@ public sealed class SuitePerformanceCoordinator
             return SuiteWorkAdmission.SoftBudgetExhausted;
         }
 
-        var nextIndex = FindNextAdmissibleRegistration();
+        if (registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation &&
+            _nativeMutationAdmitted)
+        {
+            registration.SubsystemState.DeferredAdmissions++;
+            return SuiteWorkAdmission.NativeMutationAlreadyAdmitted;
+        }
+
+        var nextIndex = FindNextAdmissibleRegistration(registration);
         if (nextIndex < 0 || !ReferenceEquals(_registrations[nextIndex], registration))
         {
             registration.SubsystemState.DeferredAdmissions++;
             return SuiteWorkAdmission.WaitingForTurn;
         }
 
+        long startTimestamp;
+        try
+        {
+            startTimestamp = _clock.GetTimestamp();
+        }
+        catch
+        {
+            registration.SubsystemState.MeasurementFailures++;
+            throw;
+        }
+
         _roundRobinIndex = (nextIndex + 1) % _registrations.Count;
         _activeRegistration = registration;
-        _activeStartTimestamp = _clock.GetTimestamp();
-        _activeExecutionKind = executionKind;
+        _activeStartTimestamp = startTimestamp;
+        _activeExecutionKind = registration.ExecutionKind;
         _activeLeaseToken++;
         registration.SubsystemState.AdmittedWorkItems++;
-        if (executionKind == SuiteWorkExecutionKind.NonPreemptibleNative)
+        if (registration.ExecutionKind != SuiteWorkExecutionKind.Cooperative)
         {
             registration.SubsystemState.NativeCallsStarted++;
+        }
+
+        if (registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+        {
+            _nativeMutationAdmitted = true;
+            registration.SubsystemState.NativeMutationsStarted++;
         }
 
         lease = new SuiteWorkLease(this, _activeLeaseToken);
@@ -252,6 +306,7 @@ public sealed class SuitePerformanceCoordinator
 
     public SuiteCoordinatorSnapshot GetSnapshot(double percentile = 0.95)
     {
+        EnsureOwnerThread();
         return new SuiteCoordinatorSnapshot(
             _hasFrame,
             _frameIdentity,
@@ -259,6 +314,7 @@ public sealed class SuitePerformanceCoordinator
             SoftBudgetMilliseconds,
             HardBudgetMilliseconds,
             _frameElapsedMilliseconds >= HardBudgetMilliseconds,
+            _nativeMutationAdmitted,
             _suiteFrameMetrics.GetSnapshot(percentile));
     }
 
@@ -267,16 +323,22 @@ public sealed class SuitePerformanceCoordinator
         out SubsystemPerformanceSnapshot snapshot,
         double percentile = 0.95)
     {
+        EnsureOwnerThread();
         if (_subsystems.TryGetValue(subsystem, out var state))
         {
             snapshot = new SubsystemPerformanceSnapshot(
                 state.CurrentFrameElapsedMilliseconds,
                 state.AdmittedWorkItems,
                 state.CompletedWorkItems,
+                state.FailedWorkItems,
+                state.AbandonedWorkItems,
                 state.TotalOperations,
                 state.DeferredAdmissions,
+                state.MissedRequestExpirations,
                 state.NativeCallsStarted,
+                state.NativeMutationsStarted,
                 state.NativeHardBudgetOverruns,
+                state.MeasurementFailures,
                 state.WorkItemMetrics.GetSnapshot(percentile),
                 state.FrameMetrics.GetSnapshot(percentile));
             return true;
@@ -288,6 +350,7 @@ public sealed class SuitePerformanceCoordinator
 
     internal void SetEnabled(SuiteWorkRegistration registration, bool enabled)
     {
+        EnsureOwnerThread();
         if (!IsRegistered(registration))
         {
             return;
@@ -302,14 +365,21 @@ public sealed class SuitePerformanceCoordinator
 
     internal void SetPending(SuiteWorkRegistration registration, bool pending)
     {
+        EnsureOwnerThread();
         if (IsRegistered(registration) && registration.Enabled)
         {
+            var becamePending = pending && !registration.HasPendingWork;
             registration.HasPendingWork = pending;
+            if (becamePending)
+            {
+                registration.PendingSinceEpoch = _frameEpoch;
+            }
         }
     }
 
     internal void Unregister(SuiteWorkRegistration registration)
     {
+        EnsureOwnerThread();
         var index = _registrations.IndexOf(registration);
         if (index < 0)
         {
@@ -343,43 +413,93 @@ public sealed class SuitePerformanceCoordinator
 
     internal void CompleteLease(long token, int operations)
     {
+        EnsureOwnerThread();
         if (_activeRegistration is null || token != _activeLeaseToken)
         {
             return;
         }
 
-        if (operations < 0)
+        var registration = _activeRegistration;
+        try
         {
-            throw new ArgumentOutOfRangeException(nameof(operations), "The operation count cannot be negative.");
-        }
+            if (operations < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(operations),
+                    "The operation count cannot be negative.");
+            }
 
-        var endTimestamp = _clock.GetTimestamp();
-        var elapsed = _clock.GetElapsedMilliseconds(_activeStartTimestamp, endTimestamp);
-        if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed < 0.0)
+            double elapsed;
+            try
+            {
+                elapsed = MeasureActiveLease();
+            }
+            catch
+            {
+                registration.SubsystemState.MeasurementFailures++;
+                throw;
+            }
+
+            AccountActiveLease(registration, elapsed, operations);
+            registration.SubsystemState.CompletedWorkItems++;
+        }
+        catch
         {
-            throw new InvalidOperationException("The performance clock returned an invalid elapsed time.");
+            registration.SubsystemState.FailedWorkItems++;
+            throw;
+        }
+        finally
+        {
+            ClearActiveLease();
+        }
+    }
+
+    private static void ValidateBudgetClass(SuiteBudgetClass budgetClass)
+    {
+        if (budgetClass != SuiteBudgetClass.SoftLimited &&
+            budgetClass != SuiteBudgetClass.HardLimited)
+        {
+            throw new ArgumentOutOfRangeException(nameof(budgetClass));
+        }
+    }
+
+    private static void ValidateExecutionKind(SuiteWorkExecutionKind executionKind)
+    {
+        if (executionKind != SuiteWorkExecutionKind.Cooperative &&
+            executionKind != SuiteWorkExecutionKind.NonPreemptibleNative &&
+            executionKind != SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+        {
+            throw new ArgumentOutOfRangeException(nameof(executionKind));
+        }
+    }
+
+    internal void FailLease(long token)
+    {
+        EnsureOwnerThread();
+        if (_activeRegistration is null || token != _activeLeaseToken)
+        {
+            return;
         }
 
         var registration = _activeRegistration;
-        var beforeCompletion = _frameElapsedMilliseconds;
-        _frameElapsedMilliseconds += elapsed;
-        _frameHadWork = true;
-
-        var subsystem = registration.SubsystemState;
-        subsystem.CurrentFrameElapsedMilliseconds += elapsed;
-        subsystem.FrameTouched = true;
-        subsystem.CompletedWorkItems++;
-        subsystem.TotalOperations += operations;
-        subsystem.WorkItemMetrics.Record(elapsed, operations);
-
-        if (_activeExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNative &&
-            beforeCompletion < HardBudgetMilliseconds &&
-            _frameElapsedMilliseconds > HardBudgetMilliseconds)
+        try
         {
-            subsystem.NativeHardBudgetOverruns++;
-        }
+            try
+            {
+                var elapsed = MeasureActiveLease();
+                AccountActiveLease(registration, elapsed, 0);
+            }
+            catch
+            {
+                registration.SubsystemState.MeasurementFailures++;
+            }
 
-        _activeRegistration = null;
+            registration.SubsystemState.FailedWorkItems++;
+        }
+        finally
+        {
+            ClearActiveLease();
+        }
     }
 
     private static void ValidateBudgets(double softBudgetMilliseconds, double hardBudgetMilliseconds)
@@ -408,7 +528,7 @@ public sealed class SuitePerformanceCoordinator
                _registrations.Contains(registration);
     }
 
-    private int FindNextAdmissibleRegistration()
+    private int FindNextAdmissibleRegistration(SuiteWorkRegistration requester)
     {
         for (var offset = 0; offset < _registrations.Count; offset++)
         {
@@ -425,10 +545,115 @@ public sealed class SuitePerformanceCoordinator
                 continue;
             }
 
+            if (candidate.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation &&
+                _nativeMutationAdmitted)
+            {
+                continue;
+            }
+
+            if (!ReferenceEquals(candidate, requester) && IsMissedRequestExpired(candidate))
+            {
+                if (candidate.LastMissedRequestExpiryEpoch != _frameEpoch)
+                {
+                    candidate.LastMissedRequestExpiryEpoch = _frameEpoch;
+                    candidate.SubsystemState.MissedRequestExpirations++;
+                }
+
+                continue;
+            }
+
             return index;
         }
 
         return -1;
+    }
+
+    private bool IsMissedRequestExpired(SuiteWorkRegistration registration)
+    {
+        var mostRecentInterest = Math.Max(
+            registration.LastRequestEpoch,
+            registration.PendingSinceEpoch);
+        return _frameEpoch - mostRecentInterest >= _missedRequestFrames;
+    }
+
+    private double MeasureActiveLease()
+    {
+        var endTimestamp = _clock.GetTimestamp();
+        var elapsed = _clock.GetElapsedMilliseconds(_activeStartTimestamp, endTimestamp);
+        if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed < 0.0)
+        {
+            throw new InvalidOperationException("The performance clock returned an invalid elapsed time.");
+        }
+
+        return elapsed;
+    }
+
+    private void AccountActiveLease(
+        SuiteWorkRegistration registration,
+        double elapsed,
+        int operations)
+    {
+        var beforeCompletion = _frameElapsedMilliseconds;
+        _frameElapsedMilliseconds += elapsed;
+        _frameHadWork = true;
+
+        var subsystem = registration.SubsystemState;
+        subsystem.CurrentFrameElapsedMilliseconds += elapsed;
+        subsystem.FrameTouched = true;
+        subsystem.TotalOperations += operations;
+        subsystem.WorkItemMetrics.Record(elapsed, operations);
+
+        if (_activeExecutionKind != SuiteWorkExecutionKind.Cooperative &&
+            beforeCompletion < HardBudgetMilliseconds &&
+            _frameElapsedMilliseconds > HardBudgetMilliseconds)
+        {
+            subsystem.NativeHardBudgetOverruns++;
+        }
+    }
+
+    private void RecoverAbandonedLease()
+    {
+        if (_activeRegistration is null)
+        {
+            return;
+        }
+
+        var registration = _activeRegistration;
+        try
+        {
+            try
+            {
+                var elapsed = MeasureActiveLease();
+                AccountActiveLease(registration, elapsed, 0);
+            }
+            catch
+            {
+                registration.SubsystemState.MeasurementFailures++;
+            }
+
+            registration.SubsystemState.FailedWorkItems++;
+            registration.SubsystemState.AbandonedWorkItems++;
+        }
+        finally
+        {
+            ClearActiveLease();
+        }
+    }
+
+    private void ClearActiveLease()
+    {
+        _activeRegistration = null;
+        _activeStartTimestamp = 0;
+        _activeExecutionKind = SuiteWorkExecutionKind.Cooperative;
+    }
+
+    private void EnsureOwnerThread()
+    {
+        if (Thread.CurrentThread.ManagedThreadId != _ownerThreadId)
+        {
+            throw new InvalidOperationException(
+                "SuitePerformanceCoordinator must be used only from the thread that created it.");
+        }
     }
 
     private void FlushFrameMetrics()
@@ -475,13 +700,23 @@ public sealed class SuitePerformanceCoordinator
 
         public long CompletedWorkItems { get; set; }
 
+        public long FailedWorkItems { get; set; }
+
+        public long AbandonedWorkItems { get; set; }
+
         public long TotalOperations { get; set; }
 
         public long DeferredAdmissions { get; set; }
 
+        public long MissedRequestExpirations { get; set; }
+
         public long NativeCallsStarted { get; set; }
 
+        public long NativeMutationsStarted { get; set; }
+
         public long NativeHardBudgetOverruns { get; set; }
+
+        public long MeasurementFailures { get; set; }
     }
 }
 
@@ -493,6 +728,8 @@ public sealed class SuiteWorkRegistration : IDisposable
         string subsystem,
         string workName,
         SuiteBudgetClass budgetClass,
+        SuiteWorkExecutionKind executionKind,
+        long registeredEpoch,
         SuitePerformanceCoordinator.SubsystemState subsystemState)
     {
         Coordinator = coordinator;
@@ -500,6 +737,9 @@ public sealed class SuiteWorkRegistration : IDisposable
         Subsystem = subsystem;
         WorkName = workName;
         BudgetClass = budgetClass;
+        ExecutionKind = executionKind;
+        PendingSinceEpoch = registeredEpoch;
+        LastRequestEpoch = registeredEpoch;
         SubsystemState = subsystemState;
         Enabled = true;
     }
@@ -514,6 +754,12 @@ public sealed class SuiteWorkRegistration : IDisposable
 
     internal bool IsDisposed { get; private set; }
 
+    internal long PendingSinceEpoch { get; set; }
+
+    internal long LastRequestEpoch { get; set; }
+
+    internal long LastMissedRequestExpiryEpoch { get; set; } = -1;
+
     public int RegistrationId { get; }
 
     public string Subsystem { get; }
@@ -521,6 +767,8 @@ public sealed class SuiteWorkRegistration : IDisposable
     public string WorkName { get; }
 
     public SuiteBudgetClass BudgetClass { get; }
+
+    public SuiteWorkExecutionKind ExecutionKind { get; }
 
     public bool IsEnabled => Enabled && !IsDisposed;
 
@@ -562,14 +810,27 @@ public readonly struct SuiteWorkLease : IDisposable
 
     public bool IsGranted => _coordinator is not null;
 
+    /// <summary>
+    /// Records successful completion. Call this before leaving a using scope;
+    /// disposing a still-active lease records failed work instead.
+    /// </summary>
     public void Complete(int operations = 1)
     {
         _coordinator?.CompleteLease(_token, operations);
     }
 
+    /// <summary>
+    /// Records caller failure and releases the active coordinator slot. Call this
+    /// from a catch/finally path when the admitted work did not finish normally.
+    /// </summary>
+    public void Fail()
+    {
+        _coordinator?.FailLease(_token);
+    }
+
     public void Dispose()
     {
-        Complete();
+        Fail();
     }
 }
 
@@ -582,6 +843,7 @@ public readonly struct SuiteCoordinatorSnapshot
         double softBudgetMilliseconds,
         double hardBudgetMilliseconds,
         bool hardBudgetExceeded,
+        bool nativeMutationAdmitted,
         RollingPerformanceSnapshot frameTiming)
     {
         HasFrame = hasFrame;
@@ -590,6 +852,7 @@ public readonly struct SuiteCoordinatorSnapshot
         SoftBudgetMilliseconds = softBudgetMilliseconds;
         HardBudgetMilliseconds = hardBudgetMilliseconds;
         HardBudgetExceeded = hardBudgetExceeded;
+        NativeMutationAdmitted = nativeMutationAdmitted;
         FrameTiming = frameTiming;
     }
 
@@ -605,6 +868,12 @@ public readonly struct SuiteCoordinatorSnapshot
 
     public bool HardBudgetExceeded { get; }
 
+    public bool NativeMutationAdmitted { get; }
+
+    /// <summary>
+    /// Rolling timing for frames in which coordinator work was active. Idle
+    /// frames are intentionally not inserted as zero-duration samples.
+    /// </summary>
     public RollingPerformanceSnapshot FrameTiming { get; }
 }
 
@@ -614,20 +883,30 @@ public readonly struct SubsystemPerformanceSnapshot
         double currentFrameElapsedMilliseconds,
         long admittedWorkItems,
         long completedWorkItems,
+        long failedWorkItems,
+        long abandonedWorkItems,
         long totalOperations,
         long deferredAdmissions,
+        long missedRequestExpirations,
         long nativeCallsStarted,
+        long nativeMutationsStarted,
         long nativeHardBudgetOverruns,
+        long measurementFailures,
         RollingPerformanceSnapshot workItemTiming,
         RollingPerformanceSnapshot frameTiming)
     {
         CurrentFrameElapsedMilliseconds = currentFrameElapsedMilliseconds;
         AdmittedWorkItems = admittedWorkItems;
         CompletedWorkItems = completedWorkItems;
+        FailedWorkItems = failedWorkItems;
+        AbandonedWorkItems = abandonedWorkItems;
         TotalOperations = totalOperations;
         DeferredAdmissions = deferredAdmissions;
+        MissedRequestExpirations = missedRequestExpirations;
         NativeCallsStarted = nativeCallsStarted;
+        NativeMutationsStarted = nativeMutationsStarted;
         NativeHardBudgetOverruns = nativeHardBudgetOverruns;
+        MeasurementFailures = measurementFailures;
         WorkItemTiming = workItemTiming;
         FrameTiming = frameTiming;
     }
@@ -638,15 +917,29 @@ public readonly struct SubsystemPerformanceSnapshot
 
     public long CompletedWorkItems { get; }
 
+    public long FailedWorkItems { get; }
+
+    public long AbandonedWorkItems { get; }
+
     public long TotalOperations { get; }
 
     public long DeferredAdmissions { get; }
 
+    public long MissedRequestExpirations { get; }
+
     public long NativeCallsStarted { get; }
+
+    public long NativeMutationsStarted { get; }
 
     public long NativeHardBudgetOverruns { get; }
 
+    public long MeasurementFailures { get; }
+
     public RollingPerformanceSnapshot WorkItemTiming { get; }
 
+    /// <summary>
+    /// Rolling timing for active-work frames for this subsystem. Idle frames are
+    /// intentionally omitted rather than reported as zero-duration work.
+    /// </summary>
     public RollingPerformanceSnapshot FrameTiming { get; }
 }

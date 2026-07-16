@@ -5,7 +5,9 @@ namespace OrbModding.Common;
 /// <summary>
 /// Allocation-conscious rolling timing metrics. Recording is allocation-free;
 /// percentile calculation reuses a scratch buffer allocated with the window.
-/// Instances are intended to be used from the Unity main thread.
+/// Snapshot creation sorts that scratch buffer, so it is intended for low-frequency
+/// diagnostics rather than per-frame use. Instances are intended to be used from
+/// the Unity main thread.
 /// </summary>
 public sealed class RollingPerformanceMetrics
 {
