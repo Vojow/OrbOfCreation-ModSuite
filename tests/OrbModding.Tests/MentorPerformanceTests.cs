@@ -1,4 +1,6 @@
 using OrbMentor;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -190,6 +192,50 @@ public sealed class MentorPerformanceTests
         Assert.False(pending.Sources.HasPending);
         Assert.Equal(0, pending.Captures.Count);
         Assert.Null(pending.ActivePlan);
+    }
+
+    [Fact]
+    public void ReconcileAndRelationshipRequestsAfterEnumerationSurviveCommit()
+    {
+        var reconcile = new MentorWorkGeneration();
+        var relationship = new MentorWorkGeneration();
+        var captures = new MentorCaptureQueue(2);
+        var reconcilePass = reconcile.Current;
+        var refreshPass = relationship.Current;
+
+        // Enumeration/read completed, then a new native source and a mastery
+        // transition arrived while ordered output was still being built.
+        Assert.Equal(MentorCaptureResult.Added, captures.Capture(
+            new MentorCaptureKey(new object(), "late-source", 3, true, progressionEpoch: 4),
+            new MentorAmount(1, 2)));
+        reconcile.Request();
+        relationship.Request();
+
+        Assert.Equal(1, captures.Count);
+        Assert.False(reconcile.IsCurrent(reconcilePass));
+        Assert.False(relationship.IsCurrent(refreshPass));
+    }
+
+    [Fact]
+    public void IncrementalUuidOrderingIsDeterministicAndLinearInBuildSteps()
+    {
+        const int count = 100;
+        using var order = new MentorIncrementalOrder<int>();
+        for (var index = count - 1; index >= 0; index--)
+            Assert.True(order.TryAdd($"id-{index:D3}", index));
+        Assert.False(order.TryAdd("id-050", 999));
+
+        var output = new List<int>();
+        var steps = 0;
+        while (true)
+        {
+            steps++;
+            if (!order.TryTakeNext(out var value)) break;
+            output.Add(value);
+        }
+
+        Assert.Equal(Enumerable.Range(0, count), output);
+        Assert.Equal(count + 1, steps);
     }
 
     [Fact]

@@ -72,8 +72,11 @@ internal sealed class MentorSourceAccumulator
         public int EventCount;
     }
 
-    private readonly Dictionary<string, SourceAmount> _sources = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SourceAmount> _sources;
     private MentorAmount _total;
+
+    public MentorSourceAccumulator(int capacity = 256) =>
+        _sources = new Dictionary<string, SourceAmount>(Math.Max(1, capacity), StringComparer.Ordinal);
 
     public int SourceCount => _sources.Count;
     public bool HasPending => _sources.Count > 0;
@@ -152,10 +155,15 @@ internal enum MentorCaptureResult { Added, Coalesced, Overflow, Invalid }
 internal sealed class MentorCaptureQueue
 {
     private readonly int _capacity;
-    private readonly Dictionary<MentorCaptureKey, MentorCapturedEvent> _pending = new();
-    private readonly Queue<MentorCaptureKey> _order = new();
+    private readonly Dictionary<MentorCaptureKey, MentorCapturedEvent> _pending;
+    private readonly Queue<MentorCaptureKey> _order;
 
-    public MentorCaptureQueue(int capacity = 256) => _capacity = Math.Max(1, capacity);
+    public MentorCaptureQueue(int capacity = 256)
+    {
+        _capacity = Math.Max(1, capacity);
+        _pending = new Dictionary<MentorCaptureKey, MentorCapturedEvent>(_capacity);
+        _order = new Queue<MentorCaptureKey>(_capacity);
+    }
     public int Count => _pending.Count;
     public int EventCount { get; private set; }
 
@@ -219,6 +227,42 @@ internal static class MentorIdentityTransition
         pending.CancelPending();
         return true;
     }
+}
+
+internal sealed class MentorWorkGeneration
+{
+    private long _requested = 1;
+    public long Current => _requested;
+    public long Request() => ++_requested;
+    public bool IsCurrent(long consumed) => consumed == _requested;
+}
+
+internal sealed class MentorIncrementalOrder<T> : IDisposable
+{
+    private readonly SortedDictionary<string, T> _sorted = new(StringComparer.Ordinal);
+    private IEnumerator<KeyValuePair<string, T>>? _enumerator;
+
+    public int Count => _sorted.Count;
+    public bool TryAdd(string key, T value)
+    {
+        if (_enumerator is not null || _sorted.ContainsKey(key)) return false;
+        _sorted.Add(key, value);
+        return true;
+    }
+
+    public bool TryTakeNext(out T value)
+    {
+        _enumerator ??= _sorted.GetEnumerator();
+        if (_enumerator.MoveNext())
+        {
+            value = _enumerator.Current.Value;
+            return true;
+        }
+        value = default!;
+        return false;
+    }
+
+    public void Dispose() => _enumerator?.Dispose();
 }
 
 internal enum MentorDropReason

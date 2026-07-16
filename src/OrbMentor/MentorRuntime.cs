@@ -62,6 +62,8 @@ internal sealed class MentorRuntime
         public bool NeedsReconcile = true;
         public long ProgressionEpoch;
         public long RelationshipEpoch;
+        public readonly MentorWorkGeneration ReconcileRequests = new();
+        public readonly MentorWorkGeneration RelationshipRequests = new();
         public ReconcileWork? Reconcile;
         public RefreshWork? Refresh;
     }
@@ -76,37 +78,48 @@ internal sealed class MentorRuntime
 
     private sealed class ReconcileWork : IDisposable
     {
-        public ReconcileWork(IEnumerator enumerator, int initialCapacity, bool catalogWasInitialized)
+        public ReconcileWork(
+            IEnumerator enumerator,
+            int initialCapacity,
+            bool catalogWasInitialized,
+            long requestGeneration)
         {
             Enumerator = enumerator;
             Entries = new List<NativeEntry>(Math.Max(0, initialCapacity));
             ById = new Dictionary<string, NativeEntry>(Math.Max(0, initialCapacity), StringComparer.Ordinal);
             ByObject = new Dictionary<object, NativeEntry>(Math.Max(0, initialCapacity), ReferenceComparer.Instance);
             CatalogWasInitialized = catalogWasInitialized;
+            RequestGeneration = requestGeneration;
         }
 
         public IEnumerator Enumerator { get; }
         public List<NativeEntry> Entries { get; }
         public Dictionary<string, NativeEntry> ById { get; }
         public Dictionary<object, NativeEntry> ByObject { get; }
+        public MentorIncrementalOrder<NativeEntry> Order { get; } = new();
         public bool CatalogWasInitialized { get; }
+        public long RequestGeneration { get; }
         public bool IdentityChanged { get; set; }
         public bool EnumerationComplete { get; set; }
-        public int SortIndex { get; set; } = 1;
-        public int SortCursor { get; set; }
-        public NativeEntry? SortValue { get; set; }
-        public void Dispose() => (Enumerator as IDisposable)?.Dispose();
+        public bool OrderingComplete { get; set; }
+        public void Dispose()
+        {
+            (Enumerator as IDisposable)?.Dispose();
+            Order.Dispose();
+        }
     }
 
     private sealed class RefreshWork
     {
-        public RefreshWork(long progressionEpoch, bool wasDirty)
+        public RefreshWork(long progressionEpoch, long requestGeneration, bool wasDirty)
         {
             ProgressionEpoch = progressionEpoch;
+            RequestGeneration = requestGeneration;
             WasDirty = wasDirty;
         }
 
         public long ProgressionEpoch { get; set; }
+        public long RequestGeneration { get; }
         public bool WasDirty { get; }
         public int ReadIndex { get; set; }
         public int BuildIndex { get; set; }
@@ -263,6 +276,7 @@ internal sealed class MentorRuntime
         var catalog = _catalogs[domain];
         if (catalog.Reconcile?.IdentityChanged == true)
         {
+            RequestReconcile(catalog);
             Diagnostics.RecordDrop(MentorDropReason.CatalogIdentityChanged, 1, grant: false);
             return;
         }
@@ -309,7 +323,7 @@ internal sealed class MentorRuntime
                 return;
             }
             Diagnostics.RecordCapture(result == MentorCaptureResult.Coalesced);
-            if (entry is null) catalog.NeedsReconcile = true;
+            if (entry is null) RequestReconcile(catalog);
 #if DEBUG
             if (_config.DevelopmentProbeEnabled)
                 _log.LogInfo($"Mentor {domain} capture: source={uuid} mastery={mastery} discovered={discovered} xp={amount.Mantissa}e{amount.Exponent}");
@@ -329,9 +343,7 @@ internal sealed class MentorRuntime
     public void MarkRelationshipDirty(MentorDomain domain)
     {
         if (DomainBlocked(domain)) return;
-        var catalog = _catalogs[domain];
-        catalog.ProgressionEpoch++;
-        catalog.RelationshipDirty = true;
+        RequestRelationshipRefresh(_catalogs[domain], advanceProgressionEpoch: true);
     }
 
     public void LateTick()
@@ -513,7 +525,7 @@ internal sealed class MentorRuntime
             // progression hook. Even when it does not visibly change mastery
             // or discovery, force the relationship cache to settle before a
             // second native grant is admitted.
-            MentorProgressionObservation.AfterNativeGrant(ref catalog.RelationshipDirty);
+            RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
             var masteryAfterGrant = Convert.ToInt32(catalog.MasteryField.GetValue(entry.Item) ?? 0);
             var discoveredAfterGrant = Convert.ToBoolean(catalog.AvailabilityMethod.Invoke(entry.Item, null) ?? false);
             ObserveLiveProgression(
@@ -554,16 +566,30 @@ internal sealed class MentorRuntime
             observedDiscovered,
             epochAlreadyAdvanced);
         if (!changed) return false;
+        catalog.RelationshipRequests.Request();
         entry.MasteryLevel = cachedMastery;
         entry.IsDiscovered = cachedDiscovered;
         return true;
+    }
+
+    private static void RequestReconcile(DomainCatalog catalog)
+    {
+        catalog.ReconcileRequests.Request();
+        catalog.NeedsReconcile = true;
+    }
+
+    private static void RequestRelationshipRefresh(DomainCatalog catalog, bool advanceProgressionEpoch)
+    {
+        if (advanceProgressionEpoch) catalog.ProgressionEpoch++;
+        catalog.RelationshipRequests.Request();
+        catalog.RelationshipDirty = true;
     }
 
     private GrantResult DeferOrDropIdentity(MentorDomain domain, MentorGrant grant, DomainState state, DomainCatalog catalog)
     {
         if (state.IdentityDeferrals.Add(grant.Uuid))
         {
-            catalog.NeedsReconcile = true;
+            RequestReconcile(catalog);
             Diagnostics.RecordDeferredGrant();
             return GrantResult.Deferred;
         }
@@ -624,12 +650,12 @@ internal sealed class MentorRuntime
             {
                 catalog.Reconcile.Dispose();
                 catalog.Reconcile = null;
-                catalog.NeedsReconcile = true;
+                RequestReconcile(catalog);
             }
             if (catalog.Refresh is not null)
             {
                 catalog.Refresh = null;
-                catalog.RelationshipDirty = true;
+                RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
             }
             return;
         }
@@ -645,8 +671,8 @@ internal sealed class MentorRuntime
         catalog.NextLiveRefresh = 0;
         catalog.NextReconcile = 0;
         catalog.Initialized = false;
-        catalog.RelationshipDirty = true;
-        catalog.NeedsReconcile = true;
+        RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
+        RequestReconcile(catalog);
         catalog.ProgressionEpoch = 0;
         catalog.RelationshipEpoch = 0;
     }
@@ -735,7 +761,13 @@ internal sealed class MentorRuntime
                     return false;
                 }
                 var capacity = registry is ICollection collection ? collection.Count : 0;
-                catalog.Reconcile = new ReconcileWork(registry.GetEnumerator(), capacity, catalog.Initialized);
+                var requestGeneration = catalog.ReconcileRequests.Current;
+                catalog.NeedsReconcile = false;
+                catalog.Reconcile = new ReconcileWork(
+                    registry.GetEnumerator(),
+                    capacity,
+                    catalog.Initialized,
+                    requestGeneration);
                 return true;
             }
 
@@ -748,7 +780,7 @@ internal sealed class MentorRuntime
                 {
                     work.Dispose();
                     catalog.Reconcile = null;
-                    catalog.NeedsReconcile = true;
+                    RequestReconcile(catalog);
                     catalog.NextReconcile = now;
                     return true;
                 }
@@ -773,36 +805,30 @@ internal sealed class MentorRuntime
                         ? existing!
                         : new NativeEntry(uuid, value, SafeName(value), artifactContainer);
                     entry.ArtifactContainer = artifactContainer;
-                    work.Entries.Add(entry);
+                    if (!work.Order.TryAdd(uuid, entry))
+                    {
+                        FailDomainContract(domain, $"registered {domain} UUID is duplicated");
+                        return false;
+                    }
                     work.ById.Add(uuid, entry);
                     work.ByObject.Add(value, entry);
                     return true;
                 }
 
                 work.EnumerationComplete = true;
-                if (work.CatalogWasInitialized && work.Entries.Count != catalog.Entries.Count)
+                if (work.CatalogWasInitialized && work.Order.Count != catalog.Entries.Count)
                     MarkReconcileIdentityChanged(domain, catalog, work);
                 return true;
             }
 
-            if (work.SortIndex < work.Entries.Count)
+            if (!work.OrderingComplete)
             {
-                if (work.SortValue is null)
+                if (work.Order.TryTakeNext(out var orderedEntry))
                 {
-                    work.SortValue = work.Entries[work.SortIndex];
-                    work.SortCursor = work.SortIndex - 1;
+                    work.Entries.Add(orderedEntry);
                     return true;
                 }
-                if (work.SortCursor >= 0 &&
-                    StringComparer.Ordinal.Compare(work.Entries[work.SortCursor].Uuid, work.SortValue.Uuid) > 0)
-                {
-                    work.Entries[work.SortCursor + 1] = work.Entries[work.SortCursor];
-                    work.SortCursor--;
-                    return true;
-                }
-                work.Entries[work.SortCursor + 1] = work.SortValue;
-                work.SortValue = null;
-                work.SortIndex++;
+                work.OrderingComplete = true;
                 return true;
             }
 
@@ -813,9 +839,9 @@ internal sealed class MentorRuntime
             catalog.Reconcile = null;
             catalog.Refresh = null;
             catalog.Initialized = true;
-            catalog.NeedsReconcile = false;
-            catalog.RelationshipDirty = true;
-            catalog.NextReconcile = now + ReconcileTicks;
+            catalog.NeedsReconcile = !catalog.ReconcileRequests.IsCurrent(work.RequestGeneration);
+            RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
+            catalog.NextReconcile = catalog.NeedsReconcile ? now : now + ReconcileTicks;
             return true;
         }
         catch (Exception ex)
@@ -834,7 +860,7 @@ internal sealed class MentorRuntime
         RecordPendingDrops(domain, MentorDropReason.CatalogIdentityChanged);
         MentorIdentityTransition.CancelPendingOnChange(true, _domains[domain]);
         _domains[domain].IdentityDeferrals.Clear();
-        catalog.ProgressionEpoch++;
+        RequestRelationshipRefresh(catalog, advanceProgressionEpoch: true);
     }
 
     private bool ResolveSchema(MentorDomain domain, DomainCatalog catalog)
@@ -878,9 +904,13 @@ internal sealed class MentorRuntime
         try
         {
             var work = catalog.Refresh;
-            if (work is null || work.ProgressionEpoch != catalog.ProgressionEpoch)
+            if (work is null || work.ProgressionEpoch != catalog.ProgressionEpoch ||
+                !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration))
             {
-                catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, catalog.RelationshipDirty);
+                var requestGeneration = catalog.RelationshipRequests.Current;
+                var wasDirty = catalog.RelationshipDirty;
+                catalog.RelationshipDirty = false;
+                catalog.Refresh = new RefreshWork(catalog.ProgressionEpoch, requestGeneration, wasDirty);
                 return true;
             }
             if (!work.ReadComplete)
@@ -891,7 +921,7 @@ internal sealed class MentorRuntime
                     if (IsDestroyed(entry.Item))
                     {
                         catalog.Refresh = null;
-                        catalog.NeedsReconcile = true;
+                        RequestReconcile(catalog);
                         return true;
                     }
                     var mastery = Convert.ToInt32(catalog.MasteryField!.GetValue(entry.Item) ?? 0);
@@ -911,7 +941,8 @@ internal sealed class MentorRuntime
                 if (!work.WasDirty && !work.Changed)
                 {
                     catalog.Refresh = null;
-                    catalog.NextLiveRefresh = now + LiveRefreshTicks;
+                    catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
+                    catalog.NextLiveRefresh = catalog.RelationshipDirty ? now : now + LiveRefreshTicks;
                 }
                 return true;
             }
@@ -928,9 +959,9 @@ internal sealed class MentorRuntime
             catalog.MentorIds = work.MentorIds;
             catalog.Recipients = work.Recipients;
             catalog.Refresh = null;
-            catalog.RelationshipDirty = false;
+            catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
             catalog.RelationshipEpoch = catalog.ProgressionEpoch;
-            catalog.NextLiveRefresh = now + LiveRefreshTicks;
+            catalog.NextLiveRefresh = catalog.RelationshipDirty ? now : now + LiveRefreshTicks;
             return true;
         }
         catch (Exception ex)
