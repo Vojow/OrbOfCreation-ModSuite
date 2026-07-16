@@ -223,7 +223,7 @@ internal sealed class ModConfigUiShell : IDisposable
 
             foreach (var binding in nativeCloseListeners)
             {
-                binding.Button.onClick.RemoveListener(binding.Listener);
+                TryRemoveListener(binding.Button, binding.Listener);
             }
 
             if (buttonObject is not null)
@@ -241,12 +241,14 @@ internal sealed class ModConfigUiShell : IDisposable
 
     public void Toggle()
     {
-        SetOpen(!_open, restorePreviousNativeView: _open);
+        TrySetOpen(!_open, restorePreviousNativeView: _open);
     }
 
     public void RefreshNavigation()
     {
-        if (_disposed || !IsAlive) return;
+        if (_disposed) return;
+        PruneNativeReferences();
+        if (!IsAlive || !IsUnityObjectAlive(_buttonParent)) return;
         EnsureButtonIsLast();
         for (var index = 0; index < _buttonParent.childCount; index++)
         {
@@ -259,7 +261,7 @@ internal sealed class ModConfigUiShell : IDisposable
 
     public void Close()
     {
-        SetOpen(false, restorePreviousNativeView: true);
+        TrySetOpen(false, restorePreviousNativeView: true);
     }
 
     public void Dispose()
@@ -269,46 +271,45 @@ internal sealed class ModConfigUiShell : IDisposable
             return;
         }
 
-        if (_open)
-        {
-            SetOpen(false, restorePreviousNativeView: true);
-        }
-
+        PruneNativeReferences();
+        if (_open) TrySetOpen(false, restorePreviousNativeView: true);
         _disposed = true;
-        _button.onClick.RemoveListener(Toggle);
-        foreach (var binding in _nativeCloseListeners)
-        {
-            binding.Button.onClick.RemoveListener(binding.Listener);
-        }
+        TryRemoveListener(_button, Toggle);
+        foreach (var binding in _nativeCloseListeners) TryRemoveListener(binding.Button, binding.Listener);
+        _nativeCloseListeners.Clear();
+        _nativeViews.Clear();
 
-        if (_navigationObserver is not null)
+        if (_navigationObserver != null)
         {
             _navigationObserver.Changed = null;
             UnityEngine.Object.Destroy(_navigationObserver);
             _navigationObserver = null;
         }
 
-        _panel.Dispose();
-        UnityEngine.Object.Destroy(_buttonObject);
+        try { _panel.Dispose(); } catch { }
+        if (_buttonObject != null) UnityEngine.Object.Destroy(_buttonObject);
     }
 
     private void CloseFromNativeTab()
     {
+        PruneNativeReferences();
         EnsureButtonIsLast();
-        SetOpen(false, restorePreviousNativeView: false);
+        TrySetOpen(false, restorePreviousNativeView: false);
     }
 
     private void EnsureButtonIsLast()
     {
+        if (!IsAlive || !IsUnityObjectAlive(_buttonParent)) return;
         if (_buttonObject.transform.GetSiblingIndex() != _buttonParent.childCount - 1)
             _buttonObject.transform.SetSiblingIndex(_buttonParent.childCount - 1);
     }
 
     private void BindNativeButton(Component component)
     {
+        if (!IsUnityObjectAlive(component)) return;
         var view = ReadNativeView(component);
-        if (view is not null && !_nativeViews.Any(existing => ReferenceEquals(existing, view)))
-            _nativeViews.Add(view);
+        if (IsUnityObjectAlive(view) && !_nativeViews.Any(existing => ReferenceEquals(existing, view)))
+            _nativeViews.Add(view!);
 
         var button = component.GetComponent<Button>();
         if (button is null || _nativeCloseListeners.Any(binding => ReferenceEquals(binding.Button, button))) return;
@@ -324,6 +325,7 @@ internal sealed class ModConfigUiShell : IDisposable
             return;
         }
 
+        PruneNativeReferences();
         if (open)
         {
             _previousNativeView = _nativeViews.FirstOrDefault(IsNativeViewActive);
@@ -353,7 +355,7 @@ internal sealed class ModConfigUiShell : IDisposable
 
         if (!open)
         {
-            if (restorePreviousNativeView &&
+            if (restorePreviousNativeView && IsUnityObjectAlive(_previousNativeView) &&
                 !_nativeViews.Any(IsNativeViewActive) &&
                 _previousNativeView is not null)
             {
@@ -363,6 +365,47 @@ internal sealed class ModConfigUiShell : IDisposable
             _previousNativeView = null;
         }
 
+    }
+
+    private void TrySetOpen(bool open, bool restorePreviousNativeView)
+    {
+        try { SetOpen(open, restorePreviousNativeView); }
+        catch { _open = false; _previousNativeView = null; }
+    }
+
+    private void PruneNativeReferences()
+    {
+        PruneDead(_nativeViews, IsUnityObjectAlive);
+        PruneDead(
+            _nativeCloseListeners,
+            binding => IsUnityObjectAlive(binding.Button) && IsUnityObjectAlive(binding.Button.gameObject),
+            binding => TryRemoveListener(binding.Button, binding.Listener));
+        if (!IsUnityObjectAlive(_previousNativeView)) _previousNativeView = null;
+    }
+
+    internal static int PruneDead<T>(List<T> items, Func<T, bool> isAlive, Action<T>? onRemoved = null)
+    {
+        var removed = 0;
+        for (var index = items.Count - 1; index >= 0; index--)
+        {
+            if (isAlive(items[index])) continue;
+            var item = items[index];
+            items.RemoveAt(index);
+            removed++;
+            try { onRemoved?.Invoke(item); } catch { }
+        }
+        return removed;
+    }
+
+    private static bool IsUnityObjectAlive(object? value)
+    {
+        if (value is null) return false;
+        return value is not UnityEngine.Object unityObject || unityObject != null;
+    }
+
+    private static void TryRemoveListener(Button? button, UnityAction listener)
+    {
+        try { if (button != null) button.onClick.RemoveListener(listener); } catch { }
     }
 
     private static object? ReadNativeView(Component component)
@@ -386,9 +429,14 @@ internal sealed class ModConfigUiShell : IDisposable
 
     private static void SetNativeViewActive(object view, bool active)
     {
-        view.GetType()
-            .GetMethod("SetActive", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?
-            .Invoke(view, new object[] { active });
+        try
+        {
+            if (!IsUnityObjectAlive(view)) return;
+            view.GetType()
+                .GetMethod("SetActive", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?
+                .Invoke(view, new object[] { active });
+        }
+        catch { }
     }
 
     private static Sprite? ReadSpriteField(Component component, string fieldName)

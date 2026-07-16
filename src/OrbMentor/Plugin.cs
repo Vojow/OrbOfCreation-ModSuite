@@ -34,13 +34,23 @@ public sealed class Plugin : BaseUnityPlugin
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
         var target = AccessTools.Method("SpellRecipeSO:GainMasteryExp");
-        if (target is null) { Logger.LogError("Orb Mentor blocked: native GainMasteryExp hook unavailable."); return; }
+        if (target is null) { _runtime.BlockPermanent("native GainMasteryExp hook unavailable"); return; }
         _harmony = new Harmony(PluginIds.MentorGuid);
         _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain)));
         PatchOptional("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), postfix: true);
         PatchOptional("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), postfix: false);
         PatchFinalizer("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick));
         PatchOptional("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), postfix: false);
+        PatchRequired("SpellRecipeSO:Discover", nameof(AfterSpellProgression));
+        PatchRequired("SpellRecipeSO:PurchaseLevel", nameof(AfterSpellProgression));
+        PatchRequired("AlchemyRecipeSO:Discover", nameof(AfterAlchemyProgression));
+        PatchRequired("AlchemyRecipeSO:ApplyMastery", nameof(AfterAlchemyProgression));
+        PatchRequired("EquipmentSO:Discover", nameof(AfterArtifactProgression));
+        PatchRequired("EquipmentSO:Create", nameof(AfterArtifactProgression));
+        PatchRequired("EquipmentSO:GainMasteryLevels", nameof(AfterArtifactProgression));
+        PatchRequired("SpellRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
+        PatchRequired("AlchemyRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
+        PatchRequired("EquipmentSO:ResetData", nameof(AfterNativeProgressionReset));
         PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
         PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
         SceneManager.activeSceneChanged += OnSceneChanged;
@@ -53,11 +63,11 @@ public sealed class Plugin : BaseUnityPlugin
         if (SceneManager.GetActiveScene().name == "Main" && _config.ToggleShortcut.Value.IsDown())
         {
             _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-            _runtime.Cancel();
+            _runtime.Cancel(MentorDropReason.Disabled);
             Logger.LogInfo($"Orb Mentor is now {_config.Mode.Value}.");
         }
         var active = _config.Active;
-        if (_wasActive && !active) _runtime.Cancel();
+        if (_wasActive && !active) _runtime.Cancel(MentorDropReason.Disabled);
         _wasActive = active;
         if (SceneManager.GetActiveScene().name != "Main") { _button?.Dispose(); _button = null; return; }
         if (_button is not null && !_button.IsAlive) { _button.Dispose(); _button = null; }
@@ -82,16 +92,19 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (IsGameplayScene()) Instance?._runtime?.BeginArtifactTick(__instance);
     }
-    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(); return __exception; }
+    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(__exception is null); return __exception; }
     private static void BeforeContainerGain(object __instance, BigDouble __0)
     {
         if (IsGameplayScene()) Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
     }
     private static void AfterLifecycleReset()
     {
-        Instance?._runtime?.Cancel();
-        Instance?._runtime?.ClearBlock();
+        Instance?._runtime?.RequestLifecycleReset();
     }
+    private static void AfterSpellProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells);
+    private static void AfterAlchemyProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy);
+    private static void AfterArtifactProgression() => Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts);
+    private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
     private static bool IsGameplayScene() => SceneManager.GetActiveScene().name == "Main";
     private void PatchOptional(string targetName, string patchName, bool postfix)
     {
@@ -100,17 +113,27 @@ public sealed class Plugin : BaseUnityPlugin
         var patch = new HarmonyMethod(typeof(Plugin), patchName);
         if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
     }
+    private void PatchRequired(string targetName, string patchName)
+    {
+        var target = AccessTools.Method(targetName);
+        if (target is null)
+        {
+            _runtime?.BlockPermanent($"required lifecycle hook unavailable: {targetName}");
+            return;
+        }
+        _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), patchName));
+    }
     private void PatchFinalizer(string targetName, string patchName)
     {
         var target = AccessTools.Method(targetName);
         if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
         _harmony!.Patch(target, finalizer: new HarmonyMethod(typeof(Plugin), patchName));
     }
-    private void OnSceneChanged(Scene previous, Scene next) { _runtime?.Cancel(); _runtime?.ClearBlock(); }
+    private void OnSceneChanged(Scene previous, Scene next) => _runtime?.ResetLifecycle();
     private void OnDestroy()
     {
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Cancel(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Cancel(MentorDropReason.LifecycleReset); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

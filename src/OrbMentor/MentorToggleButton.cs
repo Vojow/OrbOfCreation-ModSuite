@@ -91,7 +91,7 @@ internal sealed class MentorToggleButton : IDisposable
     private void Toggle()
     {
         if (!_runtime.IsBlocked) _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-        _runtime.Cancel(); Render(); Plugin.ShowNotice(_runtime.IsBlocked ? $"Orb Mentor BLOCKED: {_runtime.BlockedReason}" : $"Orb Mentor {_config.Mode.Value}. {_runtime.StatusText()}", _root.transform as RectTransform);
+        _runtime.Cancel(MentorDropReason.Disabled); Render(); Plugin.ShowNotice(_runtime.IsBlocked ? $"Orb Mentor BLOCKED: {_runtime.BlockedReason}" : $"Orb Mentor {_config.Mode.Value}. {_runtime.StatusText()}", _root.transform as RectTransform);
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
