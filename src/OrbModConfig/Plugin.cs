@@ -21,8 +21,11 @@ public sealed class Plugin : BaseUnityPlugin
     private float _uiRetrySeconds;
     private float _uiIntegritySeconds;
     private bool _uiFailureLogged;
+    private bool _uiMaintenanceDue;
+    private int _deferInstallUntilFrame;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
+    private ModConfigCoordinatorWork? _uiWork;
 
     private void Awake()
     {
@@ -49,6 +52,9 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
+        _uiWork = new ModConfigCoordinatorWork(
+            SuitePerformanceCoordinator.Shared,
+            () => Time.frameCount);
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         ResetSceneState(SceneManager.GetActiveScene());
     }
@@ -80,73 +86,99 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (_enabled?.Value != true)
         {
+            DeactivateUiWork(disposeShell: true);
             return;
         }
 
         if (SceneManager.GetActiveScene().name != "Main")
         {
+            DeactivateUiWork(disposeShell: false);
             return;
         }
 
         _mainSceneElapsed += Time.unscaledDeltaTime;
         if (_mainSceneElapsed < UiInstallDelaySeconds)
         {
+            _uiWork?.SetState(true, false);
             return;
         }
 
-        if (_enableUiShell?.Value == true)
+        if (_enableUiShell?.Value != true)
         {
-            if (_uiShell is not null && !_uiShell.IsAlive)
-            {
-                _uiShell.Dispose();
-                _uiShell = null;
-                _uiRetrySeconds = 0f;
-                // Unity destruction is deferred until the end of the frame.
-                // Reinstall on the next update so the old observer/button
-                // cannot be rebound while pending destruction.
-                return;
-            }
+            DeactivateUiWork(disposeShell: true);
+            return;
+        }
 
-            if (_uiShell is null)
+        if (_uiShell is not null && !_uiShell.IsAlive)
+            _uiMaintenanceDue = true;
+        else if (_uiShell is null)
+        {
+            if (Time.frameCount >= _deferInstallUntilFrame)
             {
                 _uiRetrySeconds -= Math.Max(0.0f, Time.unscaledDeltaTime);
-                if (_uiRetrySeconds <= 0.0f)
-                {
-                    _uiRetrySeconds = UiRetryIntervalSeconds;
-                    _catalog ??= ConfigCatalog.DiscoverLoaded();
-                    if (!ModConfigUiShell.TryCreate(Logger, _catalog, out _uiShell, out var reason))
-                    {
-                        if (!_uiFailureLogged)
-                        {
-                            _uiFailureLogged = true;
-                            Logger.LogWarning("Mod Config UI is not ready; installation will retry: " + reason);
-                        }
-                    }
-                    else
-                    {
-                        _uiFailureLogged = false;
-                        _uiIntegritySeconds = UiIntegrityIntervalSeconds;
-                    }
-                }
-            }
-            else if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
-            {
-                _uiShell.RefreshNavigation();
+                if (_uiRetrySeconds <= 0.0f) _uiMaintenanceDue = true;
             }
         }
-        else if (_uiShell is not null)
+        else if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
+            _uiMaintenanceDue = true;
+
+        _uiWork?.TryRun(true, _uiMaintenanceDue, RunUiMaintenance);
+        _uiWork?.SetState(true, _uiMaintenanceDue);
+    }
+
+    private void RunUiMaintenance()
+    {
+        _uiMaintenanceDue = false;
+        if (_uiShell is not null && !_uiShell.IsAlive)
         {
             _uiShell.Dispose();
             _uiShell = null;
             _uiRetrySeconds = 0f;
-            _uiFailureLogged = false;
+            _deferInstallUntilFrame = Time.frameCount + 1;
+            return;
         }
+        if (_uiShell is not null)
+        {
+            _uiShell.RefreshNavigation();
+            _uiIntegritySeconds = UiIntegrityIntervalSeconds;
+            return;
+        }
+
+        _uiRetrySeconds = UiRetryIntervalSeconds;
+        _catalog ??= ConfigCatalog.DiscoverLoaded();
+        if (!ModConfigUiShell.TryCreate(
+                Logger, _catalog, out _uiShell, out var reason, MarkUiMaintenanceDue))
+        {
+            if (!_uiFailureLogged)
+            {
+                _uiFailureLogged = true;
+                Logger.LogWarning("Mod Config UI is not ready; installation will retry: " + reason);
+            }
+            return;
+        }
+        _uiFailureLogged = false;
+        _uiIntegritySeconds = UiIntegrityIntervalSeconds;
+    }
+
+    private void MarkUiMaintenanceDue() => _uiMaintenanceDue = true;
+
+    private void DeactivateUiWork(bool disposeShell)
+    {
+        _uiWork?.SetState(false, false);
+        _uiMaintenanceDue = false;
+        if (!disposeShell || _uiShell is null) return;
+        _uiShell.Dispose();
+        _uiShell = null;
+        _uiRetrySeconds = 0f;
+        _uiFailureLogged = false;
     }
 
     private void OnDestroy()
     {
         _uiShell?.Dispose();
         _uiShell = null;
+        _uiWork?.Dispose();
+        _uiWork = null;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
     }
 
@@ -163,6 +195,9 @@ public sealed class Plugin : BaseUnityPlugin
         _uiRetrySeconds = 0f;
         _uiIntegritySeconds = 0f;
         _uiFailureLogged = false;
+        _uiMaintenanceDue = false;
+        _deferInstallUntilFrame = 0;
+        _uiWork?.SetState(scene.name == "Main", false);
     }
 
     internal static bool AdvanceCadence(ref float remainingSeconds, float elapsedSeconds, float intervalSeconds)

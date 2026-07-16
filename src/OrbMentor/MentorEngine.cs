@@ -759,6 +759,7 @@ internal class MentorPendingWork
 
     public bool HasGrantBarrier => Captures.Count > 0 || Sources.HasPending || ActivePlan is not null ||
         ResolvingCapture is not null || RelationshipResolution is not null;
+    public bool HasCooperativePlanning => HasGrantBarrier;
 
     public void CancelPending()
     {

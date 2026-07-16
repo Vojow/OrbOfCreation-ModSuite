@@ -1,4 +1,6 @@
 using OrbModConfig;
+using OrbModding.Common;
+using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -6,6 +8,48 @@ namespace OrbModding.Tests;
 
 public sealed class ModConfigPerformanceTests
 {
+    [Fact]
+    public void UiBudgetDenialRetainsDueRepairAndInstallsListenersExactlyOnce()
+    {
+        var coordinator = new SuitePerformanceCoordinator(
+            StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
+        long frame = 12;
+        using var blocker = coordinator.Register("test", "earlier UI work");
+        blocker.SetPending(true);
+        using var ui = new ModConfigCoordinatorWork(coordinator, () => frame);
+        var listeners = new HashSet<string>(StringComparer.Ordinal);
+        var runs = 0;
+
+        Assert.False(ui.TryRun(true, pending: true, () =>
+        {
+            runs++;
+            listeners.Add("magic");
+            listeners.Add("time");
+        }));
+        Assert.True(ui.IsPending);
+        Assert.Equal(0, runs);
+        Assert.Empty(listeners);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var blockLease));
+        blockLease.Complete();
+        blocker.SetPending(false);
+        frame++;
+        Assert.True(ui.TryRun(true, pending: true, () =>
+        {
+            runs++;
+            listeners.Add("magic");
+            listeners.Add("time");
+        }));
+        ui.SetState(true, pending: false);
+        Assert.Equal(1, runs);
+        Assert.Equal(2, listeners.Count);
+
+        ui.SetState(false, pending: true);
+        Assert.False(ui.IsPending);
+        Assert.False(ui.TryRun(false, pending: true, () => runs++));
+        Assert.Equal(1, runs);
+    }
+
     [Fact]
     public void NavigationIntegrityCadenceDoesNotRunEveryFrame()
     {

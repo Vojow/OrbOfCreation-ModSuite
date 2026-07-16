@@ -5,13 +5,14 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using BepInEx.Logging;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbMentor;
 
 internal enum MentorDomain { Spells, Artifacts, Alchemy }
 
-internal sealed class MentorRuntime
+internal sealed class MentorRuntime : IDisposable
 {
     private enum GrantResult { NoWork, Deferred, Dropped, Granted }
 
@@ -162,6 +163,7 @@ internal sealed class MentorRuntime
     private readonly Dictionary<MentorDomain, DomainState> _domains = new();
     private readonly Dictionary<MentorDomain, DomainCatalog> _catalogs = new();
     private readonly bool[] _domainResetPending = new bool[DomainOrder.Length];
+    private readonly MentorCoordinatorWork? _coordinatorWork;
     private bool _guarded;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
@@ -172,10 +174,18 @@ internal sealed class MentorRuntime
     private object? _activeArtifactContainer;
     private MentorAmount _activeArtifactXp;
 
-    public MentorRuntime(MentorConfig config, ManualLogSource log)
+    public MentorRuntime(
+        MentorConfig config,
+        ManualLogSource log,
+        SuitePerformanceCoordinator? coordinator = null,
+        Func<long>? readFrameIdentity = null)
     {
         _config = config;
         _log = log;
+        if (coordinator is not null)
+            _coordinatorWork = new MentorCoordinatorWork(
+                coordinator,
+                readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity)));
         Diagnostics = new MentorDiagnostics();
         foreach (var domain in DomainOrder)
         {
@@ -406,15 +416,26 @@ internal sealed class MentorRuntime
             CancelDomain(domain, MentorDropReason.LifecycleReset, clearCatalog: true);
             _failures.For(domain).ResetLifecycle();
         }
-        if (!_config.Active || IsBlocked) return;
-        var started = Stopwatch.GetTimestamp();
-        var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
+        if (!_config.Active || IsBlocked)
+        {
+            _coordinatorWork?.SetState(false, false, false);
+            return;
+        }
         if (!_config.ArtifactsEnabled.Value && _artifactWasEnabled)
             CancelDomain(MentorDomain.Artifacts, MentorDropReason.Disabled, clearCatalog: false);
         if (!_config.AlchemyEnabled.Value && _alchemyWasEnabled)
             CancelDomain(MentorDomain.Alchemy, MentorDropReason.Disabled, clearCatalog: false);
         _artifactWasEnabled = _config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = _config.AlchemyEnabled.Value;
+
+        if (_coordinatorWork is null) LateTickLegacy();
+        else LateTickCoordinated();
+    }
+
+    private void LateTickLegacy()
+    {
+        var started = Stopwatch.GetTimestamp();
+        var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
 
         var planningOperations = 0;
         var planningEmpty = 0;
@@ -442,6 +463,94 @@ internal sealed class MentorRuntime
             if (result == GrantResult.Deferred) grantEmpty++;
             else grantEmpty = 0;
         }
+    }
+
+    private void LateTickCoordinated()
+    {
+        var now = Stopwatch.GetTimestamp();
+        var cooperativePending = HasCooperativeWork(now);
+        var mutationPending = TryFindGrantDomain(out var mutationDomain, out var mutationIndex);
+        _coordinatorWork!.SetState(true, cooperativePending, mutationPending);
+
+        if (cooperativePending)
+        {
+            _coordinatorWork.TryRunCooperative(RunCooperativeSlice);
+        }
+
+        now = Stopwatch.GetTimestamp();
+        cooperativePending = HasCooperativeWork(now);
+        mutationPending = TryFindGrantDomain(out mutationDomain, out mutationIndex);
+        _coordinatorWork.SetState(true, cooperativePending, mutationPending);
+        if (mutationPending)
+        {
+            _coordinatorWork.TryRunMutation(() =>
+            {
+                _nextGrantDomain = (mutationIndex + 1) % DomainOrder.Length;
+                ProcessGrant(mutationDomain);
+                return 1;
+            });
+        }
+
+        _coordinatorWork.SetState(
+            true,
+            HasCooperativeWork(Stopwatch.GetTimestamp()),
+            TryFindGrantDomain(out _, out _));
+    }
+
+    private int RunCooperativeSlice()
+    {
+        var started = Stopwatch.GetTimestamp();
+        var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
+        var operations = 0;
+        var empty = 0;
+        while (operations < PlanningOperationsPerFrame &&
+               ElapsedMilliseconds(started) < cpuBudget &&
+               empty < DomainOrder.Length)
+        {
+            var domain = DomainOrder[_nextPlanningDomain++ % DomainOrder.Length];
+            if (!DomainEnabled(domain) || !ProcessDomainStep(domain, Stopwatch.GetTimestamp()))
+            {
+                empty++;
+                continue;
+            }
+            operations++;
+            empty = 0;
+        }
+        return operations;
+    }
+
+    private bool HasCooperativeWork(long now)
+    {
+        foreach (var domain in DomainOrder)
+        {
+            if (!DomainEnabled(domain)) continue;
+            var catalog = _catalogs[domain];
+            var state = _domains[domain];
+            if (!catalog.Initialized || catalog.NeedsReconcile || catalog.Reconcile is not null ||
+                now >= catalog.NextReconcile || catalog.RelationshipDirty || catalog.Refresh is not null ||
+                now >= catalog.NextLiveRefresh || state.HasCooperativePlanning)
+                return true;
+        }
+        return false;
+    }
+
+    private bool TryFindGrantDomain(out MentorDomain domain, out int domainIndex)
+    {
+        for (var offset = 0; offset < DomainOrder.Length; offset++)
+        {
+            domainIndex = (_nextGrantDomain + offset) % DomainOrder.Length;
+            domain = DomainOrder[domainIndex];
+            if (!DomainEnabled(domain)) continue;
+            var state = _domains[domain];
+            var catalog = _catalogs[domain];
+            if (!state.Engine.TryPeek(out _, out _) || state.HasGrantBarrier ||
+                catalog.RelationshipDirty || catalog.NeedsReconcile ||
+                catalog.Reconcile is not null || catalog.Refresh is not null) continue;
+            return true;
+        }
+        domain = default;
+        domainIndex = -1;
+        return false;
     }
 
     private bool ProcessDomainStep(MentorDomain domain, long now)
@@ -801,6 +910,13 @@ internal sealed class MentorRuntime
         _activeArtifact = null;
         _activeArtifactContainer = null;
         _activeArtifactXp = default;
+        _coordinatorWork?.SetState(false, false, false);
+    }
+
+    public void Dispose()
+    {
+        Cancel(MentorDropReason.LifecycleReset);
+        _coordinatorWork?.Dispose();
     }
 
     private void CancelDomain(MentorDomain domain, MentorDropReason reason, bool clearCatalog)

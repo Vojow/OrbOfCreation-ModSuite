@@ -29,7 +29,11 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
         _config = MentorConfig.Bind(Config);
-        _runtime = new MentorRuntime(_config, Logger);
+        _runtime = new MentorRuntime(
+            _config,
+            Logger,
+            SuitePerformanceCoordinator.Shared,
+            () => Time.frameCount);
         _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
@@ -173,7 +177,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnDestroy()
     {
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Cancel(MentorDropReason.LifecycleReset); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

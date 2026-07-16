@@ -81,7 +81,8 @@ internal sealed class ModConfigUiShell : IDisposable
         ManualLogSource log,
         ConfigCatalogSnapshot catalog,
         out ModConfigUiShell? shell,
-        out string reason)
+        out string reason,
+        Action? navigationChanged = null)
     {
         shell = null;
         reason = string.Empty;
@@ -214,7 +215,7 @@ internal sealed class ModConfigUiShell : IDisposable
             foreach (var nativeButton in nativeButtons) shell.BindNativeButton(nativeButton);
             var observer = buttonParent.gameObject.GetComponent<ModConfigNavigationObserver>() ??
                            buttonParent.gameObject.AddComponent<ModConfigNavigationObserver>();
-            observer.Changed = shell.RefreshNavigation;
+            observer.Changed = navigationChanged ?? shell.RefreshNavigation;
             shell._navigationObserver = observer;
 
             log.LogInfo(
