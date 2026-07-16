@@ -131,7 +131,20 @@ internal sealed class ModConfigPanel : IDisposable
     {
         if (!_disposed)
         {
+            if (active && _session.RefreshExternalValues())
+            {
+                RebuildSettings();
+            }
+
             Root.SetActive(active);
+        }
+    }
+
+    public void RefreshExternalValues()
+    {
+        if (!_disposed && _session.RefreshExternalValues())
+        {
+            RebuildSettings();
         }
     }
 

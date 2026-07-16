@@ -29,6 +29,7 @@ internal sealed class AutoCastEngine : IDisposable
     private IAutoCastCandidate? _pendingCandidate;
     private AutoCastCandidateIdentity _pendingIdentity;
     private string _pendingResourceSummary = string.Empty;
+    private IAutoCastCandidate? _fullChargeCandidate;
 
     public AutoCastEngine(
         AutomataConfig config,
@@ -58,7 +59,7 @@ internal sealed class AutoCastEngine : IDisposable
                 SuiteWorkExecutionKind.Cooperative);
             _mutationWork = coordinator.Register(
                 "OrbAutomata.AutoCast",
-                "Fire one spell",
+                "Fire spell or release charge hold",
                 SuiteBudgetClass.HardLimited,
                 SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
         }
@@ -85,6 +86,11 @@ internal sealed class AutoCastEngine : IDisposable
         _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
+        if (!MaintainFullChargeHold())
+        {
+            return;
+        }
+
         if (_config.AutoCastMode.Value != AutoCastOperationMode.Active)
         {
             return;
@@ -110,12 +116,42 @@ internal sealed class AutoCastEngine : IDisposable
         if (_config.AutoCastMode.Value != AutoCastOperationMode.Active ||
             !_config.CanStartAutoCastActively)
         {
+            ReleaseFullChargeHold("Auto Cast stopped");
             ClearPendingCandidate();
             SetCoordinatorEnabled(false);
             return;
         }
 
         SetCoordinatorEnabled(true);
+        if (_fullChargeCandidate is not null)
+        {
+            if (!_config.AutoCastFullCharge.Value || !_isGameplayScene())
+            {
+                ReleaseFullChargeHold("full-charge mode or gameplay stopped");
+                SetCoordinatorPending(false, false);
+                return;
+            }
+
+            if (_fullChargeCandidate.IsReadyingCast)
+            {
+                SetCoordinatorPending(false, false);
+                return;
+            }
+
+            SetCoordinatorPending(false, true);
+            if (TryAcquire(_mutationWork, out var releaseLease))
+            {
+                using (releaseLease)
+                {
+                    ReleaseFullChargeHold("charge completed");
+                    releaseLease.Complete();
+                }
+            }
+
+            SetCoordinatorPending(false, _fullChargeCandidate is not null);
+            return;
+        }
+
         var readDue = _pendingCandidate is null && _secondsUntilEvaluation <= 0.0f;
         if (_pendingCandidate is null && !readDue)
         {
@@ -209,6 +245,8 @@ internal sealed class AutoCastEngine : IDisposable
     {
         var candidate = _pendingCandidate;
         var resourceSummary = _pendingResourceSummary;
+        var chargeHoldAcquired = false;
+        var fireSucceeded = false;
         if (candidate is null)
         {
             return;
@@ -238,11 +276,26 @@ internal sealed class AutoCastEngine : IDisposable
                 return;
             }
 
+            var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
+            if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
+            {
+                _log.LogWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                return;
+            }
+
+            if (shouldFullCharge)
+            {
+                _fullChargeCandidate = candidate;
+                chargeHoldAcquired = true;
+            }
+
             if (!candidate.TryFireAndResolveTargets(out reason))
             {
                 _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
+
+            fireSucceeded = true;
 
             MarkSlotState(candidate, "active fired");
             LogOperation(
@@ -252,6 +305,10 @@ internal sealed class AutoCastEngine : IDisposable
         }
         finally
         {
+            if (chargeHoldAcquired && !fireSucceeded)
+            {
+                ReleaseFullChargeHold("native fire or target resolution failed");
+            }
             ClearPendingCandidate();
         }
     }
@@ -341,6 +398,7 @@ internal sealed class AutoCastEngine : IDisposable
     public void Dispose()
     {
         AutoCastManualSignal.ManualSpellFired -= OnManualSpellFired;
+        ReleaseFullChargeHold("Auto Cast disposed");
         ClearPendingCandidate();
         SetCoordinatorEnabled(false);
         _readWork?.Dispose();
@@ -350,6 +408,7 @@ internal sealed class AutoCastEngine : IDisposable
 
     public void InvalidateLifecycle()
     {
+        ReleaseFullChargeHold("Auto Cast lifecycle invalidated");
         ClearPendingCandidate();
         SetCoordinatorPending(false, false);
         _secondsUntilEvaluation = 0.0f;
@@ -408,8 +467,24 @@ internal sealed class AutoCastEngine : IDisposable
                 continue;
             }
 
+            var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
+            if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
+            {
+                _log.LogWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                return;
+            }
+
+            if (shouldFullCharge)
+            {
+                _fullChargeCandidate = candidate;
+            }
+
             if (!candidate.TryFireAndResolveTargets(out reason))
             {
+                if (shouldFullCharge)
+                {
+                    ReleaseFullChargeHold("native fire or target resolution failed");
+                }
                 _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
@@ -429,12 +504,6 @@ internal sealed class AutoCastEngine : IDisposable
         if (candidate.IsEmpty)
         {
             reason = "empty slot";
-            return false;
-        }
-
-        if (candidate.IsCharged)
-        {
-            reason = "charged spells are deferred";
             return false;
         }
 
@@ -482,9 +551,44 @@ internal sealed class AutoCastEngine : IDisposable
 
     private void OnManualSpellFired()
     {
+        ReleaseFullChargeHold("manual spell input");
         _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, _config.AutoCastManualPauseSeconds.Value));
         ClearPendingCandidate();
         _mutationWork?.SetPending(false);
+    }
+
+    private bool MaintainFullChargeHold()
+    {
+        if (_fullChargeCandidate is null)
+        {
+            return true;
+        }
+
+        if (_isGameplayScene() &&
+            _config.CanStartAutoCastActively &&
+            _config.AutoCastFullCharge.Value &&
+            _fullChargeCandidate.IsReadyingCast)
+        {
+            return false;
+        }
+
+        ReleaseFullChargeHold("charge completed or Auto Cast stopped");
+        return true;
+    }
+
+    private void ReleaseFullChargeHold(string context)
+    {
+        var candidate = _fullChargeCandidate;
+        _fullChargeCandidate = null;
+        if (candidate is null)
+        {
+            return;
+        }
+
+        if (!candidate.TrySetChargeHold(false, out var reason))
+        {
+            _log.LogWarning($"Auto Cast could not release full-charge hold for slot {candidate.SlotIndex + 1}, {candidate.DisplayName} ({context}): {reason}");
+        }
     }
 
     private void LogOperation(string message)

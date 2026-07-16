@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased performance hotfix
+## Unreleased
 
-- Bump Orb Mentor to 0.1.2 and Orb Mod Config to 0.5.3 for shared-coordinator scheduling.
+- Bump Orb Automata to 0.5.1, Orb Mentor to 0.1.2, Orb Mod Config to 0.5.3, and Orb Modding Common to 0.2.0 for the combined full-charge and shared-coordinator changes.
+- Synchronize clean Mod Config fields with live changes made by native status buttons or shortcuts without overwriting staged edits.
+- Add configurable Auto Cast support for charge-capable spells: fully charge through the native hold contract by default, or fire immediately when full charging is disabled.
 - Retry Mod Config UI installation on slower Steam Deck/Proton scene startup instead of permanently giving up after one attempt.
 - Repair Mod Config when its ScreenContent panel is destroyed even if the Mods button survives, restore a usable native view after failed open/close, and detach the old navigation listeners before reinstalling.
 - Throttle missing native-control discovery to avoid scanning the complete Unity object registry every frame before autoqueue unlock.
@@ -13,6 +15,7 @@
 - Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, and transiently ineligible UUIDs park with exact XP until a later authoritative refresh without retry churn or head-of-line blocking. The parked ledger is bounded and fails the domain closed on overflow. AutoBuy plus Mentor can start only one native mutation in a Unity frame.
 - Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
+- Keep Orb Chronomancer and Orb Achievement Resonance experimental and excluded from the supported suite archive.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

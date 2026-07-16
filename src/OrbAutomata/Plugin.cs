@@ -79,6 +79,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoBuyStructureRepeat={_config.StructureRepeatMode.Value}, " +
             $"RespectActionMultiplier={_config.RespectActionMultiplier.Value}, " +
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
+            $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
             $"OperationalLogging={_config.EnableOperationalLogging.Value}.");
     }

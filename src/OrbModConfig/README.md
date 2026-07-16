@@ -8,6 +8,7 @@ The current `0.5.3` build provides a simplified configuration UI:
 - friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
 - automatic Steam keyboard input for text fields when running on Steam Deck;
 - no hard Steamworks dependency, so desktop and non-Steam startup remain unchanged;
+- live synchronization of clean, unstaged fields when native controls or shortcuts change them;
 
 The underlying editor continues to provide:
 
@@ -27,8 +28,8 @@ The underlying editor continues to provide:
 
 `0.3.2` makes Mods participate in the top-level navigation state: opening it temporarily deactivates the selected native tab, toggling Mods closed restores that tab, and choosing another native tab closes Mods without restoring the prior selection.
 
-`0.5.2` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+, keeps it last in the native navigation row, and retries installation while slower UI hierarchies finish loading. Shell liveness includes both the button and its ScreenContent panel; losing either host or failing to open/close the panel restores the prior native view (or another surviving native view), detaches the old shell listeners, and schedules a clean reinstall.
+`0.5.2` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+, keeps it last in the native navigation row, and refreshes unstaged values when native controls or shortcuts change them.
 
-`0.5.3` runs loaded-plugin catalog discovery and logging, UI installation, shell repair, native-tab event maintenance, and the five-second integrity check as due-only cooperative work in the suite frame coordinator. The catalog is enumerated and logged once, after the first admitted installation lease. Budget denial retains the pending repair without enumerating plugins, logging the catalog, scanning the scene, or rebinding listeners; disabled and non-gameplay scenes remain idle, and scene exit or unload unregisters the work and removes owned listeners.
+`0.5.3` retries installation while slower UI hierarchies finish loading. Shell liveness includes both the button and its ScreenContent panel; losing either host or failing to open/close the panel restores the prior native view (or another surviving native view), detaches the old shell listeners, and schedules a clean reinstall. Loaded-plugin catalog discovery and logging, UI installation, repair, native-tab event maintenance, and the five-second integrity check run only when due through the shared cooperative frame budget. The catalog is enumerated and logged once, after the first admitted installation lease. Budget denial retains pending work without enumerating plugins, logging the catalog, scanning the scene, or rebinding listeners; disabled and non-gameplay scenes remain idle, and scene exit or unload unregisters the work and removes owned listeners.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

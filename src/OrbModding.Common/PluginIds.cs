@@ -9,7 +9,7 @@ public static class PluginIds
 
     public const string AutomataGuid = "dev.vojow.orbofcreation.automata";
     public const string AutomataName = "Orb Automata";
-    public const string AutomataVersion = "0.4.2";
+    public const string AutomataVersion = "0.5.1";
 
     public const string ChronomancerGuid = "dev.vojow.orbofcreation.chronomancer";
     public const string ChronomancerName = "Orb Chronomancer";

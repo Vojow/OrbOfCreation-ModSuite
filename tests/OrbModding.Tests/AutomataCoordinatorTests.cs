@@ -135,7 +135,8 @@ public sealed class AutomataCoordinatorTests
         long frame = 7;
         var config = Config();
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
-        var spell = new CastCandidate { ThrowOnFire = true };
+        config.AutoCastFullCharge.Value = true;
+        var spell = new CastCandidate { IsCharged = true, ThrowOnFire = true };
         using var engine = CastEngine(config, new CastCatalog(spell), coordinator, () => frame);
         var manualSignals = 0;
         void ObserveManualFire() => manualSignals++;
@@ -143,6 +144,8 @@ public sealed class AutomataCoordinatorTests
         try
         {
             Assert.Throws<InvalidOperationException>(() => engine.Tick(1.0f));
+            Assert.Equal(1, spell.HoldCalls);
+            Assert.Equal(1, spell.ReleaseCalls);
             AutoCastManualSignal.NotifySpellFire();
             Assert.Equal(1, manualSignals);
 
@@ -161,6 +164,74 @@ public sealed class AutomataCoordinatorTests
         {
             AutoCastManualSignal.ManualSpellFired -= ObserveManualFire;
         }
+    }
+
+    [Fact]
+    public void ChargedCastAndNaturalReleaseEachUseOneMutationFrame()
+    {
+        var coordinator = Coordinator();
+        long frame = 80;
+        var config = Config();
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        config.AutoCastFullCharge.Value = true;
+        var spell = new CastCandidate { IsCharged = true, IsReadyingCast = true };
+        using var engine = CastEngine(config, new CastCatalog(spell), coordinator, () => frame);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(1, spell.HoldCalls);
+        Assert.Equal(1, spell.FireCalls);
+        Assert.Equal(0, spell.ReleaseCalls);
+
+        spell.IsReadyingCast = false;
+        frame++;
+        var blocker = coordinator.Register(
+            "test",
+            "release blocker",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var blockedLease));
+        blockedLease.Complete();
+        blocker.SetPending(false);
+
+        engine.Tick(0.0f);
+        Assert.Equal(0, spell.ReleaseCalls);
+
+        frame++;
+        engine.Tick(0.0f);
+
+        Assert.Equal(1, spell.ReleaseCalls);
+        Assert.Equal(1, spell.FireCalls);
+        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoCast", out var snapshot));
+        Assert.Equal(2, snapshot.NativeMutationsStarted);
+        blocker.Dispose();
+    }
+
+    [Fact]
+    public void ChargedCastBlocksAutoBuyMutationInSameFrame()
+    {
+        var coordinator = Coordinator();
+        long frame = 90;
+        var castConfig = Config();
+        castConfig.AutoCastMode.Value = AutoCastOperationMode.Active;
+        castConfig.AutoCastFullCharge.Value = true;
+        var spell = new CastCandidate { IsCharged = true, IsReadyingCast = true };
+        var buyCandidate = new BuyCandidate("upgrade", AutoBuyCandidateKind.Upgrade);
+        using var cast = CastEngine(castConfig, new CastCatalog(spell), coordinator, () => frame);
+        using var buy = BuyEngine(Config(), new BuyCatalog(4, buyCandidate), coordinator, () => frame);
+
+        cast.Tick(1.0f);
+        buy.Tick(1.0f);
+
+        Assert.Equal(1, spell.FireCalls);
+        Assert.Equal(0, buyCandidate.PurchaseCalls);
+
+        frame++;
+        cast.Tick(0.0f);
+        buy.Tick(0.0f);
+
+        Assert.Equal(1, buyCandidate.PurchaseCalls);
     }
 
     [Fact]
@@ -723,13 +794,19 @@ public sealed class AutomataCoordinatorTests
 
         public bool IsEmpty => false;
 
-        public bool IsCharged => false;
+        public bool IsCharged { get; set; }
 
         public bool IsCasting => false;
+
+        public bool IsReadyingCast { get; set; }
 
         public bool ThrowOnFire { get; set; }
 
         public int FireCalls { get; private set; }
+
+        public int HoldCalls { get; private set; }
+
+        public int ReleaseCalls { get; private set; }
 
         public bool CanCast(out string reason)
         {
@@ -775,6 +852,14 @@ public sealed class AutomataCoordinatorTests
         public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
         {
             identity = new AutoCastCandidateIdentity(DisplayName, _nativeIdentity, GetType(), SlotIndex);
+            reason = string.Empty;
+            return true;
+        }
+
+        public bool TrySetChargeHold(bool isHolding, out string reason)
+        {
+            if (isHolding) HoldCalls++;
+            else ReleaseCalls++;
             reason = string.Empty;
             return true;
         }

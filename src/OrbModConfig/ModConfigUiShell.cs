@@ -18,6 +18,7 @@ internal sealed class ModConfigNavigationObserver : MonoBehaviour
 
 internal sealed class ModConfigUiShell : IDisposable
 {
+    private const float ExternalRefreshIntervalSeconds = 0.1f;
     internal const string ButtonObjectName = "OrbModConfig.ModsButton";
     internal const string PanelObjectName = "OrbModConfig.Panel";
 
@@ -39,6 +40,7 @@ internal sealed class ModConfigUiShell : IDisposable
     private bool _open;
     private bool _repairRequired;
     private object? _previousNativeView;
+    private float _externalRefreshSeconds;
 
     private ModConfigUiShell(
         ManualLogSource log,
@@ -269,6 +271,24 @@ internal sealed class ModConfigUiShell : IDisposable
             var nativeButton = child.gameObject.GetComponent(_nativeButtonType);
             if (nativeButton is Component component) BindNativeButton(component);
         }
+    }
+
+    public void Tick(float unscaledDeltaTime)
+    {
+        if (_disposed || !IsAlive || !_open)
+        {
+            _externalRefreshSeconds = 0f;
+            return;
+        }
+
+        _externalRefreshSeconds -= Math.Max(0f, unscaledDeltaTime);
+        if (_externalRefreshSeconds > 0f)
+        {
+            return;
+        }
+
+        _externalRefreshSeconds = ExternalRefreshIntervalSeconds;
+        _panel.RefreshExternalValues();
     }
 
     public void Close()

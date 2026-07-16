@@ -96,8 +96,12 @@ public sealed class Plugin : BaseUnityPlugin
                 if (_uiRetrySeconds <= 0.0f) _uiMaintenanceDue = true;
             }
         }
-        else if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
-            _uiMaintenanceDue = true;
+        else
+        {
+            _uiShell.Tick(Time.unscaledDeltaTime);
+            if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
+                _uiMaintenanceDue = true;
+        }
 
         _uiWork?.TryRun(true, _uiMaintenanceDue, RunUiMaintenance);
         _uiWork?.SetState(true, _uiMaintenanceDue);

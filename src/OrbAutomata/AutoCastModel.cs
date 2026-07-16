@@ -35,6 +35,8 @@ internal interface IAutoCastCandidate
 
     bool IsCasting { get; }
 
+    bool IsReadyingCast { get; }
+
     bool CanCast(out string reason);
 
     bool TryGetImmediateCosts(out IReadOnlyList<ResourceAdmissionCost> costs);
@@ -46,6 +48,8 @@ internal interface IAutoCastCandidate
     bool TryFireAndResolveTargets(out string reason);
 
     bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason);
+
+    bool TrySetChargeHold(bool isHolding, out string reason);
 }
 
 internal readonly struct AutoCastCandidateIdentity

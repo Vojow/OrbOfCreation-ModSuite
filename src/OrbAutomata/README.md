@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.4.2` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.5.1` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
 
 ## Build
 
@@ -54,7 +54,7 @@ The configured evaluation interval applies only while Auto Buy is idle. Once a s
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
-Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level or fired spell requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. A denied lease retains the pending candidate and repeat count, so Fixed, Bulk Development, and action-multiplier groups keep their initial queue-room clamp instead of restarting. Disabled automation clears its pending work and stops requesting leases.
+Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level, fired spell, or normal full-charge release requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. A denied lease retains the pending candidate, repeat count, or owned charge hold, so Fixed, Bulk Development, action-multiplier groups, and charge release continue without restarting or overlapping another suite mutation. Disabled automation clears pending work and stops requesting leases; manual input, scene exit, emergency stop, and unload still release an owned charge hold immediately to avoid trapping player control.
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
@@ -64,7 +64,9 @@ Active membership and ranked recommendation views use reused buffers and determi
 
 ## Auto Cast
 
-Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. It skips empty and charged slots, treats an active aura as already satisfied, pauses while a channel is active, respects native readiness and targeting, and never turns persistent spells off.
+Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically.
+
+`FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Automata owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
 A cast deferred by the shared coordinator is treated as a short-lived plan. Before firing, Automata rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
 

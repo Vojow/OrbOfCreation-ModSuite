@@ -13,6 +13,6 @@ Important controls:
 - Action multipliers are capped to available queue room and revalidated per level.
 - `Safety.EmergencyDisable` immediately stops new automated purchases and casts.
 
-Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast defaults to Disabled. Operational purchase and cast logging is off by default and should normally be enabled only for troubleshooting.
+Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast defaults to Disabled. When enabled, Auto Cast fully charges charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Operational purchase and cast logging is off by default and should normally be enabled only for troubleshooting.
 
 Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [Orb Automata reference](../../src/OrbAutomata/README.md).

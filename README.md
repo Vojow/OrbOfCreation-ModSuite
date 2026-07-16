@@ -12,8 +12,8 @@ The current public beta centers on Orb Automata: queue-aware Auto Buy, safe Auto
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.4.2** | Beta | Auto Buy and Auto Cast with affordability, reserves, and queue ownership. |
-| **Orb Mod Config 0.5.3** | Beta | Simplified in-game Mods tab, available from the start, with typed editors and Steam Deck keyboard support. |
+| **Orb Automata 0.5.1** | Beta | Queue-aware Auto Buy and coordinated Auto Cast with affordability, reserves, full-charge support, and bounded shared scheduling. |
+| **Orb Mod Config 0.5.3** | Beta | Mods tab available from the start, with typed editors, Steam Deck keyboard support, live native-control synchronization, and coordinated UI recovery. |
 | **Orb Chronomancer** | Experimental | Simulation-speed controls; excluded from the Automata release archive. |
 | **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation is disabled by default. |
 | **Orb Mentor 0.1.2** | Beta candidate | Highest-mastery spells share final native mastery XP with lower-level discovered spells; interactive validation remains before release. |
