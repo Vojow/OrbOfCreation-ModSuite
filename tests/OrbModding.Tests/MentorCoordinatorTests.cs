@@ -201,7 +201,7 @@ public sealed class MentorCoordinatorTests
     [InlineData(false, 1, 5, (int)MentorRecipientEligibilityStatus.Undiscovered)]
     [InlineData(true, 5, 5, (int)MentorRecipientEligibilityStatus.NotBelowHighestMastery)]
     [InlineData(true, 6, 5, (int)MentorRecipientEligibilityStatus.NotBelowHighestMastery)]
-    public void FinalRecipientTransitionDefersThenGrantsExactlyOnceWhenEligibleAgain(
+    public void ParkedRecipientSleepsAcrossFramesDoesNotBlockOthersAndGrantsOnceAfterRealRefresh(
         bool discovered,
         int mastery,
         int highestMastery,
@@ -211,29 +211,36 @@ public sealed class MentorCoordinatorTests
         long frame = 90;
         using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
         var engine = new MentorEngine();
+        var parked = new MentorParkedGrantLedger();
+        var settledGeneration = 1L;
         engine.Consolidate(new MentorGrant("recipient", new MentorAmount(8, 2)));
+        engine.Consolidate(new MentorGrant("other-eligible", new MentorAmount(3, 2)));
         var nativeCalls = 0;
 
         mentor.SetState(true, cooperativePending: false, mutationPending: true);
         Assert.True(mentor.TryRunMutation(() =>
         {
+            Assert.True(engine.TryPeek(out var grant));
+            Assert.Equal("recipient", grant.Uuid);
             Assert.Equal(
                 (MentorRecipientEligibilityStatus)expectedStatus,
                 MentorRecipientEligibility.Evaluate(discovered, mastery, highestMastery));
+            Assert.Equal(MentorParkResult.Parked, parked.Park(grant, settledGeneration));
+            Assert.True(engine.Complete(grant.Uuid));
             return 1;
         }));
         Assert.Equal(0, nativeCalls);
-        Assert.True(engine.TryPeek(out var retained));
-        Assert.Equal("recipient", retained.Uuid);
+        Assert.Equal(1, parked.Count);
+        Assert.False(parked.HasReady(settledGeneration));
+        Assert.True(engine.TryPeek(out var next));
+        Assert.Equal("other-eligible", next.Uuid);
 
         frame++;
         mentor.SetState(true, cooperativePending: false, mutationPending: true);
         Assert.True(mentor.TryRunMutation(() =>
         {
-            Assert.Equal(
-                MentorRecipientEligibilityStatus.Eligible,
-                MentorRecipientEligibility.Evaluate(discovered: true, mastery: 2, highestMastery: 5));
             Assert.True(engine.TryPeek(out var grant));
+            Assert.Equal("other-eligible", grant.Uuid);
             nativeCalls++;
             Assert.True(engine.Complete(grant.Uuid));
             return 1;
@@ -241,14 +248,72 @@ public sealed class MentorCoordinatorTests
         Assert.Equal(1, nativeCalls);
         Assert.False(engine.TryPeek(out _));
 
-        frame++;
-        mentor.SetState(true, cooperativePending: false, mutationPending: engine.TryPeek(out _));
-        Assert.False(mentor.TryRunMutation(() =>
+        for (var idle = 0; idle < 20; idle++)
         {
-            nativeCalls++;
+            frame++;
+            Assert.False(parked.HasReady(settledGeneration));
+            mentor.SetState(true, cooperativePending: false, mutationPending: false);
+            Assert.False(mentor.TryRunMutation(() => { nativeCalls++; return 1; }));
+        }
+        Assert.Equal(1, nativeCalls);
+
+        // A legitimate periodic authoritative refresh completed but the
+        // recipient remained unchanged. Reconsider cooperatively and re-park
+        // without spending another mutation admission.
+        settledGeneration++;
+        frame++;
+        mentor.SetState(true, cooperativePending: parked.HasReady(settledGeneration), mutationPending: false);
+        Assert.True(mentor.TryRunCooperative(() =>
+        {
+            Assert.True(parked.TryTakeReady(settledGeneration, out var retained));
+            Assert.Equal("recipient", retained.Uuid);
+            Assert.Equal(new MentorAmount(8, 2), retained.Amount);
+            Assert.Equal(MentorParkResult.Parked, parked.Park(retained, settledGeneration));
             return 1;
         }));
-        Assert.Equal(1, nativeCalls);
+        Assert.False(parked.HasReady(settledGeneration));
+        for (var idle = 0; idle < 10; idle++)
+        {
+            frame++;
+            mentor.SetState(true, cooperativePending: false, mutationPending: false);
+            Assert.False(mentor.TryRunMutation(() => { nativeCalls++; return 1; }));
+        }
+
+        // A later real progression/refresh makes the cached relationship
+        // eligible. Cooperative work wakes the exact amount, then final
+        // mutation validation grants it once.
+        settledGeneration++;
+        frame++;
+        mentor.SetState(true, cooperativePending: parked.HasReady(settledGeneration), mutationPending: false);
+        Assert.True(mentor.TryRunCooperative(() =>
+        {
+            Assert.True(parked.TryTakeReady(settledGeneration, out var retained));
+            Assert.Equal(
+                MentorRecipientEligibilityStatus.Eligible,
+                MentorRecipientEligibility.Evaluate(discovered: true, mastery: 2, highestMastery: 5));
+            engine.Consolidate(retained);
+            return 1;
+        }));
+        mentor.SetState(true, cooperativePending: false, mutationPending: engine.TryPeek(out _));
+        Assert.True(mentor.TryRunMutation(() =>
+        {
+            Assert.True(engine.TryPeek(out var grant));
+            Assert.Equal("recipient", grant.Uuid);
+            Assert.Equal(new MentorAmount(8, 2), grant.Amount);
+            nativeCalls++;
+            Assert.True(engine.Complete(grant.Uuid));
+            return 1;
+        }));
+        Assert.Equal(2, nativeCalls);
+        Assert.Equal(0, parked.Count);
+        Assert.False(engine.TryPeek(out _));
+
+        frame++;
+        mentor.SetState(true, cooperativePending: false, mutationPending: false);
+        Assert.False(mentor.TryRunMutation(() => { nativeCalls++; return 1; }));
+        Assert.Equal(2, nativeCalls);
+        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbMentor", out var metrics));
+        Assert.Equal(3, metrics.NativeMutationsStarted);
     }
 
     private static SuitePerformanceCoordinator Coordinator() =>

@@ -68,6 +68,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool NeedsReconcile = true;
         public long ProgressionEpoch;
         public long RelationshipEpoch;
+        public long SettledRefreshGeneration;
         public readonly MentorWorkGeneration ReconcileRequests = new();
         public readonly MentorWorkGeneration RelationshipRequests = new();
         public ReconcileWork? Reconcile;
@@ -542,7 +543,8 @@ internal sealed class MentorRuntime : IDisposable
             catalog.RelationshipDirty,
             catalog.Refresh is not null,
             now >= catalog.NextLiveRefresh,
-            state.HasCooperativePlanning);
+            state.HasCooperativePlanning ||
+            state.ParkedGrants.HasReady(catalog.SettledRefreshGeneration));
     }
 
     private bool TryFindGrantDomain(long now, out MentorDomain domain, out int domainIndex)
@@ -576,6 +578,24 @@ internal sealed class MentorRuntime : IDisposable
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!catalog.Initialized || catalog.RelationshipDirty || catalog.NeedsReconcile) return false;
+        if (state.ParkedGrants.TryTakeReady(
+                catalog.SettledRefreshGeneration,
+                out var parkedGrant))
+        {
+            if (catalog.ById.TryGetValue(parkedGrant.Uuid, out var parkedEntry) &&
+                MentorRecipientEligibility.Evaluate(
+                    parkedEntry.IsDiscovered,
+                    parkedEntry.MasteryLevel,
+                    catalog.HighestMastery) == MentorRecipientEligibilityStatus.Eligible)
+            {
+                state.Engine.Consolidate(parkedGrant);
+            }
+            else
+            {
+                state.ParkedGrants.Park(parkedGrant, catalog.SettledRefreshGeneration);
+            }
+            return true;
+        }
         if (state.RelationshipResolution is not null)
         {
             state.RelationshipResolution.Step();
@@ -630,7 +650,9 @@ internal sealed class MentorRuntime : IDisposable
         }
         if (state.ActivePlan is not null)
         {
-            if (state.ActivePlan.TryTake(out var grant)) state.Engine.Consolidate(grant);
+            if (state.ActivePlan.TryTake(out var grant) &&
+                !state.ParkedGrants.TryAccumulate(grant))
+                state.Engine.Consolidate(grant);
             if (state.ActivePlan.RemainingCount == 0) state.ActivePlan = null;
             return true;
         }
@@ -732,10 +754,24 @@ internal sealed class MentorRuntime : IDisposable
                     mastery,
                     catalog.HighestMastery) != MentorRecipientEligibilityStatus.Eligible)
             {
-                // This may be a transient native transition. Keep the exact
-                // pending grant, make the relationship stale, and require a
-                // settled authoritative refresh before reconsidering it.
-                RequestRelationshipRefresh(catalog, advanceProgressionEpoch: false);
+                // Park at this authoritative settled generation. The exact
+                // amount is reconsidered cooperatively only after a later
+                // real refresh pass completes; this validation does not
+                // manufacture its own immediate refresh/retry cycle.
+                var parkResult = state.ParkedGrants.Park(
+                    new MentorGrant(grantUuid, grantAmount),
+                    catalog.SettledRefreshGeneration);
+                if (parkResult == MentorParkResult.Overflow)
+                {
+                    Diagnostics.RecordParkedGrantOverflow();
+                    BlockDomainTransient(domain, $"{domain} parked grant capacity exceeded");
+                    return GrantResult.Dropped;
+                }
+                if (!state.Engine.Complete(grantUuid))
+                {
+                    BlockDomainTransient(domain, $"{domain} pending grant changed while parking");
+                    return GrantResult.Dropped;
+                }
                 Diagnostics.RecordDeferredGrant();
                 return GrantResult.Deferred;
             }
@@ -977,6 +1013,7 @@ internal sealed class MentorRuntime : IDisposable
         RequestReconcile(catalog);
         catalog.ProgressionEpoch = 0;
         catalog.RelationshipEpoch = 0;
+        catalog.SettledRefreshGeneration = 0;
     }
 
     private void RecordPendingDrops(MentorDomain domain, MentorDropReason reason)
@@ -991,6 +1028,7 @@ internal sealed class MentorRuntime : IDisposable
         if (state.ActivePlan is not null && state.ActivePlan.RemainingCount > 0)
             Diagnostics.RecordDrop(reason, state.ActivePlan.RemainingCount, grant: true);
         if (state.Engine.PendingCount > 0) Diagnostics.RecordDrop(reason, state.Engine.PendingCount, grant: true);
+        if (state.ParkedGrants.Count > 0) Diagnostics.RecordDrop(reason, state.ParkedGrants.Count, grant: true);
     }
 
     public void ResetLifecycle()
@@ -1260,6 +1298,7 @@ internal sealed class MentorRuntime : IDisposable
                     catalog.Refresh = null;
                     catalog.RelationshipDirty = !catalog.RelationshipRequests.IsCurrent(work.RequestGeneration);
                     catalog.NextLiveRefresh = catalog.RelationshipDirty ? now : now + LiveRefreshTicks;
+                    catalog.SettledRefreshGeneration++;
                 }
                 return true;
             }
@@ -1294,6 +1333,7 @@ internal sealed class MentorRuntime : IDisposable
             catalog.RelationshipDirty = !passIsCurrent;
             catalog.RelationshipEpoch = work.ProgressionEpoch;
             catalog.NextLiveRefresh = catalog.RelationshipDirty ? now : now + LiveRefreshTicks;
+            catalog.SettledRefreshGeneration++;
             return true;
         }
         catch (Exception ex)

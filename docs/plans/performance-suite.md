@@ -56,7 +56,7 @@ The Steam Deck hotfix already establishes the first safety layer:
 - Mod Config retries after slow UI initialization rather than failing permanently.
 - Mentor caches reflected catalogs briefly and uses conservative operation and CPU defaults.
 - Disabled Mentor stops clearing state on every frame.
-- AutoBuy, AutoCast, Mentor, and Mod Config now use one process-wide coordinator and the same Unity frame identity. Cooperative work is round-robin budgeted, while AutoBuy and Mentor share a one-native-mutation-per-frame gate. Mentor domains with due, active, denied, or follow-up cooperative work cannot request a stale mutation lease.
+- AutoBuy, AutoCast, Mentor, and Mod Config now use one process-wide coordinator and the same Unity frame identity. Cooperative work is round-robin budgeted, while AutoBuy and Mentor share a one-native-mutation-per-frame gate. Mentor domains with due, active, denied, or follow-up cooperative work cannot request a stale mutation lease. A final-validation miss parks that UUID in a bounded ledger until a later completed authoritative refresh, avoiding hot retry loops and head-of-line blocking.
 - Mod Config marks cooperative UI work pending only for delayed install/retry, integrity cadence, navigation events, or detected shell repair. Loaded-plugin catalog enumeration and catalog logging occur once inside the first admitted installation lease.
 
 These changes provide the first shared scheduling layer, but do not yet provide lifecycle-aware candidate indexing, dirty updates, resource snapshots, or bounded purchase prediction.

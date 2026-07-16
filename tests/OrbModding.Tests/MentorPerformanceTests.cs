@@ -171,6 +171,40 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    public void ParkedGrantLedgerIsBoundedCoalescesExactlyAndCancelsFailClosed()
+    {
+        var parked = new MentorParkedGrantLedger(capacity: 2);
+        Assert.Equal(
+            MentorParkResult.Parked,
+            parked.Park(new MentorGrant("a", new MentorAmount(1, 3)), settledGeneration: 4));
+        Assert.Equal(
+            MentorParkResult.Parked,
+            parked.Park(new MentorGrant("b", new MentorAmount(2, 3)), settledGeneration: 4));
+        Assert.Equal(
+            MentorParkResult.Coalesced,
+            parked.Park(new MentorGrant("a", new MentorAmount(3, 3)), settledGeneration: 4));
+        Assert.Equal(
+            MentorParkResult.Overflow,
+            parked.Park(new MentorGrant("c", new MentorAmount(9, 3)), settledGeneration: 4));
+        Assert.Equal(1, parked.OverflowCount);
+        Assert.Equal(2, parked.Count);
+        Assert.False(parked.HasReady(settledGeneration: 4));
+
+        Assert.True(parked.TryTakeReady(settledGeneration: 5, out var first));
+        Assert.True(parked.TryTakeReady(settledGeneration: 5, out var second));
+        var grants = new[] { first, second }.ToDictionary(grant => grant.Uuid);
+        Assert.Equal(new MentorAmount(4, 3), grants["a"].Amount);
+        Assert.Equal(new MentorAmount(2, 3), grants["b"].Amount);
+        Assert.False(parked.TryTakeReady(settledGeneration: 5, out _));
+
+        parked.Park(new MentorGrant("retained", new MentorAmount(7, 2)), settledGeneration: 5);
+        parked.Cancel();
+        Assert.Equal(0, parked.Count);
+        Assert.Equal(1, parked.OverflowCount);
+        Assert.False(parked.HasReady(settledGeneration: 6));
+    }
+
+    [Fact]
     public void SameUuidReplacementCancelsCapturedPlannedAndExpandedXpBeforeGrant()
     {
         var pending = new MentorPendingWork();

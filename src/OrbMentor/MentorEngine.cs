@@ -750,6 +750,7 @@ internal sealed class MentorUnroutableLedger
 internal class MentorPendingWork
 {
     public readonly MentorEngine Engine = new();
+    public readonly MentorParkedGrantLedger ParkedGrants = new();
     public readonly MentorCaptureQueue Captures = new();
     public readonly MentorSourceAccumulator Sources = new();
     public readonly MentorUnroutableLedger Unroutable = new();
@@ -772,6 +773,125 @@ internal class MentorPendingWork
         RelationshipResolution = null;
         ResolvingCapture = null;
         Engine.Cancel();
+        ParkedGrants.Cancel();
+    }
+}
+
+internal readonly struct MentorParkedGrant
+{
+    public MentorParkedGrant(string uuid, MentorAmount amount, long blockedAtSettledGeneration)
+    {
+        Uuid = uuid;
+        Amount = amount;
+        BlockedAtSettledGeneration = blockedAtSettledGeneration;
+    }
+
+    public string Uuid { get; }
+    public MentorAmount Amount { get; }
+    public long BlockedAtSettledGeneration { get; }
+}
+
+internal enum MentorParkResult { Parked, Coalesced, Overflow }
+
+internal sealed class MentorParkedGrantLedger
+{
+    public const int DefaultCapacity = 256;
+    private readonly Dictionary<string, MentorParkedGrant> _parked;
+    private readonly int _capacity;
+    private long _minimumBlockedGeneration = long.MaxValue;
+
+    public MentorParkedGrantLedger(int capacity = DefaultCapacity)
+    {
+        if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        _capacity = capacity;
+        _parked = new Dictionary<string, MentorParkedGrant>(capacity, StringComparer.Ordinal);
+    }
+
+    public int Count => _parked.Count;
+    public int OverflowCount { get; private set; }
+
+    public bool HasReady(long settledGeneration) =>
+        _parked.Count > 0 && _minimumBlockedGeneration < settledGeneration;
+
+    public MentorParkResult Park(MentorGrant grant, long settledGeneration)
+    {
+        if (!grant.Amount.IsValidPositive)
+        {
+            OverflowCount++;
+            return MentorParkResult.Overflow;
+        }
+        if (_parked.TryGetValue(grant.Uuid, out var existing))
+        {
+            _parked[grant.Uuid] = new MentorParkedGrant(
+                grant.Uuid,
+                existing.Amount.Add(grant.Amount),
+                Math.Max(existing.BlockedAtSettledGeneration, settledGeneration));
+            RecomputeMinimum();
+            return MentorParkResult.Coalesced;
+        }
+        if (_parked.Count >= _capacity)
+        {
+            OverflowCount++;
+            return MentorParkResult.Overflow;
+        }
+        _parked.Add(
+            grant.Uuid,
+            new MentorParkedGrant(grant.Uuid, grant.Amount, settledGeneration));
+        _minimumBlockedGeneration = Math.Min(_minimumBlockedGeneration, settledGeneration);
+        return MentorParkResult.Parked;
+    }
+
+    public bool TryAccumulate(MentorGrant grant)
+    {
+        if (!_parked.TryGetValue(grant.Uuid, out var existing)) return false;
+        _parked[grant.Uuid] = new MentorParkedGrant(
+            grant.Uuid,
+            existing.Amount.Add(grant.Amount),
+            existing.BlockedAtSettledGeneration);
+        return true;
+    }
+
+    public bool TryTakeReady(long settledGeneration, out MentorGrant grant)
+    {
+        if (!HasReady(settledGeneration))
+        {
+            grant = null!;
+            return false;
+        }
+        string? readyUuid = null;
+        MentorAmount readyAmount = default;
+        foreach (var parked in _parked.Values)
+        {
+            if (parked.BlockedAtSettledGeneration >= settledGeneration) continue;
+            readyUuid = parked.Uuid;
+            readyAmount = parked.Amount;
+            break;
+        }
+        if (readyUuid is null)
+        {
+            RecomputeMinimum();
+            grant = null!;
+            return false;
+        }
+        _parked.Remove(readyUuid);
+        RecomputeMinimum();
+        grant = new MentorGrant(readyUuid, readyAmount);
+        return true;
+    }
+
+    public void Cancel()
+    {
+        _parked.Clear();
+        _minimumBlockedGeneration = long.MaxValue;
+    }
+
+    private void RecomputeMinimum()
+    {
+        _minimumBlockedGeneration = long.MaxValue;
+        foreach (var parked in _parked.Values)
+            _minimumBlockedGeneration = Math.Min(
+                _minimumBlockedGeneration,
+                parked.BlockedAtSettledGeneration);
     }
 }
 
@@ -853,11 +973,13 @@ internal sealed class MentorDiagnostics
     public int DeferredGrants { get; private set; }
     public int DroppedEvents { get; private set; }
     public int DroppedGrants { get; private set; }
+    public int ParkedGrantOverflows { get; private set; }
 
     public void RecordCapture(bool coalesced) { CapturedEvents++; if (coalesced) CoalescedEvents++; }
     public void RecordQualified(int count) => QualifiedEvents += Math.Max(0, count);
     public void RecordGrant() => NativeGrants++;
     public void RecordDeferredGrant() => DeferredGrants++;
+    public void RecordParkedGrantOverflow() => ParkedGrantOverflows++;
     public void RecordDrop(MentorDropReason reason, int count, bool grant)
     {
         count = Math.Max(0, count);
