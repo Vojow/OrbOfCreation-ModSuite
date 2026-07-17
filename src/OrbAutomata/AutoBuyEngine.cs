@@ -481,7 +481,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 _queueWaitingLogged = true;
                 if (_config.IsOperationalLoggingEnabled)
                 {
-                    _log.LogInfo("Auto Buy is waiting for the gameplay action queue to initialize; it will retry without purchasing.");
+                    _log.LogAutomataInfo("Auto Buy is waiting for the gameplay action queue to initialize; it will retry without purchasing.");
                 }
             }
 
@@ -759,7 +759,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 if (_config.IsOperationalLoggingEnabled &&
                     _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose)
                 {
-                    _log.LogInfo(
+                    _log.LogAutomataInfo(
                         $"Auto Buy batch deferred {recommendation.Candidate.DisplayName} because its state changed: " +
                         revalidated.Detail);
                 }
@@ -814,7 +814,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 if (_config.IsOperationalLoggingEnabled &&
                     _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose)
                 {
-                    _log.LogInfo(
+                    _log.LogAutomataInfo(
                         $"Auto Buy purchased one {recommendation.Candidate.Kind} level: " +
                         $"{recommendation.Candidate.DisplayName} ({recommendation.Candidate.Uuid}); " +
                         $"BatchPurchases={_pendingBatchPurchased}/{targetLabel}; " +
@@ -837,7 +837,7 @@ internal sealed class AutoBuyEngine : IDisposable
             }
             else
             {
-                _log.LogWarning(
+                _log.LogAutomataWarning(
                     $"Auto Buy could not purchase {recommendation.Candidate.DisplayName} " +
                     $"({recommendation.Candidate.Uuid}): {reason}");
                 AdvancePurchaseCandidate();
@@ -878,7 +878,7 @@ internal sealed class AutoBuyEngine : IDisposable
                     (_config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose ||
                      _queueWaitLogGate.ShouldLog("autobuy-queue-wait", _lifetime.Elapsed)))
                 {
-                    _log.LogInfo(
+                    _log.LogAutomataInfo(
                         "Auto Buy prepared its next ranked batch and is waiting for native queue room; " +
                         "it will feed the first available slot without rescanning.");
                 }
@@ -941,7 +941,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        _log.LogInfo(
+        _log.LogAutomataInfo(
             $"Auto Buy batch summary: Batches={_diagnosticBatchCount}, " +
             $"Purchased={_diagnosticBatchPurchased}, Attempted={_diagnosticBatchAttempted}, " +
             $"Eligible={eligibleCount}, Sizing={_config.AutoBuyBatchSizing.Value}, " +
@@ -1020,11 +1020,11 @@ internal sealed class AutoBuyEngine : IDisposable
 
         if (recommendation is null)
         {
-            _log.LogInfo($"Auto Buy found no eligible purchase. Scanned={scanned}, ElapsedMs={elapsedMilliseconds:0.###}.");
+            _log.LogAutomataInfo($"Auto Buy found no eligible purchase. Scanned={scanned}, ElapsedMs={elapsedMilliseconds:0.###}.");
         }
         else
         {
-            _log.LogInfo(
+            _log.LogAutomataInfo(
                 $"Auto Buy recommendation: {recommendation.Candidate.DisplayName} ({recommendation.Candidate.Uuid}); " +
                 $"Kind={recommendation.Candidate.Kind}; MaxCostRatio={recommendation.CostRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}; " +
                 $"Admission={recommendation.Detail}; Scanned={scanned}, ElapsedMs={elapsedMilliseconds:0.###}.");
@@ -1043,7 +1043,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 break;
             }
 
-            _log.LogInfo(
+            _log.LogAutomataInfo(
                 $"Auto Buy rejected: {decision.Candidate.DisplayName} ({decision.Candidate.Uuid}) " +
                 $"[{decision.Candidate.Kind}] - {decision.Detail}");
         }
@@ -1057,7 +1057,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        _log.LogInfo(
+        _log.LogAutomataInfo(
             $"Auto Buy scan in progress: Processed={processed}, Total={total}, ElapsedMs={elapsedMilliseconds:0.###}. " +
             $"The next evaluation resumes at candidate {processed + 1}.");
     }
@@ -1188,7 +1188,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
         if (_upgradeQuarantineLogGate.ShouldLog("upgrade-mutation-quarantine", _lifetime.Elapsed))
         {
-            _log.LogError(
+            _log.LogAutomataError(
                 "Auto Buy removed automated Upgrades from admission and ranking because native " +
                 $"multi-buy restoration is unverified; Structures remain eligible. {reason}");
         }

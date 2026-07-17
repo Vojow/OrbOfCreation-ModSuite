@@ -189,7 +189,7 @@ internal sealed class AutoBuyResourceSnapshotCache
             if (entry.FailureCount == 1 || _epoch - entry.LastWarningEpoch >= 64)
             {
                 entry.LastWarningEpoch = _epoch;
-                Plugin.Log?.LogWarning(
+                Plugin.Log?.LogAutomataWarning(
                     $"Auto Buy quarantined resource snapshot {entry.Definition.ResourceId}; " +
                     $"retryEpoch={entry.NextRetryEpoch}.");
             }

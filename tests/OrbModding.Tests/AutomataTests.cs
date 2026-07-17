@@ -59,6 +59,7 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(300, config.AutoConceptRebalanceIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.True(config.CanStartAutoBuyActively);
@@ -76,6 +77,44 @@ public sealed class AutomataTests
 
         Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
         Assert.True(config.CanStartAutoConceptActively);
+    }
+
+    [Theory]
+    [InlineData(1.0f, 60)]
+    [InlineData(2.5f, 150)]
+    [InlineData(30.0f, 1800)]
+    public void AutoConceptConfiguration_MigratesLegacyMinutesToSeconds(float legacyMinutes, int expectedSeconds)
+    {
+        var configFile = new ConfigFile();
+        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", legacyMinutes, "Legacy interval.");
+
+        var config = AutomataConfig.Bind(configFile);
+
+        Assert.Equal(expectedSeconds, config.AutoConceptRebalanceIntervalSeconds.Value);
+        Assert.DoesNotContain(
+            configFile,
+            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalMinutes");
+    }
+
+    [Fact]
+    public void AutoConceptConfiguration_PreservesExistingSecondsSetting()
+    {
+        var configFile = new ConfigFile();
+        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 180, "Current interval.");
+
+        var config = AutomataConfig.Bind(configFile);
+
+        Assert.Equal(180, config.AutoConceptRebalanceIntervalSeconds.Value);
+    }
+
+    [Fact]
+    public void AutomataLogTimestamp_IncludesLocalDateTimeMillisecondsAndOffset()
+    {
+        var timestamp = new DateTimeOffset(2026, 7, 17, 9, 35, 12, TimeSpan.FromHours(2)).AddMilliseconds(345);
+
+        var message = AutomataLoggingExtensions.WithTimestamp("ConceptRecipes runtime list is empty", timestamp);
+
+        Assert.Equal("[2026-07-17 09:35:12.345 +02:00] ConceptRecipes runtime list is empty", message);
     }
 
     [Fact]

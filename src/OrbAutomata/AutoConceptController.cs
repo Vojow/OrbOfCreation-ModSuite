@@ -43,6 +43,7 @@ internal sealed class AutoConceptController : IDisposable
     private string _configuredAllowed = string.Empty;
     private string _configuredBlocked = string.Empty;
     private IReadOnlyList<NativeConceptCandidate> _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+    private string? _loggedBlockedReason;
 
     public AutoConceptController(
         AutomataConfig config,
@@ -126,6 +127,7 @@ internal sealed class AutoConceptController : IDisposable
         _lastAutomatedChange.Clear();
         _baselineCaptured = false;
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+        _loggedBlockedReason = null;
         _secondsUntilEvaluation = 0.0f;
         _secondsUntilWatchdog = 0.0f;
     }
@@ -135,12 +137,18 @@ internal sealed class AutoConceptController : IDisposable
     private void Evaluate()
     {
         _secondsUntilWatchdog = 1.0f;
+        var wasReady = _runtime.IsReady;
         var candidates = _runtime.ReadCandidates(_allowed, _blocked, out var reason);
-        if (!_runtime.IsReady)
+        if (!_runtime.IsReady || !string.IsNullOrWhiteSpace(reason))
         {
             LogFailure(reason);
             _secondsUntilEvaluation = 10.0f;
             return;
+        }
+        if (!wasReady)
+        {
+            _log.LogAutomataInfo(
+                $"Auto Concept catalog initialized. ScopedRecipes={_runtime.ScopedRecipeCount}, ActiveConcepts={_runtime.ActiveConceptCount}, EligibleCandidates={candidates.Count}.");
         }
         _cachedCandidates = candidates;
         if (!_baselineCaptured)
@@ -222,9 +230,9 @@ internal sealed class AutoConceptController : IDisposable
         }
 
         _secondsUntilEvaluation = Math.Clamp(
-            _config.AutoConceptRebalanceIntervalMinutes.Value,
-            1.0f,
-            30.0f) * 60.0f;
+            _config.AutoConceptRebalanceIntervalSeconds.Value,
+            60,
+            1800);
     }
 
     private void RunWatchdog()
@@ -385,13 +393,20 @@ internal sealed class AutoConceptController : IDisposable
 
     private void LogFailure(string reason)
     {
+        if (_runtime.BlockedReason is not null)
+        {
+            if (string.Equals(_loggedBlockedReason, reason, StringComparison.Ordinal)) return;
+            _loggedBlockedReason = reason;
+            _log.LogAutomataWarning(reason);
+            return;
+        }
         if (_failureLogGate.ShouldLog(reason, TimeSpan.FromSeconds(_elapsedSeconds)))
-            _log.LogWarning(reason);
+            _log.LogAutomataWarning(reason);
     }
 
     private void LogOperation(string message)
     {
-        if (_config.IsOperationalLoggingEnabled) _log.LogInfo(message);
+        if (_config.IsOperationalLoggingEnabled) _log.LogAutomataInfo(message);
     }
 
     public void Dispose()

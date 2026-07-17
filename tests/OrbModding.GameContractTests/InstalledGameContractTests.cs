@@ -200,7 +200,6 @@ public sealed class InstalledGameContractTests
         Assert.Equal(
             "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
             assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
-        Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("GenericListVariable`1", "initialValue"));
         Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("AbstractListVariable`1", "value"));
         Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
         Assert.Equal("ResourceCostList", assembly.GetFieldType("AlchemyRecipeSO", "drainCost"));

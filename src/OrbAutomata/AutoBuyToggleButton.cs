@@ -50,7 +50,7 @@ internal sealed class AutoBuyToggleButton : IDisposable
         result = new AutoBuyToggleButton(root, button, text, control);
         button.onClick.AddListener(result.Toggle); result.Render();
         var rect = root.transform as RectTransform;
-        Plugin.Log.LogInfo($"Auto Buy toggle installed: AnchoredPosition=({rect?.anchoredPosition.x:0.##},{rect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
+        Plugin.Log.LogAutomataInfo($"Auto Buy toggle installed: AnchoredPosition=({rect?.anchoredPosition.x:0.##},{rect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
         return true;
     }
     public void Render()

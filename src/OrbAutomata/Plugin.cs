@@ -38,7 +38,7 @@ public sealed class Plugin : BaseUnityPlugin
 
         if (!_config.Enabled.Value)
         {
-            Log.LogInfo("Automata is disabled by configuration.");
+            Log.LogAutomataInfo("Automata is disabled by configuration.");
             return;
         }
 
@@ -76,7 +76,7 @@ public sealed class Plugin : BaseUnityPlugin
         AutoConceptLifecycleSignal.Changed += OnAutoConceptChanged;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
-        Log.LogInfo(
+        Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
             $"StructureAffordability={_config.AutoBuyAffordability.Value}, " +
             $"UpgradeAffordability={_config.UpgradeAffordability.Value}, " +
@@ -171,11 +171,11 @@ public sealed class Plugin : BaseUnityPlugin
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (audit.MatchesExpected)
         {
-            Log.LogInfo("Game assemblies match the audited baseline.");
+            Log.LogAutomataInfo("Game assemblies match the audited baseline.");
             return;
         }
 
-        Log.LogWarning("Game assemblies differ from the audited baseline. Disable Automata until this game build has been validated.");
+        Log.LogAutomataWarning("Game assemblies differ from the audited baseline. Disable Automata until this game build has been validated.");
     }
 
     private void UpdateAutoCastControls(float unscaledDeltaTime)
@@ -245,7 +245,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         _autoCastUiFailureLogged = true;
-        Log.LogWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
+        Log.LogAutomataWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
     }
 
     private void UpdateAutoBuyControl(float unscaledDeltaTime)

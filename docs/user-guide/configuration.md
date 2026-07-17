@@ -8,6 +8,7 @@ Important controls:
 
 - `AutoBuy.Mode` and `AutoCast.Mode`: select `Disabled` or `Active`.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts.
+- `AutoConcept.RebalanceIntervalSeconds`: ordinary rebalance cadence from 60 to 1800 seconds; default 300. Legacy minute values migrate automatically.
 - Structure and upgrade affordability modes are configured separately.
 - Absolute and relative reserves protect selected resources.
 - `LeaveQueueSlots` preserves queue room for manual actions.

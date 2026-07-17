@@ -593,7 +593,7 @@ internal sealed class ReflectionAutoBuyCandidate :
             _resourceSnapshots.Epoch - _lastAdapterWarningEpoch >= 64)
         {
             _lastAdapterWarningEpoch = _resourceSnapshots.Epoch;
-            Plugin.Log?.LogWarning(
+            Plugin.Log?.LogAutomataWarning(
                 $"Auto Buy quarantined cost evaluation for {Snapshot().Uuid}; " +
                 $"retryEpoch={_nextAdapterRetryEpoch}; reason={reason}");
         }
@@ -969,7 +969,7 @@ internal sealed class NativeMultiBuyScope : IDisposable
     {
         if (FailureLogGate.ShouldLog("native-multi-buy-failure", Lifetime.Elapsed))
         {
-            Plugin.Log?.LogError(message);
+            Plugin.Log?.LogAutomataError(message);
         }
     }
 }

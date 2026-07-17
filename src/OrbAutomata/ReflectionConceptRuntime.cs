@@ -73,9 +73,12 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     private MethodInfo? _addInstances;
     private MethodInfo? _removeInstances;
     private string? _blockedReason;
+    private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
     public bool IsReady => _activeConcepts is not null && _blockedReason is null;
+    public int ScopedRecipeCount => _recipes.Count;
+    public int ActiveConceptCount => _activeConceptCount;
 
     public bool TryInitialize(out string reason)
     {
@@ -114,7 +117,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
                 return Fail("ConceptRecipes UUID/type mismatch", out reason);
 
             _activeValuesField = FindField(activeType, "value", isStatic: false);
-            var initialRecipesField = FindField(recipeListType, "initialValue", isStatic: false);
+            var recipeValuesField = FindField(recipeListType, "value", isStatic: false);
             _recipeDrainField = FindField(_recipeType, "drainCost", isStatic: false);
             _instanceQuantityField = FindField(_instanceType, "quantity", isStatic: false);
             _instanceQueuedQuantityField = FindField(_instanceType, "queuedQuantity", isStatic: false);
@@ -122,13 +125,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             _canAddInstance = FindMethod(activeType, "CanAddInstance", _recipeType);
             _addInstances = FindMethod(activeType, "AddAlchemyInstances", _recipeType, typeof(int));
             _removeInstances = FindMethod(activeType, "RemoveAlchemyInstances", _recipeType, typeof(int));
-            if (_activeValuesField is null || initialRecipesField is null || _recipeDrainField is null ||
+            if (_activeValuesField is null || recipeValuesField is null || _recipeDrainField is null ||
                 _instanceQuantityField is null || _instanceQueuedQuantityField is null || _instanceDrainField is null ||
                 _canAddInstance is null || _addInstances is null || _removeInstances is null)
                 return Fail("native Active Concepts accessors are unavailable", out reason);
 
-            if (initialRecipesField.GetValue(recipes) is not IEnumerable scopedRecipes)
-                return Fail("ConceptRecipes serialized contents are unavailable", out reason);
+            if (recipeValuesField.GetValue(recipes) is not IEnumerable scopedRecipes)
+                return Fail("ConceptRecipes runtime contents are unavailable", out reason);
             _recipes.Clear();
             var recipeUuids = new HashSet<string>(StringComparer.Ordinal);
             foreach (var recipe in scopedRecipes)
@@ -140,7 +143,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
                 if (!recipeUuids.Add(uuid)) return Fail("ConceptRecipes contains a duplicate concept UUID", out reason);
                 _recipes.Add(recipe);
             }
-            if (_recipes.Count == 0) return Fail("ConceptRecipes is empty", out reason);
+            if (_recipes.Count == 0) return Fail("ConceptRecipes runtime list is empty", out reason);
             _activeConcepts = active;
             reason = string.Empty;
             return true;
@@ -157,10 +160,11 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         out string reason)
     {
         if (!TryInitialize(out reason)) return Array.Empty<NativeConceptCandidate>();
-        var active = ReadActiveByRecipe();
         var result = new List<NativeConceptCandidate>(_recipes.Count);
         try
         {
+            var active = ReadActiveByRecipe();
+            _activeConceptCount = active.Count;
             foreach (var recipe in _recipes)
             {
                 var uuid = ReflectionUtil.ReadStableId(recipe)!;
@@ -328,6 +332,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     {
         _activeConcepts = null;
         _recipes.Clear();
+        _activeConceptCount = 0;
         _blockedReason = null;
     }
 

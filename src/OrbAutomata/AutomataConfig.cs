@@ -32,7 +32,7 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoCastManualPauseSeconds,
         ConfigEntry<bool> autoCastFullCharge,
         ConfigEntry<AutoConceptOperationMode> autoConceptMode,
-        ConfigEntry<float> autoConceptRebalanceIntervalMinutes,
+        ConfigEntry<int> autoConceptRebalanceIntervalSeconds,
         ConfigEntry<int> autoConceptQuantityCap,
         ConfigEntry<float> autoConceptRateReservePercent,
         ConfigEntry<float> autoConceptMinimumResourcePercent,
@@ -72,7 +72,7 @@ internal sealed class AutomataConfig
         AutoCastManualPauseSeconds = autoCastManualPauseSeconds;
         AutoCastFullCharge = autoCastFullCharge;
         AutoConceptMode = autoConceptMode;
-        AutoConceptRebalanceIntervalMinutes = autoConceptRebalanceIntervalMinutes;
+        AutoConceptRebalanceIntervalSeconds = autoConceptRebalanceIntervalSeconds;
         AutoConceptQuantityCap = autoConceptQuantityCap;
         AutoConceptRateReservePercent = autoConceptRateReservePercent;
         AutoConceptMinimumResourcePercent = autoConceptMinimumResourcePercent;
@@ -137,7 +137,7 @@ internal sealed class AutomataConfig
     public ConfigEntry<bool> AutoCastFullCharge { get; }
 
     public ConfigEntry<AutoConceptOperationMode> AutoConceptMode { get; }
-    public ConfigEntry<float> AutoConceptRebalanceIntervalMinutes { get; }
+    public ConfigEntry<int> AutoConceptRebalanceIntervalSeconds { get; }
     public ConfigEntry<int> AutoConceptQuantityCap { get; }
     public ConfigEntry<float> AutoConceptRateReservePercent { get; }
     public ConfigEntry<float> AutoConceptMinimumResourcePercent { get; }
@@ -201,6 +201,8 @@ internal sealed class AutomataConfig
 
             var autoConceptMode = BindAutoConceptMode(config);
 
+            var autoConceptRebalanceIntervalSeconds = BindAutoConceptRebalanceIntervalSeconds(config);
+
             var result = new AutomataConfig(
                 Bind(config, "General", "Enabled", true, "Enable Automata.", 0, 0),
                 autoBuyMode,
@@ -227,7 +229,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
                 Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
                 autoConceptMode,
-                Bind(config, "AutoConcept", "RebalanceIntervalMinutes", 5.0f, "Minutes between ordinary mastery rebalances. Lifecycle, mastery, slot, and safety changes can trigger an earlier pass.", 17, 10, new AcceptableValueRange<float>(1.0f, 30.0f)),
+                autoConceptRebalanceIntervalSeconds,
                 Bind(config, "AutoConcept", "PerConceptQuantityCap", 0, "Optional maximum automated quantity per concept. Zero uses the native mastery maximum.", 17, 20, new AcceptableValueRange<int>(0, 1000000)),
                 Bind(config, "AutoConcept", "RateReservePercent", 10.0f, "Minimum percentage of each drained resource's current gross positive rate to preserve after an automated quantity change.", 17, 30, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoConcept", "MinimumResourcePercent", 10.0f, "Finite-cap drained resources must be at least this full before Auto Concept adds quantity.", 17, 40, new AcceptableValueRange<float>(0.0f, 100.0f)),
@@ -236,7 +238,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoConcept", "BlockedUuids", string.Empty, "Comma-separated concept UUIDs Auto Concept must never train.", 17, 90),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
                 Bind(config, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft CPU budget for each scan or purchase slice, capped at 1 ms for frame-time safety.", 30, 0, new AcceptableValueRange<float>(0.1f, 1.0f)),
-                Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal Auto Buy and Auto Cast decisions to the BepInEx log. Startup, warnings, and errors are always logged.", 50, 0),
+                Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal automation decisions to the BepInEx log. Startup, catalog initialization, warnings, and errors are always logged.", 50, 0),
                 Bind(config, "Diagnostics", "MaxLoggedRejections", 12, "Maximum rejected candidates written per verbose evaluation when operational logging is enabled.", 50, 20),
                 Bind(config, "Diagnostics", "DecisionLogLevel", AutomataDecisionLogLevel.Summary, "Recommendation detail when operational logging is enabled.", 50, 10),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
@@ -298,6 +300,36 @@ internal sealed class AutomataConfig
             string.Equals(serializedMode, "BalanceMastery", StringComparison.OrdinalIgnoreCase))
         {
             result.Value = AutoConceptOperationMode.Active;
+        }
+
+        return result;
+    }
+
+    private static ConfigEntry<int> BindAutoConceptRebalanceIntervalSeconds(ConfigFile config)
+    {
+        var result = Bind(
+            config,
+            "AutoConcept",
+            "RebalanceIntervalSeconds",
+            300,
+            "Seconds between ordinary mastery rebalances. Lifecycle, mastery, slot, and safety changes can trigger an earlier pass.",
+            17,
+            10,
+            new AcceptableValueRange<int>(60, 1800));
+
+        var legacyDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalMinutes");
+        var legacyMinutes = config.Bind(
+            "AutoConcept",
+            "RebalanceIntervalMinutes",
+            -1.0f,
+            new ConfigDescription("Legacy Auto Concept interval migration.")).Value;
+        config.Remove(legacyDefinition);
+        if (float.IsFinite(legacyMinutes) && legacyMinutes >= 0.0f)
+        {
+            result.Value = Math.Clamp(
+                (int)Math.Round(legacyMinutes * 60.0f, MidpointRounding.AwayFromZero),
+                60,
+                1800);
         }
 
         return result;

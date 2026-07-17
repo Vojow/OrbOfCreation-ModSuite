@@ -165,7 +165,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             button.onClick.AddListener(toggle.Toggle);
             toggle.Render(force: true);
             var rect = root.transform as RectTransform;
-            log.LogInfo(
+            log.LogAutomataInfo(
                 $"Auto Cast toggle installed left of the native Auto Buy switch: {BuildPath(root)}; " +
                 $"AnchoredPosition={FormatVector(rect?.anchoredPosition)}; Size={FormatVector(rect?.sizeDelta)}; " +
                 $"Icon={iconSource}.");
@@ -321,7 +321,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             if (!_noticeFailureLogged)
             {
                 _noticeFailureLogged = true;
-                _log.LogWarning($"Auto Cast state notice could not use the native status area: {ex.GetBaseException().Message}");
+                _log.LogAutomataWarning($"Auto Cast state notice could not use the native status area: {ex.GetBaseException().Message}");
             }
         }
     }

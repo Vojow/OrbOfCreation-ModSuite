@@ -133,7 +133,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "RebalanceIntervalMinutes", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            new[] { "Mode", "RebalanceIntervalSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),

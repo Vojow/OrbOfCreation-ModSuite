@@ -436,7 +436,7 @@ Names and defaults remain subject to runtime measurement and player approval.
 
 ### Balancing
 
-- `RebalanceIntervalMinutes`: proposed default 5 minutes.
+- `RebalanceIntervalSeconds`: default 300 seconds, configurable from 60 through 1800 seconds.
 - `UseAllAvailableConceptSlots`: proposed default true.
 - `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
 - `MinimumTrainingDurationMinutes`: proposed default 3 minutes to prevent churn.
@@ -633,7 +633,7 @@ File boundaries may change after implementation proves which abstractions are ge
 
 Resolved for the current candidate against the audited assembly:
 
-- `ConceptRecipes` is read from the inherited serialized `GenericListVariable<T>.initialValue`; its `GetAll()` override is never used.
+- `ConceptRecipes` is read from the inherited runtime/save-loaded `AbstractListVariable<T>.value` on the exact UUID-scoped asset; its global `GetAll()` override is never used. Interactive validation showed the serialized `initialValue` empty while the native Concepts UI enumerated discovered recipes from `value`.
 - Active instances are read from inherited `AbstractListVariable<T>.value`, avoiding the allocating native enumerator.
 - Prospective drain is reconstructed with a temporary, uninitialized `AlchemyInstance`, its exact target quantity, `GetDrainCostMod().AsPercent()`, and the recipe's native `drainCost` vector. No effects, usage, or list mutation occur on that temporary object.
 - Incremental raw drain is converted with each resource's live `GetTrueSpend`, which applies quality in the same direction as `GetModdedDrain`, before comparison with `GetTrueRate`.

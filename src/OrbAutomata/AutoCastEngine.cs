@@ -201,7 +201,7 @@ internal sealed class AutoCastEngine : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError($"Auto Cast could not read the active loadout: {ex.Message}");
+            _log.LogAutomataError($"Auto Cast could not read the active loadout: {ex.Message}");
             return;
         }
 
@@ -280,7 +280,7 @@ internal sealed class AutoCastEngine : IDisposable
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
-                _log.LogWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
 
@@ -292,7 +292,7 @@ internal sealed class AutoCastEngine : IDisposable
 
             if (!candidate.TryFireAndResolveTargets(out reason))
             {
-                _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                _log.LogAutomataWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
 
@@ -434,7 +434,7 @@ internal sealed class AutoCastEngine : IDisposable
         }
         catch (Exception ex)
         {
-            _log.LogError($"Auto Cast could not read the active loadout: {ex.Message}");
+            _log.LogAutomataError($"Auto Cast could not read the active loadout: {ex.Message}");
             return;
         }
 
@@ -471,7 +471,7 @@ internal sealed class AutoCastEngine : IDisposable
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
-                _log.LogWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
 
@@ -486,7 +486,7 @@ internal sealed class AutoCastEngine : IDisposable
                 {
                     ReleaseFullChargeHold("native fire or target resolution failed");
                 }
-                _log.LogWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                _log.LogAutomataWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
 
@@ -588,7 +588,7 @@ internal sealed class AutoCastEngine : IDisposable
 
         if (!candidate.TrySetChargeHold(false, out var reason))
         {
-            _log.LogWarning($"Auto Cast could not release full-charge hold for slot {candidate.SlotIndex + 1}, {candidate.DisplayName} ({context}): {reason}");
+            _log.LogAutomataWarning($"Auto Cast could not release full-charge hold for slot {candidate.SlotIndex + 1}, {candidate.DisplayName} ({context}): {reason}");
         }
     }
 
@@ -602,7 +602,7 @@ internal sealed class AutoCastEngine : IDisposable
         if (_config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose ||
             _operationLogGate.ShouldLog("autocast-operation", TimeSpan.FromSeconds(_elapsedSeconds)))
         {
-            _log.LogInfo(message);
+            _log.LogAutomataInfo(message);
         }
     }
 
@@ -610,7 +610,7 @@ internal sealed class AutoCastEngine : IDisposable
     {
         if (_config.IsOperationalLoggingEnabled)
         {
-            _log.LogInfo(message);
+            _log.LogAutomataInfo(message);
         }
     }
 
@@ -627,7 +627,7 @@ internal sealed class AutoCastEngine : IDisposable
             _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose &&
             ShouldLogSlotState(candidate, state))
         {
-            _log.LogInfo($"Auto Cast skipped slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}.");
+            _log.LogAutomataInfo($"Auto Cast skipped slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}.");
         }
     }
 
