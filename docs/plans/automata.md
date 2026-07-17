@@ -15,8 +15,9 @@ Automata now prioritizes the actions that players repeat most often:
 1. **Auto Buy** — attributes/structures first, then verified upgrades and other levelable purchases.
 2. **Auto Cast** — selected player spells, subject to readiness, targeting, cooldown, channel, and reserve rules.
 3. **Auto Concept** — balance Scholar Concept mastery across acquired slots without exhausting continuously drained resources.
-4. **Auto Harvest** — execute selected ready harvest actions without taking over planting or plot strategy in the first slice.
-5. **Original expansion modules** — crafting, scribing, ordinary alchemy, and finally optional auto-research.
+4. **Auto Agromancy** — set a player-selected continuous Agromancy action to its highest sustainable native level.
+5. **Auto Harvest** — execute selected ready harvest actions without taking over planting or plot strategy in the first slice.
+6. **Original expansion modules** — crafting, scribing, ordinary alchemy, and finally optional auto-research.
 
 Research is no longer the MVP. The release plugin removes the deprecated research runtime and cleans its legacy configuration keys while preserving the shared resource-admission model used by Auto Buy and Auto Cast.
 
@@ -124,7 +125,15 @@ The detailed ownership, resource-rate, scheduling, lifecycle, and validation des
 
 Exit: validated discovered concepts are balanced through the native concept runtime, manual quantities remain owned by the player, acquired compatible slots and native `masteryLevel + 1` instance limits are respected, aggregate continuous drains retain configured resource headroom, and no ordinary alchemy recipe is touched.
 
-### A4 — Auto Harvest
+### A4 — Auto Agromancy
+
+The first slice intercepts only a player's add-side Agromancy action click. It preserves the chosen Harvest Element and Harvest Action pair, then uses native action scaling and live aggregate resource rates to set the pair to the highest mastery-capped level that leaves every consumed resource at a non-negative net rate. It does not choose actions, rebalance continuously, lower unrelated actions, or modify global multi-buy state.
+
+The detailed selection-time admission, native contract, effect-feedback, lifecycle, performance, and validation design is specified in the [Auto Agromancy level balancing plan](auto-agromancy.md).
+
+Exit: the selected action reaches the exact highest audited sustainable native level, an unsustainable level 1 is not activated, removal stays native, and unknown cost/rate/effect state fails closed.
+
+### A5 — Auto Harvest
 
 - Discover `HarvestElementSO`, `HarvestTypeSO`, `HarvestActionSO`, live `HarvestActionInstance`, and plot-node relationships.
 - Start with an allowlisted ready harvest action on an existing plot; do not choose seeds, replace plants, or redesign plot layouts.
@@ -133,7 +142,7 @@ Exit: validated discovered concepts are balanced through the native concept runt
 
 Exit: Automata harvests only selected ready targets through the native action path and never destroys a plant when the configured policy requires preservation.
 
-### A5+ — Original expansion modules
+### A6+ — Original expansion modules
 
 Add auto-crafting, auto-scribing, ordinary auto-alchemy, and optional auto-research one vertical slice at a time. Reuse the same policies and diagnostics, but keep separate adapters because availability, queueing, costs, drains, cancellation, and completion differ by domain.
 
@@ -165,11 +174,12 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 ## Original long-term definition of done
 
-This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current beta.
+This list predates the narrower supported release sequence. Auto Agromancy, Auto Harvest, and the A6+ domains remain planned and are not part of the current beta.
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.
 - Auto Concept balances validated discovered concepts across live compatible acquired slots while preserving manual quantities and conservative aggregate resource headroom.
+- Auto Agromancy sets a player-selected continuous action to the highest sustainable native level without making an affected resource's net rate negative.
 - Auto Harvest supports one explicitly selected non-destructive harvest policy.
 - Every module rejects unknown state, cost, or action contracts instead of guessing.
 - Automata never starts an action whose conservative admission calculation would cross configured reserves.

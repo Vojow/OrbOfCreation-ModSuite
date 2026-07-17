@@ -9,6 +9,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
 | [Orb Automata](automata.md) | Implemented / evolving | Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. |
 | [Auto Concept mastery balancing](auto-concept.md) | Beta / runtime validation pending | Disabled-by-default catch-up or timed concept rotation is released through native mutation paths; post-release Proton profiling remains. |
+| [Auto Agromancy level balancing](auto-agromancy.md) | Planned | Set a player-selected Agromancy action to its highest currently sustainable native level. |
 | [Mod suite performance](performance-suite.md) | P0-P3 implemented / runtime validation pending | Shared scheduling, lifecycle-aware indexes, dirty updates, and resource snapshots are implemented; post-release Steam Deck profiling remains. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |

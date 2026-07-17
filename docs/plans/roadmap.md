@@ -8,7 +8,7 @@
 
 The supported branch currently contains two gameplay plugins, an optional in-game configuration UI, and their shared library:
 
-1. **Orb Automata** — Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+1. **Orb Automata** — Auto Buy, Auto Cast, Auto Concept, progression-aware spell leveling, and planned Auto Agromancy level balancing.
 2. **Orb Mentor** — independently configurable mastery-XP sharing for spells, artifacts, and alchemy.
 3. **Orb Mod Config** — optional shared UI that exposes loaded BepInEx configuration without becoming a gameplay-plugin dependency.
 4. **Orb Modding Common** — shared audited infrastructure bundled with the supported plugins.
@@ -71,11 +71,14 @@ Exit criterion: Auto Buy runs for an extended session without overspending reser
 
 - Maintain Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
 - Keep spell leveling under Auto Buy because it spends progression resources and invokes native purchase actions; it is not a Mentor or concept responsibility.
+- Add Auto Agromancy selection-time level balancing after its native drain, scaling, and UI contracts are audited.
 - Add Auto Harvest only after its native contracts are audited.
 - Add crafting, scribing, ordinary alchemy, and optional research automation only after separate audits.
 - Reuse the shared scheduler, lifecycle-aware indexes, resource snapshots, and bounded diagnostics.
 
 Auto Concept's balancing, timed cycling, dynamic acquired-slot, ownership, zero-resource, lifecycle, and performance contracts are specified in the [Auto Concept plan](auto-concept.md).
+
+Auto Agromancy's player-owned action selection, highest-sustainable-level admission, effect-feedback, and validation contracts are specified in the [Auto Agromancy plan](auto-agromancy.md).
 
 ### Phase 3 — Orb Insights (planned)
 
