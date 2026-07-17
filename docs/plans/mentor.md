@@ -1,20 +1,20 @@
 # Orb Mentor plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, and shared scheduling are implemented.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, shared scheduling, and independently enabled artifact/alchemy extensions are implemented.
 
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
 ## Goal
 
-Reduce repetitive spell-mastering work by letting every equipped spell share native mastery XP with discovered spells below that source's own mastery. `EquippedSpells` is the default source policy; `HighestDiscovered` preserves the original highest-confirmed-mastery behavior. Orb Mentor does not set levels, edit saves, change loadouts, or spend leveling resources.
+Reduce repetitive mastery work by sharing native XP within a progression domain. For spells, every equipped spell can share native mastery XP with discovered spells below that source's own mastery. `EquippedSpells` is the default source policy; `HighestDiscovered` preserves the original highest-confirmed-mastery behavior. Optional artifact and alchemy domains follow separately audited native contracts. Orb Mentor does not edit saves, change loadouts, or spend leveling resources.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.
 
-Automatic mastery confirmation and its native resource spending are explicitly outside Orb Mentor. They may become a later Automata module.
+Automatic spell leveling and its native resource spending are explicitly outside Orb Mentor. The release candidate implements that behavior under Automata's Auto Buy feature.
 
-## MVP contract
+## Original spell MVP contract
 
-The first public version is spells-only. Artifacts and alchemy remain later vertical slices because their XP ownership and active-instance rules differ.
+The original public vertical slice was spells-only because artifact and alchemy XP ownership and active-instance rules differ. Those later domains are now implemented as disabled-by-default release-candidate extensions; see [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for their contracts and remaining validation gates.
 
 ### Mentor qualification
 
@@ -229,22 +229,20 @@ Required automated and runtime scenarios:
 
 ## Release and ownership
 
-Proposed identity:
+Current identity:
 
 - Display name: `Orb Mentor`
 - Assembly/project: `OrbMentor`
 - Plugin GUID: `dev.vojow.orbofcreation.mentor`
-- Initial plugin version: `0.1.0` (published as a beta prerelease)
+- Current release-candidate version: `0.3.0`
 
 Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata is a compatible sibling plugin, not a dependency.
 
 ## Deferred work
 
-- Automatic mastery confirmation/resource spending: future Automata module.
 - Aggregated replacement for native mastery-ready popup spam: only if runtime testing shows it is necessary.
 - Per-type mentors: after the global spell model is stable and native multi-type membership is fully tested.
-- Artifact mentoring: separate audit for definition-versus-instance XP ownership.
-- Alchemy mentoring: separate audit for recipe/type/active-instance ownership and completion semantics.
+- Production promotion for artifact and alchemy mentoring: after their interactive native-progression, lifecycle, save, and performance gates pass.
 
 ## Remaining probe questions
 
@@ -252,5 +250,4 @@ These are implementation-audit tasks, not unresolved product decisions:
 
 1. Does any non-casting native system call `SpellRecipeSO.GainMasteryExp`, and should its positive XP be included under the agreed “all native events” rule?
 2. Which lifecycle callback most reliably invalidates pending recipe references during reset/load?
-3. Which native queue/status transform is the most stable anchor when Automata is absent or its Auto Cast button is present?
-4. What operation count and CPU budget keep the largest discovered catalog smooth at the supported game-speed range?
+3. What operation count and CPU budget keep the largest discovered catalogs across all enabled domains smooth at the supported game-speed range?

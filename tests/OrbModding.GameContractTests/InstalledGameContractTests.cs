@@ -193,6 +193,23 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoSpellLevel_MatchesNativePrerequisiteCostAndCapabilityContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal("SpellRecipeListVariable", assembly.GetFieldType("SpellManager", "availableSpellRecipes"));
+        AssertMethod(assembly, "SpellManager", "TryLevelAllSpells", false, "System.Void");
+        Assert.Equal("Prerequisites+Container", assembly.GetFieldType("SpellRecipeSO", "levelingPrerequisites"));
+        AssertMethod(assembly, "Prerequisites+Container", "Check", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "GetLevelCost", false, "ResourceCostList");
+        AssertMethod(assembly, "SpellRecipeSO", "IsReadyToLevelMastery", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "PurchaseLevel", false, "System.Void");
+        AssertMethod(assembly, "ResourceCostList", "HasEnough", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceCostList", "PerformCost", false, "System.Void");
+        AssertMethod(assembly, "UpgradeSO", "GetPurchaseLevel", false, "System.Int32");
+    }
+
+    [GameAssemblyFact]
     public void AutoConcept_MatchesScopedCatalogSlotQuantityAndDrainContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
@@ -227,6 +244,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueRate", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetModdedDrain", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "IsAtZero", false, "System.Boolean");
         AssertMethod(assembly, "ResourceSO", "GetTrueSoftCap", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "HasMaxQuantity", false, "System.Boolean");
     }

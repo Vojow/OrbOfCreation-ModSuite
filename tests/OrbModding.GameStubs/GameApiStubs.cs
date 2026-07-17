@@ -50,13 +50,78 @@ public static class GlobalVariables
 public class SpellRecipeSO
 {
     public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
+    public string uuid = Guid.NewGuid().ToString();
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
+    public bool readyToLevel;
+    public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
+    public ResourceCostList levelCost = new ResourceCostList();
     public void GainMasteryExp(BigDouble exp) { masteryExperience = exp; }
     public bool IsDiscovered() => discovered;
-    public bool IsReadyToLevelMastery() => false;
+    public bool IsReadyToLevelMastery() => readyToLevel;
+    public ResourceCostList GetLevelCost() => levelCost;
+    public void PurchaseLevel()
+    {
+        if (!readyToLevel) return;
+        masteryLevel++;
+        readyToLevel = false;
+    }
     public string GetName() => "Spell";
+}
+
+public static class IdScriptableObject
+{
+    public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+}
+
+public class UpgradeSO
+{
+    public int purchaseLevel;
+    public int queuedPurchaseLevel;
+    public int GetPurchaseLevel() => purchaseLevel;
+    public int GetQueuedPurchaseLevel() => queuedPurchaseLevel;
+}
+
+public class Prerequisites
+{
+    public class Container
+    {
+        public bool unlocked;
+        public bool Check() => unlocked;
+    }
+}
+
+public class ResourceCostList
+{
+    public bool affordable = true;
+    public int PerformCalls { get; private set; }
+    public bool HasEnough() => affordable;
+    public void PerformCost() { PerformCalls++; }
+}
+
+public class SpellRecipeListVariable
+{
+    public List<SpellRecipeSO> value = new List<SpellRecipeSO>();
+}
+
+public class SpellManager
+{
+    public static SpellManager? instance;
+    public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
+
+    public void TryLevelAllSpells()
+    {
+        foreach (var recipe in availableSpellRecipes.value)
+        {
+            while (recipe.IsDiscovered() && recipe.levelingPrerequisites.Check() &&
+                   recipe.IsReadyToLevelMastery() && recipe.GetLevelCost().HasEnough())
+            {
+                recipe.GetLevelCost().PerformCost();
+                recipe.PurchaseLevel();
+            }
+        }
+    }
 }
 
 public interface ITooltipable

@@ -3,8 +3,16 @@ namespace OrbAutomata;
 internal sealed class AutoBuyToggleControl
 {
     private readonly AutomataConfig _config;
-    public AutoBuyToggleControl(AutomataConfig config) { _config = config; }
+    private readonly System.Func<AutoSpellLevelCapability> _readSpellLevelCapability;
+    public AutoBuyToggleControl(
+        AutomataConfig config,
+        System.Func<AutoSpellLevelCapability>? readSpellLevelCapability = null)
+    {
+        _config = config;
+        _readSpellLevelCapability = readSpellLevelCapability ?? (() => AutoSpellLevelCapability.Locked);
+    }
     internal AutomataConfig Config => _config;
+    internal AutoSpellLevelCapability SpellLevelCapability => _readSpellLevelCapability();
     public AutoCastToggleVisualState State => _config.AutoBuyMode.Value switch
     {
         AutoBuyOperationMode.Disabled => AutoCastToggleVisualState.Off,

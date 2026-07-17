@@ -1,6 +1,6 @@
 # Orb Automata plan
 
-> **Lifecycle: Implemented / evolving.** Core Auto Buy and Auto Cast are in public beta; this plan also contains later work.
+> **Lifecycle: Implemented / evolving.** Auto Buy and Auto Cast are in public beta; Auto Concept and progression-aware spell leveling are implemented in the current release candidate. This plan also records later work.
 
 [Back to roadmap](roadmap.md)
 
@@ -26,9 +26,10 @@ The first A1 implementation slice now covers both audited native purchase famili
 
 - `StructureSO.All`: availability, one-level cost, queue state, and `Purchase(true)`.
 - `UpgradeSO.All`: availability, one-level cost, queued level verification, and `Purchase()` while native multi-buy is temporarily forced to one and restored.
-- Disabled/Active release modes, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
+- Progression-aware spell leveling: exact native discovery, prerequisites, readiness, live cost, single-level purchase, and completed `UnlockLevelAllSpells` capability validation.
+- Disabled/Active release modes, independently configurable spell leveling, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
 
-Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases; the `0.4.0` queue-continuation and action-multiplier changes require the focused release matrix in the public checklist.
+Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases. The current `0.7.0` candidate still requires the focused desktop and Steam Deck matrix for its shared scheduling, timed concept cycling, multi-slot and zero-resource handling, progression-aware spell leveling, and unified configuration behavior.
 
 ## AutobuyOrb reference boundary
 
@@ -89,7 +90,9 @@ Start simple and deterministic:
 
 Do not introduce opaque scoring until the deterministic rules are proven.
 
-## Module delivery order
+## Original module delivery order
+
+The A1–A3 sections below record the design path that produced the current implementation. References to probes or early release shapes are historical; current player behavior is defined by the [Orb Automata reference](../../src/OrbAutomata/README.md).
 
 ### A1 — Auto Buy vertical slice
 
@@ -156,11 +159,13 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 - Evaluation interval defaults to 0.5 seconds of unscaled time.
 - Maximum actions per evaluation defaults to 1.
-- The current AutoBuy hotfix caps scan and purchase slices at 1 ms; a later shared coordinator will bound combined suite work.
+- Auto Buy caps scan and purchase slices at 1 ms, and the implemented shared coordinator bounds combined suite work and admits at most one native suite mutation per frame.
 - Cache static candidate lists and invalidate on relevant observable changes.
 - Never scan and sort every game object every frame.
 
-## Definition of done for v0.1
+## Original long-term definition of done
+
+This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current candidate.
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.

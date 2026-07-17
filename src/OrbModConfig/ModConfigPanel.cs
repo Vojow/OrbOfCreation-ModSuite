@@ -241,7 +241,8 @@ internal sealed class ModConfigPanel : IDisposable
 
         if (!_session.DependencySatisfied(setting))
         {
-            CreateText("Dependency", row.transform, new Vector2(0.58f, 0.2f), new Vector2(0.98f, 0.8f), _labelTemplate, "Enable this feature first", TextAlignmentOptions.Midline, 0.6f);
+            var dependencyMessage = _session.DescribeUnsatisfiedDependencies(setting);
+            CreateText("Dependency", row.transform, new Vector2(0.58f, 0.2f), new Vector2(0.98f, 0.8f), _labelTemplate, dependencyMessage, TextAlignmentOptions.Midline, 0.6f);
             return;
         }
 
@@ -301,9 +302,7 @@ internal sealed class ModConfigPanel : IDisposable
     private void CreateEnumEditor(Transform parent, ConfigEditValue edit)
     {
         var names = Enum.GetNames(edit.Setting.SettingType);
-        Button? button = null;
-        TextMeshProUGUI? label = null;
-        button = CreateButton(
+        CreateButton(
             "Enum",
             parent,
             new Vector2(0.58f, 0.18f),
@@ -314,14 +313,8 @@ internal sealed class ModConfigPanel : IDisposable
             {
                 var current = Array.FindIndex(names, name => string.Equals(name, edit.StagedSerialized, StringComparison.OrdinalIgnoreCase));
                 edit.Stage(names[(current + 1 + names.Length) % names.Length]);
-                if (label is not null)
-                {
-                    label.text = edit.StagedSerialized;
-                }
-
-                RefreshStatus(edit);
+                RebuildSettings();
             });
-        label = button.GetComponentInChildren<TextMeshProUGUI>(true);
     }
 
     private void CreateTextEditor(Transform parent, ConfigEditValue edit)

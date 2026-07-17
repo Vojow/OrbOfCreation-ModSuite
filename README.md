@@ -6,15 +6,15 @@
 
 Unofficial BepInEx mods, tests, and reproducible reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current release candidate centers on Orb Automata: queue-aware Auto Buy, safe Auto Cast, opt-in Auto Concept mastery balancing, and a native-styled configuration screen. Back up your save before using beta automation.
+The current release candidate centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, and a native-styled configuration screen. Back up your save before using beta automation.
 
 ## Project status
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.6.0** | Release candidate | Queue-aware Auto Buy, coordinated Auto Cast, and disabled-by-default Auto Concept mastery balancing with bounded shared scheduling. |
-| **Orb Mod Config 0.5.3** | Beta | Mods tab available from the start, with typed editors, Steam Deck keyboard support, live native-control synchronization, and coordinated UI recovery. |
-| **Orb Mentor 0.2.0** | Release candidate | Every equipped spell can share native mastery XP with discovered spells below its own mastery; the original highest-only policy remains selectable. |
+| **Orb Automata 0.7.0** | Release candidate | Queue-aware Auto Buy, coordinated Auto Cast, timed or catch-up Concept rotation, and progression-aware spell leveling with bounded shared scheduling. |
+| **Orb Mod Config 0.6.0** | Beta | Mods tab available from the start, with typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
+| **Orb Mentor 0.3.0** | Release candidate | Spell, artifact, and alchemy mastery sharing with independent opt-in domains, equipped-spell sources, and a selectable highest-only spell policy. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is supported only through the Windows game under Proton with BepInEx 5.
@@ -23,7 +23,7 @@ Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on 
 
 ## Get started
 
-- Players: [install Orb Automata](docs/user-guide/installation.md), then review [configuration and safety](docs/user-guide/configuration.md).
+- Players: [install the supported suite](docs/user-guide/installation.md), then review [configuration and safety](docs/user-guide/configuration.md).
 - Contributors: read the [development setup](docs/development/setup.md) and [contributing guidelines](CONTRIBUTING.md).
 - Researchers: start with the [reverse-engineering knowledge map](docs/reverse-engineering/README.md).
 - Maintainers: use the [testing](docs/development/testing.md), [runtime validation](docs/development/runtime-validation.md), and [release](docs/development/releases.md) guides.

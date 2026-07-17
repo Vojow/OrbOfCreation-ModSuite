@@ -398,6 +398,9 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             foreach (var entry in entries)
             {
                 if (entry.Amount.IsZero || entry.Amount.IsNegative) continue;
+                var zeroState = ReflectionUtil.InvokeNoArgs(entry.Resource, "IsAtZero");
+                if (!AutoConceptResourcePolicy.TryAcceptPositiveDrain(zeroState, out var zeroReason))
+                    return FailProjection($"{ResourceName(entry.Resource)} {zeroReason}", out reason);
                 var trueIncrement = InvokeCompatible(entry.Resource, "GetTrueSpend", entry.NativeAmount);
                 if (!BigAmount.TryRead(trueIncrement, out var adjustedIncrement) || adjustedIncrement.IsNegative)
                     return FailProjection("resource quality conversion failed", out reason);

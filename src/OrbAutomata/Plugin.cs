@@ -17,6 +17,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoBuyEngine? _autoBuyEngine;
     private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
+    private AutoSpellLevelController? _autoSpellLevelController;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
@@ -53,8 +54,9 @@ public sealed class Plugin : BaseUnityPlugin
 
         var reservePolicy = new ReservePolicy(_config);
         _autoCastToggleControl = new AutoCastToggleControl(_config);
-        _autoBuyToggleControl = new AutoBuyToggleControl(_config);
-        _autoConceptToggleControl = new AutoConceptToggleControl(_config);
+        _autoBuyToggleControl = new AutoBuyToggleControl(
+            _config,
+            () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),
@@ -76,6 +78,13 @@ public sealed class Plugin : BaseUnityPlugin
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount);
+        _autoSpellLevelController = new AutoSpellLevelController(
+            _config,
+            new ReflectionSpellLevelRuntime(),
+            Log,
+            SuitePerformanceCoordinator.Shared,
+            () => UnityEngine.Time.frameCount);
+        _autoConceptToggleControl = new AutoConceptToggleControl(_config);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
@@ -97,6 +106,8 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
             $"AutoConceptMode={_config.AutoConceptMode.Value}, " +
+            $"AutoConceptSlotManagement={_config.AutoConceptSlotManagement.Value}, " +
+            $"AutoLevelSpells={_config.AutoLevelSpells.Value}, " +
             $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
             $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
             $"DecisionLogLevel={_config.DecisionLogLevel.Value}.");
@@ -113,6 +124,7 @@ public sealed class Plugin : BaseUnityPlugin
             _autoBuyEngine?.Tick(deltaTime);
             _autoCastEngine?.Tick(deltaTime);
             _autoConceptController?.Tick(deltaTime);
+            _autoSpellLevelController?.Tick(deltaTime);
         }
     }
 
@@ -130,6 +142,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastEngine = null;
         _autoConceptController?.Dispose();
         _autoConceptController = null;
+        _autoSpellLevelController?.Dispose();
+        _autoSpellLevelController = null;
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
@@ -148,6 +162,7 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.InvalidateLifecycle();
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
+        _autoSpellLevelController?.InvalidateLifecycle();
     }
 
     private void OnAutoBuyLifecycleInvalidated()
@@ -155,6 +170,7 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.InvalidateLifecycle();
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
+        _autoSpellLevelController?.InvalidateLifecycle();
     }
 
     private void OnStructureQueueChanged(object nativeIdentity)
@@ -165,6 +181,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnNativeCompletion()
     {
         _autoBuyEngine?.NotifyNativeCompletion();
+        _autoSpellLevelController?.NotifyNativeChange();
     }
 
     private void OnUpgradeQueueChanged(object nativeIdentity)
@@ -175,6 +192,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnAutoConceptChanged()
     {
         _autoConceptController?.NotifyNativeChange();
+        _autoSpellLevelController?.NotifyNativeChange();
     }
 
     private static void LogAssemblyStatus()

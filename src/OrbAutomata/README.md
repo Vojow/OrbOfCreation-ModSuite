@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.6.0` provides Auto Buy, Auto Cast, and opt-in Auto Concept mastery balancing through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.7.0` provides Auto Buy, Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -15,7 +15,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 ## Release defaults
 
-- Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades.
+- Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades; progression-aware spell leveling is enabled within Auto Buy and can be disabled separately.
 - Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
 - Gameplay controls extend outward from the native Auto Buy queue switch with 12-pixel gaps: native Auto Buy, Automata Auto Buy, Auto Cast, Auto Concept, then Mentor when installed. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
@@ -26,13 +26,16 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Operational decision logging is off; startup, warning, and error records remain enabled.
-- `EmergencyDisable` immediately stops new automated purchases, casts, and concept mutations.
+- `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, and spell levels.
+- Orb Mod Config leaves each mode, toggle shortcut, status-button visibility, emergency control, and diagnostics editable while locking inactive feature tuning. Nested Auto Buy fields also require their applicable include, batch, multiplier, or repeat policy.
 
 The former runtime-probe, per-session purchase-limit, DryRun, expert-override, and Auto Research settings are not part of the release configuration or Mod Config UI. Existing legacy keys are removed when the configuration is loaded and saved.
 
 ## Auto Buy
 
 Automata discovers native `StructureSO` and `UpgradeSO` candidates into a lifecycle-aware UUID index. It keeps locked content for bounded retry, quarantines missing or contradictory native identities, and reconciles the native registries incrementally. Ordinary evaluations refresh only dirty candidates, maintain deterministic cached ranking, and revalidate every level immediately before calling the native purchase method.
+
+`AutoLevelSpells=true` runs while Auto Buy is active and is configured in the Auto Buy section. Its capability follows native progression automatically: `Locked` while no discovered spell passes its own leveling prerequisites, `Single` after that contract unlocks, and `All` after the exact `UnlockLevelAllSpells` Upgrade has completed. Single mode pays the spell's live native cost and confirms one native `PurchaseLevel()` per mutation. All mode calls the game's native `SpellManager.TryLevelAllSpells()` action. Queued upgrades do not count, affordability and readiness are revalidated immediately before mutation, and any ambiguous failure after a cost attempt blocks further spell leveling for that lifecycle.
 
 Resource dependencies are learned from the native current-cost result. Each referenced native resource is read once per evaluation epoch, including true quantity, quality, capacity, and effective attribute-cost modifier. Quantity or quality changes dirty only dependent candidates; save loads, gameplay-manager restarts, scene changes, and NG+ start a new lifecycle epoch. Unknown cost, resource, lifecycle, or identity state fails closed.
 
@@ -91,15 +94,15 @@ Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by 
 
 `Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
-`SlotManagementMode=RotateAll` is the default once Auto Concept is enabled. When all compatible slots are occupied, it removes one settled active concept only if a compatible inactive concept has strictly lower mastery, waits for native settlement, and then replans the add. Equal mastery never rotates on UUID ordering alone. `PreserveManual` never removes the quantity present when Auto Concept starts; it can rotate only assignments that Automata added itself.
+`SlotManagementMode=TimedCycle` is the default once Auto Concept is enabled. It permits complete settled replacement, but every assigned concept receives its full configured settled-active period before rotation; catching the current highest mastery never ends that session early, and least-recently-assigned ordering prevents discovered compatible concepts from being starved. `RotateAll` instead removes one settled active concept only if a compatible inactive concept has strictly lower mastery, waits for native settlement, and then adds the exact planned replacement. Equal mastery never rotates on UUID ordering alone. `PreserveManual` never removes the quantity present when Auto Concept starts; it can rotate only assignments that Automata added itself.
 
-Every newly assigned lower-mastery concept receives a training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. The default is 300 seconds and the accepted range is 10 through 3600 seconds. Native quantity changes can wake evaluation early without bypassing this protection.
+Every newly assigned lower-mastery concept in `RotateAll` or `PreserveManual` receives a catch-up training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. `TimedCycle` uses the same timer but never applies the catch-up shortcut. The default is 300 seconds and the accepted range is 10 through 3600 seconds. Native setup time does not consume the period, and the controller schedules the exact next session deadline even when its idle fallback is longer.
 
-The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blocking. `ShowToggleButton` defaults to true.
+The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blocking. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the Automata Auto Buy tooltip instead.
 
 `FallbackEvaluationIntervalSeconds` is an Advanced setting, not a rotation delay. It defaults to 300 seconds and accepts 10 through 1800 as the maximum idle delay between full plan calculations; native changes can request earlier passes. Existing `RebalanceIntervalSeconds` and `RebalanceIntervalMinutes` values migrate automatically.
 
-Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
+Before every add or rotation, Automata reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 
 Enabling the feature snapshots current Active Concept quantities for ownership and rollback accounting. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
 

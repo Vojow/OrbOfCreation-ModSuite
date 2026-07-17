@@ -1,8 +1,8 @@
-# Installation
+# Installing the supported ModSuite
 
 [Back to documentation](../README.md)
 
-Orb Automata supports the Windows 64-bit Mono build of Orb of Creation with BepInEx 5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is supported through the Windows game under Proton.
+The supported suite contains Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx 5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is supported through the Windows game under Proton.
 
 ## 1. Back up your save
 
@@ -21,7 +21,7 @@ On Proton, add this Steam launch option:
 WINEDLLOVERRIDES="winhttp=n,b" %command%
 ```
 
-## 3. Install Orb Automata
+## 3. Install the supported suite
 
 1. Download the recommended archive from the project's [Releases page](https://github.com/Vojow/OrbOfCreation-ModSuite/releases).
 2. Extract it into the game directory and merge the included `BepInEx` folder.
@@ -33,12 +33,17 @@ Orb of Creation/
 |-- winhttp.dll
 `-- BepInEx/
     `-- plugins/
-        `-- OrbAutomata/
-            |-- OrbAutomata.dll
-            |-- OrbModConfig.dll
-            `-- OrbModding.Common.dll
+        |-- OrbAutomata/
+        |   `-- OrbAutomata.dll
+        |-- OrbMentor/
+        |   |-- OrbMentor.dll
+        |   `-- OrbModding.Common.dll
+        `-- OrbModConfig/
+            `-- OrbModConfig.dll
 ```
 
-Keep one copy of each DLL. On startup, `BepInEx/LogOutput.log` should list Orb Automata and Orb Mod Config once each without dependency errors.
+Keep exactly one copy of each DLL anywhere under `BepInEx/plugins`; duplicate older copies can be loaded instead of the intended build. On startup, `BepInEx/LogOutput.log` should list Orb Automata, Orb Mentor, and Orb Mod Config once each without dependency errors.
+
+The supported archive never contains Orb Chronomancer or Orb Achievement Resonance. Do not copy DLLs from the experimental branch into this installation.
 
 Continue with [configuration and safety](configuration.md).

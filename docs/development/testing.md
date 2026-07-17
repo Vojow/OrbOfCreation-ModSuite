@@ -9,8 +9,9 @@
 - Mono scripting backend
 - BepInEx `5.4.23.x`
 - Plugin target: `netstandard2.1`
+- Steam Deck through the Windows game under Proton
 
-Other platforms and game versions are unsupported until explicitly tested.
+Native Linux builds, BepInEx 6, and other game versions are unsupported until explicitly tested.
 
 ## Automated test layers
 
@@ -20,7 +21,7 @@ Run the deterministic suite without a game installation:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
 ```
 
-The portable tests use a source-only `OrbModding.GameStubs` project to compile the plugin seams. They validate policy, lifecycle behavior, safe defaults, timing rollback, reflection fixtures, UUID uniqueness, entity type counts, known mappings, and Resonance target/modifier ownership. They do not claim game API compatibility. Production builds ignore the stubs and require `OOC_GAME_DIR`.
+The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
 
 On a game computer, run the installed-assembly metadata contracts:
 
@@ -29,7 +30,7 @@ $env:OOC_GAME_DIR = 'C:\Program Files (x86)\Steam\steamapps\common\Orb of Creati
 dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj
 ```
 
-That suite verifies the audited hashes and exact method, field, inheritance, overload, parameter, and return-type contracts used by all three mods. It reads PE metadata without launching Unity or loading the game assemblies into the test process. If `OOC_GAME_DIR` is absent, all installed-game tests report `SKIP` instead of pretending compatibility passed.
+That suite verifies the audited hashes and exact method, field, inheritance, overload, parameter, and return-type contracts used by Automata, Mentor, Mod Config, and their shared library. It reads PE metadata without launching Unity or loading the game assemblies into the test process. If `OOC_GAME_DIR` is absent, all installed-game tests report `SKIP` instead of pretending compatibility passed.
 
 Run both layers and all real-reference plugin builds with:
 
@@ -60,16 +61,15 @@ The supported release profile uses one auto-buy mod. Automata does not detect, p
 
 | Area | Clean | 1× | 2× | 4× | 8× |
 |---|---:|---:|---:|---:|---:|
-| Start/load game | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Passive resources | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Research/crafting | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Alchemy | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Combat | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Save/reload | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Return to title | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Extended session | ✓ | ✓ | — | ✓ | ✓ |
-| Native tooltips | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Toolbox edit/save/reload | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Start/load/return to title | Required | Required | Required | Required | Required |
+| Auto Buy queue and reserves | Required | Required | Required | Required | Required |
+| Auto Cast and manual interruption | Required | Required | Required | Required | Required |
+| Auto Concept rotation/resource safety | Required | Required | Required | Required | Required |
+| Auto spell leveling | Required | Required | Required | Required | Required |
+| Mentor spells/artifacts/alchemy | Required | Required | Required | Required | Required |
+| Mods UI navigation/edit/apply | Required | Required | Required | Required | Required |
+| Save/reload and plugin removal | Required | Required | Required | Required | Required |
+| Extended combined-suite session | Required | Required | Optional | Required | Required |
 
 The table defines required scenarios, not current results. Results should be recorded under `tests/` with date, game version, plugin version, and save used.
 
@@ -96,16 +96,20 @@ In debug builds, detect and log:
 
 ## Release package
 
-Each plugin release should contain:
+The supported suite archive follows the explicit package allowlist:
 
 ```text
-PluginName.dll
+BepInEx/plugins/OrbAutomata/OrbAutomata.dll
+BepInEx/plugins/OrbMentor/OrbMentor.dll
+BepInEx/plugins/OrbMentor/OrbModding.Common.dll
+BepInEx/plugins/OrbModConfig/OrbModConfig.dll
 README.md
 CHANGELOG.md
 LICENSE
+THIRD_PARTY_NOTICES.md
 ```
 
-Do not include game assemblies, BepInEx assemblies, Harmony, debug symbols unless intentionally published, or local configuration files containing user preferences.
+Do not include experimental DLLs, game assemblies, BepInEx assemblies, Harmony, debug symbols unless intentionally published, or local configuration files containing user preferences.
 
 ## Versioning and game updates
 

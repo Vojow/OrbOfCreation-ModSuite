@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Configuration;
+using OrbModding.Common;
 
 namespace OrbModConfig;
 
@@ -95,13 +96,42 @@ internal sealed class ConfigEditSession
 
     public bool DependencySatisfied(ConfigSettingDescriptor setting)
     {
-        if (string.IsNullOrWhiteSpace(setting.DependencySection) || string.IsNullOrWhiteSpace(setting.DependencyKey)) return true;
-        var dependency = _values.Values.FirstOrDefault(value =>
-            ReferenceEquals(value.Setting.Source.ConfigFile, setting.Source.ConfigFile) &&
-            string.Equals(value.Setting.SourceSection, setting.DependencySection, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(value.Setting.Key, setting.DependencyKey, StringComparison.OrdinalIgnoreCase));
-        return dependency is not null && string.Equals(dependency.StagedSerialized, setting.DependencyValue, StringComparison.OrdinalIgnoreCase);
+        for (var index = 0; index < setting.Dependencies.Count; index++)
+        {
+            var required = setting.Dependencies[index];
+            var dependency = FindDependency(setting, required);
+            if (dependency is null ||
+                !string.Equals(dependency.StagedSerialized, required.ExpectedValue, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return true;
     }
+
+    public string DescribeUnsatisfiedDependencies(ConfigSettingDescriptor setting)
+    {
+        var descriptions = new List<string>();
+        for (var index = 0; index < setting.Dependencies.Count; index++)
+        {
+            var required = setting.Dependencies[index];
+            var dependency = FindDependency(setting, required);
+            if (dependency is not null &&
+                string.Equals(dependency.StagedSerialized, required.ExpectedValue, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var name = dependency?.Setting.DisplayName ?? $"{required.Section}.{required.Key}";
+            descriptions.Add($"{name} = {required.ExpectedValue}");
+        }
+        return descriptions.Count == 0
+            ? string.Empty
+            : "Requires " + string.Join(" and ", descriptions);
+    }
+
+    private ConfigEditValue? FindDependency(
+        ConfigSettingDescriptor setting,
+        ModConfigDependency required) =>
+        _values.Values.FirstOrDefault(value =>
+            ReferenceEquals(value.Setting.Source.ConfigFile, setting.Source.ConfigFile) &&
+            string.Equals(value.Setting.SourceSection, required.Section, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(value.Setting.Key, required.Key, StringComparison.OrdinalIgnoreCase));
 
     public void RevertAll()
     {

@@ -17,17 +17,16 @@ Baseline checked on 2026-07-14:
 - `Assembly-CSharp.dll`: `5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F`.
 - `Assembly-CSharp-firstpass.dll`: `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A`.
 - Both installed assembly hashes match the audited repository baseline.
-- On 2026-07-17, all 271 supported game-independent behavior and knowledge-map tests passed with `UseGameStubs=true`.
-- On 2026-07-17, all 12 supported installed-game metadata contract tests passed against the audited assemblies.
+- On 2026-07-17, all 280 supported game-independent behavior and knowledge-map tests passed with `UseGameStubs=true`.
+- On 2026-07-17, all 13 supported installed-game metadata contract tests passed against the audited assemblies.
 - Automata, Mentor, and Mod Config built in Release against the real installed game references with zero warnings. The required Unity facade, UI, and TextMeshPro references are part of the build contract.
 - The supported-suite package rehearsal contained only Automata, Mentor, Mod Config, and Orb Modding Common DLLs; experimental DLL guards passed.
 
-The static ILSpy contract check confirmed these installed methods:
+The static ILSpy contract check confirmed the active `StructureSO` and `UpgradeSO` registries, availability, costs, queue state, and purchase methods; `ActionManager.GetRemainingRoom()`; native multi-buy access/restoration; concept assignment contracts; spell-leveling contracts; and Mentor's three progression-domain contracts.
 
-- `ResearchSO.CanDevelop()`, `GetDevelopError()`, `GetDevelopmentCost()`, and `Develop()`.
-- `StructureSO` and `UpgradeSO` registries, availability, costs, queue state, and purchase methods; `ActionManager.GetRemainingRoom()`; and native multi-buy access/restoration.
+### Historical Automata Auto Buy runtime evidence
 
-### Automata Auto Buy runtime evidence
+The following records explain earlier safety and performance decisions. Their probe-only `DryRun`, Research, and per-session-limit settings are not part of the current public configuration.
 
 Active probe completed on 2026-07-14 with Orb Automata `0.1.2`:
 
@@ -47,7 +46,7 @@ A subsequent 10-purchase endurance probe also passed:
 - The probe revealed that read-only registry scans continued after the session limit. Version `0.1.3` stops both purchases and candidate scans once the limit is reached; a regression test covers this behavior.
 - The `0.1.3` repeat confirmed ten purchases followed immediately by the terminal message `no further purchases or candidate scans`; the player manually reported that the resulting in-game state looked correct, with no visible level or multi-buy anomaly.
 
-Before continuous mode is enabled, visually confirm the exact one-level queue/completion, the expected resource deduction, and restoration of the native multi-buy value. Keep `ActivePurchaseLimitPerSession=1` until those observations are recorded.
+At the time of this probe, continuous mode remained gated on visual confirmation of one-level queue/completion, expected resource deduction, and native multi-buy restoration. The temporary `ActivePurchaseLimitPerSession` guard was removed before the public configuration was finalized.
 
 Structure-only DryRun evidence on 2026-07-14 with `0.1.3`:
 
@@ -66,11 +65,15 @@ Version `0.1.6` added two opt-in policies. `BatchSizingMode=FillAvailableQueue` 
 
 ### Automata Auto Cast control runtime evidence
 
-A 2026-07-17 static audit of the hash-matched game assembly and serialized Main scene established `Canvas/ContentArea/RightSidebar/AttributeBar/AutoBuyToggle` as the native anchor. The action queue is a separate sibling that expands toward the toggle; `StatusContainer` owns passive abilities and status effects. The native toggle carries a `ManagedView` reference to `AutoBuyerView`, so clones must remove that binding before activation. The suite strip ends 12 pixels before the native toggle's left edge and extends outward in Automata Auto Buy, Auto Cast, Auto Concept, Mentor order. The `0.6.0` release-candidate build still requires interactive confirmation after installation.
+A 2026-07-17 static audit of the hash-matched game assembly and serialized Main scene established `Canvas/ContentArea/RightSidebar/AttributeBar/AutoBuyToggle` as the native anchor. The action queue is a separate sibling that expands toward the toggle; `StatusContainer` owns passive abilities and status effects. The native toggle carries a `ManagedView` reference to `AutoBuyerView`, so clones must remove that binding before activation. The suite strip ends 12 pixels before the native toggle's left edge and extends outward in Automata Auto Buy, Auto Cast, Auto Concept, Mentor order. The `0.7.0` release-candidate build still requires interactive confirmation after installation.
 
 For the current candidate, verify on both a new game and NG+ that all enabled suite controls appear even when the native Auto Buy feature is locked, remain outside the action queue with uniform gaps, and keep Auto Buy → Auto Cast → Auto Concept → Mentor order. Click `CN` through OFF/ON and emergency-blocked states, confirm the Auto Concept configuration changes with it, and confirm no cloned control changes the native Auto Buy state or queue contents.
 
-The `0.3.1` desktop/handheld control probe passed on 2026-07-14:
+For `TimedCycle`, use a 10-second period and confirm that native setup time is excluded, mastery catch-up does not rotate early, the planned inactive concept occupies the released compatible slot, and the next assignment receives a new full period. With at least two acquired compatible slots, drain one candidate's required resource to zero and confirm Auto Concept neither re-adds it nor churns remove/add mutations, while another compatible resource-safe candidate still occupies the second slot. For spell leveling, validate the Auto Buy tooltip and logs in all three native capability states: no mutation while Locked, exactly one ready affordable spell level per Single mutation, and the native level-all result only after `UnlockLevelAllSpells` is completed. Confirm insufficient resources spend nothing, a queued level-all Upgrade remains Single, disabling Auto Buy stops spell leveling without stopping Auto Concept, and Mentor still observes native mastery changes without duplicate XP work.
+
+For the unified configuration pass, open each Automata and Mentor section with its owning mode disabled. Confirm tuning rows show a dependency message while mode, shortcut, status-button visibility, emergency disable, and diagnostics remain editable. Change a mode without applying and confirm rows unlock immediately from the staged value. Validate compound cases: Fixed Auto Buy batch size, Fixed Structure levels with action multiplier off, and Mentor artifact/alchemy share percentages. Disable a parent switch again and confirm saved or staged child values are retained rather than reset.
+
+Historical `0.3.1` desktop/handheld control evidence from 2026-07-14:
 
 - Automata resolved the native `UIToggleButton` bound to `AutoBuyManager.autoBuyEnabled` and cloned it under `Canvas/ContentArea/RightSidebar/AttributeBar`.
 - The first clone inherited the native absolute position and was hidden underneath the original. The corrected build offsets it by the rendered native width plus four pixels; the runtime placement was `(-54,-35)` at `50x50`, visibly left of Auto Buy.
@@ -117,7 +120,7 @@ Required checks:
 | Mod | Contracts that must be proven |
 |---|---|
 | Automata | `StructureSO`/`UpgradeSO` registries, state, cost, queue, and one-level purchase paths; `ActionManager`; native multi-buy; `ResourceTuple`; `BigDouble` |
-| Mentor | Spell mastery catalogs, XP hook, recipient identity, native grant path, and recursion suppression |
+| Mentor | Spell, artifact, and alchemy catalogs; availability and persistence; XP hooks; recipient identity; native grant or audited native-sequence path; recursion suppression; and per-domain failure isolation |
 | Mod Config | Native navigation host, Mods view lifecycle, editor contracts, and queue-adjacent status-control anchor |
 
 Acceptance criteria: every contract used by active code is either verified or guarded by a safe no-op. A warning-only fallback is not enough for a feature advertised as active.

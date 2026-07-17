@@ -2,47 +2,51 @@
 
 [Back to roadmap](../plans/roadmap.md)
 
-## Proposed first public package
+## Current supported-suite release candidate
 
-Publish a narrow beta before adding another automation domain:
+The supported package is an explicit allowlist:
 
-- **Orb Automata 0.4.x:** Auto Buy plus Auto Cast, with release-only Disabled/Active modes and keyboard/queue-adjacent Auto Cast controls.
-- **Orb Mod Config 0.4.x:** optional in-game configuration UI.
-- **Orb Modding Common:** bundled dependency, not presented as a separate gameplay mod.
+- **Orb Automata 0.7.0:** Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+- **Orb Mentor 0.3.0:** native mastery-XP sharing for spells, with independently enabled artifact and alchemy domains.
+- **Orb Mod Config 0.6.0:** optional in-game configuration UI.
+- **Orb Modding Common 0.3.0:** bundled shared dependency, not a separate gameplay mod.
 
-Auto Research is deliberately absent from the runtime and public UI. Its legacy keys are removed during config migration. Auto Concept and Auto Harvest remain future modules rather than promises in the first package.
+`OrbChronomancer` and `OrbAchievementResonance` live only on the dedicated experimental branch and must not enter a supported archive. Orb Insights and Orb Toolbox remain plans rather than packaged plugins.
 
 ## Release gates, in order
 
 ### P0 — must pass before publishing
 
-1. **Clean-install test:** fresh BepInEx profile, fresh generated configs, no development backups or duplicate DLLs, and no game assemblies in the package.
-2. **Quiet-log acceptance:** a normal 10-minute Active session writes plugin setup plus warnings/errors only; no per-purchase, batch, queue-wait, UI-open, or config-apply chatter when operational logging is disabled.
-3. **Save and removal safety:** back up a normal save, run Auto Buy, save/reload, then remove both mods and verify the game and save still load normally.
-4. **Queue/CPU matrix:** test `FillAvailableQueue` at 4, 12, and 16 ms and at representative game-speed multipliers. Confirm the queue stays useful without sustained frame stalls.
-5. **Purchase-family matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent structure/upgrade affordability modes, zero and non-zero reserves, emergency disable, live Bulk Development changes, and action multiplier off/on with queue-room capping.
-6. **Supported installation:** clean game, Automata alone, and Automata plus Mod Config. Verify documentation clearly marks concurrent auto-buy plugins as unsupported.
-7. **UI smoke matrix:** at least 1920×1080 and one smaller resolution; open/close/restore native tabs, edit/apply/revert, scroll every public section, and verify hidden legacy settings never appear.
-8. **Game-build guard:** document the audited assembly hashes and make a mismatched game build warn clearly before Active mode is recommended.
+1. **Release review:** record the exact commit, tag, project versions, supported plugin allowlist, archive entries, test evidence, and prerelease/stable status before publication.
+2. **Clean-install test:** use a fresh BepInEx profile and fresh generated configs. Verify there are no development backups, duplicate DLLs, experimental DLLs, or copied game assemblies.
+3. **Quiet-log acceptance:** run a representative 10-minute Active session with all supported modules enabled. Normal logs should contain lifecycle information plus warnings/errors, not per-action chatter.
+4. **Save and removal safety:** back up a normal save, exercise each supported gameplay plugin, save/reload, then remove the suite and verify the game and save still load normally.
+5. **Desktop and Steam Deck performance:** test new game and NG+, representative game-speed multipliers, large catalogs, populated queues, and concurrent supported modules. Confirm bounded work does not create sustained frame stalls or crashes.
+6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, live Bulk Development changes, action multiplier on/off, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
+7. **Auto Cast matrix:** instant, channelled, toggle, and aura behavior; unavailable or unaffordable spells; native queue pressure; emergency disable; and scene/load transitions.
+8. **Auto Concept matrix:** disabled and timed-cycle modes, catch-up behavior, ten-second minimum, setup time, one and multiple acquired slots, zero-resource concepts, unavailable concepts, and reset/load transitions without assignment churn.
+9. **Mentor matrix:** spell source policies and independent spell, artifact, and alchemy domains; Shared Pool and Per Recipient; disabled-domain silence; native persistence; recursion suppression; and bounded processing.
+10. **Mod Config matrix:** at least 1920×1080 and one smaller resolution; Mods available from a new game and last among available tabs; Apply/Revert; scrolling; compound feature locking; and operation without native Auto Queue UI.
+11. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
+
+Interactive behavior must satisfy [runtime validation](runtime-validation.md); a successful build or package rehearsal is not runtime approval.
 
 ### P1 — package quality
 
-0. Build public archives from an explicit release allowlist. Experimental plugins must remain excluded until their status is formally promoted and the release scope explicitly approves them; package generation must fail if an experimental DLL is present.
-1. Produce a versioned zip with only the required DLLs, README, changelog, license, and install/uninstall instructions. Inspect raw ZIP entries and reject backslashes, rooted paths, or missing `BepInEx/plugins/` entries so extraction works on SteamOS/Bazzite.
-2. Add a first-run section explaining Disabled/Active modes, affordability, optional reserves, queue slots, Bulk Development, action multiplier behavior, and the emergency stop.
-3. Add a troubleshooting section covering log opt-in, duplicate DLLs, conflicting auto-buy plugins, and restoring the previous version.
-4. Capture two screenshots: the Mods/Automata configuration page and a correctly maintained native queue.
-5. Write release notes that explicitly call the build a beta and list the exact supported game/BepInEx versions.
-6. Tag the release commit and build artifacts from a clean working tree.
+1. Build archives only through the supported allowlist. Package generation must fail if an experimental or unknown plugin DLL is present.
+2. Rehearse the complete suite package and inspect raw ZIP entries. Reject backslashes, rooted paths, missing `BepInEx/plugins/` entries, unexpected DLLs, or inconsistent versions.
+3. Include only the required DLLs, README, changelog, license, and install/uninstall guidance.
+4. Verify the first-run documentation covers module defaults, native queue ownership, reserves, emergency controls, concept modes, Mentor domains, and optional Mod Config.
+5. Verify troubleshooting covers opt-in diagnostics, duplicate DLLs, conflicting automation plugins, Auto Concept assignment churn, and restoring a previous version.
+6. Write release notes with the exact supported game/BepInEx baseline, known limitations, validation evidence, and prerelease/stable status.
+7. Create the tag and artifacts from the reviewed clean commit. Replacing or deleting an existing public release or tag requires explicit user authorization naming that target.
 
-### P2 — after the first beta
+### P2 — follow-up after the candidate
 
-1. Add conditional UI visibility so Fixed-only and verbose-logging-only fields appear only when relevant.
-2. Add friendly display labels (`Auto Buy`, `CPU Budget`, `Allowed UUIDs`) without renaming persisted config keys.
-3. Add an unsaved-changes prompt when leaving Mods.
-4. Add ranked-snapshot caching only if runtime profiling still shows candidate scanning as a material queue bottleneck.
-5. Expand Auto Cast to channel-aware scheduling only after beta feedback confirms the instant, aura, and toggle behavior is stable.
+1. Add an unsaved-changes prompt when leaving Mods if user testing shows accidental loss is common.
+2. Add further caches or aggregation only when profiling identifies a material remaining bottleneck and correctness can be preserved.
+3. Promote release-candidate features to stable only after their interactive gates are recorded.
 
 ## Recommended release decision
 
-Do not add another gameplay feature before P0 passes. The highest-value next work is a clean-install/package rehearsal followed by the 10-minute quiet-log and queue/CPU soak. Those tests validate the actual public experience and are more important than expanding scope.
+The current candidate is a **no-go until the P0 interactive matrix passes on desktop and Steam Deck**. Automated tests, real-reference builds, and package rehearsal establish a releasable artifact shape; they do not replace gameplay validation.

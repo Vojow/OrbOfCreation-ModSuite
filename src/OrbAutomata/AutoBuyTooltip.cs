@@ -14,7 +14,7 @@ internal sealed class AutoBuyTooltip : ITooltipable
     public Color GetColor() => _control.State == AutoCastToggleVisualState.On ? new Color(.4f, 1, .55f) : _control.State == AutoCastToggleVisualState.Blocked ? new Color(1, .35f, .3f) : new Color(.7f, .7f, .7f);
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
-    public string GetDescription() => "Purchases eligible structures and upgrades through the native action queue.";
+    public string GetDescription() => "Purchases eligible structures, upgrades, and spell levels through native game actions.";
     public List<TooltipNode> GetTooltipNodes()
     {
         var nodes = new List<TooltipNode>
@@ -22,9 +22,14 @@ internal sealed class AutoBuyTooltip : ITooltipable
             new TooltipNode($"State: {GetDisplayType()}", GetColor()),
             new TooltipNode($"Structures: {(Config.AutoBuyStructures.Value ? "ON" : "OFF")} ({Config.AutoBuyAffordability.Value})"),
             new TooltipNode($"Upgrades: {(Config.AutoBuyUpgrades.Value ? "ON" : "OFF")} ({Config.UpgradeAffordability.Value})"),
+            new TooltipNode(!Config.AutoLevelSpells.Value
+                ? "Spell leveling: Disabled"
+                : !Config.CanStartAutoBuyActively
+                    ? "Spell leveling: Paused with Auto Buy"
+                    : $"Spell leveling: {_control.SpellLevelCapability}"),
             new TooltipNode($"Queue slots reserved: {Config.LeaveQueueSlots.Value}"),
             new TooltipNode($"Batch sizing: {Config.AutoBuyBatchSizing.Value}"),
-            new TooltipNode("Click to toggle Auto Buy."),
+            new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         };
         if (_control.State == AutoCastToggleVisualState.Blocked)
             nodes.Add(new TooltipNode("Blocked: Automata Emergency Disable is active.", new Color(1, .35f, .3f)));

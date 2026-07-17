@@ -1,8 +1,10 @@
-# Orb Mentor 0.2.0 release candidate
+# Orb Mentor 0.3.0 release candidate
 
 Orb Mentor shares configurable percentages of native mastery XP with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and available alchemy recipes. `EquippedSpells` is the default spell policy: every equipped source can share with discovered spells below that source's own mastery. `HighestDiscovered` preserves the original highest-mastery-only behavior. Artifact and alchemy sharing remain opt-in and keep their existing highest-mastery rule.
 
-Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Alt+M`, or use the compact `M ON/OFF/BLOCKED` gameplay control. The control occupies the outermost slot of the native Auto Buy-anchored strip, after Automata Auto Buy, Auto Cast, and Auto Concept when present, with 12-pixel gaps. `SharedPool` (default, 10%) bounds the total bonus to the configured percentage. `PerRecipient` grants that percentage to each eligible spell and scales with collection size.
+Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Alt+M`, or use the compact `M ON/OFF/BLOCKED` gameplay control. The control occupies the outermost slot of the native Auto Buy-anchored strip, after Automata Auto Buy, Auto Cast, and Auto Concept when present, with 12-pixel gaps. `SharedPool` (default, 10%) bounds each domain's total bonus to the configured percentage. `PerRecipient` grants that percentage to each eligible recipient in the domain and scales with collection size.
+
+Orb Mod Config keeps the toggle shortcut, emergency disable, and diagnostics editable while Mentor is disabled. Spell, artifact, alchemy, economy, and performance tuning unlock when Mentor becomes Active; artifact and alchemy percentages additionally require their own domain switch.
 
 The plugin uses each domain's native mastery path and suppresses its own grant callbacks. The equipped-spell snapshot is refreshed from `SpellManager.activeSpells` outside the Harmony XP callback; capture remains a constant-time UUID membership check. Each planned spell grant carries its source's exclusive mastery ceiling through consolidation, parking, and final native validation, so XP from a lower equipped source cannot reach an equal- or higher-mastery recipient. It never subtracts source XP or changes loadouts, recipe activity, costs, or discovery state. A contract failure blocks sharing and discards pending bonus work.
 

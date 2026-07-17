@@ -3,11 +3,7 @@ namespace OrbAutomata;
 internal sealed class AutoConceptToggleControl
 {
     private readonly AutomataConfig _config;
-
-    public AutoConceptToggleControl(AutomataConfig config)
-    {
-        _config = config;
-    }
+    public AutoConceptToggleControl(AutomataConfig config) { _config = config; }
 
     internal AutomataConfig Config => _config;
 

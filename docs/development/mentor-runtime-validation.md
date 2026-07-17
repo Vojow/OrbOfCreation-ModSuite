@@ -28,7 +28,7 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 
 - Enable only the Artifacts domain and confirm only equipped, fully attuned artifacts create mentor events.
 - Confirm unequipped, attuning, and merely created artifacts do not create source XP events.
-- Verify created lower-mastery artifacts can receive XP without being equipped, created, attuned, or charged usage costs by Mentor.
+- Verify created lower-mastery artifacts can receive XP without being equipped or attuned and without Mentor charging usage costs or changing creation state.
 - Cross one and several mastery thresholds; compare recipient XP, mastery level, total equipment mastery, sounds/logs, and saved values with native equipped progression.
 - Confirm Mentor does not change loadout membership, stack quantity, attunement, effects, slots, costs, or creation state.
 - Run spells, artifacts, and alchemy together and confirm the round-robin worker prevents any domain from starving.

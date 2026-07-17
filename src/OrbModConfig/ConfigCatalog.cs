@@ -98,6 +98,7 @@ internal sealed class ConfigSettingDescriptor
         DependencySection = metadata?.DependencySection;
         DependencyKey = metadata?.DependencyKey;
         DependencyValue = metadata?.DependencyValue ?? "true";
+        Dependencies = metadata?.Dependencies ?? Array.Empty<ModConfigDependency>();
     }
 
     public ConfigEntryBase Source { get; }
@@ -118,6 +119,7 @@ internal sealed class ConfigSettingDescriptor
     public string? DependencySection { get; }
     public string? DependencyKey { get; }
     public string DependencyValue { get; }
+    public IReadOnlyList<ModConfigDependency> Dependencies { get; }
 
     private static string Humanize(string value)
     {

@@ -59,8 +59,9 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
-        Assert.Equal(AutoConceptSlotManagementMode.RotateAll, config.AutoConceptSlotManagement.Value);
+        Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
+        Assert.True(config.AutoLevelSpells.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
@@ -233,6 +234,120 @@ public sealed class AutomataTests
         Assert.Equal(
             expected,
             AutoConceptBalancer.HasTrainingPeriodElapsed(startedAt, current, configuredPeriod));
+    }
+
+    [Fact]
+    public void TimedConceptCycleDoesNotEndWhenMasteryCatchesUpEarly()
+    {
+        var current = new ConceptProgress("current", 5, 0.9, true);
+        var target = new ConceptProgress("target", 2, 0.0, true);
+
+        Assert.False(AutoConceptBalancer.HasTrainingSessionCompleted(
+            AutoConceptSlotManagementMode.TimedCycle,
+            current,
+            target,
+            100.0,
+            109.9,
+            10));
+        Assert.True(AutoConceptBalancer.HasTrainingSessionCompleted(
+            AutoConceptSlotManagementMode.TimedCycle,
+            current,
+            target,
+            100.0,
+            110.0,
+            10));
+        Assert.True(AutoConceptBalancer.HasTrainingSessionCompleted(
+            AutoConceptSlotManagementMode.RotateAll,
+            current,
+            target,
+            100.0,
+            100.1,
+            10));
+    }
+
+    [Fact]
+    public void TimedConceptCycleUsesFullRotationWithoutMasteryOrdering()
+    {
+        Assert.True(AutoConceptBalancer.UsesFullRotation(AutoConceptSlotManagementMode.TimedCycle));
+        Assert.False(AutoConceptBalancer.RequiresLowerMastery(AutoConceptSlotManagementMode.TimedCycle));
+        Assert.False(AutoConceptBalancer.UsesFullRotation(AutoConceptSlotManagementMode.PreserveManual));
+        Assert.True(AutoConceptBalancer.RequiresLowerMastery(AutoConceptSlotManagementMode.RotateAll));
+    }
+
+    [Fact]
+    public void TimedConceptCyclePrioritizesNeverAndLeastRecentlyAssignedConcepts()
+    {
+        Assert.True(AutoConceptBalancer.CompareTimedCycleOrder(null, "new", 1, "old") < 0);
+        Assert.True(AutoConceptBalancer.CompareTimedCycleOrder(2, "older", 3, "newer") < 0);
+        Assert.True(AutoConceptBalancer.CompareTimedCycleOrder(null, "a", null, "b") < 0);
+    }
+
+    [Fact]
+    public void TimedConceptCycleDoesNotLetResourceBlockedCandidateStarveSafeCandidate()
+    {
+        Assert.False(AutoConceptBalancer.ResourceSafeTimedCandidatePrecedes(
+            false,
+            null,
+            "resource-at-zero",
+            4,
+            "resource-safe"));
+        Assert.True(AutoConceptBalancer.ResourceSafeTimedCandidatePrecedes(
+            true,
+            null,
+            "resource-restored",
+            4,
+            "current"));
+    }
+
+    [Theory]
+    [InlineData(null, false, "zero-quantity state is unavailable")]
+    [InlineData(true, false, "is at zero")]
+    [InlineData(false, true, "")]
+    public void AutoConceptPositiveDrainRequiresAuthoritativeNonzeroResource(
+        bool? nativeIsAtZero,
+        bool expected,
+        string expectedReason)
+    {
+        Assert.Equal(expected, AutoConceptResourcePolicy.TryAcceptPositiveDrain(nativeIsAtZero, out var reason));
+        Assert.Equal(expectedReason, reason);
+    }
+
+    [Fact]
+    public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
+    {
+        var upgrade = new UpgradeSO();
+        IdScriptableObject.RuntimeLookup.Clear();
+        IdScriptableObject.RuntimeLookup[new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
+        var recipe = new SpellRecipeSO { discovered = true, readyToLevel = true };
+        SpellManager.instance = new SpellManager();
+        SpellManager.instance.availableSpellRecipes.value.Add(recipe);
+        using var runtime = new ReflectionSpellLevelRuntime();
+
+        Assert.Equal(AutoSpellLevelCapability.Locked, runtime.ReadSnapshot(out var reason).Capability);
+        Assert.Equal(string.Empty, reason);
+
+        recipe.levelingPrerequisites.unlocked = true;
+        upgrade.queuedPurchaseLevel = 1;
+        recipe.levelCost.affordable = false;
+        var single = runtime.ReadSnapshot(out reason);
+        Assert.Equal(AutoSpellLevelCapability.Single, single.Capability);
+        Assert.Null(single.Candidate);
+        Assert.Equal(0, recipe.levelCost.PerformCalls);
+
+        recipe.levelCost.affordable = true;
+        single = runtime.ReadSnapshot(out reason);
+        Assert.NotNull(single.Candidate);
+        Assert.True(runtime.TryLevelSingle(single.Candidate!, out reason));
+        Assert.Equal(1, recipe.masteryLevel);
+        Assert.Equal(1, recipe.levelCost.PerformCalls);
+
+        recipe.readyToLevel = true;
+        upgrade.purchaseLevel = 1;
+        var all = runtime.ReadSnapshot(out reason);
+        Assert.Equal(AutoSpellLevelCapability.All, all.Capability);
+        Assert.True(runtime.TryLevelAll(out reason));
+        Assert.Equal(2, recipe.masteryLevel);
+        Assert.Equal(2, recipe.levelCost.PerformCalls);
     }
 
     [Fact]

@@ -6,18 +6,16 @@
 
 ## Product direction
 
-The supported `main` branch contains four focused gameplay BepInEx 5 plugins plus an optional in-game configuration UI:
+The supported branch currently contains two gameplay plugins, an optional in-game configuration UI, and their shared library:
 
-1. **Orb Automata** — automates repetitive progression decisions through configurable rules.
-2. **Orb Insights** — extends existing tooltips into an inspection and explanation layer.
-3. **Orb Toolbox** — provides explicit resource/debug operations and development safeguards.
-4. **Orb Mentor** — shares a controlled portion of earned mastery experience with lower-level discovered spells, with artifacts and alchemy deferred to separately audited extensions.
+1. **Orb Automata** — Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+2. **Orb Mentor** — independently configurable mastery-XP sharing for spells, artifacts, and alchemy.
+3. **Orb Mod Config** — optional shared UI that exposes loaded BepInEx configuration without becoming a gameplay-plugin dependency.
+4. **Orb Modding Common** — shared audited infrastructure bundled with the supported plugins.
 
-**Orb Mod Config** is optional shared UI infrastructure that exposes loaded BepInEx configuration inside the game without becoming a dependency of the gameplay plugins.
+Orb Insights and Orb Toolbox remain design plans. `OrbChronomancer` and `OrbAchievementResonance` are isolated on the dedicated experimental branch and enter the supported branch only after explicit lifecycle promotion and release-scope approval.
 
 The public positioning is: **reduce idle waiting and repetitive management while preserving meaningful progression decisions.** Cheats and resource editing may be useful as private development tools, but they are not the first public product.
-
-Experimental modules are developed on dedicated branches and enter `main` only after explicit lifecycle promotion and release-scope approval.
 
 ## Design principles
 
@@ -26,7 +24,7 @@ Experimental modules are developed on dedicated branches and enter `main` only a
 - Use normal game APIs whenever possible.
 - Keep UI and input responsive at different game speeds.
 - Put configurable action and CPU-time budgets on automation.
-- Make every automated decision explainable in logs or tooltips.
+- Make automated decisions explainable through bounded diagnostics.
 - Use third-party mods as design references without patching or depending on them.
 - Support one owner for each automated action family; concurrent overlapping automation mods are unsupported.
 
@@ -35,24 +33,20 @@ Experimental modules are developed on dedicated branches and enter `main` only a
 ```mermaid
 flowchart TD
     Bep["BepInEx 5.4.x"] --> Automata["Orb Automata"]
-    Bep --> Insights["Orb Insights"]
-    Bep --> Toolbox["Orb Toolbox"]
     Bep --> Mentor["Orb Mentor"]
     Bep --> ModConfig["Orb Mod Config"]
+    Bep -. "future" .-> Insights["Orb Insights (planned)"]
+    Bep -. "future" .-> Toolbox["Orb Toolbox (planned)"]
     Game["Assembly-CSharp APIs"] --> Automata
-    Game --> Insights
-    Game --> Toolbox
     Game --> Mentor
     Game --> ModConfig
     Common["Orb Modding Common"] -. "shared audited infrastructure" .-> Automata
-    Common -. "shared audited infrastructure" .-> Insights
-    Common -. "shared audited infrastructure" .-> Toolbox
     Common -. "shared audited infrastructure" .-> Mentor
     ModConfig -. "optional config discovery" .-> Automata
     ModConfig -. "optional config discovery" .-> Mentor
 ```
 
-Keep the shared library focused on stable duplicated code such as keybind parsing, game-state detection, diagnostics, scheduling, and status controls.
+Keep the shared library focused on stable duplicated code such as keybind parsing, game-state detection, diagnostics, scheduling, configuration metadata, and status controls.
 
 ## Milestones
 
@@ -75,14 +69,15 @@ Exit criterion: Auto Buy runs for an extended session without overspending reser
 
 ### Phase 2 — Orb Automata modules
 
-- Maintain Auto Buy, Auto Cast, and Auto Concept.
+- Maintain Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+- Keep spell leveling under Auto Buy because it spends progression resources and invokes native purchase actions; it is not a Mentor or concept responsibility.
 - Add Auto Harvest only after its native contracts are audited.
-- Add crafting, scribing, ordinary alchemy, and optional research automation afterward.
-- Reuse the same rule engine, shared scheduler, and diagnostics.
+- Add crafting, scribing, ordinary alchemy, and optional research automation only after separate audits.
+- Reuse the shared scheduler, lifecycle-aware indexes, resource snapshots, and bounded diagnostics.
 
-Auto Concept's Scholar mastery-balancing, dynamic acquired-slot, ownership, continuous-drain, and performance contracts are specified in the [Auto Concept plan](auto-concept.md).
+Auto Concept's balancing, timed cycling, dynamic acquired-slot, ownership, zero-resource, lifecycle, and performance contracts are specified in the [Auto Concept plan](auto-concept.md).
 
-### Phase 3 — Orb Insights
+### Phase 3 — Orb Insights (planned)
 
 - Extend native resource tooltips with exact values and UUIDs.
 - Add contextual extensions for research, structures, spells, and alchemy.
@@ -91,24 +86,26 @@ Auto Concept's Scholar mastery-balancing, dynamic acquired-slot, ownership, cont
 
 Exit criterion: extensions preserve native tooltip content and degrade safely when a target type is unsupported.
 
-### Phase 4 — Orb Toolbox
+### Phase 4 — Orb Toolbox (planned)
 
 - Add searchable resource selection and explicit add/set/multiply operations.
 - Add dry-run previews, audit logging, and optional save snapshots.
 - Keep unsafe operations behind an advanced confirmation gate.
 
-Exit criterion: supported actions change only the selected runtime objects, survive normal save/load, and are recoverable through documented backups.
+Exit criterion: supported actions change only selected runtime objects, survive normal save/load, and are recoverable through documented backups.
 
 ### Phase 5 — Orb Mentor
 
-- Maintain installed-game contracts around the verified spell mastery, catalog, save, and type-XP surfaces.
-- Use native recipient XP grants, stable UUID ordering, recursion suppression, per-frame aggregation, and bounded processing.
-- Keep live Mod Config integration, `Alt+M`, and the queue-adjacent ON/OFF/BLOCKED control.
-- Defer automatic mastery confirmation to Automata and audit artifacts/alchemy as later independent extensions.
+- Maintain installed-game contracts for spell, artifact, and alchemy mastery, catalogs, saves, availability, and native XP paths.
+- Keep the three domains independently configurable and fail closed per domain.
+- Use native recipient progression, stable UUID ordering, recursion suppression, aggregation, and bounded processing.
+- Maintain `EquippedSpells` and `HighestDiscovered` spell source policies.
+- Keep live Mod Config integration, `Alt+M`, and the independent ON/OFF/BLOCKED control.
+- Keep resource-spending spell leveling in Automata rather than Mentor.
 
-See [Orb Mentor plan](mentor.md) for the resolved spell contract, verified native XP path, delivery stages, and verification requirements.
+See the [Orb Mentor plan](mentor.md) for spell contracts and [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for the implemented release-candidate extensions and remaining interactive gates.
 
-Exit criterion: eligible discovered lower-mastery spells receive exactly the configured XP through native progression behavior, grants never recurse or directly modify spell-type XP, and saves remain stable across extended sessions and plugin removal.
+Exit criterion: every enabled domain grants exactly the configured XP through its audited native progression behavior, grants never recurse, disabled or unresolved domains stay silent, and saves remain stable across extended sessions and plugin removal.
 
 ### Phase 6 — In-game mod configuration UI
 
@@ -119,9 +116,9 @@ Exit criterion: eligible discovered lower-mastery spells receive exactly the con
 - Preserve `.cfg` files as the source of truth with staged Apply/Revert behavior and honest live/restart status.
 - Keep the panel usable with unscaled time, keyboard/controller navigation, scene changes, and other UI mods.
 
-See [In-game mod configuration UI plan](mod-config-ui.md) for architecture, delivery stages, risks, and acceptance criteria.
+See the [In-game mod configuration UI plan](mod-config-ui.md) for architecture, delivery stages, risks, and acceptance criteria.
 
-Exit criterion: the suite's supported configuration types round-trip safely in game, the compatibility matrix passes, and removing the UI plugin leaves every mod configurable through its normal `.cfg` file.
+Exit criterion: supported configuration types round-trip safely in game, the compatibility matrix passes, and removing the UI plugin leaves every mod configurable through its normal `.cfg` file.
 
 ### Phase 7 — Shared library and public ecosystem
 

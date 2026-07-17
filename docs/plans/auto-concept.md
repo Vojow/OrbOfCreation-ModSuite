@@ -1,6 +1,6 @@
 # Auto Concept mastery-balancing plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, configurable slot ownership policy, settled catch-up training sessions, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, catch-up and timed-cycle policies, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
 
 [Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
 
@@ -15,6 +15,8 @@ Auto Concept should periodically:
 3. allocate as many instances of each assigned concept as its mastery and resource headroom safely allow;
 4. let the native game award mastery XP and apply mastery effects;
 5. rebalance after mastery, slot, lifecycle, configuration, or material resource changes.
+
+The same opt-in module may level spells through their native progression path. It must detect whether leveling is locked, permits one spell action, or permits the native level-all action without requiring the player to change an Automata capability mode.
 
 The game remains authoritative for discovery, compatible slots, maximum instances, bandwidth usage, drain scaling, XP, mastery level changes, effects, and final mutations.
 
@@ -53,12 +55,14 @@ This reuse does not make ordinary alchemy part of Auto Concept. The adapter must
 
 - Fresh installations start with Auto Concept disabled.
 - Active mode uses all currently acquired compatible slots. `RotateAll` may replace a settled assignment for a compatible strictly lower-mastery concept; `PreserveManual` retains the starting loadout.
+- `TimedCycle` may replace a complete settled assignment after its full configured training period, regardless of whether it caught the current highest mastery early. Least-recently-assigned ordering prevents starvation, and the exact planned replacement owns the released slot.
 - The training pool contains discovered, available, validated concepts that are not blocked by configuration.
 - Concepts are ranked by effective mastery, lowest first, with stable UUID as the final tie-breaker.
 - A full plan evaluation has a multi-minute idle fallback and may be requested sooner by a mastery-level change, acquired-slot change, manual loadout change, configuration change, or lifecycle invalidation. This fallback is not a rotation cooldown.
 - A newly assigned lower-mastery concept is protected until it reaches the highest effective mastery captured at assignment time or its configured settled training period expires. Native setup time does not consume the period.
 - The balancer changes only quantities it owns under `PreserveManual`. `RotateAll` explicitly authorizes replacing one complete, settled native assignment at a time.
 - Resource safety may leave an acquired slot empty or assign less than `masteryLevel + 1` instances.
+- Resource-blocked inactive concepts are excluded from rotation ordering, so a zero-resource concept cannot starve another compatible resource-safe concept.
 - Emergency disable cancels pending plans and new mutations immediately. It does not rewrite native progression or remove accepted game state unless an explicit cleanup policy is later approved.
 
 ### Non-goals for the first release
@@ -90,6 +94,14 @@ Static inspection was performed against the installed and repository-audited `As
 | ActiveConcepts | `9121924d-2692-428b-9599-165224ccd899` | `AlchemyInstanceListVariable` |
 | ConceptRecipes | `c8ff8e01-c042-49c2-86a2-e374f82c280c` | `AlchemyRecipeListVariable` |
 
+### Stable spell-level capability identity
+
+| Asset | UUID | Expected type |
+|---|---|---|
+| UnlockLevelAllSpells | `b5efd19a-9655-4359-ad27-f391bb86c2e4` | `UpgradeSO` |
+
+The single-level capability is not inferred from save stage, names, or the presence of recipes. Each discovered `SpellRecipeSO` must pass its own `levelingPrerequisites.Check()` contract. `UpgradeSO.GetPurchaseLevel() > 0` is the completed level-all authority; queued purchase level is deliberately ignored.
+
 The current entity mapping contains 124 `AlchemyRecipeSO` definitions, of which 46 have the mapped Analyze, Learning, or Study concept families. Names are diagnostics only; membership must be proven by the concept asset and type UUIDs.
 
 ### Important native behaviors
@@ -105,6 +117,8 @@ The current entity mapping contains 124 `AlchemyRecipeSO` definitions, of which 
 - `ApplyMastery()` contributes the concept's confirmed mastery level to its related `AlchemyTypeSO` effects.
 - Quantity increases are queued for a native cooldown of approximately 0.25 seconds before `SubmitQuantityChange()` reapplies drains and effects. Quantity decreases submit immediately.
 - `ResourceDrain` exposes current drain, actual ratio, necessary ratio, and usage ratio. `ResourceSO` exposes native quantity, capacity, true rate, drain, and effective drain ratios.
+- The native single-level button pays `SpellRecipeSO.GetLevelCost()` through `ResourceCostList.PerformCost()` and then calls `SpellRecipeSO.PurchaseLevel()`. Automata mirrors that order after final validation and blocks further leveling for the lifecycle if the post-cost result is ambiguous.
+- `SpellManager.TryLevelAllSpells()` is the audited native level-all path. It rechecks discovered recipes, ready mastery, and live affordability, and may level multiple spells in one synchronous action. Automata schedules it as one non-preemptible native mutation.
 
 These observations define candidate contracts, not release approval. Installed-game contract tests and interactive evidence must cover every reflected field, method, and mutation path used by the implementation.
 
@@ -368,7 +382,7 @@ flowchart TD
     Config -. "optional discovery" .-> ModConfig["Orb Mod Config"]
 ```
 
-Responsibilities:
+Logical responsibilities (several are consolidated into the current controller, model, and runtime adapter rather than separate classes):
 
 | Component | Ownership |
 |---|---|
@@ -425,30 +439,23 @@ The full concept catalog is small enough for infrequent work, but every scan mus
 - A 30-minute combined Auto Buy, Auto Cast, Mentor, Mod Config, and Auto Concept run shows no unbounded pending work, catalog growth, ownership drift, or managed-memory growth.
 - Measure native mastery popup/effect bursts separately because synchronous native work cannot be preempted by the coordinator.
 
-## Player controls and proposed configuration
-
-Names and defaults remain subject to runtime measurement and player approval.
+## Player controls and configuration
 
 ### General
 
 - `Mode`: `Disabled` or `Active`.
-- `ToggleShortcut`: dedicated configurable shortcut.
-- `ShowStatusButton`: native-styled status control near other Automata controls.
+- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF/!` gameplay control.
 - `EmergencyDisable`: shared Automata safety switch.
 
 ### Balancing
 
-- `SlotManagementMode`: `RotateAll` (default) or `PreserveManual`.
-- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF/!` gameplay control.
+- `SlotManagementMode`: `TimedCycle` (default), `RotateAll`, or `PreserveManual`.
 - `TrainingPeriodSeconds`: default 300 seconds, configurable from 10 through 3600; begins only after the assignment is settled and active.
 - `FallbackEvaluationIntervalSeconds`: Advanced-only idle full-plan fallback; default 300 seconds, configurable from 10 through 1800 seconds. Native signals may request earlier evaluation.
-- `UseAllAvailableConceptSlots`: proposed default true.
-- `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
 - Strict mastery comparison plus protected training sessions prevent native change signals and equal-progress UUID tie-breaks from causing rotation churn.
-- `AllowedConceptUuids`: optional allowlist; empty means every validated discovered concept.
-- `BlockedConceptUuids`: explicit denylist.
-- `PinnedConceptUuids`: preserve or prioritize separately only after ownership semantics are validated.
 - `PerConceptQuantityCap`: optional safety cap; zero means use the native mastery limit.
+
+Reserved-slot, allow/block-list, pinned-concept, and dedicated-shortcut controls remain possible follow-up work; they are not current configuration keys.
 
 ### Resource safety
 
@@ -604,7 +611,7 @@ Exit gate: combined suite frame work, allocations, loadout churn, native effect 
 
 Runtime reports must record exact configuration, save scenario, game assembly hash, plugin versions, average/p95/max subsystem time, GC deltas, slot assignments, resource floors, native mutations, rollbacks, and any observed FPS/1%-low change.
 
-## Planned source layout
+## Original proposed source layout
 
 ```text
 src/OrbAutomata/
@@ -632,7 +639,7 @@ tests/OrbModding.GameContractTests/
   InstalledGameContractTests.cs
 ```
 
-File boundaries may change after implementation proves which abstractions are genuinely separate. Avoid a single monolithic runtime class, but do not create shared abstractions before two modules need them.
+The release candidate consolidated this proposal into `AutoConceptController`, `AutoConceptModel`, `ReflectionConceptRuntime`, the shared Automata configuration, and the shared toggle-control implementation. The list above remains design history rather than a claim that every proposed file exists.
 
 ## Open decisions and unresolved contracts
 

@@ -51,9 +51,11 @@ internal sealed class AutoConceptController : IDisposable
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly ConceptOwnershipLedger _ownership = new();
     private readonly Dictionary<string, TrainingSession> _trainingSessions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _lastTimedAssignment = new(StringComparer.Ordinal);
     private readonly List<string> _completedTrainingSessions = new();
     private readonly HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _blocked = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _resourceSafeReplacements = new(StringComparer.Ordinal);
     private readonly DecisionLogGate _failureLogGate = new(TimeSpan.FromSeconds(30));
     private readonly DecisionLogGate _decisionLogGate = new(TimeSpan.FromSeconds(30));
     private PendingMutation? _pending;
@@ -61,11 +63,17 @@ internal sealed class AutoConceptController : IDisposable
     private float _secondsUntilWatchdog;
     private double _elapsedSeconds;
     private bool _baselineCaptured;
+    private bool _timedSessionsInitialized;
+    private AutoConceptSlotManagementMode? _configuredSlotManagementMode;
+    private int? _configuredTrainingPeriodSeconds;
     private bool _wasActive;
     private string _configuredAllowed = string.Empty;
     private string _configuredBlocked = string.Empty;
     private IReadOnlyList<NativeConceptCandidate> _cachedCandidates = Array.Empty<NativeConceptCandidate>();
     private string? _loggedBlockedReason;
+    private string? _preferredReplacementUuid;
+    private double _preferredReplacementExpiresAtSeconds;
+    private long _timedAssignmentSequence;
 
     public AutoConceptController(
         AutomataConfig config,
@@ -106,14 +114,21 @@ internal sealed class AutoConceptController : IDisposable
                 _pending = null;
                 _ownership.Clear();
                 _trainingSessions.Clear();
+                _lastTimedAssignment.Clear();
+                _timedAssignmentSequence = 0;
                 _baselineCaptured = false;
+                _timedSessionsInitialized = false;
                 _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+                _preferredReplacementUuid = null;
+                _preferredReplacementExpiresAtSeconds = 0.0;
             }
             _wasActive = false;
             return;
         }
         _wasActive = true;
         RefreshUuidFilters();
+        RefreshSlotManagementMode();
+        RefreshTrainingPeriod();
         _secondsUntilEvaluation -= elapsed;
         _secondsUntilWatchdog -= elapsed;
         var evaluationDue = _secondsUntilEvaluation <= 0.0f;
@@ -147,8 +162,13 @@ internal sealed class AutoConceptController : IDisposable
         _pending = null;
         _ownership.Clear();
         _trainingSessions.Clear();
+        _lastTimedAssignment.Clear();
+        _timedAssignmentSequence = 0;
         _baselineCaptured = false;
+        _timedSessionsInitialized = false;
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+        _preferredReplacementUuid = null;
+        _preferredReplacementExpiresAtSeconds = 0.0;
         _loggedBlockedReason = null;
         _secondsUntilEvaluation = 0.0f;
         _secondsUntilWatchdog = 0.0f;
@@ -184,7 +204,11 @@ internal sealed class AutoConceptController : IDisposable
             for (var index = 0; index < candidates.Count; index++)
             {
                 var candidate = candidates[index];
-                if (candidate.IsSettled) _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
+                if (!candidate.IsSettled) continue;
+                var changed = _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
+                if (changed && candidate.Quantity > 0 &&
+                    _config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle)
+                    BeginTrainingSession(candidate, candidates);
             }
         }
 
@@ -203,7 +227,10 @@ internal sealed class AutoConceptController : IDisposable
                 candidate.MaximumQuantity > 0));
         }
         var ranked = AutoConceptBalancer.Rank(progress);
+        InitializeTimedCycleSessions(candidates);
         UpdateTrainingSessions(byId);
+
+        if (TryPlanPreferredReplacement(byId)) return;
 
         // Breadth first: claim each currently compatible acquired slot with
         // one lowest-progress concept before deepening any assignment.
@@ -253,10 +280,12 @@ internal sealed class AutoConceptController : IDisposable
         }
 
         LogIdleDecision(ranked.Count, candidates);
-        _secondsUntilEvaluation = Math.Clamp(
-            _config.AutoConceptFallbackEvaluationIntervalSeconds.Value,
-            10,
-            1800);
+        _secondsUntilEvaluation = Math.Min(
+            SecondsUntilNextTrainingDeadline(),
+            Math.Clamp(
+                _config.AutoConceptFallbackEvaluationIntervalSeconds.Value,
+                10,
+                1800));
     }
 
     private void RunWatchdog()
@@ -283,23 +312,43 @@ internal sealed class AutoConceptController : IDisposable
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, NativeConceptCandidate> byId)
     {
+        _resourceSafeReplacements.Clear();
+        for (var index = 0; index < ranked.Count; index++)
+        {
+            var inactive = byId[ranked[index].Uuid];
+            if (!inactive.IsSettled || inactive.Quantity != 0 ||
+                string.IsNullOrWhiteSpace(inactive.SlotTypeUuid)) continue;
+            if (_runtime.TryFindSafeTarget(
+                    inactive,
+                    1,
+                    _config.AutoConceptRateReservePercent.Value,
+                    _config.AutoConceptMinimumResourcePercent.Value,
+                    out _,
+                    out _))
+                _resourceSafeReplacements.Add(inactive.Uuid);
+        }
+
         for (var inactiveIndex = 0; inactiveIndex < ranked.Count; inactiveIndex++)
         {
             var desiredProgress = ranked[inactiveIndex];
             var desiredInactive = byId[desiredProgress.Uuid];
             if (!desiredInactive.IsSettled || desiredInactive.Quantity != 0 ||
-                string.IsNullOrWhiteSpace(desiredInactive.SlotTypeUuid)) continue;
+                string.IsNullOrWhiteSpace(desiredInactive.SlotTypeUuid) ||
+                !_resourceSafeReplacements.Contains(desiredInactive.Uuid)) continue;
+            if (_config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle &&
+                !IsNextTimedReplacement(desiredInactive, ranked, byId, _resourceSafeReplacements)) continue;
 
             for (var activeIndex = ranked.Count - 1; activeIndex >= 0; activeIndex--)
             {
                 var activeProgress = ranked[activeIndex];
-                if (!AutoConceptBalancer.HasStrictlyLowerMastery(desiredProgress, activeProgress)) continue;
+                if (AutoConceptBalancer.RequiresLowerMastery(_config.AutoConceptSlotManagement.Value) &&
+                    !AutoConceptBalancer.HasStrictlyLowerMastery(desiredProgress, activeProgress)) continue;
                 var candidate = byId[activeProgress.Uuid];
                 if (!candidate.IsSettled || candidate.Quantity <= 0 ||
                     !string.Equals(candidate.SlotTypeUuid, desiredInactive.SlotTypeUuid, StringComparison.Ordinal)) continue;
                 if (_trainingSessions.ContainsKey(candidate.Uuid)) continue;
 
-                if (_config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.RotateAll)
+                if (AutoConceptBalancer.UsesFullRotation(_config.AutoConceptSlotManagement.Value))
                 {
                     _pending = new PendingMutation(
                         MutationKind.RotateOut,
@@ -346,14 +395,14 @@ internal sealed class AutoConceptController : IDisposable
 
         if (!IsReplacementStillValid(pending.Value, candidate, candidates))
         {
-            LogFailure($"Auto Concept rotation target changed before removing {candidate.DisplayName}; replanning.");
+            LogFailure($"Auto Concept rotation target, slot, or resource safety changed before removing {candidate.DisplayName}; replanning.");
             _secondsUntilEvaluation = 0.0f;
             return;
         }
 
         if (pending.Value.Kind == MutationKind.RotateOut)
         {
-            if (_config.AutoConceptSlotManagement.Value != AutoConceptSlotManagementMode.RotateAll ||
+            if (!AutoConceptBalancer.UsesFullRotation(_config.AutoConceptSlotManagement.Value) ||
                 candidate.Quantity != pending.Value.TargetOrDelta ||
                 !_runtime.TryRemoveForRotation(candidate, pending.Value.TargetOrDelta, out reason))
             {
@@ -363,8 +412,13 @@ internal sealed class AutoConceptController : IDisposable
                 return;
             }
             _ownership.ObserveBaseline(candidate.Uuid, 0);
+            _preferredReplacementUuid = pending.Value.ReplacementUuid;
+            _preferredReplacementExpiresAtSeconds = _elapsedSeconds + 5.0;
+            var purpose = _config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle
+                ? $"continue the timed cycle with {pending.Value.ReplacementName}"
+                : $"train lower-mastery {pending.Value.ReplacementName}";
             LogOperation(
-                $"Auto Concept rotated out {candidate.DisplayName} ({pending.Value.TargetOrDelta} instance(s)) to train lower-mastery {pending.Value.ReplacementName}.");
+                $"Auto Concept rotated out {candidate.DisplayName} ({pending.Value.TargetOrDelta} instance(s)) to {purpose}.");
             _secondsUntilEvaluation = 0.25f;
             return;
         }
@@ -411,6 +465,11 @@ internal sealed class AutoConceptController : IDisposable
         }
         if (candidate.Quantity == 0) BeginTrainingSession(candidate, candidates);
         _ownership.RecordAutomatedDelta(candidate.Uuid, candidate.Quantity + delta, delta);
+        if (string.Equals(_preferredReplacementUuid, candidate.Uuid, StringComparison.Ordinal))
+        {
+            _preferredReplacementUuid = null;
+            _preferredReplacementExpiresAtSeconds = 0.0;
+        }
         LogOperation($"Auto Concept added {delta} {candidate.DisplayName} instance(s), target {safeTarget}.");
         _secondsUntilEvaluation = 0.0f;
     }
@@ -427,10 +486,30 @@ internal sealed class AutoConceptController : IDisposable
             if (!progress.Eligible || AutoConceptBalancer.HasStrictlyLowerMastery(progress, target)) continue;
             target = progress;
         }
-        if (!AutoConceptBalancer.HasStrictlyLowerMastery(current, target)) return;
+        var timedCycle = _config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle;
+        if (!timedCycle && !AutoConceptBalancer.HasStrictlyLowerMastery(current, target)) return;
         _trainingSessions[candidate.Uuid] = new TrainingSession(target);
-        LogOperation(
-            $"Auto Concept reserved {candidate.DisplayName} until mastery {FormatMastery(target)} or {_config.AutoConceptTrainingPeriodSeconds.Value} settled active seconds.");
+        if (timedCycle) _lastTimedAssignment[candidate.Uuid] = ++_timedAssignmentSequence;
+        LogOperation(timedCycle
+            ? $"Auto Concept reserved {candidate.DisplayName} for {_config.AutoConceptTrainingPeriodSeconds.Value} settled active seconds."
+            : $"Auto Concept reserved {candidate.DisplayName} until mastery {FormatMastery(target)} or {_config.AutoConceptTrainingPeriodSeconds.Value} settled active seconds.");
+    }
+
+    private void InitializeTimedCycleSessions(IReadOnlyList<NativeConceptCandidate> candidates)
+    {
+        if (_config.AutoConceptSlotManagement.Value != AutoConceptSlotManagementMode.TimedCycle)
+        {
+            _timedSessionsInitialized = false;
+            return;
+        }
+        if (_timedSessionsInitialized) return;
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            if (candidate.IsSettled && candidate.Quantity > 0 && !_trainingSessions.ContainsKey(candidate.Uuid))
+                BeginTrainingSession(candidate, candidates);
+        }
+        _timedSessionsInitialized = true;
     }
 
     private void UpdateTrainingSessions(
@@ -456,30 +535,31 @@ internal sealed class AutoConceptController : IDisposable
             if (session.StartedAtSeconds is null)
             {
                 session.StartedAtSeconds = _elapsedSeconds;
-                LogOperation(
-                    $"Auto Concept training started for {candidate.DisplayName}; catch-up target {FormatMastery(session.Target)}.");
+                LogOperation(_config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle
+                    ? $"Auto Concept timed cycle started for {candidate.DisplayName}."
+                    : $"Auto Concept training started for {candidate.DisplayName}; catch-up target {FormatMastery(session.Target)}.");
             }
 
             var current = ToProgress(candidate);
-            if (AutoConceptBalancer.HasReached(current, session.Target))
-            {
-                LogOperation(
-                    $"Auto Concept training completed for {candidate.DisplayName}: reached catch-up target {FormatMastery(session.Target)}.");
-                _completedTrainingSessions.Add(pair.Key);
-                continue;
-            }
-
             var trainingPeriod = Math.Clamp(
                 _config.AutoConceptTrainingPeriodSeconds.Value,
                 10,
                 3600);
-            if (AutoConceptBalancer.HasTrainingPeriodElapsed(
+            if (AutoConceptBalancer.HasTrainingSessionCompleted(
+                    _config.AutoConceptSlotManagement.Value,
+                    current,
+                    session.Target,
                     session.StartedAtSeconds.Value,
                     _elapsedSeconds,
                     trainingPeriod))
             {
-                LogOperation(
-                    $"Auto Concept training completed for {candidate.DisplayName}: {trainingPeriod}-second period elapsed at {FormatMastery(current)}.");
+                var elapsed = AutoConceptBalancer.HasTrainingPeriodElapsed(
+                    session.StartedAtSeconds.Value,
+                    _elapsedSeconds,
+                    trainingPeriod);
+                LogOperation(elapsed
+                    ? $"Auto Concept training completed for {candidate.DisplayName}: {trainingPeriod}-second period elapsed at {FormatMastery(current)}."
+                    : $"Auto Concept training completed for {candidate.DisplayName}: reached catch-up target {FormatMastery(session.Target)}.");
                 _completedTrainingSessions.Add(pair.Key);
             }
         }
@@ -497,7 +577,7 @@ internal sealed class AutoConceptController : IDisposable
     private static string FormatMastery(ConceptProgress progress) =>
         $"level {progress.MasteryLevel} ({progress.MasteryProgress:P0})";
 
-    private static bool IsReplacementStillValid(
+    private bool IsReplacementStillValid(
         PendingMutation pending,
         NativeConceptCandidate active,
         IReadOnlyList<NativeConceptCandidate> candidates)
@@ -509,7 +589,15 @@ internal sealed class AutoConceptController : IDisposable
             if (!string.Equals(replacement.Uuid, pending.ReplacementUuid, StringComparison.Ordinal)) continue;
             if (!replacement.IsSettled || replacement.Quantity != 0 ||
                 !string.Equals(replacement.SlotTypeUuid, active.SlotTypeUuid, StringComparison.Ordinal)) return false;
-            return AutoConceptBalancer.HasStrictlyLowerMastery(
+            if (!_runtime.TryFindSafeTarget(
+                    replacement,
+                    1,
+                    _config.AutoConceptRateReservePercent.Value,
+                    _config.AutoConceptMinimumResourcePercent.Value,
+                    out _,
+                    out _)) return false;
+            return !AutoConceptBalancer.RequiresLowerMastery(_config.AutoConceptSlotManagement.Value) ||
+                AutoConceptBalancer.HasStrictlyLowerMastery(
                 new ConceptProgress(
                     replacement.Uuid,
                     replacement.MasteryLevel,
@@ -538,6 +626,108 @@ internal sealed class AutoConceptController : IDisposable
             ParseUuids(_configuredBlocked, _blocked);
             _secondsUntilEvaluation = 0.0f;
         }
+    }
+
+    private bool TryPlanPreferredReplacement(
+        IReadOnlyDictionary<string, NativeConceptCandidate> byId)
+    {
+        if (string.IsNullOrWhiteSpace(_preferredReplacementUuid)) return false;
+        if (_elapsedSeconds >= _preferredReplacementExpiresAtSeconds)
+        {
+            LogFailure("Auto Concept rotated replacement did not become valid within five seconds; returning to normal planning.");
+            _preferredReplacementUuid = null;
+            _preferredReplacementExpiresAtSeconds = 0.0;
+            return false;
+        }
+        if (!byId.TryGetValue(_preferredReplacementUuid, out var candidate))
+        {
+            _preferredReplacementUuid = null;
+            _preferredReplacementExpiresAtSeconds = 0.0;
+            return false;
+        }
+        if (candidate.Quantity > 0)
+        {
+            _preferredReplacementUuid = null;
+            _preferredReplacementExpiresAtSeconds = 0.0;
+            return false;
+        }
+        if (!candidate.IsSettled || !_runtime.CanAdd(candidate))
+        {
+            _secondsUntilEvaluation = 0.25f;
+            return true;
+        }
+        if (_runtime.TryFindSafeTarget(
+                candidate,
+                1,
+                _config.AutoConceptRateReservePercent.Value,
+                _config.AutoConceptMinimumResourcePercent.Value,
+                out var safeTarget,
+                out var reason))
+        {
+            _pending = new PendingMutation(MutationKind.Add, candidate.Uuid, safeTarget);
+            return true;
+        }
+        LogFailure($"Auto Concept is waiting to add rotated replacement {candidate.DisplayName}: {reason}");
+        _preferredReplacementUuid = null;
+        _preferredReplacementExpiresAtSeconds = 0.0;
+        return false;
+    }
+
+    private void RefreshSlotManagementMode()
+    {
+        var mode = _config.AutoConceptSlotManagement.Value;
+        if (_configuredSlotManagementMode == mode) return;
+        _configuredSlotManagementMode = mode;
+        _trainingSessions.Clear();
+        _lastTimedAssignment.Clear();
+        _timedAssignmentSequence = 0;
+        _timedSessionsInitialized = false;
+        _secondsUntilEvaluation = 0.0f;
+    }
+
+    private bool IsNextTimedReplacement(
+        NativeConceptCandidate candidate,
+        IReadOnlyList<ConceptProgress> ranked,
+        IReadOnlyDictionary<string, NativeConceptCandidate> byId,
+        ISet<string> resourceSafeReplacements)
+    {
+        _lastTimedAssignment.TryGetValue(candidate.Uuid, out var candidateSequence);
+        long? candidateLast = _lastTimedAssignment.ContainsKey(candidate.Uuid) ? candidateSequence : null;
+        for (var index = 0; index < ranked.Count; index++)
+        {
+            var other = byId[ranked[index].Uuid];
+            if (!other.IsSettled || other.Quantity != 0 ||
+                !string.Equals(other.SlotTypeUuid, candidate.SlotTypeUuid, StringComparison.Ordinal)) continue;
+            _lastTimedAssignment.TryGetValue(other.Uuid, out var otherSequence);
+            long? otherLast = _lastTimedAssignment.ContainsKey(other.Uuid) ? otherSequence : null;
+            if (AutoConceptBalancer.ResourceSafeTimedCandidatePrecedes(
+                    resourceSafeReplacements.Contains(other.Uuid),
+                    otherLast,
+                    other.Uuid,
+                    candidateLast,
+                    candidate.Uuid)) return false;
+        }
+        return true;
+    }
+
+    private void RefreshTrainingPeriod()
+    {
+        var period = _config.AutoConceptTrainingPeriodSeconds.Value;
+        if (_configuredTrainingPeriodSeconds == period) return;
+        _configuredTrainingPeriodSeconds = period;
+        _secondsUntilEvaluation = 0.0f;
+    }
+
+    private float SecondsUntilNextTrainingDeadline()
+    {
+        var remaining = double.PositiveInfinity;
+        var period = Math.Clamp(_config.AutoConceptTrainingPeriodSeconds.Value, 10, 3600);
+        foreach (var session in _trainingSessions.Values)
+        {
+            if (session.StartedAtSeconds is null) continue;
+            remaining = Math.Min(remaining, Math.Max(0.0, session.StartedAtSeconds.Value + period - _elapsedSeconds));
+        }
+        return double.IsPositiveInfinity(remaining) ? float.PositiveInfinity : (float)remaining;
     }
 
     private static void ParseUuids(string value, ISet<string> destination)
@@ -590,8 +780,11 @@ internal sealed class AutoConceptController : IDisposable
         var activeCount = 0;
         for (var index = 0; index < candidates.Count; index++)
             if (candidates[index].Quantity > 0) activeCount++;
+        var rotation = _config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.TimedCycle
+            ? "no compatible timed rotation"
+            : "no compatible strictly lower-mastery rotation";
         var message =
-            $"Auto Concept made no change: no compatible strictly lower-mastery rotation or resource-safe quantity increase was available. SlotManagement={_config.AutoConceptSlotManagement.Value}, Training={_trainingSessions.Count}, Eligible={eligibleCount}, Active={activeCount}.";
+            $"Auto Concept made no change: {rotation} or resource-safe quantity increase was available. SlotManagement={_config.AutoConceptSlotManagement.Value}, Training={_trainingSessions.Count}, Eligible={eligibleCount}, Active={activeCount}.";
         if (_decisionLogGate.ShouldLog(message, TimeSpan.FromSeconds(_elapsedSeconds)))
             _log.LogAutomataInfo(message);
     }
@@ -603,6 +796,14 @@ internal sealed class AutoConceptController : IDisposable
         _pending = null;
         _ownership.Clear();
         _trainingSessions.Clear();
+        _lastTimedAssignment.Clear();
+        _timedAssignmentSequence = 0;
+        _timedSessionsInitialized = false;
+        _configuredSlotManagementMode = null;
+        _configuredTrainingPeriodSeconds = null;
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+        _resourceSafeReplacements.Clear();
+        _preferredReplacementUuid = null;
+        _preferredReplacementExpiresAtSeconds = 0.0;
     }
 }
