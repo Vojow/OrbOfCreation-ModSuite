@@ -103,13 +103,18 @@ internal interface IAutoBuyIncrementalCatalog
 {
     AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request);
 
-    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking);
+    void CompleteCandidateEvaluation(
+        IAutoBuyCandidate candidate,
+        bool suppressResourceTracking,
+        bool policyExcluded);
 
     void InvalidatePolicy();
 
     void BeginMutationEvaluation();
 
     void NotifyPurchaseAttempted(IAutoBuyCandidate candidate);
+
+    void CompleteMutationGroup();
 
     void NotifyStructureQueueChanged(object nativeIdentity);
 

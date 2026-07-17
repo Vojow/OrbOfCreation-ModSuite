@@ -29,6 +29,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly DecisionLogGate _upgradeQuarantineLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly DecisionLogGate _batchSummaryLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly DecisionLogGate _queueWaitLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
+    private readonly Dictionary<string, TimeSpan> _nativeFailureLogTimes =
+        new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase);
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
     private IReadOnlyList<IAutoBuyCandidate>? _pendingCandidates;
     private IReadOnlyList<IAutoBuyCandidate>? _pendingActiveCandidates;
@@ -62,6 +64,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private float _secondsUntilQueuePoll;
     private bool _queueWaitingLogged;
     private int _successfulPurchasesThisSession;
+    private long _nativePurchaseAttempts;
+    private long _nativePurchaseFailures;
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
     private bool _nativeStateSignalPending;
@@ -453,7 +457,10 @@ internal sealed class AutoBuyEngine : IDisposable
             if (_incrementalCatalog is not null)
             {
                 UpdateCachedDecision(decision);
-                _incrementalCatalog.CompleteCandidateEvaluation(candidate, suppressResourceTracking);
+                _incrementalCatalog.CompleteCandidateEvaluation(
+                    candidate,
+                    suppressResourceTracking,
+                    IsPolicyExcluded(decision));
             }
             _pendingIndex++;
 
@@ -579,21 +586,16 @@ internal sealed class AutoBuyEngine : IDisposable
                 "blocked by configuration");
         }
 
+        var nativeCanPurchase = true;
+        var nativeReason = string.Empty;
         if (snapshot.Kind == AutoBuyCandidateKind.Upgrade)
         {
-            if (!candidate.CanPurchase(out var upgradeReason))
-            {
-                // Dormant Upgrades are retried by bounded lifecycle refreshes
-                // and broad completion invalidation. Keeping them subscribed
-                // to high-frequency resource quantity changes would turn every
-                // income tick into another rejected native call.
-                suppressResourceTracking = true;
-                return AutoBuyDecision.Rejected(
-                    snapshot,
-                    AutoBuyRejectionReason.NativeNotPurchasable,
-                    upgradeReason);
-            }
-
+            // The supported native UpgradeSO.CanPurchase contract includes
+            // affordability as well as lifecycle, requirements, and queue
+            // admission. Preserve that native call first, but decode its live
+            // costs before classifying a false result so genuine resource waits
+            // retain structured blockers and resource dependencies.
+            nativeCanPurchase = candidate.CanPurchase(out nativeReason);
             if (!candidate.IsAvailable())
             {
                 suppressResourceTracking = true;
@@ -619,7 +621,7 @@ internal sealed class AutoBuyEngine : IDisposable
                             dirtyCandidate.HasResolvedCosts;
 
         if (snapshot.Kind != AutoBuyCandidateKind.Upgrade &&
-            !candidate.CanPurchase(out var nativeReason))
+            !candidate.CanPurchase(out nativeReason))
         {
             return AutoBuyDecision.Rejected(
                 snapshot,
@@ -665,6 +667,20 @@ internal sealed class AutoBuyEngine : IDisposable
                 $"maxCostRatio={reserve.MaxCostToQuantityRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}; " +
                 $"limit={maximumRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}",
                 BuildAffordabilityBlockers(costs, maximumRatio));
+        }
+
+        if (!nativeCanPurchase)
+        {
+            // The cost vector passed every Automata policy, so this false
+            // result is normally a lifecycle/requirements/queue wait. Native
+            // bandwidth affordability uses missing usage rather than quantity,
+            // so retain those dependencies unless asset evidence proves the
+            // cost is ordinary.
+            suppressResourceTracking = !ContainsBandwidthCost(costs);
+            return AutoBuyDecision.Rejected(
+                snapshot,
+                AutoBuyRejectionReason.NativeNotPurchasable,
+                nativeReason);
         }
 
         var priorityRank = _config.PrioritizeCostAndQualityStructures.Value &&
@@ -802,10 +818,21 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             var recommendation = recommendations[_pendingPurchaseIndex];
-            var revalidated = EvaluateCandidate(recommendation.Candidate.Source);
+            var revalidated = EvaluateCandidate(
+                recommendation.Candidate.Source,
+                out var suppressResourceTracking);
             _rejectionTelemetry.Record(revalidated);
             if (revalidated.Kind != AutoBuyDecisionKind.Recommendation)
             {
+                if (_incrementalCatalog is not null)
+                {
+                    UpdateCachedDecision(revalidated);
+                    _incrementalCatalog.CompleteCandidateEvaluation(
+                        recommendation.Candidate.Source,
+                        suppressResourceTracking,
+                        IsPolicyExcluded(revalidated));
+                }
+
                 if (_config.IsOperationalLoggingEnabled &&
                     _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose)
                 {
@@ -815,6 +842,14 @@ internal sealed class AutoBuyEngine : IDisposable
                 }
 
                 AdvancePurchaseCandidate();
+                if (IsAffordableRepeatGroup)
+                {
+                    // The prepared group ends at its first failed live
+                    // admission. Do not consider a lower cached rank until
+                    // dirty resource and lifecycle state has settled.
+                    _pendingPurchaseIndex = recommendations.Count;
+                    _secondsUntilEvaluation = 0.0f;
+                }
 
                 if (singleStep)
                 {
@@ -839,6 +874,7 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             _pendingBatchAttempted++;
+            _nativePurchaseAttempts++;
             bool purchaseSucceeded;
             string reason;
             using (AutoBuyLifecycleSignal.EnterAutomatedMutation(
@@ -878,6 +914,16 @@ internal sealed class AutoBuyEngine : IDisposable
                         _pendingPurchaseIndex < recommendations.Count &&
                         _pendingBatchPurchased < maximumPurchases)
                     {
+                        if (!_catalog.TryGetRemainingQueueRoom(out var remainingRoom) ||
+                            remainingRoom <= queueReserve)
+                        {
+                            // Keep the already ranked next candidate prepared
+                            // while the native queue is full. It will still be
+                            // live-revalidated when a slot reopens.
+                            stoppedByQueue = true;
+                            break;
+                        }
+
                         // Preserve the configured repeat group, then settle
                         // resource invalidations and rerank dirty dependents
                         // before another cached candidate can mutate state.
@@ -887,16 +933,21 @@ internal sealed class AutoBuyEngine : IDisposable
             }
             else
             {
-                _log.LogAutomataWarning(
-                    $"Auto Buy could not purchase {recommendation.Candidate.DisplayName} " +
-                    $"({recommendation.Candidate.Uuid}): {reason}");
+                _nativePurchaseFailures++;
+                if (ShouldLogNativeFailure(recommendation.Candidate.Uuid))
+                {
+                    _log.LogAutomataWarning(
+                        $"Auto Buy could not purchase {recommendation.Candidate.DisplayName} " +
+                        $"({recommendation.Candidate.Uuid}): {reason}");
+                }
                 AdvancePurchaseCandidate();
-                if (_incrementalCatalog is not null)
+                if (_incrementalCatalog is not null || IsAffordableRepeatGroup)
                 {
                     // A native call may have spent resources or changed queue
                     // state even when post-call verification failed. Settle
                     // the invalidations before another candidate mutates.
                     _pendingPurchaseIndex = recommendations.Count;
+                    _secondsUntilEvaluation = 0.0f;
                 }
             }
 
@@ -944,7 +995,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        if (_pendingBatchPurchased > 0)
+        if (_pendingBatchAttempted > 0)
         {
             RecordAndMaybeLogBatchSummary(recommendations.Count);
         }
@@ -994,6 +1045,8 @@ internal sealed class AutoBuyEngine : IDisposable
         _log.LogAutomataInfo(
             $"Auto Buy batch summary: Batches={_diagnosticBatchCount}, " +
             $"Purchased={_diagnosticBatchPurchased}, Attempted={_diagnosticBatchAttempted}, " +
+            $"Failed={_diagnosticBatchAttempted - _diagnosticBatchPurchased}, " +
+            $"LifetimeAttempts={_nativePurchaseAttempts}, LifetimeFailures={_nativePurchaseFailures}, " +
             $"Eligible={eligibleCount}, Sizing={_config.AutoBuyBatchSizing.Value}, " +
             $"QueueWaited={_diagnosticQueueWaitedBatchCount > 0}, " +
             $"CpuSliced={_diagnosticCpuSlicedBatchCount > 0}, " +
@@ -1042,6 +1095,28 @@ internal sealed class AutoBuyEngine : IDisposable
                 Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, levels))),
             _ => 1,
         };
+    }
+
+    private bool IsAffordableRepeatGroup =>
+        !_config.RespectActionMultiplier.Value && _config.RepeatWhileAffordable.Value;
+
+    private static bool IsPolicyExcluded(AutoBuyDecision decision)
+    {
+        return decision.RejectionReason == AutoBuyRejectionReason.NotAllowed ||
+               decision.RejectionReason == AutoBuyRejectionReason.ConfigurationBlocked;
+    }
+
+    private bool ShouldLogNativeFailure(string uuid)
+    {
+        var now = _lifetime.Elapsed;
+        if (_nativeFailureLogTimes.TryGetValue(uuid, out var lastLoggedAt) &&
+            now - lastLoggedAt < TimeSpan.FromSeconds(30))
+        {
+            return false;
+        }
+
+        _nativeFailureLogTimes[uuid] = now;
+        return true;
     }
 
     private void AdvancePurchaseCandidate()
@@ -1097,6 +1172,8 @@ internal sealed class AutoBuyEngine : IDisposable
             $"Rejections={rejectionTelemetry.Rejections}; " +
             $"RepeatedUnchanged={rejectionTelemetry.RepeatedUnchangedRejections}; " +
             $"StateChanges={rejectionTelemetry.RejectionStateChanges}; " +
+            $"StateExits={rejectionTelemetry.RejectionExits}; " +
+            $"ScanLimitDeferrals={rejectionTelemetry.ScanLimitDeferrals}; " +
             $"CurrentRejected={rejectionTelemetry.CurrentRejectedCandidates}; " +
             $"ByReason={rejectionTelemetry.FormatReasonCounts()}.");
 
@@ -1290,6 +1367,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private void ResetPendingPurchaseBatch()
     {
+        _incrementalCatalog?.CompleteMutationGroup();
         _pendingPurchaseRecommendations = null;
         _pendingPurchaseIndex = 0;
         _pendingCandidateRepeats = 0;
@@ -1372,6 +1450,19 @@ internal sealed class AutoBuyEngine : IDisposable
         }
 
         return blockers;
+    }
+
+    private static bool ContainsBandwidthCost(IReadOnlyList<ResourceAdmissionCost> costs)
+    {
+        for (var i = 0; i < costs.Count; i++)
+        {
+            if (costs[i].IsBandwidth)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static float ClampInterval(float value)

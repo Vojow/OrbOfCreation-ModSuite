@@ -1,5 +1,15 @@
 # Changelog
 
+## Orb Automata 0.8.0 Beta 1 — 2026-07-17
+
+- Prepare Orb Automata 0.8.0 with typed Auto Buy rejection telemetry, structured multi-resource blockers, and separate scan-cap, rejection-transition, and native-mutation failure accounting.
+- Keep unaffordable Upgrades subscribed to their decoded resource dependencies even when native `CanPurchase()` rejects them; installed IL confirms that contract includes affordability as well as lifecycle, requirements, and queue admission.
+- Let the selected Structure or Upgrade fill the usable queue room while it remains safe, revalidating every level and ending the prepared group at the first failed live admission before reranking.
+- Cache validated queue, queued-level, and multi-buy reflection metadata while re-fetching the live global multi-buy variable for every Upgrade level, and coalesce shared resource invalidation until the owned repeat group settles.
+- Rate-limit repeated native purchase-failure examples per candidate while retaining aggregate attempts, successes, and failures.
+- Retain the next ranked candidate while the native queue is full, so each reopened slot is fed without another catalog scan; if queue room remains after a repeat group, settle dirty state and rerank before mutating a different candidate.
+- Validate the queue-feeding path against a disposable 13-resource `9e60` save: 150 native purchases completed with zero failures while candidate evaluations fell from 58,973 before the fix to 1,483 after it in comparable sustained runs.
+
 ## Orb Of Creation Mod Suite 0.3.0 Beta 1 — 2026-07-17
 
 - Unify disabled-feature configuration across the supported suite. Orb Mod Config 0.6.0 supports multiple staged prerequisites and refreshes enum dependencies immediately; Automata and Mentor now lock inactive tuning while keeping mode, shortcut, status-button, safety, and diagnostic controls usable.

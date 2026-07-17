@@ -21,27 +21,35 @@ internal sealed class AutoBuyRejectionTelemetry
 
     public long RejectionStateChanges { get; private set; }
 
+    public long RejectionExits { get; private set; }
+
+    public long ScanLimitDeferrals { get; private set; }
+
     public int CurrentRejectedCandidates => _latestRejections.Count;
 
     public void Record(AutoBuyDecision decision)
     {
+        if (decision.RejectionReason == AutoBuyRejectionReason.CandidateScanLimit)
+        {
+            ScanLimitDeferrals++;
+            return;
+        }
+
         Evaluations++;
         var uuid = decision.Candidate.Uuid;
         if (decision.Kind == AutoBuyDecisionKind.Recommendation)
         {
             Recommendations++;
-            _latestRejections.Remove(uuid);
+            if (_latestRejections.Remove(uuid))
+            {
+                RejectionExits++;
+            }
             return;
         }
 
         Rejections++;
         _rejectionsByReason.TryGetValue(decision.RejectionReason, out var reasonCount);
         _rejectionsByReason[decision.RejectionReason] = reasonCount + 1;
-
-        if (decision.RejectionReason == AutoBuyRejectionReason.CandidateScanLimit)
-        {
-            return;
-        }
 
         if (_latestRejections.TryGetValue(uuid, out var previous) && previous.HasSameBlockingCondition(decision))
         {
@@ -72,6 +80,8 @@ internal sealed class AutoBuyRejectionTelemetry
             Rejections,
             RepeatedUnchangedRejections,
             RejectionStateChanges,
+            RejectionExits,
+            ScanLimitDeferrals,
             CurrentRejectedCandidates,
             new Dictionary<AutoBuyRejectionReason, long>(_rejectionsByReason));
     }
@@ -138,6 +148,8 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
         long rejections,
         long repeatedUnchangedRejections,
         long rejectionStateChanges,
+        long rejectionExits,
+        long scanLimitDeferrals,
         int currentRejectedCandidates,
         IReadOnlyDictionary<AutoBuyRejectionReason, long> rejectionsByReason)
     {
@@ -146,6 +158,8 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
         Rejections = rejections;
         RepeatedUnchangedRejections = repeatedUnchangedRejections;
         RejectionStateChanges = rejectionStateChanges;
+        RejectionExits = rejectionExits;
+        ScanLimitDeferrals = scanLimitDeferrals;
         CurrentRejectedCandidates = currentRejectedCandidates;
         RejectionsByReason = rejectionsByReason;
     }
@@ -159,6 +173,10 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
     public long RepeatedUnchangedRejections { get; }
 
     public long RejectionStateChanges { get; }
+
+    public long RejectionExits { get; }
+
+    public long ScanLimitDeferrals { get; }
 
     public int CurrentRejectedCandidates { get; }
 

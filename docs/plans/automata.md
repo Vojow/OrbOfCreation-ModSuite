@@ -29,7 +29,7 @@ The first A1 implementation slice now covers both audited native purchase famili
 - Progression-aware spell leveling: exact native discovery, prerequisites, readiness, live cost, single-level purchase, and completed `UnlockLevelAllSpells` capability validation.
 - Disabled/Active release modes, independently configurable spell leveling, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
 
-Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases. The current `0.7.0` candidate still requires the focused desktop and Steam Deck matrix for its shared scheduling, timed concept cycling, multi-slot and zero-resource handling, progression-aware spell leveling, and unified configuration behavior.
+Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases plus a 150-purchase high-resource queue-feeding stress run with zero failures. The current `0.8.0` beta still requires Steam Deck profiling and the remaining focused desktop matrix for shared scheduling, timed concept cycling, multi-slot and zero-resource handling, progression-aware spell leveling, and unified configuration behavior.
 
 ## AutobuyOrb reference boundary
 

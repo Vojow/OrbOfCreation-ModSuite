@@ -230,7 +230,10 @@ internal sealed class AutoBuyCandidateIndex
         return new AutoBuyEvaluationBatch(_active, _dirty, firstExcluded, reconciliationPending: false);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking = false)
+    public void CompleteCandidateEvaluation(
+        IAutoBuyCandidate candidate,
+        bool suppressResourceTracking = false,
+        bool policyExcluded = false)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
@@ -246,8 +249,11 @@ internal sealed class AutoBuyCandidateIndex
         {
             RemoveDependencies(entry);
             entry.DirtyReasons = AutoBuyDirtyReason.None;
+            entry.PolicyExcluded = policyExcluded;
             return;
         }
+
+        entry.PolicyExcluded = false;
 
         if (candidate is IAutoBuyDirtyCandidate dirtyCandidate)
         {
@@ -263,10 +269,21 @@ internal sealed class AutoBuyCandidateIndex
 
     public void InvalidatePolicy()
     {
-        MarkAll(AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty);
+        foreach (var entry in _lifecycleEntries)
+        {
+            if (entry.State == AutoBuyCandidateLifecycleState.Invalid)
+            {
+                continue;
+            }
+
+            entry.PolicyExcluded = false;
+            MarkDirty(entry, AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty);
+        }
     }
 
-    public void MarkPurchaseAttempted(IAutoBuyCandidate candidate)
+    public void MarkPurchaseAttempted(
+        IAutoBuyCandidate candidate,
+        bool invalidateResourceDependents = true)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
@@ -281,6 +298,11 @@ internal sealed class AutoBuyCandidateIndex
             AutoBuyDirtyReason.ResourceDirty |
             AutoBuyDirtyReason.PriorityDirty |
             AutoBuyDirtyReason.CompletionDirty);
+
+        if (!invalidateResourceDependents)
+        {
+            return;
+        }
 
         foreach (var resourceId in entry.ResourceDependencies)
         {
@@ -452,12 +474,18 @@ internal sealed class AutoBuyCandidateIndex
             rollbackDetected |= RefreshLifecycle(entry);
             CompleteEpochValidation(entry);
             CompleteSettlementValidation(entry);
+            if (entry.PolicyExcluded)
+            {
+                entry.DirtyReasons &= ~AutoBuyDirtyReason.EvaluationDirty;
+                RemoveDependencies(entry);
+            }
+
             if (entry.State == AutoBuyCandidateLifecycleState.Invalid || !entry.IsEligibleForHotSet)
             {
                 entry.DirtyReasons = AutoBuyDirtyReason.None;
                 RemoveDependencies(entry);
             }
-            else if (!wasEligible || oldState != entry.State)
+            else if (!entry.PolicyExcluded && (!wasEligible || oldState != entry.State))
             {
                 MarkDirty(entry, AutoBuyDirtyReason.EvaluationDirty);
             }
@@ -560,8 +588,14 @@ internal sealed class AutoBuyCandidateIndex
                 refreshed,
                 AutoBuyDirtyReason.AvailabilityDirty |
                 AutoBuyDirtyReason.LevelDirty |
-                AutoBuyDirtyReason.CompletionDirty |
-                AutoBuyDirtyReason.PriorityDirty);
+                AutoBuyDirtyReason.CompletionDirty);
+
+            if (refreshed.PolicyExcluded)
+            {
+                continue;
+            }
+
+            MarkDirty(refreshed, AutoBuyDirtyReason.PriorityDirty);
 
             if (refreshed.Definition.Kind == AutoBuyCandidateKind.Structure)
             {
@@ -651,6 +685,7 @@ internal sealed class AutoBuyCandidateIndex
         entry.Epoch = _epoch;
         entry.InvalidReason = reason;
         entry.DirtyReasons = AutoBuyDirtyReason.None;
+        entry.PolicyExcluded = false;
         entry.LifecycleQueued = false;
         RemoveDependencies(entry);
     }
@@ -812,6 +847,8 @@ internal sealed class AutoBuyCandidateIndex
         public int? LastQueuedLevels { get; set; }
 
         public AutoBuyDirtyReason DirtyReasons { get; set; }
+
+        public bool PolicyExcluded { get; set; }
 
         public bool NeedsEpochValidation { get; set; }
 

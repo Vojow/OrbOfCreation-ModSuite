@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.7.0` provides Auto Buy, Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.0` adds rejection-aware, queue-filling Auto Buy to Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -76,7 +76,11 @@ Native completion signals no longer discard a safely prepared Fixed, Bulk Develo
 
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 
-Structures must pass native availability before Automata reads costs or calls the purchase contract. Upgrades must first pass native `CanPurchase()`; a rejected Upgrade is removed from high-frequency resource dependency updates and retried by bounded lifecycle maintenance or the next coalesced completion settlement. Once it becomes buyable, its exact cost dependencies are restored before ranking.
+Structures must pass native availability before Automata reads costs or calls the purchase contract. The supported native `UpgradeSO.CanPurchase()` contract combines affordability with lifecycle, requirements, and queue admission, so Automata calls it first and then decodes the exact current cost before classifying a false result. A proven reserve or affordability failure remains subscribed to its resource dependencies; a cost-safe false result is parked outside high-frequency quantity updates for bounded lifecycle or completion retry. Native bandwidth costs are explicitly identified through `ResourceSO.IsBandwidthResource()` and remain tracked because their admission uses missing usage rather than ordinary quantity.
+
+Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
+
+During an owned repeat group, the selected candidate refreshes its own cost after every level. Shared resource-dependent invalidation is coalesced and flushed once when that group ends or is cancelled, and the first failed live admission ends the group before any lower cached recommendation can mutate. If the group consumed the last usable queue slot, the next ranked candidate remains prepared across the queue wait and is live-revalidated when a slot reopens; if room remains, Automata settles and reranks before mutating a different candidate.
 
 ## Auto Cast
 

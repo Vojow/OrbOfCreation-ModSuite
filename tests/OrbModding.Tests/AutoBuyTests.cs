@@ -276,6 +276,23 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
+    public void RepeatWhileAffordable_ReranksAfterFirstFailedLiveAdmission()
+    {
+        var selected = Candidate("selected", AutoBuyCandidateKind.Structure, 10, 25);
+        var lowerRanked = Candidate("lower-ranked", AutoBuyCandidateKind.Structure, 500, 1_000);
+
+        Run(config =>
+        {
+            config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+            config.RepeatWhileAffordable.Value = true;
+            config.LeaveQueueSlots.Value = 0;
+        }, new FakeCatalog(5, selected, lowerRanked));
+
+        Assert.Equal(2, selected.PurchaseCalls);
+        Assert.Equal(0, lowerRanked.PurchaseCalls);
+    }
+
+    [Fact]
     public void RepeatWhileAffordable_RechecksIncreasingLevelCostBeforeEveryPurchase()
     {
         var candidate = Candidate(
@@ -328,6 +345,30 @@ public sealed class AutoBuyTests
 
         Assert.Equal(1, failing.PurchaseCalls);
         Assert.Equal(1, fallback.PurchaseCalls);
+    }
+
+    [Fact]
+    public void RepeatedNativeFailureWarningsAreRateLimitedPerCandidate()
+    {
+        var failing = Candidate("persistent-failure", AutoBuyCandidateKind.Structure, 1, 1_000, purchaseSucceeds: false);
+        var catalog = new FakeCatalog(4, failing);
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.RepeatWhileAffordable.Value = false;
+        var log = new ManualLogSource();
+        using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            engine.Tick(config.AutoBuyIntervalSeconds.Value);
+        }
+
+        Assert.Equal(20, failing.PurchaseCalls);
+        Assert.Single(log.Entries, entry =>
+            entry?.ToString()?.Contains("Auto Buy could not purchase", StringComparison.Ordinal) == true);
     }
 
     [Fact]

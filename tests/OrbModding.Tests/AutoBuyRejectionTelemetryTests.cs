@@ -74,6 +74,7 @@ public sealed class AutoBuyRejectionTelemetryTests
         Assert.Equal(3, result.Rejections);
         Assert.Equal(1, result.RepeatedUnchangedRejections);
         Assert.Equal(2, result.RejectionStateChanges);
+        Assert.Equal(1, result.RejectionExits);
         Assert.Equal(0, result.CurrentRejectedCandidates);
         Assert.Equal(3, result.RejectionsByReason[AutoBuyRejectionReason.AffordabilityThreshold]);
         Assert.Equal("AffordabilityThreshold=3", result.FormatReasonCounts());
@@ -102,7 +103,7 @@ public sealed class AutoBuyRejectionTelemetryTests
     }
 
     [Fact]
-    public void Telemetry_CountsScanLimitWithoutIndexingItAsCandidateState()
+    public void Telemetry_TracksScanLimitAsDeferralInsteadOfEvaluationRejection()
     {
         var candidate = new FakeCandidate("excluded-by-scan-limit");
         var telemetry = new AutoBuyRejectionTelemetry();
@@ -113,10 +114,12 @@ public sealed class AutoBuyRejectionTelemetryTests
             "candidate scan limit reached"));
 
         var result = telemetry.Snapshot();
-        Assert.Equal(1, result.Rejections);
+        Assert.Equal(0, result.Evaluations);
+        Assert.Equal(0, result.Rejections);
         Assert.Equal(0, result.RejectionStateChanges);
         Assert.Equal(0, result.CurrentRejectedCandidates);
-        Assert.Equal(1, result.RejectionsByReason[AutoBuyRejectionReason.CandidateScanLimit]);
+        Assert.Equal(1, result.ScanLimitDeferrals);
+        Assert.Empty(result.RejectionsByReason);
     }
 
     private static ResourceAdmissionCost Cost(string resourceId, double cost, double available)

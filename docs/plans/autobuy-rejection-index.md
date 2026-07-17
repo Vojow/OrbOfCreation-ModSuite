@@ -1,6 +1,6 @@
 # Auto Buy rejection-aware scheduler plan
 
-> **Lifecycle: In progress / runtime validation pending.** The portable diagnostics and rejection-state foundation are being implemented on `feature/autobuy-rejection-index`; native ordering and scheduling changes remain gated by game-backed evidence.
+> **Lifecycle: Foundation implemented / desktop stress gate passed.** Typed rejection evidence and affordable prepared groups are portable-tested on `feature/autobuy-rejection-index`. Game-backed fixed and high-resource queue-filling runs completed without native failures, and policy-excluded candidates remained parked across periodic refreshes. Threshold-indexed resource wakeups and the Steam Deck profiling matrix remain.
 
 [Back to plans](README.md) · [Orb Automata plan](automata.md)
 
@@ -33,6 +33,8 @@ Each active candidate has exactly one current scheduler state:
 7. `Invalid` — unresolved adapter data or quarantined mutation path.
 
 ## Delivery phases
+
+Current branch evidence: installed IL confirms that Upgrade `CanPurchase()` combines max-queued, affordability, availability, queued-level requirements, and queue admission. Automata therefore preserves that native call, decodes the exact current cost before classifying a false result, retains resource dependencies when its own reserve or affordability policy identifies a resource wait, and parks other ordinary-resource native rejections for bounded lifecycle retry. Bandwidth resources remain tracked because native admission uses missing usage rather than ordinary quantity.
 
 ### Phase 1 — Evidence and observability
 
@@ -72,6 +74,8 @@ Portable exit gate: abundant resources can feed every usable queue slot without 
 
 ### Phase 4 — Game-backed validation and tuning
 
+- Desktop evidence: a fixed Structure batch submitted three purchases with zero failures and CPU slicing active. After policy-exclusion parking was added, `NotAllowed` reached the 89 excluded registered candidates once and stayed flat across later 30-second summaries; the one allowed reserve-blocked candidate continued to provide resource-wakeup data.
+- A disposable 13-resource `9e60` profile completed 150 native purchases with zero failures. Retaining the next ranked candidate only across a full-queue wait reduced sustained candidate evaluations from 58,973 to 1,483 (97.5%) while preserving post-group dirty settlement whenever another queue slot remained usable.
 - Capture separate counts for evaluation rejections and native purchase failures.
 - Verify what Upgrade `CanPurchase` includes in the supported game build before changing cost-read ordering.
 - Profile scans, dirty wakeups, coordinator waits, queue waits, and native mutation duration on desktop and Steam Deck/Proton.

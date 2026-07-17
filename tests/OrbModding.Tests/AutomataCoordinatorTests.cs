@@ -730,7 +730,10 @@ public sealed class AutomataCoordinatorTests
                 false);
         }
 
-        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
+        public void CompleteCandidateEvaluation(
+            IAutoBuyCandidate candidate,
+            bool suppressResourceTracking,
+            bool policyExcluded)
         {
         }
 
@@ -743,6 +746,10 @@ public sealed class AutomataCoordinatorTests
         }
 
         public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
+        {
+        }
+
+        public void CompleteMutationGroup()
         {
         }
 

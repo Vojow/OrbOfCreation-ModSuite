@@ -39,6 +39,7 @@ internal readonly struct AutoBuyResourceSnapshot
         BigAmount effectiveAttributeCost,
         BigAmount? capacity,
         bool isAvailable,
+        bool isBandwidth,
         long epoch)
     {
         ResourceId = resourceId;
@@ -49,6 +50,7 @@ internal readonly struct AutoBuyResourceSnapshot
         EffectiveAttributeCost = effectiveAttributeCost;
         Capacity = capacity;
         IsAvailable = isAvailable;
+        IsBandwidth = isBandwidth;
         Epoch = epoch;
     }
 
@@ -67,6 +69,8 @@ internal readonly struct AutoBuyResourceSnapshot
     public BigAmount? Capacity { get; }
 
     public bool IsAvailable { get; }
+
+    public bool IsBandwidth { get; }
 
     public long Epoch { get; }
 }
@@ -309,6 +313,7 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
             !TryInvokeAmount(accessors.GetTrueQuantity, resource, out var trueQuantity) ||
             !TryInvokeAmount(accessors.GetAttributeCostMod, resource, out var attributeCost) ||
             !TryInvokeBool(accessors.IsAvailable, resource, out var isAvailable) ||
+            !TryInvokeBool(accessors.IsBandwidthResource, resource, out var isBandwidth) ||
             !TryInvokeAmount(accessors.ModifierGetValue, accessors.QualityField.GetValue(resource), out var quality))
         {
             return false;
@@ -335,6 +340,7 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
             attributeCost,
             trueCapacity,
             isAvailable,
+            isBandwidth,
             epoch);
         return true;
     }
@@ -406,6 +412,7 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
             MethodInfo getTrueQuantity,
             MethodInfo getAttributeCostMod,
             MethodInfo isAvailable,
+            MethodInfo isBandwidthResource,
             MethodInfo getTrueAmount,
             MethodInfo modifierGetValue,
             FieldInfo qualityField,
@@ -415,6 +422,7 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
             GetTrueQuantity = getTrueQuantity;
             GetAttributeCostMod = getAttributeCostMod;
             IsAvailable = isAvailable;
+            IsBandwidthResource = isBandwidthResource;
             GetTrueAmount = getTrueAmount;
             ModifierGetValue = modifierGetValue;
             QualityField = qualityField;
@@ -428,6 +436,8 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
         public MethodInfo GetAttributeCostMod { get; }
 
         public MethodInfo IsAvailable { get; }
+
+        public MethodInfo IsBandwidthResource { get; }
 
         public MethodInfo GetTrueAmount { get; }
 
@@ -448,6 +458,12 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
             var getTrueQuantity = FindNoArg(type, "GetTrueQuantity");
             var getAttributeCostMod = FindNoArg(type, "GetAttributeCostMod");
             var isAvailable = type.GetMethod("IsAvailable", ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+            var isBandwidthResource = type.GetMethod(
+                "IsBandwidthResource",
+                BindingFlags.Instance | BindingFlags.Public,
+                null,
+                Type.EmptyTypes,
+                null);
             var quality = type.GetField("quality", ReflectionUtil.InstanceFlags);
             var maxQuantity = type.GetField("maxQuantity", ReflectionUtil.InstanceFlags);
             MethodInfo? getTrueAmount = null;
@@ -467,7 +483,9 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
                 Type.EmptyTypes,
                 null);
             if (getQuantity is null || getTrueQuantity is null || getAttributeCostMod is null ||
-                isAvailable?.ReturnType != typeof(bool) || quality is null || maxQuantity is null ||
+                isAvailable?.ReturnType != typeof(bool) ||
+                isBandwidthResource?.ReturnType != typeof(bool) ||
+                quality is null || maxQuantity is null ||
                 getTrueAmount is null || getTrueAmount.GetParameters().Length != 1 ||
                 modifierGetValue is null)
             {
@@ -479,6 +497,7 @@ internal sealed class ReflectionAutoBuyResourceSnapshotReader : IAutoBuyResource
                 getTrueQuantity,
                 getAttributeCostMod,
                 isAvailable,
+                isBandwidthResource,
                 getTrueAmount,
                 modifierGetValue,
                 quality,

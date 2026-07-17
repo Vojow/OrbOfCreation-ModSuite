@@ -100,6 +100,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceSO", "IsBandwidthResource", false, "System.Boolean");
         Assert.Equal(
             "System.Collections.Generic.List`1<PersistentEffectDeprecated+Property>",
             assembly.GetFieldType("StructureSO", "structureProperties"));
