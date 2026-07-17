@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.7.0` provides Auto Buy, Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.0` adds rejection-aware, queue-filling Auto Buy to Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -21,7 +21,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
-- Structure repeat follows the live Bulk Development value.
+- The selected Structure or Upgrade repeats while it remains affordable and usable queue room remains; every level is revalidated separately.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -52,7 +52,9 @@ When `RespectActionMultiplier=true`, Automata reads the game's current action mu
 
 Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process and removed from admission, cached ranking, and pending batches. Structure purchases do not use that global and remain independently eligible.
 
-When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
+When action-multiplier handling is off, `RepeatWhileAffordable=true` keeps the selected Structure or Upgrade prepared for the queue room available at the start of its group. Automata does not divide the current balance by one potentially stale cost: it re-reads and revalidates the native cost, affordability threshold, and reserves before every level, stopping at the exact first failed admission check. This avoids a new scan/ranking rotation after every Bulk Development-sized group when resources are abundant.
+
+Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. In that fallback mode, Upgrades remain one level per ranked candidate.
 
 `PrioritizeCostAndQualityStructures=true` adds one purchase-priority tier above ordinary cost-ratio ordering. A Structure receives that tier only when its stable native effect definition and a non-mutating `ValueModifier.Adjust(1)` preview prove that it reduces `Cost`, `CostScaling`, or resource `AttributeCost`, or increases resource `Quality`. Dynamic targets, unknown properties, unreadable modifiers, and effects with the wrong direction receive no boost. The option changes ranking only after native availability, `CanPurchase`, exact current cost, affordability, reserves, allow/block lists, and queue safety have passed; it never makes a locked or unaffordable Structure eligible. Classification is lazy and cached, so it is not performed while the option is off and is not repeated in the per-frame evaluation path.
 
@@ -66,7 +68,7 @@ Auto Buy and Auto Cast register separate read and native-mutation work with the 
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
-Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels that group buys.
+Automata finishes the configured repeat group for the selected candidate, then refreshes dirty resource and cost state and reranks before mutating a different candidate. The default affordable group is capped to the usable queue room captured at group start and can end earlier on live admission failure. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels remain safe.
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
@@ -74,7 +76,11 @@ Native completion signals no longer discard a safely prepared Fixed, Bulk Develo
 
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 
-Structures must pass native availability before Automata reads costs or calls the purchase contract. Upgrades must first pass native `CanPurchase()`; a rejected Upgrade is removed from high-frequency resource dependency updates and retried by bounded lifecycle maintenance or the next coalesced completion settlement. Once it becomes buyable, its exact cost dependencies are restored before ranking.
+Structures must pass native availability before Automata reads costs or calls the purchase contract. The supported native `UpgradeSO.CanPurchase()` contract combines affordability with lifecycle, requirements, and queue admission, so Automata calls it first and then decodes the exact current cost before classifying a false result. A proven reserve or affordability failure remains subscribed to its resource dependencies; a cost-safe false result is parked outside high-frequency quantity updates for bounded lifecycle or completion retry. Native bandwidth costs are explicitly identified through `ResourceSO.IsBandwidthResource()` and remain tracked because their admission uses missing usage rather than ordinary quantity.
+
+Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
+
+During an owned repeat group, the selected candidate refreshes its own cost after every level. Shared resource-dependent invalidation is coalesced and flushed once when that group ends or is cancelled, and the first failed live admission ends the group before any lower cached recommendation can mutate. If the group consumed the last usable queue slot, the next ranked candidate remains prepared across the queue wait and is live-revalidated when a slot reopens; if room remains, Automata settles and reranks before mutating a different candidate.
 
 ## Auto Cast
 

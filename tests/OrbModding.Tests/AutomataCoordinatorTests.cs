@@ -105,6 +105,7 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
+        config.RepeatWhileAffordable.Value = false;
         config.StructureRepeatMode.Value = (AutoBuyStructureRepeatMode)repeatMode;
         config.FixedStructureLevelsPerCandidate.Value = 20;
         config.RespectActionMultiplier.Value = respectActionMultiplier;
@@ -125,6 +126,34 @@ public sealed class AutomataCoordinatorTests
         engine.Tick(0.0f);
 
         Assert.Equal(3, candidate.PurchaseCalls);
+        Assert.Equal(1, catalog.DiscoverCalls);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void AffordableRepeatGroupFeedsEveryUsableSlotWithoutRescanning(int candidateKind)
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.RepeatWhileAffordable.Value = true;
+        config.RespectActionMultiplier.Value = false;
+        config.LeaveQueueSlots.Value = 1;
+        var candidate = new BuyCandidate("affordable-repeat", (AutoBuyCandidateKind)candidateKind);
+        var catalog = new BuyCatalog(6, candidate)
+        {
+            BulkDevelopment = 2,
+        };
+        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+
+        for (var expectedPurchases = 1; expectedPurchases <= 5; expectedPurchases++)
+        {
+            engine.Tick(expectedPurchases == 1 ? 1.0f : 0.0f);
+            Assert.Equal(expectedPurchases, candidate.PurchaseCalls);
+            frame++;
+        }
+
         Assert.Equal(1, catalog.DiscoverCalls);
     }
 
@@ -417,8 +446,10 @@ public sealed class AutomataCoordinatorTests
             var catalog = new ReplayIncrementalCatalog(
                 candidates.ToArray(),
                 new IAutoBuyCandidate[] { replayedUpgrade, structure });
+            var config = Config();
+            config.RepeatWhileAffordable.Value = false;
             using var engine = BuyEngine(
-                Config(),
+                config,
                 catalog,
                 coordinator,
                 () => frame,
@@ -699,7 +730,10 @@ public sealed class AutomataCoordinatorTests
                 false);
         }
 
-        public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool policyExcluded)
+        public void CompleteCandidateEvaluation(
+            IAutoBuyCandidate candidate,
+            bool suppressResourceTracking,
+            bool policyExcluded)
         {
         }
 
@@ -712,6 +746,10 @@ public sealed class AutomataCoordinatorTests
         }
 
         public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
+        {
+        }
+
+        public void CompleteMutationGroup()
         {
         }
 

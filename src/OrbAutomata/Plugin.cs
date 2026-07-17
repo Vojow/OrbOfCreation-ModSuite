@@ -101,6 +101,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoBuyBatchSizing={_config.AutoBuyBatchSizing.Value}, " +
             $"AutoBuyBatchSize={_config.MaxPurchasesPerBatch.Value}, " +
             $"AutoBuyStructureRepeat={_config.StructureRepeatMode.Value}, " +
+            $"AutoBuyRepeatWhileAffordable={_config.RepeatWhileAffordable.Value}, " +
             $"RespectActionMultiplier={_config.RespectActionMultiplier.Value}, " +
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +

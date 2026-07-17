@@ -103,13 +103,18 @@ internal interface IAutoBuyIncrementalCatalog
 {
     AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request);
 
-    void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking);
+    void CompleteCandidateEvaluation(
+        IAutoBuyCandidate candidate,
+        bool suppressResourceTracking,
+        bool policyExcluded);
 
     void InvalidatePolicy();
 
     void BeginMutationEvaluation();
 
     void NotifyPurchaseAttempted(IAutoBuyCandidate candidate);
+
+    void CompleteMutationGroup();
 
     void NotifyStructureQueueChanged(object nativeIdentity);
 
@@ -231,6 +236,60 @@ internal enum AutoBuyDecisionKind
     Rejection
 }
 
+internal enum AutoBuyRejectionReason
+{
+    None,
+    MutationQuarantined,
+    NotAllowed,
+    ConfigurationBlocked,
+    NativeNotPurchasable,
+    Unavailable,
+    Locked,
+    CostSnapshotUnavailable,
+    InvalidReservePolicy,
+    InvalidResourceSnapshot,
+    ReserveViolation,
+    AffordabilityThreshold,
+    CandidateScanLimit,
+}
+
+internal enum AutoBuyResourceBlockerKind
+{
+    ReserveFloor,
+    AffordabilityThreshold,
+}
+
+internal readonly struct AutoBuyResourceBlocker
+{
+    public AutoBuyResourceBlocker(
+        AutoBuyResourceBlockerKind kind,
+        string resourceId,
+        string resourceName,
+        BigAmount cost,
+        BigAmount availableQuantity,
+        BigAmount requiredQuantity)
+    {
+        Kind = kind;
+        ResourceId = resourceId;
+        ResourceName = resourceName;
+        Cost = cost;
+        AvailableQuantity = availableQuantity;
+        RequiredQuantity = requiredQuantity;
+    }
+
+    public AutoBuyResourceBlockerKind Kind { get; }
+
+    public string ResourceId { get; }
+
+    public string ResourceName { get; }
+
+    public BigAmount Cost { get; }
+
+    public BigAmount AvailableQuantity { get; }
+
+    public BigAmount RequiredQuantity { get; }
+}
+
 internal sealed class AutoBuyDecision
 {
     private AutoBuyDecision(
@@ -238,13 +297,17 @@ internal sealed class AutoBuyDecision
         AutoBuyCandidateSnapshot candidate,
         double costRatio,
         int priorityRank,
-        string detail)
+        string detail,
+        AutoBuyRejectionReason rejectionReason,
+        IReadOnlyList<AutoBuyResourceBlocker> resourceBlockers)
     {
         Kind = kind;
         Candidate = candidate;
         CostRatio = costRatio;
         PriorityRank = priorityRank;
         Detail = detail;
+        RejectionReason = rejectionReason;
+        ResourceBlockers = resourceBlockers;
     }
 
     public AutoBuyDecisionKind Kind { get; }
@@ -257,17 +320,44 @@ internal sealed class AutoBuyDecision
 
     public string Detail { get; }
 
+    public AutoBuyRejectionReason RejectionReason { get; }
+
+    public IReadOnlyList<AutoBuyResourceBlocker> ResourceBlockers { get; }
+
     public static AutoBuyDecision Recommended(
         AutoBuyCandidateSnapshot candidate,
         double costRatio,
         string detail,
         int priorityRank = 0)
     {
-        return new AutoBuyDecision(AutoBuyDecisionKind.Recommendation, candidate, costRatio, priorityRank, detail);
+        return new AutoBuyDecision(
+            AutoBuyDecisionKind.Recommendation,
+            candidate,
+            costRatio,
+            priorityRank,
+            detail,
+            AutoBuyRejectionReason.None,
+            Array.Empty<AutoBuyResourceBlocker>());
     }
 
-    public static AutoBuyDecision Rejected(AutoBuyCandidateSnapshot candidate, string detail)
+    public static AutoBuyDecision Rejected(
+        AutoBuyCandidateSnapshot candidate,
+        AutoBuyRejectionReason rejectionReason,
+        string detail,
+        IReadOnlyList<AutoBuyResourceBlocker>? resourceBlockers = null)
     {
-        return new AutoBuyDecision(AutoBuyDecisionKind.Rejection, candidate, double.PositiveInfinity, 0, detail);
+        if (rejectionReason == AutoBuyRejectionReason.None)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rejectionReason));
+        }
+
+        return new AutoBuyDecision(
+            AutoBuyDecisionKind.Rejection,
+            candidate,
+            double.PositiveInfinity,
+            0,
+            detail,
+            rejectionReason,
+            resourceBlockers ?? Array.Empty<AutoBuyResourceBlocker>());
     }
 }

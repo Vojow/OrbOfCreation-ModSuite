@@ -21,9 +21,14 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private readonly Func<TimeSpan>? _readElapsed;
     private readonly AutoBuyMaintenanceCadence _maintenanceCadence;
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
+    private readonly HashSet<string> _deferredPurchaseResourceInvalidations =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
     private bool _completionEffectsDirty;
+    private bool _mutationGroupActive;
+    private MethodInfo? _getRemainingQueueRoom;
+    private MethodInfo? _getBulkDevelopment;
 
     public ReflectionAutoBuyCatalog()
         : this(null)
@@ -39,7 +44,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             SlowLifecycleRefreshPerMaintenance);
         _resourceSnapshots = new AutoBuyResourceSnapshotCache(
             new ReflectionAutoBuyResourceSnapshotReader(),
-            _index.InvalidateResource);
+            OnResourceSnapshotChanged);
     }
 
     public IEnumerable<IAutoBuyCandidate> Discover()
@@ -49,6 +54,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     public AutoBuyEvaluationBatch BeginEvaluation(AutoBuyEvaluationRequest request)
     {
+        CompleteMutationGroup();
+        FlushDeferredPurchaseInvalidations();
         if (_completionEffectsDirty)
         {
             _completionEffectsDirty = false;
@@ -77,13 +84,17 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             _index.SettlementValidationPending);
     }
 
-    public void CompleteCandidateEvaluation(IAutoBuyCandidate candidate, bool suppressResourceTracking)
+    public void CompleteCandidateEvaluation(
+        IAutoBuyCandidate candidate,
+        bool suppressResourceTracking,
+        bool policyExcluded)
     {
-        _index.CompleteCandidateEvaluation(candidate, suppressResourceTracking);
+        _index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
     }
 
     public void InvalidatePolicy()
     {
+        _deferredPurchaseResourceInvalidations.Clear();
         _index.InvalidatePolicy();
     }
 
@@ -94,18 +105,74 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     public void NotifyPurchaseAttempted(IAutoBuyCandidate candidate)
     {
-        _index.MarkPurchaseAttempted(candidate);
+        _mutationGroupActive = true;
+        if (candidate is IAutoBuyDirtyCandidate dirtyCandidate)
+        {
+            for (var i = 0; i < dirtyCandidate.ResourceDependencies.Count; i++)
+            {
+                _deferredPurchaseResourceInvalidations.Add(dirtyCandidate.ResourceDependencies[i]);
+            }
+
+            // The selected candidate must refresh its own live cost and level
+            // before the next repeated level, but shared dependents can settle
+            // once when the owned group ends.
+            _index.MarkPurchaseAttempted(candidate, invalidateResourceDependents: false);
+        }
+        else
+        {
+            _index.MarkPurchaseAttempted(candidate);
+        }
         _resourceSnapshots.BeginLazyEpoch();
+    }
+
+    public void CompleteMutationGroup()
+    {
+        _mutationGroupActive = false;
+    }
+
+    private void FlushDeferredPurchaseInvalidations()
+    {
+        if (_deferredPurchaseResourceInvalidations.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var resourceId in _deferredPurchaseResourceInvalidations)
+        {
+            _index.InvalidateResource(resourceId, AutoBuyResourceChange.Quantity);
+        }
+
+        _deferredPurchaseResourceInvalidations.Clear();
+    }
+
+    private void OnResourceSnapshotChanged(string resourceId, AutoBuyResourceChange change)
+    {
+        if (ShouldDeferResourceInvalidation(_mutationGroupActive, change))
+        {
+            _deferredPurchaseResourceInvalidations.Add(resourceId);
+            return;
+        }
+
+        _index.InvalidateResource(resourceId, change);
+    }
+
+    internal static bool ShouldDeferResourceInvalidation(
+        bool mutationGroupActive,
+        AutoBuyResourceChange change)
+    {
+        return mutationGroupActive && change == AutoBuyResourceChange.Quantity;
     }
 
     public void NotifyStructureQueueChanged(object nativeIdentity)
     {
+        CompleteMutationGroup();
         _index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Structure);
         _resourceSnapshots.BeginLazyEpoch();
     }
 
     public void NotifyUpgradeQueueChanged(object nativeIdentity)
     {
+        CompleteMutationGroup();
         _index.InvalidateQueue(nativeIdentity, AutoBuyCandidateKind.Upgrade);
         _resourceSnapshots.BeginLazyEpoch();
     }
@@ -117,6 +184,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     public void InvalidateLifecycle()
     {
+        _mutationGroupActive = false;
+        _deferredPurchaseResourceInvalidations.Clear();
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
         _completionEffectsDirty = false;
@@ -128,8 +197,11 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
     {
         remainingRoom = 0;
-        var type = ReflectionUtil.FindLoadedType("ActionManager");
-        var method = type?.GetMethod("GetRemainingRoom", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+        var method = ResolveStaticNoArgMethod(
+            ref _getRemainingQueueRoom,
+            "ActionManager",
+            "GetRemainingRoom",
+            typeof(int));
         try
         {
             var value = method?.Invoke(null, Array.Empty<object>());
@@ -149,14 +221,19 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     public bool TryGetBulkDevelopment(out int levels)
     {
         levels = 1;
-        var player = ReflectionUtil.FindLoadedType("Player");
-        var method = player?.GetMethod("GetBulkDevelopment", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+        var method = ResolveStaticNoArgMethod(
+            ref _getBulkDevelopment,
+            "Player",
+            "GetBulkDevelopment",
+            expectedReturnType: null);
         try
         {
             var variable = method?.Invoke(null, Array.Empty<object>());
-            if (variable is not null && ReflectionUtil.TryReadNumeric(variable, out var value, "AsInt"))
+            if (variable is not null &&
+                NativeIntVariableContract.TryResolve(variable, out var contract, out _) &&
+                contract.TryRead(variable, out var value, out _))
             {
-                levels = Math.Max(1, (int)value);
+                levels = Math.Max(1, value);
                 return true;
             }
         }
@@ -170,26 +247,51 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     public bool TryGetActionMultiplier(out int multiplier)
     {
         multiplier = 1;
-        var globals = ReflectionUtil.FindLoadedType("GlobalVariables");
-        var method = globals?.GetMethod("GetMultiBuy", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
-        try
+        if (NativeGlobalVariableAccess.TryGetMultiBuy(
+                out var variable,
+                out var contract,
+                out _) &&
+            contract.TryRead(variable, out var value, out _))
         {
-            var variable = method?.Invoke(null, Array.Empty<object>());
-            if (variable is not null && ReflectionUtil.TryReadNumeric(variable, out var value, "AsInt"))
-            {
-                multiplier = Math.Max(1, (int)value);
-                return true;
-            }
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
+            multiplier = Math.Max(1, value);
+            return true;
         }
 
         return false;
     }
 
+    private static MethodInfo? ResolveStaticNoArgMethod(
+        ref MethodInfo? cached,
+        string typeName,
+        string methodName,
+        Type? expectedReturnType)
+    {
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var type = ReflectionUtil.FindLoadedType(typeName);
+        var method = type?.GetMethod(
+            methodName,
+            BindingFlags.Static | BindingFlags.Public,
+            null,
+            Type.EmptyTypes,
+            null);
+        if (method is null ||
+            (expectedReturnType is not null && method.ReturnType != expectedReturnType))
+        {
+            return null;
+        }
+
+        cached = method;
+        return method;
+    }
+
     public void Dispose()
     {
+        _mutationGroupActive = false;
+        _deferredPurchaseResourceInvalidations.Clear();
         _registryReconciliation = null;
         _resourceSnapshots.Clear();
         _index.Clear();
@@ -504,7 +606,8 @@ internal sealed class ReflectionAutoBuyCandidate :
                 definition.ResourceName,
                 definition.NominalCost,
                 resource.TrueQuantity,
-                resource.Capacity));
+                resource.Capacity,
+                resource.IsBandwidth));
         }
 
         return _admissionCosts;
@@ -723,7 +826,12 @@ internal sealed class ReflectionAutoBuyCandidate :
     private bool InvokeAndVerify(MethodInfo method, object[] arguments, string levelMethod, out string reason)
     {
         reason = string.Empty;
-        ReflectionUtil.TryReadNumeric(_source, out var before, levelMethod);
+        if (!TryInvoke(_getQueuedState, out int before))
+        {
+            reason = $"native {levelMethod} was unavailable before purchase";
+            return false;
+        }
+
         try
         {
             method.Invoke(_source, arguments);
@@ -739,7 +847,7 @@ internal sealed class ReflectionAutoBuyCandidate :
             return false;
         }
 
-        if (!ReflectionUtil.TryReadNumeric(_source, out var after, levelMethod) || after <= before)
+        if (!TryInvoke(_getQueuedState, out int after) || after <= before)
         {
             reason = $"native purchase did not increase {levelMethod}";
             return false;
@@ -794,23 +902,250 @@ internal sealed class ReflectionAutoBuyCandidate :
     }
 }
 
+internal sealed class NativeIntVariableContract
+{
+    private static readonly object CacheGate = new object();
+    private static readonly Dictionary<Type, NativeIntVariableContract> Cache =
+        new Dictionary<Type, NativeIntVariableContract>();
+    private readonly Type _variableType;
+    private readonly MethodInfo _asInt;
+    private readonly MethodInfo _setValue;
+
+    private NativeIntVariableContract(Type variableType, MethodInfo asInt, MethodInfo setValue)
+    {
+        _variableType = variableType;
+        _asInt = asInt;
+        _setValue = setValue;
+    }
+
+    internal static int ResolutionCount { get; private set; }
+
+    public static bool TryResolve(
+        object variable,
+        out NativeIntVariableContract contract,
+        out string reason)
+    {
+        var variableType = variable.GetType();
+        lock (CacheGate)
+        {
+            if (Cache.TryGetValue(variableType, out contract!))
+            {
+                reason = string.Empty;
+                return true;
+            }
+        }
+
+        if (!string.Equals(variableType.Name, "IntVariable", StringComparison.Ordinal))
+        {
+            contract = null!;
+            reason = $"unexpected global multi-buy variable type {variableType.FullName}";
+            return false;
+        }
+
+        var asInt = variableType.GetMethod(
+            "AsInt",
+            BindingFlags.Instance | BindingFlags.Public,
+            null,
+            Type.EmptyTypes,
+            null);
+        var setValue = variableType.GetMethod(
+            "SetValue",
+            BindingFlags.Instance | BindingFlags.Public,
+            null,
+            new[] { typeof(int) },
+            null);
+        if (asInt?.ReturnType != typeof(int) || setValue?.ReturnType != typeof(void))
+        {
+            contract = null!;
+            reason = "global multi-buy requires exact IntVariable.AsInt() and SetValue(int) contracts";
+            return false;
+        }
+
+        contract = new NativeIntVariableContract(variableType, asInt, setValue);
+        lock (CacheGate)
+        {
+            Cache[variableType] = contract;
+            ResolutionCount++;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    public bool TryRead(object variable, out int value, out string reason)
+    {
+        if (variable.GetType() != _variableType)
+        {
+            value = 0;
+            reason = "global multi-buy variable runtime type changed";
+            return false;
+        }
+
+        try
+        {
+            if (_asInt.Invoke(variable, Array.Empty<object>()) is int current)
+            {
+                value = current;
+                reason = string.Empty;
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        {
+            value = 0;
+            reason = DescribeException(ex);
+            return false;
+        }
+
+        value = 0;
+        reason = "global multi-buy AsInt() did not return Int32";
+        return false;
+    }
+
+    public bool TrySet(object variable, int value, out string reason)
+    {
+        if (variable.GetType() != _variableType)
+        {
+            reason = "global multi-buy variable runtime type changed";
+            return false;
+        }
+
+        try
+        {
+            _setValue.Invoke(variable, new object[] { value });
+            reason = string.Empty;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            reason = DescribeException(ex);
+            return false;
+        }
+    }
+
+    internal static void ResetForTests()
+    {
+        lock (CacheGate)
+        {
+            Cache.Clear();
+            ResolutionCount = 0;
+        }
+    }
+
+    private static string DescribeException(Exception exception)
+    {
+        return exception is TargetInvocationException { InnerException: not null } target
+            ? target.InnerException.Message
+            : exception.Message;
+    }
+}
+
+internal static class NativeGlobalVariableAccess
+{
+    private static readonly object ContractGate = new object();
+    private static MethodInfo? _getMultiBuy;
+
+    internal static int ResolutionCount { get; private set; }
+
+    public static bool TryGetMultiBuy(
+        out object variable,
+        out NativeIntVariableContract contract,
+        out string reason)
+    {
+        variable = null!;
+        contract = null!;
+        MethodInfo? getMultiBuy;
+        lock (ContractGate)
+        {
+            getMultiBuy = _getMultiBuy;
+        }
+
+        if (getMultiBuy is null)
+        {
+            var globals = ReflectionUtil.FindLoadedType("GlobalVariables");
+            var resolved = globals?.GetMethod(
+                "GetMultiBuy",
+                BindingFlags.Static | BindingFlags.Public,
+                null,
+                Type.EmptyTypes,
+                null);
+            if (resolved is null ||
+                !string.Equals(resolved.ReturnType.Name, "IntVariable", StringComparison.Ordinal))
+            {
+                reason = "GlobalVariables.GetMultiBuy() -> IntVariable contract unavailable";
+                return false;
+            }
+
+            lock (ContractGate)
+            {
+                _getMultiBuy ??= resolved;
+                getMultiBuy = _getMultiBuy;
+                ResolutionCount++;
+            }
+        }
+
+        try
+        {
+            variable = getMultiBuy.Invoke(null, Array.Empty<object>())!;
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        {
+            reason = ex is TargetInvocationException { InnerException: not null } target
+                ? target.InnerException.Message
+                : ex.Message;
+            return false;
+        }
+
+        if (variable is null)
+        {
+            reason = "global multi-buy value unavailable";
+            return false;
+        }
+
+        if (variable.GetType() != getMultiBuy.ReturnType)
+        {
+            reason = $"global multi-buy runtime type {variable.GetType().FullName} did not match " +
+                     $"{getMultiBuy.ReturnType.FullName}";
+            return false;
+        }
+
+        return NativeIntVariableContract.TryResolve(variable, out contract, out reason);
+    }
+
+    internal static void ResetForTests()
+    {
+        lock (ContractGate)
+        {
+            _getMultiBuy = null;
+            ResolutionCount = 0;
+        }
+    }
+}
+
 internal sealed class NativeMultiBuyScope : IDisposable
 {
     private static readonly DecisionLogGate FailureLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private static readonly System.Diagnostics.Stopwatch Lifetime = System.Diagnostics.Stopwatch.StartNew();
     private readonly object _variable;
-    private readonly MethodInfo _setValue;
+    private readonly NativeIntVariableContract _contract;
     private readonly int _originalValue;
     private static bool _mutationQuarantined;
     private static string _quarantineReason = string.Empty;
     private bool _disposed;
 
-    private NativeMultiBuyScope(object variable, MethodInfo setValue, int originalValue)
+    private NativeMultiBuyScope(
+        object variable,
+        NativeIntVariableContract contract,
+        int originalValue)
     {
         _variable = variable;
-        _setValue = setValue;
+        _contract = contract;
         _originalValue = originalValue;
     }
+
+    internal static int GlobalContractResolutionCount => NativeGlobalVariableAccess.ResolutionCount;
+
+    internal static int VariableContractResolutionCount => NativeIntVariableContract.ResolutionCount;
 
     public static bool TryEnterOne(out NativeMultiBuyScope scope, out string reason)
     {
@@ -822,42 +1157,16 @@ internal sealed class NativeMultiBuyScope : IDisposable
             return false;
         }
 
-        var globals = ReflectionUtil.FindLoadedType("GlobalVariables");
-        var getMultiBuy = globals?.GetMethod("GetMultiBuy", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
-        object? variable;
-        try
+        if (!NativeGlobalVariableAccess.TryGetMultiBuy(out var variable, out var contract, out reason) ||
+            !contract.TryRead(variable, out var originalValue, out reason))
         {
-            variable = getMultiBuy?.Invoke(null, Array.Empty<object>());
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.Message;
             return false;
         }
 
-        if (variable is null || !ReflectionUtil.TryReadNumeric(variable, out var original, "AsInt"))
+        if (!contract.TrySet(variable, 1, out var setterFailure))
         {
-            reason = "global multi-buy value unavailable";
-            return false;
-        }
-
-        var setValue = variable.GetType().GetMethod("SetValue", ReflectionUtil.InstanceFlags, null, new[] { typeof(int) }, null);
-        if (setValue is null)
-        {
-            reason = "global multi-buy SetValue(int) unavailable";
-            return false;
-        }
-
-        var originalValue = (int)original;
-        try
-        {
-            setValue.Invoke(variable, new object[] { 1 });
-        }
-        catch (Exception ex)
-        {
-            var originalFailure = DescribeException(ex);
-            var restored = TryRestore(variable, setValue, originalValue, out var restorationDetail);
-            reason = $"global multi-buy SetValue(1) failed: {originalFailure}; {restorationDetail}";
+            var restored = TryRestore(variable, contract, originalValue, out var restorationDetail);
+            reason = $"global multi-buy SetValue(1) failed: {setterFailure}; {restorationDetail}";
             if (!restored)
             {
                 Quarantine(reason);
@@ -870,9 +1179,9 @@ internal sealed class NativeMultiBuyScope : IDisposable
             return false;
         }
 
-        if (!ReflectionUtil.TryReadNumeric(variable, out var enteredValue, "AsInt") || enteredValue != 1)
+        if (!contract.TryRead(variable, out var enteredValue, out _) || enteredValue != 1)
         {
-            var restored = TryRestore(variable, setValue, originalValue, out var restorationDetail);
+            var restored = TryRestore(variable, contract, originalValue, out var restorationDetail);
             reason = $"global multi-buy SetValue(1) could not be verified; {restorationDetail}";
             if (!restored)
             {
@@ -886,7 +1195,7 @@ internal sealed class NativeMultiBuyScope : IDisposable
             return false;
         }
 
-        scope = new NativeMultiBuyScope(variable, setValue, originalValue);
+        scope = new NativeMultiBuyScope(variable, contract, originalValue);
         return true;
     }
 
@@ -898,7 +1207,7 @@ internal sealed class NativeMultiBuyScope : IDisposable
         }
 
         _disposed = true;
-        if (!TryRestore(_variable, _setValue, _originalValue, out var restorationDetail))
+        if (!TryRestore(_variable, _contract, _originalValue, out var restorationDetail))
         {
             Quarantine($"global multi-buy cleanup failed: {restorationDetail}");
         }
@@ -920,25 +1229,23 @@ internal sealed class NativeMultiBuyScope : IDisposable
     {
         _mutationQuarantined = false;
         _quarantineReason = string.Empty;
+        NativeGlobalVariableAccess.ResetForTests();
+        NativeIntVariableContract.ResetForTests();
     }
 
     private static bool TryRestore(
         object variable,
-        MethodInfo setValue,
+        NativeIntVariableContract contract,
         int originalValue,
         out string detail)
     {
         string? setterFailure = null;
-        try
+        if (!contract.TrySet(variable, originalValue, out var failure))
         {
-            setValue.Invoke(variable, new object[] { originalValue });
-        }
-        catch (Exception ex)
-        {
-            setterFailure = DescribeException(ex);
+            setterFailure = failure;
         }
 
-        if (ReflectionUtil.TryReadNumeric(variable, out var restoredValue, "AsInt") && restoredValue == originalValue)
+        if (contract.TryRead(variable, out var restoredValue, out _) && restoredValue == originalValue)
         {
             detail = setterFailure is null
                 ? $"restoration to {originalValue} verified"
@@ -950,13 +1257,6 @@ internal sealed class NativeMultiBuyScope : IDisposable
             ? $"restoration to {originalValue} could not be verified"
             : $"restoration setter threw ({setterFailure}) and value {originalValue} could not be verified";
         return false;
-    }
-
-    private static string DescribeException(Exception exception)
-    {
-        return exception is TargetInvocationException { InnerException: not null } target
-            ? target.InnerException.Message
-            : exception.Message;
     }
 
     private static void Quarantine(string reason)

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>OrbAutomata</AssemblyName>
     <RootNamespace>OrbAutomata</RootNamespace>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <RequireGameReferences>true</RequireGameReferences>
     <Description>Safe configurable buying and progression automation for Orb Of Creation.</Description>
   </PropertyGroup>

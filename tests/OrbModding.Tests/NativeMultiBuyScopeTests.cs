@@ -63,6 +63,25 @@ public sealed class NativeMultiBuyScopeTests : IDisposable
         Assert.False(NativeMultiBuyScope.IsMutationQuarantined);
     }
 
+    [Fact]
+    public void CachedContractStillFetchesTheLiveVariableForEveryLevel()
+    {
+        var first = GlobalVariables.MultiBuy;
+        Assert.True(NativeMultiBuyScope.TryEnterOne(out var firstScope, out var reason), reason);
+        firstScope.Dispose();
+
+        var second = new IntVariable { Value = 9 };
+        GlobalVariables.MultiBuy = second;
+        Assert.True(NativeMultiBuyScope.TryEnterOne(out var secondScope, out reason), reason);
+        Assert.Equal(7, first.Value);
+        Assert.Equal(1, second.Value);
+        secondScope.Dispose();
+
+        Assert.Equal(9, second.Value);
+        Assert.Equal(1, NativeMultiBuyScope.GlobalContractResolutionCount);
+        Assert.Equal(1, NativeMultiBuyScope.VariableContractResolutionCount);
+    }
+
     public void Dispose()
     {
         GlobalVariables.MultiBuy = new IntVariable();
