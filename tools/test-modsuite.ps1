@@ -89,6 +89,15 @@ try {
             Invoke-DotNet @('build', $build.Project, '-c', 'Release')
             Assert-PluginOutput -ProjectName $build.Name -PluginAssembly $build.Assembly
         }
+
+        Write-Host 'Building experimental plugins against the installed game references...'
+        $experimentalBuilds = @(
+            [pscustomobject]@{ Project = 'src/OrbQuietReflection/OrbQuietReflection.csproj'; Name = 'OrbQuietReflection'; Assembly = 'OrbQuietReflection.dll' }
+        )
+        foreach ($build in $experimentalBuilds) {
+            Invoke-DotNet @('build', $build.Project, '-c', 'Release')
+            Assert-PluginOutput -ProjectName $build.Name -PluginAssembly $build.Assembly
+        }
     }
 }
 finally {

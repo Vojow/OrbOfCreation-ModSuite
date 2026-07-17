@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrbQuietReflection</AssemblyName>
+    <RootNamespace>OrbQuietReflection</RootNamespace>
+    <Version>0.1.0</Version>
+    <RequireGameReferences>true</RequireGameReferences>
+    <Description>Suppress Reflective passive-ability splash notifications without changing their effects.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OrbModding.Common\OrbModding.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrbModding.Tests" />
+  </ItemGroup>
+</Project>

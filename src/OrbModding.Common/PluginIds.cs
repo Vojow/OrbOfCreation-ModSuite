@@ -16,5 +16,9 @@ public static class PluginIds
     public const string MentorName = "Orb Mentor";
     public const string MentorVersion = "0.3.0";
 
+    public const string QuietReflectionGuid = "dev.vojow.orbofcreation.quietreflection";
+    public const string QuietReflectionName = "Orb Quiet Reflection";
+    public const string QuietReflectionVersion = "0.1.0";
+
     public const string Version = "0.3.0";
 }

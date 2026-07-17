@@ -139,6 +139,20 @@ public interface ITooltipable
 
 public class TooltipableObject : UnityEngine.ScriptableObject { }
 
+public class PassiveAbilityTypeSO
+{
+    public Guid Guid { get; set; }
+
+    public Guid GetGuid() => Guid;
+}
+
+public class PassiveAbilitySO
+{
+    public List<PassiveAbilityTypeSO> passiveTypes = new List<PassiveAbilityTypeSO>();
+
+    public bool IsQuiet() => false;
+}
+
 public class TooltipNode
 {
     public TooltipNode(string text) { }

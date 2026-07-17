@@ -320,6 +320,20 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void QuietReflection_MatchesNativePassiveNotificationContract()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<PassiveAbilityTypeSO>",
+            assembly.GetFieldType("PassiveAbilitySO", "passiveTypes"));
+        AssertMethod(assembly, "PassiveAbilitySO", "IsQuiet", false, "System.Boolean");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "PassiveAbility", "EnterCooldownEffects", false, "System.Void", "ScalingInfo");
+        AssertMethod(assembly, "PassiveAbility", "ExitCooldownEffects", false, "System.Void", "ScalingInfo");
+    }
+
+    [GameAssemblyFact]
     public void ModConfigNavigation_MatchesKnownNativeLayout()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

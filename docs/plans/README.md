@@ -14,6 +14,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |
 | [Orb Mentor](mentor.md) | Beta / runtime validation pending | Equipped-source and highest-only spell policies are released; extended interactive validation remains. |
 | [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) | Beta / runtime validation pending | Independent, disabled-by-default domains are released; interactive native-progression and performance gates remain. |
+| [Orb Quiet Reflection](quiet-reflection.md) | Experimental | Reflective passive splash-popup suppression; interactive validation pending. |
 | [Orb Insights](insights.md) | Planned | Design only. |
 | [Orb Toolbox](toolbox.md) | Planned | Design only. |
 

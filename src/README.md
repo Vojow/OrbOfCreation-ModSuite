@@ -17,6 +17,8 @@ Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally
 
 Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance source lives only on `codex/experimental-chronomancer-resonance` and must not be inferred from old build-output directories.
 
+`OrbQuietReflection` is tracked as a standalone experimental plugin. It overrides only the native quiet query for passives carrying the stable Reflective passive-type UUID; native effect execution remains authoritative. It is excluded from supported suite packages until interactive effect and resource-delta validation passes.
+
 ## Shared gameplay controls
 
 Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.

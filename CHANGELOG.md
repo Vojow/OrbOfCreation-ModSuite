@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the experimental Orb Quiet Reflection 0.1.0 plugin, which suppresses Reflective learning passive splash popups without changing effects, cooldowns, or saves.
+
 ## Orb Of Creation Mod Suite 0.3.0 Beta 1 — 2026-07-17
 
 - Unify disabled-feature configuration across the supported suite. Orb Mod Config 0.6.0 supports multiple staged prerequisites and refreshes enum dependencies immediately; Automata and Mentor now lock inactive tuning while keeping mode, shortcut, status-button, safety, and diagnostic controls usable.
