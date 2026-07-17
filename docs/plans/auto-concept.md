@@ -436,7 +436,7 @@ Names and defaults remain subject to runtime measurement and player approval.
 
 ### Balancing
 
-- `RebalanceIntervalSeconds`: default 300 seconds, configurable from 60 through 1800 seconds.
+- `RebalanceIntervalSeconds`: default 300 seconds, configurable from 10 through 1800 seconds.
 - `UseAllAvailableConceptSlots`: proposed default true.
 - `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
 - `MinimumTrainingDurationMinutes`: proposed default 3 minutes to prevent churn.

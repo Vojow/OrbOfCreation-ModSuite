@@ -90,7 +90,7 @@ Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by 
 
 `Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
-`RebalanceIntervalSeconds` defaults to 300 seconds and accepts 60 through 1800. Existing `RebalanceIntervalMinutes` values migrate to seconds automatically.
+`RebalanceIntervalSeconds` defaults to 300 seconds and accepts 10 through 1800. Existing `RebalanceIntervalMinutes` values migrate to seconds automatically.
 
 Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 

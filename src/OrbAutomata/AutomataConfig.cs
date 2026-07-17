@@ -315,7 +315,7 @@ internal sealed class AutomataConfig
             "Seconds between ordinary mastery rebalances. Lifecycle, mastery, slot, and safety changes can trigger an earlier pass.",
             17,
             10,
-            new AcceptableValueRange<int>(60, 1800));
+            new AcceptableValueRange<int>(10, 1800));
 
         var legacyDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalMinutes");
         var legacyMinutes = config.Bind(
@@ -328,7 +328,7 @@ internal sealed class AutomataConfig
         {
             result.Value = Math.Clamp(
                 (int)Math.Round(legacyMinutes * 60.0f, MidpointRounding.AwayFromZero),
-                60,
+                10,
                 1800);
         }
 

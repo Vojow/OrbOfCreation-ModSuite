@@ -231,7 +231,7 @@ internal sealed class AutoConceptController : IDisposable
 
         _secondsUntilEvaluation = Math.Clamp(
             _config.AutoConceptRebalanceIntervalSeconds.Value,
-            60,
+            10,
             1800);
     }
 

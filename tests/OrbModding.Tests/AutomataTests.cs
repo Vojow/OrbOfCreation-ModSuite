@@ -80,6 +80,7 @@ public sealed class AutomataTests
     }
 
     [Theory]
+    [InlineData(0.1f, 10)]
     [InlineData(1.0f, 60)]
     [InlineData(2.5f, 150)]
     [InlineData(30.0f, 1800)]
@@ -100,11 +101,11 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_PreservesExistingSecondsSetting()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 180, "Current interval.");
+        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Current interval.");
 
         var config = AutomataConfig.Bind(configFile);
 
-        Assert.Equal(180, config.AutoConceptRebalanceIntervalSeconds.Value);
+        Assert.Equal(10, config.AutoConceptRebalanceIntervalSeconds.Value);
     }
 
     [Fact]
