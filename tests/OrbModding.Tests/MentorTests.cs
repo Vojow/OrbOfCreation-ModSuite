@@ -83,6 +83,41 @@ public sealed class MentorTests
     }
 
     [Fact]
+    public void PendingGrantsKeepDifferentSourceMasteryCeilingsSeparate()
+    {
+        var engine = new MentorEngine();
+        engine.Consolidate(new MentorGrant("recipient", new MentorAmount(1, 3), 4));
+        engine.Consolidate(new MentorGrant("recipient", new MentorAmount(2, 3), 7));
+
+        Assert.Equal(2, engine.PendingCount);
+        var grants = engine.Take(2);
+        Assert.Equal(new[] { 4, 7 }, grants.Select(grant => grant.MasteryCeilingExclusive));
+    }
+
+    [Fact]
+    public void EquippedSourceSharesOnlyBelowItsOwnMastery()
+    {
+        var relationship = new MentorRelationshipSnapshot(
+            3,
+            9,
+            new[]
+            {
+                new MentorRecipe("source", 4, true),
+                new MentorRecipe("lower", 3, true),
+                new MentorRecipe("equal", 4, true),
+                new MentorRecipe("higher", 8, true),
+            },
+            new[] { new MentorRecipe("lower", 3, true) });
+        var captured = new MentorCaptureKey(new object(), "source", 4, true, relationship: relationship);
+
+        var recipients = relationship.ForEquippedCapture(captured);
+
+        Assert.Equal(4, recipients.HighestMastery);
+        Assert.Equal("lower", Assert.Single(recipients.Recipients).Uuid);
+        Assert.Same(recipients, relationship.ForEquippedCapture(captured));
+    }
+
+    [Fact]
     public void ReplenishingEarlyRecipientsCannotStarveLaterRecipients()
     {
         var engine = new MentorEngine();
@@ -127,6 +162,9 @@ public sealed class MentorTests
         Assert.Equal(10.0, config.ArtifactSharePercent.Value);
         Assert.False(config.AlchemyEnabled.Value);
         Assert.Equal(10.0, config.AlchemySharePercent.Value);
+        Assert.Equal(2, config.OperationsPerFrame.Value);
+        Assert.Equal(0.5, config.CpuBudgetMilliseconds.Value);
+        Assert.Equal(MentorSpellSourcePolicy.EquippedSpells, config.SpellSourcePolicy.Value);
     }
 
     [Fact]

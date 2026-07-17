@@ -1,6 +1,6 @@
 # Entity correlations
 
-[Back to index](README.md) · [Entity catalog](entity-catalog.md) · [Global stats](global-stats-catalog.md)
+[Back to index](README.md) · [Entity catalog](entity-catalog.md)
 
 ## Reading this map
 
@@ -119,7 +119,7 @@ Correlations and implications:
 - Achievements contribute raw values to Achievement Strength and can also have their own completion effects.
 - Achievement Strength is therefore a derived global driver, not a replacement for individual achievement completion data.
 
-Mod guidance: Achievement Resonance should attach new persistent effects to Achievement Strength. It should not multiply `AchievementSO.GetTotalAchievementStrength()`, because that would amplify every existing consumer too.
+Mod guidance: future achievement-driven effects should attach narrowly scoped persistent effects to Achievement Strength. They should not multiply `AchievementSO.GetTotalAchievementStrength()`, because that would amplify every existing consumer too.
 
 ## Alchemy and rituals
 
@@ -223,4 +223,4 @@ Use this order when exploring a system:
 6. Observe related list variables for live instances and state.
 7. Use names only for logging and human-readable configuration.
 
-This approach supports Toolbox, Insights, Automata, and Achievement Resonance without maintaining separate hard-coded relationship lists for each plugin.
+This approach supports Toolbox, Insights, Automata, and future modules without maintaining separate hard-coded relationship lists for each plugin.

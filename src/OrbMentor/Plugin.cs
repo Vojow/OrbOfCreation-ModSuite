@@ -14,11 +14,13 @@ namespace OrbMentor;
 [BepInPlugin(PluginIds.MentorGuid, PluginIds.MentorName, PluginIds.MentorVersion)]
 public sealed class Plugin : BaseUnityPlugin
 {
+    private const float UiRetryIntervalSeconds = 5.0f;
     private Harmony? _harmony;
     private MentorConfig? _config;
     private MentorRuntime? _runtime;
     private MentorToggleButton? _button;
     private float _uiRetry;
+    private bool _wasActive;
     internal static Plugin? Instance { get; private set; }
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -27,19 +29,44 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
         _config = MentorConfig.Bind(Config);
-        _runtime = new MentorRuntime(_config, Logger);
+        _runtime = new MentorRuntime(
+            _config,
+            Logger,
+            SuitePerformanceCoordinator.Shared,
+            () => Time.frameCount);
+        _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
         var target = AccessTools.Method("SpellRecipeSO:GainMasteryExp");
-        if (target is null) { Logger.LogError("Orb Mentor blocked: native GainMasteryExp hook unavailable."); return; }
+        if (target is null) { _runtime.BlockPermanent("native GainMasteryExp hook unavailable"); return; }
         _harmony = new Harmony(PluginIds.MentorGuid);
-        _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain)));
-        PatchOptional("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), postfix: true);
-        PatchOptional("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), postfix: false);
-        PatchFinalizer("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick));
-        PatchOptional("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), postfix: false);
+        try { _harmony.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain))); }
+        catch (Exception ex)
+        {
+            _runtime.BlockPermanent($"native GainMasteryExp hook failed: {ex.GetBaseException().Message}");
+            return;
+        }
+        PatchDomainRequired("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), MentorDomain.Artifacts, postfix: false);
+        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick), MentorDomain.Artifacts, postfix: false, finalizer: true);
+        PatchDomainRequired("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), MentorDomain.Artifacts, postfix: false);
+        PatchRequired("SpellRecipeSO:Discover", nameof(AfterSpellProgression));
+        PatchRequired("SpellRecipeSO:PurchaseLevel", nameof(AfterSpellProgression));
+        PatchDomainRequired("AlchemyRecipeSO:Discover", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("AlchemyRecipeSO:ApplyMastery", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:Discover", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
+        PatchDomainRequired("EquipmentSO:Create", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
+        PatchDomainRequired("EquipmentSO:GainMasteryLevels", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
+        PatchRequired("SpellRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
+        PatchDomainRequired("AlchemyRecipeSO:ResetData", nameof(AfterAlchemyNativeReset), MentorDomain.Alchemy, postfix: true);
+        PatchDomainRequired("EquipmentSO:ResetData", nameof(AfterArtifactNativeReset), MentorDomain.Artifacts, postfix: true);
+        PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
+        PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
+        PatchOptional("SpellManager:AddSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
+        PatchOptional("SpellManager:RemoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
+        PatchOptional("SpellManager:MoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
         SceneManager.activeSceneChanged += OnSceneChanged;
-        Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
+        Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Sources={_config.SpellSourcePolicy.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
     }
 
     private void Update()
@@ -48,41 +75,113 @@ public sealed class Plugin : BaseUnityPlugin
         if (SceneManager.GetActiveScene().name == "Main" && _config.ToggleShortcut.Value.IsDown())
         {
             _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-            _runtime.Cancel();
+            _runtime.Cancel(MentorDropReason.Disabled);
             Logger.LogInfo($"Orb Mentor is now {_config.Mode.Value}.");
         }
-        if (!_config.Active) _runtime.Cancel();
+        var active = _config.Active;
+        if (_wasActive && !active) _runtime.Cancel(MentorDropReason.Disabled);
+        _wasActive = active;
         if (SceneManager.GetActiveScene().name != "Main") { _button?.Dispose(); _button = null; return; }
         if (_button is not null && !_button.IsAlive) { _button.Dispose(); _button = null; }
         if (_button is not null) { _button.Render(); return; }
         _uiRetry -= Time.unscaledDeltaTime;
-        if (_uiRetry <= 0) { _uiRetry = 1; MentorToggleButton.TryCreate(_config, _runtime, out _button); }
+        if (_uiRetry <= 0) { _uiRetry = UiRetryIntervalSeconds; MentorToggleButton.TryCreate(_config, _runtime, out _button); }
     }
 
-    private void LateUpdate() => _runtime?.LateTick();
-    private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp) => Instance?._runtime?.Observe(__instance, exp);
-    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp) => Instance?._runtime?.ObserveAlchemy(__instance, exp);
-    private static void BeforeArtifactTick(object __instance) => Instance?._runtime?.BeginArtifactTick(__instance);
-    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(); return __exception; }
-    private static void BeforeContainerGain(object __instance, BigDouble __0) => Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
+    private void LateUpdate()
+    {
+        if (SceneManager.GetActiveScene().name == "Main") _runtime?.LateTick();
+    }
+    private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.Observe(__instance, exp);
+    }
+    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.ObserveAlchemy(__instance, exp);
+    }
+    private static void BeforeArtifactTick(object __instance)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.BeginArtifactTick(__instance);
+    }
+    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._runtime?.EndArtifactTick(__exception is null); return __exception; }
+    private static void BeforeContainerGain(object __instance, BigDouble __0)
+    {
+        if (IsGameplayScene()) Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
+    }
+    private static void AfterLifecycleReset()
+    {
+        Instance?._runtime?.RequestLifecycleReset();
+    }
+    private static void AfterSpellLoadoutChanged() => Instance?._runtime?.NotifyEquippedLoadoutChanged();
+    private static void AfterSpellProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells, __instance);
+    private static void AfterAlchemyProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy, __instance);
+    private static void AfterArtifactProgression(object __instance) =>
+        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts, __instance);
+    private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
+    private static void AfterAlchemyNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
+    private static void AfterArtifactNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
+    private static bool IsGameplayScene() => SceneManager.GetActiveScene().name == "Main";
     private void PatchOptional(string targetName, string patchName, bool postfix)
     {
         var target = AccessTools.Method(targetName);
         if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
         var patch = new HarmonyMethod(typeof(Plugin), patchName);
-        if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
+        try
+        {
+            if (postfix) _harmony!.Patch(target, postfix: patch); else _harmony!.Patch(target, prefix: patch);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Orb Mentor optional lifecycle hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
     }
-    private void PatchFinalizer(string targetName, string patchName)
+    private void PatchRequired(string targetName, string patchName)
     {
         var target = AccessTools.Method(targetName);
-        if (target is null) { Logger.LogWarning($"Orb Mentor optional domain hook unavailable: {targetName}."); return; }
-        _harmony!.Patch(target, finalizer: new HarmonyMethod(typeof(Plugin), patchName));
+        if (target is null)
+        {
+            _runtime?.BlockPermanent($"required lifecycle hook unavailable: {targetName}");
+            return;
+        }
+        try { _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), patchName)); }
+        catch (Exception ex)
+        {
+            _runtime?.BlockPermanent($"required lifecycle hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
     }
-    private void OnSceneChanged(Scene previous, Scene next) { _runtime?.Cancel(); _runtime?.ClearBlock(); }
+    private void PatchDomainRequired(
+        string targetName,
+        string patchName,
+        MentorDomain domain,
+        bool postfix,
+        bool finalizer = false)
+    {
+        var target = AccessTools.Method(targetName);
+        if (target is null)
+        {
+            _runtime?.QuarantineDomain(domain, $"required {domain} hook unavailable: {targetName}");
+            return;
+        }
+        var patch = new HarmonyMethod(typeof(Plugin), patchName);
+        try
+        {
+            if (finalizer) _harmony!.Patch(target, finalizer: patch);
+            else if (postfix) _harmony!.Patch(target, postfix: patch);
+            else _harmony!.Patch(target, prefix: patch);
+        }
+        catch (Exception ex)
+        {
+            _runtime?.QuarantineDomain(domain, $"required {domain} hook failed: {targetName}: {ex.GetBaseException().Message}");
+        }
+    }
+    private void OnSceneChanged(Scene previous, Scene next) => _runtime?.ResetLifecycle();
     private void OnDestroy()
     {
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Cancel(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

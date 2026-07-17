@@ -15,13 +15,15 @@ $OOC_GAME_DIR/
 
 Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally small and must not grow into a shared gameplay framework until duplicated implementation pressure proves it is worth extracting.
 
+Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance source lives only on `codex/experimental-chronomancer-resonance` and must not be inferred from old build-output directories.
+
+## Shared gameplay controls
+
+Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.
+
 ## Orb Mentor
 
-`OrbMentor` is the spells-only mastery-sharing plugin. Its pure engine is covered by the portable suite; production builds hook the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary and fail closed on contract or lifecycle errors.
-
-## Achievement Resonance
-
-Native mutation is guarded by `General.ApplyNativeEffectBlocks=false`. The exact target, script-list, `BigDouble`, stable-GUID, and capped-refresh contracts are now verified statically and by tests. Use the default mode for the read-only load probe, then enable only the global-speed slice for isolated gameplay validation.
+`OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.
 
 ## Test build
 

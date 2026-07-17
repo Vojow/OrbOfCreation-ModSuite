@@ -1,12 +1,10 @@
 # Orb Automata plan
 
-> **Lifecycle: Implemented / evolving.** Core Auto Buy and Auto Cast are in public beta; this plan also contains later work.
+> **Lifecycle: Implemented / evolving.** Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. This plan also records later work.
 
 [Back to roadmap](roadmap.md)
 
 ## Goal
-
-Coordinated implementation iterations, the shared admission model, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration.md).
 
 Automate repetitive actions through transparent, configurable rules without silently consuming resources the player intended to reserve.
 
@@ -16,7 +14,7 @@ Automata now prioritizes the actions that players repeat most often:
 
 1. **Auto Buy** — attributes/structures first, then verified upgrades and other levelable purchases.
 2. **Auto Cast** — selected player spells, subject to readiness, targeting, cooldown, channel, and reserve rules.
-3. **Auto Concept** — maintain selected concept recipes and levels through the game's concept/alchemy pipeline.
+3. **Auto Concept** — balance Scholar Concept mastery across acquired slots without exhausting continuously drained resources.
 4. **Auto Harvest** — execute selected ready harvest actions without taking over planting or plot strategy in the first slice.
 5. **Original expansion modules** — crafting, scribing, ordinary alchemy, and finally optional auto-research.
 
@@ -28,9 +26,10 @@ The first A1 implementation slice now covers both audited native purchase famili
 
 - `StructureSO.All`: availability, one-level cost, queue state, and `Purchase(true)`.
 - `UpgradeSO.All`: availability, one-level cost, queued level verification, and `Purchase()` while native multi-buy is temporarily forced to one and restored.
-- Disabled/Active release modes, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
+- Progression-aware spell leveling: exact native discovery, prerequisites, readiness, live cost, single-level purchase, and completed `UnlockLevelAllSpells` capability validation.
+- Disabled/Active release modes, independently configurable spell leveling, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
 
-Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases; the `0.4.0` queue-continuation and action-multiplier changes require the focused release matrix in the public checklist.
+Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases. The current `0.7.0` candidate still requires the focused desktop and Steam Deck matrix for its shared scheduling, timed concept cycling, multi-slot and zero-resource handling, progression-aware spell leveling, and unified configuration behavior.
 
 ## AutobuyOrb reference boundary
 
@@ -91,7 +90,9 @@ Start simple and deterministic:
 
 Do not introduce opaque scoring until the deterministic rules are proven.
 
-## Module delivery order
+## Original module delivery order
+
+The A1–A3 sections below record the design path that produced the current implementation. References to probes or early release shapes are historical; current player behavior is defined by the [Orb Automata reference](../../src/OrbAutomata/README.md).
 
 ### A1 — Auto Buy vertical slice
 
@@ -117,9 +118,11 @@ Concepts reuse alchemy runtime types in this build:
 - Study/Learning concept definitions are `AlchemyRecipeSO` assets.
 - `ConceptRecipes` is an `AlchemyRecipeListVariable` and `ActiveConcepts` is an `AlchemyInstanceListVariable`.
 
-The module must filter the concept registries rather than treating all alchemy recipes as concepts. Its first slice maintains a user-selected concept and conservative level/drain target. Automatic discovery, loadout swapping, mastery optimization, and multi-concept balancing come later.
+The module must filter the concept registries rather than treating all alchemy recipes as concepts. It periodically ranks discovered concepts by confirmed mastery plus progress toward the next mastery level, fills the currently acquired compatible Active Concept slots with the lowest-progress concepts, and assigns as many instances as native mastery limits and conservative aggregate resource headroom allow. The training-assignment count follows live acquired slots rather than a fixed maximum.
 
-Exit: a selected unlocked concept is loaded or maintained through the native concept/alchemy API, with capacity and resource drains respected and no ordinary alchemy recipe touched.
+The detailed ownership, resource-rate, scheduling, lifecycle, and validation design is specified in [Auto Concept mastery-balancing plan](auto-concept.md). Automatic discovery, effect-value optimization, ordinary alchemy automation, and a global economic loadout optimizer remain outside the first supported slice.
+
+Exit: validated discovered concepts are balanced through the native concept runtime, manual quantities remain owned by the player, acquired compatible slots and native `masteryLevel + 1` instance limits are respected, aggregate continuous drains retain configured resource headroom, and no ordinary alchemy recipe is touched.
 
 ### A4 — Auto Harvest
 
@@ -152,22 +155,26 @@ Rejected actions should have a concise reason: locked, insufficient queue space,
 
 ## Performance controls
 
+The cross-plugin target architecture and lifecycle rules are maintained in the [mod suite performance plan](performance-suite.md).
+
 - Evaluation interval defaults to 0.5 seconds of unscaled time.
 - Maximum actions per evaluation defaults to 1.
-- CPU budget defaults to 25% of a 60 FPS frame.
+- Auto Buy caps scan and purchase slices at 1 ms, and the implemented shared coordinator bounds combined suite work and admits at most one native suite mutation per frame.
 - Cache static candidate lists and invalidate on relevant observable changes.
 - Never scan and sort every game object every frame.
 
-## Definition of done for v0.1
+## Original long-term definition of done
+
+This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current beta.
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.
-- Auto Concept supports one explicitly selected concept-maintenance policy.
+- Auto Concept balances validated discovered concepts across live compatible acquired slots while preserving manual quantities and conservative aggregate resource headroom.
 - Auto Harvest supports one explicitly selected non-destructive harvest policy.
 - Every module rejects unknown state, cost, or action contracts instead of guessing.
 - Automata never starts an action whose conservative admission calculation would cross configured reserves.
 - Manual actions remain available.
-- It behaves consistently at Chronomancer 1×, 2×, 4×, and 8×.
+- It behaves consistently at normal and accelerated game speeds supported by the game environment.
 - Disabling the plugin stops new actions immediately.
 - Existing queued actions are not deleted or rewritten.
 - Documentation and packaging state that concurrent auto-buy plugins are unsupported.

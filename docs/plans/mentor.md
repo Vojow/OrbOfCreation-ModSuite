@@ -1,25 +1,25 @@
 # Orb Mentor plan
 
-> **Lifecycle: Implemented / beta candidate.** The spells-only implementation awaits interactive runtime validation before release.
+> **Lifecycle: Beta; extended interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, shared scheduling, and independently enabled artifact/alchemy extensions are released.
 
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
 ## Goal
 
-Reduce repetitive spell-mastering work by letting the player's highest confirmed-mastery spells mentor every discovered spell below them. Orb Mentor shares experience through the game's native spell-mastery path; it does not set levels, edit saves, change loadouts, or spend leveling resources.
+Reduce repetitive mastery work by sharing native XP within a progression domain. For spells, every equipped spell can share native mastery XP with discovered spells below that source's own mastery. `EquippedSpells` is the default source policy; `HighestDiscovered` preserves the original highest-confirmed-mastery behavior. Optional artifact and alchemy domains follow separately audited native contracts. Orb Mentor does not edit saves, change loadouts, or spend leveling resources.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.
 
-Automatic mastery confirmation and its native resource spending are explicitly outside Orb Mentor. They may become a later Automata module.
+Automatic spell leveling and its native resource spending are explicitly outside Orb Mentor. The beta implements that behavior under Automata's Auto Buy feature.
 
-## MVP contract
+## Original spell MVP contract
 
-The first public version is spells-only. Artifacts and alchemy remain later vertical slices because their XP ownership and active-instance rules differ.
+The original public vertical slice was spells-only because artifact and alchemy XP ownership and active-instance rules differ. Those later domains are now released as disabled-by-default beta extensions; see [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for their contracts and remaining validation gates.
 
 ### Mentor qualification
 
-- Rank discovered spells by confirmed mastery level (`SpellRecipeSO.masteryLevel`).
-- Every spell tied at the highest confirmed mastery level qualifies as a mentor.
+- With `EquippedSpells` (default), every spell present in the cached native active loadout qualifies as a source for that event.
+- With `HighestDiscovered`, every spell tied at the highest confirmed mastery level qualifies as a mentor.
 - A qualifying spell creates sharing XP only when the game awards it a positive native mastery-XP event.
 - Instant, channelled, toggled, and any other verified native spell-mastery events qualify.
 - Orb Mentor never equips, selects, creates, casts, or otherwise activates a spell.
@@ -32,13 +32,13 @@ A recipient must:
 - be a registered `SpellRecipeSO`;
 - be discovered/unlocked;
 - not be the source;
-- have a strictly lower confirmed mastery level than the current highest mentor level.
+- have a strictly lower confirmed mastery level than the capture-time source mastery ceiling (`EquippedSpells`) or highest mentor level (`HighestDiscovered`).
 
 Active/loadout spells remain eligible. A spell that is already ready to confirm mastery also remains eligible and may continue banking XP, matching native behavior. Locked, undiscovered, unresolved, or equal/higher-level spells never receive sharing XP.
 
 ### XP source and type progression
 
-Sharing is calculated from the final positive XP passed to `SpellRecipeSO.GainMasteryExp`, after the game's spell, type, player, and Achievement Resonance modifiers have already been applied.
+Sharing is calculated from the final positive XP passed to `SpellRecipeSO.GainMasteryExp`, after the game's spell, type, player, and other native modifiers have already been applied.
 
 Orb Mentor grants only per-spell mastery XP. It never calls `SpellTypeSO.GainTypeXp` directly. Native spell-type XP continues to be awarded by `SpellRecipeSO.PurchaseLevel()` when the player confirms each recipient's mastery. This means a Firebolt event mentors individual lower-level spells without directly granting Cantrip, Evocation, or other type XP.
 
@@ -87,14 +87,14 @@ The correct interception boundary is a Harmony postfix on `SpellRecipeSO.GainMas
 ```text
 postfix GainMasteryExp(source, finalXp)
   → reject when disabled, guarded, non-finite, zero, or negative
-  → resolve all discovered recipes and highest confirmed mastery
-  → reject unless source is tied at that highest mastery
+  → use cached source identity, progression evidence, and equipped membership
+  → reject unless source satisfies the selected source policy
   → add finalXp to the current-frame mentor accumulator
 
 LateUpdate / bounded worker
-  → snapshot eligible lower-level discovered recipients
+  → snapshot recipients strictly below the capture-time source ceiling
   → calculate Shared Pool or Per Recipient amounts
-  → consolidate pending XP by stable recipient UUID
+  → consolidate pending XP by stable recipient UUID plus source ceiling
   → process grants within CPU and operation budgets
   → call recipient.GainMasteryExp(amount) inside guard
 ```
@@ -117,6 +117,7 @@ Fresh installations start disabled.
 ### Sharing
 
 - `EconomyMode`: `SharedPool` or `PerRecipient`.
+- `SpellSourcePolicy`: `EquippedSpells` (default) or `HighestDiscovered`.
 - `SharePercent`: 0–100, default 10.
 
 ### Performance
@@ -197,8 +198,8 @@ Exit gate: large recipient sets and channelled spells remain smooth; toggling of
 
 ### I4 — Public beta hardening
 
-- Run extended sessions at 1× and Chronomancer speeds.
-- Validate with and without Automata, Orb Mod Config, and Achievement Resonance.
+- Run extended sessions at normal and accelerated game speeds.
+- Validate with and without Automata and Orb Mod Config.
 - Confirm normal logs remain quiet and detailed logs are sufficient to diagnose discrepancies.
 - Package a standalone Orb Mentor archive and an optional complete ModSuite archive.
 - Publish only Disabled/Active behavior; retain probe instrumentation for development builds.
@@ -222,28 +223,26 @@ Required automated and runtime scenarios:
 - source and recipient crossing thresholds during the same frame;
 - native mastery confirmation and spell-type XP occurring exactly once per confirmed recipient level;
 - save/load, scene changes, reset/prestige boundaries, and plugin removal;
-- normal speed and accelerated Chronomancer modes;
-- Achievement Resonance final-XP modifiers;
+- normal and accelerated game speeds;
+- native final-XP modifiers;
 - proof that mod-generated XP cannot recursively produce additional sharing.
 
 ## Release and ownership
 
-Proposed identity:
+Current identity:
 
 - Display name: `Orb Mentor`
 - Assembly/project: `OrbMentor`
 - Plugin GUID: `dev.vojow.orbofcreation.mentor`
-- Initial plugin version: `0.1.0` (published as a beta prerelease)
+- Current beta version: `0.3.0`
 
-Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata, Achievement Resonance, and Chronomancer are compatible sibling plugins, not dependencies.
+Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata is a compatible sibling plugin, not a dependency.
 
 ## Deferred work
 
-- Automatic mastery confirmation/resource spending: future Automata module.
 - Aggregated replacement for native mastery-ready popup spam: only if runtime testing shows it is necessary.
 - Per-type mentors: after the global spell model is stable and native multi-type membership is fully tested.
-- Artifact mentoring: separate audit for definition-versus-instance XP ownership.
-- Alchemy mentoring: separate audit for recipe/type/active-instance ownership and completion semantics.
+- Production promotion for artifact and alchemy mentoring: after their interactive native-progression, lifecycle, save, and performance gates pass.
 
 ## Remaining probe questions
 
@@ -251,5 +250,4 @@ These are implementation-audit tasks, not unresolved product decisions:
 
 1. Does any non-casting native system call `SpellRecipeSO.GainMasteryExp`, and should its positive XP be included under the agreed “all native events” rule?
 2. Which lifecycle callback most reliably invalidates pending recipe references during reset/load?
-3. Which native queue/status transform is the most stable anchor when Automata is absent or its Auto Cast button is present?
-4. What operation count and CPU budget keep the largest discovered catalog smooth at the supported game-speed range?
+3. What operation count and CPU budget keep the largest discovered catalogs across all enabled domains smooth at the supported game-speed range?

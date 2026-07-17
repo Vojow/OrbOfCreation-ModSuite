@@ -1,9 +1,43 @@
 # Changelog
 
-## Unreleased
+## Orb Of Creation Mod Suite 0.3.0 Beta 1 — 2026-07-17
 
+- Unify disabled-feature configuration across the supported suite. Orb Mod Config 0.6.0 supports multiple staged prerequisites and refreshes enum dependencies immediately; Automata and Mentor now lock inactive tuning while keeping mode, shortcut, status-button, safety, and diagnostic controls usable.
+- Prepare Orb Mentor 0.3.0 and Orb Modding Common 0.3.0 for compound spell/artifact/alchemy and nested Auto Buy configuration dependencies.
+- Prepare Orb Automata 0.7.0 with `TimedCycle` as the new default Auto Concept slot-management policy, keeping every assignment active for the full settled `TrainingPeriodSeconds` before rotating to its remembered compatible replacement. Existing saved selections remain unchanged.
+- Add progression-aware Auto Spell Leveling under Auto Buy, with a separate `AutoLevelSpells` switch. It detects Locked, Single, and All capability without player mode changes, revalidates per-spell prerequisites and live costs, and switches to the game's native level-all action only after the exact Upgrade is completed.
+- Prevent Auto Concept from repeatedly removing and re-adding the same concept when its required resource is at zero, which could keep training on one slot even after more slots were acquired. Every positive prospective drain now rejects an authoritative zero resource, replacements must pass one-instance admission before the current assignment is removed, and unsafe candidates no longer block the timed-cycle order.
+- Anchor Auto Buy, Auto Cast, Auto Concept, and Mentor outside the native action queue with 12-pixel gaps; remove cloned native view gating, resolve the audited inactive Auto Buy hierarchy without `AutoBuyManager` reference matching, and use an extensible shared ordered-slot layout. The new `CN ON/OFF/!` button toggles Auto Concept directly.
+- Rename Auto Concept's technical idle polling control to `FallbackEvaluationIntervalSeconds`, migrate both previous seconds and legacy minutes values, and show it only under Advanced. `TrainingPeriodSeconds` remains the normal gameplay rotation timer.
+- Prepare Orb Automata 0.6.0 and Orb Mentor 0.2.0 as an intermediate local candidate before the current beta versions.
+- Add Auto Concept `SlotManagementMode`: `RotateAll` replaces a settled active concept when a compatible discovered concept has strictly lower mastery, while `PreserveManual` retains the previous manual-baseline behavior. Rotation uses the verified native remove path, waits for settlement, and revalidates before adding; rate-limited no-change summaries make an idle balancer visible in diagnostics.
+- Keep each newly assigned Auto Concept in a settled training session until it reaches the highest effective mastery captured at assignment time or `TrainingPeriodSeconds` elapses, whichever occurs first. The default period is 300 seconds; native setup/settlement time does not consume it.
+- Present Auto Concept's mode consistently as `Disabled` or `Active`; active mode still performs mastery balancing.
+- Read discovered concepts from the exact runtime `ConceptRecipes` list used by the native UI, migrate the rebalance interval from minutes to seconds with a 300-second default and 10-second minimum, timestamp all Orb Automata messages, and log permanent concept-contract failures once per lifecycle.
+- Add disabled-by-default Auto Concept mastery balancing inside Orb Automata. It resolves only the UUID-scoped Scholar concept assets, fills compatible acquired slots breadth-first, batches depth to live native mastery limits, tracks manual and automated quantity separately, shares the suite scheduler, and rolls back only proven automated quantity when the native drain watchdog becomes unsafe.
+- Validate every Auto Concept add with an exact prospective native drain vector, live resource-quality conversion, positive-rate reserve, finite-quantity floor, stable UUID/type checks, compatible slots, and final native quantity revalidation. Unknown contracts fail closed and ordinary alchemy remains untouched.
+- Add Mentor's `EquippedSpells` source policy as the new default: every equipped spell may share with discovered spells strictly below that source's mastery. Keep `HighestDiscovered` selectable.
+- Carry each Mentor event's exclusive source-mastery ceiling through recipient planning, pending consolidation, parking, and final native validation so lower equipped sources cannot grant to equal- or higher-mastery recipients.
+- Bump Orb Automata to 0.5.2, Orb Mentor to 0.1.2, Orb Mod Config to 0.5.3, and Orb Modding Common to 0.2.1 for the combined full-charge, coordinator, and Auto Buy performance changes.
+- Preserve CPU-sliced Structure repeat groups across coalesced native completion signals, while still settling broad completion effects before selecting the next ranked group.
+- Move routine Auto Buy lifecycle probes to fixed 250 ms bounded slices so purchase frequency cannot multiply locked/active reflection work.
+- Keep locked Structures out before cost or purchase checks, and park Upgrades rejected by native `CanPurchase()` outside high-frequency resource invalidation until a bounded lifecycle or completion retry.
+- Add an opt-in `PrioritizeCostAndQualityStructures` Auto Buy policy. It ranks unlocked, affordable Structures first only when a one-time native effect preview proves a cost reduction or resource-quality increase; unknown effects keep normal cost ordering.
+- Give continuously pending Auto Buy work a bounded three-turn coordinator weight before yielding to Mentor, Auto Cast, or UI work.
+- Make `DecisionLogLevel=Off` suppress all operational Auto Buy and Auto Cast records, rate-limit summary logging, and reserve per-purchase messages for verbose diagnostics.
 - Synchronize clean Mod Config fields with live changes made by native status buttons or shortcuts without overwriting staged edits.
 - Add configurable Auto Cast support for charge-capable spells: fully charge through the native hold contract by default, or fire immediately when full charging is disabled.
+- Retry Mod Config UI installation on slower Steam Deck/Proton scene startup instead of permanently giving up after one attempt.
+- Repair Mod Config when its ScreenContent panel is destroyed even if the Mods button survives, restore a usable native view after failed open/close, and detach the old navigation listeners before reinstalling.
+- Throttle missing native-control discovery to avoid scanning the complete Unity object registry every frame before autoqueue unlock.
+- Cache Auto Buy's static candidate registry, cap its reflective CPU slice to 1 ms, and poll full queues at 10 Hz instead of every frame.
+- Preserve Mentor XP and capture-time recipients when XP arrives during bounded relationship/reconciliation work; use constant-time indexed source exclusion, let active refreshes finish under sustained invalidation, cap and safely compact immutable evidence history, and retain unorderable captures without guessing their route until lifecycle/native-identity cancellation.
+- Cache Mentor catalogs and native object lookups, stop repeated inactive-state cleanup, and lower its default grant and CPU budgets.
+- Schedule Auto Buy and Auto Cast through the shared suite frame budget, with at most one native automation mutation per frame and resumable multi-level purchase groups.
+- Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, and transiently ineligible UUIDs park with exact XP until a later authoritative refresh without retry churn or head-of-line blocking. The parked ledger is bounded and fails the domain closed on overflow. AutoBuy plus Mentor can start only one native mutation in a Unity frame.
+- Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
+- Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
+- Move Orb Chronomancer and Orb Achievement Resonance source, tests, and design notes to the dedicated `codex/experimental-chronomancer-resonance` branch; supported `main` builds and archives contain only the allowlisted suite modules.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

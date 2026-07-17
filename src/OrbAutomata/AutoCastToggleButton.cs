@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Logging;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -64,41 +65,28 @@ internal sealed class AutoCastToggleButton : IDisposable
         toggle = null;
         reason = string.Empty;
         var nativeToggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
-        var autoBuyManagerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
-        if (nativeToggleType is null || autoBuyManagerType is null)
+        if (nativeToggleType is null)
         {
-            reason = "native Auto Buy toggle types unavailable";
+            reason = "native UIToggleButton type is unavailable";
             return false;
         }
 
-        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(autoBuyManagerType)
-            .OfType<Component>()
-            .Where(manager => manager.gameObject.activeInHierarchy)
-            .Select(manager => ReadField(manager, "autoBuyEnabled"))
-            .FirstOrDefault(variable => variable is not null);
-        if (autoBuyEnabled is null)
-        {
-            reason = "AutoBuyManager.autoBuyEnabled is not initialized";
-            return false;
-        }
-
-        var nativeToggle = Resources.FindObjectsOfTypeAll(nativeToggleType)
-            .OfType<Component>()
-            .FirstOrDefault(component => IsNativeQueueToggle(component) && ReferenceEquals(ReadField(component, "isOnVariable"), autoBuyEnabled));
+        var nativeToggle = StatusControlGroup.FindNativeToggle(nativeToggleType);
         if (nativeToggle is null || nativeToggle.transform.parent is null)
         {
-            reason = "native Auto Buy queue switch is not initialized";
+            reason = "native RightSidebar/AttributeBar/AutoBuyToggle is unavailable";
             return false;
         }
 
-        RemoveOwnedSibling(nativeToggle.transform.parent);
         GameObject? root = null;
         try
         {
             var group = StatusControlGroup.GetOrCreate(nativeToggle);
+            RemoveOwnedChild(group);
             root = UnityEngine.Object.Instantiate(nativeToggle.gameObject, group, false);
             root.name = ObjectName;
-            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
+            root.SetActive(false);
+            StatusControlGroup.RegisterControl(root, StatusControlOrder.AutoCast);
 
             var clonedNativeToggle = root.GetComponent(nativeToggleType);
             var iconImage = ReadField(clonedNativeToggle, "iconImage") as Image;
@@ -129,6 +117,7 @@ internal sealed class AutoCastToggleButton : IDisposable
                 UnityEngine.Object.Destroy(clonedNativeToggle);
             }
 
+            RemoveNativeViewBindings(root);
             foreach (var tooltip in root.GetComponents<Component>()
                          .Where(component => component.GetType().Name == "HoverTooltip"))
             {
@@ -164,8 +153,10 @@ internal sealed class AutoCastToggleButton : IDisposable
                 log);
             button.onClick.AddListener(toggle.Toggle);
             toggle.Render(force: true);
+            root.SetActive(true);
+            if (nativeToggle.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
             var rect = root.transform as RectTransform;
-            log.LogInfo(
+            log.LogAutomataInfo(
                 $"Auto Cast toggle installed left of the native Auto Buy switch: {BuildPath(root)}; " +
                 $"AnchoredPosition={FormatVector(rect?.anchoredPosition)}; Size={FormatVector(rect?.sizeDelta)}; " +
                 $"Icon={iconSource}.");
@@ -321,7 +312,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             if (!_noticeFailureLogged)
             {
                 _noticeFailureLogged = true;
-                _log.LogWarning($"Auto Cast state notice could not use the native status area: {ex.GetBaseException().Message}");
+                _log.LogAutomataWarning($"Auto Cast state notice could not use the native status area: {ex.GetBaseException().Message}");
             }
         }
     }
@@ -364,11 +355,15 @@ internal sealed class AutoCastToggleButton : IDisposable
         return null;
     }
 
-    private static bool IsNativeQueueToggle(Component component) =>
-        component.gameObject.activeInHierarchy &&
-        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
-        component.gameObject.name != "OrbMentor.Toggle" &&
-        component.transform.parent?.name != StatusControlGroup.ObjectName;
+    private static void RemoveNativeViewBindings(GameObject root)
+    {
+        foreach (var component in root.GetComponents<Component>()
+                     .Where(component => component.GetType().Name == "ManagedView"))
+        {
+            if (component is Behaviour behaviour) behaviour.enabled = false;
+            UnityEngine.Object.Destroy(component);
+        }
+    }
 
     private static Sprite? FindEquippedSpellIcon(out string source)
     {
@@ -419,13 +414,15 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
     }
 
-    private static void RemoveOwnedSibling(Transform parent)
+    private static void RemoveOwnedChild(Transform group)
     {
-        for (var index = parent.childCount - 1; index >= 0; index--)
+        for (var index = group.childCount - 1; index >= 0; index--)
         {
-            var child = parent.GetChild(index);
+            var child = group.GetChild(index);
             if (string.Equals(child.name, ObjectName, StringComparison.Ordinal))
             {
+                child.name = ObjectName + ".Removing";
+                child.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(child.gameObject);
             }
         }

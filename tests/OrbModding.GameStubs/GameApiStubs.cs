@@ -12,16 +12,116 @@ public struct BigDouble
     public long exponent;
 }
 
+public sealed class IntVariable
+{
+    public int Value { get; set; } = 1;
+
+    public int SetCalls { get; private set; }
+
+    public int? ThrowBeforeWriteFor { get; set; }
+
+    public int? ThrowAfterWriteFor { get; set; }
+
+    public int AsInt() => Value;
+
+    public void SetValue(int value)
+    {
+        SetCalls++;
+        if (ThrowBeforeWriteFor == value)
+        {
+            throw new InvalidOperationException($"setter rejected {value} before write");
+        }
+
+        Value = value;
+        if (ThrowAfterWriteFor == value)
+        {
+            throw new InvalidOperationException($"setter rejected {value} after write");
+        }
+    }
+}
+
+public static class GlobalVariables
+{
+    public static IntVariable MultiBuy { get; set; } = new IntVariable();
+
+    public static IntVariable GetMultiBuy() => MultiBuy;
+}
+
 public class SpellRecipeSO
 {
     public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
+    public string uuid = Guid.NewGuid().ToString();
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
+    public bool readyToLevel;
+    public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
+    public ResourceCostList levelCost = new ResourceCostList();
     public void GainMasteryExp(BigDouble exp) { masteryExperience = exp; }
     public bool IsDiscovered() => discovered;
-    public bool IsReadyToLevelMastery() => false;
+    public bool IsReadyToLevelMastery() => readyToLevel;
+    public ResourceCostList GetLevelCost() => levelCost;
+    public void PurchaseLevel()
+    {
+        if (!readyToLevel) return;
+        masteryLevel++;
+        readyToLevel = false;
+    }
     public string GetName() => "Spell";
+}
+
+public static class IdScriptableObject
+{
+    public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+}
+
+public class UpgradeSO
+{
+    public int purchaseLevel;
+    public int queuedPurchaseLevel;
+    public int GetPurchaseLevel() => purchaseLevel;
+    public int GetQueuedPurchaseLevel() => queuedPurchaseLevel;
+}
+
+public class Prerequisites
+{
+    public class Container
+    {
+        public bool unlocked;
+        public bool Check() => unlocked;
+    }
+}
+
+public class ResourceCostList
+{
+    public bool affordable = true;
+    public int PerformCalls { get; private set; }
+    public bool HasEnough() => affordable;
+    public void PerformCost() { PerformCalls++; }
+}
+
+public class SpellRecipeListVariable
+{
+    public List<SpellRecipeSO> value = new List<SpellRecipeSO>();
+}
+
+public class SpellManager
+{
+    public static SpellManager? instance;
+    public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
+
+    public void TryLevelAllSpells()
+    {
+        foreach (var recipe in availableSpellRecipes.value)
+        {
+            while (recipe.IsDiscovered() && recipe.levelingPrerequisites.Check() &&
+                   recipe.IsReadyToLevelMastery() && recipe.GetLevelCost().HasEnough())
+            {
+                recipe.GetLevelCost().PerformCost();
+                recipe.PurchaseLevel();
+            }
+        }
+    }
 }
 
 public interface ITooltipable
@@ -453,7 +553,7 @@ namespace UnityEngine
         public GameObject(string name, params Type[] components)
         {
             this.name = name;
-            transform = new RectTransform { gameObject = this };
+            transform = new RectTransform { gameObject = this, name = name };
             transform.transform = transform;
             _components.Add(transform);
             foreach (var type in components.Where(type => type != typeof(RectTransform) && typeof(Component).IsAssignableFrom(type)))
@@ -461,6 +561,7 @@ namespace UnityEngine
                 var component = (Component)Activator.CreateInstance(type)!;
                 component.gameObject = this;
                 component.transform = transform;
+                component.name = name;
                 _components.Add(component);
             }
         }
@@ -468,11 +569,14 @@ namespace UnityEngine
         public Transform transform { get; }
 
         public bool activeInHierarchy { get; set; } = true;
+        public bool activeSelf { get; private set; } = true;
 
         public static GameObject? Find(string name) => null;
 
         public void SetActive(bool value)
         {
+            activeSelf = value;
+            activeInHierarchy = value;
         }
 
         public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
@@ -485,7 +589,7 @@ namespace UnityEngine
 
         public T AddComponent<T>() where T : Component, new()
         {
-            var component = new T { gameObject = this, transform = transform };
+            var component = new T { gameObject = this, transform = transform, name = name };
             _components.Add(component);
             return component;
         }
@@ -493,26 +597,37 @@ namespace UnityEngine
 
     public class Transform : Component
     {
+        private readonly List<Transform> _children = new List<Transform>();
+
         public Transform? parent { get; private set; }
 
-        public int childCount => 0;
+        public int childCount => _children.Count;
 
         public void SetParent(Transform parent, bool worldPositionStays)
         {
+            if (ReferenceEquals(this.parent, parent)) return;
+            this.parent?._children.Remove(this);
             this.parent = parent;
+            parent._children.Add(this);
         }
 
-        public int GetSiblingIndex() => 0;
+        public int GetSiblingIndex() => parent?._children.IndexOf(this) ?? 0;
 
         public void SetSiblingIndex(int index)
         {
+            if (parent is null) return;
+            parent._children.Remove(this);
+            parent._children.Insert(Math.Max(0, Math.Min(index, parent._children.Count)), this);
         }
 
         public void SetAsLastSibling()
         {
+            if (parent is null) return;
+            parent._children.Remove(this);
+            parent._children.Add(this);
         }
 
-        public Transform GetChild(int index) => throw new ArgumentOutOfRangeException(nameof(index));
+        public Transform GetChild(int index) => _children[index];
     }
 
     public class RectTransform : Transform
@@ -598,6 +713,7 @@ namespace UnityEngine
         public static float deltaTime { get; set; } = 0.016f;
         public static float unscaledDeltaTime { get; set; } = 0.016f;
         public static float realtimeSinceStartup { get; set; }
+        public static int frameCount { get; set; }
     }
 
     public static class Resources

@@ -285,6 +285,28 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
+    public void DecisionLogLevelOffSuppressesOperationalPurchaseAndBatchLogs()
+    {
+        var candidate = Candidate("quiet", AutoBuyCandidateKind.Structure, 1, 1_000);
+        var catalog = new FakeCatalog(4, candidate);
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.MaxPurchasesPerBatch.Value = 1;
+        config.EnableOperationalLogging.Value = true;
+        config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Off;
+        var log = new ManualLogSource();
+        using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(1, candidate.PurchaseCalls);
+        Assert.Empty(log.Entries);
+    }
+
+    [Fact]
     public void CompletedActiveBatch_PipelinesNextScanOnFollowingFrame()
     {
         var first = Candidate("first", AutoBuyCandidateKind.Upgrade, 1, 1_000);

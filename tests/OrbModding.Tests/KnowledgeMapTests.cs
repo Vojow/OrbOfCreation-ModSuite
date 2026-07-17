@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using OrbAchievementResonance;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -10,6 +9,7 @@ namespace OrbModding.Tests;
 public sealed class KnowledgeMapTests
 {
     private const string AlchemicScrollUuid = "67acd892-8a8a-455a-aa71-3fb06e75bf38";
+    private const string AchievementStrengthUuid = "534d8a27-7320-4ca1-8d8c-7eaf0ade385c";
 
     [Fact]
     public void EntityMappings_AreUniqueValidAndMatchTypeSummary()
@@ -34,55 +34,16 @@ public sealed class KnowledgeMapTests
     }
 
     [Fact]
-    public void KnownResourceAndAchievementIdentifiers_MatchCatalog()
+    public void KnownResourceAndGlobalIdentifiers_MatchCatalog()
     {
         var byId = ReadMappings().ToDictionary(row => row.Id, StringComparer.OrdinalIgnoreCase);
 
         AssertMapping(byId, AlchemicScrollUuid, "AlchemicScroll", "ResourceSO");
         AssertMapping(
             byId,
-            ResonanceTargetCatalog.AchievementStrengthUuid,
+            AchievementStrengthUuid,
             "AchievementStrength",
             "IntVariable");
-    }
-
-    [Fact]
-    public void ResonanceTargets_ResolveToExpectedMappedFamilies()
-    {
-        var byId = ReadMappings().ToDictionary(row => row.Id, StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(16, ResonanceTargetCatalog.All.Count);
-        Assert.Equal(
-            ResonanceTargetCatalog.All.Count,
-            ResonanceTargetCatalog.All.Select(target => target.TargetUuid).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-
-        foreach (var target in ResonanceTargetCatalog.All)
-        {
-            Assert.True(Guid.TryParse(target.TargetUuid, out _), $"Invalid target UUID for {target.Name}");
-            Assert.True(byId.TryGetValue(target.TargetUuid, out var mapping), $"Unmapped Resonance target: {target.Name}");
-            var expectedType = target.Kind switch
-            {
-                ResonanceTargetKind.AttributeGroup => "AttributeGroupSO",
-                ResonanceTargetKind.ResourceTypeProperty => "ResourceTypeSO",
-                ResonanceTargetKind.NumberVariable => "DoubleVariable",
-                _ => throw new ArgumentOutOfRangeException(),
-            };
-            Assert.Equal(expectedType, mapping.Type);
-        }
-    }
-
-    [Fact]
-    public void ResonanceOwnedModifierIds_AreValidUniqueAndDoNotCollideWithGameEntities()
-    {
-        var gameIds = ReadMappings().Select(row => row.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var modifierIds = ResonanceTargetCatalog.All.Select(target => target.ModifierUuid).ToArray();
-
-        Assert.Equal(modifierIds.Length, modifierIds.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.All(modifierIds, id =>
-        {
-            Assert.True(Guid.TryParse(id, out _), $"Invalid modifier UUID: {id}");
-            Assert.True(ResonanceModifierIds.IsOwned(id), $"Modifier UUID is not recognized as owned: {id}");
-            Assert.DoesNotContain(id, gameIds);
-        });
     }
 
     private static IReadOnlyList<EntityMapping> ReadMappings()

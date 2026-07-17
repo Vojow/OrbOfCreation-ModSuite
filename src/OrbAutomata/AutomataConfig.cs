@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using BepInEx.Configuration;
 using OrbModding.Common;
 
@@ -5,6 +7,47 @@ namespace OrbAutomata;
 
 internal sealed class AutomataConfig
 {
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyStructuresActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+        new ModConfigDependency("AutoBuy", "IncludeStructures"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyUpgradesActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+        new ModConfigDependency("AutoBuy", "IncludeUpgrades"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyFixedBatchDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+        new ModConfigDependency("AutoBuy", "BatchSizingMode", "Fixed"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyStructureRepeatDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+        new ModConfigDependency("AutoBuy", "IncludeStructures"),
+        new ModConfigDependency("AutoBuy", "RespectActionMultiplier", "false"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyFixedStructureDependencies = new[]
+    {
+        new ModConfigDependency("AutoBuy", "Mode", "Active"),
+        new ModConfigDependency("AutoBuy", "IncludeStructures"),
+        new ModConfigDependency("AutoBuy", "RespectActionMultiplier", "false"),
+        new ModConfigDependency("AutoBuy", "StructureRepeatMode", "Fixed"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoCastActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoCast", "Mode", "Active"),
+    };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoConceptActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoConcept", "Mode", "Active"),
+    };
+
     private AutomataConfig(
         ConfigEntry<bool> enabled,
         ConfigEntry<AutoBuyOperationMode> autoBuyMode,
@@ -12,6 +55,7 @@ internal sealed class AutomataConfig
         ConfigEntry<AutoBuyAffordabilityMode> upgradeAffordabilityMode,
         ConfigEntry<bool> autoBuyStructures,
         ConfigEntry<bool> autoBuyUpgrades,
+        ConfigEntry<bool> autoLevelSpells,
         ConfigEntry<bool> respectActionMultiplier,
         ConfigEntry<float> autoBuyIntervalSeconds,
         ConfigEntry<int> leaveQueueSlots,
@@ -20,6 +64,7 @@ internal sealed class AutomataConfig
         ConfigEntry<int> maxPurchasesPerBatch,
         ConfigEntry<AutoBuyStructureRepeatMode> structureRepeatMode,
         ConfigEntry<int> fixedStructureLevelsPerCandidate,
+        ConfigEntry<bool> prioritizeCostAndQualityStructures,
         ConfigEntry<string> allowedAutoBuyUuids,
         ConfigEntry<string> blockedAutoBuyUuids,
         ConfigEntry<AutoCastOperationMode> autoCastMode,
@@ -29,6 +74,17 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoCastStartResourcePercent,
         ConfigEntry<float> autoCastManualPauseSeconds,
         ConfigEntry<bool> autoCastFullCharge,
+        ConfigEntry<AutoConceptOperationMode> autoConceptMode,
+        ConfigEntry<AutoConceptSlotManagementMode> autoConceptSlotManagementMode,
+        ConfigEntry<bool> autoConceptShowToggleButton,
+        ConfigEntry<int> autoConceptTrainingPeriodSeconds,
+        ConfigEntry<int> autoConceptFallbackEvaluationIntervalSeconds,
+        ConfigEntry<int> autoConceptQuantityCap,
+        ConfigEntry<float> autoConceptRateReservePercent,
+        ConfigEntry<float> autoConceptMinimumResourcePercent,
+        ConfigEntry<float> autoConceptMinimumDrainRatio,
+        ConfigEntry<string> allowedAutoConceptUuids,
+        ConfigEntry<string> blockedAutoConceptUuids,
         ConfigEntry<bool> emergencyDisable,
         ConfigEntry<float> cpuBudgetMilliseconds,
         ConfigEntry<bool> enableOperationalLogging,
@@ -43,6 +99,7 @@ internal sealed class AutomataConfig
         UpgradeAffordability = upgradeAffordabilityMode;
         AutoBuyStructures = autoBuyStructures;
         AutoBuyUpgrades = autoBuyUpgrades;
+        AutoLevelSpells = autoLevelSpells;
         RespectActionMultiplier = respectActionMultiplier;
         AutoBuyIntervalSeconds = autoBuyIntervalSeconds;
         LeaveQueueSlots = leaveQueueSlots;
@@ -51,6 +108,7 @@ internal sealed class AutomataConfig
         MaxPurchasesPerBatch = maxPurchasesPerBatch;
         StructureRepeatMode = structureRepeatMode;
         FixedStructureLevelsPerCandidate = fixedStructureLevelsPerCandidate;
+        PrioritizeCostAndQualityStructures = prioritizeCostAndQualityStructures;
         AllowedAutoBuyUuids = allowedAutoBuyUuids;
         BlockedAutoBuyUuids = blockedAutoBuyUuids;
         AutoCastMode = autoCastMode;
@@ -60,6 +118,17 @@ internal sealed class AutomataConfig
         AutoCastStartResourcePercent = autoCastStartResourcePercent;
         AutoCastManualPauseSeconds = autoCastManualPauseSeconds;
         AutoCastFullCharge = autoCastFullCharge;
+        AutoConceptMode = autoConceptMode;
+        AutoConceptSlotManagement = autoConceptSlotManagementMode;
+        AutoConceptShowToggleButton = autoConceptShowToggleButton;
+        AutoConceptTrainingPeriodSeconds = autoConceptTrainingPeriodSeconds;
+        AutoConceptFallbackEvaluationIntervalSeconds = autoConceptFallbackEvaluationIntervalSeconds;
+        AutoConceptQuantityCap = autoConceptQuantityCap;
+        AutoConceptRateReservePercent = autoConceptRateReservePercent;
+        AutoConceptMinimumResourcePercent = autoConceptMinimumResourcePercent;
+        AutoConceptMinimumDrainRatio = autoConceptMinimumDrainRatio;
+        AllowedAutoConceptUuids = allowedAutoConceptUuids;
+        BlockedAutoConceptUuids = blockedAutoConceptUuids;
         EmergencyDisable = emergencyDisable;
         CpuBudgetMilliseconds = cpuBudgetMilliseconds;
         EnableOperationalLogging = enableOperationalLogging;
@@ -97,6 +166,8 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<int> FixedStructureLevelsPerCandidate { get; }
 
+    public ConfigEntry<bool> PrioritizeCostAndQualityStructures { get; }
+
     public ConfigEntry<string> AllowedAutoBuyUuids { get; }
 
     public ConfigEntry<string> BlockedAutoBuyUuids { get; }
@@ -115,6 +186,19 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<bool> AutoCastFullCharge { get; }
 
+    public ConfigEntry<AutoConceptOperationMode> AutoConceptMode { get; }
+    public ConfigEntry<AutoConceptSlotManagementMode> AutoConceptSlotManagement { get; }
+    public ConfigEntry<bool> AutoConceptShowToggleButton { get; }
+    public ConfigEntry<bool> AutoLevelSpells { get; }
+    public ConfigEntry<int> AutoConceptTrainingPeriodSeconds { get; }
+    public ConfigEntry<int> AutoConceptFallbackEvaluationIntervalSeconds { get; }
+    public ConfigEntry<int> AutoConceptQuantityCap { get; }
+    public ConfigEntry<float> AutoConceptRateReservePercent { get; }
+    public ConfigEntry<float> AutoConceptMinimumResourcePercent { get; }
+    public ConfigEntry<float> AutoConceptMinimumDrainRatio { get; }
+    public ConfigEntry<string> AllowedAutoConceptUuids { get; }
+    public ConfigEntry<string> BlockedAutoConceptUuids { get; }
+
     public ConfigEntry<bool> EmergencyDisable { get; }
 
     public ConfigEntry<float> CpuBudgetMilliseconds { get; }
@@ -129,12 +213,20 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<float> RelativeReserveMultiplier { get; }
 
+    public bool IsOperationalLoggingEnabled =>
+        EnableOperationalLogging.Value &&
+        DecisionLogLevel.Value != AutomataDecisionLogLevel.Off;
+
     public bool CanStartAutoBuyActively =>
         AutoBuyMode.Value == AutoBuyOperationMode.Active &&
         !EmergencyDisable.Value;
 
     public bool CanStartAutoCastActively =>
         AutoCastMode.Value == AutoCastOperationMode.Active &&
+        !EmergencyDisable.Value;
+
+    public bool CanStartAutoConceptActively =>
+        AutoConceptMode.Value == AutoConceptOperationMode.Active &&
         !EmergencyDisable.Value;
 
     public static AutomataConfig Bind(ConfigFile config)
@@ -161,33 +253,50 @@ internal sealed class AutomataConfig
                 15,
                 0);
 
+            var autoConceptMode = BindAutoConceptMode(config);
+
+            var autoConceptFallbackEvaluationIntervalSeconds = BindAutoConceptFallbackEvaluationIntervalSeconds(config);
+
             var result = new AutomataConfig(
                 Bind(config, "General", "Enabled", true, "Enable Automata.", 0, 0),
                 autoBuyMode,
-                Bind(config, "AutoBuy", "AffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Affordability policy for structures. BuyAll accepts any affordable purchase; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 30),
-                Bind(config, "AutoBuy", "UpgradeAffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Independent affordability policy for upgrades. BuyAll accepts any affordable upgrade; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 31),
-                Bind(config, "AutoBuy", "IncludeStructures", true, "Include native StructureSO attributes and levels.", 10, 10),
-                Bind(config, "AutoBuy", "IncludeUpgrades", true, "Include native UpgradeSO purchases.", 10, 20),
-                Bind(config, "AutoBuy", "RespectActionMultiplier", false, "When enabled, repeat the selected purchase up to the current native action multiplier, capped to free queue room. Every level is still submitted and revalidated separately.", 10, 62),
-                Bind(config, "AutoBuy", "EvaluationIntervalSeconds", 0.5f, "Unscaled seconds between idle scans when no eligible purchase is pending. In-progress scans and active queue feeding continue every frame.", 10, 90),
-                Bind(config, "AutoBuy", "LeaveQueueSlots", 1, "Minimum native action-queue slots Automata leaves free for manual actions.", 10, 70),
-                Bind(config, "AutoBuy", "MaxCandidatesPerScan", 1024, "Safety cap for the combined StructureSO and UpgradeSO registry. CPU-limited scans resume on the next frame.", 10, 110),
-                Bind(config, "AutoBuy", "BatchSizingMode", AutoBuyBatchSizingMode.FillAvailableQueue, "FillAvailableQueue continues through ranked candidates until only LeaveQueueSlots remain. Fixed queues up to MaxPurchasesPerBatch levels.", 10, 40),
-                Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum queued levels from one completed scan when BatchSizingMode is Fixed.", 10, 50),
-                Bind(config, "AutoBuy", "StructureRepeatMode", AutoBuyStructureRepeatMode.BulkDevelopment, "Used when RespectActionMultiplier is disabled. BulkDevelopment follows the live Player Bulk Development value; Fixed uses FixedStructureLevelsPerCandidate; Single queues each ranked structure once.", 10, 60),
-                Bind(config, "AutoBuy", "FixedStructureLevelsPerCandidate", 2, "Maximum consecutive one-level structure purchases only when StructureRepeatMode is Fixed. Ignored by BulkDevelopment and Single.", 10, 61, new AcceptableValueRange<int>(1, 100)),
-                Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120),
-                Bind(config, "AutoBuy", "BlockedUuids", string.Empty, "Comma-separated StructureSO or UpgradeSO UUIDs Automata must never buy.", 10, 130),
+                Bind(config, "AutoBuy", "AffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Affordability policy for structures. BuyAll accepts any affordable purchase; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 30, dependencies: AutoBuyStructuresActiveDependencies),
+                Bind(config, "AutoBuy", "UpgradeAffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Independent affordability policy for upgrades. BuyAll accepts any affordable upgrade; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 31, dependencies: AutoBuyUpgradesActiveDependencies),
+                Bind(config, "AutoBuy", "IncludeStructures", true, "Include native StructureSO attributes and levels.", 10, 10, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "IncludeUpgrades", true, "Include native UpgradeSO purchases.", 10, 20, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "AutoLevelSpells", true, "Automatically level ready spells while Auto Buy is active. Capability follows native progression automatically: locked, one spell per action, then the native level-all action after its upgrade completes.", 10, 25, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "RespectActionMultiplier", false, "When enabled, repeat the selected purchase up to the current native action multiplier, capped to free queue room. Every level is still submitted and revalidated separately.", 10, 62, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "EvaluationIntervalSeconds", 0.5f, "Unscaled seconds between idle scans when no eligible purchase is pending. In-progress scans and active queue feeding continue every frame.", 10, 90, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "LeaveQueueSlots", 1, "Minimum native action-queue slots Automata leaves free for manual actions.", 10, 70, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "MaxCandidatesPerScan", 1024, "Safety cap for the combined StructureSO and UpgradeSO registry. CPU-limited scans resume on the next frame.", 10, 110, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "BatchSizingMode", AutoBuyBatchSizingMode.FillAvailableQueue, "FillAvailableQueue continues through ranked candidates until only LeaveQueueSlots remain. Fixed queues up to MaxPurchasesPerBatch levels.", 10, 40, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum queued levels from one completed scan when BatchSizingMode is Fixed.", 10, 50, dependencies: AutoBuyFixedBatchDependencies),
+                Bind(config, "AutoBuy", "StructureRepeatMode", AutoBuyStructureRepeatMode.BulkDevelopment, "Used when RespectActionMultiplier is disabled. BulkDevelopment follows the live Player Bulk Development value; Fixed uses FixedStructureLevelsPerCandidate; Single queues each ranked structure once.", 10, 60, dependencies: AutoBuyStructureRepeatDependencies),
+                Bind(config, "AutoBuy", "FixedStructureLevelsPerCandidate", 2, "Maximum consecutive one-level structure purchases only when StructureRepeatMode is Fixed. Ignored by BulkDevelopment and Single.", 10, 61, new AcceptableValueRange<int>(1, 100), AutoBuyFixedStructureDependencies),
+                Bind(config, "AutoBuy", "PrioritizeCostAndQualityStructures", false, "When enabled, unlocked and affordable Structures with native effects proven to reduce costs or increase resource quality rank before ordinary candidates. Unknown effects receive no priority.", 10, 65, dependencies: AutoBuyStructuresActiveDependencies),
+                Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120, dependencies: AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "BlockedUuids", string.Empty, "Comma-separated StructureSO or UpgradeSO UUIDs Automata must never buy.", 10, 130, dependencies: AutoBuyActiveDependencies),
                 autoCastMode,
                 Bind(config, "AutoCast", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.X, UnityEngine.KeyCode.LeftAlt), "Toggle Auto Cast between Disabled and Active. Default: Left Alt + X.", 15, 5),
                 Bind(config, "AutoCast", "ShowToggleButton", true, "Show the Auto Cast state button immediately left of the native Auto Buy queue switch.", 15, 6),
-                Bind(config, "AutoCast", "EvaluationIntervalSeconds", 0.25f, "Unscaled seconds between Auto Cast evaluations.", 15, 10, new AcceptableValueRange<float>(0.1f, 10.0f)),
-                Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
-                Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
-                Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
+                Bind(config, "AutoCast", "EvaluationIntervalSeconds", 0.25f, "Unscaled seconds between Auto Cast evaluations.", 15, 10, new AcceptableValueRange<float>(0.1f, 10.0f), AutoCastActiveDependencies),
+                Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f), AutoCastActiveDependencies),
+                Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f), AutoCastActiveDependencies),
+                Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1, dependencies: AutoCastActiveDependencies),
+                autoConceptMode,
+                Bind(config, "AutoConcept", "SlotManagementMode", AutoConceptSlotManagementMode.TimedCycle, "RotateAll replaces active concepts when a compatible discovered concept has strictly lower mastery. PreserveManual fills empty slots and rotates only quantities added by Automata. TimedCycle rotates compatible concepts only after their full settled training period, even if they already caught up.", 17, 5, dependencies: AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "ShowToggleButton", true, "Show the Auto Concept state button in the native Auto Buy-anchored control strip.", 17, 6),
+                Bind(config, "AutoConcept", "TrainingPeriodSeconds", 300, "RotateAll and PreserveManual protect a newly assigned concept until it catches the captured highest mastery or this settled time elapses. TimedCycle always uses the full settled period.", 17, 7, new AcceptableValueRange<int>(10, 3600), AutoConceptActiveDependencies),
+                autoConceptFallbackEvaluationIntervalSeconds,
+                Bind(config, "AutoConcept", "PerConceptQuantityCap", 0, "Optional maximum automated quantity per concept. Zero uses the native mastery maximum.", 17, 20, new AcceptableValueRange<int>(0, 1000000), AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "RateReservePercent", 10.0f, "Minimum percentage of each drained resource's current gross positive rate to preserve after an automated quantity change.", 17, 30, new AcceptableValueRange<float>(0.0f, 100.0f), AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "MinimumResourcePercent", 10.0f, "Finite-cap drained resources must be at least this full before Auto Concept adds quantity.", 17, 40, new AcceptableValueRange<float>(0.0f, 100.0f), AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "MinimumDrainRatio", 0.95f, "Native post-settlement drain ratio floor. Falling below it rolls back only Automata-owned quantity.", 17, 50, new AcceptableValueRange<float>(0.0f, 1.0f), AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "AllowedUuids", string.Empty, "Optional comma-separated concept allowlist. Empty allows every validated recipe in ConceptRecipes.", 17, 80, dependencies: AutoConceptActiveDependencies),
+                Bind(config, "AutoConcept", "BlockedUuids", string.Empty, "Comma-separated concept UUIDs Auto Concept must never train.", 17, 90, dependencies: AutoConceptActiveDependencies),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
-                Bind(config, "Performance", "CpuBudgetMilliseconds", 4.0f, "Soft CPU budget for each scan or per-frame purchase slice. Higher values fill the queue faster but may reduce frame rate.", 30, 0),
-                Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal Auto Buy and Auto Cast decisions to the BepInEx log. Startup, warnings, and errors are always logged.", 50, 0),
+                Bind(config, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft CPU budget for each scan or purchase slice, capped at 1 ms for frame-time safety.", 30, 0, new AcceptableValueRange<float>(0.1f, 1.0f)),
+                Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal automation decisions to the BepInEx log. Startup, catalog initialization, warnings, and errors are always logged.", 50, 0),
                 Bind(config, "Diagnostics", "MaxLoggedRejections", 12, "Maximum rejected candidates written per verbose evaluation when operational logging is enabled.", 50, 20),
                 Bind(config, "Diagnostics", "DecisionLogLevel", AutomataDecisionLogLevel.Summary, "Recommendation detail when operational logging is enabled.", 50, 10),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
@@ -220,6 +329,7 @@ internal sealed class AutomataConfig
         RemoveLegacy(config, "Research", "CategoryPriority", string.Empty);
         RemoveLegacy(config, "Reserves", "MaxCostToQuantityRatio", 1.0f);
         RemoveLegacy(config, "ActiveMode", "StartMethod", "Develop");
+        RemoveLegacy(config, "AutoConcept", "AutoLevelSpells", true);
     }
 
     private static void RemoveLegacy<T>(ConfigFile config, string section, string key, T defaultValue)
@@ -227,6 +337,87 @@ internal sealed class AutomataConfig
         var definition = new ConfigDefinition(section, key);
         config.Bind(section, key, defaultValue, "Removed legacy setting.");
         config.Remove(definition);
+    }
+
+    private static ConfigEntry<AutoConceptOperationMode> BindAutoConceptMode(ConfigFile config)
+    {
+        const string section = "AutoConcept";
+        const string key = "Mode";
+        var definition = new ConfigDefinition(section, key);
+        var serializedMode = config.Bind(section, key, AutoConceptOperationMode.Disabled.ToString(), "Auto Concept mode migration.").Value;
+        config.Remove(definition);
+
+        var result = Bind(
+            config,
+            section,
+            key,
+            AutoConceptOperationMode.Disabled,
+            "Disabled performs no concept work. Active trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
+            17,
+            0);
+        if (string.Equals(serializedMode, "Active", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(serializedMode, "BalanceMastery", StringComparison.OrdinalIgnoreCase))
+        {
+            result.Value = AutoConceptOperationMode.Active;
+        }
+
+        return result;
+    }
+
+    private static ConfigEntry<int> BindAutoConceptFallbackEvaluationIntervalSeconds(ConfigFile config)
+    {
+        const string section = "AutoConcept";
+        const string currentKey = "FallbackEvaluationIntervalSeconds";
+        var currentDefinition = new ConfigDefinition("AutoConcept", "FallbackEvaluationIntervalSeconds");
+        var currentSeconds = config.Bind(
+            section,
+            currentKey,
+            -1,
+            new ConfigDescription("Current Auto Concept fallback interval migration.")).Value;
+        config.Remove(currentDefinition);
+
+        var previousDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalSeconds");
+        var previousSeconds = config.Bind(
+            section,
+            "RebalanceIntervalSeconds",
+            -1,
+            new ConfigDescription("Previous Auto Concept fallback interval migration.")).Value;
+        config.Remove(previousDefinition);
+
+        var result = Bind(
+            config,
+            section,
+            currentKey,
+            300,
+            "Maximum idle seconds between full concept plan evaluations. Native lifecycle, mastery, slot, quantity, and safety signals can request an earlier pass.",
+            17,
+            10,
+            new AcceptableValueRange<int>(10, 1800),
+            AutoConceptActiveDependencies);
+        var legacyDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalMinutes");
+        var legacyMinutes = config.Bind(
+            section,
+            "RebalanceIntervalMinutes",
+            -1.0f,
+            new ConfigDescription("Legacy Auto Concept interval migration.")).Value;
+        config.Remove(legacyDefinition);
+        if (currentSeconds >= 0)
+        {
+            result.Value = Math.Clamp(currentSeconds, 10, 1800);
+        }
+        else if (previousSeconds >= 0)
+        {
+            result.Value = Math.Clamp(previousSeconds, 10, 1800);
+        }
+        else if (float.IsFinite(legacyMinutes) && legacyMinutes >= 0.0f)
+        {
+            result.Value = Math.Clamp(
+                (int)Math.Round(legacyMinutes * 60.0f, MidpointRounding.AwayFromZero),
+                10,
+                1800);
+        }
+
+        return result;
     }
 
     private static ConfigEntry<T> Bind<T>(
@@ -237,20 +428,28 @@ internal sealed class AutomataConfig
         string description,
         int sectionOrder,
         int settingOrder,
-        AcceptableValueBase? acceptableValues = null)
+        AcceptableValueBase? acceptableValues = null,
+        IReadOnlyList<ModConfigDependency>? dependencies = null)
     {
         var hidden = section == "General" && key == "Enabled";
         var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids" || key == "MaxCandidatesPerScan");
+        var advancedAutoConcept = section == "AutoConcept" && key == "FallbackEvaluationIntervalSeconds";
         var displaySection = section switch
         {
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
+            "AutoConcept" when !advancedAutoConcept => "Auto Concept",
             _ => "Advanced",
         };
         var displayName = key switch
         {
             "Mode" when section == "AutoBuy" => "Auto Buy",
             "Mode" when section == "AutoCast" => "Auto Cast",
+            "Mode" when section == "AutoConcept" => "Auto Concept",
+            "SlotManagementMode" => "Slot management",
+            "TrainingPeriodSeconds" => "Training period (seconds)",
+            "AutoLevelSpells" => "Auto-level spells",
+            "FallbackEvaluationIntervalSeconds" => "Auto Concept fallback evaluation (seconds)",
             "AffordabilityMode" => "Structure affordability",
             "UpgradeAffordabilityMode" => "Upgrade affordability",
             "IncludeStructures" => "Buy structures",
@@ -261,7 +460,10 @@ internal sealed class AutomataConfig
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : 20;
+        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : 20;
+        var metadata = dependencies is null
+            ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName)
+            : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName);
         return config.Bind(
             section,
             key,
@@ -269,7 +471,7 @@ internal sealed class AutomataConfig
             new ConfigDescription(
                 description,
                 acceptableValues,
-                new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName)));
+                metadata));
     }
 }
 

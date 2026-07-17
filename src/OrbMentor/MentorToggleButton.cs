@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,12 +10,14 @@ namespace OrbMentor;
 
 internal sealed class MentorToggleButton : IDisposable
 {
+    private const string ObjectName = "OrbMentor.Toggle";
     private readonly GameObject _root;
     private readonly Button _button;
     private readonly TextMeshProUGUI? _text;
     private readonly Image? _icon;
     private readonly MentorConfig _config;
     private readonly MentorRuntime _runtime;
+    private int _lastVisualState = -1;
 
     private MentorToggleButton(GameObject root, Button button, TextMeshProUGUI? text, Image? icon, MentorConfig config, MentorRuntime runtime)
     { _root = root; _button = button; _text = text; _icon = icon; _config = config; _runtime = runtime; }
@@ -24,22 +27,15 @@ internal sealed class MentorToggleButton : IDisposable
     {
         result = null;
         var toggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
-        var managerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
-        if (toggleType is null || managerType is null) return false;
-        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType)
-            .OfType<Component>()
-            .Where(manager => manager.gameObject.activeInHierarchy)
-            .Select(manager => Read(manager, "autoBuyEnabled"))
-            .FirstOrDefault(value => value is not null);
-        if (autoBuyEnabled is null) return false;
-        var native = Resources.FindObjectsOfTypeAll(toggleType)
-            .OfType<Component>()
-            .FirstOrDefault(component => IsNativeQueueToggle(component) && ReferenceEquals(Read(component, "isOnVariable"), autoBuyEnabled));
+        if (toggleType is null) return false;
+        var native = StatusControlGroup.FindNativeToggle(toggleType);
         if (native?.transform.parent is null) return false;
-        var group = MentorStatusControlGroup.GetOrCreate(native);
+        var group = StatusControlGroup.GetOrCreate(native);
+        RemoveOwnedChild(group);
         var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
-        root.name = "OrbMentor.Toggle";
-        if (native.transform is RectTransform nativeRect) MentorStatusControlGroup.Reflow(group, nativeRect);
+        root.name = ObjectName;
+        root.SetActive(false);
+        StatusControlGroup.RegisterControl(root, StatusControlOrder.Mentor);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
@@ -56,6 +52,7 @@ internal sealed class MentorToggleButton : IDisposable
         }
         if (cloned is Behaviour behaviour) behaviour.enabled = false;
         if (cloned is not null) UnityEngine.Object.Destroy(cloned);
+        RemoveNativeViewBindings(root);
         if (clonedHoverTooltip is not null)
         {
             clonedHoverTooltip.enabled = false;
@@ -69,6 +66,8 @@ internal sealed class MentorToggleButton : IDisposable
         result = new MentorToggleButton(root, button, text, icon, config, runtime);
         button.onClick.AddListener(result.Toggle);
         result.Render();
+        root.SetActive(true);
+        if (native.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
         var installedRect = root.transform as RectTransform;
         Plugin.Log.LogInfo($"Mentor toggle installed: AnchoredPosition=({installedRect?.anchoredPosition.x:0.##},{installedRect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
         return true;
@@ -76,8 +75,11 @@ internal sealed class MentorToggleButton : IDisposable
 
     public void Render()
     {
-        var state = _runtime.IsBlocked ? "BLOCKED" : _config.Active ? "ON" : "OFF";
-        var color = _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+        var visualState = _runtime.IsBlocked ? 2 : _config.Active ? 1 : 0;
+        if (_lastVisualState == visualState) return;
+        _lastVisualState = visualState;
+        var state = visualState == 2 ? "BLOCKED" : visualState == 1 ? "ON" : "OFF";
+        var color = visualState == 2 ? new Color(1, .3f, .25f) : visualState == 1 ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
         if (_text is not null)
         {
             _text.text = $"M {state}";
@@ -87,13 +89,27 @@ internal sealed class MentorToggleButton : IDisposable
     private void Toggle()
     {
         if (!_runtime.IsBlocked) _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-        _runtime.Cancel(); Render(); Plugin.ShowNotice(_runtime.IsBlocked ? $"Orb Mentor BLOCKED: {_runtime.BlockedReason}" : $"Orb Mentor {_config.Mode.Value}. {_runtime.StatusText()}", _root.transform as RectTransform);
+        _runtime.Cancel(MentorDropReason.Disabled); Render(); Plugin.ShowNotice(_runtime.IsBlocked ? $"Orb Mentor BLOCKED: {_runtime.BlockedReason}" : $"Orb Mentor {_config.Mode.Value}. {_runtime.StatusText()}", _root.transform as RectTransform);
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
-    private static bool IsNativeQueueToggle(Component component) =>
-        component.gameObject.activeInHierarchy &&
-        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
-        component.gameObject.name != "OrbMentor.Toggle" &&
-        component.transform.parent?.name != "OrbModSuite.StatusControls";
+    private static void RemoveNativeViewBindings(GameObject root)
+    {
+        foreach (var component in root.GetComponents<Component>().Where(component => component.GetType().Name == "ManagedView"))
+        {
+            if (component is Behaviour behaviour) behaviour.enabled = false;
+            UnityEngine.Object.Destroy(component);
+        }
+    }
+    private static void RemoveOwnedChild(Transform group)
+    {
+        for (var index = group.childCount - 1; index >= 0; index--)
+        {
+            var child = group.GetChild(index);
+            if (child.name != ObjectName) continue;
+            child.name = ObjectName + ".Removing";
+            child.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(child.gameObject);
+        }
+    }
 }

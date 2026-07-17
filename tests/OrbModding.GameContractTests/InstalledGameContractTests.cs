@@ -67,14 +67,23 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "CanPurchase", false, "System.Boolean");
         AssertMethod(assembly, "StructureSO", "GetPurchaseCost", false, "ResourceCostList");
         AssertMethod(assembly, "StructureSO", "Purchase", false, "System.Void", "System.Boolean");
+        AssertMethod(assembly, "StructureSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
+        AssertMethod(assembly, "StructureSO", "QueueBuild", false, "System.Void", "System.Int32");
+        AssertMethod(assembly, "StructureSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "CanPurchase", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "GetPurchaseCost", false, "ResourceCostList");
+        AssertMethod(assembly, "UpgradeSO", "GetLeveledCostList", false, "ResourceCostList", "System.Int32");
         AssertMethod(assembly, "UpgradeSO", "Purchase", false, "System.Void");
+        AssertMethod(assembly, "UpgradeSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "UpgradeSO", "GetQueuedPurchaseLevel", false, "System.Int32");
+        AssertMethod(assembly, "UpgradeSO", "HasFiniteLevels", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
@@ -82,10 +91,37 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "IntVariable", "AsInt", false, "System.Int32");
         AssertMethod(assembly, "IntVariable", "SetValue", false, "System.Void", "System.Int32");
         Assert.Equal("System.Collections.Generic.List`1<ResourceTuple>", assembly.GetFieldType("ResourceCostList", "costs"));
+        AssertMethod(assembly, "ResourceCostList", "GetEntries", false, "System.Collections.Generic.List`1<ResourceTuple>");
         Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
         AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
+        Assert.Equal(
+            "System.Collections.Generic.List`1<PersistentEffectDeprecated+Property>",
+            assembly.GetFieldType("StructureSO", "structureProperties"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ResourceSO+PersistentEffect>",
+            assembly.GetFieldType("PersistentEffectDeprecated", "resourceEffects"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<UpgradeableObject+UpgradeEffectModifier>",
+            assembly.GetFieldType("PersistentEffectDeprecated", "upgradeableObjectEffects"));
+        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceSO+PersistentEffect", "resource"));
+        Assert.Equal("ResourceSO+ModifiableType", assembly.GetFieldType("ResourceSO+PersistentEffect", "upgradeType"));
+        Assert.Equal("ValueModifier", assembly.GetFieldType("ResourceSO+PersistentEffect", "modifier"));
+        Assert.Equal("UpgradeableObject", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "upgradeableObject"));
+        Assert.Equal("System.String", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyType"));
+        Assert.Equal("ValueModifier", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "modifier"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "useTargetRef"));
+        AssertMethod(assembly, "ValueModifier", "Adjust", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "TooltipableObject", "GetName", false, "System.String");
+        Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "quality"));
+        Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "maxQuantity"));
+        AssertMethod(assembly, "ValueModifierRecord", "GetValue", false, "BigDouble");
     }
 
     [GameAssemblyFact]
@@ -97,6 +133,9 @@ public sealed class InstalledGameContractTests
         Assert.Equal("SpellListVariable", assembly.GetFieldType("SpellManager", "activeSpells"));
         AssertMethod(assembly, "SpellManager", "FireSpellIndex", false, "System.Void", "System.Int32");
         AssertMethod(assembly, "SpellManager", "CanCastASpell", true, "System.Boolean");
+        AssertMethod(assembly, "SpellManager", "AddSpell", false, "System.Void", "Spell");
+        AssertMethod(assembly, "SpellManager", "RemoveSpell", false, "System.Void", "Spell");
+        AssertMethod(assembly, "SpellManager", "MoveSpell", false, "System.Void", "Spell");
 
         AssertMethod(assembly, "Spell", "Fire", false, "System.Void");
         AssertMethod(assembly, "Spell", "CanCast", false, "System.Boolean");
@@ -116,6 +155,8 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "Spell", "GetCost", false, "ResourceCostList");
         AssertMethod(assembly, "Spell", "GetDrainCost", false, "ResourceCostList");
         AssertMethod(assembly, "Spell", "GetScalingInfo", false, "ScalingInfo");
+        Assert.Equal("IdObjectRef`1<SpellRecipeSO>", assembly.GetFieldType("Spell", "referenceObj"));
+        AssertMethod(assembly, "Spell", "get_reference", false, "SpellRecipeSO");
 
         Assert.Equal("SpellRecipeSO+CastType", assembly.GetFieldType("SpellRecipeSO", "castType"));
         Assert.Equal("System.Collections.Generic.List`1<InstantEffectBlock>", assembly.GetFieldType("SpellRecipeSO", "onCastEffects"));
@@ -152,37 +193,60 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void AchievementResonance_MatchesKnownNativeLayout()
+    public void AutoSpellLevel_MatchesNativePrerequisiteCostAndCapabilityContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
-        Assert.Equal("NumberVariable", assembly.GetBaseType("IntVariable"));
-        AssertMethod(assembly, "NumberVariable", "ApplyEffects", false, "System.Void", "System.Int32");
-        AssertMethod(assembly, "NumberVariable", "GetLevel", false, "System.Int32");
-        AssertMethod(assembly, "NumberVariable", "GetExecInfo", false, "EffectExecutionInfo", "System.Int32");
-        Assert.Equal(
-            "System.Collections.Generic.List`1<PersistentEffectBlock>",
-            assembly.GetFieldType("NumberVariable", "persistentEffectBlocks"));
-        Assert.Equal(
-            "System.Collections.Generic.List`1<IPersistentEffectScript>",
-            assembly.GetFieldType("PersistentEffectBlock", "effectScripts"));
-        Assert.Equal("NumberVariable", assembly.GetFieldType("NumberVariable+PersistentEffect", "numberVariable"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("NumberVariable+PersistentEffect", "modifier"));
-        Assert.Equal("UpgradeableObject", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "upgradeableObject"));
-        Assert.Equal("System.String", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyType"));
-        Assert.Equal("System.Int32", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyIndex"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "modifier"));
+        Assert.Equal("SpellRecipeListVariable", assembly.GetFieldType("SpellManager", "availableSpellRecipes"));
+        AssertMethod(assembly, "SpellManager", "TryLevelAllSpells", false, "System.Void");
+        Assert.Equal("Prerequisites+Container", assembly.GetFieldType("SpellRecipeSO", "levelingPrerequisites"));
+        AssertMethod(assembly, "Prerequisites+Container", "Check", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "GetLevelCost", false, "ResourceCostList");
+        AssertMethod(assembly, "SpellRecipeSO", "IsReadyToLevelMastery", false, "System.Boolean");
+        AssertMethod(assembly, "SpellRecipeSO", "PurchaseLevel", false, "System.Void");
+        AssertMethod(assembly, "ResourceCostList", "HasEnough", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceCostList", "PerformCost", false, "System.Void");
+        AssertMethod(assembly, "UpgradeSO", "GetPurchaseLevel", false, "System.Int32");
+    }
 
-        AssertMethod(assembly, "ValueModifier", "Stacking", true, "ValueModifier", "BigDouble");
-        AssertMethod(assembly, "ValueModifier", "Stacking", true, "ValueModifier", "System.Guid", "BigDouble");
-        AssertMethod(assembly, "ValueModifier", "GetGuid", false, "System.Guid");
+    [GameAssemblyFact]
+    public void AutoConcept_MatchesScopedCatalogSlotQuantityAndDrainContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
-        var numberEffectFields = new[]
-        {
-            "maximumMultiplier", "MaximumMultiplier", "maxMultiplier", "MaxMultiplier", "maximum", "Maximum", "cap", "Cap",
-        };
-        Assert.All(numberEffectFields, name => Assert.Throws<InvalidOperationException>(
-            () => assembly.GetFieldType("NumberVariable+PersistentEffect", name)));
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
+            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
+        Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("AbstractListVariable`1", "value"));
+        Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("AlchemyRecipeSO", "drainCost"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
+        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperience", false, "BigDouble");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetRequiredExperience", false, "BigDouble");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperienceLevel", false, "System.Int32");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
+
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "CanAddInstance", false, "System.Boolean", "AlchemyRecipeSO");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "SetupMaxSlotsValue", false, "System.Void");
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "quantity"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "queuedQuantity"));
+        Assert.Equal("ResourceDrain", assembly.GetFieldType("AlchemyInstance", "resourceDrain"));
+        AssertMethod(assembly, "AlchemyInstance", ".ctor", false, "System.Void", "AlchemyRecipeSO");
+        AssertMethod(assembly, "AlchemyInstance", "GetDrainCostMod", false, "BigDouble");
+        AssertMethod(assembly, "ResourceDrain", "GetCurrentDrain", false, "ResourceCostList");
+        AssertMethod(assembly, "ResourceDrain", "GetRatio", false, "BigDouble");
+        AssertMethod(assembly, "ResourceCostList", "Subtract", false, "ResourceCostList", "ResourceCostList");
+        AssertMethod(assembly, "ResourceCostList", "Multiply", false, "ResourceCostList", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueRate", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetModdedDrain", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "IsAtZero", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceSO", "GetTrueSoftCap", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "HasMaxQuantity", false, "System.Boolean");
     }
 
     [GameAssemblyFact]
@@ -192,6 +256,7 @@ public sealed class InstalledGameContractTests
 
         Assert.Equal("System.Double", firstPass.GetFieldType("BigDouble", "mantissa"));
         Assert.Equal("System.Int64", firstPass.GetFieldType("BigDouble", "exponent"));
+        Assert.Equal("BigDouble", firstPass.GetFieldType("BigDouble", "One"));
         AssertMethod(firstPass, "BigDouble", ".ctor", false, "System.Void", "System.Double");
         AssertMethod(firstPass, "BigDouble", ".ctor", false, "System.Void", "System.Double", "System.Int64");
         AssertMethod(firstPass, "BigDouble", "op_Implicit", true, "BigDouble", "System.Double");

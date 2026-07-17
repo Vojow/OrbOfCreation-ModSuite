@@ -4,7 +4,7 @@ Choose the path that matches what you are trying to do.
 
 ## Players
 
-- [Install Orb Automata](user-guide/installation.md)
+- [Install the supported suite](user-guide/installation.md)
 - [Configure automation safely](user-guide/configuration.md)
 - [Troubleshoot a problem](user-guide/troubleshooting.md)
 - [Remove the mods](user-guide/uninstalling.md)
@@ -35,6 +35,10 @@ Research pages distinguish **Verified**, **Inferred**, and **Candidate** finding
 
 - [Project roadmap](plans/roadmap.md)
 - [Plan index and lifecycle status](plans/README.md)
+- [Mod suite performance architecture](plans/performance-suite.md)
+- [Auto Concept mastery-balancing architecture](plans/auto-concept.md)
 - [Orb Mentor artifacts and alchemy design](plans/mentor-artifacts-alchemy.md)
 
 Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.
+
+Experimental Orb Chronomancer and Orb Achievement Resonance documentation is intentionally absent from this supported branch. Their source, tests, and design notes live on `codex/experimental-chronomancer-resonance` until an explicit lifecycle promotion.

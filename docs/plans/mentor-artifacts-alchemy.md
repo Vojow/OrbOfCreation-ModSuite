@@ -1,12 +1,12 @@
 # Orb Mentor: artifacts and alchemy design
 
-> **Lifecycle: Planned.** These are future vertical slices, separate from the implemented spells-only beta candidate.
+> **Lifecycle: Beta; extended interactive validation pending.** Independent artifact and alchemy domains are released, default disabled, and still require the interactive gates below before stable promotion.
 
 [Back to plan index](README.md) · [Orb Mentor plan](mentor.md) · [Project roadmap](roadmap.md)
 
 ## Purpose
 
-Extend Orb Mentor beyond spells without changing the released spells contract. Each progression domain remains independently configurable and fails closed. Shared Pool remains the default economy, fresh domain switches start disabled, and all grants must use or faithfully complete the domain's native persistence and level-up path.
+This document records the design and current beta implementation that extended Orb Mentor beyond spells without changing the spell contract. Each progression domain remains independently configurable and fails closed. Shared Pool remains the default economy, fresh artifact and alchemy switches start disabled, and all grants use or faithfully complete the domain's native persistence and level-up path.
 
 The game calls artifacts `EquipmentSO`; this document uses **artifact** for player-facing text and **equipment** for native API names.
 
@@ -21,7 +21,7 @@ The existing economy formulas remain unchanged:
 - **Shared Pool:** each eligible recipient receives `(source XP × share percent) / recipient count`.
 - **Per Recipient:** each eligible recipient receives `source XP × share percent`.
 
-Configuration should add independent `Spells`, `Artifacts`, and `Alchemy` enable switches and percentages. The compact Mentor button remains the plugin-wide Disabled/Active control. Its tooltip summarizes each domain and identifies any domain-specific blocked reason.
+Configuration provides independent `Spells`, `Artifacts`, and `Alchemy` enable switches and percentages. The compact Mentor button remains the plugin-wide Disabled/Active control. Its tooltip summarizes each domain and identifies any domain-specific blocked reason.
 
 ## Alchemy vertical slice
 
@@ -36,7 +36,7 @@ Configuration should add independent `Spells`, `Artifacts`, and `Alchemy` enable
 - Type progression: `GainMasteryXp` increases mastery immediately and `ApplyMastery()` adds the resulting level to every related `AlchemyTypeSO`.
 - XP producers include continuous recipe activity through `AlchemyRecipeSO.Increment(float)` and completion XP through `AlchemyInstance.CompleteRecipe()`.
 
-### Proposed contract
+### Implemented contract
 
 - Hook a postfix on `AlchemyRecipeSO.GainMasteryXp(BigDouble)` and observe the final positive argument.
 - Include all successful native alchemy XP events, whether continuous or completion-based.
@@ -84,7 +84,7 @@ I0 adds an installed-game contract fixture and a development-only adapter probe 
 
 The adapter executes the same ordered state transition as native `IncrementActive`: gain container XP, calculate gained levels, apply those levels through the native equipment method, then copy the container's current experience to the saved field. It must fail closed before mutation if every member is not resolved against the supported assembly.
 
-This adapter is acceptable for public use only after differential tests show that, for identical starting states and XP, it produces the same XP, mastery level, total-equipment-mastery modifier, notifications, and serialized save values as native equipped progression. Until that gate passes, Artifacts remains unavailable/blocked rather than an experimental public mode.
+The beta adapter is allowed to operate only after its complete reflected contract resolves. Automated differential tests cover identical starting-state and XP transitions, but stable promotion still requires interactive evidence that XP, mastery level, total-equipment-mastery modifier, notifications, and serialized save values match native equipped progression. If the runtime contract is incomplete, Artifacts remains unavailable/blocked before mutation.
 
 ### Artifact event capture
 
@@ -129,7 +129,7 @@ Only after R1 differential evidence passes, enable the guarded adapter, schedule
 
 ### H1 — Hardening
 
-Test all three domains independently and together at normal and Chronomancer speeds, with and without sibling plugins. Validate clean install, upgrade, save/load, reset, disable, removal, and reinstall. Public configuration remains Disabled/Active only.
+Test all three domains independently and together at normal and accelerated game speeds, with and without supported sibling plugins. Validate clean install, upgrade, save/load, reset, disable, removal, and reinstall. Public configuration remains Disabled/Active only.
 
 ## Decisions intentionally deferred to evidence
 
@@ -139,4 +139,4 @@ Test all three domains independently and together at normal and Chronomancer spe
 
 ## Implementation status
 
-The first development build now includes independent Alchemy and Artifacts switches, guarded hooks, per-domain aggregation and queues, round-robin budgeting, alchemy native grants, and the artifact native-sequence adapter. Continuous artifact and alchemy events reuse one catalog snapshot per frame and distribute consolidated XP at most four times per second to avoid reflection churn and native-notification storms. Both new domains default disabled. Automated contracts and adapter tests are required before installation, and the interactive gates above remain mandatory before either domain is described as production-ready.
+The beta includes independent Alchemy and Artifacts switches, guarded hooks, per-domain aggregation and queues, round-robin budgeting, alchemy native grants, and the artifact native-sequence adapter. Continuous artifact and alchemy events reuse one catalog snapshot per frame and distribute consolidated XP at most four times per second to avoid reflection churn and native-notification storms. Both domains default disabled. Automated contract and adapter tests pass on the current supported tree; the interactive gates above remain mandatory before either domain is described as stable.

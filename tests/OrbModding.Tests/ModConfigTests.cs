@@ -123,15 +123,18 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "Auto Buy", "Auto Cast", "Advanced" },
+            new[] { "Auto Buy", "Auto Cast", "Auto Concept", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
-            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
-            mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(6).Select(setting => setting.Key));
+            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
+            mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(7).Select(setting => setting.Key));
         Assert.Equal(
             new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
@@ -142,29 +145,126 @@ public sealed class ModConfigTests
 
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
+        var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
+        Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
+        var autoConceptSlotManagement = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "SlotManagementMode");
+        Assert.Equal(new[] { "RotateAll", "PreserveManual", "TimedCycle" }, Enum.GetNames(autoConceptSlotManagement.SettingType));
+
+        var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
+        var settings = mod.Sections.SelectMany(section => section.Settings).ToDictionary(
+            setting => $"{setting.SourceSection}.{setting.Key}");
+
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoBuy" && setting.Key != "Mode"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoBuy" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoCast" &&
+                setting.Key is not ("Mode" or "ToggleShortcut" or "ShowToggleButton")),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoCast" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoConcept" &&
+                setting.Key is not ("Mode" or "ShowToggleButton")),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoConcept" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+
+        Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
+        Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));
+        Assert.True(session.DependencySatisfied(settings["AutoCast.ShowToggleButton"]));
+        Assert.True(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
+        session.Get(settings["AutoBuy.Mode"]).Stage("Disabled");
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
+        session.Get(settings["AutoBuy.Mode"]).Stage("Active");
+        Assert.False(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
+        Assert.False(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
+        Assert.True(session.DependencySatisfied(settings["AutoConcept.ShowToggleButton"]));
+        Assert.False(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
+
+        session.Get(settings["AutoCast.Mode"]).Stage("Active");
+        session.Get(settings["AutoConcept.Mode"]).Stage("Active");
+        Assert.True(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
+        Assert.True(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
+        Assert.True(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
+
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        session.Get(settings["AutoBuy.BatchSizingMode"]).Stage("Fixed");
+        session.Get(settings["AutoBuy.StructureRepeatMode"]).Stage("Fixed");
+        Assert.True(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
+        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        session.Get(settings["AutoBuy.RespectActionMultiplier"]).Stage("true");
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.StructureRepeatMode"]));
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
     }
 
     [Fact]
     public void MentorCatalog_UsesFeatureTabsAndDependencies()
     {
         var config = new ConfigFile();
-        var mentor = MentorConfig.Bind(config);
+        MentorConfig.Bind(config);
         var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("mentor", "Mentor", "test", config) }).Mods.Single();
 
         Assert.Equal(new[] { "Spells", "Artifacts", "Alchemy", "Advanced" }, mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         var artifactShare = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "SharePercent");
-        Assert.Equal("Artifacts", artifactShare.DependencySection);
-        Assert.Equal("Enabled", artifactShare.DependencyKey);
+        Assert.Equal(2, artifactShare.Dependencies.Count);
+        Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active");
+        Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "Artifacts" && dependency.Key == "Enabled" && dependency.ExpectedValue == "true");
 
         var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
+        var spellSection = mod.Sections.Single(section => section.Name == "Spells");
+        var mentorMode = spellSection.Settings.Single(setting => setting.Key == "Mode");
+        var toggleShortcut = spellSection.Settings.Single(setting => setting.Key == "ToggleShortcut");
+        var artifactEnabled = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "Enabled");
+        Assert.All(
+            mod.Sections.SelectMany(section => section.Settings).Where(setting =>
+                setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy" or "Performance"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.False(session.DependencySatisfied(artifactShare));
-        mentor.ArtifactsEnabled.Value = true;
-        session.RevertAll();
+        Assert.False(session.DependencySatisfied(artifactEnabled));
+        Assert.True(session.DependencySatisfied(toggleShortcut));
+        var dependencyMessage = session.DescribeUnsatisfiedDependencies(artifactShare);
+        Assert.Contains("Mentor = Active", dependencyMessage);
+        Assert.Contains("Artifact sharing = true", dependencyMessage);
+        session.Get(mentorMode).Stage("Active");
+        Assert.True(session.DependencySatisfied(artifactEnabled));
+        Assert.False(session.DependencySatisfied(artifactShare));
+        session.Get(artifactEnabled).Stage("true");
         Assert.True(session.DependencySatisfied(artifactShare));
+    }
+
+    [Fact]
+    public void LegacySingleDependencyMetadataRemainsSupported()
+    {
+        var config = new ConfigFile();
+        var enabled = config.Bind("Feature", "Enabled", false, "feature");
+        config.Bind(
+            "Feature",
+            "Amount",
+            5,
+            new ConfigDescription(
+                "amount",
+                null,
+                new ModConfigMetadata(
+                    0,
+                    10,
+                    dependencySection: "Feature",
+                    dependencyKey: "Enabled")));
+        var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("legacy", "Legacy", "1", config) }).Mods.Single();
+        var amount = mod.Sections.Single().Settings.Single(setting => setting.Key == "Amount");
+        var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
+
+        Assert.Single(amount.Dependencies);
+        Assert.False(session.DependencySatisfied(amount));
+        enabled.Value = true;
+        session.RevertAll();
+        Assert.True(session.DependencySatisfied(amount));
     }
 
     [Fact]
@@ -176,6 +276,7 @@ public sealed class ModConfigTests
         config.Bind("AutoCast", "RuntimeProbeConfirmed", true, "legacy");
         config.Bind("Safety", "AllowUnvalidatedActiveMode", false, "legacy");
         config.Bind("Research", "Mode", LegacyResearchAutomationMode.DryRun, "legacy");
+        config.Bind("AutoConcept", "AutoLevelSpells", false, "pre-release location");
 
         AutomataConfig.Bind(config);
 
@@ -183,6 +284,8 @@ public sealed class ModConfigTests
         Assert.DoesNotContain(config, pair => pair.Key.Key == "ActivePurchaseLimitPerSession");
         Assert.DoesNotContain(config, pair => pair.Key.Key == "AllowUnvalidatedActiveMode");
         Assert.DoesNotContain(config, pair => pair.Key.Section == "Research");
+        Assert.DoesNotContain(config, pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "AutoLevelSpells");
+        Assert.Contains(config, pair => pair.Key.Section == "AutoBuy" && pair.Key.Key == "AutoLevelSpells");
     }
 
     [Fact]

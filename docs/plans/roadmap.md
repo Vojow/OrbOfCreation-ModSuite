@@ -6,16 +6,14 @@
 
 ## Product direction
 
-The project will produce six focused gameplay BepInEx 5 plugins plus an optional in-game configuration UI:
+The supported branch currently contains two gameplay plugins, an optional in-game configuration UI, and their shared library:
 
-1. **Orb Chronomancer** — controls simulation speed while keeping input and UI usable.
-2. **Orb Automata** — automates repetitive progression decisions through configurable rules.
-3. **Orb Insights** — extends existing tooltips into an inspection and explanation layer.
-4. **Orb Toolbox** — provides explicit resource/debug operations and development safeguards.
-5. **Orb Achievement Resonance** — extends Achievement Strength through the game's native persistent-effect pipeline.
-6. **Orb Mentor** — shares a controlled portion of earned mastery experience with lower-level discovered spells, with artifacts and alchemy deferred to separately audited extensions.
+1. **Orb Automata** — Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+2. **Orb Mentor** — independently configurable mastery-XP sharing for spells, artifacts, and alchemy.
+3. **Orb Mod Config** — optional shared UI that exposes loaded BepInEx configuration without becoming a gameplay-plugin dependency.
+4. **Orb Modding Common** — shared audited infrastructure bundled with the supported plugins.
 
-**Orb Mod Config** is optional shared UI infrastructure that exposes loaded BepInEx configuration inside the game without becoming a dependency of the gameplay plugins.
+Orb Insights and Orb Toolbox remain design plans. `OrbChronomancer` and `OrbAchievementResonance` are isolated on the dedicated experimental branch and enter the supported branch only after explicit lifecycle promotion and release-scope approval.
 
 The public positioning is: **reduce idle waiting and repetitive management while preserving meaningful progression decisions.** Cheats and resource editing may be useful as private development tools, but they are not the first public product.
 
@@ -24,9 +22,9 @@ The public positioning is: **reduce idle waiting and repetitive management while
 - Opt-in actions and conservative defaults.
 - Never mutate a save file directly during gameplay.
 - Use normal game APIs whenever possible.
-- Keep UI/input responsive at accelerated simulation speeds.
-- Put a configurable action and CPU-time budget on automation.
-- Make every automated decision explainable in logs or tooltips.
+- Keep UI and input responsive at different game speeds.
+- Put configurable action and CPU-time budgets on automation.
+- Make automated decisions explainable through bounded diagnostics.
 - Use third-party mods as design references without patching or depending on them.
 - Support one owner for each automated action family; concurrent overlapping automation mods are unsupported.
 
@@ -34,82 +32,52 @@ The public positioning is: **reduce idle waiting and repetitive management while
 
 ```mermaid
 flowchart TD
-    Bep["BepInEx 5.4.x"] --> Chrono["Orb Chronomancer"]
-    Bep --> Automata["Orb Automata"]
-    Bep --> Insights["Orb Insights"]
-    Bep --> Toolbox["Orb Toolbox"]
-    Bep --> Resonance["Orb Achievement Resonance"]
-    Bep --> Sharing["Orb Mentor"]
+    Bep["BepInEx 5.4.x"] --> Automata["Orb Automata"]
+    Bep --> Mentor["Orb Mentor"]
     Bep --> ModConfig["Orb Mod Config"]
-    Game["Assembly-CSharp APIs"] --> Chrono
-    Game --> Automata
-    Game --> Insights
-    Game --> Toolbox
-    Game --> Resonance
-    Game --> Sharing
+    Bep -. "future" .-> Insights["Orb Insights (planned)"]
+    Bep -. "future" .-> Toolbox["Orb Toolbox (planned)"]
+    Game["Assembly-CSharp APIs"] --> Automata
+    Game --> Mentor
     Game --> ModConfig
-    Common["Orb Modding Common"] -. "extract only after duplication" .-> Chrono
-    Common -. "extract only after duplication" .-> Automata
-    Common -. "extract only after duplication" .-> Insights
-    Common -. "extract only after duplication" .-> Toolbox
-    Common -. "extract only after duplication" .-> Resonance
-    Common -. "extract only after duplication" .-> Sharing
-    ModConfig -. "optional config discovery" .-> Chrono
+    Common["Orb Modding Common"] -. "shared audited infrastructure" .-> Automata
+    Common -. "shared audited infrastructure" .-> Mentor
     ModConfig -. "optional config discovery" .-> Automata
-    ModConfig -. "optional config discovery" .-> Resonance
-    ModConfig -. "optional config discovery" .-> Sharing
+    ModConfig -. "optional config discovery" .-> Mentor
 ```
 
-Do not create a shared library on day one. First prove both plugins independently. Extract only stable duplicated code such as keybind parsing, game-state detection, diagnostics, and status overlays.
+Keep the shared library focused on stable duplicated code such as keybind parsing, game-state detection, diagnostics, scheduling, configuration metadata, and status controls.
 
 ## Milestones
 
-The coordinated execution order for Chronomancer, Automata, and Achievement Resonance is defined in [Three-mod iteration plan](three-mod-iteration.md). Its pre-worktree discovery gate takes precedence over beginning the older phase list in parallel.
-
 ### Phase 0 — Development foundation
 
-- Create a `netstandard2.1` BepInEx 5 solution.
+- Maintain the `netstandard2.1` BepInEx 5 solution.
 - Reference game assemblies without copying them into release output.
-- Add structured logging and a build-to-staging workflow.
-- Detect `Start` and `Main` scenes.
+- Keep structured logging and reproducible build-to-staging workflows.
 - Verify load/unload and configuration generation.
 
-Exit criterion: a minimal plugin loads with no BepInEx errors and survives scene changes.
+Exit criterion: supported plugins load without BepInEx errors and survive scene changes.
 
-### Phase 1 — Timing probe
+### Phase 1 — Automation foundation
 
-- Record `Time.deltaTime`, `fixedDeltaTime`, `unscaledDeltaTime`, and game phase.
-- Trace `GameManager.FixedUpdate`, manager updates, increment loops, and representative timers.
-- Classify subsystems as scaled, fixed, or unscaled.
-- Test `Time.timeScale` at 0.5×, 2×, and 8× without shipping it yet.
-
-Exit criterion: a timing matrix identifies the correct speed-control surface and known exceptions.
-
-### Phase 2 — Orb Chronomancer MVP
-
-- Implement 1×/2×/4×/8× presets, reset, and visible status.
-- Add scene and save safety.
-- Test independently with only the intended plugin set installed.
-- Package a release with configuration documentation.
-
-Exit criterion: all critical test scenarios pass at 1×, 2×, 4×, and 8×.
-
-### Phase 3 — Automation foundation
-
-- Implement rule evaluation, reserves, priorities, dry-run mode, and action budgets.
-- Add a decision log explaining why actions were or were not taken.
-- Preserve the auto-research source as an archived diagnostic prototype without constructing it at runtime, then ship Auto Buy as the first product vertical slice.
+- Maintain rule evaluation, reserves, priorities, action budgets, and diagnostics.
+- Preserve native game ownership of availability, cost, queues, and final mutations.
+- Keep Auto Buy as the first product vertical slice.
 
 Exit criterion: Auto Buy runs for an extended session without overspending reserved resources or blocking manual play in a supported single-buyer installation.
 
-### Phase 4 — Orb Automata modules
+### Phase 2 — Orb Automata modules
 
-- Add Auto Cast, Auto Concept, and Auto Harvest in that order.
-- Add crafting, scribing, ordinary alchemy, and optional research automation afterward.
-- Reuse the same rule engine and diagnostics.
-- Add enhanced tooltips explaining automation state.
+- Maintain Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
+- Keep spell leveling under Auto Buy because it spends progression resources and invokes native purchase actions; it is not a Mentor or concept responsibility.
+- Add Auto Harvest only after its native contracts are audited.
+- Add crafting, scribing, ordinary alchemy, and optional research automation only after separate audits.
+- Reuse the shared scheduler, lifecycle-aware indexes, resource snapshots, and bounded diagnostics.
 
-### Phase 4a — Orb Insights
+Auto Concept's balancing, timed cycling, dynamic acquired-slot, ownership, zero-resource, lifecycle, and performance contracts are specified in the [Auto Concept plan](auto-concept.md).
+
+### Phase 3 — Orb Insights (planned)
 
 - Extend native resource tooltips with exact values and UUIDs.
 - Add contextual extensions for research, structures, spells, and alchemy.
@@ -118,50 +86,41 @@ Exit criterion: Auto Buy runs for an extended session without overspending reser
 
 Exit criterion: extensions preserve native tooltip content and degrade safely when a target type is unsupported.
 
-### Phase 4b — Orb Toolbox
+### Phase 4 — Orb Toolbox (planned)
 
 - Add searchable resource selection and explicit add/set/multiply operations.
 - Add dry-run previews, audit logging, and optional save snapshots.
 - Keep unsafe operations behind an advanced confirmation gate.
 
-Exit criterion: supported actions change only the selected runtime objects, survive normal save/load, and are recoverable through documented backups.
+Exit criterion: supported actions change only selected runtime objects, survive normal save/load, and are recoverable through documented backups.
 
-### Phase 4c — Orb Achievement Resonance
+### Phase 5 — Orb Mentor
 
-- Probe the native Achievement Strength effect blocks and attribute-group membership.
-- Add a speed proof of concept using `GlobalSpeedGroup`.
-- Add domain power bonuses and carefully curated beneficial scaling targets.
-- Reuse native tooltips and Achievement Strength recalculation.
+- Maintain installed-game contracts for spell, artifact, and alchemy mastery, catalogs, saves, availability, and native XP paths.
+- Keep the three domains independently configurable and fail closed per domain.
+- Use native recipient progression, stable UUID ordering, recursion suppression, aggregation, and bounded processing.
+- Maintain `EquippedSpells` and `HighestDiscovered` spell source policies.
+- Keep live Mod Config integration, `Alt+M`, and the independent ON/OFF/BLOCKED control.
+- Keep resource-spending spell leveling in Automata rather than Mentor.
 
-Exit criterion: bonuses update immediately when achievements change, never duplicate across loads, and do not alter achievement save data.
+See the [Orb Mentor plan](mentor.md) for spell contracts and [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for the released beta extensions and remaining interactive gates.
 
-### Phase 4d — Orb Mentor
+Exit criterion: every enabled domain grants exactly the configured XP through its audited native progression behavior, grants never recurse, disabled or unresolved domains stay silent, and saves remain stable across extended sessions and plugin removal.
 
-- Lock installed-game contracts around the verified spell mastery, catalog, save, and type-XP surfaces.
-- Validate the `SpellRecipeSO.GainMasteryExp` boundary with a development-only logging probe.
-- Add global highest-mastery mentoring through Shared Pool and Per Recipient economy modes.
-- Use native recipient XP grants, stable UUID ordering, recursion suppression, per-frame aggregation, and bounded processing.
-- Add live Mod Config integration, `Alt+M`, and a queue/status-area ON/OFF/BLOCKED control.
-- Defer automatic mastery confirmation to Automata and audit artifacts/alchemy as later independent extensions.
+### Phase 6 — In-game mod configuration UI
 
-See [Orb Mentor plan](mentor.md) for the resolved spell MVP contract, verified native XP path, delivery stages, and verification requirements.
-
-Exit criterion: every discovered lower-mastery spell receives exactly the configured XP through native progression behavior, grants never recurse or directly modify spell-type XP, and saves remain stable across extended sessions and plugin removal.
-
-### Phase 5 — In-game mod configuration UI
-
-- Add a Mods button after Time in the main navigation.
+- Keep the Mods navigation item available from a new game and last among available top-level tabs.
 - Open a standalone, mod-owned Unity panel rather than extending native content panels.
 - Discover loaded BepInEx configurations without requiring participating mods to depend on the UI plugin.
-- Group settings by mod and config section and provide type-appropriate, validated editors.
+- Group settings by mod and section and provide type-appropriate, validated editors.
 - Preserve `.cfg` files as the source of truth with staged Apply/Revert behavior and honest live/restart status.
 - Keep the panel usable with unscaled time, keyboard/controller navigation, scene changes, and other UI mods.
 
-See [In-game mod configuration UI plan](mod-config-ui.md) for architecture, delivery stages, risks, and acceptance criteria.
+See the [In-game mod configuration UI plan](mod-config-ui.md) for architecture, delivery stages, risks, and acceptance criteria.
 
-Exit criterion: the suite's supported configuration types round-trip safely in game, the compatibility matrix passes, and removing the UI plugin leaves every mod configurable through its normal `.cfg` file.
+Exit criterion: supported configuration types round-trip safely in game, the compatibility matrix passes, and removing the UI plugin leaves every mod configurable through its normal `.cfg` file.
 
-### Phase 6 — Shared library and public ecosystem
+### Phase 7 — Shared library and public ecosystem
 
 - Extract genuinely shared infrastructure.
 - Publish stable configuration and compatibility contracts.
@@ -169,4 +128,4 @@ Exit criterion: the suite's supported configuration types round-trip safely in g
 
 ## Immediate next task
 
-Complete P0/P1 from the [Three-mod iteration plan](three-mod-iteration.md), then build the unified runtime probe before creating feature worktrees.
+Complete post-release Steam Deck/Proton and extended combined-suite validation for ModSuite 0.3.0 Beta 1, then address any release-blocking regressions before stable promotion.

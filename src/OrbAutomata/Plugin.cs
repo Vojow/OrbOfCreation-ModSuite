@@ -11,18 +11,28 @@ namespace OrbAutomata;
 [BepInPlugin(PluginIds.AutomataGuid, PluginIds.AutomataName, PluginIds.AutomataVersion)]
 public sealed class Plugin : BaseUnityPlugin
 {
+    private const float UiRetryIntervalSeconds = 5.0f;
     private Harmony? _harmony;
     private AutomataConfig? _config;
     private AutoBuyEngine? _autoBuyEngine;
     private AutoCastEngine? _autoCastEngine;
+    private AutoConceptController? _autoConceptController;
+    private AutoSpellLevelController? _autoSpellLevelController;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
     private AutoBuyToggleButton? _autoBuyToggleButton;
+    private AutoConceptToggleControl? _autoConceptToggleControl;
+    private AutoConceptToggleButton? _autoConceptToggleButton;
     private float _autoCastUiRetrySeconds;
+    private float _autoBuyUiRetrySeconds;
+    private float _autoConceptUiRetrySeconds;
     private float _autoCastUiFailureSeconds;
+    private float _autoConceptUiFailureSeconds;
     private bool _autoCastUiFailureLogged;
+    private bool _autoConceptUiFailureLogged;
     private string _autoCastUiFailureReason = string.Empty;
+    private string _autoConceptUiFailureReason = string.Empty;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -35,7 +45,7 @@ public sealed class Plugin : BaseUnityPlugin
 
         if (!_config.Enabled.Value)
         {
-            Log.LogInfo("Automata is disabled by configuration.");
+            Log.LogAutomataInfo("Automata is disabled by configuration.");
             return;
         }
 
@@ -44,20 +54,45 @@ public sealed class Plugin : BaseUnityPlugin
 
         var reservePolicy = new ReservePolicy(_config);
         _autoCastToggleControl = new AutoCastToggleControl(_config);
-        _autoBuyToggleControl = new AutoBuyToggleControl(_config);
+        _autoBuyToggleControl = new AutoBuyToggleControl(
+            _config,
+            () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),
             reservePolicy,
-            Log);
+            Log,
+            coordinator: SuitePerformanceCoordinator.Shared,
+            readFrameIdentity: () => UnityEngine.Time.frameCount);
         _autoCastEngine = new AutoCastEngine(
             _config,
             new ReflectionAutoCastCatalog(),
             reservePolicy,
             new ResourceFullnessPolicy(),
-            Log);
+            Log,
+            coordinator: SuitePerformanceCoordinator.Shared,
+            readFrameIdentity: () => UnityEngine.Time.frameCount);
+        _autoConceptController = new AutoConceptController(
+            _config,
+            new ReflectionConceptRuntime(),
+            Log,
+            SuitePerformanceCoordinator.Shared,
+            () => UnityEngine.Time.frameCount);
+        _autoSpellLevelController = new AutoSpellLevelController(
+            _config,
+            new ReflectionSpellLevelRuntime(),
+            Log,
+            SuitePerformanceCoordinator.Shared,
+            () => UnityEngine.Time.frameCount);
+        _autoConceptToggleControl = new AutoConceptToggleControl(_config);
+        AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
+        AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
+        AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
+        AutoBuyLifecycleSignal.NativeCompletion += OnNativeCompletion;
+        AutoConceptLifecycleSignal.Changed += OnAutoConceptChanged;
+        SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
-        Log.LogInfo(
+        Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
             $"StructureAffordability={_config.AutoBuyAffordability.Value}, " +
             $"UpgradeAffordability={_config.UpgradeAffordability.Value}, " +
@@ -70,32 +105,94 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
-            $"OperationalLogging={_config.EnableOperationalLogging.Value}.");
+            $"AutoConceptMode={_config.AutoConceptMode.Value}, " +
+            $"AutoConceptSlotManagement={_config.AutoConceptSlotManagement.Value}, " +
+            $"AutoLevelSpells={_config.AutoLevelSpells.Value}, " +
+            $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
+            $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
+            $"DecisionLogLevel={_config.DecisionLogLevel.Value}.");
     }
 
     private void Update()
     {
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
-        UpdateAutoBuyControl();
-        _autoBuyEngine?.Tick(deltaTime);
-        _autoCastEngine?.Tick(deltaTime);
+        UpdateAutoBuyControl(deltaTime);
+        UpdateAutoConceptControl(deltaTime);
+        if (SceneManager.GetActiveScene().name == "Main")
+        {
+            _autoBuyEngine?.Tick(deltaTime);
+            _autoCastEngine?.Tick(deltaTime);
+            _autoConceptController?.Tick(deltaTime);
+            _autoSpellLevelController?.Tick(deltaTime);
+        }
     }
 
     private void OnDestroy()
     {
+        AutoBuyLifecycleSignal.Invalidated -= OnAutoBuyLifecycleInvalidated;
+        AutoBuyLifecycleSignal.StructureQueueChanged -= OnStructureQueueChanged;
+        AutoBuyLifecycleSignal.UpgradeQueueChanged -= OnUpgradeQueueChanged;
+        AutoBuyLifecycleSignal.NativeCompletion -= OnNativeCompletion;
+        AutoConceptLifecycleSignal.Changed -= OnAutoConceptChanged;
+        SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
         _autoBuyEngine = null;
         _autoCastEngine?.Dispose();
         _autoCastEngine = null;
+        _autoConceptController?.Dispose();
+        _autoConceptController = null;
+        _autoSpellLevelController?.Dispose();
+        _autoSpellLevelController = null;
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
         _autoBuyToggleButton?.Dispose();
         _autoBuyToggleButton = null;
         _autoBuyToggleControl = null;
+        _autoConceptToggleButton?.Dispose();
+        _autoConceptToggleButton = null;
+        _autoConceptToggleControl = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
+    }
+
+    private void OnActiveSceneChanged(Scene previous, Scene next)
+    {
+        _autoBuyEngine?.InvalidateLifecycle();
+        _autoCastEngine?.InvalidateLifecycle();
+        _autoConceptController?.InvalidateLifecycle();
+        _autoSpellLevelController?.InvalidateLifecycle();
+    }
+
+    private void OnAutoBuyLifecycleInvalidated()
+    {
+        _autoBuyEngine?.InvalidateLifecycle();
+        _autoCastEngine?.InvalidateLifecycle();
+        _autoConceptController?.InvalidateLifecycle();
+        _autoSpellLevelController?.InvalidateLifecycle();
+    }
+
+    private void OnStructureQueueChanged(object nativeIdentity)
+    {
+        _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
+    }
+
+    private void OnNativeCompletion()
+    {
+        _autoBuyEngine?.NotifyNativeCompletion();
+        _autoSpellLevelController?.NotifyNativeChange();
+    }
+
+    private void OnUpgradeQueueChanged(object nativeIdentity)
+    {
+        _autoBuyEngine?.NotifyUpgradeQueueChanged(nativeIdentity);
+    }
+
+    private void OnAutoConceptChanged()
+    {
+        _autoConceptController?.NotifyNativeChange();
+        _autoSpellLevelController?.NotifyNativeChange();
     }
 
     private static void LogAssemblyStatus()
@@ -103,11 +200,11 @@ public sealed class Plugin : BaseUnityPlugin
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (audit.MatchesExpected)
         {
-            Log.LogInfo("Game assemblies match the audited baseline.");
+            Log.LogAutomataInfo("Game assemblies match the audited baseline.");
             return;
         }
 
-        Log.LogWarning("Game assemblies differ from the audited baseline. Disable Automata until this game build has been validated.");
+        Log.LogAutomataWarning("Game assemblies differ from the audited baseline. Disable Automata until this game build has been validated.");
     }
 
     private void UpdateAutoCastControls(float unscaledDeltaTime)
@@ -154,7 +251,7 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
-        _autoCastUiRetrySeconds = 1.0f;
+        _autoCastUiRetrySeconds = UiRetryIntervalSeconds;
         if (AutoCastToggleButton.TryCreate(_autoCastToggleControl, Log, out var toggle, out var reason))
         {
             _autoCastToggleButton = toggle;
@@ -177,16 +274,17 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         _autoCastUiFailureLogged = true;
-        Log.LogWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
+        Log.LogAutomataWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
     }
 
-    private void UpdateAutoBuyControl()
+    private void UpdateAutoBuyControl(float unscaledDeltaTime)
     {
         if (_autoBuyToggleControl is null) return;
         if (SceneManager.GetActiveScene().name != "Main")
         {
             _autoBuyToggleButton?.Dispose();
             _autoBuyToggleButton = null;
+            _autoBuyUiRetrySeconds = 0.0f;
             return;
         }
         if (_autoBuyToggleButton is not null && !_autoBuyToggleButton.IsAlive)
@@ -195,7 +293,68 @@ public sealed class Plugin : BaseUnityPlugin
             _autoBuyToggleButton = null;
         }
         if (_autoBuyToggleButton is not null) { _autoBuyToggleButton.Render(); return; }
+        _autoBuyUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
+        if (_autoBuyUiRetrySeconds > 0.0f) return;
+        _autoBuyUiRetrySeconds = UiRetryIntervalSeconds;
         AutoBuyToggleButton.TryCreate(_autoBuyToggleControl, out _autoBuyToggleButton);
+    }
+
+    private void UpdateAutoConceptControl(float unscaledDeltaTime)
+    {
+        if (_config is null || _autoConceptToggleControl is null) return;
+        var inGameplay = SceneManager.GetActiveScene().name == "Main";
+        if (!inGameplay || !_config.AutoConceptShowToggleButton.Value)
+        {
+            _autoConceptToggleButton?.Dispose();
+            _autoConceptToggleButton = null;
+            _autoConceptUiRetrySeconds = 0.0f;
+            _autoConceptUiFailureSeconds = 0.0f;
+            _autoConceptUiFailureLogged = false;
+            _autoConceptUiFailureReason = string.Empty;
+            return;
+        }
+        if (_autoConceptToggleButton is not null && !_autoConceptToggleButton.IsAlive)
+        {
+            _autoConceptToggleButton.Dispose();
+            _autoConceptToggleButton = null;
+        }
+        if (_autoConceptToggleButton is not null)
+        {
+            _autoConceptToggleButton.Render();
+            return;
+        }
+
+        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
+        _autoConceptUiRetrySeconds -= elapsed;
+        if (_autoConceptUiRetrySeconds > 0.0f)
+        {
+            _autoConceptUiFailureSeconds += elapsed;
+            LogAutoConceptUiFailureIfPersistent();
+            return;
+        }
+        _autoConceptUiRetrySeconds = UiRetryIntervalSeconds;
+        if (AutoConceptToggleButton.TryCreate(
+                _autoConceptToggleControl,
+                out var toggle,
+                out var reason))
+        {
+            _autoConceptToggleButton = toggle;
+            _autoConceptUiFailureSeconds = 0.0f;
+            _autoConceptUiFailureLogged = false;
+            _autoConceptUiFailureReason = string.Empty;
+            return;
+        }
+        _autoConceptUiFailureReason = reason;
+        _autoConceptUiFailureSeconds += elapsed;
+        LogAutoConceptUiFailureIfPersistent();
+    }
+
+    private void LogAutoConceptUiFailureIfPersistent()
+    {
+        if (_autoConceptUiFailureLogged || _autoConceptUiFailureSeconds < 10.0f) return;
+        _autoConceptUiFailureLogged = true;
+        Log.LogAutomataWarning(
+            $"Auto Concept toggle could not attach beside the native Auto Buy queue: {_autoConceptUiFailureReason}");
     }
 
     private static int CountConfiguredUuids(string value)
