@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,6 +10,7 @@ namespace OrbAutomata;
 
 internal sealed class AutoBuyToggleButton : IDisposable
 {
+    private const string ObjectName = "OrbAutomata.AutoBuyToggle";
     private readonly GameObject _root;
     private readonly Button _button;
     private readonly TextMeshProUGUI? _text;
@@ -21,20 +23,15 @@ internal sealed class AutoBuyToggleButton : IDisposable
     {
         result = null;
         var toggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
-        var managerType = Type.GetType("AutoBuyManager, Assembly-CSharp", false);
-        if (toggleType is null || managerType is null) return false;
-        var autoBuyEnabled = Resources.FindObjectsOfTypeAll(managerType)
-            .OfType<Component>()
-            .Where(manager => manager.gameObject.activeInHierarchy)
-            .Select(manager => Read(manager, "autoBuyEnabled"))
-            .FirstOrDefault(value => value is not null);
-        if (autoBuyEnabled is null) return false;
-        var native = Resources.FindObjectsOfTypeAll(toggleType).OfType<Component>().FirstOrDefault(c => IsNativeQueueToggle(c) && ReferenceEquals(Read(c, "isOnVariable"), autoBuyEnabled));
+        if (toggleType is null) return false;
+        var native = StatusControlGroup.FindNativeToggle(toggleType);
         if (native?.transform.parent is null) return false;
         var group = StatusControlGroup.GetOrCreate(native);
+        RemoveOwnedChild(group);
         var root = UnityEngine.Object.Instantiate(native.gameObject, group, false);
-        root.name = "OrbAutomata.AutoBuyToggle";
-        if (native.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
+        root.name = ObjectName;
+        root.SetActive(false);
+        StatusControlGroup.RegisterControl(root, StatusControlOrder.AutoBuy);
         var cloned = root.GetComponent(toggleType);
         var text = Read(cloned, "textElement") as TextMeshProUGUI;
         var icon = Read(cloned, "iconImage") as Image;
@@ -42,13 +39,17 @@ internal sealed class AutoBuyToggleButton : IDisposable
         if (text is not null) { text.gameObject.SetActive(true); text.alignment = TextAlignmentOptions.Center; }
         if (cloned is Behaviour behaviour) behaviour.enabled = false;
         if (cloned is not null) UnityEngine.Object.Destroy(cloned);
+        RemoveNativeViewBindings(root);
         foreach (var old in root.GetComponents<Component>().Where(c => c.GetType().Name == "HoverTooltip")) { if (old is Behaviour b) b.enabled = false; UnityEngine.Object.Destroy(old); }
         root.AddComponent<HoverTooltip>().Setup(new AutoBuyTooltip(control));
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
         result = new AutoBuyToggleButton(root, button, text, control);
-        button.onClick.AddListener(result.Toggle); result.Render();
+        button.onClick.AddListener(result.Toggle);
+        result.Render();
+        root.SetActive(true);
+        if (native.transform is RectTransform nativeRect) StatusControlGroup.Reflow(group, nativeRect);
         var rect = root.transform as RectTransform;
         Plugin.Log.LogAutomataInfo($"Auto Buy toggle installed: AnchoredPosition=({rect?.anchoredPosition.x:0.##},{rect?.anchoredPosition.y:0.##}); Native={native.gameObject.name}; NativeActive={native.gameObject.activeInHierarchy}.");
         return true;
@@ -63,9 +64,23 @@ internal sealed class AutoBuyToggleButton : IDisposable
     private void Toggle() { _control.Toggle(); Render(); }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
-    private static bool IsNativeQueueToggle(Component component) =>
-        component.gameObject.activeInHierarchy &&
-        !component.gameObject.name.StartsWith("OrbAutomata.", StringComparison.Ordinal) &&
-        component.gameObject.name != "OrbMentor.Toggle" &&
-        component.transform.parent?.name != StatusControlGroup.ObjectName;
+    private static void RemoveNativeViewBindings(GameObject root)
+    {
+        foreach (var component in root.GetComponents<Component>().Where(component => component.GetType().Name == "ManagedView"))
+        {
+            if (component is Behaviour behaviour) behaviour.enabled = false;
+            UnityEngine.Object.Destroy(component);
+        }
+    }
+    private static void RemoveOwnedChild(Transform group)
+    {
+        for (var index = group.childCount - 1; index >= 0; index--)
+        {
+            var child = group.GetChild(index);
+            if (child.name != ObjectName) continue;
+            child.name = ObjectName + ".Removing";
+            child.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(child.gameObject);
+        }
+    }
 }

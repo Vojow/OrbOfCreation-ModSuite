@@ -488,7 +488,7 @@ namespace UnityEngine
         public GameObject(string name, params Type[] components)
         {
             this.name = name;
-            transform = new RectTransform { gameObject = this };
+            transform = new RectTransform { gameObject = this, name = name };
             transform.transform = transform;
             _components.Add(transform);
             foreach (var type in components.Where(type => type != typeof(RectTransform) && typeof(Component).IsAssignableFrom(type)))
@@ -496,6 +496,7 @@ namespace UnityEngine
                 var component = (Component)Activator.CreateInstance(type)!;
                 component.gameObject = this;
                 component.transform = transform;
+                component.name = name;
                 _components.Add(component);
             }
         }
@@ -503,11 +504,14 @@ namespace UnityEngine
         public Transform transform { get; }
 
         public bool activeInHierarchy { get; set; } = true;
+        public bool activeSelf { get; private set; } = true;
 
         public static GameObject? Find(string name) => null;
 
         public void SetActive(bool value)
         {
+            activeSelf = value;
+            activeInHierarchy = value;
         }
 
         public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
@@ -520,7 +524,7 @@ namespace UnityEngine
 
         public T AddComponent<T>() where T : Component, new()
         {
-            var component = new T { gameObject = this, transform = transform };
+            var component = new T { gameObject = this, transform = transform, name = name };
             _components.Add(component);
             return component;
         }
@@ -528,26 +532,37 @@ namespace UnityEngine
 
     public class Transform : Component
     {
+        private readonly List<Transform> _children = new List<Transform>();
+
         public Transform? parent { get; private set; }
 
-        public int childCount => 0;
+        public int childCount => _children.Count;
 
         public void SetParent(Transform parent, bool worldPositionStays)
         {
+            if (ReferenceEquals(this.parent, parent)) return;
+            this.parent?._children.Remove(this);
             this.parent = parent;
+            parent._children.Add(this);
         }
 
-        public int GetSiblingIndex() => 0;
+        public int GetSiblingIndex() => parent?._children.IndexOf(this) ?? 0;
 
         public void SetSiblingIndex(int index)
         {
+            if (parent is null) return;
+            parent._children.Remove(this);
+            parent._children.Insert(Math.Max(0, Math.Min(index, parent._children.Count)), this);
         }
 
         public void SetAsLastSibling()
         {
+            if (parent is null) return;
+            parent._children.Remove(this);
+            parent._children.Add(this);
         }
 
-        public Transform GetChild(int index) => throw new ArgumentOutOfRangeException(nameof(index));
+        public Transform GetChild(int index) => _children[index];
     }
 
     public class RectTransform : Transform

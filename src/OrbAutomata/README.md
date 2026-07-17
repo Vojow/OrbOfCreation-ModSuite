@@ -17,6 +17,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades.
 - Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
+- Gameplay controls extend outward from the native Auto Buy queue switch with 12-pixel gaps: native Auto Buy, Automata Auto Buy, Auto Cast, Auto Concept, then Mentor when installed. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
@@ -94,7 +95,9 @@ Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by 
 
 Every newly assigned lower-mastery concept receives a training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. The default is 300 seconds and the accepted range is 10 through 3600 seconds. Native quantity changes can wake evaluation early without bypassing this protection.
 
-`RebalanceIntervalSeconds` defaults to 300 seconds and accepts 10 through 1800. Existing `RebalanceIntervalMinutes` values migrate to seconds automatically.
+The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blocking. `ShowToggleButton` defaults to true.
+
+`FallbackEvaluationIntervalSeconds` is an Advanced setting, not a rotation delay. It defaults to 300 seconds and accepts 10 through 1800 as the maximum idle delay between full plan calculations; native changes can request earlier passes. Existing `RebalanceIntervalSeconds` and `RebalanceIntervalMinutes` values migrate automatically.
 
 Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 

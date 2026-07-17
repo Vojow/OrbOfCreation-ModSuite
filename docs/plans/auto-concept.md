@@ -55,7 +55,7 @@ This reuse does not make ordinary alchemy part of Auto Concept. The adapter must
 - Active mode uses all currently acquired compatible slots. `RotateAll` may replace a settled assignment for a compatible strictly lower-mastery concept; `PreserveManual` retains the starting loadout.
 - The training pool contains discovered, available, validated concepts that are not blocked by configuration.
 - Concepts are ranked by effective mastery, lowest first, with stable UUID as the final tie-breaker.
-- A rebalance runs on a multi-minute interval and may be requested sooner by a mastery-level change, acquired-slot change, manual loadout change, configuration change, or lifecycle invalidation.
+- A full plan evaluation has a multi-minute idle fallback and may be requested sooner by a mastery-level change, acquired-slot change, manual loadout change, configuration change, or lifecycle invalidation. This fallback is not a rotation cooldown.
 - A newly assigned lower-mastery concept is protected until it reaches the highest effective mastery captured at assignment time or its configured settled training period expires. Native setup time does not consume the period.
 - The balancer changes only quantities it owns under `PreserveManual`. `RotateAll` explicitly authorizes replacing one complete, settled native assignment at a time.
 - Resource safety may leave an acquired slot empty or assign less than `masteryLevel + 1` instances.
@@ -439,8 +439,9 @@ Names and defaults remain subject to runtime measurement and player approval.
 ### Balancing
 
 - `SlotManagementMode`: `RotateAll` (default) or `PreserveManual`.
+- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF/!` gameplay control.
 - `TrainingPeriodSeconds`: default 300 seconds, configurable from 10 through 3600; begins only after the assignment is settled and active.
-- `RebalanceIntervalSeconds`: default 300 seconds, configurable from 10 through 1800 seconds.
+- `FallbackEvaluationIntervalSeconds`: Advanced-only idle full-plan fallback; default 300 seconds, configurable from 10 through 1800 seconds. Native signals may request earlier evaluation.
 - `UseAllAvailableConceptSlots`: proposed default true.
 - `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
 - Strict mastery comparison plus protected training sessions prevent native change signals and equal-progress UUID tie-breaks from causing rotation churn.

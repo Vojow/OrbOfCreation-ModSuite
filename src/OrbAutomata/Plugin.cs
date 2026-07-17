@@ -21,11 +21,17 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
     private AutoBuyToggleButton? _autoBuyToggleButton;
+    private AutoConceptToggleControl? _autoConceptToggleControl;
+    private AutoConceptToggleButton? _autoConceptToggleButton;
     private float _autoCastUiRetrySeconds;
     private float _autoBuyUiRetrySeconds;
+    private float _autoConceptUiRetrySeconds;
     private float _autoCastUiFailureSeconds;
+    private float _autoConceptUiFailureSeconds;
     private bool _autoCastUiFailureLogged;
+    private bool _autoConceptUiFailureLogged;
     private string _autoCastUiFailureReason = string.Empty;
+    private string _autoConceptUiFailureReason = string.Empty;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -48,6 +54,7 @@ public sealed class Plugin : BaseUnityPlugin
         var reservePolicy = new ReservePolicy(_config);
         _autoCastToggleControl = new AutoCastToggleControl(_config);
         _autoBuyToggleControl = new AutoBuyToggleControl(_config);
+        _autoConceptToggleControl = new AutoConceptToggleControl(_config);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),
@@ -100,6 +107,7 @@ public sealed class Plugin : BaseUnityPlugin
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
+        UpdateAutoConceptControl(deltaTime);
         if (SceneManager.GetActiveScene().name == "Main")
         {
             _autoBuyEngine?.Tick(deltaTime);
@@ -128,6 +136,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyToggleButton?.Dispose();
         _autoBuyToggleButton = null;
         _autoBuyToggleControl = null;
+        _autoConceptToggleButton?.Dispose();
+        _autoConceptToggleButton = null;
+        _autoConceptToggleControl = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
     }
@@ -268,6 +279,64 @@ public sealed class Plugin : BaseUnityPlugin
         if (_autoBuyUiRetrySeconds > 0.0f) return;
         _autoBuyUiRetrySeconds = UiRetryIntervalSeconds;
         AutoBuyToggleButton.TryCreate(_autoBuyToggleControl, out _autoBuyToggleButton);
+    }
+
+    private void UpdateAutoConceptControl(float unscaledDeltaTime)
+    {
+        if (_config is null || _autoConceptToggleControl is null) return;
+        var inGameplay = SceneManager.GetActiveScene().name == "Main";
+        if (!inGameplay || !_config.AutoConceptShowToggleButton.Value)
+        {
+            _autoConceptToggleButton?.Dispose();
+            _autoConceptToggleButton = null;
+            _autoConceptUiRetrySeconds = 0.0f;
+            _autoConceptUiFailureSeconds = 0.0f;
+            _autoConceptUiFailureLogged = false;
+            _autoConceptUiFailureReason = string.Empty;
+            return;
+        }
+        if (_autoConceptToggleButton is not null && !_autoConceptToggleButton.IsAlive)
+        {
+            _autoConceptToggleButton.Dispose();
+            _autoConceptToggleButton = null;
+        }
+        if (_autoConceptToggleButton is not null)
+        {
+            _autoConceptToggleButton.Render();
+            return;
+        }
+
+        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
+        _autoConceptUiRetrySeconds -= elapsed;
+        if (_autoConceptUiRetrySeconds > 0.0f)
+        {
+            _autoConceptUiFailureSeconds += elapsed;
+            LogAutoConceptUiFailureIfPersistent();
+            return;
+        }
+        _autoConceptUiRetrySeconds = UiRetryIntervalSeconds;
+        if (AutoConceptToggleButton.TryCreate(
+                _autoConceptToggleControl,
+                out var toggle,
+                out var reason))
+        {
+            _autoConceptToggleButton = toggle;
+            _autoConceptUiFailureSeconds = 0.0f;
+            _autoConceptUiFailureLogged = false;
+            _autoConceptUiFailureReason = string.Empty;
+            return;
+        }
+        _autoConceptUiFailureReason = reason;
+        _autoConceptUiFailureSeconds += elapsed;
+        LogAutoConceptUiFailureIfPersistent();
+    }
+
+    private void LogAutoConceptUiFailureIfPersistent()
+    {
+        if (_autoConceptUiFailureLogged || _autoConceptUiFailureSeconds < 10.0f) return;
+        _autoConceptUiFailureLogged = true;
+        Log.LogAutomataWarning(
+            $"Auto Concept toggle could not attach beside the native Auto Buy queue: {_autoConceptUiFailureReason}");
     }
 
     private static int CountConfiguredUuids(string value)

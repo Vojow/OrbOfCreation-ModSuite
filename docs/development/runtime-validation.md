@@ -75,6 +75,10 @@ Version `0.1.6` added two opt-in policies. `BatchSizingMode=FillAvailableQueue` 
 
 ### Automata Auto Cast control runtime evidence
 
+A 2026-07-17 static audit of the hash-matched game assembly and serialized Main scene established `Canvas/ContentArea/RightSidebar/AttributeBar/AutoBuyToggle` as the native anchor. The action queue is a separate sibling that expands toward the toggle; `StatusContainer` owns passive abilities and status effects. The native toggle carries a `ManagedView` reference to `AutoBuyerView`, so clones must remove that binding before activation. The suite strip ends 12 pixels before the native toggle's left edge and extends outward in Automata Auto Buy, Auto Cast, Auto Concept, Mentor order. The `0.6.0` release-candidate build still requires interactive confirmation after installation.
+
+For the current candidate, verify on both a new game and NG+ that all enabled suite controls appear even when the native Auto Buy feature is locked, remain outside the action queue with uniform gaps, and keep Auto Buy → Auto Cast → Auto Concept → Mentor order. Click `CN` through OFF/ON and emergency-blocked states, confirm the Auto Concept configuration changes with it, and confirm no cloned control changes the native Auto Buy state or queue contents.
+
 The `0.3.1` desktop/handheld control probe passed on 2026-07-14:
 
 - Automata resolved the native `UIToggleButton` bound to `AutoBuyManager.autoBuyEnabled` and cloned it under `Canvas/ContentArea/RightSidebar/AttributeBar`.

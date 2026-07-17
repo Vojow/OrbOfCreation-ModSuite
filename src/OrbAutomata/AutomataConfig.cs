@@ -33,8 +33,9 @@ internal sealed class AutomataConfig
         ConfigEntry<bool> autoCastFullCharge,
         ConfigEntry<AutoConceptOperationMode> autoConceptMode,
         ConfigEntry<AutoConceptSlotManagementMode> autoConceptSlotManagementMode,
+        ConfigEntry<bool> autoConceptShowToggleButton,
         ConfigEntry<int> autoConceptTrainingPeriodSeconds,
-        ConfigEntry<int> autoConceptRebalanceIntervalSeconds,
+        ConfigEntry<int> autoConceptFallbackEvaluationIntervalSeconds,
         ConfigEntry<int> autoConceptQuantityCap,
         ConfigEntry<float> autoConceptRateReservePercent,
         ConfigEntry<float> autoConceptMinimumResourcePercent,
@@ -75,8 +76,9 @@ internal sealed class AutomataConfig
         AutoCastFullCharge = autoCastFullCharge;
         AutoConceptMode = autoConceptMode;
         AutoConceptSlotManagement = autoConceptSlotManagementMode;
+        AutoConceptShowToggleButton = autoConceptShowToggleButton;
         AutoConceptTrainingPeriodSeconds = autoConceptTrainingPeriodSeconds;
-        AutoConceptRebalanceIntervalSeconds = autoConceptRebalanceIntervalSeconds;
+        AutoConceptFallbackEvaluationIntervalSeconds = autoConceptFallbackEvaluationIntervalSeconds;
         AutoConceptQuantityCap = autoConceptQuantityCap;
         AutoConceptRateReservePercent = autoConceptRateReservePercent;
         AutoConceptMinimumResourcePercent = autoConceptMinimumResourcePercent;
@@ -142,8 +144,9 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<AutoConceptOperationMode> AutoConceptMode { get; }
     public ConfigEntry<AutoConceptSlotManagementMode> AutoConceptSlotManagement { get; }
+    public ConfigEntry<bool> AutoConceptShowToggleButton { get; }
     public ConfigEntry<int> AutoConceptTrainingPeriodSeconds { get; }
-    public ConfigEntry<int> AutoConceptRebalanceIntervalSeconds { get; }
+    public ConfigEntry<int> AutoConceptFallbackEvaluationIntervalSeconds { get; }
     public ConfigEntry<int> AutoConceptQuantityCap { get; }
     public ConfigEntry<float> AutoConceptRateReservePercent { get; }
     public ConfigEntry<float> AutoConceptMinimumResourcePercent { get; }
@@ -207,7 +210,7 @@ internal sealed class AutomataConfig
 
             var autoConceptMode = BindAutoConceptMode(config);
 
-            var autoConceptRebalanceIntervalSeconds = BindAutoConceptRebalanceIntervalSeconds(config);
+            var autoConceptFallbackEvaluationIntervalSeconds = BindAutoConceptFallbackEvaluationIntervalSeconds(config);
 
             var result = new AutomataConfig(
                 Bind(config, "General", "Enabled", true, "Enable Automata.", 0, 0),
@@ -236,8 +239,9 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
                 autoConceptMode,
                 Bind(config, "AutoConcept", "SlotManagementMode", AutoConceptSlotManagementMode.RotateAll, "RotateAll replaces active concepts when a compatible discovered concept has strictly lower mastery. PreserveManual fills empty slots and rotates only quantities added by Automata.", 17, 5),
+                Bind(config, "AutoConcept", "ShowToggleButton", true, "Show the Auto Concept state button in the native Auto Buy-anchored control strip.", 17, 6),
                 Bind(config, "AutoConcept", "TrainingPeriodSeconds", 300, "Protect a newly assigned concept until it catches the captured highest mastery or trains for this many settled active seconds, whichever happens first.", 17, 7, new AcceptableValueRange<int>(10, 3600)),
-                autoConceptRebalanceIntervalSeconds,
+                autoConceptFallbackEvaluationIntervalSeconds,
                 Bind(config, "AutoConcept", "PerConceptQuantityCap", 0, "Optional maximum automated quantity per concept. Zero uses the native mastery maximum.", 17, 20, new AcceptableValueRange<int>(0, 1000000)),
                 Bind(config, "AutoConcept", "RateReservePercent", 10.0f, "Minimum percentage of each drained resource's current gross positive rate to preserve after an automated quantity change.", 17, 30, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoConcept", "MinimumResourcePercent", 10.0f, "Finite-cap drained resources must be at least this full before Auto Concept adds quantity.", 17, 40, new AcceptableValueRange<float>(0.0f, 100.0f)),
@@ -313,26 +317,51 @@ internal sealed class AutomataConfig
         return result;
     }
 
-    private static ConfigEntry<int> BindAutoConceptRebalanceIntervalSeconds(ConfigFile config)
+    private static ConfigEntry<int> BindAutoConceptFallbackEvaluationIntervalSeconds(ConfigFile config)
     {
+        const string section = "AutoConcept";
+        const string currentKey = "FallbackEvaluationIntervalSeconds";
+        var currentDefinition = new ConfigDefinition("AutoConcept", "FallbackEvaluationIntervalSeconds");
+        var currentSeconds = config.Bind(
+            section,
+            currentKey,
+            -1,
+            new ConfigDescription("Current Auto Concept fallback interval migration.")).Value;
+        config.Remove(currentDefinition);
+
+        var previousDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalSeconds");
+        var previousSeconds = config.Bind(
+            section,
+            "RebalanceIntervalSeconds",
+            -1,
+            new ConfigDescription("Previous Auto Concept fallback interval migration.")).Value;
+        config.Remove(previousDefinition);
+
         var result = Bind(
             config,
-            "AutoConcept",
-            "RebalanceIntervalSeconds",
+            section,
+            currentKey,
             300,
-            "Seconds between ordinary mastery rebalances. Lifecycle, mastery, slot, and safety changes can trigger an earlier pass.",
+            "Maximum idle seconds between full concept plan evaluations. Native lifecycle, mastery, slot, quantity, and safety signals can request an earlier pass.",
             17,
             10,
             new AcceptableValueRange<int>(10, 1800));
-
         var legacyDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalMinutes");
         var legacyMinutes = config.Bind(
-            "AutoConcept",
+            section,
             "RebalanceIntervalMinutes",
             -1.0f,
             new ConfigDescription("Legacy Auto Concept interval migration.")).Value;
         config.Remove(legacyDefinition);
-        if (float.IsFinite(legacyMinutes) && legacyMinutes >= 0.0f)
+        if (currentSeconds >= 0)
+        {
+            result.Value = Math.Clamp(currentSeconds, 10, 1800);
+        }
+        else if (previousSeconds >= 0)
+        {
+            result.Value = Math.Clamp(previousSeconds, 10, 1800);
+        }
+        else if (float.IsFinite(legacyMinutes) && legacyMinutes >= 0.0f)
         {
             result.Value = Math.Clamp(
                 (int)Math.Round(legacyMinutes * 60.0f, MidpointRounding.AwayFromZero),
@@ -355,11 +384,12 @@ internal sealed class AutomataConfig
     {
         var hidden = section == "General" && key == "Enabled";
         var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids" || key == "MaxCandidatesPerScan");
+        var advancedAutoConcept = section == "AutoConcept" && key == "FallbackEvaluationIntervalSeconds";
         var displaySection = section switch
         {
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
-            "AutoConcept" => "Auto Concept",
+            "AutoConcept" when !advancedAutoConcept => "Auto Concept",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -369,6 +399,7 @@ internal sealed class AutomataConfig
             "Mode" when section == "AutoConcept" => "Auto Concept",
             "SlotManagementMode" => "Slot management",
             "TrainingPeriodSeconds" => "Training period (seconds)",
+            "FallbackEvaluationIntervalSeconds" => "Auto Concept fallback evaluation (seconds)",
             "AffordabilityMode" => "Structure affordability",
             "UpgradeAffordabilityMode" => "Upgrade affordability",
             "IncludeStructures" => "Buy structures",

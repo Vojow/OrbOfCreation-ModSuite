@@ -15,6 +15,10 @@ $OOC_GAME_DIR/
 
 Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally small and must not grow into a shared gameplay framework until duplicated implementation pressure proves it is worth extracting.
 
+## Shared gameplay controls
+
+Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.
+
 ## Orb Mentor
 
 `OrbMentor` is the spells-only mastery-sharing plugin. Its pure engine is covered by the portable suite; production builds hook the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary and fail closed on contract or lifecycle errors.

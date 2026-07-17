@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Anchor Auto Buy, Auto Cast, Auto Concept, and Mentor outside the native action queue with 12-pixel gaps; remove cloned native view gating, resolve the audited inactive Auto Buy hierarchy without `AutoBuyManager` reference matching, and use an extensible shared ordered-slot layout. The new `CN ON/OFF/!` button toggles Auto Concept directly.
+- Rename Auto Concept's technical idle polling control to `FallbackEvaluationIntervalSeconds`, migrate both previous seconds and legacy minutes values, and show it only under Advanced. `TrainingPeriodSeconds` remains the normal gameplay rotation timer.
 - Prepare Orb Automata 0.6.0 and Orb Mentor 0.2.0 as a local release candidate; public publication remains gated on interactive desktop/Steam Deck validation.
 - Add Auto Concept `SlotManagementMode`: the default `RotateAll` policy replaces a settled active concept when a compatible discovered concept has strictly lower mastery, while `PreserveManual` retains the previous manual-baseline behavior. Rotation uses the verified native remove path, waits for settlement, and revalidates before adding; rate-limited no-change summaries make an idle balancer visible in diagnostics.
 - Keep each newly assigned Auto Concept in a settled training session until it reaches the highest effective mastery captured at assignment time or `TrainingPeriodSeconds` elapses, whichever occurs first. The default period is 300 seconds; native setup/settlement time does not consume it.

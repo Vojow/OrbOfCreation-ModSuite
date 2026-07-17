@@ -133,7 +133,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "SlotManagementMode", "TrainingPeriodSeconds", "RebalanceIntervalSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
@@ -145,6 +145,7 @@ public sealed class ModConfigTests
 
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));

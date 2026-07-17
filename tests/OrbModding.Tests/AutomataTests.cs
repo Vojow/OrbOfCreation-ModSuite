@@ -60,8 +60,9 @@ public sealed class AutomataTests
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoConceptSlotManagementMode.RotateAll, config.AutoConceptSlotManagement.Value);
+        Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
-        Assert.Equal(300, config.AutoConceptRebalanceIntervalSeconds.Value);
+        Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.True(config.CanStartAutoBuyActively);
@@ -93,21 +94,67 @@ public sealed class AutomataTests
 
         var config = AutomataConfig.Bind(configFile);
 
-        Assert.Equal(expectedSeconds, config.AutoConceptRebalanceIntervalSeconds.Value);
+        Assert.Equal(expectedSeconds, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.DoesNotContain(
             configFile,
             pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalMinutes");
     }
 
     [Fact]
-    public void AutoConceptConfiguration_PreservesExistingSecondsSetting()
+    public void AutoConceptConfiguration_MigratesExistingRebalanceSecondsSetting()
     {
         var configFile = new ConfigFile();
         configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Current interval.");
 
         var config = AutomataConfig.Bind(configFile);
 
-        Assert.Equal(10, config.AutoConceptRebalanceIntervalSeconds.Value);
+        Assert.Equal(10, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.DoesNotContain(
+            configFile,
+            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalSeconds");
+    }
+
+    [Fact]
+    public void AutoConceptConfiguration_PreservesNewFallbackSettingOverLegacyValues()
+    {
+        var configFile = new ConfigFile();
+        configFile.Bind("AutoConcept", "FallbackEvaluationIntervalSeconds", 45, "Current interval.");
+        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Previous interval.");
+        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", 2.0f, "Legacy interval.");
+
+        var config = AutomataConfig.Bind(configFile);
+
+        Assert.Equal(45, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.DoesNotContain(
+            configFile,
+            pair => pair.Key.Section == "AutoConcept" &&
+                    (pair.Key.Key == "RebalanceIntervalSeconds" || pair.Key.Key == "RebalanceIntervalMinutes"));
+    }
+
+    [Fact]
+    public void AutoConceptToggleSwitchesModeAndShowsEmergencyBlock()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        var toggle = new AutoConceptToggleControl(config);
+
+        Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
+        toggle.Toggle();
+        Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
+        Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
+        config.EmergencyDisable.Value = true;
+        Assert.Equal(AutoCastToggleVisualState.Blocked, toggle.State);
+        toggle.Toggle();
+        Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
+    }
+
+    [Theory]
+    [InlineData(0, "CN OFF")]
+    [InlineData(1, "CN ON")]
+    [InlineData(2, "CN !")]
+    public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
+    {
+        Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));
     }
 
     [Fact]

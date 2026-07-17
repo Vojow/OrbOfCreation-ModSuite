@@ -9,8 +9,9 @@ Important controls:
 - `AutoBuy.Mode` and `AutoCast.Mode`: select `Disabled` or `Active`.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts.
 - `AutoConcept.SlotManagementMode`: `RotateAll` (default) replaces active concepts to train a compatible strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
+- `AutoConcept.ShowToggleButton`: show the `CN ON/OFF/!` gameplay button in the native Auto Buy-anchored control strip; default true.
 - `AutoConcept.TrainingPeriodSeconds`: maximum settled active time for one newly assigned concept; default 300, range 10 to 3600. Rotation resumes earlier if the concept catches the highest effective mastery captured when its session began.
-- `AutoConcept.RebalanceIntervalSeconds`: ordinary rebalance cadence from 10 to 1800 seconds; default 300. Legacy minute values migrate automatically.
+- `AutoConcept.FallbackEvaluationIntervalSeconds`: Advanced-only maximum idle delay between full plan calculations; default 300, range 10 to 1800. Native signals can evaluate earlier. Previous seconds and legacy minutes values migrate automatically.
 - Structure and upgrade affordability modes are configured separately.
 - Absolute and relative reserves protect selected resources.
 - `LeaveQueueSlots` preserves queue room for manual actions.

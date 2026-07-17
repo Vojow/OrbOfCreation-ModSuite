@@ -254,7 +254,7 @@ internal sealed class AutoConceptController : IDisposable
 
         LogIdleDecision(ranked.Count, candidates);
         _secondsUntilEvaluation = Math.Clamp(
-            _config.AutoConceptRebalanceIntervalSeconds.Value,
+            _config.AutoConceptFallbackEvaluationIntervalSeconds.Value,
             10,
             1800);
     }
