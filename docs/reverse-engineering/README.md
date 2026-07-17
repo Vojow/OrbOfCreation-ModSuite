@@ -89,8 +89,7 @@ mindmap
 5. [Resources and large numbers](resources-and-bigdouble.md)
 6. [Save system](save-system.md)
 7. [Modding hooks](modding-hooks.md)
-8. [Global and global-ish stat catalog](global-stats-catalog.md)
-9. [Reverse-engineering audit](audit.md)
+8. [Reverse-engineering audit](audit.md)
 
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 

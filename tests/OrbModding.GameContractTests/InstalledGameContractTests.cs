@@ -232,40 +232,6 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void AchievementResonance_MatchesKnownNativeLayout()
-    {
-        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
-
-        Assert.Equal("NumberVariable", assembly.GetBaseType("IntVariable"));
-        AssertMethod(assembly, "NumberVariable", "ApplyEffects", false, "System.Void", "System.Int32");
-        AssertMethod(assembly, "NumberVariable", "GetLevel", false, "System.Int32");
-        AssertMethod(assembly, "NumberVariable", "GetExecInfo", false, "EffectExecutionInfo", "System.Int32");
-        Assert.Equal(
-            "System.Collections.Generic.List`1<PersistentEffectBlock>",
-            assembly.GetFieldType("NumberVariable", "persistentEffectBlocks"));
-        Assert.Equal(
-            "System.Collections.Generic.List`1<IPersistentEffectScript>",
-            assembly.GetFieldType("PersistentEffectBlock", "effectScripts"));
-        Assert.Equal("NumberVariable", assembly.GetFieldType("NumberVariable+PersistentEffect", "numberVariable"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("NumberVariable+PersistentEffect", "modifier"));
-        Assert.Equal("UpgradeableObject", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "upgradeableObject"));
-        Assert.Equal("System.String", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyType"));
-        Assert.Equal("System.Int32", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyIndex"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "modifier"));
-
-        AssertMethod(assembly, "ValueModifier", "Stacking", true, "ValueModifier", "BigDouble");
-        AssertMethod(assembly, "ValueModifier", "Stacking", true, "ValueModifier", "System.Guid", "BigDouble");
-        AssertMethod(assembly, "ValueModifier", "GetGuid", false, "System.Guid");
-
-        var numberEffectFields = new[]
-        {
-            "maximumMultiplier", "MaximumMultiplier", "maxMultiplier", "MaxMultiplier", "maximum", "Maximum", "cap", "Cap",
-        };
-        Assert.All(numberEffectFields, name => Assert.Throws<InvalidOperationException>(
-            () => assembly.GetFieldType("NumberVariable+PersistentEffect", name)));
-    }
-
-    [GameAssemblyFact]
     public void BigDouble_MatchesPrecisionBridgeContract()
     {
         using var firstPass = new GameAssemblyMetadata(GameAssemblyPaths.Require().FirstPass);

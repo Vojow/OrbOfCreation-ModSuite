@@ -22,9 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../OrbModding.GameStubs/OrbModding.GameStubs.csproj" />
-    <ProjectReference Include="../../src/OrbAchievementResonance/OrbAchievementResonance.csproj" />
     <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj" />
-    <ProjectReference Include="../../src/OrbChronomancer/OrbChronomancer.csproj" />
     <ProjectReference Include="../../src/OrbModConfig/OrbModConfig.csproj" />
     <ProjectReference Include="../../src/OrbMentor/OrbMentor.csproj" />
   </ItemGroup>

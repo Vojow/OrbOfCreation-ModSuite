@@ -607,7 +607,7 @@ Exit: the suite backs off under load while safety actions and eventual progress 
 - Publish Deck validation builds as clearly named GitHub prereleases without replacing the current public release.
 - Introduce each performance phase behind an internal or hidden compatibility gate until its runtime matrix passes.
 - Compare every phase against the P0 baseline and keep rollback artifacts.
-- Do not combine experimental Chronomancer or Achievement Resonance binaries with performance test packages.
+- Do not combine binaries from experimental branches with supported performance test packages.
 
 ## Definition of done
 

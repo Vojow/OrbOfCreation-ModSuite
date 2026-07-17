@@ -1,6 +1,6 @@
 # Reverse-engineering audit
 
-[Back to index](README.md) · [Global stat catalog](global-stats-catalog.md)
+[Back to index](README.md)
 
 ## Audited build
 

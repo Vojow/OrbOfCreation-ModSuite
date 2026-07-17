@@ -14,12 +14,12 @@ The current release candidate centers on Orb Automata: queue-aware Auto Buy, saf
 |---|---|---|
 | **Orb Automata 0.6.0** | Release candidate | Queue-aware Auto Buy, coordinated Auto Cast, and disabled-by-default Auto Concept mastery balancing with bounded shared scheduling. |
 | **Orb Mod Config 0.5.3** | Beta | Mods tab available from the start, with typed editors, Steam Deck keyboard support, live native-control synchronization, and coordinated UI recovery. |
-| **Orb Chronomancer** | Experimental | Simulation-speed controls; excluded from the Automata release archive. |
-| **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation is disabled by default. |
 | **Orb Mentor 0.2.0** | Release candidate | Every equipped spell can share native mastery XP with discovered spells below its own mastery; the original highest-only policy remains selectable. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is supported only through the Windows game under Proton with BepInEx 5.
+
+Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on the `codex/experimental-chronomancer-resonance` branch and is not part of supported `main` builds or packages.
 
 ## Get started
 

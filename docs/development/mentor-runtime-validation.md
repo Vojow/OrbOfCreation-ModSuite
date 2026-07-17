@@ -14,7 +14,7 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 - Confirm spell-type XP changes only after each native `PurchaseLevel` confirmation, including bulk confirmation.
 - Disable or emergency-block while a large batch spans frames; confirm all ungranted bonus work is discarded.
 - Save/load, change scenes, reset/prestige, remove the plugin, reload, and reinstall; confirm no stale grants or save repair.
-- Repeat at accelerated Chronomancer speeds and with/without Automata, Orb Mod Config, and Achievement Resonance.
+- Repeat at normal and accelerated game speeds and with/without Automata and Orb Mod Config.
 - Confirm normal logs remain quiet and detailed logs identify source, batch, recipient UUID, and amount when enabled.
 
 ## Alchemy extension

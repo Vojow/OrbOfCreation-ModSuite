@@ -23,10 +23,6 @@ Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup
 
 `OrbMentor` is the spells-only mastery-sharing plugin. Its pure engine is covered by the portable suite; production builds hook the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary and fail closed on contract or lifecycle errors.
 
-## Achievement Resonance
-
-Native mutation is guarded by `General.ApplyNativeEffectBlocks=false`. The exact target, script-list, `BigDouble`, stable-GUID, and capped-refresh contracts are now verified statically and by tests. Use the default mode for the read-only load probe, then enable only the global-speed slice for isolated gameplay validation.
-
 ## Test build
 
 Run the game-independent suite with:

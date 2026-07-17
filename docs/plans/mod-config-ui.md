@@ -33,7 +33,7 @@ The first release does not provide a general-purpose game UI framework, edit arb
 Main tabs:  ...  Workshop | Alchemy | Time | Mods
 
 Mods panel
-├─ Mod list: Chronomancer | Automata | Achievement Resonance | ...
+├─ Mod list: Automata | Mentor | ...
 ├─ Categories: General | Safety | Research | Diagnostics | ...
 └─ Settings
    ├─ label and description
@@ -96,7 +96,7 @@ Until that contract exists, settings are assumed to be saved immediately but not
 - **Scene recreation:** make initialization idempotent and destroy all owned objects on teardown.
 - **Layout pressure:** verify the additional main button at every supported resolution and UI scale; allow compact labeling if required.
 - **Game input leakage:** while a text field, slider, dropdown, or keybinding capture owns focus, suppress relevant gameplay shortcuts without globally disabling input.
-- **Paused or accelerated time:** animate and process the panel with unscaled time so Chronomancer does not affect usability.
+- **Paused or accelerated time:** animate and process the panel with unscaled time so game-speed changes do not affect usability.
 - **Other UI mods:** modify the smallest possible hierarchy, use unique object names, and tolerate the navigation host already being extended.
 - **Config callbacks:** isolate exceptions raised by a mod's `SettingChanged` subscriber and report them without breaking the panel.
 
@@ -138,7 +138,7 @@ Exit criterion: an empty/sample panel behaves correctly with mouse and keyboard 
 - Group entries by plugin and section.
 - Display descriptions, current/default values, acceptable ranges, and unsupported types.
 
-Exit criterion: Chronomancer, Automata, and Achievement Resonance appear without modifications to those plugins.
+Exit criterion: Automata, Mentor, and other supported configurable plugins appear without modifications to those plugins.
 
 ### M3 — Safe editing
 
@@ -163,7 +163,7 @@ Required scenarios include:
 - fresh install, existing configs, malformed external value, and read-only config file;
 - `Main` scene entry/exit, save/load, resolution change, fullscreen toggle, and UI-scale change;
 - mouse, keyboard-only, and controller navigation;
-- 1× and accelerated Chronomancer modes;
+- normal and accelerated game-speed modes;
 - Apply, Revert, category reset, external reload, and a throwing `SettingChanged` subscriber;
 - zero configurable mods, one mod, all suite mods, and an unrelated third-party plugin;
 - duplicate plugin display names and duplicate section/key labels across different plugins;

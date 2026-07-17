@@ -129,7 +129,7 @@ Only after R1 differential evidence passes, enable the guarded adapter, schedule
 
 ### H1 — Hardening
 
-Test all three domains independently and together at normal and Chronomancer speeds, with and without sibling plugins. Validate clean install, upgrade, save/load, reset, disable, removal, and reinstall. Public configuration remains Disabled/Active only.
+Test all three domains independently and together at normal and accelerated game speeds, with and without supported sibling plugins. Validate clean install, upgrade, save/load, reset, disable, removal, and reinstall. Public configuration remains Disabled/Active only.
 
 ## Decisions intentionally deferred to evidence
 

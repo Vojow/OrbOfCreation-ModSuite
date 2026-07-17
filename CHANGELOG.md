@@ -32,7 +32,7 @@
 - Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, and transiently ineligible UUIDs park with exact XP until a later authoritative refresh without retry churn or head-of-line blocking. The parked ledger is bounded and fails the domain closed on overflow. AutoBuy plus Mentor can start only one native mutation in a Unity frame.
 - Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
-- Keep Orb Chronomancer and Orb Achievement Resonance experimental and excluded from the supported suite archive.
+- Move Orb Chronomancer and Orb Achievement Resonance source, tests, and design notes to the dedicated `codex/experimental-chronomancer-resonance` branch; supported `main` builds and archives contain only the allowlisted suite modules.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

@@ -599,7 +599,7 @@ Exit gate: combined suite frame work, allocations, loadout churn, native effect 
 - Title → load → Main → title → different save → Main.
 - Reset and NG+ invalidate all live references and ownership.
 - Concept page open and closed during long training.
-- Chronomancer 1×, 2×, 4×, and 8× where supported.
+- Normal and accelerated game speeds where supported.
 - Auto Buy, Auto Cast, Mentor, Mod Config, and Auto Concept active together for at least 30 minutes.
 
 Runtime reports must record exact configuration, save scenario, game assembly hash, plugin versions, average/p95/max subsystem time, GC deltas, slot assignments, resource floors, native mutations, rollbacks, and any observed FPS/1%-low change.

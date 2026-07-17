@@ -352,11 +352,14 @@ public sealed class AutomataCoordinatorTests
                 new BuyCatalog(4, upgrade, structure),
                 coordinator,
                 () => frame,
-                log);
+                log,
+                _ => 0.0);
 
             engine.Tick(1.0f);
 
-            Assert.True(NativeMultiBuyScope.IsMutationQuarantined);
+            Assert.True(
+                NativeMultiBuyScope.IsMutationQuarantined,
+                $"UpgradeCalls={upgrade.PurchaseCalls}; StructureCalls={structure.PurchaseCalls}; MultiBuySetCalls={GlobalVariables.MultiBuy.SetCalls}");
             Assert.Equal(1, upgrade.PurchaseCalls);
             Assert.Equal(0, structure.PurchaseCalls);
             var setterCallsAfterQuarantine = GlobalVariables.MultiBuy.SetCalls;

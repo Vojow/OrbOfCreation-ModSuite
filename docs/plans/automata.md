@@ -6,8 +6,6 @@
 
 ## Goal
 
-Coordinated implementation iterations, the shared admission model, and the pre-worktree gate are defined in [Three-mod iteration plan](three-mod-iteration.md).
-
 Automate repetitive actions through transparent, configurable rules without silently consuming resources the player intended to reserve.
 
 ## Product priorities
@@ -171,7 +169,7 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 - Every module rejects unknown state, cost, or action contracts instead of guessing.
 - Automata never starts an action whose conservative admission calculation would cross configured reserves.
 - Manual actions remain available.
-- It behaves consistently at Chronomancer 1×, 2×, 4×, and 8×.
+- It behaves consistently at normal and accelerated game speeds supported by the game environment.
 - Disabling the plugin stops new actions immediately.
 - Existing queued actions are not deleted or rewritten.
 - Documentation and packaging state that concurrent auto-buy plugins are unsupported.

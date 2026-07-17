@@ -38,7 +38,7 @@ Active/loadout spells remain eligible. A spell that is already ready to confirm 
 
 ### XP source and type progression
 
-Sharing is calculated from the final positive XP passed to `SpellRecipeSO.GainMasteryExp`, after the game's spell, type, player, and Achievement Resonance modifiers have already been applied.
+Sharing is calculated from the final positive XP passed to `SpellRecipeSO.GainMasteryExp`, after the game's spell, type, player, and other native modifiers have already been applied.
 
 Orb Mentor grants only per-spell mastery XP. It never calls `SpellTypeSO.GainTypeXp` directly. Native spell-type XP continues to be awarded by `SpellRecipeSO.PurchaseLevel()` when the player confirms each recipient's mastery. This means a Firebolt event mentors individual lower-level spells without directly granting Cantrip, Evocation, or other type XP.
 
@@ -198,8 +198,8 @@ Exit gate: large recipient sets and channelled spells remain smooth; toggling of
 
 ### I4 — Public beta hardening
 
-- Run extended sessions at 1× and Chronomancer speeds.
-- Validate with and without Automata, Orb Mod Config, and Achievement Resonance.
+- Run extended sessions at normal and accelerated game speeds.
+- Validate with and without Automata and Orb Mod Config.
 - Confirm normal logs remain quiet and detailed logs are sufficient to diagnose discrepancies.
 - Package a standalone Orb Mentor archive and an optional complete ModSuite archive.
 - Publish only Disabled/Active behavior; retain probe instrumentation for development builds.
@@ -223,8 +223,8 @@ Required automated and runtime scenarios:
 - source and recipient crossing thresholds during the same frame;
 - native mastery confirmation and spell-type XP occurring exactly once per confirmed recipient level;
 - save/load, scene changes, reset/prestige boundaries, and plugin removal;
-- normal speed and accelerated Chronomancer modes;
-- Achievement Resonance final-XP modifiers;
+- normal and accelerated game speeds;
+- native final-XP modifiers;
 - proof that mod-generated XP cannot recursively produce additional sharing.
 
 ## Release and ownership
@@ -236,7 +236,7 @@ Proposed identity:
 - Plugin GUID: `dev.vojow.orbofcreation.mentor`
 - Initial plugin version: `0.1.0` (published as a beta prerelease)
 
-Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata, Achievement Resonance, and Chronomancer are compatible sibling plugins, not dependencies.
+Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata is a compatible sibling plugin, not a dependency.
 
 ## Deferred work
 

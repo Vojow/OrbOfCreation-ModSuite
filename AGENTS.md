@@ -16,7 +16,7 @@ This repository builds BepInEx 5 mods for Orb Of Creation. Runtime behavior must
 ## Product and release boundaries
 
 - The supported suite package is an explicit allowlist, never "every project on main."
-- `OrbChronomancer` and `OrbAchievementResonance` are experimental until their lifecycle is explicitly promoted in documentation and the user approves their release scope.
+- `OrbChronomancer` and `OrbAchievementResonance` live only on `codex/experimental-chronomancer-resonance` until their lifecycle is explicitly promoted and the user approves their release scope.
 - Experimental DLLs must never enter a supported suite archive accidentally.
 - Build success is not permission to install DLLs into the game. Install only when the user explicitly asks, then verify source/destination hashes.
 - A release request requires a release review before publication: exact commit, tag, versions, plugin allowlist, archive entries, test evidence, and prerelease/stable status.

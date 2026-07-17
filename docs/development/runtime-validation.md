@@ -1,6 +1,6 @@
 # Local runtime validation protocol
 
-[Back to compatibility and testing](testing.md) · [Three-mod iteration plan](../plans/three-mod-iteration.md)
+[Back to compatibility and testing](testing.md)
 
 ## Purpose
 
@@ -17,24 +17,15 @@ Baseline checked on 2026-07-14:
 - `Assembly-CSharp.dll`: `5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F`.
 - `Assembly-CSharp-firstpass.dll`: `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A`.
 - Both installed assembly hashes match the audited repository baseline.
-- All 73 game-independent behavior and knowledge-map tests pass with `UseGameStubs=true`.
-- All 8 installed-game metadata contract tests pass against the audited assemblies.
-- All four plugin projects build in Release against the real installed game references with zero warnings. The required Unity facade, UI, and TextMeshPro references are part of the build contract.
+- On 2026-07-17, all 271 supported game-independent behavior and knowledge-map tests passed with `UseGameStubs=true`.
+- On 2026-07-17, all 12 supported installed-game metadata contract tests passed against the audited assemblies.
+- Automata, Mentor, and Mod Config built in Release against the real installed game references with zero warnings. The required Unity facade, UI, and TextMeshPro references are part of the build contract.
+- The supported-suite package rehearsal contained only Automata, Mentor, Mod Config, and Orb Modding Common DLLs; experimental DLL guards passed.
 
 The static ILSpy contract check confirmed these installed methods:
 
-- `Player.ManagerStart()` and `Player.GetAchievementLevel()`.
 - `ResearchSO.CanDevelop()`, `GetDevelopError()`, `GetDevelopmentCost()`, and `Develop()`.
 - `StructureSO` and `UpgradeSO` registries, availability, costs, queue state, and purchase methods; `ActionManager.GetRemainingRoom()`; and native multi-buy access/restoration.
-- `SaveStateManager.CollectJsonData()`, `ImplementLoadedJson()`, and `WriteFileAndBackupAsync(...)`.
-
-The static audit originally found three Achievement Resonance construction blockers. They are now fixed and covered by regression tests:
-
-1. The builder constructs the game's `BigDouble` and calls `ValueModifier.Stacking(Guid, BigDouble)`.
-2. It inserts scripts into `PersistentEffectBlock.effectScripts` and targets the audited script fields.
-3. Because native scripts have no cap field, the `NumberVariable.ApplyEffects(int)` prefix derives a per-level rate whose native compounded result equals the configured capped total multiplier.
-
-Native mutation still defaults to off until the non-mutating load probe confirms asset resolution and the isolated global-speed slice proves application, tooltip output, duplicate prevention, and rollback in the running game.
 
 ### Automata Auto Buy runtime evidence
 
@@ -89,12 +80,12 @@ The `0.3.1` desktop/handheld control probe passed on 2026-07-14:
 
 ## Validation order
 
-Run the mods in this order:
+Run supported mods in this order:
 
-1. **Chronomancer** — smallest game-state surface; acceleration is reversible and begins at `1x`.
-2. **Automata** — begin Disabled; Active is tested only on a disposable backed-up save.
-3. **Achievement Resonance** — begin with `ApplyNativeEffectBlocks=false`; after V2/V3 pass, test only the global-speed slice in V4.
-4. **Combined suite** using only the intended project plugins.
+1. **Automata** — begin Disabled; Active is tested only on a disposable backed-up save.
+2. **Mentor** — begin Disabled, then validate XP sharing on a disposable backed-up save.
+3. **Mod Config** — validate navigation, editors, and status-control synchronization.
+4. **Combined supported suite** using only allowlisted plugins.
 
 ## Gate V0 — repository and real-reference build
 
@@ -104,9 +95,9 @@ Run from the repository root:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
 $env:OOC_GAME_DIR = 'C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
 dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj
-dotnet build src/OrbChronomancer/OrbChronomancer.csproj -c Release
 dotnet build src/OrbAutomata/OrbAutomata.csproj -c Release
-dotnet build src/OrbAchievementResonance/OrbAchievementResonance.csproj -c Release
+dotnet build src/OrbMentor/OrbMentor.csproj -c Release
+dotnet build src/OrbModConfig/OrbModConfig.csproj -c Release
 ```
 
 Acceptance criteria:
@@ -125,9 +116,9 @@ Required checks:
 
 | Mod | Contracts that must be proven |
 |---|---|
-| Chronomancer | Gameplay scene name; three `SaveStateManager` hook targets; Unity timing members |
 | Automata | `StructureSO`/`UpgradeSO` registries, state, cost, queue, and one-level purchase paths; `ActionManager`; native multi-buy; `ResourceTuple`; `BigDouble` |
-| Resonance | Achievement variable resolution; `persistentEffectBlocks`; block/script layout; modifier GUID ownership; cap implementation |
+| Mentor | Spell mastery catalogs, XP hook, recipient identity, native grant path, and recursion suppression |
+| Mod Config | Native navigation host, Mods view lifecycle, editor contracts, and queue-adjacent status-control anchor |
 
 Acceptance criteria: every contract used by active code is either verified or guarded by a safe no-op. A warning-only fallback is not enough for a feature advertised as active.
 
@@ -139,7 +130,7 @@ Prepare once:
 2. Copy the entire save directory to a timestamped backup outside the live directory.
 3. Preserve the existing `BepInEx/config` files and `BepInEx/LogOutput.log`.
 4. Install only one mod and its matching `OrbModding.Common.dll`.
-5. Do not press Chronomancer speed keys, keep Automata Disabled, and keep Resonance native mutation disabled.
+5. Keep all automation and sharing modules Disabled during the initial smoke test.
 
 For each mod, launch to title, load the backed-up test slot, wait two minutes, return to title, and quit normally.
 
@@ -153,12 +144,6 @@ Acceptance criteria:
 
 ## Gate V3 — read-only behavior probes
 
-### Chronomancer
-
-- Confirm the active gameplay scene is `Main`.
-- Confirm exactly the expected save/load hooks install.
-- At `1x`, verify captured `timeScale` and `fixedDeltaTime` remain unchanged across load, save, and title return.
-
 ### Automata
 
 - Keep `AutoBuy.Mode=Disabled`. Confirm the public configuration exposes only Disabled/Active modes and contains no runtime-probe, per-session-limit, DryRun, or Research settings.
@@ -167,29 +152,15 @@ Acceptance criteria:
 - Confirm no other auto-buy plugin is installed during Automata validation.
 - Candidate/cost behavior moves to the disposable active gate because the release build intentionally has no mutating-looking DryRun mode.
 
-### Achievement Resonance
-
-- Keep `ApplyNativeEffectBlocks=false`.
-- Confirm `Player.ManagerStart`, the Achievement Strength `IntVariable`, and its native `persistentEffectBlocks` list are resolved.
-- Record native block/script types and existing modifier identifiers without adding or removing anything.
-
 Acceptance criteria: logged observations match the UI and ILSpy contracts, no save data changes are attributable to the probe, and no unresolved active-path member remains.
 
 ## Gate V4 — isolated active gameplay tests
 
 Use a disposable copy of the backed-up save and enable only one mod.
 
-### Chronomancer
-
-Test `1x`, `2x`, and `4x` first; keep `8x` experimental. At each speed measure passive gain, drains, crafting, research, alchemy, combat, animation/input, autosave, save/reload, and title return. Verify timing returns to the captured baseline during save/load and after quit. Compare real-time CPU cost and fixed-update frequency for both fixed-step policies before choosing a release default.
-
 ### Automata
 
 After V3 evidence is approved, use a disposable save and ensure no other auto-buy plugin is installed. Start Disabled, set one cheap observed UUID in `AutoBuy.AllowedUuids`, choose `BatchSizingMode=Fixed` with `MaxPurchasesPerBatch=1`, then activate and immediately return to Disabled after the first visible queued level. Verify its cost, resource deduction, queue entry, and completion. Test an Upgrade and Structure separately. Repeat with independent affordability thresholds and with both zero and non-zero reserves. Finally test `RespectActionMultiplier=true` at 5×: it must submit at most five individually revalidated levels, never exceed free queue room, and stop early at a reserve boundary. Emergency disable must stop new purchases immediately. A sustained queue test must show scan continuations and prepared batches checking room every frame rather than waiting for the idle evaluation interval.
-
-### Achievement Resonance
-
-The V1 construction blockers are fixed in code and automated tests. After V2/V3 pass, enable only the global-speed vertical slice. Verify one owned block is added, the expected modifier is applied once, Achievement Strength changes recalculate it, repeated load does not duplicate it, the cap works, the tooltip explains it, and disabling/removing the mod restores the baseline without changing Achievement Strength save data.
 
 ## Gate V5 — persistence and rollback
 
@@ -202,13 +173,9 @@ For every active test:
 
 ## Gate V6 — combined compatibility
 
-Test the following sets at `1x`, `2x`, and `4x`; add `8x` only after isolated Chronomancer evidence passes:
+Test Automata, Mentor, and Mod Config together at normal and accelerated game speeds supported by the environment.
 
-1. Chronomancer + Automata.
-2. Chronomancer + Achievement Resonance.
-3. All three mods.
-
-Verify independent configs and keybinds, unscaled Automata cadence, one owner for Unity timing, no duplicated Resonance blocks, unchanged global multi-buy, acceptable frame time, save/reload, title return, and the ability to disable one plugin without breaking the others.
+Verify independent configs and keybinds, unscaled scheduler cadence, unchanged global multi-buy, acceptable frame time, save/reload, title return, queue-adjacent control ordering, and the ability to disable one plugin without breaking the others.
 
 ## Gate V7 — release candidate
 
