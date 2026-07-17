@@ -21,7 +21,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
-- Structure repeat follows the live Bulk Development value.
+- The selected Structure or Upgrade repeats while it remains affordable and usable queue room remains; every level is revalidated separately.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -52,7 +52,9 @@ When `RespectActionMultiplier=true`, Automata reads the game's current action mu
 
 Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process and removed from admission, cached ranking, and pending batches. Structure purchases do not use that global and remain independently eligible.
 
-When action-multiplier handling is off, structures use `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. Upgrades remain one level per ranked candidate.
+When action-multiplier handling is off, `RepeatWhileAffordable=true` keeps the selected Structure or Upgrade prepared for the queue room available at the start of its group. Automata does not divide the current balance by one potentially stale cost: it re-reads and revalidates the native cost, affordability threshold, and reserves before every level, stopping at the exact first failed admission check. This avoids a new scan/ranking rotation after every Bulk Development-sized group when resources are abundant.
+
+Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. In that fallback mode, Upgrades remain one level per ranked candidate.
 
 `PrioritizeCostAndQualityStructures=true` adds one purchase-priority tier above ordinary cost-ratio ordering. A Structure receives that tier only when its stable native effect definition and a non-mutating `ValueModifier.Adjust(1)` preview prove that it reduces `Cost`, `CostScaling`, or resource `AttributeCost`, or increases resource `Quality`. Dynamic targets, unknown properties, unreadable modifiers, and effects with the wrong direction receive no boost. The option changes ranking only after native availability, `CanPurchase`, exact current cost, affordability, reserves, allow/block lists, and queue safety have passed; it never makes a locked or unaffordable Structure eligible. Classification is lazy and cached, so it is not performed while the option is off and is not repeated in the per-frame evaluation path.
 
@@ -66,7 +68,7 @@ Auto Buy and Auto Cast register separate read and native-mutation work with the 
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
-Structure repeat still follows `BulkDevelopment`, `Fixed`, or `Single` exactly. Automata finishes the configured group for the selected Structure, then refreshes dirty resource and cost state and reranks before mutating a different candidate. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels that group buys.
+Automata finishes the configured repeat group for the selected candidate, then refreshes dirty resource and cost state and reranks before mutating a different candidate. The default affordable group is capped to the usable queue room captured at group start and can end earlier on live admission failure. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels remain safe.
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 

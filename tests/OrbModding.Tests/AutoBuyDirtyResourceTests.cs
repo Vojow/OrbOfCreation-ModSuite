@@ -416,6 +416,7 @@ public sealed class AutoBuyDirtyResourceTests
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 10;
+        config.RepeatWhileAffordable.Value = false;
         config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
         config.FixedStructureLevelsPerCandidate.Value = 3;
         config.LeaveQueueSlots.Value = 0;
@@ -1134,6 +1135,7 @@ public sealed class AutoBuyDirtyResourceTests
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.AllowedAutoBuyUuids.Value = allowedUuid;
         config.LeaveQueueSlots.Value = 0;
+        config.RepeatWhileAffordable.Value = false;
         return config;
     }
 

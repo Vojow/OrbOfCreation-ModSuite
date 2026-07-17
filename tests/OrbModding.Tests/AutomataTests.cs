@@ -55,6 +55,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoBuyStructureRepeatMode.BulkDevelopment, config.StructureRepeatMode.Value);
         Assert.Equal(2, config.FixedStructureLevelsPerCandidate.Value);
         Assert.False(config.RespectActionMultiplier.Value);
+        Assert.True(config.RepeatWhileAffordable.Value);
         Assert.Equal("0", config.AbsoluteReserve.Value);
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);

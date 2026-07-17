@@ -8,6 +8,7 @@ These documents record design intent, implementation sequencing, or historical d
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
 | [Orb Automata](automata.md) | Implemented / evolving | Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. |
+| [Auto Buy rejection-aware scheduler](autobuy-rejection-index.md) | In progress / runtime validation pending | Typed rejection evidence and aggregate diagnostics first; threshold-indexed resource wakeups follow without weakening coordinator or queue-slot guarantees. |
 | [Auto Concept mastery balancing](auto-concept.md) | Beta / runtime validation pending | Disabled-by-default catch-up or timed concept rotation is released through native mutation paths; post-release Proton profiling remains. |
 | [Mod suite performance](performance-suite.md) | P0-P3 implemented / runtime validation pending | Shared scheduling, lifecycle-aware indexes, dirty updates, and resource snapshots are implemented; post-release Steam Deck profiling remains. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
