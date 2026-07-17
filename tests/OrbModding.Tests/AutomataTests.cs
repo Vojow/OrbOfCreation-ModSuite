@@ -59,6 +59,7 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(AutoConceptSlotManagementMode.RotateAll, config.AutoConceptSlotManagement.Value);
         Assert.Equal(300, config.AutoConceptRebalanceIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
@@ -131,6 +132,24 @@ public sealed class AutomataTests
         });
 
         Assert.Equal(new[] { "early", "a", "b", "z" }, System.Linq.Enumerable.Select(ranked, item => item.Uuid));
+    }
+
+    [Theory]
+    [InlineData(0, 0.9, 1, 0.0, true)]
+    [InlineData(1, 0.2, 1, 0.8, true)]
+    [InlineData(1, 0.8, 1, 0.8, false)]
+    [InlineData(2, 0.0, 1, 0.9, false)]
+    public void AutoConceptRotatesOnlyForStrictlyLowerMastery(
+        int candidateLevel,
+        double candidateProgress,
+        int activeLevel,
+        double activeProgress,
+        bool expected)
+    {
+        var candidate = new ConceptProgress("candidate", candidateLevel, candidateProgress, true);
+        var active = new ConceptProgress("active", activeLevel, activeProgress, true);
+
+        Assert.Equal(expected, AutoConceptBalancer.HasStrictlyLowerMastery(candidate, active));
     }
 
     [Fact]

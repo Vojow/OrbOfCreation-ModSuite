@@ -1,12 +1,12 @@
 # Auto Concept mastery-balancing plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, manual-baseline ownership ledger, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, configurable slot ownership policy, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
 
 [Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
 
 ## Goal
 
-Automate Scholar Concept mastery training without taking ownership of the player's entire concept loadout or allowing continuous concept drains to exhaust resources.
+Automate Scholar Concept mastery training with an explicit loadout-rotation policy while preventing continuous concept drains from exhausting resources.
 
 Auto Concept should periodically:
 
@@ -43,7 +43,7 @@ This reuse does not make ordinary alchemy part of Auto Concept. The adapter must
 | Mastery level | Native `AlchemyRecipeSO.masteryLevel`. For mastery-limited concepts, the native maximum quantity is `masteryLevel + 1`. |
 | Effective mastery | Mastery level plus bounded progress toward the next level, used only for deterministic training priority. |
 | Manual baseline | Active quantity present when Automata begins owning a training plan or after an explicit rebaseline. |
-| Automated delta | Quantity added by Auto Concept above the preserved manual baseline. Auto Concept may remove only this delta by default. |
+| Automated delta | Quantity added by Auto Concept above the observed manual baseline. Safety rollback and `PreserveManual` removal never exceed this delta. |
 | Training assignment | A concept selected by the balancer for one currently usable slot. |
 | Resource headroom | Native resource rate and quantity capacity remaining after configured safety margins. |
 
@@ -52,11 +52,11 @@ This reuse does not make ordinary alchemy part of Auto Concept. The adapter must
 ### Default behavior
 
 - Fresh installations start with Auto Concept disabled.
-- Active mode uses all currently acquired compatible slots except slots occupied by preserved manual/pinned concepts or explicitly reserved for manual play.
+- Active mode uses all currently acquired compatible slots. `RotateAll` may replace a settled assignment for a compatible strictly lower-mastery concept; `PreserveManual` retains the starting loadout.
 - The training pool contains discovered, available, validated concepts that are not blocked by configuration.
 - Concepts are ranked by effective mastery, lowest first, with stable UUID as the final tie-breaker.
 - A rebalance runs on a multi-minute interval and may be requested sooner by a mastery-level change, acquired-slot change, manual loadout change, configuration change, or lifecycle invalidation.
-- The balancer changes only quantities it owns. It does not clear the native loadout.
+- The balancer changes only quantities it owns under `PreserveManual`. `RotateAll` explicitly authorizes replacing one complete, settled native assignment at a time.
 - Resource safety may leave an acquired slot empty or assign less than `masteryLevel + 1` instances.
 - Emergency disable cancels pending plans and new mutations immediately. It does not rewrite native progression or remove accepted game state unless an explicit cleanup policy is later approved.
 
@@ -146,7 +146,7 @@ Locked, undiscovered, temporarily resource-blocked, incompatible, or unresolved 
 ```text
 usable automated assignments
   = compatible acquired slots
-  - preserved manual/pinned assignments
+  - preserved manual/pinned assignments when `PreserveManual` is selected
   - configured manual slot reserve
 ```
 
@@ -167,7 +167,7 @@ flowchart TD
 
 Slot changes invalidate only the assignment plan. A newly acquired slot schedules an early rebalance; it does not rebuild native reflection metadata or run the optimizer inside the slot-change hook.
 
-If slot capacity shrinks, Auto Concept removes its lowest-priority automated assignment first. It never removes a preserved manual/pinned entry to satisfy its own plan. Contradictory native slot state fails closed and pauses new mutations.
+If slot capacity shrinks, Auto Concept removes its lowest-priority automated assignment first. It does not remove a baseline merely to repair contradictory native slot state; that state fails closed and pauses new mutations.
 
 ## Manual and automated ownership
 
@@ -185,7 +185,8 @@ Rules:
 - An uncorrelated native quantity or assignment change is treated as manual input.
 - Manual input pauses automated mutation for a configurable interval and requests a rebaseline.
 - Automata-originated mutations are correlated to the exact ActiveConcepts asset, recipe identity, and expected quantity delta so their synchronous native hooks are not mistaken for manual input.
-- Removing a training assignment removes at most its automated delta.
+- `PreserveManual` and safety rollback remove at most the automated delta.
+- `RotateAll` may remove the exact full settled quantity of one assignment only after final identity, slot family, quantity, and policy revalidation; the controller then waits for settlement and replans the compatible lower-mastery add.
 - Save load, reset, NG+, native-object replacement, or ambiguous ownership clears the ownership ledger and blocks mutation until a controlled rebaseline.
 - Disabling Auto Concept leaves native quantities unchanged by default. Optional cleanup is deferred until player expectations and lifecycle behavior are validated.
 
@@ -436,10 +437,11 @@ Names and defaults remain subject to runtime measurement and player approval.
 
 ### Balancing
 
+- `SlotManagementMode`: `RotateAll` (default) or `PreserveManual`.
 - `RebalanceIntervalSeconds`: default 300 seconds, configurable from 10 through 1800 seconds.
 - `UseAllAvailableConceptSlots`: proposed default true.
 - `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
-- `MinimumTrainingDurationMinutes`: proposed default 3 minutes to prevent churn.
+- Strict mastery comparison prevents equal-progress UUID tie-breaks from causing rotation churn.
 - `AllowedConceptUuids`: optional allowlist; empty means every validated discovered concept.
 - `BlockedConceptUuids`: explicit denylist.
 - `PinnedConceptUuids`: preserve or prioritize separately only after ownership semantics are validated.
@@ -468,8 +470,8 @@ The status tooltip should show mode, acquired/usable/assigned slots, current tra
 - Never touch an ordinary alchemy recipe or active alchemy list.
 - Never treat undiscovered, unavailable, missing, or resource-blocked as completed.
 - Never exceed native `GetMaxUsageSlots()` or bypass compatible-slot checks.
-- Never mutate a manual/pinned baseline to satisfy an automated plan.
-- Never remove more than the recorded automated delta.
+- Never mutate a manual baseline under `PreserveManual` or during safety rollback.
+- Under `RotateAll`, remove only the exact full settled assignment selected for a compatible strictly lower-mastery replacement.
 - Preserve global multi-buy across success, failure, early return, and exception paths.
 - Revalidate slots, quantity, bandwidth, resource state, ownership, and identity immediately before every native mutation.
 - Abort and replan when native results disagree with prediction.
@@ -511,7 +513,7 @@ Exit gate: the observed UI quantity, XP/s, mastery gain, maximum quantity, drain
 - Implement effective-mastery scoring, stable ordering, starvation age, dynamic assignment count, typed-slot compatibility model, and manual/automated quantity accounting without game dependencies.
 - Add deterministic tests for ties, invalid XP, locked candidates, slot growth/shrink, typed slots, manual baselines, and lifecycle rebaseline.
 
-Exit gate: the pure engine selects the correct lowest-progress concepts for arbitrary slot layouts and never proposes removal of manual quantity.
+Exit gate: the pure engine selects the correct lowest-progress concepts for arbitrary slot layouts and proposes manual-baseline removal only under the explicit `RotateAll` policy.
 
 ### C2 — Read-only native catalog and status
 
@@ -525,7 +527,7 @@ Exit gate: long-session read-only operation has bounded CPU, allocations, and ca
 ### C3 — Single-assignment native vertical slice
 
 - Allow one explicitly selected or lowest-ranked training concept.
-- Preserve manual baseline, use native compatible-slot checks, and batch quantity through the audited engagement path.
+- Track the manual baseline, use native compatible-slot checks, and batch quantity through the audited engagement path.
 - Preserve/restore native multi-buy and correlate own mutations.
 - Add settlement verification and safe rollback.
 
@@ -535,7 +537,7 @@ Exit gate: one concept trains to its native mastery limit or resource-safe quant
 
 - Select as many distinct training assignments as current compatible acquired slots permit.
 - Implement breadth-before-depth allocation across a shared provisional resource ledger.
-- Rebalance on mastery and slot changes while enforcing minimum training duration and manual pause.
+- Rebalance on mastery and slot changes; require a strict mastery deficit so equal-progress ties cannot churn.
 - Spread removals/additions across frames with settlement between candidates.
 
 Exit gate: slot acquisition automatically expands training, slot loss removes only automated low-priority assignments, and shared-resource candidates never exceed aggregate headroom.
@@ -558,13 +560,13 @@ Exit gate: combined suite frame work, allocations, loadout churn, native effect 
 - Stable UUID breaks exact ties deterministically.
 - Invalid XP requirement never produces NaN priority.
 - Dynamic training count follows acquired compatible slots, not a fixed maximum.
-- Manual/pinned assignments and reserved manual slots reduce usable automated assignments.
+- Manual/pinned assignments reduce usable automated assignments under `PreserveManual`.
 - Typed slot incompatibility skips a candidate without consuming the slot permanently.
 - Breadth pass assigns one sustainable instance before depth allocation.
 - Shared resource vectors use one aggregate provisional ledger.
 - One failing resource rejects the complete candidate quantity.
 - Mastery increase raises the native-maximum model from `level + 1` to the next value.
-- Ownership ledger never proposes removal below manual baseline.
+- Ownership ledger never proposes removal below manual baseline unless `RotateAll` explicitly selects an exact settled assignment replacement.
 - Manual signal pauses and rebases; correlated Automata signal does not.
 - Budget deferral preserves the exact pending plan and dirty reasons.
 
@@ -660,7 +662,7 @@ Record resolved answers here with assembly hash, method signature, and runtime e
 - Training assignments follow the live compatible acquired-slot layout rather than a fixed maximum.
 - Lowest-progress discovered concepts receive deterministic, starvation-resistant training priority.
 - Each assigned quantity stays within the native mastery limit and verified resource headroom.
-- Manual/pinned quantities are preserved, and Auto Concept removes only proven automated deltas.
+- `PreserveManual` preserves manual quantities; `RotateAll` replaces only a fully revalidated settled assignment, and safety rollback removes only proven automated deltas.
 - Native XP, mastery, effects, bandwidth, drains, and save behavior remain authoritative.
 - Save load, reset, NG+, slot changes, manual interaction, and object replacement invalidate and rebuild safe state correctly.
 - Disabled and steady-state operation perform no unbounded scans, allocations, logging, or pending-work growth.

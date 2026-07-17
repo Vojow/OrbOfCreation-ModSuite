@@ -32,6 +32,7 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoCastManualPauseSeconds,
         ConfigEntry<bool> autoCastFullCharge,
         ConfigEntry<AutoConceptOperationMode> autoConceptMode,
+        ConfigEntry<AutoConceptSlotManagementMode> autoConceptSlotManagementMode,
         ConfigEntry<int> autoConceptRebalanceIntervalSeconds,
         ConfigEntry<int> autoConceptQuantityCap,
         ConfigEntry<float> autoConceptRateReservePercent,
@@ -72,6 +73,7 @@ internal sealed class AutomataConfig
         AutoCastManualPauseSeconds = autoCastManualPauseSeconds;
         AutoCastFullCharge = autoCastFullCharge;
         AutoConceptMode = autoConceptMode;
+        AutoConceptSlotManagement = autoConceptSlotManagementMode;
         AutoConceptRebalanceIntervalSeconds = autoConceptRebalanceIntervalSeconds;
         AutoConceptQuantityCap = autoConceptQuantityCap;
         AutoConceptRateReservePercent = autoConceptRateReservePercent;
@@ -137,6 +139,7 @@ internal sealed class AutomataConfig
     public ConfigEntry<bool> AutoCastFullCharge { get; }
 
     public ConfigEntry<AutoConceptOperationMode> AutoConceptMode { get; }
+    public ConfigEntry<AutoConceptSlotManagementMode> AutoConceptSlotManagement { get; }
     public ConfigEntry<int> AutoConceptRebalanceIntervalSeconds { get; }
     public ConfigEntry<int> AutoConceptQuantityCap { get; }
     public ConfigEntry<float> AutoConceptRateReservePercent { get; }
@@ -229,6 +232,7 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
                 Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
                 autoConceptMode,
+                Bind(config, "AutoConcept", "SlotManagementMode", AutoConceptSlotManagementMode.RotateAll, "RotateAll replaces active concepts when a compatible discovered concept has strictly lower mastery. PreserveManual fills empty slots and rotates only quantities added by Automata.", 17, 5),
                 autoConceptRebalanceIntervalSeconds,
                 Bind(config, "AutoConcept", "PerConceptQuantityCap", 0, "Optional maximum automated quantity per concept. Zero uses the native mastery maximum.", 17, 20, new AcceptableValueRange<int>(0, 1000000)),
                 Bind(config, "AutoConcept", "RateReservePercent", 10.0f, "Minimum percentage of each drained resource's current gross positive rate to preserve after an automated quantity change.", 17, 30, new AcceptableValueRange<float>(0.0f, 100.0f)),
@@ -359,6 +363,7 @@ internal sealed class AutomataConfig
             "Mode" when section == "AutoBuy" => "Auto Buy",
             "Mode" when section == "AutoCast" => "Auto Cast",
             "Mode" when section == "AutoConcept" => "Auto Concept",
+            "SlotManagementMode" => "Slot management",
             "AffordabilityMode" => "Structure affordability",
             "UpgradeAffordabilityMode" => "Upgrade affordability",
             "IncludeStructures" => "Buy structures",

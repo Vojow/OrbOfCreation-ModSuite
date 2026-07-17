@@ -9,6 +9,12 @@ internal enum AutoConceptOperationMode
     Active,
 }
 
+internal enum AutoConceptSlotManagementMode
+{
+    RotateAll,
+    PreserveManual,
+}
+
 internal readonly struct ConceptProgress
 {
     public ConceptProgress(string uuid, int masteryLevel, double masteryProgress, bool eligible)
@@ -39,6 +45,12 @@ internal static class AutoConceptBalancer
         }
         result.Sort(Compare);
         return result;
+    }
+
+    public static bool HasStrictlyLowerMastery(ConceptProgress candidate, ConceptProgress active)
+    {
+        var level = candidate.MasteryLevel.CompareTo(active.MasteryLevel);
+        return level < 0 || level == 0 && candidate.MasteryProgress < active.MasteryProgress;
     }
 
     private static int Compare(ConceptProgress left, ConceptProgress right)

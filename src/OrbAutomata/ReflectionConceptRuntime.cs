@@ -275,22 +275,38 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     public bool TryRemoveOwned(NativeConceptCandidate candidate, int delta, out string reason)
     {
+        return TryRemove(candidate, delta, requireExactQuantity: false, "owned concept quantity", out reason);
+    }
+
+    public bool TryRemoveForRotation(NativeConceptCandidate candidate, int expectedQuantity, out string reason)
+    {
+        return TryRemove(candidate, expectedQuantity, requireExactQuantity: true, "rotation quantity", out reason);
+    }
+
+    private bool TryRemove(
+        NativeConceptCandidate candidate,
+        int delta,
+        bool requireExactQuantity,
+        string quantityDescription,
+        out string reason)
+    {
         var current = FindActiveInstance(candidate.Recipe);
-        if (delta <= 0 || current is null)
+        if (delta <= 0 || current is null || !IsCurrentRecipe(candidate))
         {
-            reason = "owned concept quantity is no longer active";
+            reason = $"{quantityDescription} is no longer active";
             return false;
         }
-        var quantity = Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(current) ?? 0);
-        if (quantity < delta)
+        var quantity = Convert.ToInt32(_instanceQuantityField!.GetValue(current) ?? 0);
+        var queuedQuantity = Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(current) ?? 0);
+        if (queuedQuantity < delta || requireExactQuantity && (quantity != delta || queuedQuantity != delta))
         {
-            reason = "native quantity fell below owned delta";
+            reason = $"native {quantityDescription} changed";
             return false;
         }
         try
         {
             _removeInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta });
-            reason = "owned concept quantity removal submitted";
+            reason = $"native {quantityDescription} removal submitted";
             return true;
         }
         catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)

@@ -133,7 +133,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "RebalanceIntervalSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            new[] { "Mode", "SlotManagementMode", "RebalanceIntervalSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
@@ -150,6 +150,8 @@ public sealed class ModConfigTests
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
         var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
+        var autoConceptSlotManagement = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "SlotManagementMode");
+        Assert.Equal(new[] { "RotateAll", "PreserveManual" }, Enum.GetNames(autoConceptSlotManagement.SettingType));
     }
 
     [Fact]

@@ -7,19 +7,28 @@ namespace OrbAutomata;
 
 internal sealed class AutoConceptController : IDisposable
 {
-    private enum MutationKind { Add, Remove }
+    private enum MutationKind { Add, RemoveOwned, RotateOut }
 
     private readonly struct PendingMutation
     {
-        public PendingMutation(MutationKind kind, string uuid, int targetOrDelta)
+        public PendingMutation(
+            MutationKind kind,
+            string uuid,
+            int targetOrDelta,
+            string replacementUuid = "",
+            string replacementName = "")
         {
             Kind = kind;
             Uuid = uuid;
             TargetOrDelta = targetOrDelta;
+            ReplacementUuid = replacementUuid;
+            ReplacementName = replacementName;
         }
         public MutationKind Kind { get; }
         public string Uuid { get; }
         public int TargetOrDelta { get; }
+        public string ReplacementUuid { get; }
+        public string ReplacementName { get; }
     }
 
     private readonly AutomataConfig _config;
@@ -30,10 +39,10 @@ internal sealed class AutoConceptController : IDisposable
     private readonly SuiteWorkRegistration _readWork;
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly ConceptOwnershipLedger _ownership = new();
-    private readonly Dictionary<string, double> _lastAutomatedChange = new(StringComparer.Ordinal);
     private readonly HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _blocked = new(StringComparer.OrdinalIgnoreCase);
     private readonly DecisionLogGate _failureLogGate = new(TimeSpan.FromSeconds(30));
+    private readonly DecisionLogGate _decisionLogGate = new(TimeSpan.FromSeconds(30));
     private PendingMutation? _pending;
     private float _secondsUntilEvaluation;
     private float _secondsUntilWatchdog;
@@ -83,7 +92,6 @@ internal sealed class AutoConceptController : IDisposable
             {
                 _pending = null;
                 _ownership.Clear();
-                _lastAutomatedChange.Clear();
                 _baselineCaptured = false;
                 _cachedCandidates = Array.Empty<NativeConceptCandidate>();
             }
@@ -124,7 +132,6 @@ internal sealed class AutoConceptController : IDisposable
         _runtime.InvalidateLifecycle();
         _pending = null;
         _ownership.Clear();
-        _lastAutomatedChange.Clear();
         _baselineCaptured = false;
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
         _loggedBlockedReason = null;
@@ -201,9 +208,9 @@ internal sealed class AutoConceptController : IDisposable
             }
         }
 
-        // If a newly discovered lower-progress concept is blocked only after
-        // all slots are occupied, retire the worst proven automated slot and
-        // replan. Manual baselines are never candidates for removal.
+        // If a strictly lower-mastery concept is blocked only because all
+        // compatible slots are occupied, retire one compatible assignment
+        // according to the explicit slot-management policy and then replan.
         if (TryPlanMasteryRebalance(ranked, byId)) return;
 
         // Depth second: submit one native batched quantity change for the
@@ -229,6 +236,7 @@ internal sealed class AutoConceptController : IDisposable
             }
         }
 
+        LogIdleDecision(ranked.Count, candidates);
         _secondsUntilEvaluation = Math.Clamp(
             _config.AutoConceptRebalanceIntervalSeconds.Value,
             10,
@@ -249,7 +257,7 @@ internal sealed class AutoConceptController : IDisposable
             var candidate = candidates[index];
             if (!_ownership.TryGet(candidate.Uuid, out var ownership) || ownership.AutomatedDelta <= 0) continue;
             if (_runtime.IsDrainSafe(candidate, _config.AutoConceptMinimumDrainRatio.Value)) continue;
-            _pending = new PendingMutation(MutationKind.Remove, candidate.Uuid, ownership.AutomatedDelta);
+            _pending = new PendingMutation(MutationKind.RemoveOwned, candidate.Uuid, ownership.AutomatedDelta);
             return true;
         }
         return false;
@@ -259,25 +267,42 @@ internal sealed class AutoConceptController : IDisposable
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, NativeConceptCandidate> byId)
     {
-        var firstInactiveRank = -1;
-        for (var index = 0; index < ranked.Count; index++)
+        for (var inactiveIndex = 0; inactiveIndex < ranked.Count; inactiveIndex++)
         {
-            if (byId[ranked[index].Uuid].Quantity == 0) { firstInactiveRank = index; break; }
-        }
-        if (firstInactiveRank < 0) return false;
-        var desiredInactive = byId[ranked[firstInactiveRank].Uuid];
+            var desiredProgress = ranked[inactiveIndex];
+            var desiredInactive = byId[desiredProgress.Uuid];
+            if (!desiredInactive.IsSettled || desiredInactive.Quantity != 0 ||
+                string.IsNullOrWhiteSpace(desiredInactive.SlotTypeUuid)) continue;
 
-        for (var index = ranked.Count - 1; index > firstInactiveRank; index--)
-        {
-            var candidate = byId[ranked[index].Uuid];
-            if (string.IsNullOrWhiteSpace(desiredInactive.SlotTypeUuid) ||
-                !string.Equals(candidate.SlotTypeUuid, desiredInactive.SlotTypeUuid, StringComparison.Ordinal)) continue;
-            if (!candidate.IsSettled || !_ownership.TryGet(candidate.Uuid, out var ownership) ||
-                ownership.ManualBaseline != 0 || ownership.AutomatedDelta <= 0) continue;
-            if (_lastAutomatedChange.TryGetValue(candidate.Uuid, out var changedAt) &&
-                _elapsedSeconds - changedAt < 180.0) continue;
-            _pending = new PendingMutation(MutationKind.Remove, candidate.Uuid, ownership.AutomatedDelta);
-            return true;
+            for (var activeIndex = ranked.Count - 1; activeIndex >= 0; activeIndex--)
+            {
+                var activeProgress = ranked[activeIndex];
+                if (!AutoConceptBalancer.HasStrictlyLowerMastery(desiredProgress, activeProgress)) continue;
+                var candidate = byId[activeProgress.Uuid];
+                if (!candidate.IsSettled || candidate.Quantity <= 0 ||
+                    !string.Equals(candidate.SlotTypeUuid, desiredInactive.SlotTypeUuid, StringComparison.Ordinal)) continue;
+
+                if (_config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.RotateAll)
+                {
+                    _pending = new PendingMutation(
+                        MutationKind.RotateOut,
+                        candidate.Uuid,
+                        candidate.Quantity,
+                        desiredInactive.Uuid,
+                        desiredInactive.DisplayName);
+                    return true;
+                }
+
+                if (!_ownership.TryGet(candidate.Uuid, out var ownership) ||
+                    ownership.ManualBaseline != 0 || ownership.AutomatedDelta <= 0) continue;
+                _pending = new PendingMutation(
+                    MutationKind.RemoveOwned,
+                    candidate.Uuid,
+                    ownership.AutomatedDelta,
+                    desiredInactive.Uuid,
+                    desiredInactive.DisplayName);
+                return true;
+            }
         }
         return false;
     }
@@ -302,7 +327,32 @@ internal sealed class AutoConceptController : IDisposable
             return;
         }
 
-        if (pending.Value.Kind == MutationKind.Remove)
+        if (!IsReplacementStillValid(pending.Value, candidate, candidates))
+        {
+            LogFailure($"Auto Concept rotation target changed before removing {candidate.DisplayName}; replanning.");
+            _secondsUntilEvaluation = 0.0f;
+            return;
+        }
+
+        if (pending.Value.Kind == MutationKind.RotateOut)
+        {
+            if (_config.AutoConceptSlotManagement.Value != AutoConceptSlotManagementMode.RotateAll ||
+                candidate.Quantity != pending.Value.TargetOrDelta ||
+                !_runtime.TryRemoveForRotation(candidate, pending.Value.TargetOrDelta, out reason))
+            {
+                _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
+                LogFailure($"Auto Concept rotation rejected for {candidate.DisplayName}: {reason}");
+                _secondsUntilEvaluation = 0.0f;
+                return;
+            }
+            _ownership.ObserveBaseline(candidate.Uuid, 0);
+            LogOperation(
+                $"Auto Concept rotated out {candidate.DisplayName} ({pending.Value.TargetOrDelta} instance(s)) to train lower-mastery {pending.Value.ReplacementName}.");
+            _secondsUntilEvaluation = 0.25f;
+            return;
+        }
+
+        if (pending.Value.Kind == MutationKind.RemoveOwned)
         {
             if (!_ownership.TryGet(candidate.Uuid, out var ownership) ||
                 ownership.AutomatedDelta < pending.Value.TargetOrDelta ||
@@ -318,9 +368,8 @@ internal sealed class AutoConceptController : IDisposable
                 candidate.Uuid,
                 candidate.Quantity - pending.Value.TargetOrDelta,
                 -pending.Value.TargetOrDelta);
-            _lastAutomatedChange[candidate.Uuid] = _elapsedSeconds;
             LogOperation($"Auto Concept removed {pending.Value.TargetOrDelta} owned {candidate.DisplayName} instance(s).");
-            _secondsUntilEvaluation = 0.0f;
+            _secondsUntilEvaluation = string.IsNullOrWhiteSpace(pending.Value.ReplacementName) ? 0.0f : 0.25f;
             return;
         }
 
@@ -344,9 +393,35 @@ internal sealed class AutoConceptController : IDisposable
             return;
         }
         _ownership.RecordAutomatedDelta(candidate.Uuid, candidate.Quantity + delta, delta);
-        _lastAutomatedChange[candidate.Uuid] = _elapsedSeconds;
         LogOperation($"Auto Concept added {delta} {candidate.DisplayName} instance(s), target {safeTarget}.");
         _secondsUntilEvaluation = 0.0f;
+    }
+
+    private static bool IsReplacementStillValid(
+        PendingMutation pending,
+        NativeConceptCandidate active,
+        IReadOnlyList<NativeConceptCandidate> candidates)
+    {
+        if (string.IsNullOrWhiteSpace(pending.ReplacementUuid)) return true;
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var replacement = candidates[index];
+            if (!string.Equals(replacement.Uuid, pending.ReplacementUuid, StringComparison.Ordinal)) continue;
+            if (!replacement.IsSettled || replacement.Quantity != 0 ||
+                !string.Equals(replacement.SlotTypeUuid, active.SlotTypeUuid, StringComparison.Ordinal)) return false;
+            return AutoConceptBalancer.HasStrictlyLowerMastery(
+                new ConceptProgress(
+                    replacement.Uuid,
+                    replacement.MasteryLevel,
+                    replacement.MasteryProgress,
+                    replacement.MaximumQuantity > 0),
+                new ConceptProgress(
+                    active.Uuid,
+                    active.MasteryLevel,
+                    active.MasteryProgress,
+                    active.MaximumQuantity > 0));
+        }
+        return false;
     }
 
     private void RefreshUuidFilters()
@@ -407,6 +482,18 @@ internal sealed class AutoConceptController : IDisposable
     private void LogOperation(string message)
     {
         if (_config.IsOperationalLoggingEnabled) _log.LogAutomataInfo(message);
+    }
+
+    private void LogIdleDecision(int eligibleCount, IReadOnlyList<NativeConceptCandidate> candidates)
+    {
+        if (!_config.IsOperationalLoggingEnabled) return;
+        var activeCount = 0;
+        for (var index = 0; index < candidates.Count; index++)
+            if (candidates[index].Quantity > 0) activeCount++;
+        var message =
+            $"Auto Concept made no change: no compatible strictly lower-mastery rotation or resource-safe quantity increase was available. SlotManagement={_config.AutoConceptSlotManagement.Value}, Eligible={eligibleCount}, Active={activeCount}.";
+        if (_decisionLogGate.ShouldLog(message, TimeSpan.FromSeconds(_elapsedSeconds)))
+            _log.LogAutomataInfo(message);
     }
 
     public void Dispose()

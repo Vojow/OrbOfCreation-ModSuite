@@ -90,17 +90,19 @@ Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by 
 
 `Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
+`SlotManagementMode=RotateAll` is the default once Auto Concept is enabled. When all compatible slots are occupied, it removes one settled active concept only if a compatible inactive concept has strictly lower mastery, waits for native settlement, and then replans the add. Equal mastery never rotates on UUID ordering alone. `PreserveManual` never removes the quantity present when Auto Concept starts; it can rotate only assignments that Automata added itself.
+
 `RebalanceIntervalSeconds` defaults to 300 seconds and accepts 10 through 1800. Existing `RebalanceIntervalMinutes` values migrate to seconds automatically.
 
 Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 
-Enabling the feature snapshots current Active Concept quantities as the manual baseline. Manual changes are never overwritten: an unexpected settled quantity is rebaselined as player-owned and Automata relinquishes its removal claim. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
+Enabling the feature snapshots current Active Concept quantities for ownership and rollback accounting. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
 
 ## Diagnostics
 
 Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
 
 Every Orb Automata message includes local date, time to milliseconds, and UTC offset so runtime reports can identify when a failure began.
-Successful Auto Concept initialization records separate scoped-recipe, active-loadout, and eligible-candidate counts.
+Successful Auto Concept initialization records separate scoped-recipe, active-loadout, and eligible-candidate counts. When operational logging is enabled, a rate-limited no-change summary distinguishes an idle balancer from a missed evaluation.
 
 Orb of Creation's LeanTween pool defaults to 400 simultaneous tweens. AutobuyOrb raises that capacity because very large purchase bursts can create enough UI popups to exhaust it. This is separate from queue scheduling; Automata does not currently override the global tween pool. If the BepInEx log reports LeanTween exhaustion or UI animations begin disappearing during unusually large batches, treat a restart-time tween-capacity option as a separate performance feature.
