@@ -6,7 +6,7 @@ namespace OrbAutomata;
 internal enum AutoConceptOperationMode
 {
     Disabled,
-    BalanceMastery,
+    Active,
 }
 
 internal readonly struct ConceptProgress

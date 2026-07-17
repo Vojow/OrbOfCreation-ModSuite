@@ -67,6 +67,18 @@ public sealed class AutomataTests
     }
 
     [Fact]
+    public void AutoConceptConfiguration_MigratesLegacyBalanceMasteryModeToActive()
+    {
+        var configFile = new ConfigFile();
+        configFile.Bind("AutoConcept", "Mode", "BalanceMastery", "Legacy Auto Concept mode.");
+
+        var config = AutomataConfig.Bind(configFile);
+
+        Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
+        Assert.True(config.CanStartAutoConceptActively);
+    }
+
+    [Fact]
     public void AutoConceptRanksLowestEffectiveMasteryWithStableTieBreaks()
     {
         var ranked = AutoConceptBalancer.Rank(new[]

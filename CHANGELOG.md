@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Prepare Orb Automata 0.6.0 and Orb Mentor 0.2.0 as a local release candidate; public publication remains gated on interactive desktop/Steam Deck validation.
+- Present Auto Concept's mode consistently as `Disabled` or `Active`; active mode still performs mastery balancing.
 - Add disabled-by-default Auto Concept mastery balancing inside Orb Automata. It resolves only the UUID-scoped Scholar concept assets, fills compatible acquired slots breadth-first, batches depth to live native mastery limits, preserves manual baselines, shares the suite scheduler, and rolls back only proven automated quantity when the native drain watchdog becomes unsafe.
 - Validate every Auto Concept add with an exact prospective native drain vector, live resource-quality conversion, positive-rate reserve, finite-quantity floor, stable UUID/type checks, compatible slots, and final native quantity revalidation. Unknown contracts fail closed and ordinary alchemy remains untouched.
 - Add Mentor's `EquippedSpells` source policy as the new default: every equipped spell may share with discovered spells strictly below that source's mastery. Keep `HighestDiscovered` selectable.

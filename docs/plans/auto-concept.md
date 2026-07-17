@@ -429,7 +429,7 @@ Names and defaults remain subject to runtime measurement and player approval.
 
 ### General
 
-- `Mode`: `Disabled` or `BalanceMastery`.
+- `Mode`: `Disabled` or `Active`.
 - `ToggleShortcut`: dedicated configurable shortcut.
 - `ShowStatusButton`: native-styled status control near other Automata controls.
 - `EmergencyDisable`: shared Automata safety switch.

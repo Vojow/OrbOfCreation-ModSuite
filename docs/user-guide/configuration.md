@@ -7,7 +7,7 @@ Open the in-game **Mods** tab to configure Automata. Orb Mod Config is optional;
 Important controls:
 
 - `AutoBuy.Mode` and `AutoCast.Mode`: select `Disabled` or `Active`.
-- `AutoConcept.Mode`: `Disabled` (default) or `BalanceMastery` for Scholar Active Concepts.
+- `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts.
 - Structure and upgrade affordability modes are configured separately.
 - Absolute and relative reserves protect selected resources.
 - `LeaveQueueSlots` preserves queue room for manual actions.

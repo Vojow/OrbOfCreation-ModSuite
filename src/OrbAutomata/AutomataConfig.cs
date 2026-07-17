@@ -1,3 +1,4 @@
+using System;
 using BepInEx.Configuration;
 using OrbModding.Common;
 
@@ -171,7 +172,7 @@ internal sealed class AutomataConfig
         !EmergencyDisable.Value;
 
     public bool CanStartAutoConceptActively =>
-        AutoConceptMode.Value == AutoConceptOperationMode.BalanceMastery &&
+        AutoConceptMode.Value == AutoConceptOperationMode.Active &&
         !EmergencyDisable.Value;
 
     public static AutomataConfig Bind(ConfigFile config)
@@ -198,14 +199,7 @@ internal sealed class AutomataConfig
                 15,
                 0);
 
-            var autoConceptMode = Bind(
-                config,
-                "AutoConcept",
-                "Mode",
-                AutoConceptOperationMode.Disabled,
-                "Disabled performs no concept work. BalanceMastery trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
-                17,
-                0);
+            var autoConceptMode = BindAutoConceptMode(config);
 
             var result = new AutomataConfig(
                 Bind(config, "General", "Enabled", true, "Enable Automata.", 0, 0),
@@ -282,6 +276,31 @@ internal sealed class AutomataConfig
         var definition = new ConfigDefinition(section, key);
         config.Bind(section, key, defaultValue, "Removed legacy setting.");
         config.Remove(definition);
+    }
+
+    private static ConfigEntry<AutoConceptOperationMode> BindAutoConceptMode(ConfigFile config)
+    {
+        const string section = "AutoConcept";
+        const string key = "Mode";
+        var definition = new ConfigDefinition(section, key);
+        var serializedMode = config.Bind(section, key, AutoConceptOperationMode.Disabled.ToString(), "Auto Concept mode migration.").Value;
+        config.Remove(definition);
+
+        var result = Bind(
+            config,
+            section,
+            key,
+            AutoConceptOperationMode.Disabled,
+            "Disabled performs no concept work. Active trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
+            17,
+            0);
+        if (string.Equals(serializedMode, "Active", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(serializedMode, "BalanceMastery", StringComparison.OrdinalIgnoreCase))
+        {
+            result.Value = AutoConceptOperationMode.Active;
+        }
+
+        return result;
     }
 
     private static ConfigEntry<T> Bind<T>(

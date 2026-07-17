@@ -17,8 +17,8 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades.
 - Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
-- Auto Concept starts `Disabled`; `BalanceMastery` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
-- Both mode selectors expose only `Disabled` and `Active`.
+- Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
+- All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - Structure repeat follows the live Bulk Development value.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
@@ -88,7 +88,7 @@ The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active con
 
 Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by UUID and validates every candidate against the three Scholar concept type UUIDs. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
 
-`Mode=BalanceMastery` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
+`Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
 Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 

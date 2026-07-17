@@ -148,6 +148,8 @@ public sealed class ModConfigTests
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
+        var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
+        Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
     }
 
     [Fact]
