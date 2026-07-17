@@ -1,12 +1,12 @@
 # Orb Mentor plan
 
-> **Lifecycle: Implemented / beta candidate.** The spells-only implementation awaits interactive runtime validation before release.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, and shared scheduling are implemented.
 
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
 ## Goal
 
-Reduce repetitive spell-mastering work by letting the player's highest confirmed-mastery spells mentor every discovered spell below them. Orb Mentor shares experience through the game's native spell-mastery path; it does not set levels, edit saves, change loadouts, or spend leveling resources.
+Reduce repetitive spell-mastering work by letting every equipped spell share native mastery XP with discovered spells below that source's own mastery. `EquippedSpells` is the default source policy; `HighestDiscovered` preserves the original highest-confirmed-mastery behavior. Orb Mentor does not set levels, edit saves, change loadouts, or spend leveling resources.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.
 
@@ -18,8 +18,8 @@ The first public version is spells-only. Artifacts and alchemy remain later vert
 
 ### Mentor qualification
 
-- Rank discovered spells by confirmed mastery level (`SpellRecipeSO.masteryLevel`).
-- Every spell tied at the highest confirmed mastery level qualifies as a mentor.
+- With `EquippedSpells` (default), every spell present in the cached native active loadout qualifies as a source for that event.
+- With `HighestDiscovered`, every spell tied at the highest confirmed mastery level qualifies as a mentor.
 - A qualifying spell creates sharing XP only when the game awards it a positive native mastery-XP event.
 - Instant, channelled, toggled, and any other verified native spell-mastery events qualify.
 - Orb Mentor never equips, selects, creates, casts, or otherwise activates a spell.
@@ -32,7 +32,7 @@ A recipient must:
 - be a registered `SpellRecipeSO`;
 - be discovered/unlocked;
 - not be the source;
-- have a strictly lower confirmed mastery level than the current highest mentor level.
+- have a strictly lower confirmed mastery level than the capture-time source mastery ceiling (`EquippedSpells`) or highest mentor level (`HighestDiscovered`).
 
 Active/loadout spells remain eligible. A spell that is already ready to confirm mastery also remains eligible and may continue banking XP, matching native behavior. Locked, undiscovered, unresolved, or equal/higher-level spells never receive sharing XP.
 
@@ -87,14 +87,14 @@ The correct interception boundary is a Harmony postfix on `SpellRecipeSO.GainMas
 ```text
 postfix GainMasteryExp(source, finalXp)
   → reject when disabled, guarded, non-finite, zero, or negative
-  → resolve all discovered recipes and highest confirmed mastery
-  → reject unless source is tied at that highest mastery
+  → use cached source identity, progression evidence, and equipped membership
+  → reject unless source satisfies the selected source policy
   → add finalXp to the current-frame mentor accumulator
 
 LateUpdate / bounded worker
-  → snapshot eligible lower-level discovered recipients
+  → snapshot recipients strictly below the capture-time source ceiling
   → calculate Shared Pool or Per Recipient amounts
-  → consolidate pending XP by stable recipient UUID
+  → consolidate pending XP by stable recipient UUID plus source ceiling
   → process grants within CPU and operation budgets
   → call recipient.GainMasteryExp(amount) inside guard
 ```
@@ -117,6 +117,7 @@ Fresh installations start disabled.
 ### Sharing
 
 - `EconomyMode`: `SharedPool` or `PerRecipient`.
+- `SpellSourcePolicy`: `EquippedSpells` (default) or `HighestDiscovered`.
 - `SharePercent`: 0–100, default 10.
 
 ### Performance

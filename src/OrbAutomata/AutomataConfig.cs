@@ -30,6 +30,14 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoCastStartResourcePercent,
         ConfigEntry<float> autoCastManualPauseSeconds,
         ConfigEntry<bool> autoCastFullCharge,
+        ConfigEntry<AutoConceptOperationMode> autoConceptMode,
+        ConfigEntry<float> autoConceptRebalanceIntervalMinutes,
+        ConfigEntry<int> autoConceptQuantityCap,
+        ConfigEntry<float> autoConceptRateReservePercent,
+        ConfigEntry<float> autoConceptMinimumResourcePercent,
+        ConfigEntry<float> autoConceptMinimumDrainRatio,
+        ConfigEntry<string> allowedAutoConceptUuids,
+        ConfigEntry<string> blockedAutoConceptUuids,
         ConfigEntry<bool> emergencyDisable,
         ConfigEntry<float> cpuBudgetMilliseconds,
         ConfigEntry<bool> enableOperationalLogging,
@@ -62,6 +70,14 @@ internal sealed class AutomataConfig
         AutoCastStartResourcePercent = autoCastStartResourcePercent;
         AutoCastManualPauseSeconds = autoCastManualPauseSeconds;
         AutoCastFullCharge = autoCastFullCharge;
+        AutoConceptMode = autoConceptMode;
+        AutoConceptRebalanceIntervalMinutes = autoConceptRebalanceIntervalMinutes;
+        AutoConceptQuantityCap = autoConceptQuantityCap;
+        AutoConceptRateReservePercent = autoConceptRateReservePercent;
+        AutoConceptMinimumResourcePercent = autoConceptMinimumResourcePercent;
+        AutoConceptMinimumDrainRatio = autoConceptMinimumDrainRatio;
+        AllowedAutoConceptUuids = allowedAutoConceptUuids;
+        BlockedAutoConceptUuids = blockedAutoConceptUuids;
         EmergencyDisable = emergencyDisable;
         CpuBudgetMilliseconds = cpuBudgetMilliseconds;
         EnableOperationalLogging = enableOperationalLogging;
@@ -119,6 +135,15 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<bool> AutoCastFullCharge { get; }
 
+    public ConfigEntry<AutoConceptOperationMode> AutoConceptMode { get; }
+    public ConfigEntry<float> AutoConceptRebalanceIntervalMinutes { get; }
+    public ConfigEntry<int> AutoConceptQuantityCap { get; }
+    public ConfigEntry<float> AutoConceptRateReservePercent { get; }
+    public ConfigEntry<float> AutoConceptMinimumResourcePercent { get; }
+    public ConfigEntry<float> AutoConceptMinimumDrainRatio { get; }
+    public ConfigEntry<string> AllowedAutoConceptUuids { get; }
+    public ConfigEntry<string> BlockedAutoConceptUuids { get; }
+
     public ConfigEntry<bool> EmergencyDisable { get; }
 
     public ConfigEntry<float> CpuBudgetMilliseconds { get; }
@@ -145,6 +170,10 @@ internal sealed class AutomataConfig
         AutoCastMode.Value == AutoCastOperationMode.Active &&
         !EmergencyDisable.Value;
 
+    public bool CanStartAutoConceptActively =>
+        AutoConceptMode.Value == AutoConceptOperationMode.BalanceMastery &&
+        !EmergencyDisable.Value;
+
     public static AutomataConfig Bind(ConfigFile config)
     {
         var saveOnConfigSet = config.SaveOnConfigSet;
@@ -167,6 +196,15 @@ internal sealed class AutomataConfig
                 AutoCastOperationMode.Disabled,
                 "Disabled stops Auto Cast. Active casts through the native spell manager.",
                 15,
+                0);
+
+            var autoConceptMode = Bind(
+                config,
+                "AutoConcept",
+                "Mode",
+                AutoConceptOperationMode.Disabled,
+                "Disabled performs no concept work. BalanceMastery trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
+                17,
                 0);
 
             var result = new AutomataConfig(
@@ -194,6 +232,14 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f)),
                 Bind(config, "AutoCast", "ManualPauseSeconds", 2.0f, "Unscaled pause after a manual spell fire before Auto Cast resumes.", 15, 30, new AcceptableValueRange<float>(0.0f, 60.0f)),
                 Bind(config, "AutoCast", "FullCharge", true, "When enabled, Auto Cast holds charge-capable spells until the native full-charge point. When disabled, it fires them immediately without charging.", 15, 1),
+                autoConceptMode,
+                Bind(config, "AutoConcept", "RebalanceIntervalMinutes", 5.0f, "Minutes between ordinary mastery rebalances. Lifecycle, mastery, slot, and safety changes can trigger an earlier pass.", 17, 10, new AcceptableValueRange<float>(1.0f, 30.0f)),
+                Bind(config, "AutoConcept", "PerConceptQuantityCap", 0, "Optional maximum automated quantity per concept. Zero uses the native mastery maximum.", 17, 20, new AcceptableValueRange<int>(0, 1000000)),
+                Bind(config, "AutoConcept", "RateReservePercent", 10.0f, "Minimum percentage of each drained resource's current gross positive rate to preserve after an automated quantity change.", 17, 30, new AcceptableValueRange<float>(0.0f, 100.0f)),
+                Bind(config, "AutoConcept", "MinimumResourcePercent", 10.0f, "Finite-cap drained resources must be at least this full before Auto Concept adds quantity.", 17, 40, new AcceptableValueRange<float>(0.0f, 100.0f)),
+                Bind(config, "AutoConcept", "MinimumDrainRatio", 0.95f, "Native post-settlement drain ratio floor. Falling below it rolls back only Automata-owned quantity.", 17, 50, new AcceptableValueRange<float>(0.0f, 1.0f)),
+                Bind(config, "AutoConcept", "AllowedUuids", string.Empty, "Optional comma-separated concept allowlist. Empty allows every validated recipe in ConceptRecipes.", 17, 80),
+                Bind(config, "AutoConcept", "BlockedUuids", string.Empty, "Comma-separated concept UUIDs Auto Concept must never train.", 17, 90),
                 Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
                 Bind(config, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft CPU budget for each scan or purchase slice, capped at 1 ms for frame-time safety.", 30, 0, new AcceptableValueRange<float>(0.1f, 1.0f)),
                 Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal Auto Buy and Auto Cast decisions to the BepInEx log. Startup, warnings, and errors are always logged.", 50, 0),
@@ -254,12 +300,14 @@ internal sealed class AutomataConfig
         {
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
+            "AutoConcept" => "Auto Concept",
             _ => "Advanced",
         };
         var displayName = key switch
         {
             "Mode" when section == "AutoBuy" => "Auto Buy",
             "Mode" when section == "AutoCast" => "Auto Cast",
+            "Mode" when section == "AutoConcept" => "Auto Concept",
             "AffordabilityMode" => "Structure affordability",
             "UpgradeAffordabilityMode" => "Upgrade affordability",
             "IncludeStructures" => "Buy structures",
@@ -270,7 +318,7 @@ internal sealed class AutomataConfig
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : 20;
+        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : 20;
         return config.Bind(
             section,
             key,

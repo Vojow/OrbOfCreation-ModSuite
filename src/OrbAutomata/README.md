@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.5.2` provides Auto Buy and Auto Cast through the game's native purchase, queue, and spell APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.6.0` provides Auto Buy, Auto Cast, and opt-in Auto Concept mastery balancing through the game's native APIs.
 
 ## Build
 
@@ -17,6 +17,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades.
 - Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
+- Auto Concept starts `Disabled`; `BalanceMastery` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - Both mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - Structure repeat follows the live Bulk Development value.
@@ -24,7 +25,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Operational decision logging is off; startup, warning, and error records remain enabled.
-- `EmergencyDisable` immediately stops new automated purchases and casts.
+- `EmergencyDisable` immediately stops new automated purchases, casts, and concept mutations.
 
 The former runtime-probe, per-session purchase-limit, DryRun, expert-override, and Auto Research settings are not part of the release configuration or Mod Config UI. Existing legacy keys are removed when the configuration is loaded and saved.
 
@@ -82,6 +83,16 @@ A cast deferred by the shared coordinator is treated as a short-lived plan. Befo
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 
 The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active configuration. It uses the first equipped spell icon when available.
+
+## Auto Concept
+
+Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by UUID and validates every candidate against the three Scholar concept type UUIDs. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
+
+`Mode=BalanceMastery` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
+
+Before every add, Automata reconstructs that exact prospective native drain vector, converts it through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
+
+Enabling the feature snapshots current Active Concept quantities as the manual baseline. Manual changes are never overwritten: an unexpected settled quantity is rebaselined as player-owned and Automata relinquishes its removal claim. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
 
 ## Diagnostics
 

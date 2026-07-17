@@ -1,6 +1,6 @@
 # Auto Concept mastery-balancing plan
 
-> **Lifecycle: Planned.** Native contracts have been statically inspected against the supported game assembly, but the resource planner, ownership policy, and runtime behavior remain unimplemented and require interactive validation.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, manual-baseline ownership ledger, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
 
 [Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
 
@@ -631,20 +631,25 @@ File boundaries may change after implementation proves which abstractions are ge
 
 ## Open decisions and unresolved contracts
 
-The next implementation session must revisit these rather than assume answers from conversation memory:
+Resolved for the current candidate against the audited assembly:
 
-1. How should the exact serialized contents of ConceptRecipes be accessed without relying on its global `GetAll()` override?
-2. Which observable or native event most precisely signals acquired Active Concept slot changes?
-3. Are prospective quantity drain calculations monotonic for every concept and selected level in the supported build?
-4. Which native method produces the exact prospective drain vector without creating or engaging an instance?
-5. Does `ResourceSO.GetTrueRate()` use the same units as `ResourceDrain.GetCurrentDrain()` for every relevant resource and quality state?
-6. Should a concept that boosts its own drained resource be admitted through a one-instance settle-and-replan path?
-7. What default positive-rate and quantity margins are safe across early, mid, and late game?
-8. Should disabling Auto Concept leave automated deltas active, remove them, or offer both policies?
-9. How should pinned concepts divide ownership when the player manually changes their quantities?
-10. Is lowest effective mastery sufficient, or should a later optional policy consider XP-per-resource efficiency after the safe balancer ships?
-11. How frequently do simultaneous concept mastery level-ups create popup/audio or effect-application frame spikes?
-12. Which exact save, reset, and NG+ events invalidate ActiveConcepts object identity in runtime practice?
+- `ConceptRecipes` is read from the inherited serialized `GenericListVariable<T>.initialValue`; its `GetAll()` override is never used.
+- Active instances are read from inherited `AbstractListVariable<T>.value`, avoiding the allocating native enumerator.
+- Prospective drain is reconstructed with a temporary, uninitialized `AlchemyInstance`, its exact target quantity, `GetDrainCostMod().AsPercent()`, and the recipe's native `drainCost` vector. No effects, usage, or list mutation occur on that temporary object.
+- Incremental raw drain is converted with each resource's live `GetTrueSpend`, which applies quality in the same direction as `GetModdedDrain`, before comparison with `GetTrueRate`.
+- Disabling stops work and leaves current native quantities unchanged. A later enable treats them as a new manual baseline.
+- Native Active Concept list changes plus concept discovery/mastery changes schedule an early re-evaluation; the 1 Hz watchdog reads cached owned assignments without rebuilding the catalog.
+
+Still unresolved and gated by interactive evidence:
+
+1. Which observable or native event most precisely signals acquired Active Concept slot changes beyond the current bounded list-count signal and ordinary rebalance?
+2. Are prospective quantity drain calculations monotonic for every concept and selected level in the supported build? The candidate does not assume monotonicity: it validates the exact maximum target, then halves the delta until one exact safe target is found.
+3. Should a concept that boosts its own drained resource be admitted through a one-instance settle-and-replan path? The candidate conservatively uses pre-mutation production.
+4. Are the default 10% rate reserve, 10% quantity floor, and 0.95 native drain-ratio floor safe across early, mid, and late game?
+5. How should pinned concepts divide ownership when the player manually changes their quantities? The candidate conservatively rebaselines the complete settled quantity as manual and relinquishes removal ownership.
+6. Is lowest effective mastery sufficient, or should a later optional policy consider XP-per-resource efficiency?
+7. How frequently do simultaneous concept mastery level-ups create popup/audio or effect-application frame spikes?
+8. Which exact save, reset, and NG+ events invalidate ActiveConcepts object identity in runtime practice beyond the patched scene/load/manager lifecycle paths?
 
 Record resolved answers here with assembly hash, method signature, and runtime evidence before changing lifecycle status.
 

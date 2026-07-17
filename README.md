@@ -6,17 +6,17 @@
 
 Unofficial BepInEx mods, tests, and reproducible reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current public beta centers on Orb Automata: queue-aware Auto Buy, safe Auto Cast, and an optional native-styled configuration screen. Back up your save before using beta automation.
+The current release candidate centers on Orb Automata: queue-aware Auto Buy, safe Auto Cast, opt-in Auto Concept mastery balancing, and a native-styled configuration screen. Back up your save before using beta automation.
 
 ## Project status
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.5.2** | Beta | Queue-aware Auto Buy and coordinated Auto Cast with affordability, reserves, full-charge support, and bounded shared scheduling. |
+| **Orb Automata 0.6.0** | Release candidate | Queue-aware Auto Buy, coordinated Auto Cast, and disabled-by-default Auto Concept mastery balancing with bounded shared scheduling. |
 | **Orb Mod Config 0.5.3** | Beta | Mods tab available from the start, with typed editors, Steam Deck keyboard support, live native-control synchronization, and coordinated UI recovery. |
 | **Orb Chronomancer** | Experimental | Simulation-speed controls; excluded from the Automata release archive. |
 | **Orb Achievement Resonance** | Experimental | Achievement Strength extension; native mutation is disabled by default. |
-| **Orb Mentor 0.1.2** | Beta candidate | Highest-mastery spells share final native mastery XP with lower-level discovered spells; interactive validation remains before release. |
+| **Orb Mentor 0.2.0** | Release candidate | Every equipped spell can share native mastery XP with discovered spells below its own mastery; the original highest-only policy remains selectable. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is supported only through the Windows game under Proton with BepInEx 5.

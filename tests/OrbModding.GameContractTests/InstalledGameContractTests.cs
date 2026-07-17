@@ -133,6 +133,9 @@ public sealed class InstalledGameContractTests
         Assert.Equal("SpellListVariable", assembly.GetFieldType("SpellManager", "activeSpells"));
         AssertMethod(assembly, "SpellManager", "FireSpellIndex", false, "System.Void", "System.Int32");
         AssertMethod(assembly, "SpellManager", "CanCastASpell", true, "System.Boolean");
+        AssertMethod(assembly, "SpellManager", "AddSpell", false, "System.Void", "Spell");
+        AssertMethod(assembly, "SpellManager", "RemoveSpell", false, "System.Void", "Spell");
+        AssertMethod(assembly, "SpellManager", "MoveSpell", false, "System.Void", "Spell");
 
         AssertMethod(assembly, "Spell", "Fire", false, "System.Void");
         AssertMethod(assembly, "Spell", "CanCast", false, "System.Boolean");
@@ -187,6 +190,46 @@ public sealed class InstalledGameContractTests
             "System.Collections.Generic.List`1<TooltipNode>",
             "UnityEngine.RectTransform",
             "UnityEngine.Vector2");
+    }
+
+    [GameAssemblyFact]
+    public void AutoConcept_MatchesScopedCatalogSlotQuantityAndDrainContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
+            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
+        Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("GenericListVariable`1", "initialValue"));
+        Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("AbstractListVariable`1", "value"));
+        Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("AlchemyRecipeSO", "drainCost"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
+        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperience", false, "BigDouble");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetRequiredExperience", false, "BigDouble");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperienceLevel", false, "System.Int32");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
+
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "CanAddInstance", false, "System.Boolean", "AlchemyRecipeSO");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "SetupMaxSlotsValue", false, "System.Void");
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "quantity"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "queuedQuantity"));
+        Assert.Equal("ResourceDrain", assembly.GetFieldType("AlchemyInstance", "resourceDrain"));
+        AssertMethod(assembly, "AlchemyInstance", ".ctor", false, "System.Void", "AlchemyRecipeSO");
+        AssertMethod(assembly, "AlchemyInstance", "GetDrainCostMod", false, "BigDouble");
+        AssertMethod(assembly, "ResourceDrain", "GetCurrentDrain", false, "ResourceCostList");
+        AssertMethod(assembly, "ResourceDrain", "GetRatio", false, "BigDouble");
+        AssertMethod(assembly, "ResourceCostList", "Subtract", false, "ResourceCostList", "ResourceCostList");
+        AssertMethod(assembly, "ResourceCostList", "Multiply", false, "ResourceCostList", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueRate", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetModdedDrain", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueSoftCap", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "HasMaxQuantity", false, "System.Boolean");
     }
 
     [GameAssemblyFact]

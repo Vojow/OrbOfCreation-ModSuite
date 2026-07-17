@@ -16,6 +16,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutomataConfig? _config;
     private AutoBuyEngine? _autoBuyEngine;
     private AutoCastEngine? _autoCastEngine;
+    private AutoConceptController? _autoConceptController;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
@@ -62,10 +63,17 @@ public sealed class Plugin : BaseUnityPlugin
             Log,
             coordinator: SuitePerformanceCoordinator.Shared,
             readFrameIdentity: () => UnityEngine.Time.frameCount);
+        _autoConceptController = new AutoConceptController(
+            _config,
+            new ReflectionConceptRuntime(),
+            Log,
+            SuitePerformanceCoordinator.Shared,
+            () => UnityEngine.Time.frameCount);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion += OnNativeCompletion;
+        AutoConceptLifecycleSignal.Changed += OnAutoConceptChanged;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
 
         Log.LogInfo(
@@ -81,6 +89,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
+            $"AutoConceptMode={_config.AutoConceptMode.Value}, " +
             $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
             $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
             $"DecisionLogLevel={_config.DecisionLogLevel.Value}.");
@@ -95,6 +104,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             _autoBuyEngine?.Tick(deltaTime);
             _autoCastEngine?.Tick(deltaTime);
+            _autoConceptController?.Tick(deltaTime);
         }
     }
 
@@ -104,11 +114,14 @@ public sealed class Plugin : BaseUnityPlugin
         AutoBuyLifecycleSignal.StructureQueueChanged -= OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged -= OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion -= OnNativeCompletion;
+        AutoConceptLifecycleSignal.Changed -= OnAutoConceptChanged;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
         _autoBuyEngine = null;
         _autoCastEngine?.Dispose();
         _autoCastEngine = null;
+        _autoConceptController?.Dispose();
+        _autoConceptController = null;
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
@@ -123,12 +136,14 @@ public sealed class Plugin : BaseUnityPlugin
     {
         _autoBuyEngine?.InvalidateLifecycle();
         _autoCastEngine?.InvalidateLifecycle();
+        _autoConceptController?.InvalidateLifecycle();
     }
 
     private void OnAutoBuyLifecycleInvalidated()
     {
         _autoBuyEngine?.InvalidateLifecycle();
         _autoCastEngine?.InvalidateLifecycle();
+        _autoConceptController?.InvalidateLifecycle();
     }
 
     private void OnStructureQueueChanged(object nativeIdentity)
@@ -144,6 +159,11 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnUpgradeQueueChanged(object nativeIdentity)
     {
         _autoBuyEngine?.NotifyUpgradeQueueChanged(nativeIdentity);
+    }
+
+    private void OnAutoConceptChanged()
+    {
+        _autoConceptController?.NotifyNativeChange();
     }
 
     private static void LogAssemblyStatus()

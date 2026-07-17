@@ -62,8 +62,11 @@ public sealed class Plugin : BaseUnityPlugin
         PatchDomainRequired("EquipmentSO:ResetData", nameof(AfterArtifactNativeReset), MentorDomain.Artifacts, postfix: true);
         PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
         PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
+        PatchOptional("SpellManager:AddSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
+        PatchOptional("SpellManager:RemoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
+        PatchOptional("SpellManager:MoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
         SceneManager.activeSceneChanged += OnSceneChanged;
-        Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
+        Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Sources={_config.SpellSourcePolicy.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
     }
 
     private void Update()
@@ -110,6 +113,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance?._runtime?.RequestLifecycleReset();
     }
+    private static void AfterSpellLoadoutChanged() => Instance?._runtime?.NotifyEquippedLoadoutChanged();
     private static void AfterSpellProgression(object __instance) =>
         Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells, __instance);
     private static void AfterAlchemyProgression(object __instance) =>

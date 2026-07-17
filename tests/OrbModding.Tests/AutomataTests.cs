@@ -58,10 +58,43 @@ public sealed class AutomataTests
         Assert.Equal("0", config.AbsoluteReserve.Value);
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
+        Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.False(config.EnableOperationalLogging.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.True(config.CanStartAutoBuyActively);
         Assert.False(config.CanStartAutoCastActively);
+        Assert.False(config.CanStartAutoConceptActively);
+    }
+
+    [Fact]
+    public void AutoConceptRanksLowestEffectiveMasteryWithStableTieBreaks()
+    {
+        var ranked = AutoConceptBalancer.Rank(new[]
+        {
+            new ConceptProgress("z", 2, 0.1, true),
+            new ConceptProgress("b", 1, 0.8, true),
+            new ConceptProgress("a", 1, 0.8, true),
+            new ConceptProgress("locked", 0, 0.0, false),
+            new ConceptProgress("early", 1, 0.2, true),
+        });
+
+        Assert.Equal(new[] { "early", "a", "b", "z" }, System.Linq.Enumerable.Select(ranked, item => item.Uuid));
+    }
+
+    [Fact]
+    public void AutoConceptOwnershipNeverClaimsUnexpectedManualQuantity()
+    {
+        var ledger = new ConceptOwnershipLedger();
+        ledger.ObserveBaseline("concept", 3);
+        ledger.RecordAutomatedDelta("concept", 5, 2);
+
+        Assert.True(ledger.TryGet("concept", out var owned));
+        Assert.Equal(3, owned.ManualBaseline);
+        Assert.Equal(2, owned.AutomatedDelta);
+        Assert.True(ledger.RebaselineIfUnexpected("concept", 7));
+        Assert.True(ledger.TryGet("concept", out owned));
+        Assert.Equal(7, owned.ManualBaseline);
+        Assert.Equal(0, owned.AutomatedDelta);
     }
 
     [Theory]

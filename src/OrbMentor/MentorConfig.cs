@@ -4,12 +4,14 @@ using OrbModding.Common;
 namespace OrbMentor;
 
 internal enum MentorOperationMode { Disabled, Active }
+internal enum MentorSpellSourcePolicy { EquippedSpells, HighestDiscovered }
 
 internal sealed class MentorConfig
 {
     private MentorConfig(ConfigEntry<bool> enabled, ConfigEntry<MentorOperationMode> mode,
         ConfigEntry<KeyboardShortcut> shortcut, ConfigEntry<bool> emergencyDisable,
-        ConfigEntry<MentorEconomyMode> economyMode, ConfigEntry<double> sharePercent,
+        ConfigEntry<MentorEconomyMode> economyMode, ConfigEntry<MentorSpellSourcePolicy> spellSourcePolicy,
+        ConfigEntry<double> sharePercent,
         ConfigEntry<bool> artifactsEnabled, ConfigEntry<double> artifactSharePercent,
         ConfigEntry<bool> alchemyEnabled, ConfigEntry<double> alchemySharePercent,
         ConfigEntry<int> operationsPerFrame, ConfigEntry<double> cpuBudgetMilliseconds,
@@ -17,6 +19,7 @@ internal sealed class MentorConfig
     {
         Enabled = enabled; Mode = mode; ToggleShortcut = shortcut; EmergencyDisable = emergencyDisable;
         EconomyMode = economyMode; SharePercent = sharePercent; OperationsPerFrame = operationsPerFrame;
+        SpellSourcePolicy = spellSourcePolicy;
         ArtifactsEnabled = artifactsEnabled; ArtifactSharePercent = artifactSharePercent;
         AlchemyEnabled = alchemyEnabled; AlchemySharePercent = alchemySharePercent;
         CpuBudgetMilliseconds = cpuBudgetMilliseconds; DetailedLogging = detailedLogging; DevelopmentProbe = developmentProbe;
@@ -27,6 +30,7 @@ internal sealed class MentorConfig
     public ConfigEntry<KeyboardShortcut> ToggleShortcut { get; }
     public ConfigEntry<bool> EmergencyDisable { get; }
     public ConfigEntry<MentorEconomyMode> EconomyMode { get; }
+    public ConfigEntry<MentorSpellSourcePolicy> SpellSourcePolicy { get; }
     public ConfigEntry<double> SharePercent { get; }
     public ConfigEntry<bool> ArtifactsEnabled { get; }
     public ConfigEntry<double> ArtifactSharePercent { get; }
@@ -45,6 +49,7 @@ internal sealed class MentorConfig
         Bind(file, "General", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.M, UnityEngine.KeyCode.LeftAlt), "Toggle Disabled/Active. Default: Left Alt + M.", 0, 20, displaySection: "Spells", displayName: "Toggle shortcut"),
         Bind(file, "Safety", "EmergencyDisable", false, "Immediately reject new events and discard pending bonus work.", 30, 20, displaySection: "Advanced", displayName: "Emergency disable"),
         Bind(file, "Sharing", "EconomyMode", MentorEconomyMode.SharedPool, "SharedPool bounds total bonus XP. PerRecipient grants the percentage to every recipient and scales with collection size.", 30, 10, displaySection: "Advanced", displayName: "Economy mode"),
+        Bind(file, "Sharing", "SpellSourcePolicy", MentorSpellSourcePolicy.EquippedSpells, "EquippedSpells lets every equipped spell share its native mastery XP with discovered spells below that source's mastery. HighestDiscovered keeps the original highest-mastery-only rule.", 0, 5, displaySection: "Spells", displayName: "Sharing sources", dependencySection: "General", dependencyKey: "Mode", dependencyValue: "Active"),
         Bind(file, "Sharing", "SharePercent", 10.0, "Final mentor XP percentage, clamped to 0-100.", 0, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Spells", displayName: "Spell share percent", dependencySection: "General", dependencyKey: "Mode", dependencyValue: "Active"),
         Bind(file, "Artifacts", "Enabled", false, "Share mastery XP earned by equipped artifacts with lower-mastery created artifacts.", 10, 0, displaySection: "Artifacts", displayName: "Artifact sharing"),
         Bind(file, "Artifacts", "SharePercent", 10.0, "Artifact mastery XP percentage, clamped to 0-100.", 10, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Artifacts", displayName: "Artifact share percent", dependencySection: "Artifacts", dependencyKey: "Enabled"),

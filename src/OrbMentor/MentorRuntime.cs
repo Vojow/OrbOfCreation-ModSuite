@@ -153,6 +153,7 @@ internal sealed class MentorRuntime : IDisposable
     private static readonly FieldInfo? BigDoubleMantissa = typeof(BigDouble).GetField("mantissa", AllFlags);
     private static readonly FieldInfo? BigDoubleExponent = typeof(BigDouble).GetField("exponent", AllFlags);
     private static readonly long ContinuousDistributionTicks = Math.Max(1, Stopwatch.Frequency / 4);
+    private static readonly long EquippedSnapshotTicks = Math.Max(1, Stopwatch.Frequency / 4);
     private static readonly long SummaryRefreshTicks = Math.Max(1, Stopwatch.Frequency);
     private static readonly long LiveRefreshTicks = Math.Max(1, Stopwatch.Frequency);
     private static readonly long ReconcileTicks = Math.Max(1, Stopwatch.Frequency * 10);
@@ -174,6 +175,11 @@ internal sealed class MentorRuntime : IDisposable
     private object? _activeArtifact;
     private object? _activeArtifactContainer;
     private MentorAmount _activeArtifactXp;
+    private readonly HashSet<string> _equippedSpellUuids = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _equippedSpellScratch = new(StringComparer.Ordinal);
+    private MentorSpellSourcePolicy _spellSourcePolicy;
+    private long _nextEquippedSnapshot;
+    private bool _equippedSnapshotReady;
 
     public MentorRuntime(
         MentorConfig config,
@@ -195,6 +201,7 @@ internal sealed class MentorRuntime : IDisposable
         }
         _artifactWasEnabled = config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = config.AlchemyEnabled.Value;
+        _spellSourcePolicy = config.SpellSourcePolicy.Value;
         if (BigDoubleMantissa is null || BigDoubleExponent is null)
             BlockPermanent("BigDouble mantissa/exponent contract is unavailable");
     }
@@ -213,6 +220,21 @@ internal sealed class MentorRuntime : IDisposable
         state.NextSummaryTimestamp = now + SummaryRefreshTicks;
         var catalog = _catalogs[domain];
         if (!catalog.Initialized || catalog.RelationshipDirty) return state.MentorSummary = "Pending";
+        if (domain == MentorDomain.Spells && _config.SpellSourcePolicy.Value == MentorSpellSourcePolicy.EquippedSpells)
+        {
+            if (!_equippedSnapshotReady) return state.MentorSummary = "Pending equipped loadout";
+            if (_equippedSpellUuids.Count == 0) return state.MentorSummary = "None equipped";
+            var equippedNames = new List<string>(Math.Min(3, _equippedSpellUuids.Count));
+            foreach (var entry in catalog.Entries)
+            {
+                if (equippedNames.Count >= 3) break;
+                if (_equippedSpellUuids.Contains(entry.Uuid)) equippedNames.Add(entry.DisplayName);
+            }
+            var extraEquipped = Math.Max(0, _equippedSpellUuids.Count - equippedNames.Count);
+            return state.MentorSummary = equippedNames.Count == 0
+                ? $"{_equippedSpellUuids.Count} equipped"
+                : string.Join(", ", equippedNames) + (extraEquipped > 0 ? $" +{extraEquipped}" : string.Empty);
+        }
         if (catalog.MentorIds.Count == 0) return state.MentorSummary = "None";
         var names = new List<string>(Math.Min(3, catalog.MentorIds.Count));
         foreach (var entry in catalog.Entries)
@@ -240,12 +262,19 @@ internal sealed class MentorRuntime : IDisposable
         var warning = _config.EconomyMode.Value == MentorEconomyMode.PerRecipient ? " Warning: total bonus scales with recipient count." : string.Empty;
         var drops = Diagnostics.DroppedEvents + Diagnostics.DroppedGrants;
         var dropSummary = drops > 0 ? $" Dropped work: {drops}." : string.Empty;
-        return $"{_config.EconomyMode.Value}. Spells {_config.SharePercent.Value:0.##}%; {artifact}; {alchemy}.{warning}{dropSummary}";
+        return $"{_config.EconomyMode.Value}. Spells {_config.SharePercent.Value:0.##}% from {_config.SpellSourcePolicy.Value}; {artifact}; {alchemy}.{warning}{dropSummary}";
     }
 
     public void Observe(SpellRecipeSO source, BigDouble xp)
     {
         if (TryAmount(xp, out var amount)) CaptureDomain(MentorDomain.Spells, source, amount);
+    }
+
+    public void NotifyEquippedLoadoutChanged()
+    {
+        _equippedSnapshotReady = false;
+        _equippedSpellUuids.Clear();
+        _nextEquippedSnapshot = 0;
     }
 
     public void ObserveAlchemy(object source, BigDouble xp)
@@ -323,6 +352,13 @@ internal sealed class MentorRuntime : IDisposable
             if (string.IsNullOrWhiteSpace(uuid))
             {
                 Diagnostics.RecordDrop(MentorDropReason.SourceIdentityChanged, 1, grant: false);
+                return;
+            }
+            if (domain == MentorDomain.Spells &&
+                _config.SpellSourcePolicy.Value == MentorSpellSourcePolicy.EquippedSpells &&
+                (!_equippedSnapshotReady || !_equippedSpellUuids.Contains(uuid)))
+            {
+                Diagnostics.RecordDrop(MentorDropReason.SourceIneligible, 1, grant: false);
                 return;
             }
             if (entry is not null)
@@ -409,6 +445,8 @@ internal sealed class MentorRuntime : IDisposable
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();
+        RefreshSpellSourcePolicy();
+        RefreshEquippedSpellSnapshot(Stopwatch.GetTimestamp());
         foreach (var domain in DomainOrder)
         {
             var index = (int)domain;
@@ -431,6 +469,63 @@ internal sealed class MentorRuntime : IDisposable
 
         if (_coordinatorWork is null) LateTickLegacy();
         else LateTickCoordinated();
+    }
+
+    private void RefreshSpellSourcePolicy()
+    {
+        var current = _config.SpellSourcePolicy.Value;
+        if (current == _spellSourcePolicy) return;
+        _spellSourcePolicy = current;
+        CancelDomain(MentorDomain.Spells, MentorDropReason.Disabled, clearCatalog: false);
+        _equippedSpellUuids.Clear();
+        _equippedSnapshotReady = false;
+        _nextEquippedSnapshot = 0;
+        _log.LogInfo($"Mentor spell sharing sources changed to {current}; pending spell grants were cleared.");
+    }
+
+    private void RefreshEquippedSpellSnapshot(long now)
+    {
+        if (_spellSourcePolicy != MentorSpellSourcePolicy.EquippedSpells)
+        {
+            _equippedSpellUuids.Clear();
+            _equippedSnapshotReady = false;
+            return;
+        }
+        if (now < _nextEquippedSnapshot) return;
+        _nextEquippedSnapshot = now + EquippedSnapshotTicks;
+        _equippedSpellScratch.Clear();
+        try
+        {
+            var managerType = Type.GetType("SpellManager, Assembly-CSharp", false);
+            var manager = FindField(managerType!, "instance")?.GetValue(null);
+            var activeSpells = manager is null ? null : FindField(manager.GetType(), "activeSpells")?.GetValue(manager);
+            var activeValues = activeSpells is null
+                ? null
+                : FindField(activeSpells.GetType(), "value")?.GetValue(activeSpells) as IList;
+            if (activeValues is null ||
+                !string.Equals(activeSpells!.GetType().Name, "SpellListVariable", StringComparison.Ordinal))
+            {
+                _equippedSpellUuids.Clear();
+                _equippedSnapshotReady = false;
+                return;
+            }
+            for (var index = 0; index < activeValues.Count; index++)
+            {
+                var spell = activeValues[index];
+                if (spell is null) continue;
+                var reference = Invoke(spell, "get_reference");
+                var uuid = reference is null ? null : StableId(reference);
+                if (!string.IsNullOrWhiteSpace(uuid)) _equippedSpellScratch.Add(uuid);
+            }
+            _equippedSpellUuids.Clear();
+            foreach (var uuid in _equippedSpellScratch) _equippedSpellUuids.Add(uuid);
+            _equippedSnapshotReady = true;
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException || ex is NullReferenceException)
+        {
+            _equippedSpellUuids.Clear();
+            _equippedSnapshotReady = false;
+        }
     }
 
     private void LateTickLegacy()
@@ -586,7 +681,7 @@ internal sealed class MentorRuntime : IDisposable
                 MentorRecipientEligibility.Evaluate(
                     parkedEntry.IsDiscovered,
                     parkedEntry.MasteryLevel,
-                    catalog.HighestMastery) == MentorRecipientEligibilityStatus.Eligible)
+                    parkedGrant.MasteryCeilingExclusive) == MentorRecipientEligibilityStatus.Eligible)
             {
                 state.Engine.Consolidate(parkedGrant);
             }
@@ -672,8 +767,19 @@ internal sealed class MentorRuntime : IDisposable
             captured.Key.Discovered,
             captured.Key.ProgressionEpoch,
             relationship);
-        var qualification = MentorRelationshipQualification.Evaluate(
-            resolvedKey, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
+        var equippedSpellPolicy = ReferenceEquals(catalog, _catalogs[MentorDomain.Spells]) &&
+            _config.SpellSourcePolicy.Value == MentorSpellSourcePolicy.EquippedSpells;
+        var capturedRelationship = equippedSpellPolicy
+            ? relationship.ForEquippedCapture(resolvedKey)
+            : relationship.ForCapture(resolvedKey);
+        var qualification = equippedSpellPolicy
+            ? (!resolvedKey.Discovered
+                ? MentorQualificationStatus.SourceIneligible
+                : capturedRelationship.Recipients.Count > 0
+                    ? MentorQualificationStatus.Qualified
+                    : MentorQualificationStatus.NoRecipients)
+            : MentorRelationshipQualification.Evaluate(
+                resolvedKey, catalog.RelationshipEpoch, catalog.HighestMastery, catalog.Recipients.Count);
         if (qualification == MentorQualificationStatus.NoRecipients)
         {
             Diagnostics.RecordDrop(MentorDropReason.NoRecipients, captured.EventCount, grant: false);
@@ -684,7 +790,6 @@ internal sealed class MentorRuntime : IDisposable
             Diagnostics.RecordDrop(MentorDropReason.SourceIneligible, captured.EventCount, grant: false);
             return;
         }
-        var capturedRelationship = relationship.ForCapture(resolvedKey);
         state.Sources.Capture(capturedRelationship, captured.Key.Uuid, captured.Amount, captured.EventCount);
         Diagnostics.RecordQualified(captured.EventCount);
     }
@@ -715,7 +820,13 @@ internal sealed class MentorRuntime : IDisposable
             Diagnostics.RecordDrop(MentorDropReason.ZeroShare, batch.EventCount, grant: false);
             return;
         }
-        state.ActivePlan = state.Engine.CreatePlan(batch.Amount, percent, _config.EconomyMode.Value, recipients, batch.EventCount);
+        state.ActivePlan = state.Engine.CreatePlan(
+            batch.Amount,
+            percent,
+            _config.EconomyMode.Value,
+            recipients,
+            batch.EventCount,
+            batch.Relationship?.HighestMastery ?? _catalogs[domain].HighestMastery);
         if (state.ActivePlan is null)
             Diagnostics.RecordDrop(MentorDropReason.ContractFailure, batch.EventCount, grant: false);
         else if (_config.DetailedLogging.Value)
@@ -726,7 +837,9 @@ internal sealed class MentorRuntime : IDisposable
     {
         var state = _domains[domain];
         var catalog = _catalogs[domain];
-        if (!state.Engine.TryPeek(out var grantUuid, out var grantAmount)) return GrantResult.NoWork;
+        if (!state.Engine.TryPeek(out MentorGrant grant)) return GrantResult.NoWork;
+        var grantUuid = grant.Uuid;
+        var grantAmount = grant.Amount;
         if (DomainHasCooperativeWork(domain, Stopwatch.GetTimestamp()))
         {
             Diagnostics.RecordDeferredGrant();
@@ -752,14 +865,14 @@ internal sealed class MentorRuntime : IDisposable
             if (MentorRecipientEligibility.Evaluate(
                     discovered,
                     mastery,
-                    catalog.HighestMastery) != MentorRecipientEligibilityStatus.Eligible)
+                    grant.MasteryCeilingExclusive) != MentorRecipientEligibilityStatus.Eligible)
             {
                 // Park at this authoritative settled generation. The exact
                 // amount is reconsidered cooperatively only after a later
                 // real refresh pass completes; this validation does not
                 // manufacture its own immediate refresh/retry cycle.
                 var parkResult = state.ParkedGrants.Park(
-                    new MentorGrant(grantUuid, grantAmount),
+                    grant,
                     catalog.SettledRefreshGeneration);
                 if (parkResult == MentorParkResult.Overflow)
                 {
@@ -767,7 +880,7 @@ internal sealed class MentorRuntime : IDisposable
                     BlockDomainTransient(domain, $"{domain} parked grant capacity exceeded");
                     return GrantResult.Dropped;
                 }
-                if (!state.Engine.Complete(grantUuid))
+                if (!state.Engine.Complete(grant))
                 {
                     BlockDomainTransient(domain, $"{domain} pending grant changed while parking");
                     return GrantResult.Dropped;
@@ -799,7 +912,7 @@ internal sealed class MentorRuntime : IDisposable
                 masteryAfterGrant,
                 discoveredAfterGrant,
                 epochAlreadyAdvanced: catalog.ProgressionEpoch != progressionEpochBeforeGrant);
-            state.Engine.Complete(grantUuid);
+            state.Engine.Complete(grant);
             Diagnostics.RecordGrant();
             if (_config.DetailedLogging.Value)
                 _log.LogInfo($"Mentor {domain} grant: recipient={entry.DisplayName} ({grantUuid}), amount={grantAmount.Mantissa}e{grantAmount.Exponent}");

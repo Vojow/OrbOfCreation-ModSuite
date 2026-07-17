@@ -16,21 +16,33 @@ internal sealed class MentorRecipe
 
 internal sealed class MentorGrant
 {
-    public MentorGrant(string uuid, MentorAmount amount) { Uuid = uuid; Amount = amount; }
+    public MentorGrant(string uuid, MentorAmount amount, int masteryCeilingExclusive = int.MaxValue)
+    {
+        Uuid = uuid;
+        Amount = amount;
+        MasteryCeilingExclusive = masteryCeilingExclusive;
+    }
     public string Uuid { get; }
     public MentorAmount Amount { get; }
+    public int MasteryCeilingExclusive { get; }
 }
 
 internal sealed class MentorPlan
 {
     private readonly IReadOnlyList<MentorRecipe> _recipients;
     private readonly MentorAmount _amount;
+    private readonly int _masteryCeilingExclusive;
     private int _nextRecipient;
 
-    public MentorPlan(IReadOnlyList<MentorRecipe> recipients, MentorAmount amount, int sourceEventCount = 1)
+    public MentorPlan(
+        IReadOnlyList<MentorRecipe> recipients,
+        MentorAmount amount,
+        int sourceEventCount = 1,
+        int masteryCeilingExclusive = int.MaxValue)
     {
         _recipients = recipients;
         _amount = amount;
+        _masteryCeilingExclusive = masteryCeilingExclusive;
         SourceEventCount = Math.Max(0, sourceEventCount);
     }
 
@@ -45,7 +57,10 @@ internal sealed class MentorPlan
             return false;
         }
 
-        grant = new MentorGrant(_recipients[_nextRecipient++].Uuid, _amount);
+        grant = new MentorGrant(
+            _recipients[_nextRecipient++].Uuid,
+            _amount,
+            _masteryCeilingExclusive);
         return true;
     }
 }
@@ -112,9 +127,20 @@ internal sealed class MentorRecipientSelection : IReadOnlyList<MentorRecipe>
 
 internal sealed class MentorRelationshipSnapshot
 {
+    private readonly struct EquippedRecipientKey : IEquatable<EquippedRecipientKey>
+    {
+        public EquippedRecipientKey(string uuid, int mastery) { Uuid = uuid; Mastery = mastery; }
+        public string Uuid { get; }
+        public int Mastery { get; }
+        public bool Equals(EquippedRecipientKey other) => Mastery == other.Mastery && string.Equals(Uuid, other.Uuid, StringComparison.Ordinal);
+        public override bool Equals(object? obj) => obj is EquippedRecipientKey other && Equals(other);
+        public override int GetHashCode() => HashCode.Combine(Uuid, Mastery);
+    }
+
     private readonly Dictionary<string, int> _discoveredIndices;
     private readonly Dictionary<string, int> _recipientIndices;
     private readonly MentorRecipientSnapshot _defaultRecipients;
+    private readonly Dictionary<EquippedRecipientKey, MentorRecipientSnapshot> _equippedRecipients = new();
 
     public MentorRelationshipSnapshot(
         long epoch,
@@ -173,6 +199,24 @@ internal sealed class MentorRelationshipSnapshot
             Epoch,
             Math.Max(HighestMastery, captured.MasteryLevel),
             new MentorRecipientSelection(source, excludedIndex));
+    }
+
+    public MentorRecipientSnapshot ForEquippedCapture(MentorCaptureKey captured)
+    {
+        var key = new EquippedRecipientKey(captured.Uuid, captured.MasteryLevel);
+        if (_equippedRecipients.TryGetValue(key, out var cached)) return cached;
+        var recipients = new List<MentorRecipe>();
+        foreach (var recipe in Discovered)
+        {
+            if (recipe.MasteryLevel < captured.MasteryLevel &&
+                !string.Equals(recipe.Uuid, captured.Uuid, StringComparison.Ordinal))
+            {
+                recipients.Add(recipe);
+            }
+        }
+        var result = new MentorRecipientSnapshot(Epoch, captured.MasteryLevel, recipients, Discovered.Count);
+        _equippedRecipients.Add(key, result);
+        return result;
     }
 
     private IReadOnlyList<MentorRecipe> SelectBaseRecipients(MentorCaptureKey captured) =>
@@ -779,16 +823,39 @@ internal class MentorPendingWork
 
 internal readonly struct MentorParkedGrant
 {
-    public MentorParkedGrant(string uuid, MentorAmount amount, long blockedAtSettledGeneration)
+    public MentorParkedGrant(
+        string uuid,
+        MentorAmount amount,
+        int masteryCeilingExclusive,
+        long blockedAtSettledGeneration)
     {
         Uuid = uuid;
         Amount = amount;
+        MasteryCeilingExclusive = masteryCeilingExclusive;
         BlockedAtSettledGeneration = blockedAtSettledGeneration;
     }
 
     public string Uuid { get; }
     public MentorAmount Amount { get; }
+    public int MasteryCeilingExclusive { get; }
     public long BlockedAtSettledGeneration { get; }
+}
+
+internal readonly struct MentorGrantKey : IEquatable<MentorGrantKey>
+{
+    public MentorGrantKey(string uuid, int masteryCeilingExclusive)
+    {
+        Uuid = uuid;
+        MasteryCeilingExclusive = masteryCeilingExclusive;
+    }
+
+    public string Uuid { get; }
+    public int MasteryCeilingExclusive { get; }
+    public bool Equals(MentorGrantKey other) =>
+        MasteryCeilingExclusive == other.MasteryCeilingExclusive &&
+        string.Equals(Uuid, other.Uuid, StringComparison.Ordinal);
+    public override bool Equals(object? obj) => obj is MentorGrantKey other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(Uuid, MasteryCeilingExclusive);
 }
 
 internal enum MentorParkResult { Parked, Coalesced, Overflow }
@@ -796,7 +863,7 @@ internal enum MentorParkResult { Parked, Coalesced, Overflow }
 internal sealed class MentorParkedGrantLedger
 {
     public const int DefaultCapacity = 256;
-    private readonly Dictionary<string, MentorParkedGrant> _parked;
+    private readonly Dictionary<MentorGrantKey, MentorParkedGrant> _parked;
     private readonly int _capacity;
     private long _minimumBlockedGeneration = long.MaxValue;
 
@@ -804,7 +871,7 @@ internal sealed class MentorParkedGrantLedger
     {
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
         _capacity = capacity;
-        _parked = new Dictionary<string, MentorParkedGrant>(capacity, StringComparer.Ordinal);
+        _parked = new Dictionary<MentorGrantKey, MentorParkedGrant>(capacity);
     }
 
     public int Count => _parked.Count;
@@ -820,11 +887,13 @@ internal sealed class MentorParkedGrantLedger
             OverflowCount++;
             return MentorParkResult.Overflow;
         }
-        if (_parked.TryGetValue(grant.Uuid, out var existing))
+        var key = new MentorGrantKey(grant.Uuid, grant.MasteryCeilingExclusive);
+        if (_parked.TryGetValue(key, out var existing))
         {
-            _parked[grant.Uuid] = new MentorParkedGrant(
+            _parked[key] = new MentorParkedGrant(
                 grant.Uuid,
                 existing.Amount.Add(grant.Amount),
+                grant.MasteryCeilingExclusive,
                 Math.Max(existing.BlockedAtSettledGeneration, settledGeneration));
             RecomputeMinimum();
             return MentorParkResult.Coalesced;
@@ -835,18 +904,24 @@ internal sealed class MentorParkedGrantLedger
             return MentorParkResult.Overflow;
         }
         _parked.Add(
-            grant.Uuid,
-            new MentorParkedGrant(grant.Uuid, grant.Amount, settledGeneration));
+            key,
+            new MentorParkedGrant(
+                grant.Uuid,
+                grant.Amount,
+                grant.MasteryCeilingExclusive,
+                settledGeneration));
         _minimumBlockedGeneration = Math.Min(_minimumBlockedGeneration, settledGeneration);
         return MentorParkResult.Parked;
     }
 
     public bool TryAccumulate(MentorGrant grant)
     {
-        if (!_parked.TryGetValue(grant.Uuid, out var existing)) return false;
-        _parked[grant.Uuid] = new MentorParkedGrant(
+        var key = new MentorGrantKey(grant.Uuid, grant.MasteryCeilingExclusive);
+        if (!_parked.TryGetValue(key, out var existing)) return false;
+        _parked[key] = new MentorParkedGrant(
             grant.Uuid,
             existing.Amount.Add(grant.Amount),
+            grant.MasteryCeilingExclusive,
             existing.BlockedAtSettledGeneration);
         return true;
     }
@@ -858,24 +933,24 @@ internal sealed class MentorParkedGrantLedger
             grant = null!;
             return false;
         }
-        string? readyUuid = null;
-        MentorAmount readyAmount = default;
+        MentorGrantKey? readyKey = null;
+        MentorParkedGrant ready = default;
         foreach (var parked in _parked.Values)
         {
             if (parked.BlockedAtSettledGeneration >= settledGeneration) continue;
-            readyUuid = parked.Uuid;
-            readyAmount = parked.Amount;
+            readyKey = new MentorGrantKey(parked.Uuid, parked.MasteryCeilingExclusive);
+            ready = parked;
             break;
         }
-        if (readyUuid is null)
+        if (readyKey is null)
         {
             RecomputeMinimum();
             grant = null!;
             return false;
         }
-        _parked.Remove(readyUuid);
+        _parked.Remove(readyKey.Value);
         RecomputeMinimum();
-        grant = new MentorGrant(readyUuid, readyAmount);
+        grant = new MentorGrant(ready.Uuid, ready.Amount, ready.MasteryCeilingExclusive);
         return true;
     }
 
@@ -1139,8 +1214,8 @@ internal static class MentorIdentityValidation
 
 internal sealed class MentorEngine
 {
-    private readonly Dictionary<string, MentorAmount> _pending = new(StringComparer.Ordinal);
-    private readonly Queue<string> _pendingOrder = new();
+    private readonly Dictionary<MentorGrantKey, MentorAmount> _pending = new();
+    private readonly Queue<MentorGrantKey> _pendingOrder = new();
 
     public IReadOnlyList<MentorRecipe> EligibleRecipients(
         string sourceUuid,
@@ -1189,12 +1264,15 @@ internal sealed class MentorEngine
         double sharePercent,
         MentorEconomyMode mode,
         IReadOnlyList<MentorRecipe> recipients,
-        int sourceEventCount = 1)
+        int sourceEventCount = 1,
+        int masteryCeilingExclusive = int.MaxValue)
     {
         if (!sourceXp.IsValidPositive || !double.IsFinite(sharePercent) || recipients.Count == 0) return null;
         var fraction = Math.Clamp(sharePercent, 0.0, 100.0) / 100.0;
         var amount = sourceXp.Multiply(mode == MentorEconomyMode.SharedPool ? fraction / recipients.Count : fraction);
-        return amount.IsValidPositive ? new MentorPlan(recipients, amount, sourceEventCount) : null;
+        return amount.IsValidPositive
+            ? new MentorPlan(recipients, amount, sourceEventCount, masteryCeilingExclusive)
+            : null;
     }
 
     public void Consolidate(IEnumerable<MentorGrant> grants)
@@ -1205,14 +1283,15 @@ internal sealed class MentorEngine
     public void Consolidate(MentorGrant grant)
     {
         if (!grant.Amount.IsValidPositive) return;
-        if (_pending.TryGetValue(grant.Uuid, out var current))
+        var key = new MentorGrantKey(grant.Uuid, grant.MasteryCeilingExclusive);
+        if (_pending.TryGetValue(key, out var current))
         {
-            _pending[grant.Uuid] = current.Add(grant.Amount);
+            _pending[key] = current.Add(grant.Amount);
             return;
         }
 
-        _pending[grant.Uuid] = grant.Amount;
-        _pendingOrder.Enqueue(grant.Uuid);
+        _pending[key] = grant.Amount;
+        _pendingOrder.Enqueue(key);
     }
 
     public IReadOnlyList<MentorGrant> Take(int operationBudget)
@@ -1220,9 +1299,9 @@ internal sealed class MentorEngine
         var result = new List<MentorGrant>();
         while (result.Count < Math.Max(0, operationBudget) && _pendingOrder.Count > 0)
         {
-            var uuid = _pendingOrder.Dequeue();
-            if (!_pending.Remove(uuid, out var amount)) continue;
-            result.Add(new MentorGrant(uuid, amount));
+            var key = _pendingOrder.Dequeue();
+            if (!_pending.Remove(key, out var amount)) continue;
+            result.Add(new MentorGrant(key.Uuid, amount, key.MasteryCeilingExclusive));
         }
         return result;
     }
@@ -1231,9 +1310,9 @@ internal sealed class MentorEngine
     {
         while (_pendingOrder.Count > 0)
         {
-            var uuid = _pendingOrder.Dequeue();
-            if (!_pending.Remove(uuid, out var amount)) continue;
-            grant = new MentorGrant(uuid, amount);
+            var key = _pendingOrder.Dequeue();
+            if (!_pending.Remove(key, out var amount)) continue;
+            grant = new MentorGrant(key.Uuid, amount, key.MasteryCeilingExclusive);
             return true;
         }
 
@@ -1245,10 +1324,10 @@ internal sealed class MentorEngine
     {
         while (_pendingOrder.Count > 0)
         {
-            var uuid = _pendingOrder.Peek();
-            if (_pending.TryGetValue(uuid, out var amount))
+            var key = _pendingOrder.Peek();
+            if (_pending.TryGetValue(key, out var amount))
             {
-                grant = new MentorGrant(uuid, amount);
+                grant = new MentorGrant(key.Uuid, amount, key.MasteryCeilingExclusive);
                 return true;
             }
             _pendingOrder.Dequeue();
@@ -1261,8 +1340,9 @@ internal sealed class MentorEngine
     {
         while (_pendingOrder.Count > 0)
         {
-            uuid = _pendingOrder.Peek();
-            if (_pending.TryGetValue(uuid, out amount)) return true;
+            var key = _pendingOrder.Peek();
+            uuid = key.Uuid;
+            if (_pending.TryGetValue(key, out amount)) return true;
             _pendingOrder.Dequeue();
         }
         uuid = string.Empty;
@@ -1272,9 +1352,16 @@ internal sealed class MentorEngine
 
     public bool Complete(string uuid)
     {
-        if (_pendingOrder.Count == 0 || !string.Equals(_pendingOrder.Peek(), uuid, StringComparison.Ordinal)) return false;
+        if (_pendingOrder.Count == 0 || !string.Equals(_pendingOrder.Peek().Uuid, uuid, StringComparison.Ordinal)) return false;
+        return _pending.Remove(_pendingOrder.Dequeue());
+    }
+
+    public bool Complete(MentorGrant grant)
+    {
+        var key = new MentorGrantKey(grant.Uuid, grant.MasteryCeilingExclusive);
+        if (_pendingOrder.Count == 0 || !_pendingOrder.Peek().Equals(key)) return false;
         _pendingOrder.Dequeue();
-        return _pending.Remove(uuid);
+        return _pending.Remove(key);
     }
 
     public int PendingCount => _pending.Count;

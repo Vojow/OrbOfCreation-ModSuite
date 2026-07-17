@@ -145,6 +145,8 @@ internal readonly struct BigAmount : IComparable<BigAmount>
         return new BigAmount(Mantissa * factor, Exponent);
     }
 
+    public BigAmount Subtract(BigAmount other) => Add(other.Multiply(-1.0));
+
     public double DivideApprox(BigAmount denominator)
     {
         if (denominator.IsZero)

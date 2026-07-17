@@ -8,13 +8,13 @@ These documents record design intent, implementation sequencing, or historical d
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
 | [Orb Automata](automata.md) | Implemented / evolving | Core Auto Buy and Auto Cast are in public beta; later work remains. |
-| [Auto Concept mastery balancing](auto-concept.md) | Planned | Scholar concept slot allocation, mastery balancing, and resource-safe continuous-drain planning. |
+| [Auto Concept mastery balancing](auto-concept.md) | RC implementation / runtime validation pending | Disabled-by-default Scholar concept balancing, native slot/quantity mutation, ownership tracking, and quality-adjusted drain safety are implemented; interactive profiling remains. |
 | [Mod suite performance](performance-suite.md) | P0-P3 implemented / runtime validation pending | Shared scheduling, lifecycle-aware indexes, dirty updates, and resource snapshots are implemented; desktop/Steam Deck profiling remains. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI is in public beta. |
 | [Orb Chronomancer](chronomancer.md) | Experimental | Code exists but is not in the Automata release archive. |
 | [Orb Achievement Resonance](achievement-resonance.md) | Experimental | Native mutation remains disabled by default. |
-| [Orb Mentor](mentor.md) | Implemented / beta candidate | Spells-only implementation awaits interactive validation before release. |
+| [Orb Mentor](mentor.md) | RC implementation / runtime validation pending | Equipped-source and highest-only spell policies are implemented; interactive validation remains. |
 | [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) | Planned | Separately audited future vertical slices. |
 | [Orb Insights](insights.md) | Planned | Design only. |
 | [Orb Toolbox](toolbox.md) | Planned | Design only. |
