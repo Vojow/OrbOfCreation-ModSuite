@@ -9,6 +9,17 @@ internal sealed class AutoConceptController : IDisposable
 {
     private enum MutationKind { Add, RemoveOwned, RotateOut }
 
+    private sealed class TrainingSession
+    {
+        public TrainingSession(ConceptProgress target)
+        {
+            Target = target;
+        }
+
+        public ConceptProgress Target { get; }
+        public double? StartedAtSeconds { get; set; }
+    }
+
     private readonly struct PendingMutation
     {
         public PendingMutation(
@@ -39,6 +50,8 @@ internal sealed class AutoConceptController : IDisposable
     private readonly SuiteWorkRegistration _readWork;
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly ConceptOwnershipLedger _ownership = new();
+    private readonly Dictionary<string, TrainingSession> _trainingSessions = new(StringComparer.Ordinal);
+    private readonly List<string> _completedTrainingSessions = new();
     private readonly HashSet<string> _allowed = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _blocked = new(StringComparer.OrdinalIgnoreCase);
     private readonly DecisionLogGate _failureLogGate = new(TimeSpan.FromSeconds(30));
@@ -92,6 +105,7 @@ internal sealed class AutoConceptController : IDisposable
             {
                 _pending = null;
                 _ownership.Clear();
+                _trainingSessions.Clear();
                 _baselineCaptured = false;
                 _cachedCandidates = Array.Empty<NativeConceptCandidate>();
             }
@@ -132,6 +146,7 @@ internal sealed class AutoConceptController : IDisposable
         _runtime.InvalidateLifecycle();
         _pending = null;
         _ownership.Clear();
+        _trainingSessions.Clear();
         _baselineCaptured = false;
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
         _loggedBlockedReason = null;
@@ -188,6 +203,7 @@ internal sealed class AutoConceptController : IDisposable
                 candidate.MaximumQuantity > 0));
         }
         var ranked = AutoConceptBalancer.Rank(progress);
+        UpdateTrainingSessions(byId);
 
         // Breadth first: claim each currently compatible acquired slot with
         // one lowest-progress concept before deepening any assignment.
@@ -281,6 +297,7 @@ internal sealed class AutoConceptController : IDisposable
                 var candidate = byId[activeProgress.Uuid];
                 if (!candidate.IsSettled || candidate.Quantity <= 0 ||
                     !string.Equals(candidate.SlotTypeUuid, desiredInactive.SlotTypeUuid, StringComparison.Ordinal)) continue;
+                if (_trainingSessions.ContainsKey(candidate.Uuid)) continue;
 
                 if (_config.AutoConceptSlotManagement.Value == AutoConceptSlotManagementMode.RotateAll)
                 {
@@ -392,10 +409,93 @@ internal sealed class AutoConceptController : IDisposable
             _secondsUntilEvaluation = 5.0f;
             return;
         }
+        if (candidate.Quantity == 0) BeginTrainingSession(candidate, candidates);
         _ownership.RecordAutomatedDelta(candidate.Uuid, candidate.Quantity + delta, delta);
         LogOperation($"Auto Concept added {delta} {candidate.DisplayName} instance(s), target {safeTarget}.");
         _secondsUntilEvaluation = 0.0f;
     }
+
+    private void BeginTrainingSession(
+        NativeConceptCandidate candidate,
+        IReadOnlyList<NativeConceptCandidate> candidates)
+    {
+        var current = ToProgress(candidate);
+        var target = current;
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var progress = ToProgress(candidates[index]);
+            if (!progress.Eligible || AutoConceptBalancer.HasStrictlyLowerMastery(progress, target)) continue;
+            target = progress;
+        }
+        if (!AutoConceptBalancer.HasStrictlyLowerMastery(current, target)) return;
+        _trainingSessions[candidate.Uuid] = new TrainingSession(target);
+        LogOperation(
+            $"Auto Concept reserved {candidate.DisplayName} until mastery {FormatMastery(target)} or {_config.AutoConceptTrainingPeriodSeconds.Value} settled active seconds.");
+    }
+
+    private void UpdateTrainingSessions(
+        IReadOnlyDictionary<string, NativeConceptCandidate> candidates)
+    {
+        if (_trainingSessions.Count == 0) return;
+        _completedTrainingSessions.Clear();
+        foreach (var pair in _trainingSessions)
+        {
+            if (!candidates.TryGetValue(pair.Key, out var candidate))
+            {
+                _completedTrainingSessions.Add(pair.Key);
+                continue;
+            }
+            if (!candidate.IsSettled) continue;
+            if (candidate.Quantity <= 0)
+            {
+                _completedTrainingSessions.Add(pair.Key);
+                continue;
+            }
+
+            var session = pair.Value;
+            if (session.StartedAtSeconds is null)
+            {
+                session.StartedAtSeconds = _elapsedSeconds;
+                LogOperation(
+                    $"Auto Concept training started for {candidate.DisplayName}; catch-up target {FormatMastery(session.Target)}.");
+            }
+
+            var current = ToProgress(candidate);
+            if (AutoConceptBalancer.HasReached(current, session.Target))
+            {
+                LogOperation(
+                    $"Auto Concept training completed for {candidate.DisplayName}: reached catch-up target {FormatMastery(session.Target)}.");
+                _completedTrainingSessions.Add(pair.Key);
+                continue;
+            }
+
+            var trainingPeriod = Math.Clamp(
+                _config.AutoConceptTrainingPeriodSeconds.Value,
+                10,
+                3600);
+            if (AutoConceptBalancer.HasTrainingPeriodElapsed(
+                    session.StartedAtSeconds.Value,
+                    _elapsedSeconds,
+                    trainingPeriod))
+            {
+                LogOperation(
+                    $"Auto Concept training completed for {candidate.DisplayName}: {trainingPeriod}-second period elapsed at {FormatMastery(current)}.");
+                _completedTrainingSessions.Add(pair.Key);
+            }
+        }
+        for (var index = 0; index < _completedTrainingSessions.Count; index++)
+            _trainingSessions.Remove(_completedTrainingSessions[index]);
+    }
+
+    private static ConceptProgress ToProgress(NativeConceptCandidate candidate) =>
+        new(
+            candidate.Uuid,
+            candidate.MasteryLevel,
+            candidate.MasteryProgress,
+            candidate.MaximumQuantity > 0);
+
+    private static string FormatMastery(ConceptProgress progress) =>
+        $"level {progress.MasteryLevel} ({progress.MasteryProgress:P0})";
 
     private static bool IsReplacementStillValid(
         PendingMutation pending,
@@ -491,7 +591,7 @@ internal sealed class AutoConceptController : IDisposable
         for (var index = 0; index < candidates.Count; index++)
             if (candidates[index].Quantity > 0) activeCount++;
         var message =
-            $"Auto Concept made no change: no compatible strictly lower-mastery rotation or resource-safe quantity increase was available. SlotManagement={_config.AutoConceptSlotManagement.Value}, Eligible={eligibleCount}, Active={activeCount}.";
+            $"Auto Concept made no change: no compatible strictly lower-mastery rotation or resource-safe quantity increase was available. SlotManagement={_config.AutoConceptSlotManagement.Value}, Training={_trainingSessions.Count}, Eligible={eligibleCount}, Active={activeCount}.";
         if (_decisionLogGate.ShouldLog(message, TimeSpan.FromSeconds(_elapsedSeconds)))
             _log.LogAutomataInfo(message);
     }
@@ -502,6 +602,7 @@ internal sealed class AutoConceptController : IDisposable
         _runtime.Dispose();
         _pending = null;
         _ownership.Clear();
+        _trainingSessions.Clear();
         _cachedCandidates = Array.Empty<NativeConceptCandidate>();
     }
 }

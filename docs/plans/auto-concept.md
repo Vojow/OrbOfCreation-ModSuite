@@ -1,6 +1,6 @@
 # Auto Concept mastery-balancing plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, configurable slot ownership policy, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
+> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, breadth/depth mastery balancer, configurable slot ownership policy, settled catch-up training sessions, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
 
 [Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
 
@@ -56,6 +56,7 @@ This reuse does not make ordinary alchemy part of Auto Concept. The adapter must
 - The training pool contains discovered, available, validated concepts that are not blocked by configuration.
 - Concepts are ranked by effective mastery, lowest first, with stable UUID as the final tie-breaker.
 - A rebalance runs on a multi-minute interval and may be requested sooner by a mastery-level change, acquired-slot change, manual loadout change, configuration change, or lifecycle invalidation.
+- A newly assigned lower-mastery concept is protected until it reaches the highest effective mastery captured at assignment time or its configured settled training period expires. Native setup time does not consume the period.
 - The balancer changes only quantities it owns under `PreserveManual`. `RotateAll` explicitly authorizes replacing one complete, settled native assignment at a time.
 - Resource safety may leave an acquired slot empty or assign less than `masteryLevel + 1` instances.
 - Emergency disable cancels pending plans and new mutations immediately. It does not rewrite native progression or remove accepted game state unless an explicit cleanup policy is later approved.
@@ -438,10 +439,11 @@ Names and defaults remain subject to runtime measurement and player approval.
 ### Balancing
 
 - `SlotManagementMode`: `RotateAll` (default) or `PreserveManual`.
+- `TrainingPeriodSeconds`: default 300 seconds, configurable from 10 through 3600; begins only after the assignment is settled and active.
 - `RebalanceIntervalSeconds`: default 300 seconds, configurable from 10 through 1800 seconds.
 - `UseAllAvailableConceptSlots`: proposed default true.
 - `ReservedManualConceptSlots`: proposed default 0; applies only after preserved manual/pinned assignments.
-- Strict mastery comparison prevents equal-progress UUID tie-breaks from causing rotation churn.
+- Strict mastery comparison plus protected training sessions prevent native change signals and equal-progress UUID tie-breaks from causing rotation churn.
 - `AllowedConceptUuids`: optional allowlist; empty means every validated discovered concept.
 - `BlockedConceptUuids`: explicit denylist.
 - `PinnedConceptUuids`: preserve or prioritize separately only after ownership semantics are validated.
@@ -537,7 +539,7 @@ Exit gate: one concept trains to its native mastery limit or resource-safe quant
 
 - Select as many distinct training assignments as current compatible acquired slots permit.
 - Implement breadth-before-depth allocation across a shared provisional resource ledger.
-- Rebalance on mastery and slot changes; require a strict mastery deficit so equal-progress ties cannot churn.
+- Rebalance on mastery and slot changes; protect each settled assignment until its captured catch-up target or configured training period is reached.
 - Spread removals/additions across frames with settlement between candidates.
 
 Exit gate: slot acquisition automatically expands training, slot loss removes only automated low-priority assignments, and shared-resource candidates never exceed aggregate headroom.

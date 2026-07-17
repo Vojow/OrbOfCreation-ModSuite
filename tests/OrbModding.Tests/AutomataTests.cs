@@ -60,6 +60,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoConceptSlotManagementMode.RotateAll, config.AutoConceptSlotManagement.Value);
+        Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptRebalanceIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
@@ -150,6 +151,41 @@ public sealed class AutomataTests
         var active = new ConceptProgress("active", activeLevel, activeProgress, true);
 
         Assert.Equal(expected, AutoConceptBalancer.HasStrictlyLowerMastery(candidate, active));
+    }
+
+    [Theory]
+    [InlineData(4, 0.9, 5, 0.0, false)]
+    [InlineData(5, 0.4, 5, 0.5, false)]
+    [InlineData(5, 0.5, 5, 0.5, true)]
+    [InlineData(6, 0.0, 5, 0.9, true)]
+    public void AutoConceptCatchUpUsesCapturedEffectiveMastery(
+        int currentLevel,
+        double currentProgress,
+        int targetLevel,
+        double targetProgress,
+        bool expected)
+    {
+        var current = new ConceptProgress("current", currentLevel, currentProgress, true);
+        var target = new ConceptProgress("target", targetLevel, targetProgress, true);
+
+        Assert.Equal(expected, AutoConceptBalancer.HasReached(current, target));
+    }
+
+    [Theory]
+    [InlineData(100.0, 109.9, 10, false)]
+    [InlineData(100.0, 110.0, 10, true)]
+    [InlineData(100.0, 99.0, 10, false)]
+    [InlineData(0.0, 9.9, 1, false)]
+    [InlineData(0.0, 3600.0, 9999, true)]
+    public void AutoConceptTrainingPeriodStartsAtSettledAssignment(
+        double startedAt,
+        double current,
+        int configuredPeriod,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            AutoConceptBalancer.HasTrainingPeriodElapsed(startedAt, current, configuredPeriod));
     }
 
     [Fact]

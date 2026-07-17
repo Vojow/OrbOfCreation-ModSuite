@@ -53,6 +53,18 @@ internal static class AutoConceptBalancer
         return level < 0 || level == 0 && candidate.MasteryProgress < active.MasteryProgress;
     }
 
+    public static bool HasReached(ConceptProgress current, ConceptProgress target) =>
+        !HasStrictlyLowerMastery(current, target);
+
+    public static bool HasTrainingPeriodElapsed(
+        double startedAtSeconds,
+        double currentSeconds,
+        int configuredPeriodSeconds)
+    {
+        var period = Math.Clamp(configuredPeriodSeconds, 10, 3600);
+        return Math.Max(0.0, currentSeconds - startedAtSeconds) >= period;
+    }
+
     private static int Compare(ConceptProgress left, ConceptProgress right)
     {
         var level = left.MasteryLevel.CompareTo(right.MasteryLevel);
