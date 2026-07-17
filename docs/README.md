@@ -10,7 +10,7 @@ Choose the path that matches what you are trying to do.
 - [Remove the mods](user-guide/uninstalling.md)
 - [Orb Automata behavior reference](../src/OrbAutomata/README.md)
 - [Orb Mod Config reference](../src/OrbModConfig/README.md)
-- [Orb Mentor release-candidate reference](../src/OrbMentor/README.md)
+- [Orb Mentor beta reference](../src/OrbMentor/README.md)
 
 ## Contributors and maintainers
 

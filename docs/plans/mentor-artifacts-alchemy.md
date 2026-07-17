@@ -1,12 +1,12 @@
 # Orb Mentor: artifacts and alchemy design
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** Independent artifact and alchemy domains are implemented, default disabled, and still require the interactive gates below before production promotion.
+> **Lifecycle: Beta; extended interactive validation pending.** Independent artifact and alchemy domains are released, default disabled, and still require the interactive gates below before stable promotion.
 
 [Back to plan index](README.md) · [Orb Mentor plan](mentor.md) · [Project roadmap](roadmap.md)
 
 ## Purpose
 
-This document records the design and current release-candidate implementation that extended Orb Mentor beyond spells without changing the spell contract. Each progression domain remains independently configurable and fails closed. Shared Pool remains the default economy, fresh artifact and alchemy switches start disabled, and all grants use or faithfully complete the domain's native persistence and level-up path.
+This document records the design and current beta implementation that extended Orb Mentor beyond spells without changing the spell contract. Each progression domain remains independently configurable and fails closed. Shared Pool remains the default economy, fresh artifact and alchemy switches start disabled, and all grants use or faithfully complete the domain's native persistence and level-up path.
 
 The game calls artifacts `EquipmentSO`; this document uses **artifact** for player-facing text and **equipment** for native API names.
 
@@ -84,7 +84,7 @@ I0 adds an installed-game contract fixture and a development-only adapter probe 
 
 The adapter executes the same ordered state transition as native `IncrementActive`: gain container XP, calculate gained levels, apply those levels through the native equipment method, then copy the container's current experience to the saved field. It must fail closed before mutation if every member is not resolved against the supported assembly.
 
-The release-candidate adapter is allowed to operate only after its complete reflected contract resolves. Automated differential tests cover identical starting-state and XP transitions, but public promotion still requires interactive evidence that XP, mastery level, total-equipment-mastery modifier, notifications, and serialized save values match native equipped progression. If the runtime contract is incomplete, Artifacts remains unavailable/blocked before mutation.
+The beta adapter is allowed to operate only after its complete reflected contract resolves. Automated differential tests cover identical starting-state and XP transitions, but stable promotion still requires interactive evidence that XP, mastery level, total-equipment-mastery modifier, notifications, and serialized save values match native equipped progression. If the runtime contract is incomplete, Artifacts remains unavailable/blocked before mutation.
 
 ### Artifact event capture
 
@@ -139,4 +139,4 @@ Test all three domains independently and together at normal and accelerated game
 
 ## Implementation status
 
-The release candidate includes independent Alchemy and Artifacts switches, guarded hooks, per-domain aggregation and queues, round-robin budgeting, alchemy native grants, and the artifact native-sequence adapter. Continuous artifact and alchemy events reuse one catalog snapshot per frame and distribute consolidated XP at most four times per second to avoid reflection churn and native-notification storms. Both domains default disabled. Automated contract and adapter tests pass on the current supported tree; the interactive gates above remain mandatory before either domain is described as production-ready.
+The beta includes independent Alchemy and Artifacts switches, guarded hooks, per-domain aggregation and queues, round-robin budgeting, alchemy native grants, and the artifact native-sequence adapter. Continuous artifact and alchemy events reuse one catalog snapshot per frame and distribute consolidated XP at most four times per second to avoid reflection churn and native-notification storms. Both domains default disabled. Automated contract and adapter tests pass on the current supported tree; the interactive gates above remain mandatory before either domain is described as stable.

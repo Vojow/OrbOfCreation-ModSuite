@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Orb Of Creation Mod Suite 0.3.0 Beta 1 — 2026-07-17
 
 - Unify disabled-feature configuration across the supported suite. Orb Mod Config 0.6.0 supports multiple staged prerequisites and refreshes enum dependencies immediately; Automata and Mentor now lock inactive tuning while keeping mode, shortcut, status-button, safety, and diagnostic controls usable.
 - Prepare Orb Mentor 0.3.0 and Orb Modding Common 0.3.0 for compound spell/artifact/alchemy and nested Auto Buy configuration dependencies.
@@ -9,7 +9,7 @@
 - Prevent Auto Concept from repeatedly removing and re-adding the same concept when its required resource is at zero, which could keep training on one slot even after more slots were acquired. Every positive prospective drain now rejects an authoritative zero resource, replacements must pass one-instance admission before the current assignment is removed, and unsafe candidates no longer block the timed-cycle order.
 - Anchor Auto Buy, Auto Cast, Auto Concept, and Mentor outside the native action queue with 12-pixel gaps; remove cloned native view gating, resolve the audited inactive Auto Buy hierarchy without `AutoBuyManager` reference matching, and use an extensible shared ordered-slot layout. The new `CN ON/OFF/!` button toggles Auto Concept directly.
 - Rename Auto Concept's technical idle polling control to `FallbackEvaluationIntervalSeconds`, migrate both previous seconds and legacy minutes values, and show it only under Advanced. `TrainingPeriodSeconds` remains the normal gameplay rotation timer.
-- Prepare Orb Automata 0.6.0 and Orb Mentor 0.2.0 as a local release candidate; public publication remains gated on interactive desktop/Steam Deck validation.
+- Prepare Orb Automata 0.6.0 and Orb Mentor 0.2.0 as an intermediate local candidate before the current beta versions.
 - Add Auto Concept `SlotManagementMode`: `RotateAll` replaces a settled active concept when a compatible discovered concept has strictly lower mastery, while `PreserveManual` retains the previous manual-baseline behavior. Rotation uses the verified native remove path, waits for settlement, and revalidates before adding; rate-limited no-change summaries make an idle balancer visible in diagnostics.
 - Keep each newly assigned Auto Concept in a settled training session until it reaches the highest effective mastery captured at assignment time or `TrainingPeriodSeconds` elapses, whichever occurs first. The default period is 300 seconds; native setup/settlement time does not consume it.
 - Present Auto Concept's mode consistently as `Disabled` or `Active`; active mode still performs mastery balancing.

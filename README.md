@@ -6,18 +6,18 @@
 
 Unofficial BepInEx mods, tests, and reproducible reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current release candidate centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, and a native-styled configuration screen. Back up your save before using beta automation.
+The current beta centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, and a native-styled configuration screen. Back up your save before using beta automation.
 
 ## Project status
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.7.0** | Release candidate | Queue-aware Auto Buy, coordinated Auto Cast, timed or catch-up Concept rotation, and progression-aware spell leveling with bounded shared scheduling. |
+| **Orb Automata 0.7.0** | Beta | Queue-aware Auto Buy, coordinated Auto Cast, timed or catch-up Concept rotation, and progression-aware spell leveling with bounded shared scheduling. |
 | **Orb Mod Config 0.6.0** | Beta | Mods tab available from the start, with typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
-| **Orb Mentor 0.3.0** | Release candidate | Spell, artifact, and alchemy mastery sharing with independent opt-in domains, equipped-spell sources, and a selectable highest-only spell policy. |
+| **Orb Mentor 0.3.0** | Beta | Spell, artifact, and alchemy mastery sharing with independent opt-in domains, equipped-spell sources, and a selectable highest-only spell policy. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
-Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is supported only through the Windows game under Proton with BepInEx 5.
+Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton with BepInEx 5, but ModSuite 0.3.0 Beta 1 still requires post-release Proton validation.
 
 Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on the `codex/experimental-chronomancer-resonance` branch and is not part of supported `main` builds or packages.
 

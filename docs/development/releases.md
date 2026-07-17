@@ -2,7 +2,7 @@
 
 [Back to roadmap](../plans/roadmap.md)
 
-## Current supported-suite release candidate
+## Current supported-suite beta
 
 The supported package is an explicit allowlist:
 
@@ -49,4 +49,4 @@ Interactive behavior must satisfy [runtime validation](runtime-validation.md); a
 
 ## Recommended release decision
 
-The current candidate is a **no-go until the P0 interactive matrix passes on desktop and Steam Deck**. Automated tests, real-reference builds, and package rehearsal establish a releasable artifact shape; they do not replace gameplay validation.
+ModSuite 0.3.0 Beta 1 completed its automated, real-reference, package, and desktop gates. The maintainer explicitly authorized prerelease publication with Steam Deck/Proton validation deferred until after release. Release notes must identify Proton as unverified, and the beta must not be promoted to stable until the remaining Proton and extended interactive gates pass.

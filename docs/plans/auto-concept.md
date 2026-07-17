@@ -1,6 +1,6 @@
 # Auto Concept mastery-balancing plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** The scoped catalog, native slot/quantity mutation, catch-up and timed-cycle policies, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are implemented against the supported game assembly. Desktop and Steam Deck runtime validation is still required before public release.
+> **Lifecycle: Beta; extended interactive validation pending.** The scoped catalog, native slot/quantity mutation, catch-up and timed-cycle policies, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are released against the supported game assembly. Post-release Proton validation remains required before stable promotion.
 
 [Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
 
@@ -639,11 +639,11 @@ tests/OrbModding.GameContractTests/
   InstalledGameContractTests.cs
 ```
 
-The release candidate consolidated this proposal into `AutoConceptController`, `AutoConceptModel`, `ReflectionConceptRuntime`, the shared Automata configuration, and the shared toggle-control implementation. The list above remains design history rather than a claim that every proposed file exists.
+The beta implementation consolidated this proposal into `AutoConceptController`, `AutoConceptModel`, `ReflectionConceptRuntime`, the shared Automata configuration, and the shared toggle-control implementation. The list above remains design history rather than a claim that every proposed file exists.
 
 ## Open decisions and unresolved contracts
 
-Resolved for the current candidate against the audited assembly:
+Resolved for the current beta against the audited assembly:
 
 - `ConceptRecipes` is read from the inherited runtime/save-loaded `AbstractListVariable<T>.value` on the exact UUID-scoped asset; its global `GetAll()` override is never used. Interactive validation showed the serialized `initialValue` empty while the native Concepts UI enumerated discovered recipes from `value`.
 - Active instances are read from inherited `AbstractListVariable<T>.value`, avoiding the allocating native enumerator.

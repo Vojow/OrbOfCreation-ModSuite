@@ -1,6 +1,6 @@
 # Orb Automata plan
 
-> **Lifecycle: Implemented / evolving.** Auto Buy and Auto Cast are in public beta; Auto Concept and progression-aware spell leveling are implemented in the current release candidate. This plan also records later work.
+> **Lifecycle: Implemented / evolving.** Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. This plan also records later work.
 
 [Back to roadmap](roadmap.md)
 
@@ -165,7 +165,7 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 ## Original long-term definition of done
 
-This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current candidate.
+This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current beta.
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.

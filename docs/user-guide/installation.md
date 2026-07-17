@@ -2,7 +2,7 @@
 
 [Back to documentation](../README.md)
 
-The supported suite contains Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx 5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is supported through the Windows game under Proton.
+The supported suite contains Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx 5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is targeted through the Windows game under Proton; ModSuite 0.3.0 Beta 1 has not yet completed its post-release Proton validation.
 
 ## 1. Back up your save
 

@@ -103,7 +103,7 @@ Exit criterion: supported actions change only selected runtime objects, survive 
 - Keep live Mod Config integration, `Alt+M`, and the independent ON/OFF/BLOCKED control.
 - Keep resource-spending spell leveling in Automata rather than Mentor.
 
-See the [Orb Mentor plan](mentor.md) for spell contracts and [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for the implemented release-candidate extensions and remaining interactive gates.
+See the [Orb Mentor plan](mentor.md) for spell contracts and [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for the released beta extensions and remaining interactive gates.
 
 Exit criterion: every enabled domain grants exactly the configured XP through its audited native progression behavior, grants never recurse, disabled or unresolved domains stay silent, and saves remain stable across extended sessions and plugin removal.
 
@@ -128,4 +128,4 @@ Exit criterion: supported configuration types round-trip safely in game, the com
 
 ## Immediate next task
 
-Complete interactive desktop and Steam Deck validation for the Automata, Mentor, and Mod Config release candidate, then run the supported-suite release review.
+Complete post-release Steam Deck/Proton and extended combined-suite validation for ModSuite 0.3.0 Beta 1, then address any release-blocking regressions before stable promotion.

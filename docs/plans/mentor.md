@@ -1,6 +1,6 @@
 # Orb Mentor plan
 
-> **Lifecycle: Release-candidate implementation; interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, shared scheduling, and independently enabled artifact/alchemy extensions are implemented.
+> **Lifecycle: Beta; extended interactive validation pending.** Equipped-source and highest-only spell policies, capture-time recipient evidence, source-specific mastery ceilings, shared scheduling, and independently enabled artifact/alchemy extensions are released.
 
 [Back to project index](../README.md) · [Project roadmap](roadmap.md)
 
@@ -10,11 +10,11 @@ Reduce repetitive mastery work by sharing native XP within a progression domain.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.
 
-Automatic spell leveling and its native resource spending are explicitly outside Orb Mentor. The release candidate implements that behavior under Automata's Auto Buy feature.
+Automatic spell leveling and its native resource spending are explicitly outside Orb Mentor. The beta implements that behavior under Automata's Auto Buy feature.
 
 ## Original spell MVP contract
 
-The original public vertical slice was spells-only because artifact and alchemy XP ownership and active-instance rules differ. Those later domains are now implemented as disabled-by-default release-candidate extensions; see [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for their contracts and remaining validation gates.
+The original public vertical slice was spells-only because artifact and alchemy XP ownership and active-instance rules differ. Those later domains are now released as disabled-by-default beta extensions; see [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for their contracts and remaining validation gates.
 
 ### Mentor qualification
 
@@ -234,7 +234,7 @@ Current identity:
 - Display name: `Orb Mentor`
 - Assembly/project: `OrbMentor`
 - Plugin GUID: `dev.vojow.orbofcreation.mentor`
-- Current release-candidate version: `0.3.0`
+- Current beta version: `0.3.0`
 
 Runtime dependency: `OrbModding.Common`. Orb Mod Config is optional. Automata is a compatible sibling plugin, not a dependency.
 

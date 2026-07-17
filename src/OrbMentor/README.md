@@ -1,4 +1,4 @@
-# Orb Mentor 0.3.0 release candidate
+# Orb Mentor 0.3.0 beta
 
 Orb Mentor shares configurable percentages of native mastery XP with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and available alchemy recipes. `EquippedSpells` is the default spell policy: every equipped source can share with discovered spells below that source's own mastery. `HighestDiscovered` preserves the original highest-mastery-only behavior. Artifact and alchemy sharing remain opt-in and keep their existing highest-mastery rule.
 
