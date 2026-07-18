@@ -34,7 +34,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         var reader = new FakeResourceReader();
         var changes = new List<AutoBuyResourceChange>();
-        var cache = new AutoBuyResourceSnapshotCache(reader, (_, change) => changes.Add(change));
+        var cache = new AutoBuyResourceSnapshotCache(reader, (_, change, _, _) => changes.Add(change));
         var native = new object();
         var definition = new AutoBuyResourceDefinition(
             "mana",
@@ -65,7 +65,7 @@ public sealed class AutoBuyDirtyResourceTests
     public void ResourceSnapshotFailure_UsesBoundedRetryBackoff()
     {
         var reader = new FakeResourceReader();
-        var cache = new AutoBuyResourceSnapshotCache(reader, (_, _) => { });
+        var cache = new AutoBuyResourceSnapshotCache(reader, (_, _, _, _) => { });
         var missing = new AutoBuyResourceDefinition(
             "missing",
             "Missing",
@@ -114,6 +114,161 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.True(index.TryGetDirtyReasons(dust.Uuid, out var dustDirty));
         Assert.True((manaDirty & AutoBuyDirtyReason.ResourceDirty) != 0);
         Assert.Equal(AutoBuyDirtyReason.None, dustDirty);
+    }
+
+    [Fact]
+    public void StructureResourceWait_StaysParkedUntilQuantityCrossesRequiredThreshold()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(50, 0),
+            new BigAmount(99, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var belowThreshold));
+        Assert.Equal(AutoBuyDirtyReason.None, belowThreshold);
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(99, 0),
+            new BigAmount(100, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var crossedThreshold));
+        Assert.True((crossedThreshold & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void StructureResourceWait_RemainsParkedAcrossUnchangedActiveMaintenance()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        var maintenance = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 1,
+            slowRefreshCount: 0);
+
+        Assert.Empty(maintenance.DirtyCandidates);
+    }
+
+    [Fact]
+    public void StructureResourceWait_IgnoresSatisfiedDependencyQuantityTicksUntilBlockerCrosses()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("multi-resource-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        structure.AddDependency("dust");
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "dust",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(500, 0),
+            new BigAmount(501, 0));
+        index.InvalidateResource(
+            "dust",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(501, 0),
+            new BigAmount(400, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var stillParked));
+        Assert.Equal(AutoBuyDirtyReason.None, stillParked);
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(99, 0),
+            new BigAmount(100, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var crossed));
+        Assert.True((crossed & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void StructureBandwidthWait_RemainsConservativelyQuantityTracked()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("bandwidth-structure", AutoBuyCandidateKind.Structure, "bandwidth", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(
+                structure,
+                available: 5,
+                required: 10,
+                resourceId: "bandwidth",
+                isBandwidth: true));
+
+        index.InvalidateResource(
+            "bandwidth",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(5, 0),
+            new BigAmount(6, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(32)]
+    [InlineData(64)]
+    public void StructureResourceWait_ConservativelyWakesForNonQuantityChanges(
+        int rawChange)
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            (AutoBuyResourceChange)rawChange,
+            new BigAmount(50, 0),
+            new BigAmount(51, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void UpgradeResourceWait_PreservesConservativeQuantityRetry()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var upgrade = Candidate("upgrade-wait", AutoBuyCandidateKind.Upgrade, "mana", available: true);
+        PrimeDependencies(index, upgrade);
+        index.CompleteCandidateEvaluation(
+            upgrade,
+            decision: ResourceWait(upgrade, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(50, 0),
+            new BigAmount(51, 0));
+
+        Assert.True(index.TryGetDirtyReasons(upgrade.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
     }
 
     [Fact]
@@ -417,6 +572,42 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(1, candidate.CostReads);
         Assert.Equal(0, candidate.PurchaseCalls);
         Assert.False(catalog.FirstResourceTrackingSuppressed);
+    }
+
+    [Fact]
+    public void IncrementalEngine_ClassifiesNativeStructureQuantityFailureForThresholdParking()
+    {
+        var structure = new EngineCandidate(
+            "structure-resource-wait",
+            10.0,
+            AutoBuyCandidateKind.Structure)
+        {
+            CanPurchaseValue = false,
+            Quantity = 5.0,
+        };
+        var catalog = new IncrementalCatalog(
+            structure,
+            new EngineCandidate("other", 2.0, AutoBuyCandidateKind.Structure));
+        var config = ActiveConfig("structure-resource-wait");
+        config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.RepeatWhileAffordable.Value = false;
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(1, structure.CanPurchaseCalls);
+        Assert.Equal(1, structure.CostReads);
+        Assert.NotNull(catalog.FirstDecision);
+        Assert.Equal(AutoBuyRejectionReason.ReserveViolation, catalog.FirstDecision!.RejectionReason);
+        var blocker = Assert.Single(catalog.FirstDecision.ResourceBlockers);
+        Assert.Equal("resource", blocker.ResourceId);
+        Assert.Equal(0, blocker.RequiredQuantity.CompareTo(new BigAmount(10, 0)));
     }
 
     [Fact]
@@ -1116,7 +1307,7 @@ public sealed class AutoBuyDirtyResourceTests
             Cost = new ResourceCostList(),
         };
         native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
-        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _) => { });
+        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _, _, _) => { });
         var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
 
         Assert.Empty(candidate.GetCosts());
@@ -1291,6 +1482,30 @@ public sealed class AutoBuyDirtyResourceTests
         return new DirtyCandidate(uuid, kind, resourceId, available);
     }
 
+    private static AutoBuyDecision ResourceWait(
+        DirtyCandidate candidate,
+        double available,
+        double required,
+        string resourceId = "mana",
+        bool isBandwidth = false)
+    {
+        return AutoBuyDecision.Rejected(
+            candidate.Snapshot(),
+            AutoBuyRejectionReason.AffordabilityThreshold,
+            "resource threshold not met",
+            new[]
+            {
+                new AutoBuyResourceBlocker(
+                    AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                    resourceId,
+                    resourceId,
+                    new BigAmount(10, 0),
+                    new BigAmount(available, 0),
+                    new BigAmount(required, 0),
+                    isBandwidth),
+            });
+    }
+
     private static void PrimeDependencies(AutoBuyCandidateIndex index, params DirtyCandidate[] candidates)
     {
         index.Reconcile(candidates);
@@ -1372,6 +1587,8 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool HasResolvedCosts => CostsResolved;
 
+        public void AddDependency(string resourceId) => _dependencies.Add(resourceId);
+
         public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
         public bool IsAvailable() => Available;
@@ -1447,14 +1664,18 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool FirstResourceTrackingSuppressed { get; private set; }
 
+        public AutoBuyDecision? FirstDecision { get; private set; }
+
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
             if (ReferenceEquals(candidate, _first))
             {
                 FirstResourceTrackingSuppressed = suppressResourceTracking;
+                FirstDecision = decision;
             }
         }
 
@@ -1525,7 +1746,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         private readonly IReadOnlyList<IAutoBuyCandidate> _candidates;
 
-        public IndexedCatalog(IReadOnlyList<DirtyCandidate> candidates)
+        public IndexedCatalog(IReadOnlyList<IAutoBuyCandidate> candidates)
         {
             _candidates = candidates;
             Index.Reconcile(candidates);
@@ -1561,9 +1782,10 @@ public sealed class AutoBuyDirtyResourceTests
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
-            Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
+            Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
         }
 
         public void InvalidatePolicy() => Index.InvalidatePolicy();

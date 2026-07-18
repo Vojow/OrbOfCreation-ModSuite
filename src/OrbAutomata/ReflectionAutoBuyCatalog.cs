@@ -87,9 +87,10 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     public void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
-        bool policyExcluded)
+        bool policyExcluded,
+        AutoBuyDecision? decision = null)
     {
-        _index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
+        _index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
     }
 
     public void InvalidatePolicy()
@@ -145,7 +146,11 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _deferredPurchaseResourceInvalidations.Clear();
     }
 
-    private void OnResourceSnapshotChanged(string resourceId, AutoBuyResourceChange change)
+    private void OnResourceSnapshotChanged(
+        string resourceId,
+        AutoBuyResourceChange change,
+        BigAmount? previousQuantity,
+        BigAmount? currentQuantity)
     {
         if (ShouldDeferResourceInvalidation(_mutationGroupActive, change))
         {
@@ -153,7 +158,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             return;
         }
 
-        _index.InvalidateResource(resourceId, change);
+        _index.InvalidateResource(resourceId, change, previousQuantity, currentQuantity);
     }
 
     internal static bool ShouldDeferResourceInvalidation(
