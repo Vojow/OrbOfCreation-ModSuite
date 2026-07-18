@@ -18,10 +18,14 @@ public sealed class HarmonyBindingHeadlessTests
         AssertTarget("OrbAutomata.AutoBuyUpgradeQueuePatch", "Purchase", typeof(UpgradeSO));
         AssertTarget("OrbAutomata.SpellFirePatch", "Fire", typeof(Spell));
 
-        AssertTargets(
-            "OrbAutomata.AutoBuyNativeCompletionPatch",
-            (typeof(global::StructureSO), "CompleteAction", Type.EmptyTypes),
-            (typeof(UpgradeSO), "CompleteAction", Type.EmptyTypes));
+        AssertTarget(
+            "OrbAutomata.AutoBuyStructureCompletionPatch",
+            "CompleteAction",
+            typeof(global::StructureSO));
+        AssertTarget(
+            "OrbAutomata.AutoBuyUpgradeCompletionPatch",
+            "CompleteAction",
+            typeof(UpgradeSO));
         AssertTargets(
             "OrbAutomata.AutoBuyLifecyclePatch",
             (typeof(Player), "ManagerStart", Type.EmptyTypes),
@@ -45,7 +49,7 @@ public sealed class HarmonyBindingHeadlessTests
         var automated = new global::StructureSO();
         var manual = new global::StructureSO();
         var structureSignals = new List<object>();
-        var completions = 0;
+        var completions = new List<(object Identity, AutoBuyCandidateKind Kind)>();
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructure;
         AutoBuyLifecycleSignal.NativeCompletion += OnCompletion;
         try
@@ -56,11 +60,13 @@ public sealed class HarmonyBindingHeadlessTests
                 InvokePatch("OrbAutomata.AutoBuyStructureQueuePatch", "Postfix", manual);
             }
 
-            InvokePatch("OrbAutomata.AutoBuyNativeCompletionPatch", "Postfix");
+            InvokePatch("OrbAutomata.AutoBuyStructureCompletionPatch", "Postfix", automated);
 
             Assert.Single(structureSignals);
             Assert.Same(manual, structureSignals[0]);
-            Assert.Equal(1, completions);
+            var completion = Assert.Single(completions);
+            Assert.Same(automated, completion.Identity);
+            Assert.Equal(AutoBuyCandidateKind.Structure, completion.Kind);
         }
         finally
         {
@@ -69,7 +75,8 @@ public sealed class HarmonyBindingHeadlessTests
         }
 
         void OnStructure(object identity) => structureSignals.Add(identity);
-        void OnCompletion() => completions++;
+        void OnCompletion(object identity, AutoBuyCandidateKind kind) =>
+            completions.Add((identity, kind));
     }
 
     [Fact]
