@@ -1,6 +1,6 @@
 # Compatibility, testing, and releases
 
-[Back to roadmap](../plans/roadmap.md) · [Local runtime validation protocol](runtime-validation.md)
+[Back to roadmap](../plans/roadmap.md) · [Headless E2E simulation](headless-e2e.md) · [Local runtime UAT protocol](runtime-validation.md)
 
 ## Supported baseline
 
@@ -22,6 +22,22 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
 ```
 
 The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
+
+Portable automation has three scopes:
+
+- unit/component tests isolate policies, reflection fixtures, schedulers, and lifecycle transitions;
+- headless integration tests connect production native adapters to focused game API stubs;
+- headless E2E runs the real mod engine against a deterministic simulated game boundary for complete queue, economy, lifecycle, and failure journeys.
+
+Run the headless E2E and deterministic performance scopes independently with:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessIntegration"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessE2E"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+```
+
+See [headless E2E simulation](headless-e2e.md) for the modeled contracts, metrics, scenario rules, and non-goals.
 
 On a game computer, run the installed-assembly metadata contracts:
 
@@ -73,7 +89,7 @@ The supported release profile uses one auto-buy mod. Automata does not detect, p
 
 The table defines required scenarios, not current results. Results should be recorded under `tests/` with date, game version, plugin version, and save used.
 
-Use the [local runtime validation protocol](runtime-validation.md) for the ordered build, static-audit, load-smoke, read-only, active, rollback, combined-mod, and release gates. A computer without the game can run the automated tests, but cannot mark any real-reference or runtime gate as passed.
+Use the [local runtime validation protocol](runtime-validation.md) for the ordered build, static-audit, load-smoke, read-only, active, rollback, combined-mod, and release gates. Those real-game checks are UAT. Computer control may be used to perform or observe UAT, but it is never a dependency of headless E2E or performance simulation. A computer without the game can run the automated tests, but cannot mark any real-reference or runtime UAT gate as passed.
 
 ## Runtime assertions
 

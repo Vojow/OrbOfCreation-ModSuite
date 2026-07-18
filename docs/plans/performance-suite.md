@@ -61,6 +61,10 @@ The Steam Deck hotfix already establishes the first safety layer:
 
 P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate indexing, dirty updates, incremental recommendation maintenance, and resource snapshots. A separately approved, opt-in Structure priority tier classifies proven cost reductions and quality increases once from native effect definitions. P4 bounded future-cost prediction and broader impact planning remain deferred until runtime measurements justify them.
 
+The portable suite also includes a deterministic headless Auto Buy simulation. It drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its active performance baseline checks queue saturation, candidate handoff, operation-count budgets, and idle frames without depending on computer control or machine-speed wall-clock thresholds. Real-game computer control remains a UAT tool.
+
+An aggressive completion-storm target is recorded separately and intentionally skipped: repeated completion signals can currently restart a CPU-sliced scan before it settles, amplifying candidate evaluation and allowing queue depth to fall. This is a known P3 follow-up, not an accepted passing baseline. The target becomes an active release gate when the engine preserves resumable scan progress across those coalesced completion invalidations.
+
 ## Candidate lifecycle model
 
 Registry membership and player progression are separate dimensions. The index retains stable identity while the live state moves through the following lifecycle:
@@ -544,6 +548,8 @@ Exit: AutoBuy can estimate a safe queue-sized batch without duplicating the game
 Exit: the suite backs off under load while safety actions and eventual progress remain reliable.
 
 ## Automated test matrix
+
+The executable headless journeys and deterministic performance budgets are documented in [headless E2E simulation](../development/headless-e2e.md). They run in the portable suite and precede installed-game contract checks and runtime UAT.
 
 ### Lifecycle tests
 

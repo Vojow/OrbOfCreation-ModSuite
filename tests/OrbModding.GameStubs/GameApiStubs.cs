@@ -47,6 +47,20 @@ public static class GlobalVariables
     public static IntVariable GetMultiBuy() => MultiBuy;
 }
 
+public static class ActionManager
+{
+    public static int RemainingRoom { get; set; }
+
+    public static int GetRemainingRoom() => RemainingRoom;
+}
+
+public static class AutoBuyManager
+{
+    public static int RemainingRoom { get; set; }
+
+    public static int GetRemainingRoom() => RemainingRoom;
+}
+
 public class SpellRecipeSO
 {
     public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
