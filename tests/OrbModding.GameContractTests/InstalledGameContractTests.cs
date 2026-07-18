@@ -284,6 +284,21 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void OrbMentorDomainUnlocks_MatchNativeMasteryAndViewAvailabilityContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
+            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
+        AssertMethod(assembly, "IdScriptableObject", "GetInstance", true, "IdScriptableObject", "System.Guid");
+        Assert.Equal("System.Collections.Generic.List`1<ViewSO>", assembly.GetFieldType("ViewSO", "All"));
+        Assert.Equal("Prerequisites+Container", assembly.GetFieldType("ViewSO", "prerequisites"));
+        AssertMethod(assembly, "ViewSO", "IsAvailable", false, "System.Boolean");
+        Assert.Equal("ViewSO", assembly.GetFieldType("UITooltip", "masteryEnabledView"));
+    }
+
+    [GameAssemblyFact]
     public void OrbMentorAlchemy_MatchesNativeMasteryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

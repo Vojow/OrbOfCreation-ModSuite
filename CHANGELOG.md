@@ -1,5 +1,11 @@
 # Changelog
 
+## Orb Mentor 0.3.1 Beta 1 — 2026-07-18
+
+- Gate spell, artifact, and alchemy Mentor work independently on the exact native mastery and domain progression views while preserving the user's configured switches and percentages.
+- Report locked progression as a non-error `M WAIT` state, activate within the bounded polling interval after unlock, and cancel stale catalog, relationship, plan, capture, and grant work across lifecycle transitions.
+- Keep locked domains out of catalog discovery, mastery ranking, recipient planning, XP capture, equipped-spell inspection, and native grants; isolate a broken unlock contract to the affected domain.
+
 ## Orb Automata 0.8.1 Beta 1 — 2026-07-18
 
 - Prevent one cheap Structure or Upgrade from monopolizing a large shared action queue: when several candidates are ready, queue one independently validated level from each ranked candidate before repeating the pass.

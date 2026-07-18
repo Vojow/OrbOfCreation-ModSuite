@@ -6,6 +6,9 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 
 - Confirm the supported assembly hash and a quiet startup with `Mode=Disabled`.
 - Confirm the compact control appears beside the queue controls, reads `M OFF`, and its status notice lists economy, percentage, tied mentors, and recipient count.
+- On progression states before mastery or a domain screen unlocks, activate Mentor and confirm `M WAIT` names the native lock without errors, catalog/log churn, tooltip scans, XP capture, or configuration changes.
+- Unlock spell mastery, the artifact workshop, and alchemy independently; confirm only the newly eligible domain starts catalog and relationship work promptly, without a scene restart.
+- Load or reset to a progression state where one or more domains are locked again; confirm pending captures/plans/grants are cancelled and the affected domains return to `WAIT` before any stale mutation.
 - Toggle with the button and `Alt+M`; verify `ON`, `OFF`, and forced `BLOCKED` presentation and immediate pending-work cancellation.
 - At 1× speed, compare native XP and detailed logs for instant, channelled, aura/toggled, rapid, and large-batch spell events.
 - Test one mentor, tied mentors, a changing highest tier, lower/equal/higher mastery recipes, locked recipes, active recipients, and ready-to-confirm recipients with banked XP.

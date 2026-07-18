@@ -70,9 +70,19 @@ public class SpellRecipeSO
     public string GetName() => "Spell";
 }
 
-public static class IdScriptableObject
+public class IdScriptableObject : UnityEngine.ScriptableObject
 {
     public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+    public Guid uuid = Guid.NewGuid();
+    public Guid GetGuid() => uuid;
+    public Guid GetId() => uuid;
+    public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+}
+
+public class ViewSO : IdScriptableObject
+{
+    public bool available;
+    public bool IsAvailable() => available;
 }
 
 public class UpgradeSO

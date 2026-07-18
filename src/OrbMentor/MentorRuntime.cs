@@ -153,6 +153,7 @@ internal sealed class MentorRuntime : IDisposable
     private static readonly FieldInfo? BigDoubleMantissa = typeof(BigDouble).GetField("mantissa", AllFlags);
     private static readonly FieldInfo? BigDoubleExponent = typeof(BigDouble).GetField("exponent", AllFlags);
     private static readonly long ContinuousDistributionTicks = Math.Max(1, Stopwatch.Frequency / 4);
+    private static readonly long UnlockRefreshTicks = Math.Max(1, Stopwatch.Frequency / 4);
     private static readonly long EquippedSnapshotTicks = Math.Max(1, Stopwatch.Frequency / 4);
     private static readonly long SummaryRefreshTicks = Math.Max(1, Stopwatch.Frequency);
     private static readonly long LiveRefreshTicks = Math.Max(1, Stopwatch.Frequency);
@@ -161,11 +162,14 @@ internal sealed class MentorRuntime : IDisposable
     private readonly MentorConfig _config;
     private readonly ManualLogSource _log;
     private readonly MentorFailureRegistry _failures = new();
+    private readonly MentorDomainUnlockGate _unlockGate;
+    private readonly MentorDomainUnlockSnapshot[] _domainUnlocks = new MentorDomainUnlockSnapshot[DomainOrder.Length];
     private readonly MentorLifecycleSignal _lifecycleReset = new();
     private readonly Dictionary<MentorDomain, DomainState> _domains = new();
     private readonly Dictionary<MentorDomain, DomainCatalog> _catalogs = new();
     private readonly bool[] _domainResetPending = new bool[DomainOrder.Length];
     private readonly MentorCoordinatorWork? _coordinatorWork;
+    private readonly Func<long> _readTimestamp;
     private bool _guarded;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
@@ -180,15 +184,20 @@ internal sealed class MentorRuntime : IDisposable
     private MentorSpellSourcePolicy _spellSourcePolicy;
     private long _nextEquippedSnapshot;
     private bool _equippedSnapshotReady;
+    private long _nextUnlockRefresh;
 
-    public MentorRuntime(
+    internal MentorRuntime(
         MentorConfig config,
         ManualLogSource log,
         SuitePerformanceCoordinator? coordinator = null,
-        Func<long>? readFrameIdentity = null)
+        Func<long>? readFrameIdentity = null,
+        MentorDomainUnlockGate? unlockGate = null,
+        Func<long>? readTimestamp = null)
     {
         _config = config;
         _log = log;
+        _unlockGate = unlockGate ?? new MentorDomainUnlockGate();
+        _readTimestamp = readTimestamp ?? Stopwatch.GetTimestamp;
         if (coordinator is not null)
             _coordinatorWork = new MentorCoordinatorWork(
                 coordinator,
@@ -198,6 +207,9 @@ internal sealed class MentorRuntime : IDisposable
         {
             _domains.Add(domain, new DomainState());
             _catalogs.Add(domain, new DomainCatalog());
+            _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
+                MentorDomainUnlockState.Waiting,
+                "native progression unlock is awaiting lifecycle evaluation");
         }
         _artifactWasEnabled = config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = config.AlchemyEnabled.Value;
@@ -209,12 +221,31 @@ internal sealed class MentorRuntime : IDisposable
     internal MentorDiagnostics Diagnostics { get; }
     public string? BlockedReason => _failures.Global.Reason;
     public bool IsBlocked => _failures.Global.IsBlocked;
+    public bool IsWaiting
+    {
+        get
+        {
+            if (!_config.Active) return false;
+            for (var index = 0; index < DomainOrder.Length; index++)
+            {
+                var domain = DomainOrder[index];
+                if (DomainConfigured(domain) && !DomainBlocked(domain) && !DomainUnlocked(domain))
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    internal MentorDomainUnlockSnapshot DomainUnlock(MentorDomain domain) => _domainUnlocks[(int)domain];
 
     public string CurrentMentor(MentorDomain domain)
     {
         var state = _domains[domain];
         if (!_config.Active || !DomainConfigured(domain)) return state.MentorSummary = "Inactive";
-        if (DomainBlocked(domain)) return state.MentorSummary = "Blocked";
+        if (DomainBlocked(domain))
+            return state.MentorSummary = $"Blocked: {DomainBlockedReason(domain)}";
+        var unlock = DomainUnlock(domain);
+        if (!unlock.IsUnlocked) return state.MentorSummary = $"Waiting: {unlock.Reason}";
         var now = Stopwatch.GetTimestamp();
         if (now < state.NextSummaryTimestamp) return state.MentorSummary;
         state.NextSummaryTimestamp = now + SummaryRefreshTicks;
@@ -257,12 +288,13 @@ internal sealed class MentorRuntime : IDisposable
 
     public string StatusText()
     {
+        var spells = DomainStatus(MentorDomain.Spells, _config.SharePercent.Value);
         var artifact = DomainStatus(MentorDomain.Artifacts, _config.ArtifactSharePercent.Value);
         var alchemy = DomainStatus(MentorDomain.Alchemy, _config.AlchemySharePercent.Value);
         var warning = _config.EconomyMode.Value == MentorEconomyMode.PerRecipient ? " Warning: total bonus scales with recipient count." : string.Empty;
         var drops = Diagnostics.DroppedEvents + Diagnostics.DroppedGrants;
         var dropSummary = drops > 0 ? $" Dropped work: {drops}." : string.Empty;
-        return $"{_config.EconomyMode.Value}. Spells {_config.SharePercent.Value:0.##}% from {_config.SpellSourcePolicy.Value}; {artifact}; {alchemy}.{warning}{dropSummary}";
+        return $"{_config.EconomyMode.Value}. {spells} from {_config.SpellSourcePolicy.Value}; {artifact}; {alchemy}.{warning}{dropSummary}";
     }
 
     public void Observe(SpellRecipeSO source, BigDouble xp)
@@ -417,7 +449,7 @@ internal sealed class MentorRuntime : IDisposable
 
     public void MarkRelationshipDirty(MentorDomain domain, object? changedSource = null)
     {
-        if (DomainBlocked(domain)) return;
+        if (!DomainEnabled(domain)) return;
         var catalog = _catalogs[domain];
         RequestRelationshipRefresh(catalog, advanceProgressionEpoch: true);
         if (changedSource is null || catalog.ExpectedType is null || catalog.MasteryField is null ||
@@ -445,8 +477,6 @@ internal sealed class MentorRuntime : IDisposable
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();
-        RefreshSpellSourcePolicy();
-        RefreshEquippedSpellSnapshot(Stopwatch.GetTimestamp());
         foreach (var domain in DomainOrder)
         {
             var index = (int)domain;
@@ -455,7 +485,10 @@ internal sealed class MentorRuntime : IDisposable
             CancelDomain(domain, MentorDropReason.LifecycleReset, clearCatalog: true);
             _failures.For(domain).ResetLifecycle();
         }
-        if (!_config.Active || IsBlocked)
+        var unlockStateChanged = RefreshDomainUnlocks();
+        RefreshSpellSourcePolicy();
+        RefreshEquippedSpellSnapshot(Stopwatch.GetTimestamp());
+        if (!_config.Active || IsBlocked || unlockStateChanged)
         {
             _coordinatorWork?.SetState(false, false, false);
             return;
@@ -469,6 +502,40 @@ internal sealed class MentorRuntime : IDisposable
 
         if (_coordinatorWork is null) LateTickLegacy();
         else LateTickCoordinated();
+    }
+
+    private bool RefreshDomainUnlocks()
+    {
+        if (!_config.Active)
+        {
+            _nextUnlockRefresh = 0;
+            return false;
+        }
+        var now = _readTimestamp();
+        if (now < _nextUnlockRefresh) return false;
+        _nextUnlockRefresh = now + UnlockRefreshTicks;
+        var changed = false;
+        foreach (var domain in DomainOrder)
+        {
+            if (DomainBlocked(domain)) continue;
+            var previous = _domainUnlocks[(int)domain];
+            var current = _unlockGate.Evaluate(domain);
+            _domainUnlocks[(int)domain] = current;
+            if (current.IsContractBlocked)
+            {
+                QuarantineUnlockDomain(domain, $"{domain} progression-unlock contract failed: {current.Reason}");
+                changed = true;
+                continue;
+            }
+            if (previous.IsUnlocked == current.IsUnlocked) continue;
+            changed = true;
+            CancelDomain(domain, MentorDropReason.LifecycleReset, clearCatalog: true);
+            if (current.IsUnlocked)
+                _log.LogInfo($"Mentor {domain} sharing is available; native mastery and domain progression are unlocked.");
+            else
+                _log.LogInfo($"Mentor {domain} sharing is waiting: {current.Reason} Pending work was cleared.");
+        }
+        return changed;
     }
 
     private void RefreshSpellSourcePolicy()
@@ -485,7 +552,8 @@ internal sealed class MentorRuntime : IDisposable
 
     private void RefreshEquippedSpellSnapshot(long now)
     {
-        if (_spellSourcePolicy != MentorSpellSourcePolicy.EquippedSpells)
+        if (!_config.Active || !DomainUnlocked(MentorDomain.Spells) ||
+            _spellSourcePolicy != MentorSpellSourcePolicy.EquippedSpells)
         {
             _equippedSpellUuids.Clear();
             _equippedSnapshotReady = false;
@@ -1151,11 +1219,21 @@ internal sealed class MentorRuntime : IDisposable
         Cancel(MentorDropReason.LifecycleReset);
         _failures.ResetLifecycle();
         _captureFailureLogged = false;
+        _nextUnlockRefresh = 0;
+        foreach (var domain in DomainOrder)
+            if (!DomainBlocked(domain))
+                _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
+                    MentorDomainUnlockState.Waiting,
+                    "native progression unlock is awaiting lifecycle evaluation");
     }
 
     public void RequestLifecycleReset() => _lifecycleReset.Request();
 
-    public void RequestDomainReset(MentorDomain domain) => _domainResetPending[(int)domain] = true;
+    public void RequestDomainReset(MentorDomain domain)
+    {
+        _domainResetPending[(int)domain] = true;
+        _nextUnlockRefresh = 0;
+    }
 
     public void BlockPermanent(string reason)
     {
@@ -1179,6 +1257,15 @@ internal sealed class MentorRuntime : IDisposable
             BlockPermanent(reason);
             return;
         }
+        var failure = _failures.For(domain);
+        if (failure.PermanentReason is not null) return;
+        failure.BlockPermanent(reason);
+        CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
+    }
+
+    private void QuarantineUnlockDomain(MentorDomain domain, string reason)
+    {
         var failure = _failures.For(domain);
         if (failure.PermanentReason is not null) return;
         failure.BlockPermanent(reason);
@@ -1474,12 +1561,20 @@ internal sealed class MentorRuntime : IDisposable
     private bool DomainBlocked(MentorDomain domain) =>
         _failures.IsDomainBlocked(domain);
 
-    private bool DomainEnabled(MentorDomain domain) => DomainConfigured(domain) && !DomainBlocked(domain);
+    private string? DomainBlockedReason(MentorDomain domain) =>
+        _failures.Global.Reason ?? _failures.For(domain).Reason;
+
+    private bool DomainUnlocked(MentorDomain domain) => _domainUnlocks[(int)domain].IsUnlocked;
+
+    private bool DomainEnabled(MentorDomain domain) =>
+        DomainConfigured(domain) && DomainUnlocked(domain) && !DomainBlocked(domain);
 
     private string DomainStatus(MentorDomain domain, double percent)
     {
         if (!DomainConfigured(domain)) return $"{domain} off";
-        if (DomainBlocked(domain)) return $"{domain} blocked";
+        if (DomainBlocked(domain)) return $"{domain} blocked: {DomainBlockedReason(domain)}";
+        var unlock = DomainUnlock(domain);
+        if (!unlock.IsUnlocked) return $"{domain} waiting: {unlock.Reason}";
         return $"{domain} {percent:0.##}%";
     }
 

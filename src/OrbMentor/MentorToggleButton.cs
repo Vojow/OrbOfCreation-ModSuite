@@ -75,11 +75,11 @@ internal sealed class MentorToggleButton : IDisposable
 
     public void Render()
     {
-        var visualState = _runtime.IsBlocked ? 2 : _config.Active ? 1 : 0;
+        var visualState = _runtime.IsBlocked ? 2 : _runtime.IsWaiting ? 3 : _config.Active ? 1 : 0;
         if (_lastVisualState == visualState) return;
         _lastVisualState = visualState;
-        var state = visualState == 2 ? "BLOCKED" : visualState == 1 ? "ON" : "OFF";
-        var color = visualState == 2 ? new Color(1, .3f, .25f) : visualState == 1 ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+        var state = visualState == 2 ? "BLOCKED" : visualState == 3 ? "WAIT" : visualState == 1 ? "ON" : "OFF";
+        var color = visualState == 2 ? new Color(1, .3f, .25f) : visualState == 3 ? new Color(1, .75f, .25f) : visualState == 1 ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
         if (_text is not null)
         {
             _text.text = $"M {state}";
