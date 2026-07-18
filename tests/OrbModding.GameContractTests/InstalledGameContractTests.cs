@@ -228,10 +228,13 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "AlchemyRecipeSO", "GetExperienceLevel", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
+        AssertMethod(assembly, "AlchemyRecipeSO", "Discover", false, "System.Void");
+        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
 
         AssertMethod(assembly, "AlchemyInstanceListVariable", "CanAddInstance", false, "System.Boolean", "AlchemyRecipeSO");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "RebuildCounts", false, "System.Void");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "SetupMaxSlotsValue", false, "System.Void");
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "quantity"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "queuedQuantity"));

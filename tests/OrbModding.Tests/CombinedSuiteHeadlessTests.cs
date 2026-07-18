@@ -1,0 +1,165 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using OrbModding.Common;
+using Xunit;
+
+namespace OrbModding.Tests;
+
+public sealed class CombinedSuiteHeadlessTests
+{
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void CombinedSuite_AllMutationProducersAllowOnlyOneNativeMutationPerFrame()
+    {
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 128);
+        var producers = CreateMutationProducers(coordinator);
+        try
+        {
+            foreach (var producer in producers)
+            {
+                producer.Registration.SetPending(true);
+            }
+
+            for (var frame = 1L; frame <= 21; frame++)
+            {
+                var grantsThisFrame = 0;
+                foreach (var producer in producers)
+                {
+                    var admission = coordinator.RequestWork(producer.Registration, frame, out var lease);
+                    if (admission == SuiteWorkAdmission.Granted)
+                    {
+                        grantsThisFrame++;
+                        producer.Grants++;
+                        lease.Complete(1);
+                    }
+                    else
+                    {
+                        Assert.Contains(
+                            admission,
+                            new[]
+                            {
+                                SuiteWorkAdmission.WaitingForTurn,
+                                SuiteWorkAdmission.NativeMutationAlreadyAdmitted,
+                            });
+                    }
+                }
+
+                Assert.Equal(1, grantsThisFrame);
+                Assert.True(coordinator.NativeMutationAdmittedThisFrame);
+            }
+
+            Assert.All(producers, producer => Assert.Equal(3, producer.Grants));
+        }
+        finally
+        {
+            foreach (var producer in producers)
+            {
+                producer.Registration.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "PerformanceSimulation")]
+    public void CombinedSuite_SustainedMutationBacklogRemainsBoundedAndFair()
+    {
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 256);
+        var producers = CreateMutationProducers(coordinator);
+        var grantOrder = new List<string>();
+        try
+        {
+            foreach (var producer in producers)
+            {
+                producer.Registration.SetPending(true);
+            }
+
+            for (var frame = 1L; frame <= 700; frame++)
+            {
+                foreach (var producer in producers)
+                {
+                    if (coordinator.RequestWork(producer.Registration, frame, out var lease) !=
+                        SuiteWorkAdmission.Granted)
+                    {
+                        continue;
+                    }
+
+                    producer.Grants++;
+                    grantOrder.Add(producer.Name);
+                    lease.Complete(1);
+                }
+            }
+
+            Assert.Equal(700, grantOrder.Count);
+            Assert.All(producers, producer => Assert.Equal(100, producer.Grants));
+            for (var index = 0; index < grantOrder.Count; index++)
+            {
+                Assert.Equal(producers[index % producers.Length].Name, grantOrder[index]);
+            }
+
+            Assert.All(producers, producer =>
+            {
+                Assert.True(coordinator.TryGetSubsystemSnapshot(producer.Name, out var snapshot));
+                Assert.Equal(100, snapshot.NativeMutationsStarted);
+                Assert.Equal(100, snapshot.CompletedWorkItems);
+            });
+        }
+        finally
+        {
+            foreach (var producer in producers)
+            {
+                producer.Registration.Dispose();
+            }
+        }
+    }
+
+    private static MutationProducer[] CreateMutationProducers(SuitePerformanceCoordinator coordinator)
+    {
+        return new[]
+        {
+            Create(coordinator, "OrbAutomata.AutoBuy", "Submit purchase"),
+            Create(coordinator, "OrbAutomata.AutoCast", "Fire spell"),
+            Create(coordinator, "OrbAutomata.AutoConcept", "Change concept quantity"),
+            Create(coordinator, "OrbAutomata.SpellLevel", "Purchase spell level"),
+            Create(coordinator, "OrbMentor.Spells", "Grant spell XP"),
+            Create(coordinator, "OrbMentor.Artifacts", "Grant artifact XP"),
+            Create(coordinator, "OrbMentor.Alchemy", "Grant alchemy XP"),
+        };
+    }
+
+    private static MutationProducer Create(
+        SuitePerformanceCoordinator coordinator,
+        string subsystem,
+        string work)
+    {
+        return new MutationProducer(
+            subsystem,
+            coordinator.Register(
+                subsystem,
+                work,
+                SuiteBudgetClass.HardLimited,
+                SuiteWorkExecutionKind.NonPreemptibleNativeMutation));
+    }
+
+    private sealed class MutationProducer
+    {
+        public MutationProducer(string name, SuiteWorkRegistration registration)
+        {
+            Name = name;
+            Registration = registration;
+        }
+
+        public string Name { get; }
+
+        public SuiteWorkRegistration Registration { get; }
+
+        public int Grants { get; set; }
+    }
+
+    private sealed class ZeroClock : IPerformanceClock
+    {
+        public long GetTimestamp() => 0;
+
+        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) => 0.0;
+    }
+}

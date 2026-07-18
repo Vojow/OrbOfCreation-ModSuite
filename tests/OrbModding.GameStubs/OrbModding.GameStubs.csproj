@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>OrbModding.GameStubs</AssemblyName>
+    <!-- Production reflection uses assembly-qualified names such as
+         "SpellRecipeSO, Assembly-CSharp". Give the source-only fixture the
+         native assembly identity so those exact paths remain testable. -->
+    <AssemblyName>Assembly-CSharp</AssemblyName>
     <RootNamespace>OrbModding.GameStubs</RootNamespace>
     <TargetFramework>netstandard2.1</TargetFramework>
     <RequireGameReferences>false</RequireGameReferences>

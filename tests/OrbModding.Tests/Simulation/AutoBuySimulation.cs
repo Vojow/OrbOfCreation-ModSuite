@@ -86,6 +86,40 @@ internal sealed class AutoBuySimulation : IDisposable
             Config.LeaveQueueSlots.Value);
     }
 
+    public NativeCompletionObservation StepNativeCompletion(
+        int bulkLevels,
+        int echoActions = 0,
+        float deltaSeconds = 1.0f / 60.0f,
+        Action<SimulatedAutoBuyWorld>? afterCandidateEffectsBeforeSignal = null,
+        Action<SimulatedAutoBuyWorld>? afterSignalBeforeOuterUnstack = null)
+    {
+        ThrowIfDisposed();
+        _frame++;
+
+        var observation = World.BeginNativeCompletion(bulkLevels, echoActions);
+        afterCandidateEffectsBeforeSignal?.Invoke(World);
+        if (observation.AutomationCompletion)
+        {
+            _engine.NotifyNativeCompletion();
+        }
+
+        afterSignalBeforeOuterUnstack?.Invoke(World);
+        World.FinishNativeCompletion();
+
+        var purchasesBefore = World.TotalSubmitted;
+        var evaluationsBefore = World.TotalCandidateEvaluations;
+        _engine.Tick(deltaSeconds);
+        var purchasesThisFrame = World.TotalSubmitted - purchasesBefore;
+        var evaluationsThisFrame = World.TotalCandidateEvaluations - evaluationsBefore;
+
+        Metrics.RecordFrame(
+            World,
+            purchasesThisFrame,
+            evaluationsThisFrame,
+            Config.LeaveQueueSlots.Value);
+        return observation;
+    }
+
     public void RunFrames(int frameCount, int completionsPerFrame = 0)
     {
         for (var i = 0; i < frameCount; i++)
@@ -112,7 +146,10 @@ internal sealed class AutoBuySimulation : IDisposable
         return condition(World);
     }
 
-    public void ReloadLifecycle(bool clearQueue = true, bool replaceNativeIdentities = true)
+    public void ReloadLifecycle(
+        bool clearQueue = true,
+        bool replaceNativeIdentities = true,
+        bool replaceCandidateWrappers = false)
     {
         ThrowIfDisposed();
         if (clearQueue)
@@ -120,7 +157,11 @@ internal sealed class AutoBuySimulation : IDisposable
             World.ClearQueueForReload();
         }
 
-        if (replaceNativeIdentities)
+        if (replaceCandidateWrappers)
+        {
+            World.ReplaceCandidateWrappers();
+        }
+        else if (replaceNativeIdentities)
         {
             World.ReplaceNativeIdentities();
         }
@@ -186,9 +227,12 @@ internal sealed class AutoBuySimulation : IDisposable
 
 internal sealed class SimulatedAutoBuyWorld
 {
-    private readonly Queue<SimulatedAutoBuyCandidate?> _queue = new Queue<SimulatedAutoBuyCandidate?>();
+    private readonly List<SimulatedAutoBuyCandidate?> _queue = new List<SimulatedAutoBuyCandidate?>();
     private readonly List<SimulatedAutoBuyCandidate> _candidates = new List<SimulatedAutoBuyCandidate>();
     private readonly List<string> _submissionOrder = new List<string>();
+    private readonly Dictionary<string, BigAmount> _resources =
+        new Dictionary<string, BigAmount>(StringComparer.OrdinalIgnoreCase);
+    private bool _nativeCompletionInProgress;
 
     public SimulatedAutoBuyWorld(int queueCapacity, double initialResourceQuantity)
     {
@@ -215,7 +259,11 @@ internal sealed class SimulatedAutoBuyWorld
 
     public int TotalCandidateEvaluations => _candidates.Sum(candidate => candidate.CanPurchaseCalls);
 
-    public double ResourceQuantity { get; set; }
+    public double ResourceQuantity
+    {
+        get => GetResourceQuantity("resource").DivideApprox(new BigAmount(1.0, 0));
+        set => SetResourceQuantity("resource", new BigAmount(value, 0));
+    }
 
     public IReadOnlyList<SimulatedAutoBuyCandidate> Candidates => _candidates;
 
@@ -233,13 +281,96 @@ internal sealed class SimulatedAutoBuyWorld
         var completed = 0;
         while (completed < maximumCompletions && _queue.Count > 0)
         {
-            var candidate = _queue.Dequeue();
+            var candidate = _queue[0];
+            _queue.RemoveAt(0);
             candidate?.CompleteOne();
             TotalCompleted++;
             completed++;
         }
 
         return completed;
+    }
+
+    public NativeCompletionObservation BeginNativeCompletion(int bulkLevels, int echoActions)
+    {
+        if (_nativeCompletionInProgress)
+        {
+            throw new InvalidOperationException("A simulated native completion is already in progress.");
+        }
+
+        if (bulkLevels <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bulkLevels));
+        }
+
+        if (echoActions < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(echoActions));
+        }
+
+        if (_queue.Count == 0)
+        {
+            return default;
+        }
+
+        _nativeCompletionInProgress = true;
+        var candidate = _queue[0];
+        if (candidate is null)
+        {
+            return new NativeCompletionObservation(false, 1, 0, QueueCount);
+        }
+
+        var completedLevels = Math.Min(bulkLevels, candidate.QueuedLevels);
+        var additionalSlotsToRelease = Math.Max(0, completedLevels - 1);
+        for (var index = 1; index < _queue.Count && additionalSlotsToRelease > 0;)
+        {
+            if (ReferenceEquals(_queue[index], candidate))
+            {
+                _queue.RemoveAt(index);
+                additionalSlotsToRelease--;
+                continue;
+            }
+
+            index++;
+        }
+
+        completedLevels -= additionalSlotsToRelease;
+        candidate.Complete(completedLevels);
+        TotalCompleted += completedLevels;
+
+        var echoActionsEnqueued = 0;
+        for (var index = 0; index < echoActions; index++)
+        {
+            if (RemainingQueueRoom <= 0)
+            {
+                break;
+            }
+
+            _queue.Add(null);
+            echoActionsEnqueued++;
+        }
+
+        QueueHighWater = Math.Max(QueueHighWater, QueueCount);
+        return new NativeCompletionObservation(
+            true,
+            completedLevels,
+            echoActionsEnqueued,
+            QueueCount);
+    }
+
+    public void FinishNativeCompletion()
+    {
+        if (!_nativeCompletionInProgress)
+        {
+            return;
+        }
+
+        if (_queue.Count > 0)
+        {
+            _queue.RemoveAt(0);
+        }
+
+        _nativeCompletionInProgress = false;
     }
 
     public void EnqueueManualAction()
@@ -249,12 +380,13 @@ internal sealed class SimulatedAutoBuyWorld
             throw new InvalidOperationException("The simulated native queue is full.");
         }
 
-        _queue.Enqueue(null);
+        _queue.Add(null);
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
     }
 
     public void ClearQueueForReload()
     {
+        _nativeCompletionInProgress = false;
         _queue.Clear();
         foreach (var candidate in _candidates)
         {
@@ -270,10 +402,59 @@ internal sealed class SimulatedAutoBuyWorld
         }
     }
 
+    public void ReplaceCandidateWrappers()
+    {
+        var replacements = new Dictionary<SimulatedAutoBuyCandidate, SimulatedAutoBuyCandidate>();
+        for (var index = 0; index < _candidates.Count; index++)
+        {
+            var previous = _candidates[index];
+            var replacement = previous.CloneForLifecycle();
+            replacements.Add(previous, replacement);
+            _candidates[index] = replacement;
+        }
+
+        for (var index = 0; index < _queue.Count; index++)
+        {
+            var queued = _queue[index];
+            if (queued is not null && replacements.TryGetValue(queued, out var replacement))
+            {
+                _queue[index] = replacement;
+            }
+        }
+    }
+
     public bool HasPurchasableCandidate(int reservedQueueSlots)
     {
         return RemainingQueueRoom > Math.Max(0, reservedQueueSlots) &&
                _candidates.Any(candidate => candidate.CouldPurchaseNow());
+    }
+
+    public BigAmount GetResourceQuantity(string resourceId)
+    {
+        return _resources.TryGetValue(resourceId, out var quantity) ? quantity : default;
+    }
+
+    public void SetResourceQuantity(string resourceId, BigAmount quantity)
+    {
+        if (string.IsNullOrWhiteSpace(resourceId))
+        {
+            throw new ArgumentException("A resource UUID is required.", nameof(resourceId));
+        }
+
+        _resources[resourceId] = quantity;
+    }
+
+    internal bool CanAfford(SimulatedAutoBuyCandidate candidate)
+    {
+        foreach (var cost in candidate.CurrentCosts)
+        {
+            if (GetResourceQuantity(cost.ResourceId).CompareTo(cost.Cost) < 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal bool TrySubmit(SimulatedAutoBuyCandidate candidate)
@@ -283,14 +464,41 @@ internal sealed class SimulatedAutoBuyWorld
             return false;
         }
 
-        ResourceQuantity -= candidate.CurrentCost;
+        foreach (var cost in candidate.CurrentCosts)
+        {
+            _resources[cost.ResourceId] = GetResourceQuantity(cost.ResourceId).Subtract(cost.Cost);
+        }
+
         candidate.QueueOne();
-        _queue.Enqueue(candidate);
+        _queue.Add(candidate);
         _submissionOrder.Add(candidate.Uuid);
         TotalSubmitted++;
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
         return true;
     }
+}
+
+internal readonly struct NativeCompletionObservation
+{
+    public NativeCompletionObservation(
+        bool automationCompletion,
+        int completedLevels,
+        int echoActionsEnqueued,
+        int queueCountAtSignal)
+    {
+        AutomationCompletion = automationCompletion;
+        CompletedLevels = completedLevels;
+        EchoActionsEnqueued = echoActionsEnqueued;
+        QueueCountAtSignal = queueCountAtSignal;
+    }
+
+    public bool AutomationCompletion { get; }
+
+    public int CompletedLevels { get; }
+
+    public int EchoActionsEnqueued { get; }
+
+    public int QueueCountAtSignal { get; }
 }
 
 internal sealed class SimulatedAutoBuyCandidate :
@@ -301,15 +509,19 @@ internal sealed class SimulatedAutoBuyCandidate :
     IAutoBuyPriorityCandidate
 {
     private readonly SimulatedAutoBuyWorld _world;
+    private readonly SimulatedCandidateSpec _spec;
     private readonly AutoBuyCandidateSnapshot _snapshot;
+    private readonly IReadOnlyList<SimulatedResourceCost> _baseCosts;
+    private readonly List<ResourceAdmissionCost> _observedCosts = new List<ResourceAdmissionCost>();
+    private readonly string[] _resourceDependencies;
     private object _nativeIdentity = new object();
-    private double _observedCost;
     private bool _costDirty = true;
     private long _completionRefreshGeneration = -1;
 
     public SimulatedAutoBuyCandidate(SimulatedAutoBuyWorld world, SimulatedCandidateSpec spec)
     {
         _world = world;
+        _spec = spec;
         Uuid = spec.Uuid;
         Kind = spec.Kind;
         BaseCost = spec.BaseCost;
@@ -318,6 +530,13 @@ internal sealed class SimulatedAutoBuyCandidate :
         MaximumLevel = spec.MaximumLevel;
         FailureMode = spec.FailureMode;
         EconomicPriority = spec.EconomicPriority;
+        _baseCosts = spec.ResourceCosts.Count == 0
+            ? new[] { new SimulatedResourceCost("resource", "Resource", new BigAmount(spec.BaseCost, 0)) }
+            : spec.ResourceCosts;
+        _resourceDependencies = _baseCosts
+            .Select(cost => cost.ResourceId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         _snapshot = new AutoBuyCandidateSnapshot(this, Uuid, Uuid, Kind, nameof(SimulatedAutoBuyCandidate));
     }
 
@@ -354,9 +573,20 @@ internal sealed class SimulatedAutoBuyCandidate :
     public double CurrentCost =>
         BaseCost * CostMultiplier * Math.Pow(CostScaling, CurrentLevel + QueuedLevels);
 
+    public IReadOnlyList<SimulatedResourceCost> CurrentCosts
+    {
+        get
+        {
+            var scale = CostMultiplier * Math.Pow(CostScaling, CurrentLevel + QueuedLevels);
+            return _baseCosts
+                .Select(cost => cost.WithCost(cost.Cost.Multiply(scale)))
+                .ToArray();
+        }
+    }
+
     public object NativeIdentity => _nativeIdentity;
 
-    public IReadOnlyList<string> ResourceDependencies { get; } = new[] { "resource" };
+    public IReadOnlyList<string> ResourceDependencies => _resourceDependencies;
 
     public bool HasResolvedCosts => true;
 
@@ -379,18 +609,22 @@ internal sealed class SimulatedAutoBuyCandidate :
         CostReads++;
         if (_costDirty)
         {
-            _observedCost = CurrentCost;
+            _observedCosts.Clear();
+            foreach (var cost in CurrentCosts)
+            {
+                _observedCosts.Add(new ResourceAdmissionCost(
+                    cost.ResourceId,
+                    cost.ResourceName,
+                    cost.Cost,
+                    _world.GetResourceQuantity(cost.ResourceId),
+                    cost.Capacity,
+                    cost.IsBandwidth));
+            }
+
             _costDirty = false;
         }
 
-        return new[]
-        {
-            new ResourceAdmissionCost(
-                "resource",
-                "Resource",
-                new BigAmount(_observedCost, 0),
-                new BigAmount(_world.ResourceQuantity, 0)),
-        };
+        return _observedCosts;
     }
 
     public bool TryPurchaseOne(out string reason)
@@ -469,26 +703,42 @@ internal sealed class SimulatedAutoBuyCandidate :
     {
         return Available &&
                _world.RemainingQueueRoom > 0 &&
-               _world.ResourceQuantity >= CurrentCost &&
+               _world.CanAfford(this) &&
                (!MaximumLevel.HasValue || CurrentLevel + QueuedLevels < MaximumLevel.Value);
     }
 
     internal void QueueOne() => QueuedLevels++;
 
-    internal void CompleteOne()
+    internal void CompleteOne() => Complete(1);
+
+    internal void Complete(int levels)
     {
-        if (QueuedLevels <= 0)
+        if (levels <= 0 || QueuedLevels < levels)
         {
-            throw new InvalidOperationException($"Candidate {Uuid} completed without a queued level.");
+            throw new InvalidOperationException(
+                $"Candidate {Uuid} completed {levels} levels with only {QueuedLevels} queued.");
         }
 
-        QueuedLevels--;
-        CurrentLevel++;
+        QueuedLevels -= levels;
+        CurrentLevel += levels;
     }
 
     internal void ClearQueuedLevels() => QueuedLevels = 0;
 
     internal void ReplaceNativeIdentity() => _nativeIdentity = new object();
+
+    internal SimulatedAutoBuyCandidate CloneForLifecycle()
+    {
+        var replacement = new SimulatedAutoBuyCandidate(_world, _spec)
+        {
+            Available = Available,
+            FailureMode = FailureMode,
+            CurrentLevel = CurrentLevel,
+            QueuedLevels = QueuedLevels,
+            CostMultiplier = CostMultiplier,
+        };
+        return replacement;
+    }
 }
 
 internal sealed class SimulatedAutoBuyCatalog :
@@ -754,7 +1004,8 @@ internal readonly struct SimulatedCandidateSpec
         bool available = true,
         int? maximumLevel = null,
         SimulatedPurchaseFailureMode failureMode = SimulatedPurchaseFailureMode.None,
-        AutoBuyEconomicPriority economicPriority = AutoBuyEconomicPriority.None)
+        AutoBuyEconomicPriority economicPriority = AutoBuyEconomicPriority.None,
+        IReadOnlyList<SimulatedResourceCost>? resourceCosts = null)
     {
         Uuid = uuid;
         Kind = kind;
@@ -764,6 +1015,7 @@ internal readonly struct SimulatedCandidateSpec
         MaximumLevel = maximumLevel;
         FailureMode = failureMode;
         EconomicPriority = economicPriority;
+        ResourceCosts = resourceCosts ?? Array.Empty<SimulatedResourceCost>();
     }
 
     public string Uuid { get; }
@@ -781,6 +1033,43 @@ internal readonly struct SimulatedCandidateSpec
     public SimulatedPurchaseFailureMode FailureMode { get; }
 
     public AutoBuyEconomicPriority EconomicPriority { get; }
+
+    public IReadOnlyList<SimulatedResourceCost> ResourceCosts { get; }
+}
+
+internal readonly struct SimulatedResourceCost
+{
+    public SimulatedResourceCost(
+        string resourceId,
+        string resourceName,
+        BigAmount cost,
+        BigAmount? capacity = null,
+        bool isBandwidth = false)
+    {
+        if (string.IsNullOrWhiteSpace(resourceId))
+        {
+            throw new ArgumentException("A resource UUID is required.", nameof(resourceId));
+        }
+
+        ResourceId = resourceId;
+        ResourceName = string.IsNullOrWhiteSpace(resourceName) ? resourceId : resourceName;
+        Cost = cost;
+        Capacity = capacity;
+        IsBandwidth = isBandwidth;
+    }
+
+    public string ResourceId { get; }
+
+    public string ResourceName { get; }
+
+    public BigAmount Cost { get; }
+
+    public BigAmount? Capacity { get; }
+
+    public bool IsBandwidth { get; }
+
+    public SimulatedResourceCost WithCost(BigAmount cost) =>
+        new SimulatedResourceCost(ResourceId, ResourceName, cost, Capacity, IsBandwidth);
 }
 
 internal enum SimulatedPurchaseFailureMode
