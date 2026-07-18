@@ -339,8 +339,8 @@ internal sealed class MentorRuntime : IDisposable
             RequestReconcile(_catalogs[MentorDomain.Alchemy]);
             return;
         }
-        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
-        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return;
+        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
         {
             if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
                 _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
@@ -497,8 +497,8 @@ internal sealed class MentorRuntime : IDisposable
                     RequestReconcile(_catalogs[domain]);
                     return;
                 }
-                if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
-                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return;
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                 {
                     if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
                         _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
@@ -1022,7 +1022,7 @@ internal sealed class MentorRuntime : IDisposable
             if (domain == MentorDomain.Alchemy)
             {
                 var classification = _alchemyDomainGate.ClassifyAndCache(entry.Item);
-                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                 {
                     BlockAlchemyDomain("final grant validation", classification);
                     return GrantResult.Dropped;
@@ -1485,8 +1485,8 @@ internal sealed class MentorRuntime : IDisposable
                     if (domain == MentorDomain.Alchemy)
                     {
                         var classification = _alchemyDomainGate.ClassifyAndCache(value);
-                        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return true;
-                        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return true;
+                        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                         {
                             BlockAlchemyDomain("catalog reconciliation", classification);
                             return false;
@@ -1763,7 +1763,9 @@ internal sealed class MentorRuntime : IDisposable
             MentorDomain.Alchemy,
             $"Alchemy {operation} could not prove an ordinary-alchemy recipe. " +
             $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
-            $"Evidence={classification.Evidence}, Reason={classification.Reason}");
+            $"Evidence={classification.Evidence}, Level={classification.Assessment.Level}, " +
+            $"Sources={classification.Assessment.Sources}, Contradictory={classification.Assessment.IsContradictory}, " +
+            $"Reason={classification.Reason}");
     }
 
     private void InvalidateAlchemyDomainLifecycle()

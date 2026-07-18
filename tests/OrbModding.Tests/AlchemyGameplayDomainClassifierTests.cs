@@ -33,6 +33,16 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
         Assert.Contains(conceptType.GetGuid(), result.AlchemyTypeUuids);
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.ConceptRegistryMember));
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.KnownScholarConceptType));
+        Assert.Equal(EvidenceLevel.SerializedAssetVerified, result.Assessment.Level);
+        Assert.Equal(
+            EvidenceSource.StaticContract |
+            EvidenceSource.SerializedAsset |
+            EvidenceSource.RuntimeNativeType |
+            EvidenceSource.StableIdentity |
+            EvidenceSource.RuntimeRegistry |
+            EvidenceSource.NativeRelationship,
+            result.Assessment.Sources);
+        Assert.True(result.IsMutationGrade);
     }
 
     [Fact]
@@ -49,6 +59,7 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
         Assert.Equal(AlchemyGameplayDomain.OrdinaryAlchemy, result.Domain);
         Assert.False(result.Evidence.HasFlag(AlchemyDomainEvidence.ConceptRegistryMember));
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.KnownOrdinaryAlchemyType));
+        Assert.True(result.IsMutationGrade);
     }
 
     [Fact]
@@ -63,6 +74,8 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
 
         Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
         Assert.Contains("absent from the ConceptRecipes", result.Reason, StringComparison.Ordinal);
+        Assert.True(result.Assessment.IsContradictory);
+        Assert.False(result.IsMutationGrade);
     }
 
     [Fact]
@@ -157,6 +170,24 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
 
         Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
         Assert.Contains("different lifecycle-scoped native reference", result.Reason, StringComparison.Ordinal);
+        Assert.True(result.Assessment.IsContradictory);
+    }
+
+    [Fact]
+    public void DisplayNameNeverUpgradesUnknownIdentityEvidence()
+    {
+        RegisterConceptRecipes(Recipe(Guid.NewGuid(), Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid)));
+        var recipe = Recipe(Guid.NewGuid(), Type(Guid.NewGuid()));
+        recipe.name = "Alchemy";
+        using var classifier = new AlchemyGameplayDomainClassifier();
+        Assert.True(classifier.TryInitialize(out var reason), reason);
+
+        var result = classifier.ClassifyRecipe(recipe);
+
+        Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
+        Assert.Equal(EvidenceLevel.RuntimeObserved, result.Assessment.Level);
+        Assert.False(result.Assessment.Sources.HasFlag(EvidenceSource.SerializedAsset));
+        Assert.False(result.IsMutationGrade);
     }
 
     private static AlchemyTypeSO Type(Guid uuid)
