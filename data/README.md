@@ -4,6 +4,8 @@ This directory stores the known mapping between Orb of Creation entity UUIDs, in
 
 ## Files
 
+The directory also contains `native-contracts.json`, the audited machine-readable inventory of game assembly hashes and native reflection/Harmony contracts. It records signatures, visibility, feature ownership, and selecting source files. Maintain it through the [native contract workflow](../docs/development/native-contract-manifest.md); it does not replace runtime fail-closed checks.
+
 - `entity-mappings.tsv` — normalized mapping with `id`, `name`, and `type` columns.
 - `entity-types.tsv` — mapping count grouped by managed type.
 - `source/message.txt` — preserved UTF-8 source used for the current import.

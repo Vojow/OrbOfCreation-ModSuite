@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.1` fixes queue-filling Auto Buy so multiple affordable Structures and Upgrades share the prepared queue pass instead of one candidate monopolizing it, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.2` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -22,6 +22,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - When several Structures or Upgrades are eligible, each receives one live-validated level per ranked pass; a lone candidate may fill all usable queue room.
+- Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -60,7 +61,7 @@ Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `S
 
 ### Queue scheduling
 
-The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A full queue is polled at 10 Hz and retains the next candidate for the first newly available slot. After one pass, reranking begins on the next frame while existing native actions continue.
+The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A native completion wakes the prepared next candidate immediately; the full queue is polled at 10 Hz only as a fallback when no completion signal arrives. After one pass, reranking begins on the next frame while existing native actions continue.
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
@@ -72,7 +73,9 @@ Automata finishes the configured repeat group for each candidate and advances th
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
-Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
+Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Completed Structures and Upgrades retain their native identity and family in that signal: Structure completion requests an immediate bounded Upgrade-registry refresh, Upgrade completion requests the matching Structure refresh, and a burst coalesces into one refresh of each affected family. Conservative cross-candidate cost and availability invalidation still settles before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
+
+Rapid completion signals are generation-coalesced while a bounded lifecycle settlement is already running. They do not restart its cursor or an in-progress candidate scan; one follow-up generation retains eventual broad effect discovery. A recommendation produced across that window is advisory only and must still pass a fresh authoritative candidate and queue validation before its native mutation.
 
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 
@@ -81,6 +84,8 @@ Structures must pass native availability before Automata reads costs or calls th
 Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and identical verbose rejection examples remain suppressed until their typed blocker signature changes. Repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
 
 During a prepared ranked pass, each candidate refreshes its own cost immediately before its level. Shared resource-dependent invalidation is coalesced while later candidates are still live-revalidated against current resources and native state. A failed admission skips that candidate for the current pass; an ambiguous native mutation failure ends the pass so dirty state can settle safely. If the queue fills, the next ranked candidate remains prepared across the wait and is live-revalidated when a slot reopens.
+
+Queue capacity is refreshed after that live candidate/cost/reserve validation and immediately before every queued mutation. The supported native adapter reads total capacity from `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()` and live room from `ActionManager.GetRemainingRoom()`. Negative values, remaining room greater than capacity, missing native objects, or an invalid policy input reject the snapshot and submit no purchase. The snapshot derives occupancy and subtracts `LeaveQueueSlots` exactly once before applying the current batch usage limit.
 
 ## Auto Cast
 
@@ -96,7 +101,7 @@ The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active con
 
 ## Auto Concept
 
-Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by UUID and validates every candidate against the three Scholar concept type UUIDs. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
+Auto Concept uses the shared `OrbModding.Common.AlchemyGameplayDomainClassifier` as its concept-versus-ordinary-alchemy identity boundary. The classifier resolves the exact `ConceptRecipes` UUID/type asset and requires each exact `AlchemyRecipeSO` registry member to carry only audited Scholar type evidence; contradictory ordinary-and-Scholar typing fails the lifecycle closed. Auto Concept separately resolves `ActiveConcepts` for native slot and quantity ownership. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
 
 `Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
@@ -110,9 +115,11 @@ The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blo
 
 Before every add or rotation, Automata reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 
-Enabling the feature snapshots current Active Concept quantities for ownership and rollback accounting. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
+Enabling the feature initializes the scoped shared classifier and snapshots current Active Concept quantities for ownership and rollback accounting. Disabled Auto Concept neither initializes nor rebuilds classifier/catalog evidence. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets (including reset/NG+ manager restarts) invalidate classifier and runtime references and rebuild a new baseline only after Auto Concept is active again.
 
 ## Diagnostics
+
+Transient shared classifier readiness failures use the existing 30-second Auto Concept warning gate. A contradictory or permanently invalid concept-domain contract blocks Auto Concept for that lifecycle and is logged once; `Unknown` evidence never falls back to ordinary names or broad alchemy membership.
 
 Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
 

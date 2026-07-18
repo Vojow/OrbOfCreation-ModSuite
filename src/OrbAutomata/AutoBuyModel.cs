@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -7,6 +8,15 @@ internal enum AutoBuyCandidateKind
 {
     Structure,
     Upgrade
+}
+
+[Flags]
+internal enum AutoBuyCandidateKinds
+{
+    None = 0,
+    Structures = 1 << 0,
+    Upgrades = 1 << 1,
+    All = Structures | Upgrades,
 }
 
 [Flags]
@@ -92,7 +102,10 @@ internal interface IAutoBuyCatalog : IDisposable
 {
     IEnumerable<IAutoBuyCandidate> Discover();
 
-    bool TryGetRemainingQueueRoom(out int remainingRoom);
+    bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot);
 
     bool TryGetBulkDevelopment(out int levels);
 
@@ -124,6 +137,19 @@ internal interface IAutoBuyIncrementalCatalog
     void NotifyNativeCompletion();
 
     void InvalidateLifecycle();
+}
+
+internal interface IAutoBuyProgressionCatalog
+{
+    void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind);
+}
+
+internal interface IAutoBuyCompletionRevalidationCatalog
+{
+    bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason);
 }
 
 internal readonly struct AutoBuyEvaluationRequest

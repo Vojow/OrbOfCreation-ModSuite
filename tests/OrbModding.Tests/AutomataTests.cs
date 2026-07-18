@@ -314,6 +314,7 @@ public sealed class AutomataTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessIntegration")]
     public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
     {
         var upgrade = new UpgradeSO();
