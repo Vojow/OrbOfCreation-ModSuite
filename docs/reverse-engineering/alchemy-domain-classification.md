@@ -40,6 +40,6 @@ Call `TryInitialize` outside hot hooks after the runtime registry is ready. Init
 
 The ready classifier caches concept membership, lifecycle-bound native references, decoded type evidence, and later ordinary-recipe results. `ClassifyRecipe` returns the cached object for repeat calls. A same-UUID replacement object is rejected until the owner calls `InvalidateLifecycle()` and obtains a fresh snapshot. Owners must invalidate on scene change, save load, reset, and NG+ transitions. A disabled consumer should not initialize or rebuild the classifier in the background.
 
-`AlchemyDomainClassification` exposes the domain, stable recipe/type UUID evidence, evidence flags, lifecycle generation, and a diagnostic reason. Consumers must treat `Unknown` as ineligible and rate-limit any repeated diagnostic.
+`AlchemyDomainClassification` exposes the domain, stable recipe/type UUID evidence, detailed flags, shared [evidence level and sources](evidence-strength.md), lifecycle generation, mutation-grade decision, and diagnostic reason. Auto Concept and Mentor Alchemy require `IsMutationGrade`; `Unknown`, insufficient-source, and contradictory results are ineligible and repeated diagnostics remain rate-limited.
 
 This shared classifier does not decide discovery, availability, completion, mastery eligibility, or mutation authority. Those remain live native-domain checks in each consuming module.

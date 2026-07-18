@@ -1,5 +1,11 @@
 # Changelog
 
+## Evidence strength foundation — 2026-07-18
+
+- Add shared unresolved, inferred, runtime-observed, serialized-asset-verified, and statically-verified evidence levels with named source masks and contradiction handling.
+- Require mutation-grade identity, native type, registry relationship, serialized mapping, and static contract evidence before Auto Concept or Mentor Alchemy accepts a classification.
+- Expose structured level/source diagnostics and contract tests so game-update evidence changes fail closed and remain reviewable; display names never upgrade evidence.
+
 ## Shared lifecycle generation foundation — 2026-07-18
 
 - Add one main-thread-safe Common lifecycle monitor with explicit no-game, initializing, playing, resetting, and scene-exit states plus monotonically increasing generations and bounded structured diagnostics.

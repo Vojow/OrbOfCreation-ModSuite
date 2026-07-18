@@ -142,12 +142,15 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             foreach (var recipe in scopedRecipes)
             {
                 var classification = _domainClassifier.ClassifyRecipe(recipe);
-                if (classification.Domain != AlchemyGameplayDomain.ScholarConcept || classification.RecipeUuid is null)
+                if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
+                    !classification.IsMutationGrade ||
+                    classification.RecipeUuid is null)
                 {
                     return Fail(
                         $"ConceptRecipes entry failed shared domain classification. " +
                         $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
-                        $"Evidence={classification.Evidence}, Reason={classification.Reason}",
+                        $"Evidence={classification.Evidence}, Level={classification.Assessment.Level}, " +
+                        $"Sources={classification.Assessment.Sources}, Reason={classification.Reason}",
                         out reason);
                 }
                 var uuid = classification.RecipeUuid.Value.ToString();
@@ -507,6 +510,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         if (candidate.Recipe.GetType() != _recipeType) return false;
         var classification = _domainClassifier.ClassifyRecipe(candidate.Recipe);
         if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
+            !classification.IsMutationGrade ||
             classification.RecipeUuid is null ||
             !string.Equals(classification.RecipeUuid.Value.ToString(), candidate.Uuid, StringComparison.Ordinal) ||
             !_recipeUuids.TryGetValue(candidate.Recipe, out var snapshotUuid) ||
