@@ -12,7 +12,7 @@ public sealed class MentorAlchemyDomainTests : IDisposable
 {
     public MentorAlchemyDomainTests()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
         RegisterUnlockedView(MentorDomainUnlockGate.MasteriesEnabledUuid);
         RegisterUnlockedView(MentorDomainUnlockGate.SpellbookUuid);
         RegisterUnlockedView(MentorDomainUnlockGate.ArtifactWorkshopUuid);
@@ -21,7 +21,7 @@ public sealed class MentorAlchemyDomainTests : IDisposable
 
     public void Dispose()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
     }
 
     [Fact]

@@ -27,6 +27,10 @@ Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup
 
 The classifier caches the verified registry snapshot and per-recipe results. Call `InvalidateLifecycle()` on scene, save-load, reset, and NG+ changes; do not initialize or reflect inside a per-frame or native-XP hook. See [Alchemy gameplay-domain classification](../docs/reverse-engineering/alchemy-domain-classification.md) for the evidence matrix and adoption contract.
 
+## Shared typed registry resolver
+
+`OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only. See the [typed resolver plan](../docs/plans/typed-registry-resolver.md).
+
 ## Orb Mentor
 
 `OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.

@@ -1,5 +1,11 @@
 # Changelog
 
+## Typed registry resolution foundation — 2026-07-18
+
+- Centralize lifecycle-stamped stable-UUID and exact-native-type resolution in Common with structured retryable, missing, wrong-type, ambiguous, contract, and stale-generation outcomes.
+- Verify scoped registry inclusion or exclusion separately from global lookup and refuse malformed list evidence, same-UUID replacement references, and display-name fallback.
+- Adopt the resolver for the Alchemy classifier, Auto Concept registries, spell-level capability upgrade, and Mentor progression views while invalidating retained results across lifecycle generations.
+
 ## Evidence strength foundation — 2026-07-18
 
 - Add shared unresolved, inferred, runtime-observed, serialized-asset-verified, and statically-verified evidence levels with named source masks and contradiction handling.

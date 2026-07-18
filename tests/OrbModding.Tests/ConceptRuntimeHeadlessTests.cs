@@ -143,6 +143,7 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
     private static AlchemyInstanceListVariable InstallNativeLists(params AlchemyRecipeSO[] recipes)
     {
         var active = new AlchemyInstanceListVariable();
+        active.SetGuid(new Guid(ReflectionConceptRuntime.ActiveConceptsUuid));
         var recipeList = new AlchemyRecipeListVariable { value = recipes.ToList() };
         recipeList.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ActiveConceptsUuid)] = active;

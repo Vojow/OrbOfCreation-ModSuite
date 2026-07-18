@@ -92,7 +92,7 @@ public sealed class MentorDomainUnlockTests : IDisposable
     public void SpellUnlockContractFailureDoesNotBlockOtherDomains()
     {
         RegisterAll(masteriesAvailable: true);
-        IdScriptableObject.RuntimeLookup[new Guid(MentorDomainUnlockGate.SpellbookUuid)] = new object();
+        RegisterWrongType(MentorDomainUnlockGate.SpellbookUuid);
         var config = MentorConfig.Bind(new BepInEx.Configuration.ConfigFile());
         config.Mode.Value = MentorOperationMode.Active;
         config.ArtifactsEnabled.Value = true;
@@ -118,10 +118,11 @@ public sealed class MentorDomainUnlockTests : IDisposable
         Assert.Equal(MentorDomainUnlockState.Waiting, missing.State);
         Assert.Contains("has not registered", missing.Reason);
 
-        IdScriptableObject.RuntimeLookup[new Guid(MentorDomainUnlockGate.SpellbookUuid)] = new object();
+        RegisterWrongType(MentorDomainUnlockGate.SpellbookUuid);
         var contradiction = gate.Evaluate(MentorDomain.Spells);
         Assert.Equal(MentorDomainUnlockState.ContractBlocked, contradiction.State);
-        Assert.Equal("MagicSpellbook UUID/type contract does not resolve to ViewSO", contradiction.Reason);
+        Assert.Contains("Status=WrongType", contradiction.Reason);
+        Assert.Contains("ExpectedType=ViewSO", contradiction.Reason);
     }
 
     [Fact]
@@ -136,6 +137,14 @@ public sealed class MentorDomainUnlockTests : IDisposable
         Assert.Equal(("MagicSpellbook", "ViewSO"), byId[MentorDomainUnlockGate.SpellbookUuid]);
         Assert.Equal(("WorkshopArtifact", "ViewSO"), byId[MentorDomainUnlockGate.ArtifactWorkshopUuid]);
         Assert.Equal(("ScreenAlchemy", "ViewSO"), byId[MentorDomainUnlockGate.AlchemyScreenUuid]);
+    }
+
+    private static void RegisterWrongType(string uuid)
+    {
+        var id = new Guid(uuid);
+        var wrongType = new AlchemyRecipeListVariable();
+        wrongType.SetGuid(id);
+        IdScriptableObject.RuntimeLookup[id] = wrongType;
     }
 
     private static MentorDomainUnlockGate Gate() => new(name => name switch

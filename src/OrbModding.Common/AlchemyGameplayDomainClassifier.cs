@@ -42,7 +42,7 @@ public sealed class AlchemyDomainClassification
         IReadOnlyList<Guid> alchemyTypeUuids,
         AlchemyDomainEvidence evidence,
         EvidenceAssessment assessment,
-        int lifecycleGeneration,
+        long lifecycleGeneration,
         string reason)
     {
         Domain = domain;
@@ -59,7 +59,7 @@ public sealed class AlchemyDomainClassification
     public IReadOnlyList<Guid> AlchemyTypeUuids { get; }
     public AlchemyDomainEvidence Evidence { get; }
     public EvidenceAssessment Assessment { get; }
-    public int LifecycleGeneration { get; }
+    public long LifecycleGeneration { get; }
     public string Reason { get; }
     public bool IsKnown => Domain != AlchemyGameplayDomain.Unknown;
     public bool IsMutationGrade =>
@@ -112,21 +112,31 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
         ConceptualizationTypeUuid,
     };
 
+    private readonly TypedRegistryResolver _registryResolver;
     private readonly Dictionary<Guid, CachedRecipe> _recipes = new Dictionary<Guid, CachedRecipe>();
     private Type? _recipeType;
     private Type? _alchemyType;
     private FieldInfo? _alchemyTypesField;
     private MethodInfo? _getGuid;
+    private TypedRegistryResolution? _registryResolution;
     private string _statusReason = "classifier has not been initialized for this lifecycle";
-    private int _lifecycleGeneration = 1;
+    private int _classifierGeneration = 1;
 
     public AlchemyDomainClassifierStatus Status { get; private set; } = AlchemyDomainClassifierStatus.Uninitialized;
     public string StatusReason => _statusReason;
-    public int LifecycleGeneration => _lifecycleGeneration;
+    public long LifecycleGeneration => _registryResolution?.LifecycleGeneration ?? -1;
+    public int ClassifierGeneration => _classifierGeneration;
     public int CachedRecipeCount => _recipes.Count;
+
+    public AlchemyGameplayDomainClassifier(TypedRegistryResolver? registryResolver = null)
+    {
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
+    }
 
     public bool TryInitialize(out string reason)
     {
+        if (_registryResolution is not null && !_registryResolver.IsCurrent(_registryResolution))
+            InvalidateLifecycle();
         if (Status == AlchemyDomainClassifierStatus.Ready)
         {
             reason = string.Empty;
@@ -148,23 +158,17 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
             if (idType is null || _recipeType is null || _alchemyType is null || recipeListType is null)
                 return Retry("native alchemy classifier types are not loaded yet", out reason);
 
-            var lookupField = FindField(idType, "RuntimeLookup", BindingFlags.Static);
             _getGuid = FindNoArgumentGuidMethod(idType, "GetGuid");
             _alchemyTypesField = FindField(_recipeType, "alchemyTypes", BindingFlags.Instance);
             var valuesField = FindField(recipeListType, "value", BindingFlags.Instance);
-            if (lookupField is null || _getGuid is null || _alchemyTypesField is null || valuesField is null)
+            if (_getGuid is null || _alchemyTypesField is null || valuesField is null)
                 return Block("native alchemy classifier metadata does not match the audited contract", out reason);
 
-            if (lookupField.GetValue(null) is not IDictionary lookup)
-                return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
-            if (!lookup.Contains(ConceptRecipesUuid))
-                return Retry("ConceptRecipes is not registered yet", out reason);
-
-            var registry = lookup[ConceptRecipesUuid];
-            if (registry is null || registry.GetType() != recipeListType)
-                return Block("ConceptRecipes UUID/type mismatch", out reason);
-            if (!TryReadStableUuid(registry, out var registryUuid) || registryUuid != ConceptRecipesUuid)
-                return Block("ConceptRecipes stable UUID does not match its registry key", out reason);
+            var registryResolution = _registryResolver.Resolve(ConceptRecipesUuid, recipeListType);
+            if (!registryResolution.IsResolved)
+                return HandleRegistryFailure("ConceptRecipes", registryResolution, out reason);
+            _registryResolution = registryResolution;
+            var registry = registryResolution.Value!;
             if (valuesField.GetValue(registry) is not IEnumerable recipes)
                 return Block("ConceptRecipes contents are unavailable", out reason);
 
@@ -187,6 +191,8 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
 
             if (snapshot.Count == 0)
                 return Retry("ConceptRecipes is empty for the current lifecycle", out reason);
+            if (!_registryResolver.IsCurrent(registryResolution))
+                return Retry("ConceptRecipes lifecycle generation changed while building the classifier snapshot", out reason);
 
             _recipes.Clear();
             foreach (var entry in snapshot) _recipes.Add(entry.Key, entry.Value);
@@ -203,6 +209,9 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
 
     public AlchemyDomainClassification ClassifyRecipe(object? recipe)
     {
+        if (Status == AlchemyDomainClassifierStatus.Ready &&
+            (_registryResolution is null || !_registryResolver.IsCurrent(_registryResolution)))
+            InvalidateLifecycle();
         if (Status != AlchemyDomainClassifierStatus.Ready)
             return Unknown(null, AlchemyDomainEvidence.None, _statusReason);
         if (recipe is null || recipe.GetType() != _recipeType)
@@ -232,6 +241,9 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
 
     public AlchemyDomainClassification ClassifyType(object? alchemyType)
     {
+        if (Status == AlchemyDomainClassifierStatus.Ready &&
+            (_registryResolution is null || !_registryResolver.IsCurrent(_registryResolution)))
+            InvalidateLifecycle();
         if (Status != AlchemyDomainClassifierStatus.Ready)
             return Unknown(null, AlchemyDomainEvidence.None, _statusReason);
         if (alchemyType is null || alchemyType.GetType() != _alchemyType)
@@ -268,7 +280,8 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
         _alchemyType = null;
         _alchemyTypesField = null;
         _getGuid = null;
-        _lifecycleGeneration++;
+        _registryResolution = null;
+        _classifierGeneration++;
         Status = AlchemyDomainClassifierStatus.Uninitialized;
         _statusReason = "classifier has not been initialized for this lifecycle";
     }
@@ -403,7 +416,7 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
             typeUuids,
             evidence,
             AssessEvidence(domain, evidence, contradictory),
-            _lifecycleGeneration,
+            LifecycleGeneration,
             reason);
 
     private static EvidenceAssessment AssessEvidence(
@@ -451,6 +464,17 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
         _statusReason = message;
         reason = message;
         return false;
+    }
+
+    private bool HandleRegistryFailure(
+        string label,
+        TypedRegistryResolution resolution,
+        out string reason)
+    {
+        var message = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable
+            ? Retry(message, out reason)
+            : Block(message, out reason);
     }
 
     private static Type? FindLoadedType(string typeName)
