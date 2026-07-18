@@ -308,6 +308,24 @@ public class SaveStateManager
     }
 }
 
+public class GameManager
+{
+    public static void ResetGameState()
+    {
+    }
+
+    public void InitGame()
+    {
+    }
+}
+
+public class PersistentResetManager
+{
+    private void PersistentResetLogic()
+    {
+    }
+}
+
 public class Spell
 {
     private readonly SpellRecipeSO? reference;

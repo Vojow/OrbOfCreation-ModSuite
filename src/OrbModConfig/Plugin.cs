@@ -26,6 +26,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
     private ModConfigCoordinatorWork? _uiWork;
+    private long _lifecycleGeneration;
 
     private void Awake()
     {
@@ -55,7 +56,10 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork = new ModConfigCoordinatorWork(
             SuitePerformanceCoordinator.Shared,
             () => Time.frameCount);
+        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
+        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
         ResetSceneState(SceneManager.GetActiveScene());
     }
 
@@ -176,14 +180,36 @@ public sealed class Plugin : BaseUnityPlugin
         _uiShell = null;
         _uiWork?.Dispose();
         _uiWork = null;
+        GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
     {
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
+    }
+
+    private void OnLifecycleTransition(GameLifecycleTransition transition)
+    {
+        if (transition.Current.Generation == _lifecycleGeneration) return;
+        _lifecycleGeneration = transition.Current.Generation;
+        if (transition.Current.LastTransition != GameLifecycleTransitionKind.SceneEntered) return;
         _uiShell?.Dispose();
         _uiShell = null;
-        ResetSceneState(next);
+        ResetSceneState(SceneManager.GetActiveScene());
+    }
+
+    private static void ObserveLifecycle(GameLifecycleTransitionKind kind, string sceneName)
+    {
+        GameLifecycleMonitor.Shared.TryObserve(
+            new GameLifecycleObservation(
+                kind,
+                Time.frameCount,
+                sceneName,
+                PluginIds.ModConfigGuid),
+            out _,
+            out _);
     }
 
     private void ResetSceneState(Scene scene)

@@ -25,6 +25,9 @@ public sealed class InstalledGameContractTests
 
         AssertMethod(assembly, "Player", "ManagerStart", false, "System.Void");
         AssertMethod(assembly, "Player", "GetAchievementLevel", true, "IntVariable");
+        AssertMethod(assembly, "GameManager", "InitGame", false, "System.Void");
+        AssertMethod(assembly, "GameManager", "ResetGameState", true, "System.Void");
+        AssertMethod(assembly, "PersistentResetManager", "PersistentResetLogic", false, "System.Void");
         AssertMethod(assembly, "SaveStateManager", "CollectJsonData", false, "System.String");
         AssertMethod(assembly, "SaveStateManager", "ImplementLoadedJson", false, "System.Void");
         AssertMethod(

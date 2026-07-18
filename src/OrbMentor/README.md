@@ -1,10 +1,12 @@
-# Orb Mentor 0.3.3 beta
+# Orb Mentor 0.3.4 beta
 
 Orb Mentor shares configurable percentages of native mastery XP with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and ordinary available alchemy recipes. `EquippedSpells` is the default spell policy: every equipped source can share with discovered spells below that source's own mastery. `HighestDiscovered` preserves the original highest-mastery-only behavior. Artifact and alchemy sharing remain opt-in and keep their existing highest-mastery rule. Scholar concepts are excluded from the Alchemy catalog, cannot become Alchemy mentors or recipients, and their XP callbacks are ignored.
 
 Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Alt+M`, or use the compact `M ON/OFF/WAIT/BLOCKED` gameplay control. The control occupies the outermost slot of the native Auto Buy-anchored strip, after Automata Auto Buy, Auto Cast, and Auto Concept when present, with 12-pixel gaps. `SharedPool` (default, 10%) bounds each domain's total bonus to the configured percentage. `PerRecipient` grants that percentage to each eligible recipient in the domain and scales with collection size.
 
 Mentor follows the game's progression unlocks independently for spells, artifacts, and alchemy. A domain starts only after the exact native `MasteriesEnabled` view and that domain's `MagicSpellbook`, `WorkshopArtifact`, or `ScreenAlchemy` view are both available. While locked, `M WAIT` and the tooltip show a non-error waiting reason; the domain does not discover a catalog, rank mentors, plan or grant XP, or inspect the equipped spell loadout. The saved Mentor configuration is left unchanged. Unlocks are noticed without a restart, while save/load, reset, scene, and NG+ lifecycle signals cancel stale work and re-evaluate all gates. A missing registration waits fail-closed; an exact UUID/type or accessor contradiction blocks only the affected domain with the contract reason.
+
+Mentor consumes the same Common lifecycle generation as Automata and Mod Config. A shared transition cancels or defers capture, relationship, plan, parked-grant, and native-grant work under the old generation; domain progression locks remain separate from global game readiness.
 
 Orb Mod Config keeps the toggle shortcut, emergency disable, and diagnostics editable while Mentor is disabled. Spell, artifact, alchemy, economy, and performance tuning unlock when Mentor becomes Active; artifact and alchemy percentages additionally require their own domain switch.
 
