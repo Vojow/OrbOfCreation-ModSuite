@@ -2,7 +2,7 @@
 
 Orb Mod Config is the optional in-game configuration surface for the mod suite and other loaded BepInEx plugins.
 
-The current `0.6.0` build provides a simplified configuration UI:
+The current `0.6.1` build provides a simplified configuration UI:
 
 - feature-oriented presentation groups independent of raw BepInEx sections;
 - friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
@@ -34,5 +34,7 @@ The underlying editor continues to provide:
 `0.5.3` retries installation while slower UI hierarchies finish loading. Shell liveness includes both the button and its ScreenContent panel; losing either host or failing to open/close the panel restores the prior native view (or another surviving native view), detaches the old shell listeners, and schedules a clean reinstall. Loaded-plugin catalog discovery and logging, UI installation, repair, native-tab event maintenance, and the five-second integrity check run only when due through the shared cooperative frame budget. The catalog is enumerated and logged once, after the first admitted installation lease. Budget denial retains pending work without enumerating plugins, logging the catalog, scanning the scene, or rebinding listeners; disabled and non-gameplay scenes remain idle, and scene exit or unload unregisters the work and removes owned listeners.
 
 `0.6.0` lets one setting require multiple staged values and evaluates all requirements without writing configuration early. Enum changes rebuild the current settings rows immediately, matching the existing boolean behavior, so enabling or disabling a module updates its dependent editors in the same interaction.
+
+`0.6.1` sizes each setting row from the rendered description instead of truncating longer help text, and preserves the current absolute scroll offset when a staged value, Default, Apply, Revert, or external refresh rebuilds the same page. Selecting another mod or feature section still begins at the top.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

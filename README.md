@@ -13,7 +13,7 @@ The current beta centers on Orb Automata: queue-aware Auto Buy with progression-
 | Component | Status | Description |
 |---|---|---|
 | **Orb Automata 0.8.2** | Beta | Rejection-aware, completion-responsive queue-filling Auto Buy; coordinated Auto Cast; timed or catch-up Concept rotation; and progression-aware spell leveling with bounded shared scheduling. |
-| **Orb Mod Config 0.6.0** | Beta | Mods tab available from the start, with typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
+| **Orb Mod Config 0.6.1** | Beta | Mods tab with readable variable-height descriptions, stable scroll position while editing, typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
 | **Orb Mentor 0.3.2** | Beta | Progression-gated spell, artifact, and ordinary-alchemy mastery sharing with independent opt-in domains, equipped-spell sources, and a selectable highest-only spell policy. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
