@@ -50,6 +50,7 @@ internal sealed class MentorRuntime : IDisposable
         public Type? ExpectedType;
         public FieldInfo? RegistryField;
         public FieldInfo? MasteryField;
+        public FieldInfo? ExperienceField;
         public MethodInfo? AvailabilityMethod;
         public MethodInfo? IdentityMethod;
         public MethodInfo? RegistryLookupMethod;
@@ -66,6 +67,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool Initialized;
         public bool RelationshipDirty = true;
         public bool NeedsReconcile = true;
+        public object? LastMutationEvidence;
         public long ProgressionEpoch;
         public long RelationshipEpoch;
         public long SettledRefreshGeneration;
@@ -73,6 +75,21 @@ internal sealed class MentorRuntime : IDisposable
         public readonly MentorWorkGeneration RelationshipRequests = new();
         public ReconcileWork? Reconcile;
         public RefreshWork? Refresh;
+    }
+
+    private readonly struct GrantMutationState
+    {
+        public GrantMutationState(int masteryLevel, MentorAmount experience)
+        {
+            MasteryLevel = masteryLevel;
+            Experience = experience;
+        }
+
+        public int MasteryLevel { get; }
+        public MentorAmount Experience { get; }
+
+        public override string ToString() =>
+            $"mastery={MasteryLevel},xp={Experience.Mantissa:R}e{Experience.Exponent}";
     }
 
     private sealed class DomainState : MentorPendingWork
@@ -1014,9 +1031,29 @@ internal sealed class MentorRuntime : IDisposable
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
             var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);
-            if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
-            else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
-            else GrantArtifact(entry.Item, value);
+            var expectedExperience = grantAmount;
+            var evidence = NativeMutationVerifier.Execute(
+                $"Mentor {domain} XP grant",
+                grantUuid,
+                $"XP exact delta +{grantAmount.Mantissa:R}e{grantAmount.Exponent}",
+                () => CaptureGrantState(domain, catalog, entry),
+                () =>
+                {
+                    if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
+                    else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
+                    else GrantArtifact(entry.Item, value);
+                },
+                (before, after) => AmountsEquivalent(
+                    before.Experience.Add(expectedExperience),
+                    after.Experience));
+            catalog.LastMutationEvidence = evidence;
+            if (!evidence.IsVerified)
+            {
+                BlockDomainTransient(
+                    domain,
+                    $"native XP mutation postcondition failed: {evidence.Format(state => state.ToString())}");
+                return GrantResult.Dropped;
+            }
             // The native grant may synchronously trigger a domain-specific
             // progression hook. Even when it does not visibly change mastery
             // or discovery, force the relationship cache to settle before a
@@ -1185,6 +1222,66 @@ internal sealed class MentorRuntime : IDisposable
         var current = InvokeRequired(container, "GetExperience");
         var savedXp = FindField(equipment.GetType(), "masteryXp") ?? throw new MissingMemberException("artifact saved mastery XP field unavailable");
         savedXp.SetValue(equipment, current);
+    }
+
+    private static GrantMutationState CaptureGrantState(
+        MentorDomain domain,
+        DomainCatalog catalog,
+        NativeEntry entry)
+    {
+        var mastery = Convert.ToInt32(catalog.MasteryField!.GetValue(entry.Item) ?? 0);
+        object? nativeExperience;
+        if (domain == MentorDomain.Artifacts)
+        {
+            var container = entry.ArtifactContainer ??
+                catalog.ArtifactContainerMethod!.Invoke(entry.Item, Array.Empty<object>()) ??
+                throw new MissingMemberException("artifact experience container unavailable");
+            entry.ArtifactContainer = container;
+            nativeExperience = InvokeRequired(container, "GetExperience");
+        }
+        else
+        {
+            nativeExperience = catalog.ExperienceField!.GetValue(entry.Item);
+        }
+
+        if (!TryReadNonNegativeAmount(nativeExperience, out var experience))
+        {
+            throw new InvalidOperationException("native mastery XP state is unavailable or invalid");
+        }
+
+        return new GrantMutationState(mastery, experience);
+    }
+
+    private static bool TryReadNonNegativeAmount(object? value, out MentorAmount amount)
+    {
+        if (value is null ||
+            BigDoubleMantissa?.GetValue(value) is not double mantissa ||
+            BigDoubleExponent?.GetValue(value) is not long exponent ||
+            !double.IsFinite(mantissa) ||
+            mantissa < 0.0)
+        {
+            amount = default;
+            return false;
+        }
+
+        amount = mantissa == 0.0 ? default : new MentorAmount(mantissa, exponent);
+        return true;
+    }
+
+    private static bool AmountsEquivalent(MentorAmount expected, MentorAmount actual)
+    {
+        if (!expected.IsValidPositive || !actual.IsValidPositive)
+        {
+            return expected.IsValidPositive == actual.IsValidPositive;
+        }
+
+        if (expected.Exponent != actual.Exponent)
+        {
+            return false;
+        }
+
+        var scale = Math.Max(Math.Abs(expected.Mantissa), Math.Abs(actual.Mantissa));
+        return Math.Abs(expected.Mantissa - actual.Mantissa) <= scale * 1e-12;
     }
 
     public void Cancel(MentorDropReason reason = MentorDropReason.LifecycleReset)
@@ -1479,6 +1576,15 @@ internal sealed class MentorRuntime : IDisposable
         catalog.ExpectedType = expected;
         catalog.RegistryField = FindField(expected, "All");
         catalog.MasteryField = FindField(expected, "masteryLevel");
+        var experienceField = domain switch
+        {
+            MentorDomain.Spells => FindField(expected, "masteryExperience"),
+            MentorDomain.Alchemy => FindField(expected, "masteryXp"),
+            _ => null,
+        };
+        catalog.ExperienceField = experienceField?.FieldType == typeof(BigDouble)
+            ? experienceField
+            : null;
         catalog.AvailabilityMethod = FindMethod(expected, AvailabilityMethod(domain), 0);
         foreach (var name in IdentityMethods)
         {
@@ -1498,6 +1604,7 @@ internal sealed class MentorRuntime : IDisposable
         if (domain == MentorDomain.Artifacts) catalog.ArtifactContainerMethod = FindMethod(expected, "GetExperienceElement", 0);
         if (catalog.RegistryField is null || catalog.MasteryField is null || catalog.AvailabilityMethod is null ||
             catalog.IdentityMethod is null || catalog.RegistryLookupMethod is null ||
+            (domain != MentorDomain.Artifacts && catalog.ExperienceField is null) ||
             (domain == MentorDomain.Artifacts && catalog.ArtifactContainerMethod is null))
         {
             FailDomainContract(domain, $"{domain} native catalog/accessor contract is unavailable");

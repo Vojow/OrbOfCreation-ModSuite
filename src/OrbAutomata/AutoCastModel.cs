@@ -21,6 +21,11 @@ internal interface IAutoCastCatalog : IDisposable
     bool IsTargeting();
 }
 
+internal interface IAutoCastMutationRecoveryCatalog
+{
+    void RecoverMutationBlocks();
+}
+
 internal interface IAutoCastCandidate
 {
     int SlotIndex { get; }

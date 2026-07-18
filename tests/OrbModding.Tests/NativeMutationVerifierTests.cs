@@ -1,0 +1,110 @@
+using System;
+using OrbModding.Common;
+using Xunit;
+
+namespace OrbModding.Tests;
+
+public sealed class NativeMutationVerifierTests
+{
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void RejectsNoOpPartialAndUnexpectedLargerChanges(int appliedDelta)
+    {
+        var state = 10;
+
+        var evidence = NativeMutationVerifier.Execute(
+            "test queue",
+            "candidate-1",
+            "exact delta +2",
+            () => state,
+            () => state += appliedDelta,
+            (before, after) => after == before + 2);
+
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, evidence.Outcome);
+        Assert.True(evidence.MutationWasAttempted);
+        Assert.Equal(10, evidence.Before);
+        Assert.Equal(10 + appliedDelta, evidence.After);
+        Assert.Contains("candidate-1", evidence.Format());
+    }
+
+    [Fact]
+    public void PreservesAfterStateWhenExecutionThrowsAfterChangingState()
+    {
+        var state = 10;
+
+        var evidence = NativeMutationVerifier.Execute(
+            "test queue",
+            "candidate-2",
+            "exact delta +2",
+            () => state,
+            () =>
+            {
+                state += 2;
+                throw new InvalidOperationException("native failure");
+            },
+            (before, after) => after == before + 2);
+
+        Assert.Equal(NativeMutationOutcome.ExecutionThrew, evidence.Outcome);
+        Assert.True(evidence.HasAfter);
+        Assert.Equal(12, evidence.After);
+        Assert.Contains("native failure", evidence.Detail);
+    }
+
+    [Fact]
+    public void AcceptsOnlyTheExpectedChange()
+    {
+        var state = 10;
+
+        var evidence = NativeMutationVerifier.Execute(
+            "test queue",
+            "candidate-3",
+            "exact delta +2",
+            () => state,
+            () => state += 2,
+            (before, after) => after == before + 2);
+
+        Assert.Equal(NativeMutationOutcome.Verified, evidence.Outcome);
+        Assert.True(evidence.IsVerified);
+        Assert.Equal(10, evidence.Before);
+        Assert.Equal(12, evidence.After);
+    }
+
+    [Fact]
+    public void DoesNotExecuteWhenBeforeCaptureFails()
+    {
+        var executed = false;
+
+        var evidence = NativeMutationVerifier.Execute<int>(
+            "test queue",
+            "candidate-4",
+            "exact delta +1",
+            () => throw new InvalidOperationException("capture failure"),
+            () => executed = true,
+            (before, after) => after == before + 1);
+
+        Assert.Equal(NativeMutationOutcome.BeforeCaptureFailed, evidence.Outcome);
+        Assert.False(evidence.MutationWasAttempted);
+        Assert.False(executed);
+    }
+
+    [Fact]
+    public void ReportsAfterCaptureFailureAsAmbiguousMutation()
+    {
+        var state = 10;
+        var captures = 0;
+
+        var evidence = NativeMutationVerifier.Execute<int>(
+            "test queue",
+            "candidate-5",
+            "exact delta +1",
+            () => ++captures == 1 ? state : throw new InvalidOperationException("after unavailable"),
+            () => state++,
+            (before, after) => after == before + 1);
+
+        Assert.Equal(NativeMutationOutcome.AfterCaptureFailed, evidence.Outcome);
+        Assert.True(evidence.MutationWasAttempted);
+        Assert.False(evidence.HasAfter);
+    }
+}

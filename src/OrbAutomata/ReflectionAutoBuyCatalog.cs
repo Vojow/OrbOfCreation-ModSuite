@@ -595,7 +595,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     IAutoBuyLifecycleCandidate,
     IAutoBuyNativeIdentity,
     IAutoBuyDirtyCandidate,
-    IAutoBuyPriorityCandidate
+    IAutoBuyPriorityCandidate,
+    IAutoBuyMutationCandidate
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
@@ -627,6 +628,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
     private long _completionRefreshGeneration = -1;
+    private string? _mutationBlockedReason;
+    private NativeMutationEvidence<int>? _lastMutationEvidence;
 
     public ReflectionAutoBuyCandidate(
         object source,
@@ -697,6 +700,12 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     public bool CanPurchase(out string reason)
     {
+        if (_mutationBlockedReason is not null)
+        {
+            reason = _mutationBlockedReason;
+            return false;
+        }
+
         if (!TryInvoke(_canPurchase, out bool canPurchase))
         {
             reason = "CanPurchase unavailable";
@@ -956,6 +965,12 @@ internal sealed class ReflectionAutoBuyCandidate :
     public bool TryPurchaseOne(out string reason)
     {
         reason = string.Empty;
+        if (_mutationBlockedReason is not null)
+        {
+            reason = _mutationBlockedReason;
+            return false;
+        }
+
         if (!CanPurchase(out reason))
         {
             return false;
@@ -1002,35 +1017,44 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     private bool InvokeAndVerify(MethodInfo method, object[] arguments, string levelMethod, out string reason)
     {
-        reason = string.Empty;
-        if (!TryInvoke(_getQueuedState, out int before))
+        var evidence = NativeMutationVerifier.Execute(
+            $"Auto Buy {_kind}",
+            Snapshot().Uuid,
+            $"{levelMethod} exact delta +1",
+            CaptureQueuedState,
+            () => method.Invoke(_source, arguments),
+            (before, after) => after == before + 1);
+        _lastMutationEvidence = evidence;
+        if (evidence.IsVerified)
         {
-            reason = $"native {levelMethod} was unavailable before purchase";
-            return false;
+            reason = string.Empty;
+            return true;
         }
 
-        try
+        reason = evidence.Format();
+        if (evidence.MutationWasAttempted)
         {
-            method.Invoke(_source, arguments);
-        }
-        catch (TargetInvocationException ex)
-        {
-            reason = ex.InnerException?.Message ?? ex.Message;
-            return false;
-        }
-        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.Message;
-            return false;
+            _mutationBlockedReason = $"native mutation blocked until the next lifecycle: {reason}";
+            Plugin.Log?.LogAutomataWarning(_mutationBlockedReason);
         }
 
-        if (!TryInvoke(_getQueuedState, out int after) || after <= before)
+        return false;
+    }
+
+    public void RecoverMutationBlock()
+    {
+        _mutationBlockedReason = null;
+        _lastMutationEvidence = null;
+    }
+
+    private int CaptureQueuedState()
+    {
+        if (!TryInvoke(_getQueuedState, out int queued))
         {
-            reason = $"native purchase did not increase {levelMethod}";
-            return false;
+            throw new InvalidOperationException("native queued state is unavailable");
         }
 
-        return true;
+        return queued;
     }
 
     private MethodInfo? FindNoArgMethod(string name, Type? returnType)

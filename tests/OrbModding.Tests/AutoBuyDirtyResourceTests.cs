@@ -1434,6 +1434,32 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionStructureCandidate_NoOpPurchaseBlocksUntilExplicitRecovery()
+    {
+        var native = new StructureSO
+        {
+            uuid = "no-op-structure",
+            ApplyPurchaseMutation = false,
+        };
+        var snapshots = new AutoBuyResourceSnapshotCache(
+            new ReflectionAutoBuyResourceSnapshotReader(),
+            (_, _, _, _) => { });
+        var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
+
+        Assert.False(candidate.TryPurchaseOne(out var failedReason));
+        Assert.Contains("PostconditionFailed", failedReason);
+        Assert.False(candidate.TryPurchaseOne(out var blockedReason));
+        Assert.Contains("blocked until the next lifecycle", blockedReason);
+
+        native.ApplyPurchaseMutation = true;
+        candidate.RecoverMutationBlock();
+
+        Assert.True(candidate.TryPurchaseOne(out var recoveredReason), recoveredReason);
+        Assert.Equal(1, native.QueuedQuantity);
+    }
+
+    [Fact]
     public void UnchangedRegistryIdentity_ReusesExistingCandidateWrapper()
     {
         var index = new AutoBuyCandidateIndex();
@@ -2173,6 +2199,8 @@ internal class StructureSO
 
     public bool Purchasable { get; set; } = true;
 
+    public bool ApplyPurchaseMutation { get; set; } = true;
+
     public int PurchaseLevel { get; set; }
 
     public int QueuedQuantity { get; set; }
@@ -2193,7 +2221,7 @@ internal class StructureSO
 
     public void Purchase(bool forceOne)
     {
-        if (forceOne && Purchasable) QueuedQuantity++;
+        if (forceOne && Purchasable && ApplyPurchaseMutation) QueuedQuantity++;
     }
 
     public int GetPurchaseLevel() => PurchaseLevel;

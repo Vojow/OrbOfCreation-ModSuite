@@ -72,6 +72,32 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
 
     [Fact]
     [Trait("Category", "HeadlessIntegration")]
+    public void NoOpSingleLevelBlocksFurtherCostsUntilLifecycleRecovery()
+    {
+        InstallLevelAllUpgrade(purchaseLevel: 0);
+        var recipe = AddReadySpell("00000000-0000-0000-0000-000000000013", mastery: 2);
+        recipe.SuppressLevelMutation = true;
+        using var runtime = new ReflectionSpellLevelRuntime();
+        var candidate = runtime.ReadSnapshot(out _).Candidate;
+        Assert.NotNull(candidate);
+
+        Assert.False(runtime.TryLevelSingle(candidate!, out var failedReason));
+        Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(1, recipe.levelCost.PerformCalls);
+        Assert.False(runtime.TryLevelSingle(candidate, out var blockedReason));
+        Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(1, recipe.levelCost.PerformCalls);
+
+        recipe.SuppressLevelMutation = false;
+        runtime.InvalidateLifecycle();
+
+        Assert.True(runtime.TryLevelSingle(candidate, out var recoveredReason), recoveredReason);
+        Assert.Equal(3, recipe.masteryLevel);
+        Assert.Equal(2, recipe.levelCost.PerformCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
     public void LifecycleInvalidation_DiscardsAQueuedSpellMutation()
     {
         InstallLevelAllUpgrade(purchaseLevel: 0);

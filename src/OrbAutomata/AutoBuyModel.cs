@@ -214,6 +214,11 @@ internal interface IAutoBuyLifecycleCandidate
     bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason);
 }
 
+internal interface IAutoBuyMutationCandidate
+{
+    void RecoverMutationBlock();
+}
+
 internal interface IAutoBuyDirtyCandidate
 {
     IReadOnlyList<string> ResourceDependencies { get; }

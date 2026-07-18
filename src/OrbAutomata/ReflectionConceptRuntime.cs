@@ -65,6 +65,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     private MethodInfo? _addInstances;
     private MethodInfo? _removeInstances;
     private string? _blockedReason;
+    private NativeMutationEvidence<int>? _lastMutationEvidence;
     private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
@@ -257,6 +258,12 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     public bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
     {
+        if (_blockedReason is not null)
+        {
+            reason = _blockedReason;
+            return false;
+        }
+
         if (delta <= 0 || !IsCurrentRecipe(candidate) || !CanAdd(candidate))
         {
             reason = "candidate identity, compatible slot, or quantity changed";
@@ -270,17 +277,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             reason = "native mastery quantity limit changed";
             return false;
         }
-        try
-        {
-            _addInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta });
-            reason = "native concept quantity submitted";
-            return true;
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.GetBaseException().Message;
-            return false;
-        }
+        return ExecuteQuantityMutation(
+            candidate,
+            "Auto Concept add",
+            $"queued quantity exact delta +{delta}",
+            () => _addInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta }),
+            (before, after) => after == before + delta,
+            out reason);
     }
 
     public bool TryRemoveOwned(NativeConceptCandidate candidate, int delta, out string reason)
@@ -300,6 +303,12 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         string quantityDescription,
         out string reason)
     {
+        if (_blockedReason is not null)
+        {
+            reason = _blockedReason;
+            return false;
+        }
+
         var current = FindActiveInstance(candidate.Recipe);
         if (delta <= 0 || current is null || !IsCurrentRecipe(candidate))
         {
@@ -313,17 +322,49 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             reason = $"native {quantityDescription} changed";
             return false;
         }
-        try
+        return ExecuteQuantityMutation(
+            candidate,
+            "Auto Concept remove",
+            $"queued quantity exact delta -{delta}",
+            () => _removeInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta }),
+            (before, after) => after == before - delta,
+            out reason);
+    }
+
+    private bool ExecuteQuantityMutation(
+        NativeConceptCandidate candidate,
+        string feature,
+        string expectedChange,
+        Action execute,
+        Func<int, int, bool> verify,
+        out string reason)
+    {
+        var evidence = NativeMutationVerifier.Execute(
+            feature,
+            candidate.Uuid,
+            expectedChange,
+            () => CaptureQueuedQuantity(candidate.Recipe),
+            execute,
+            verify);
+        _lastMutationEvidence = evidence;
+        if (evidence.IsVerified)
         {
-            _removeInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta });
-            reason = $"native {quantityDescription} removal submitted";
+            reason = string.Empty;
             return true;
         }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.GetBaseException().Message;
-            return false;
-        }
+
+        reason = evidence.Format();
+        return evidence.MutationWasAttempted
+            ? Fail($"native Concept mutation blocked until the next lifecycle: {reason}", out reason)
+            : false;
+    }
+
+    private int CaptureQueuedQuantity(object recipe)
+    {
+        var instance = FindActiveInstance(recipe);
+        return instance is null
+            ? 0
+            : Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(instance) ?? 0);
     }
 
     public bool IsDrainSafe(NativeConceptCandidate candidate, float minimumDrainRatio)
@@ -362,6 +403,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         _recipeUuids.Clear();
         _activeConceptCount = 0;
         _blockedReason = null;
+        _lastMutationEvidence = null;
     }
 
     public void Dispose() => InvalidateLifecycle();

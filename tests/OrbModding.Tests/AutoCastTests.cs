@@ -521,6 +521,40 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionAutoCastCandidate_MissingFireEvidenceBlocksUntilLifecycleRecovery()
+    {
+        var manager = new SpellManager();
+        var spell = new NativeLoadoutSpell("no-evidence-spell") { EmitFireSignal = false };
+        manager.activeSpells.Add(spell);
+        SpellManager.instance = manager;
+        TargetingManager.Targeting = false;
+        using var catalog = new ReflectionAutoCastCatalog();
+        try
+        {
+            var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
+
+            Assert.False(candidate.TryFireAndResolveTargets(out var failedReason));
+            Assert.Contains("PostconditionFailed", failedReason);
+            Assert.Equal(1, spell.FireCalls);
+            Assert.False(candidate.TryFireAndResolveTargets(out var blockedReason));
+            Assert.Contains("blocked until the next lifecycle", blockedReason);
+            Assert.Equal(1, spell.FireCalls);
+
+            spell.EmitFireSignal = true;
+            catalog.RecoverMutationBlocks();
+
+            Assert.True(candidate.TryFireAndResolveTargets(out var recoveredReason), recoveredReason);
+            Assert.Equal(2, spell.FireCalls);
+        }
+        finally
+        {
+            SpellManager.instance = null;
+            TargetingManager.Targeting = false;
+        }
+    }
+
+    [Fact]
     public void ManualFireSignalPausesForConfiguredUnscaledTime()
     {
         var spell = Spell("paused");
@@ -824,6 +858,7 @@ public sealed class AutoCastTests
 
         public NativeLoadoutRecipe reference;
         public bool Channeled { get; set; }
+        public bool EmitFireSignal { get; set; } = true;
         public bool HoldingCharge { get; private set; }
         public int FireCalls { get; private set; }
 
@@ -842,7 +877,11 @@ public sealed class AutoCastTests
         public NativeLoadoutCostList GetDrainCost() => new();
         public object GetScalingInfo() => new object();
         public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
-        public void Fire() => FireCalls++;
+        public void Fire()
+        {
+            if (EmitFireSignal) AutoCastManualSignal.NotifySpellFire();
+            FireCalls++;
+        }
     }
 
     private sealed class NativeLoadoutRecipe
