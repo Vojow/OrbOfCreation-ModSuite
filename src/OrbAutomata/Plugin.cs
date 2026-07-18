@@ -74,7 +74,7 @@ public sealed class Plugin : BaseUnityPlugin
             readFrameIdentity: () => UnityEngine.Time.frameCount);
         _autoConceptController = new AutoConceptController(
             _config,
-            new ReflectionConceptRuntime(),
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount);

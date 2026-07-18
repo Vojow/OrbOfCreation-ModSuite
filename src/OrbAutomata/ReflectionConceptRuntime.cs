@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -47,20 +48,11 @@ internal sealed class NativeConceptCandidate
 
 internal sealed class ReflectionConceptRuntime : IDisposable
 {
-    internal const string ReductiveConceptTypeUuid = "47b787b9-d4cd-43c8-a7e3-63a1e4e0ae94";
-    internal const string ReflectiveConceptTypeUuid = "8f258dcc-c39a-4d64-b915-4239e746c49d";
-    internal const string ConceptualizationTypeUuid = "69842862-dfce-4a9e-a73b-f757c72e49dc";
     internal const string ActiveConceptsUuid = "9121924d-2692-428b-9599-165224ccd899";
-    internal const string ConceptRecipesUuid = "c8ff8e01-c042-49c2-86a2-e374f82c280c";
 
-    private static readonly HashSet<string> ConceptTypeUuids = new(StringComparer.Ordinal)
-    {
-        ReductiveConceptTypeUuid,
-        ReflectiveConceptTypeUuid,
-        ConceptualizationTypeUuid,
-    };
-
+    private readonly AlchemyGameplayDomainClassifier _domainClassifier;
     private readonly List<object> _recipes = new();
+    private readonly Dictionary<object, string> _recipeUuids = new(ReferenceEqualityComparer.Instance);
     private object? _activeConcepts;
     private Type? _recipeType;
     private Type? _instanceType;
@@ -80,6 +72,11 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     public int ScopedRecipeCount => _recipes.Count;
     public int ActiveConceptCount => _activeConceptCount;
 
+    public ReflectionConceptRuntime(AlchemyGameplayDomainClassifier domainClassifier)
+    {
+        _domainClassifier = domainClassifier ?? throw new ArgumentNullException(nameof(domainClassifier));
+    }
+
     public bool TryInitialize(out string reason)
     {
         if (IsReady)
@@ -94,6 +91,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         }
         try
         {
+            if (!_domainClassifier.TryInitialize(out var classifierReason))
+            {
+                return _domainClassifier.Status == AlchemyDomainClassifierStatus.Blocked
+                    ? Fail($"Auto Concept domain classifier blocked: {classifierReason}", out reason)
+                    : Retry($"Auto Concept domain classifier is not ready: {classifierReason}", out reason);
+            }
+
             var idType = ReflectionUtil.FindLoadedType("IdScriptableObject");
             _recipeType = ReflectionUtil.FindLoadedType("AlchemyRecipeSO");
             _instanceType = ReflectionUtil.FindLoadedType("AlchemyInstance");
@@ -106,7 +110,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             if (lookupField?.GetValue(null) is not IDictionary lookup)
                 return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
             var activeId = new Guid(ActiveConceptsUuid);
-            var recipesId = new Guid(ConceptRecipesUuid);
+            var recipesId = AlchemyGameplayDomainClassifier.ConceptRecipesUuid;
             if (!lookup.Contains(activeId) || !lookup.Contains(recipesId))
                 return Retry("concept assets are not registered yet", out reason);
             var active = lookup[activeId];
@@ -133,15 +137,21 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             if (recipeValuesField.GetValue(recipes) is not IEnumerable scopedRecipes)
                 return Fail("ConceptRecipes runtime contents are unavailable", out reason);
             _recipes.Clear();
-            var recipeUuids = new HashSet<string>(StringComparer.Ordinal);
+            _recipeUuids.Clear();
             foreach (var recipe in scopedRecipes)
             {
-                if (recipe is null || recipe.GetType() != _recipeType || !HasValidatedConceptType(recipe))
-                    return Fail("ConceptRecipes contains an invalid or non-concept entry", out reason);
-                var uuid = ReflectionUtil.ReadStableId(recipe);
-                if (string.IsNullOrWhiteSpace(uuid)) return Fail("concept recipe UUID is unavailable", out reason);
-                if (!recipeUuids.Add(uuid)) return Fail("ConceptRecipes contains a duplicate concept UUID", out reason);
+                var classification = _domainClassifier.ClassifyRecipe(recipe);
+                if (classification.Domain != AlchemyGameplayDomain.ScholarConcept || classification.RecipeUuid is null)
+                {
+                    return Fail(
+                        $"ConceptRecipes entry failed shared domain classification. " +
+                        $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
+                        $"Evidence={classification.Evidence}, Reason={classification.Reason}",
+                        out reason);
+                }
+                var uuid = classification.RecipeUuid.Value.ToString();
                 _recipes.Add(recipe);
+                _recipeUuids.Add(recipe, uuid);
             }
             if (_recipes.Count == 0) return Fail("ConceptRecipes runtime list is empty", out reason);
             _activeConcepts = active;
@@ -167,7 +177,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             _activeConceptCount = active.Count;
             foreach (var recipe in _recipes)
             {
-                var uuid = ReflectionUtil.ReadStableId(recipe)!;
+                var uuid = _recipeUuids[recipe];
                 if (blocked.Contains(uuid) || allowed.Count > 0 && !allowed.Contains(uuid)) continue;
                 if (ReflectionUtil.InvokeNoArgs(recipe, "IsDiscovered") is not true) continue;
                 var masteryLevel = ReadInt(recipe, "GetExperienceLevel", "masteryLevel");
@@ -346,8 +356,10 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     public void InvalidateLifecycle()
     {
+        _domainClassifier.InvalidateLifecycle();
         _activeConcepts = null;
         _recipes.Clear();
+        _recipeUuids.Clear();
         _activeConceptCount = 0;
         _blockedReason = null;
     }
@@ -450,22 +462,15 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     private bool IsCurrentRecipe(NativeConceptCandidate candidate)
     {
-        if (candidate.Recipe.GetType() != _recipeType ||
-            !string.Equals(ReflectionUtil.ReadStableId(candidate.Recipe), candidate.Uuid, StringComparison.Ordinal)) return false;
+        if (candidate.Recipe.GetType() != _recipeType) return false;
+        var classification = _domainClassifier.ClassifyRecipe(candidate.Recipe);
+        if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
+            classification.RecipeUuid is null ||
+            !string.Equals(classification.RecipeUuid.Value.ToString(), candidate.Uuid, StringComparison.Ordinal) ||
+            !_recipeUuids.TryGetValue(candidate.Recipe, out var snapshotUuid) ||
+            !string.Equals(snapshotUuid, candidate.Uuid, StringComparison.Ordinal)) return false;
         for (var index = 0; index < _recipes.Count; index++)
             if (ReferenceEquals(_recipes[index], candidate.Recipe)) return true;
-        return false;
-    }
-
-    private bool HasValidatedConceptType(object recipe)
-    {
-        if (FindField(recipe.GetType(), "alchemyTypes", isStatic: false)?.GetValue(recipe) is not IEnumerable types)
-            return false;
-        foreach (var type in types)
-        {
-            var uuid = type is null ? null : ReflectionUtil.ReadStableId(type);
-            if (uuid is not null && ConceptTypeUuids.Contains(uuid)) return true;
-        }
         return false;
     }
 

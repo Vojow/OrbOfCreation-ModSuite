@@ -30,6 +30,52 @@ jobs:
       - name: Audit native contract manifest and reflection declarations
         run: dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj --configuration Release -p:UseGameStubs=true
 
+  headless-behavior:
+    name: Headless behavior and performance
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run headless integration and E2E journeys
+        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=HeadlessIntegration|Category=HeadlessE2E"
+
+      - name: Run deterministic performance simulations
+        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+
+  coverage:
+    name: Production coverage floors
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Collect production coverage
+        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --collect:"XPlat Code Coverage" --settings tests/coverage.runsettings --results-directory artifacts/coverage
+
+      - name: Enforce coverage floors
+        shell: pwsh
+        run: |
+          $coverage = Get-ChildItem artifacts/coverage -Recurse -Filter coverage.cobertura.xml |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $coverage) { throw 'Coverage report was not produced.' }
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-coverage.ps1 -CoveragePath $coverage.FullName
+
   repository-hygiene:
     name: Repository hygiene
     runs-on: windows-latest
