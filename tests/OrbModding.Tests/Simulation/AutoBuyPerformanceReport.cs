@@ -114,7 +114,10 @@ internal static class AutoBuyPerformanceReporter
             SchemaVersion = 1,
             Suite = "OrbAutomata.AutoBuy",
             GeneratedAtUtc = DateTime.UtcNow.ToString("O"),
-            SourceCommit = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "working-tree",
+            SourceCommit =
+                Environment.GetEnvironmentVariable("OOC_PERFORMANCE_SOURCE") ??
+                Environment.GetEnvironmentVariable("GITHUB_SHA") ??
+                "working-tree",
             Scenarios = Scenarios.Values.ToArray(),
         };
         File.WriteAllText(reportPath, JsonSerializer.Serialize(report, SerializerOptions) + Environment.NewLine);

@@ -45,6 +45,12 @@ summary, and retains the raw report for 90 days. See
 [headless E2E simulation](headless-e2e.md#historical-reports) for metric
 definitions and the baseline-update policy.
 
+For a source-level A/B comparison with the last pre-beta `main` engine, run
+`tools/compare-autobuy-performance.ps1`. Its compatibility project compiles the
+same deterministic workload separately against the untouched reference and
+current production sources; it does not copy beta engine changes into the
+reference. See [main versus beta compatibility run](headless-e2e.md#main-versus-beta-compatibility-run).
+
 Collect portable production coverage with the checked-in assembly allowlist:
 
 ```powershell

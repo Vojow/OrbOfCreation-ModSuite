@@ -760,14 +760,21 @@ internal sealed class SimulatedAutoBuyCandidate :
 
 internal sealed class SimulatedAutoBuyCatalog :
     IAutoBuyCatalog,
-    IAutoBuyIncrementalCatalog,
+    IAutoBuyIncrementalCatalog
+#if !LEGACY_MAIN_API
+    ,
     IAutoBuyCompletionRevalidationCatalog
+#endif
 {
     private readonly SimulatedAutoBuyWorld _world;
     private readonly HashSet<string> _deferredResourceInvalidations =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+#if !LEGACY_MAIN_API
     private readonly AutoBuyCompletionSettlementGate _completionSettlement =
         new AutoBuyCompletionSettlementGate();
+#else
+    private bool _completionEffectsDirty;
+#endif
     private bool _mutationGroupActive;
 
     public SimulatedAutoBuyCatalog(SimulatedAutoBuyWorld world)
@@ -799,10 +806,18 @@ internal sealed class SimulatedAutoBuyCatalog :
         EvaluationBatches++;
         CompleteMutationGroup();
         FlushDeferredInvalidations();
+#if LEGACY_MAIN_API
+        if (_completionEffectsDirty)
+        {
+            _completionEffectsDirty = false;
+            Index.InvalidateCompletionEffects();
+        }
+#else
         if (_completionSettlement.TryBegin(Index.SettlementValidationPending))
         {
             Index.InvalidateCompletionEffects();
         }
+#endif
 
         var batch = Index.PrepareEvaluation(
             request,
@@ -819,11 +834,20 @@ internal sealed class SimulatedAutoBuyCatalog :
     public void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
-        bool policyExcluded,
+        bool policyExcluded
+#if !LEGACY_MAIN_API
+        ,
         AutoBuyDecision? decision = null)
+#else
+        )
+#endif
     {
         CompletedCandidateEvaluations++;
+#if LEGACY_MAIN_API
+        Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
+#else
         Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
+#endif
     }
 
     public void InvalidatePolicy()
@@ -870,7 +894,11 @@ internal sealed class SimulatedAutoBuyCatalog :
     public void NotifyNativeCompletion()
     {
         CompletionSignals++;
+#if LEGACY_MAIN_API
+        _completionEffectsDirty = true;
+#else
         _completionSettlement.Notify();
+#endif
     }
 
     public void NotifyResourceChanged(
@@ -878,13 +906,18 @@ internal sealed class SimulatedAutoBuyCatalog :
         BigAmount previousQuantity,
         BigAmount currentQuantity)
     {
+#if LEGACY_MAIN_API
+        Index.InvalidateResource(resourceId, AutoBuyResourceChange.Quantity);
+#else
         Index.InvalidateResource(
             resourceId,
             AutoBuyResourceChange.Quantity,
             previousQuantity,
             currentQuantity);
+#endif
     }
 
+#if !LEGACY_MAIN_API
     public bool TryRefreshCandidateAfterCompletion(
         IAutoBuyCandidate candidate,
         long completionGeneration,
@@ -898,15 +931,28 @@ internal sealed class SimulatedAutoBuyCatalog :
         reason = "candidate is not part of the simulated native world";
         return false;
     }
+#endif
 
     public void InvalidateLifecycle()
     {
         _mutationGroupActive = false;
+#if LEGACY_MAIN_API
+        _completionEffectsDirty = false;
+#else
         _completionSettlement.Clear();
+#endif
         _deferredResourceInvalidations.Clear();
         RebuildIndex();
     }
 
+#if LEGACY_MAIN_API
+    public bool TryGetRemainingQueueRoom(out int remainingRoom)
+    {
+        QueueCapacityReads++;
+        remainingRoom = QueueReadSucceeds ? _world.RemainingQueueRoom : 0;
+        return QueueReadSucceeds;
+    }
+#else
     public bool TryCaptureQueueCapacity(
         int automationUsageLimit,
         int manualReservation,
@@ -923,6 +969,7 @@ internal sealed class SimulatedAutoBuyCatalog :
                    out snapshot,
                    out _);
     }
+#endif
 
     public bool TryGetBulkDevelopment(out int levels)
     {

@@ -129,6 +129,36 @@ workload or improves/accepts the engine result. Run the full portable suite
 first, record the previous and new values in the PR, and never refresh the file
 merely to make a regression check pass.
 
+### Main versus beta compatibility run
+
+Run the same simulation against the last pre-beta `main` engine and the current
+working tree with:
+
+```powershell
+tools/compare-autobuy-performance.ps1
+```
+
+The script checks out commit `7f61f21` into a disposable temporary worktree,
+compiles a legacy catalog adapter against that unmodified production source,
+then compiles the current adapter against the current production source. Both
+execute the same 166-candidate, 304-slot, 900-frame periodic-completion and
+completion-storm workloads. It writes `main-reference.json`,
+`beta-current.json`, and `comparison.md` under
+`artifacts/performance/ab` and removes only the temporary worktree it created.
+
+The compatibility adapter accounts only for intentional API differences: the
+change from remaining queue room to the full queue-capacity snapshot, candidate
+evaluation evidence, and completion settlement/revalidation. It does not
+backport beta engine behavior into the reference build. Use
+`-ReferenceRef <commit>` to compare another legacy-compatible commit.
+
+Output and responsiveness metrics are interpreted directly: submissions,
+queue depth, distinct candidates, saturation time, and idle purchasable frames.
+Raw reads and modeled operations remain diagnostic in this cross-version view.
+An older engine can appear to perform less work simply because it does not
+revalidate or serve as many candidates, so operation density is a regression
+gate only between reports with equivalent engine semantics.
+
 ## Scenario design rules
 
 - Exercise the production engine through public or existing internal seams; do not duplicate its decision algorithm in the simulator.

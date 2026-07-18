@@ -56,12 +56,16 @@ jobs:
         shell: pwsh
         run: tools/check-performance-report.ps1 -ReportPath artifacts/performance/autobuy-current.json
 
+      - name: Compare pre-beta main and current engine
+        shell: pwsh
+        run: tools/compare-autobuy-performance.ps1
+
       - name: Retain deterministic performance report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: autobuy-performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/performance/autobuy-current.json
+          path: artifacts/performance
           if-no-files-found: error
           retention-days: 90
 
