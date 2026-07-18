@@ -76,6 +76,7 @@ Portable exit gate: abundant resources can feed every usable queue slot without 
 
 - Desktop evidence: a fixed Structure batch submitted three purchases with zero failures and CPU slicing active. After policy-exclusion parking was added, `NotAllowed` reached the 89 excluded registered candidates once and stayed flat across later 30-second summaries; the one allowed reserve-blocked candidate continued to provide resource-wakeup data.
 - A disposable 13-resource `9e60` profile completed 150 native purchases with zero failures. Retaining the next ranked candidate only across a full-queue wait reduced sustained candidate evaluations from 58,973 to 1,483 (97.5%) while preserving post-group dirty settlement whenever another queue slot remained usable.
+- The `0.8.1` fair-pass profile filled the visible shared queue from `14/304` to `302/304` in ten seconds with one manual slot reserved. Its 130-second log recorded 1,797 successful submissions across 166 distinct candidates, including both Structures and Upgrades, with zero native failures.
 - Capture separate counts for evaluation rejections and native purchase failures.
 - Verify what Upgrade `CanPurchase` includes in the supported game build before changing cost-read ordering.
 - Profile scans, dirty wakeups, coordinator waits, queue waits, and native mutation duration on desktop and Steam Deck/Proton.

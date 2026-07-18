@@ -842,7 +842,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 }
 
                 AdvancePurchaseCandidate();
-                if (IsAffordableRepeatGroup)
+                if (IsAffordableRepeatGroup && recommendations.Count == 1)
                 {
                     // The prepared group ends at its first failed live
                     // admission. Do not consider a lower cached rank until
@@ -870,7 +870,8 @@ internal sealed class AutoBuyEngine : IDisposable
             {
                 _pendingCandidateRepeatLimit = GetCandidateRepeatLimit(
                     recommendation,
-                    Math.Max(1, room - queueReserve));
+                    Math.Max(1, room - queueReserve),
+                    recommendations.Count);
             }
 
             _pendingBatchAttempted++;
@@ -924,10 +925,12 @@ internal sealed class AutoBuyEngine : IDisposable
                             break;
                         }
 
-                        // Preserve the configured repeat group, then settle
-                        // resource invalidations and rerank dirty dependents
-                        // before another cached candidate can mutate state.
-                        _pendingPurchaseIndex = recommendations.Count;
+                        if (!IsAffordableRepeatGroup)
+                        {
+                            // Fixed, Bulk Development, and action-multiplier
+                            // groups retain their settle-and-rerank boundary.
+                            _pendingPurchaseIndex = recommendations.Count;
+                        }
                     }
                 }
             }
@@ -980,7 +983,7 @@ internal sealed class AutoBuyEngine : IDisposable
                      _queueWaitLogGate.ShouldLog("autobuy-queue-wait", _lifetime.Elapsed)))
                 {
                     _log.LogAutomataInfo(
-                        "Auto Buy prepared its next ranked batch and is waiting for native queue room; " +
+                        "Auto Buy preserved its next prepared ranked candidate while waiting for native queue room; " +
                         "it will feed the first available slot without rescanning.");
                 }
             }
@@ -1065,7 +1068,10 @@ internal sealed class AutoBuyEngine : IDisposable
         _diagnosticBatchElapsedMilliseconds = 0.0;
     }
 
-    private int GetCandidateRepeatLimit(AutoBuyDecision recommendation, int availableQueueSlots)
+    private int GetCandidateRepeatLimit(
+        AutoBuyDecision recommendation,
+        int availableQueueSlots,
+        int recommendationCount)
     {
         if (_config.RespectActionMultiplier.Value &&
             _catalog.TryGetActionMultiplier(out var multiplier))
@@ -1075,11 +1081,12 @@ internal sealed class AutoBuyEngine : IDisposable
 
         if (_config.RepeatWhileAffordable.Value)
         {
-            // Queue room is the stable upper bound. Future costs are not:
-            // queued levels can change scaling, modifiers, and resources.
-            // Continue the prepared candidate and revalidate each level so
-            // the first failed live admission check becomes the exact stop.
-            return Math.Max(1, availableQueueSlots);
+            // A lone candidate may consume all usable room. When several are
+            // ready, give each one independently revalidated level before the
+            // next scan so one cheap candidate cannot monopolize the queue.
+            return recommendationCount > 1
+                ? 1
+                : Math.Max(1, availableQueueSlots);
         }
 
         if (recommendation.Candidate.Kind != AutoBuyCandidateKind.Structure)

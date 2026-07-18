@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.0` adds rejection-aware, queue-filling Auto Buy to Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.1` fixes queue-filling Auto Buy so multiple affordable Structures and Upgrades share the prepared queue pass instead of one candidate monopolizing it, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -21,7 +21,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
-- The selected Structure or Upgrade repeats while it remains affordable and usable queue room remains; every level is revalidated separately.
+- When several Structures or Upgrades are eligible, each receives one live-validated level per ranked pass; a lone candidate may fill all usable queue room.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -52,7 +52,7 @@ When `RespectActionMultiplier=true`, Automata reads the game's current action mu
 
 Upgrade submission temporarily forces the native global multi-buy value to one and verifies that the captured value is restored afterward, including when the setter or purchase throws. If restoration cannot be confirmed through the native getter, further automated Upgrade mutations are quarantined for the process and removed from admission, cached ranking, and pending batches. Structure purchases do not use that global and remain independently eligible.
 
-When action-multiplier handling is off, `RepeatWhileAffordable=true` keeps the selected Structure or Upgrade prepared for the queue room available at the start of its group. Automata does not divide the current balance by one potentially stale cost: it re-reads and revalidates the native cost, affordability threshold, and reserves before every level, stopping at the exact first failed admission check. This avoids a new scan/ranking rotation after every Bulk Development-sized group when resources are abundant.
+When action-multiplier handling is off, `RepeatWhileAffordable=true` gives each prepared eligible Structure or Upgrade one level before repeating the ranked pass. The already prepared next candidate continues on the following admitted frame without a catalog rescan; if the shared native action queue fills, that candidate waits for the first reopened slot. A lone eligible candidate can still fill every usable slot. Automata does not divide the current balance by one potentially stale cost: it re-reads and revalidates native availability, current cost, affordability threshold, reserves, maximum level, and queue admission before every level.
 
 Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `StructureRepeatMode`: `BulkDevelopment` follows the live player value, `Fixed` uses `FixedStructureLevelsPerCandidate`, and `Single` buys one level. In that fallback mode, Upgrades remain one level per ranked candidate.
 
@@ -60,7 +60,7 @@ Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `S
 
 ### Queue scheduling
 
-The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. Once a ranked batch is prepared, it also checks queue room every frame and feeds the first newly available slot without waiting for the queue to become nearly empty or performing another scan. After a successful batch, the following scan begins on the next frame while existing native actions continue.
+The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A full queue is polled at 10 Hz and retains the next candidate for the first newly available slot. After one pass, reranking begins on the next frame while existing native actions continue.
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
@@ -68,7 +68,7 @@ Auto Buy and Auto Cast register separate read and native-mutation work with the 
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
-Automata finishes the configured repeat group for the selected candidate, then refreshes dirty resource and cost state and reranks before mutating a different candidate. The default affordable group is capped to the usable queue room captured at group start and can end earlier on live admission failure. It does not predict future levels; the optional cost/quality tier changes which admitted Structure starts a group, not how many levels remain safe.
+Automata finishes the configured repeat group for each candidate and advances through the prepared ranking before refreshing dirty resource and cost state. For the default affordable policy, that group is one level whenever multiple recommendations exist, preventing the cheapest candidate from consuming the entire queue; if only one recommendation exists, its group may use all usable room. It does not predict future levels: every mutation is admitted independently.
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
@@ -80,7 +80,7 @@ Structures must pass native availability before Automata reads costs or calls th
 
 Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
 
-During an owned repeat group, the selected candidate refreshes its own cost after every level. Shared resource-dependent invalidation is coalesced and flushed once when that group ends or is cancelled, and the first failed live admission ends the group before any lower cached recommendation can mutate. If the group consumed the last usable queue slot, the next ranked candidate remains prepared across the queue wait and is live-revalidated when a slot reopens; if room remains, Automata settles and reranks before mutating a different candidate.
+During a prepared ranked pass, each candidate refreshes its own cost immediately before its level. Shared resource-dependent invalidation is coalesced while later candidates are still live-revalidated against current resources and native state. A failed admission skips that candidate for the current pass; an ambiguous native mutation failure ends the pass so dirty state can settle safely. If the queue fills, the next ranked candidate remains prepared across the wait and is live-revalidated when a slot reopens.
 
 ## Auto Cast
 

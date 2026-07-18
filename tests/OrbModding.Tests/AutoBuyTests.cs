@@ -276,7 +276,7 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RepeatWhileAffordable_ReranksAfterFirstFailedLiveAdmission()
+    public void RepeatWhileAffordable_VisitsLowerRankedCandidateBeforeRepeating()
     {
         var selected = Candidate("selected", AutoBuyCandidateKind.Structure, 10, 25);
         var lowerRanked = Candidate("lower-ranked", AutoBuyCandidateKind.Structure, 500, 1_000);
@@ -288,8 +288,8 @@ public sealed class AutoBuyTests
             config.LeaveQueueSlots.Value = 0;
         }, new FakeCatalog(5, selected, lowerRanked));
 
-        Assert.Equal(2, selected.PurchaseCalls);
-        Assert.Equal(0, lowerRanked.PurchaseCalls);
+        Assert.Equal(1, selected.PurchaseCalls);
+        Assert.Equal(1, lowerRanked.PurchaseCalls);
     }
 
     [Fact]
