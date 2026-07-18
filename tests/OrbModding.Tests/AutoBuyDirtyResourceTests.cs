@@ -1408,7 +1408,7 @@ public sealed class AutoBuyDirtyResourceTests
         native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 1)));
         var snapshots = new AutoBuyResourceSnapshotCache(
             new ReflectionAutoBuyResourceSnapshotReader(),
-            (_, _) => { });
+            (_, _, _, _) => { });
         snapshots.BeginLazyEpoch();
         var candidate = new ReflectionAutoBuyCandidate(
             native,

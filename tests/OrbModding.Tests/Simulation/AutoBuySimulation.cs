@@ -182,6 +182,14 @@ internal sealed class AutoBuySimulation : IDisposable
         }
     }
 
+    public void SetResourceQuantity(string resourceId, BigAmount quantity)
+    {
+        ThrowIfDisposed();
+        var previous = World.GetResourceQuantity(resourceId);
+        World.SetResourceQuantity(resourceId, quantity);
+        Catalog.NotifyResourceChanged(resourceId, previous, quantity);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -677,7 +685,7 @@ internal sealed class SimulatedAutoBuyCandidate :
             DirtyMarks++;
         }
 
-        if ((reasons & AutoBuyDirtyReason.CostDirty) != 0)
+        if ((reasons & (AutoBuyDirtyReason.CostDirty | AutoBuyDirtyReason.ResourceDirty)) != 0)
         {
             _costDirty = true;
         }
@@ -796,10 +804,11 @@ internal sealed class SimulatedAutoBuyCatalog :
     public void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
-        bool policyExcluded)
+        bool policyExcluded,
+        AutoBuyDecision? decision = null)
     {
         CompletedCandidateEvaluations++;
-        Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
+        Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
     }
 
     public void InvalidatePolicy()
@@ -847,6 +856,18 @@ internal sealed class SimulatedAutoBuyCatalog :
     {
         CompletionSignals++;
         _completionSettlement.Notify();
+    }
+
+    public void NotifyResourceChanged(
+        string resourceId,
+        BigAmount previousQuantity,
+        BigAmount currentQuantity)
+    {
+        Index.InvalidateResource(
+            resourceId,
+            AutoBuyResourceChange.Quantity,
+            previousQuantity,
+            currentQuantity);
     }
 
     public bool TryRefreshCandidateAfterCompletion(
