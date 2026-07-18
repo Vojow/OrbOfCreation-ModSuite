@@ -17,6 +17,8 @@ This audit was repeated on 2026-07-13 against the assemblies currently installed
 
 The copied analysis inputs and installed assemblies have identical lengths and hashes. ILSpyCmd `10.1.0.8386` decompiled the key types to C# and ILSpy GUI was opened on the installed main assembly; repeatable metadata and IL checks were also made with Mono.Cecil. No game files were changed.
 
+The audited hashes and active runtime-resolved member contracts are mirrored in [`data/native-contracts.json`](../../data/native-contracts.json). Installed-game tests validate the manifest directly, including type/member visibility and staticness. The manifest hash baseline is also checked against the runtime `GameAssemblyAudit` constants so those fail-closed warnings cannot drift independently.
+
 ## Mind-map result
 
 The high-level map remains correct:

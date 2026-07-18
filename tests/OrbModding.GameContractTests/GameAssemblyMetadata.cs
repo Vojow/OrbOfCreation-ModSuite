@@ -36,7 +36,21 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return DecodeTypeHandle(definition.BaseType);
     }
 
+    public TypeContract GetType(string fullName)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        return new TypeContract(
+            fullName,
+            GetTypeVisibility(definition.Attributes),
+            DecodeTypeHandle(definition.BaseType));
+    }
+
     public string GetFieldType(string fullName, string fieldName)
+    {
+        return GetField(fullName, fieldName).FieldType;
+    }
+
+    public FieldContract GetField(string fullName, string fieldName)
     {
         var definition = Reader.GetTypeDefinition(RequireType(fullName));
         foreach (var fieldHandle in definition.GetFields())
@@ -44,7 +58,11 @@ internal sealed class GameAssemblyMetadata : IDisposable
             var field = Reader.GetFieldDefinition(fieldHandle);
             if (Reader.GetString(field.Name) == fieldName)
             {
-                return field.DecodeSignature(_typeProvider, null);
+                return new FieldContract(
+                    fieldName,
+                    GetFieldVisibility(field.Attributes),
+                    (field.Attributes & FieldAttributes.Static) != 0,
+                    field.DecodeSignature(_typeProvider, null));
             }
         }
 
@@ -67,6 +85,7 @@ internal sealed class GameAssemblyMetadata : IDisposable
             var signature = method.DecodeSignature(_typeProvider, null);
             methods.Add(new MethodContract(
                 name,
+                GetMethodVisibility(method.Attributes),
                 (method.Attributes & MethodAttributes.Static) != 0,
                 signature.ReturnType,
                 signature.ParameterTypes.ToArray()));
@@ -74,6 +93,39 @@ internal sealed class GameAssemblyMetadata : IDisposable
 
         return methods;
     }
+
+    private static string GetTypeVisibility(TypeAttributes attributes) =>
+        (attributes & TypeAttributes.VisibilityMask) switch
+        {
+            TypeAttributes.Public or TypeAttributes.NestedPublic => "public",
+            TypeAttributes.NestedFamily => "family",
+            TypeAttributes.NestedAssembly => "assembly",
+            TypeAttributes.NestedFamORAssem => "family-or-assembly",
+            TypeAttributes.NestedFamANDAssem => "family-and-assembly",
+            _ => "private",
+        };
+
+    private static string GetMethodVisibility(MethodAttributes attributes) =>
+        (attributes & MethodAttributes.MemberAccessMask) switch
+        {
+            MethodAttributes.Public => "public",
+            MethodAttributes.Family => "family",
+            MethodAttributes.Assembly => "assembly",
+            MethodAttributes.FamORAssem => "family-or-assembly",
+            MethodAttributes.FamANDAssem => "family-and-assembly",
+            _ => "private",
+        };
+
+    private static string GetFieldVisibility(FieldAttributes attributes) =>
+        (attributes & FieldAttributes.FieldAccessMask) switch
+        {
+            FieldAttributes.Public => "public",
+            FieldAttributes.Family => "family",
+            FieldAttributes.Assembly => "assembly",
+            FieldAttributes.FamORAssem => "family-or-assembly",
+            FieldAttributes.FamANDAssem => "family-and-assembly",
+            _ => "private",
+        };
 
     public void Dispose()
     {
@@ -134,9 +186,21 @@ internal sealed class GameAssemblyMetadata : IDisposable
 
 internal sealed record MethodContract(
     string Name,
+    string Visibility,
     bool IsStatic,
     string ReturnType,
     IReadOnlyList<string> ParameterTypes);
+
+internal sealed record FieldContract(
+    string Name,
+    string Visibility,
+    bool IsStatic,
+    string FieldType);
+
+internal sealed record TypeContract(
+    string Name,
+    string Visibility,
+    string BaseType);
 
 internal sealed class MetadataTypeNameProvider : ISignatureTypeProvider<string, object?>
 {
