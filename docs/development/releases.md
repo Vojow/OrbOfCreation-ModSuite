@@ -9,7 +9,7 @@ The supported package is an explicit allowlist:
 - **Orb Automata 0.8.2:** rejection-aware, completion-responsive queue-filling Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
 - **Orb Mentor 0.3.0:** native mastery-XP sharing for spells, with independently enabled artifact and alchemy domains.
 - **Orb Mod Config 0.6.0:** optional in-game configuration UI.
-- **Orb Modding Common 0.3.0:** bundled shared dependency, not a separate gameplay mod.
+- **Orb Modding Common 0.3.1:** bundled shared dependency with the audited Alchemy/Scholar gameplay-domain classifier, not a separate gameplay mod.
 
 `OrbChronomancer` and `OrbAchievementResonance` live only on the dedicated experimental branch and must not enter a supported archive. Orb Insights and Orb Toolbox remain plans rather than packaged plugins.
 

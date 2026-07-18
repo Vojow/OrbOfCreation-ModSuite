@@ -101,7 +101,7 @@ The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active con
 
 ## Auto Concept
 
-Auto Concept resolves the exact `ConceptRecipes` and `ActiveConcepts` assets by UUID and validates every candidate against the three Scholar concept type UUIDs. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
+Auto Concept uses the shared `OrbModding.Common.AlchemyGameplayDomainClassifier` as its concept-versus-ordinary-alchemy identity boundary. The classifier resolves the exact `ConceptRecipes` UUID/type asset and requires each exact `AlchemyRecipeSO` registry member to carry only audited Scholar type evidence; contradictory ordinary-and-Scholar typing fails the lifecycle closed. Auto Concept separately resolves `ActiveConcepts` for native slot and quantity ownership. It never uses the global alchemy recipe registry as a concept catalog and never mutates ordinary alchemy.
 
 `Mode=Active` ranks discovered concepts by mastery level, fractional XP progress, and stable UUID. It assigns one instance to each currently compatible acquired slot before deepening active assignments. Depth is submitted as one native batched quantity change up to the recipe's live mastery maximum or `PerConceptQuantityCap`.
 
@@ -115,9 +115,11 @@ The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blo
 
 Before every add or rotation, Automata reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio` or a drained resource reaches zero, it schedules removal of only the quantity recorded as Automata-owned.
 
-Enabling the feature snapshots current Active Concept quantities for ownership and rollback accounting. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets discard live references and rebuild a new baseline.
+Enabling the feature initializes the scoped shared classifier and snapshots current Active Concept quantities for ownership and rollback accounting. Disabled Auto Concept neither initializes nor rebuilds classifier/catalog evidence. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Automata-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets (including reset/NG+ manager restarts) invalidate classifier and runtime references and rebuild a new baseline only after Auto Concept is active again.
 
 ## Diagnostics
+
+Transient shared classifier readiness failures use the existing 30-second Auto Concept warning gate. A contradictory or permanently invalid concept-domain contract blocks Auto Concept for that lifecycle and is logged once; `Unknown` evidence never falls back to ordinary names or broad alchemy membership.
 
 Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
 

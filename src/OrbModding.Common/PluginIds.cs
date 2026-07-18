@@ -16,5 +16,5 @@ public static class PluginIds
     public const string MentorName = "Orb Mentor";
     public const string MentorVersion = "0.3.0";
 
-    public const string Version = "0.3.0";
+    public const string Version = "0.3.1";
 }

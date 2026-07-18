@@ -86,10 +86,11 @@ mindmap
 2. [Identity and registries](identity-and-registries.md)
 3. [Entity catalog and taxonomy](entity-catalog.md)
 4. [Entity correlations](entity-correlations.md)
-5. [Resources and large numbers](resources-and-bigdouble.md)
-6. [Save system](save-system.md)
-7. [Modding hooks](modding-hooks.md)
-8. [Reverse-engineering audit](audit.md)
+5. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
+6. [Resources and large numbers](resources-and-bigdouble.md)
+7. [Save system](save-system.md)
+8. [Modding hooks](modding-hooks.md)
+9. [Reverse-engineering audit](audit.md)
 
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 

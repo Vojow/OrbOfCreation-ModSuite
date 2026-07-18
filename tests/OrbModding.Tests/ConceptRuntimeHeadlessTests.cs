@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -26,12 +27,12 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
     {
         var recipe = new AlchemyRecipeSO("invalid", "Invalid", new[] { new AlchemyTypeSO(typeUuid) });
         InstallNativeLists(recipe);
-        using var runtime = new ReflectionConceptRuntime();
+        using var runtime = new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier());
 
         var initialized = runtime.TryInitialize(out var reason);
 
         Assert.False(initialized);
-        Assert.Contains("invalid or non-concept", reason);
+        Assert.Contains("without verified Scholar type evidence", reason);
         Assert.False(runtime.IsReady);
     }
 
@@ -43,14 +44,14 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
         var recipe = new AlchemyRecipeSO(
             "valid-concept",
             "Valid concept",
-            new[] { new AlchemyTypeSO(ReflectionConceptRuntime.ReductiveConceptTypeUuid) })
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
         {
             maxUsageSlots = 2,
             drainCost = new ConceptCostVector(
                 new ConceptCostEntry(resource, new BigDouble(10.0, 0))),
         };
         var active = InstallNativeLists(recipe);
-        using var runtime = new ReflectionConceptRuntime();
+        using var runtime = new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier());
         var candidates = runtime.ReadCandidates(
             new HashSet<string>(StringComparer.Ordinal),
             new HashSet<string>(StringComparer.Ordinal),
@@ -79,14 +80,14 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
         var recipe = new AlchemyRecipeSO(
             "zero-resource-concept",
             "Zero resource concept",
-            new[] { new AlchemyTypeSO(ReflectionConceptRuntime.ReflectiveConceptTypeUuid) })
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString()) })
         {
             maxUsageSlots = 4,
             drainCost = new ConceptCostVector(
                 new ConceptCostEntry(resource, new BigDouble(1.0, 0))),
         };
         InstallNativeLists(recipe);
-        using var runtime = new ReflectionConceptRuntime();
+        using var runtime = new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier());
         var candidate = Assert.Single(runtime.ReadCandidates(
             new HashSet<string>(StringComparer.Ordinal),
             new HashSet<string>(StringComparer.Ordinal),
@@ -106,8 +107,9 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
     {
         var active = new AlchemyInstanceListVariable();
         var recipeList = new AlchemyRecipeListVariable { value = recipes.ToList() };
+        recipeList.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ActiveConceptsUuid)] = active;
-        IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ConceptRecipesUuid)] = recipeList;
+        IdScriptableObject.RuntimeLookup[AlchemyGameplayDomainClassifier.ConceptRecipesUuid] = recipeList;
         return active;
     }
 }

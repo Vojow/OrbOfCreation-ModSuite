@@ -24,15 +24,15 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
     [Trait("Category", "HeadlessE2E")]
     public void AutoConceptController_TimedRotationStartsOnlyAfterSettlementAndAddsReplacementAfterRemoval()
     {
-        var first = Concept("a-concept");
-        var second = Concept("b-concept");
+        var first = Concept("00000000-0000-0000-0000-000000000001");
+        var second = Concept("00000000-0000-0000-0000-000000000002");
         var active = InstallNativeLists(first, second);
         var config = Config(AutoConceptSlotManagementMode.TimedCycle);
         var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 32);
         long frame = 0;
         using var controller = new AutoConceptController(
             config,
-            new ReflectionConceptRuntime(),
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             new ManualLogSource(),
             coordinator,
             () => frame);
@@ -77,7 +77,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         long frame = 0;
         using var controller = new AutoConceptController(
             config,
-            new ReflectionConceptRuntime(),
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             new ManualLogSource(),
             coordinator,
             () => frame);
@@ -113,7 +113,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         long frame = 1;
         using var controller = new AutoConceptController(
             config,
-            new ReflectionConceptRuntime(),
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             new ManualLogSource(),
             coordinator,
             () => frame);
@@ -151,7 +151,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         return new AlchemyRecipeSO(
             uuid,
             uuid,
-            new[] { new AlchemyTypeSO(ReflectionConceptRuntime.ReductiveConceptTypeUuid) })
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
         {
             maxUsageSlots = 1,
             drainCost = new ConceptCostVector(
@@ -162,9 +162,10 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
     private static AlchemyInstanceListVariable InstallNativeLists(params AlchemyRecipeSO[] recipes)
     {
         var active = new AlchemyInstanceListVariable();
+        var recipeList = new AlchemyRecipeListVariable { value = recipes.ToList() };
+        recipeList.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ActiveConceptsUuid)] = active;
-        IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ConceptRecipesUuid)] =
-            new AlchemyRecipeListVariable { value = recipes.ToList() };
+        IdScriptableObject.RuntimeLookup[AlchemyGameplayDomainClassifier.ConceptRecipesUuid] = recipeList;
         return active;
     }
 

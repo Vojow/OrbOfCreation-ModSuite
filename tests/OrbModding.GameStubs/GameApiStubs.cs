@@ -110,11 +110,109 @@ public class SpellRecipeSO
     }
 }
 
-public static class IdScriptableObject
+public class IdScriptableObject
 {
     public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
 
+    private Guid _guid = Guid.NewGuid();
+
     public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+
+    public Guid GetGuid() => _guid;
+
+    public Guid GetId() => _guid;
+
+    public void SetGuid(Guid guid) => _guid = guid;
+}
+
+public sealed class AlchemyTypeSO : IdScriptableObject
+{
+    public AlchemyTypeSO()
+    {
+        uuid = base.GetGuid().ToString();
+    }
+
+    public AlchemyTypeSO(string uuid)
+    {
+        this.uuid = uuid;
+        if (Guid.TryParse(uuid, out var guid))
+        {
+            base.SetGuid(guid);
+        }
+    }
+
+    public string uuid;
+
+    public new void SetGuid(Guid guid)
+    {
+        base.SetGuid(guid);
+        uuid = guid.ToString();
+    }
+}
+
+public sealed class AlchemyRecipeSO : IdScriptableObject
+{
+    public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
+
+    public AlchemyRecipeSO()
+    {
+        uuid = base.GetGuid().ToString();
+    }
+
+    public AlchemyRecipeSO(string uuid, string name, IEnumerable<AlchemyTypeSO> types)
+    {
+        this.uuid = uuid;
+        this.name = name;
+        alchemyTypes.AddRange(types);
+        if (Guid.TryParse(uuid, out var guid))
+        {
+            base.SetGuid(guid);
+        }
+    }
+
+    public string uuid;
+    public string name = "Alchemy";
+    public bool discovered = true;
+    public int masteryLevel;
+    public BigDouble masteryXp;
+    public int maxUsageSlots = 1;
+    public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
+    public ConceptCostVector drainCost = new ConceptCostVector();
+    public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
+    public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
+
+    public new Guid GetGuid() => Guid.TryParse(uuid, out var guid) ? guid : base.GetGuid();
+    public new Guid GetId() => GetGuid();
+    public new void SetGuid(Guid guid)
+    {
+        base.SetGuid(guid);
+        uuid = guid.ToString();
+    }
+    public bool IsDiscovered() => discovered;
+    public bool IsAvailable() => discovered;
+    public int GetExperienceLevel() => masteryLevel;
+    public BigDouble GetExperience() => masteryXp;
+    public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
+    public int GetMaxUsageSlots() => maxUsageSlots;
+    public AlchemyTypeSO GetCoreType() => coreType;
+    public string GetName() => name;
+    public void Discover() => discovered = true;
+    public void ApplyMastery() => masteryLevel++;
+
+    public void GainMasteryXp(BigDouble amount)
+    {
+        GrantedMasteryExperience.Add(amount);
+        masteryXp = amount;
+    }
+}
+
+public class AbstractListVariable<T> : IdScriptableObject
+{
+    public List<T> value = new List<T>();
+}
+
+public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
+{
 }
 
 public class UpgradeSO
@@ -372,63 +470,6 @@ public sealed class ExperienceElement
             right.mantissa * Math.Pow(10, right.exponent - exponent),
             exponent);
     }
-}
-
-public sealed class AlchemyTypeSO
-{
-    public AlchemyTypeSO(string uuid)
-    {
-        this.uuid = uuid;
-    }
-
-    public string uuid;
-}
-
-public sealed class AlchemyRecipeSO
-{
-    public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
-
-    public AlchemyRecipeSO(string uuid, string name, IEnumerable<AlchemyTypeSO> types)
-    {
-        this.uuid = uuid;
-        this.name = name;
-        alchemyTypes.AddRange(types);
-    }
-
-    public string uuid;
-    public string name;
-    public bool discovered = true;
-    public int masteryLevel;
-    public BigDouble masteryXp;
-    public int maxUsageSlots = 1;
-    public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
-    public ConceptCostVector drainCost = new ConceptCostVector();
-    public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
-    public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
-
-    public Guid GetGuid() => Guid.Parse(uuid);
-    public Guid GetId() => GetGuid();
-    public bool IsDiscovered() => discovered;
-    public bool IsAvailable() => discovered;
-    public int GetExperienceLevel() => masteryLevel;
-    public BigDouble GetExperience() => masteryXp;
-    public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
-    public int GetMaxUsageSlots() => maxUsageSlots;
-    public AlchemyTypeSO GetCoreType() => coreType;
-    public string GetName() => name;
-    public void Discover() => discovered = true;
-    public void ApplyMastery() => masteryLevel++;
-
-    public void GainMasteryXp(BigDouble amount)
-    {
-        GrantedMasteryExperience.Add(amount);
-        masteryXp = amount;
-    }
-}
-
-public sealed class AlchemyRecipeListVariable
-{
-    public List<AlchemyRecipeSO> value = new List<AlchemyRecipeSO>();
 }
 
 public sealed class AlchemyInstance

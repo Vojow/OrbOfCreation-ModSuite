@@ -257,6 +257,22 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
+            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        Assert.True(assembly.HasType("AlchemyRecipeSO"));
+        Assert.True(assembly.HasType("AlchemyTypeSO"));
+        Assert.True(assembly.HasType("AlchemyRecipeListVariable"));
+        Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
+        Assert.Equal("System.Collections.Generic.List`1<!0>", assembly.GetFieldType("AbstractListVariable`1", "value"));
+    }
+
+    [GameAssemblyFact]
     public void BigDouble_MatchesPrecisionBridgeContract()
     {
         using var firstPass = new GameAssemblyMetadata(GameAssemblyPaths.Require().FirstPass);

@@ -1,5 +1,10 @@
 # Changelog
 
+## Orb Modding Common 0.3.1 Beta 1 — 2026-07-18
+
+- Add one fail-closed, lifecycle-scoped classifier for ordinary Alchemy and Scholar Concepts using exact native types, stable UUIDs, the authoritative `ConceptRecipes` snapshot, and audited type identities.
+- Make Auto Concept consume the shared classifier for catalog admission and final add/remove identity validation, removing its duplicated Scholar-type boundary.
+
 ## Orb Automata 0.8.2 Beta 1 — 2026-07-18
 
 - Keep queue feeding responsive during rapid native completions: finish the current bounded completion-settlement generation, coalesce intervening signals into one follow-up, preserve CPU-sliced scan progress, and wake a prepared candidate immediately when a completion reopens a slot.
