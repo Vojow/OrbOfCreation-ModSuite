@@ -25,6 +25,11 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 - Enable only the Alchemy domain and confirm continuous active-recipe XP is observed once at the exact native amount.
 - Complete a recipe, including a multi-completion batch, and confirm the final multiplied completion XP is shared once.
 - Verify only discovered lower-mastery recipes receive XP and native automatic mastery/type progression occurs once.
+- Put a Scholar concept above every ordinary recipe's mastery level; confirm the highest ordinary recipe remains the Alchemy mentor and the concept is neither a mentor nor a recipient.
+- Earn Scholar concept XP and confirm it creates no Mentor capture, grant, or dropped-work warning.
+- With Alchemy sharing disabled, exercise Scholar/ordinary progression and confirm the shared classifier remains uninitialized and the normal log stays quiet.
+- Save/load and cross reset/NG+ after Alchemy has initialized; confirm the classifier refreshes its lifecycle evidence before any later ordinary-alchemy grant.
+- In a development fixture, introduce unknown or contradictory domain evidence and confirm Alchemy alone shows `Blocked` before mutation.
 - Confirm Mentor grants do not change active instances, quantities, recipe time, advancement, costs, or completion effects.
 
 ## Artifact extension

@@ -2,6 +2,7 @@ using System;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbMentor;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -18,6 +19,7 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         RegisterUnlockedView(MentorDomainUnlockGate.SpellbookUuid);
         RegisterUnlockedView(MentorDomainUnlockGate.ArtifactWorkshopUuid);
         RegisterUnlockedView(MentorDomainUnlockGate.AlchemyScreenUuid);
+        RegisterConceptRecipes();
         SpellManager.instance = new SpellManager();
     }
 
@@ -196,7 +198,7 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         var recipe = new AlchemyRecipeSO(
             Guid.NewGuid().ToString(),
             "Alchemy",
-            new[] { new AlchemyTypeSO("alchemy") })
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.BrewingTypeUuid.ToString()) })
         {
             masteryLevel = mastery,
             discovered = true,
@@ -204,6 +206,22 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         AlchemyRecipeSO.All.Add(recipe);
         IdScriptableObject.RuntimeLookup.Add(recipe.GetGuid(), recipe);
         return recipe;
+    }
+
+    private static void RegisterConceptRecipes()
+    {
+        var concept = new AlchemyRecipeSO(
+            Guid.NewGuid().ToString(),
+            "Fixture Concept",
+            new[]
+            {
+                new AlchemyTypeSO(
+                    AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()),
+            });
+        var registry = new AlchemyRecipeListVariable();
+        registry.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
+        registry.value.Add(concept);
+        IdScriptableObject.RuntimeLookup[AlchemyGameplayDomainClassifier.ConceptRecipesUuid] = registry;
     }
 
     private static void Drive(MentorRuntime runtime, int ticks)
