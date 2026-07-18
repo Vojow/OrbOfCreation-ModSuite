@@ -172,7 +172,7 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     }
 
     public new string uuid;
-    public string name = "Alchemy";
+    public new string name = "Alchemy";
     public bool discovered = true;
     public int masteryLevel;
     public BigDouble masteryXp;
