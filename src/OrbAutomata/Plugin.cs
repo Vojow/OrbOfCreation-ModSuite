@@ -179,9 +179,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
     }
 
-    private void OnNativeCompletion()
+    private void OnNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
     {
-        _autoBuyEngine?.NotifyNativeCompletion();
+        _autoBuyEngine?.NotifyNativeCompletion(nativeIdentity, completedKind);
         _autoSpellLevelController?.NotifyNativeChange();
     }
 

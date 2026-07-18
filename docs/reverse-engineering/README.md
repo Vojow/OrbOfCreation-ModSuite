@@ -13,7 +13,7 @@ These notes describe the managed-code architecture of the installed Orb of Creat
 - Numeric library: `Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll`
 - Save format version observed: `6`
 
-The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified.
+The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified. Runtime-resolved compatibility findings are also recorded in the machine-readable [`data/native-contracts.json`](../../data/native-contracts.json); maintain it through the [native contract workflow](../development/native-contract-manifest.md).
 
 ## Knowledge map
 

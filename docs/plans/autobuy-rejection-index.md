@@ -1,6 +1,6 @@
 # Auto Buy rejection-aware scheduler plan
 
-> **Lifecycle: Foundation implemented / desktop stress gate passed.** Typed rejection evidence and affordable prepared groups are portable-tested on `feature/autobuy-rejection-index`. Game-backed fixed and high-resource queue-filling runs completed without native failures, and policy-excluded candidates remained parked across periodic refreshes. Threshold-indexed resource wakeups and the Steam Deck profiling matrix remain.
+> **Lifecycle: Structure threshold parking implemented / runtime gate pending.** Typed rejection evidence, affordable prepared groups, and exact Structure reserve/affordability threshold wakeups are portable-tested. Game-backed fixed and high-resource queue-filling runs completed without native failures, and policy-excluded candidates remained parked across periodic refreshes. Conservative Upgrade handling, unavailable-resource backoff, broader profiling, and the Steam Deck matrix remain.
 
 [Back to plans](README.md) · [Orb Automata plan](automata.md)
 
@@ -47,6 +47,8 @@ Current branch evidence: installed IL confirms that Upgrade `CanPurchase()` comb
 Portable exit gate: unit tests prove multi-resource blocker capture, rejection-state transitions, aggregate counts, and unchanged queue/coordinator purchase behavior.
 
 ### Phase 2 — Threshold-indexed resource wakeups
+
+The current bounded slice stores exact blocker thresholds on stable Structure decisions for ordinary quantity resources. Quantity-only updates below those thresholds, including already-satisfied dependencies of a multi-resource candidate, stay parked; the first blocker crossing wakes the candidate, while bandwidth, capacity, quality, attribute-cost, identity, availability, lifecycle, policy, queue, and completion evidence remains conservative. Upgrades intentionally retain their previous quantity retry behavior because native `CanPurchase()` also represents lifecycle and queue state. Unavailable-resource backoff and broader indexed diagnostics remain follow-up work.
 
 - Add a reverse wait index keyed by resource UUID and required quantity.
 - Move resource-blocked candidates into the index after evaluation.

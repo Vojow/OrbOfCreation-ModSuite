@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -7,6 +8,15 @@ internal enum AutoBuyCandidateKind
 {
     Structure,
     Upgrade
+}
+
+[Flags]
+internal enum AutoBuyCandidateKinds
+{
+    None = 0,
+    Structures = 1 << 0,
+    Upgrades = 1 << 1,
+    All = Structures | Upgrades,
 }
 
 [Flags]
@@ -92,7 +102,10 @@ internal interface IAutoBuyCatalog : IDisposable
 {
     IEnumerable<IAutoBuyCandidate> Discover();
 
-    bool TryGetRemainingQueueRoom(out int remainingRoom);
+    bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot);
 
     bool TryGetBulkDevelopment(out int levels);
 
@@ -106,7 +119,8 @@ internal interface IAutoBuyIncrementalCatalog
     void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
-        bool policyExcluded);
+        bool policyExcluded,
+        AutoBuyDecision? decision = null);
 
     void InvalidatePolicy();
 
@@ -123,6 +137,19 @@ internal interface IAutoBuyIncrementalCatalog
     void NotifyNativeCompletion();
 
     void InvalidateLifecycle();
+}
+
+internal interface IAutoBuyProgressionCatalog
+{
+    void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind);
+}
+
+internal interface IAutoBuyCompletionRevalidationCatalog
+{
+    bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason);
 }
 
 internal readonly struct AutoBuyEvaluationRequest
@@ -267,7 +294,8 @@ internal readonly struct AutoBuyResourceBlocker
         string resourceName,
         BigAmount cost,
         BigAmount availableQuantity,
-        BigAmount requiredQuantity)
+        BigAmount requiredQuantity,
+        bool isBandwidth = false)
     {
         Kind = kind;
         ResourceId = resourceId;
@@ -275,6 +303,7 @@ internal readonly struct AutoBuyResourceBlocker
         Cost = cost;
         AvailableQuantity = availableQuantity;
         RequiredQuantity = requiredQuantity;
+        IsBandwidth = isBandwidth;
     }
 
     public AutoBuyResourceBlockerKind Kind { get; }
@@ -288,6 +317,8 @@ internal readonly struct AutoBuyResourceBlocker
     public BigAmount AvailableQuantity { get; }
 
     public BigAmount RequiredQuantity { get; }
+
+    public bool IsBandwidth { get; }
 }
 
 internal sealed class AutoBuyDecision

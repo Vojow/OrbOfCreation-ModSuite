@@ -19,7 +19,7 @@ internal static class AutoBuyLifecycleSignal
 
     public static event Action<object>? UpgradeQueueChanged;
 
-    public static event Action? NativeCompletion;
+    public static event Action<object, AutoBuyCandidateKind>? NativeCompletion;
 
     public static void Raise()
     {
@@ -47,9 +47,9 @@ internal static class AutoBuyLifecycleSignal
         }
     }
 
-    public static void RaiseNativeCompletion()
+    public static void RaiseNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
     {
-        NativeCompletion?.Invoke();
+        NativeCompletion?.Invoke(nativeIdentity, completedKind);
     }
 
     private static bool IsAutomatedMutation(object nativeIdentity)
@@ -118,28 +118,40 @@ internal static class AutoBuyUpgradeQueuePatch
 }
 
 [HarmonyPatch]
-internal static class AutoBuyNativeCompletionPatch
+internal static class AutoBuyStructureCompletionPatch
 {
-    private static IEnumerable<MethodBase> TargetMethods()
+    private static MethodBase? TargetMethod()
     {
-        foreach (var typeName in new[] { "StructureSO", "UpgradeSO" })
-        {
-            var method = AccessTools.TypeByName(typeName)?.GetMethod(
-                "CompleteAction",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                null,
-                Type.EmptyTypes,
-                null);
-            if (method is not null)
-            {
-                yield return method;
-            }
-        }
+        return AccessTools.TypeByName("StructureSO")?.GetMethod(
+            "CompleteAction",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
     }
 
-    private static void Postfix()
+    private static void Postfix(object __instance)
     {
-        AutoBuyLifecycleSignal.RaiseNativeCompletion();
+        AutoBuyLifecycleSignal.RaiseNativeCompletion(__instance, AutoBuyCandidateKind.Structure);
+    }
+}
+
+[HarmonyPatch]
+internal static class AutoBuyUpgradeCompletionPatch
+{
+    private static MethodBase? TargetMethod()
+    {
+        return AccessTools.TypeByName("UpgradeSO")?.GetMethod(
+            "CompleteAction",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
+    }
+
+    private static void Postfix(object __instance)
+    {
+        AutoBuyLifecycleSignal.RaiseNativeCompletion(__instance, AutoBuyCandidateKind.Upgrade);
     }
 }
 

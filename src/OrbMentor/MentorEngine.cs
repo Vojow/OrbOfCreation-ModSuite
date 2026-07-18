@@ -1086,7 +1086,7 @@ internal sealed class MentorFailureRegistry
     public MentorFailureState Global => _global;
     public MentorFailureState For(MentorDomain domain) => _domains[(int)domain];
     public bool IsDomainBlocked(MentorDomain domain) =>
-        domain == MentorDomain.Spells ? _global.IsBlocked : For(domain).IsBlocked;
+        _global.IsBlocked || For(domain).IsBlocked;
     public void ResetLifecycle()
     {
         _global.ResetLifecycle();

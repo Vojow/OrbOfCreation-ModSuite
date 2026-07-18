@@ -47,17 +47,47 @@ public static class GlobalVariables
     public static IntVariable GetMultiBuy() => MultiBuy;
 }
 
+public sealed class ActionableListVariable
+{
+    public IntVariable maxQueuedItems = new IntVariable();
+}
+
+public sealed class ActionManager
+{
+    public static ActionManager instance = new ActionManager();
+
+    public ActionableListVariable actionableItems = new ActionableListVariable();
+
+    public static int RemainingRoom { get; set; }
+
+    public static int GetRemainingRoom() => RemainingRoom;
+}
+
+public static class AutoBuyManager
+{
+    public static int RemainingRoom { get; set; }
+
+    public static int GetRemainingRoom() => RemainingRoom;
+}
+
 public class SpellRecipeSO
 {
-    public static List<SpellRecipeSO> All { get; } = new List<SpellRecipeSO>();
+    public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
     public string uuid = Guid.NewGuid().ToString();
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
     public bool readyToLevel;
+    public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
-    public void GainMasteryExp(BigDouble exp) { masteryExperience = exp; }
+    public void GainMasteryExp(BigDouble exp)
+    {
+        GrantedMasteryExperience.Add(exp);
+        masteryExperience = Add(masteryExperience, exp);
+    }
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public Guid GetId() => GetGuid();
     public bool IsDiscovered() => discovered;
     public bool IsReadyToLevelMastery() => readyToLevel;
     public ResourceCostList GetLevelCost() => levelCost;
@@ -68,28 +98,113 @@ public class SpellRecipeSO
         readyToLevel = false;
     }
     public string GetName() => "Spell";
+
+    private static BigDouble Add(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right;
+        if (right.mantissa == 0) return left;
+        var exponent = Math.Max(left.exponent, right.exponent);
+        var mantissa = left.mantissa * Math.Pow(10, left.exponent - exponent) +
+                       right.mantissa * Math.Pow(10, right.exponent - exponent);
+        return new BigDouble(mantissa, exponent);
+    }
 }
 
-public class IdScriptableObject
+public class IdScriptableObject : UnityEngine.ScriptableObject
 {
     public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
-
-    private Guid _guid = Guid.NewGuid();
-
-    public Guid GetGuid() => _guid;
-
-    public Guid GetId() => _guid;
-
-    public void SetGuid(Guid guid) => _guid = guid;
+    public Guid uuid = Guid.NewGuid();
+    public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+    public Guid GetGuid() => uuid;
+    public Guid GetId() => uuid;
+    public void SetGuid(Guid guid) => uuid = guid;
 }
 
-public class AlchemyTypeSO : IdScriptableObject
+public class ViewSO : IdScriptableObject
 {
+    public bool available;
+    public bool IsAvailable() => available;
 }
 
-public class AlchemyRecipeSO : IdScriptableObject
+public sealed class AlchemyTypeSO : IdScriptableObject
 {
-    public List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
+    public AlchemyTypeSO()
+    {
+        uuid = base.GetGuid().ToString();
+    }
+
+    public AlchemyTypeSO(string uuid)
+    {
+        this.uuid = uuid;
+        if (Guid.TryParse(uuid, out var guid))
+        {
+            base.SetGuid(guid);
+        }
+    }
+
+    public new string uuid;
+
+    public new void SetGuid(Guid guid)
+    {
+        base.SetGuid(guid);
+        uuid = guid.ToString();
+    }
+}
+
+public sealed class AlchemyRecipeSO : IdScriptableObject
+{
+    public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
+
+    public AlchemyRecipeSO()
+    {
+        uuid = base.GetGuid().ToString();
+    }
+
+    public AlchemyRecipeSO(string uuid, string name, IEnumerable<AlchemyTypeSO> types)
+    {
+        this.uuid = uuid;
+        this.name = name;
+        alchemyTypes.AddRange(types);
+        if (Guid.TryParse(uuid, out var guid))
+        {
+            base.SetGuid(guid);
+        }
+    }
+
+    public new string uuid;
+    public new string name = "Alchemy";
+    public bool discovered = true;
+    public int masteryLevel;
+    public BigDouble masteryXp;
+    public int maxUsageSlots = 1;
+    public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
+    public ConceptCostVector drainCost = new ConceptCostVector();
+    public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
+    public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
+
+    public new Guid GetGuid() => Guid.TryParse(uuid, out var guid) ? guid : base.GetGuid();
+    public new Guid GetId() => GetGuid();
+    public new void SetGuid(Guid guid)
+    {
+        base.SetGuid(guid);
+        uuid = guid.ToString();
+    }
+    public bool IsDiscovered() => discovered;
+    public bool IsAvailable() => discovered;
+    public int GetExperienceLevel() => masteryLevel;
+    public BigDouble GetExperience() => masteryXp;
+    public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
+    public int GetMaxUsageSlots() => maxUsageSlots;
+    public AlchemyTypeSO GetCoreType() => coreType;
+    public string GetName() => name;
+    public void Discover() => discovered = true;
+    public void ApplyMastery() => masteryLevel++;
+
+    public void GainMasteryXp(BigDouble amount)
+    {
+        GrantedMasteryExperience.Add(amount);
+        masteryXp = amount;
+    }
 }
 
 public class AbstractListVariable<T> : IdScriptableObject
@@ -97,16 +212,104 @@ public class AbstractListVariable<T> : IdScriptableObject
     public List<T> value = new List<T>();
 }
 
-public class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
+public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
 {
 }
 
 public class UpgradeSO
 {
+    public static List<UpgradeSO> All = new List<UpgradeSO>();
+    public string uuid = Guid.NewGuid().ToString();
     public int purchaseLevel;
     public int queuedPurchaseLevel;
+    public bool available = true;
+    public bool purchasable = true;
+    public bool finite;
+    public int maxLevel = int.MaxValue;
+    public ResourceCostList purchaseCost = new ResourceCostList();
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public string GetName() => "Upgrade";
+    public bool IsAvailable() => available;
+    public bool CanPurchase() => purchasable && !IsMaxQueuedLevel();
+    public ResourceCostList GetPurchaseCost() => purchaseCost;
     public int GetPurchaseLevel() => purchaseLevel;
     public int GetQueuedPurchaseLevel() => queuedPurchaseLevel;
+    public bool HasFiniteLevels() => finite;
+    public bool IsMaxLevel() => finite && purchaseLevel >= maxLevel;
+    public bool IsMaxQueuedLevel() => finite && queuedPurchaseLevel >= maxLevel;
+    public void Purchase()
+    {
+        if (CanPurchase()) queuedPurchaseLevel++;
+    }
+    public void CompleteAction()
+    {
+        if (queuedPurchaseLevel <= 0) return;
+        queuedPurchaseLevel--;
+        purchaseLevel++;
+    }
+}
+
+public class StructureSO
+{
+    public static List<StructureSO> All = new List<StructureSO>();
+    public string uuid = Guid.NewGuid().ToString();
+    public int queuedQuantity;
+    public int quantity;
+    public bool available = true;
+    public bool purchasable = true;
+    public ResourceCostList purchaseCost = new ResourceCostList();
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public string GetName() => "Structure";
+    public bool IsAvailable() => available;
+    public bool CanPurchase() => purchasable;
+    public ResourceCostList GetPurchaseCost() => purchaseCost;
+    public int GetPurchaseLevel() => quantity;
+    public int GetQueuedQuantity() => queuedQuantity;
+    public void Purchase(bool forceOne)
+    {
+        if (forceOne && CanPurchase()) queuedQuantity++;
+    }
+    public void QueueBuild(int amount) => queuedQuantity += amount;
+    public void CompleteAction()
+    {
+        if (queuedQuantity <= 0) return;
+        queuedQuantity--;
+        quantity++;
+    }
+}
+
+public class Player
+{
+    public void ManagerStart()
+    {
+    }
+}
+
+public class SaveStateManager
+{
+    public void ImplementLoadedJson()
+    {
+    }
+}
+
+public class Spell
+{
+    private readonly SpellRecipeSO? reference;
+
+    public Spell()
+    {
+    }
+
+    public Spell(SpellRecipeSO reference)
+    {
+        this.reference = reference;
+    }
+
+    public SpellRecipeSO? get_reference() => reference;
+
+    public void Fire()
+    {
+    }
 }
 
 public class Prerequisites
@@ -120,10 +323,59 @@ public class Prerequisites
 
 public class ResourceCostList
 {
+    public List<ResourceTuple> costs = new List<ResourceTuple>();
     public bool affordable = true;
     public int PerformCalls { get; private set; }
     public bool HasEnough() => affordable;
     public void PerformCost() { PerformCalls++; }
+}
+
+public class ResourceSO
+{
+    public string uuid = Guid.NewGuid().ToString();
+    public string name = "Resource";
+    public BigDouble quantity = new BigDouble(1.0, 3);
+    public BigDouble trueQuantity = new BigDouble(1.0, 3);
+    public BigDouble attributeCostMod = new BigDouble(1.0, 0);
+    public bool available = true;
+    public bool bandwidthResource;
+    public ValueModifierRecord quality = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord maxQuantity = new ValueModifierRecord(new BigDouble(1.0, 4));
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public string GetName() => name;
+    public BigDouble GetQuantity() => quantity;
+    public BigDouble GetTrueQuantity() => trueQuantity;
+    public BigDouble GetAttributeCostMod() => attributeCostMod;
+    public bool IsAvailable() => available;
+    public bool IsBandwidthResource() => bandwidthResource;
+    public BigDouble GetTrueAmount(BigDouble amount) => amount;
+}
+
+public struct ResourceTuple
+{
+    private readonly BigDouble value;
+
+    public ResourceTuple(ResourceSO resource, BigDouble value)
+    {
+        this.resource = resource;
+        this.value = value;
+    }
+
+    public ResourceSO resource;
+
+    public BigDouble GetValue() => value;
+}
+
+public sealed class ValueModifierRecord
+{
+    private readonly BigDouble value;
+
+    public ValueModifierRecord(BigDouble value)
+    {
+        this.value = value;
+    }
+
+    public BigDouble GetValue() => value;
 }
 
 public class SpellRecipeListVariable
@@ -134,7 +386,22 @@ public class SpellRecipeListVariable
 public class SpellManager
 {
     public static SpellManager? instance;
+    public static bool NativeCanCast { get; set; } = true;
     public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
+    public SpellListVariable activeSpells = new SpellListVariable();
+
+    public static bool CanCastASpell() => NativeCanCast;
+
+    public void FireSpellIndex(int index)
+    {
+        var spell = activeSpells[index];
+        spell.GetType().GetMethod(
+            "Fire",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null)?.Invoke(spell, Array.Empty<object>());
+    }
 
     public void TryLevelAllSpells()
     {
@@ -148,6 +415,204 @@ public class SpellManager
             }
         }
     }
+}
+
+public sealed class SpellListVariable : IEnumerable
+{
+    public List<object> value = new List<object>();
+
+    public object this[int index] => value[index];
+
+    public void Add(object spell) => value.Add(spell);
+
+    public IEnumerator GetEnumerator() => value.GetEnumerator();
+}
+
+public sealed class EquipmentSO
+{
+    public static List<EquipmentSO> All = new List<EquipmentSO>();
+    private readonly ExperienceElement experienceContainer = new ExperienceElement();
+    public string uuid = Guid.NewGuid().ToString();
+    public string name = "Equipment";
+    public int masteryLevel;
+    public BigDouble masteryXp;
+    public bool isCreated = true;
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public Guid GetId() => GetGuid();
+    public string GetName() => name;
+    public bool IsCreated() => isCreated;
+    public ExperienceElement GetExperienceElement() => experienceContainer;
+    private void GainMasteryLevels(int levels) => masteryLevel += levels;
+}
+
+public sealed class ExperienceElement
+{
+    private BigDouble experience;
+    public int GainedLevels { get; set; }
+    public List<BigDouble> Grants { get; } = new List<BigDouble>();
+
+    public void GainExperience(BigDouble amount)
+    {
+        Grants.Add(amount);
+        experience = Add(experience, amount);
+    }
+
+    public int GetGainedLevels() => GainedLevels;
+
+    public BigDouble GetExperience() => experience;
+
+    private static BigDouble Add(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right;
+        if (right.mantissa == 0) return left;
+        var exponent = Math.Max(left.exponent, right.exponent);
+        return new BigDouble(
+            left.mantissa * Math.Pow(10, left.exponent - exponent) +
+            right.mantissa * Math.Pow(10, right.exponent - exponent),
+            exponent);
+    }
+}
+
+public sealed class AlchemyInstance
+{
+    public AlchemyInstance(AlchemyRecipeSO reference)
+    {
+        this.reference = reference;
+    }
+
+    public AlchemyRecipeSO reference;
+    public int quantity;
+    public int queuedQuantity;
+    public ConceptDrainState resourceDrain = new ConceptDrainState();
+
+    public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
+}
+
+public sealed class AlchemyInstanceListVariable
+{
+    public List<AlchemyInstance> value = new List<AlchemyInstance>();
+
+    public bool CanAddInstance(AlchemyRecipeSO recipe)
+    {
+        var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
+        if (instance is not null && instance.queuedQuantity >= recipe.GetMaxUsageSlots()) return false;
+        return value.All(item =>
+            ReferenceEquals(item.reference, recipe) ||
+            Math.Max(item.quantity, item.queuedQuantity) == 0 ||
+            !string.Equals(item.reference.GetCoreType().uuid, recipe.GetCoreType().uuid, StringComparison.Ordinal));
+    }
+
+    public void AddAlchemyInstances(AlchemyRecipeSO recipe, int delta)
+    {
+        var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
+        if (instance is null)
+        {
+            instance = new AlchemyInstance(recipe);
+            value.Add(instance);
+        }
+        instance.queuedQuantity += delta;
+    }
+
+    public void RemoveAlchemyInstances(AlchemyRecipeSO recipe, int delta)
+    {
+        value.Single(item => ReferenceEquals(item.reference, recipe)).queuedQuantity -= delta;
+    }
+
+    public void RebuildCounts()
+    {
+        foreach (var instance in value) instance.quantity = instance.queuedQuantity;
+    }
+
+    public void SetupMaxSlotsValue()
+    {
+    }
+}
+
+public sealed class ConceptDrainMultiplier
+{
+    private readonly AlchemyInstance instance;
+
+    public ConceptDrainMultiplier(AlchemyInstance instance)
+    {
+        this.instance = instance;
+    }
+
+    public double AsPercent() => instance.quantity;
+}
+
+public sealed class ConceptDrainState
+{
+    public ConceptCostVector Current { get; set; } = new ConceptCostVector();
+    public BigDouble GetRatio() => new BigDouble(1.0, 0);
+    public ConceptCostVector GetCurrentDrain() => Current;
+}
+
+public sealed class ConceptCostVector
+{
+    public ConceptCostVector(params ConceptCostEntry[] entries)
+    {
+        Entries = entries.ToList();
+    }
+
+    public List<ConceptCostEntry> Entries { get; }
+    public IList GetEntries() => Entries;
+
+    public ConceptCostVector Multiply(double multiplier) => new ConceptCostVector(
+        Entries.Select(entry => new ConceptCostEntry(
+            entry.resource,
+            new BigDouble(entry.Value.mantissa * multiplier, entry.Value.exponent))).ToArray());
+
+    public ConceptCostVector Subtract(ConceptCostVector other)
+    {
+        var remaining = new List<ConceptCostEntry>();
+        foreach (var entry in Entries)
+        {
+            var previous = other.Entries.FirstOrDefault(item => ReferenceEquals(item.resource, entry.resource));
+            remaining.Add(new ConceptCostEntry(
+                entry.resource,
+                new BigDouble(entry.Value.mantissa - (previous?.Value.mantissa ?? 0), entry.Value.exponent)));
+        }
+        return new ConceptCostVector(remaining.ToArray());
+    }
+}
+
+public sealed class ConceptCostEntry
+{
+    public ConceptCostEntry(ConceptResource resource, BigDouble value)
+    {
+        this.resource = resource;
+        Value = value;
+    }
+
+    public ConceptResource resource;
+    public BigDouble Value { get; }
+    public BigDouble GetValue() => Value;
+}
+
+public sealed class ConceptResource
+{
+    public string uuid = Guid.NewGuid().ToString();
+    public string name = "Concept resource";
+    public bool AtZero { get; set; }
+    public BigDouble TrueRate { get; set; } = new BigDouble(100.0, 0);
+    public BigDouble ModdedDrain { get; set; } = new BigDouble(0.0, 0);
+    public BigDouble Quantity { get; set; } = new BigDouble(100.0, 0);
+    public BigDouble SoftCap { get; set; } = new BigDouble(100.0, 0);
+    public bool IsAtZero() => AtZero;
+    public BigDouble GetTrueSpend(BigDouble amount) => amount;
+    public BigDouble GetTrueRate() => TrueRate;
+    public BigDouble GetModdedDrain() => ModdedDrain;
+    public bool HasMaxQuantity() => true;
+    public BigDouble GetQuantity() => Quantity;
+    public BigDouble GetTrueSoftCap() => SoftCap;
+    public string GetName() => name;
+}
+
+public static class TargetingManager
+{
+    public static bool Targeting { get; set; }
+
+    public static bool IsTargeting() => Targeting;
 }
 
 public interface ITooltipable
@@ -233,6 +698,10 @@ namespace BepInEx.Configuration
 
         public bool SaveOnConfigSet { get; set; } = true;
 
+        public int SaveCalls { get; private set; }
+
+        public int? ThrowOnSaveCall { get; set; }
+
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, string description)
         {
             return Bind(section, key, defaultValue, new ConfigDescription(description));
@@ -253,6 +722,11 @@ namespace BepInEx.Configuration
 
         public void Save()
         {
+            SaveCalls++;
+            if (ThrowOnSaveCall == SaveCalls)
+            {
+                throw new InvalidOperationException($"simulated config save failure on call {SaveCalls}");
+            }
         }
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
@@ -510,9 +984,59 @@ namespace HarmonyLib
 
     public static class AccessTools
     {
-        public static MethodInfo? Method(string typeColonMethod) => null;
+        public static MethodInfo? Method(string typeColonMethod)
+        {
+            var separator = typeColonMethod.IndexOf(':');
+            if (separator <= 0 || separator == typeColonMethod.Length - 1)
+            {
+                return null;
+            }
 
-        public static Type? TypeByName(string name) => null;
+            var type = TypeByName(typeColonMethod.Substring(0, separator));
+            var methodName = typeColonMethod.Substring(separator + 1);
+            return type?.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(method => method.Name == methodName);
+        }
+
+        public static Type? TypeByName(string name)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var preferred = assemblies.FirstOrDefault(assembly =>
+                assembly.GetName().Name == "Assembly-CSharp");
+            if (preferred is not null)
+            {
+                var preferredType = FindType(preferred, name);
+                if (preferredType is not null)
+                {
+                    return preferredType;
+                }
+            }
+
+            foreach (var assembly in assemblies)
+            {
+                var match = FindType(assembly, name);
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static Type? FindType(Assembly assembly, string name)
+        {
+            try
+            {
+                return assembly.GetTypes().FirstOrDefault(type => type.Name == name || type.FullName == name);
+            }
+            catch (ReflectionTypeLoadException exception)
+            {
+                return exception.Types
+                    .Where(type => type is not null)
+                    .FirstOrDefault(type => type!.Name == name || type.FullName == name);
+            }
+        }
 
         public static List<MethodInfo> GetDeclaredMethods(Type type)
         {

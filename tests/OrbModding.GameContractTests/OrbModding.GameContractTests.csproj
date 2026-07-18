@@ -5,6 +5,7 @@
     <IsTestProject>true</IsTestProject>
     <AssemblyName>OrbModding.GameContractTests</AssemblyName>
     <RequireGameReferences>false</RequireGameReferences>
+    <UseGameStubs Condition="'$(GameRoot)' == '' and '$(UseGameStubs)' == ''">true</UseGameStubs>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,5 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OrbModding.Common/OrbModding.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../data/native-contracts.json" Link="data/native-contracts.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

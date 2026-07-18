@@ -23,6 +23,8 @@ The existing economy formulas remain unchanged:
 
 Configuration provides independent `Spells`, `Artifacts`, and `Alchemy` enable switches and percentages. The compact Mentor button remains the plugin-wide Disabled/Active control. Its tooltip summarizes each domain and identifies any domain-specific blocked reason.
 
+Each configured domain also follows native progression availability independently. The global `MasteriesEnabled` `ViewSO` and the domain's exact `WorkshopArtifact` or `ScreenAlchemy` `ViewSO` must both report `IsAvailable()` before Mentor starts any catalog, relationship, planning, or grant work for that domain. A locked domain reports waiting rather than an error, preserves its saved switch and percentage, and can unlock later in the same session. Lifecycle resets cancel pending domain work and re-evaluate the views.
+
 ## Alchemy vertical slice
 
 ### Verified native ownership

@@ -39,6 +39,20 @@ public sealed class AutoBuyRejectionTelemetryTests
     }
 
     [Fact]
+    public void ReservePolicy_DescribesZeroReserveFailureAsInsufficientCostCoverage()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+
+        var decision = new ReservePolicy(config).Evaluate(new[] { Cost("mana", 10, 5) });
+
+        Assert.False(decision.Passed);
+        Assert.Equal("insufficient mana: have 5e0, need 1e1 to cover cost", decision.Reason);
+        Assert.DoesNotContain("including reserve", decision.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AffordabilityBlockers_ContainOnlyResourcesAboveTheConfiguredRatio()
     {
         var blockers = AutoBuyEngine.BuildAffordabilityBlockers(
@@ -78,6 +92,17 @@ public sealed class AutoBuyRejectionTelemetryTests
         Assert.Equal(0, result.CurrentRejectedCandidates);
         Assert.Equal(3, result.RejectionsByReason[AutoBuyRejectionReason.AffordabilityThreshold]);
         Assert.Equal("AffordabilityThreshold=3", result.FormatReasonCounts());
+    }
+
+    [Fact]
+    public void Telemetry_ReportsOnlyNewOrChangedRejectionsForVerboseLogging()
+    {
+        var snapshot = new FakeCandidate("candidate").Snapshot();
+        var telemetry = new AutoBuyRejectionTelemetry();
+
+        Assert.True(telemetry.Record(ResourceRejection(snapshot, available: 50, required: 100)));
+        Assert.False(telemetry.Record(ResourceRejection(snapshot, available: 75, required: 100)));
+        Assert.True(telemetry.Record(ResourceRejection(snapshot, available: 75, required: 120)));
     }
 
     [Fact]

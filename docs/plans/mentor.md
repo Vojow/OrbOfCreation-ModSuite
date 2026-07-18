@@ -58,6 +58,19 @@ Static inspection was repeated against the supported `Assembly-CSharp.dll` basel
 - SHA-256: `5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F`
 - ILSpy command-line version used: `10.1.0.8386`
 
+### Native domain-unlock contract
+
+Mentor treats mastery progression and each feature domain as separate native gates. `UITooltip.RenderXpBar()` uses its serialized `masteryEnabledView.IsAvailable()` result to hide ordinary mastery progression, and `ViewSO.IsAvailable()` delegates to the view's native prerequisites. `IdScriptableObject.RuntimeLookup` provides exact UUID-to-native-object resolution after deserialization.
+
+The audited serialized `ViewSO` identities are:
+
+- `MasteriesEnabled`: `07dfae7e-76b9-4b38-bf81-38abc40b9ed7`;
+- `MagicSpellbook`: `ca934900-0253-4f71-93e9-733fb91132b7`;
+- `WorkshopArtifact`: `668a2a7a-468f-4e0e-b182-979b12a4b0ad`;
+- `ScreenAlchemy`: `3ae45ec0-4449-4903-b3d0-b5182e03dca3`.
+
+Names are diagnostics only. The runtime requires exact UUID plus `ViewSO` type and requires both `MasteriesEnabled.IsAvailable()` and the applicable domain view's `IsAvailable()` before that domain can catalog, rank, plan, grant, or inspect domain-specific tooltip data. Missing registry entries remain in a non-error waiting state because native objects can register later. Wrong type, missing accessor, or contradictory return contracts fail closed with a precise permanent reason. Lifecycle invalidation cancels pending work and forces a fresh gate read without rewriting configuration.
+
 ### Native event and grant path
 
 ```text
@@ -140,7 +153,7 @@ Orb Mentor has a compact queue/status-area button beside the existing Auto Cast 
 
 - Click toggles Active/Disabled.
 - `Alt+M` performs the same action.
-- Visual states: `ON`, `OFF`, and `BLOCKED`.
+- Visual states: `ON`, `OFF`, `WAITING`, and `BLOCKED`.
 - Tooltip: economy mode, percentage, current tied mentor names/count, eligible-recipient count, and the reason for a blocked state.
 - The compact surface uses an appropriate native spell/mastery icon; detailed text stays in the tooltip.
 
@@ -158,6 +171,7 @@ Changing mode, percentage, shortcut, or enable state through Orb Mod Config appl
 - Preserve native mastery-ready sounds, popups, and logs in the MVP, even when several recipients cross thresholds together.
 - Revalidate recipients immediately before a delayed grant.
 - Fail closed and show `BLOCKED` when the hook, catalog, lifecycle, or numeric contract is unavailable.
+- Show `WAITING` without catalog or loadout discovery while the native mastery or domain view remains locked; unlock promptly when both audited views become available.
 - Do not store progression state outside native objects. Plugin removal leaves an ordinary game save containing only XP the game already knows how to serialize.
 
 ## Implementation iterations

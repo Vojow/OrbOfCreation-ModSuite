@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -34,7 +35,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         var reader = new FakeResourceReader();
         var changes = new List<AutoBuyResourceChange>();
-        var cache = new AutoBuyResourceSnapshotCache(reader, (_, change) => changes.Add(change));
+        var cache = new AutoBuyResourceSnapshotCache(reader, (_, change, _, _) => changes.Add(change));
         var native = new object();
         var definition = new AutoBuyResourceDefinition(
             "mana",
@@ -65,7 +66,7 @@ public sealed class AutoBuyDirtyResourceTests
     public void ResourceSnapshotFailure_UsesBoundedRetryBackoff()
     {
         var reader = new FakeResourceReader();
-        var cache = new AutoBuyResourceSnapshotCache(reader, (_, _) => { });
+        var cache = new AutoBuyResourceSnapshotCache(reader, (_, _, _, _) => { });
         var missing = new AutoBuyResourceDefinition(
             "missing",
             "Missing",
@@ -114,6 +115,161 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.True(index.TryGetDirtyReasons(dust.Uuid, out var dustDirty));
         Assert.True((manaDirty & AutoBuyDirtyReason.ResourceDirty) != 0);
         Assert.Equal(AutoBuyDirtyReason.None, dustDirty);
+    }
+
+    [Fact]
+    public void StructureResourceWait_StaysParkedUntilQuantityCrossesRequiredThreshold()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(50, 0),
+            new BigAmount(99, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var belowThreshold));
+        Assert.Equal(AutoBuyDirtyReason.None, belowThreshold);
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(99, 0),
+            new BigAmount(100, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var crossedThreshold));
+        Assert.True((crossedThreshold & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void StructureResourceWait_RemainsParkedAcrossUnchangedActiveMaintenance()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        var maintenance = index.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(10, true, true),
+            lifecycleWorkLimit: 10,
+            activeRefreshCount: 1,
+            slowRefreshCount: 0);
+
+        Assert.Empty(maintenance.DirtyCandidates);
+    }
+
+    [Fact]
+    public void StructureResourceWait_IgnoresSatisfiedDependencyQuantityTicksUntilBlockerCrosses()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("multi-resource-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        structure.AddDependency("dust");
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "dust",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(500, 0),
+            new BigAmount(501, 0));
+        index.InvalidateResource(
+            "dust",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(501, 0),
+            new BigAmount(400, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var stillParked));
+        Assert.Equal(AutoBuyDirtyReason.None, stillParked);
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(99, 0),
+            new BigAmount(100, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var crossed));
+        Assert.True((crossed & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void StructureBandwidthWait_RemainsConservativelyQuantityTracked()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("bandwidth-structure", AutoBuyCandidateKind.Structure, "bandwidth", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(
+                structure,
+                available: 5,
+                required: 10,
+                resourceId: "bandwidth",
+                isBandwidth: true));
+
+        index.InvalidateResource(
+            "bandwidth",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(5, 0),
+            new BigAmount(6, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(32)]
+    [InlineData(64)]
+    public void StructureResourceWait_ConservativelyWakesForNonQuantityChanges(
+        int rawChange)
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure-wait", AutoBuyCandidateKind.Structure, "mana", available: true);
+        PrimeDependencies(index, structure);
+        index.CompleteCandidateEvaluation(
+            structure,
+            decision: ResourceWait(structure, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            (AutoBuyResourceChange)rawChange,
+            new BigAmount(50, 0),
+            new BigAmount(51, 0));
+
+        Assert.True(index.TryGetDirtyReasons(structure.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
+    }
+
+    [Fact]
+    public void UpgradeResourceWait_PreservesConservativeQuantityRetry()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var upgrade = Candidate("upgrade-wait", AutoBuyCandidateKind.Upgrade, "mana", available: true);
+        PrimeDependencies(index, upgrade);
+        index.CompleteCandidateEvaluation(
+            upgrade,
+            decision: ResourceWait(upgrade, available: 50, required: 100));
+
+        index.InvalidateResource(
+            "mana",
+            AutoBuyResourceChange.Quantity,
+            new BigAmount(50, 0),
+            new BigAmount(51, 0));
+
+        Assert.True(index.TryGetDirtyReasons(upgrade.Uuid, out var dirty));
+        Assert.True((dirty & AutoBuyDirtyReason.ResourceDirty) != 0);
     }
 
     [Fact]
@@ -295,6 +451,37 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    public void TargetedRegistryCompletion_DoesNotInvalidateTheOtherCandidateFamily()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure", AutoBuyCandidateKind.Structure, "mana", available: true);
+        var upgrade = Candidate("upgrade", AutoBuyCandidateKind.Upgrade, "mana", available: true);
+        index.Reconcile(new[] { structure, upgrade });
+
+        index.BeginRegistryCompletion(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            AutoBuyCandidateKind.Upgrade);
+        index.ProcessRegistryCompletion(int.MaxValue);
+
+        Assert.True(index.TryGetState("structure", out var structureState));
+        Assert.Equal(AutoBuyCandidateLifecycleState.Available, structureState);
+        Assert.True(index.TryGetState("upgrade", out var upgradeState));
+        Assert.Equal(AutoBuyCandidateLifecycleState.Invalid, upgradeState);
+    }
+
+    [Fact]
+    public void ProgressionCompletions_CoalesceOppositeFamilyRegistryRefreshes()
+    {
+        using var catalog = new ReflectionAutoBuyCatalog(() => TimeSpan.Zero);
+
+        catalog.NotifyNativeCompletion(new object(), AutoBuyCandidateKind.Structure);
+        Assert.Equal(AutoBuyCandidateKinds.Upgrades, catalog.PendingRegistryRefresh);
+
+        catalog.NotifyNativeCompletion(new object(), AutoBuyCandidateKind.Upgrade);
+        Assert.Equal(AutoBuyCandidateKinds.All, catalog.PendingRegistryRefresh);
+    }
+
+    [Fact]
     public void RecreatedRegistryObjects_CoalesceIntoOneLifecycleEpoch()
     {
         var index = new AutoBuyCandidateIndex();
@@ -417,6 +604,42 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(1, candidate.CostReads);
         Assert.Equal(0, candidate.PurchaseCalls);
         Assert.False(catalog.FirstResourceTrackingSuppressed);
+    }
+
+    [Fact]
+    public void IncrementalEngine_ClassifiesNativeStructureQuantityFailureForThresholdParking()
+    {
+        var structure = new EngineCandidate(
+            "structure-resource-wait",
+            10.0,
+            AutoBuyCandidateKind.Structure)
+        {
+            CanPurchaseValue = false,
+            Quantity = 5.0,
+        };
+        var catalog = new IncrementalCatalog(
+            structure,
+            new EngineCandidate("other", 2.0, AutoBuyCandidateKind.Structure));
+        var config = ActiveConfig("structure-resource-wait");
+        config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+        config.RepeatWhileAffordable.Value = false;
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.Equal(1, structure.CanPurchaseCalls);
+        Assert.Equal(1, structure.CostReads);
+        Assert.NotNull(catalog.FirstDecision);
+        Assert.Equal(AutoBuyRejectionReason.ReserveViolation, catalog.FirstDecision!.RejectionReason);
+        var blocker = Assert.Single(catalog.FirstDecision.ResourceBlockers);
+        Assert.Equal("resource", blocker.ResourceId);
+        Assert.Equal(0, blocker.RequiredQuantity.CompareTo(new BigAmount(10, 0)));
     }
 
     [Fact]
@@ -543,7 +766,7 @@ public sealed class AutoBuyDirtyResourceTests
         var second = new EngineCandidate("second", 2.0, AutoBuyCandidateKind.Structure);
         var catalog = new IncrementalCatalog(first, second)
         {
-            QueueRooms = new Queue<int>(new[] { 2, 2, 1, 2, 2 }),
+            QueueRooms = new Queue<int>(new[] { 2, 2, 2, 1, 2, 2, 2 }),
         };
         var config = ActiveConfig(string.Empty);
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
@@ -1116,7 +1339,7 @@ public sealed class AutoBuyDirtyResourceTests
             Cost = new ResourceCostList(),
         };
         native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
-        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _) => { });
+        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _, _, _) => { });
         var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
 
         Assert.Empty(candidate.GetCosts());
@@ -1126,6 +1349,88 @@ public sealed class AutoBuyDirtyResourceTests
         snapshots.BeginLazyEpoch();
         Assert.Empty(candidate.GetCosts());
         Assert.Equal(2, native.GetPurchaseCostCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionResourceSnapshot_ReadsTheAuditedNativeResourceContract()
+    {
+        var native = new ResourceSO
+        {
+            uuid = "mana",
+            Quantity = new TestBigDouble(4.0, 2),
+            TrueQuantity = new TestBigDouble(5.0, 2),
+            AttributeCostMod = new TestBigDouble(2.0, -1),
+            Available = true,
+            Bandwidth = true,
+            quality = new ValueModifierRecord(new TestBigDouble(1.25, 2)),
+            maxQuantity = new ValueModifierRecord(new TestBigDouble(2.0, 3)),
+        };
+        var definition = new AutoBuyResourceDefinition(
+            "mana", "Mana", native, new BigAmount(1.0, 1));
+        var reader = new ReflectionAutoBuyResourceSnapshotReader();
+
+        Assert.True(reader.TryRead(definition, 7, out var snapshot));
+        Assert.Equal(4.0, snapshot.StoredQuantity.Mantissa, 12);
+        Assert.Equal(2, snapshot.StoredQuantity.Exponent);
+        Assert.Equal(5.0, snapshot.TrueQuantity.Mantissa, 12);
+        Assert.Equal(1.25, snapshot.Quality.Mantissa, 12);
+        Assert.Equal(2.0, snapshot.EffectiveAttributeCost.Mantissa, 12);
+        Assert.Equal(-1, snapshot.EffectiveAttributeCost.Exponent);
+        Assert.Equal(2.0, snapshot.Capacity!.Value.Mantissa, 12);
+        Assert.Equal(3, snapshot.Capacity.Value.Exponent);
+        Assert.True(snapshot.IsAvailable);
+        Assert.True(snapshot.IsBandwidth);
+        Assert.Equal(7, snapshot.Epoch);
+
+        Assert.False(reader.TryRead(
+            new AutoBuyResourceDefinition("other", "Other", native, new BigAmount(1.0, 0)),
+            8,
+            out _));
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void ReflectionStructureCandidate_DecodesCostsValidatesLifecycleAndQueuesExactlyOne()
+    {
+        var mana = new ResourceSO
+        {
+            uuid = "mana",
+            TrueQuantity = new TestBigDouble(5.0, 2),
+        };
+        var native = new StructureSO
+        {
+            uuid = "structure",
+            PurchaseLevel = 3,
+            QueuedQuantity = 2,
+        };
+        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(2.0, 1)));
+        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 1)));
+        var snapshots = new AutoBuyResourceSnapshotCache(
+            new ReflectionAutoBuyResourceSnapshotReader(),
+            (_, _, _, _) => { });
+        snapshots.BeginLazyEpoch();
+        var candidate = new ReflectionAutoBuyCandidate(
+            native,
+            AutoBuyCandidateKind.Structure,
+            snapshots);
+
+        var costs = candidate.GetCosts();
+        var cost = Assert.Single(costs);
+        Assert.True(candidate.HasResolvedCosts);
+        Assert.Equal("mana", cost.ResourceId);
+        Assert.Equal(5.0, cost.Cost.Mantissa, 12);
+        Assert.Equal(1, cost.Cost.Exponent);
+        Assert.Equal(5.0, cost.CurrentQuantity.Mantissa, 12);
+        Assert.Equal(new[] { "mana" }, candidate.ResourceDependencies);
+
+        Assert.True(candidate.TryGetLifecycleEvidence(out var evidence, out var lifecycleReason), lifecycleReason);
+        Assert.True(evidence.IsAvailable);
+        Assert.Equal(3, evidence.CurrentLevel);
+        Assert.Equal(2, evidence.QueuedLevels);
+
+        Assert.True(candidate.TryPurchaseOne(out var purchaseReason), purchaseReason);
+        Assert.Equal(3, native.QueuedQuantity);
     }
 
     [Fact]
@@ -1291,6 +1596,30 @@ public sealed class AutoBuyDirtyResourceTests
         return new DirtyCandidate(uuid, kind, resourceId, available);
     }
 
+    private static AutoBuyDecision ResourceWait(
+        DirtyCandidate candidate,
+        double available,
+        double required,
+        string resourceId = "mana",
+        bool isBandwidth = false)
+    {
+        return AutoBuyDecision.Rejected(
+            candidate.Snapshot(),
+            AutoBuyRejectionReason.AffordabilityThreshold,
+            "resource threshold not met",
+            new[]
+            {
+                new AutoBuyResourceBlocker(
+                    AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                    resourceId,
+                    resourceId,
+                    new BigAmount(10, 0),
+                    new BigAmount(available, 0),
+                    new BigAmount(required, 0),
+                    isBandwidth),
+            });
+    }
+
     private static void PrimeDependencies(AutoBuyCandidateIndex index, params DirtyCandidate[] candidates)
     {
         index.Reconcile(candidates);
@@ -1372,6 +1701,8 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool HasResolvedCosts => CostsResolved;
 
+        public void AddDependency(string resourceId) => _dependencies.Add(resourceId);
+
         public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
         public bool IsAvailable() => Available;
@@ -1447,14 +1778,18 @@ public sealed class AutoBuyDirtyResourceTests
 
         public bool FirstResourceTrackingSuppressed { get; private set; }
 
+        public AutoBuyDecision? FirstDecision { get; private set; }
+
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
             if (ReferenceEquals(candidate, _first))
             {
                 FirstResourceTrackingSuppressed = suppressResourceTracking;
+                FirstDecision = decision;
             }
         }
 
@@ -1496,12 +1831,21 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = QueueRooms is { Count: > 0 }
+            var remainingRoom = QueueRooms is { Count: > 0 }
                 ? QueueRooms.Dequeue()
                 : RemainingRoom;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                1024,
+                remainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -1525,7 +1869,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         private readonly IReadOnlyList<IAutoBuyCandidate> _candidates;
 
-        public IndexedCatalog(IReadOnlyList<DirtyCandidate> candidates)
+        public IndexedCatalog(IReadOnlyList<IAutoBuyCandidate> candidates)
         {
             _candidates = candidates;
             Index.Reconcile(candidates);
@@ -1561,9 +1905,10 @@ public sealed class AutoBuyDirtyResourceTests
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
-            Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
+            Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
         }
 
         public void InvalidatePolicy() => Index.InvalidatePolicy();
@@ -1588,10 +1933,18 @@ public sealed class AutoBuyDirtyResourceTests
 
         public void InvalidateLifecycle() => Index.BeginLifecycleEpoch();
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = 128;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                128,
+                128,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -1756,9 +2109,47 @@ internal class ResourceSO
 {
     public string uuid = string.Empty;
 
+    public TestBigDouble Quantity { get; set; } = new TestBigDouble(4.0, 2);
+
+    public TestBigDouble TrueQuantity { get; set; } = new TestBigDouble(5.0, 2);
+
+    public TestBigDouble AttributeCostMod { get; set; } = new TestBigDouble(1.0, 0);
+
+    public bool Available { get; set; } = true;
+
+    public bool Bandwidth { get; set; }
+
+    public ValueModifierRecord quality = new ValueModifierRecord(new TestBigDouble(1.0, 2));
+
+    public ValueModifierRecord maxQuantity = new ValueModifierRecord(new TestBigDouble(1.0, 3));
+
     public string GetGuid() => uuid;
 
     public string GetName() => uuid;
+
+    public TestBigDouble GetQuantity() => Quantity;
+
+    public TestBigDouble GetTrueQuantity() => TrueQuantity;
+
+    public TestBigDouble GetAttributeCostMod() => AttributeCostMod;
+
+    public bool IsAvailable() => Available;
+
+    public bool IsBandwidthResource() => Bandwidth;
+
+    public TestBigDouble GetTrueAmount(TestBigDouble amount) => amount;
+}
+
+internal sealed class ValueModifierRecord
+{
+    private readonly TestBigDouble _value;
+
+    public ValueModifierRecord(TestBigDouble value)
+    {
+        _value = value;
+    }
+
+    public TestBigDouble GetValue() => _value;
 }
 
 internal readonly struct TestBigDouble
@@ -1778,13 +2169,21 @@ internal class StructureSO
 {
     public string uuid = string.Empty;
 
+    public bool Available { get; set; } = true;
+
+    public bool Purchasable { get; set; } = true;
+
+    public int PurchaseLevel { get; set; }
+
+    public int QueuedQuantity { get; set; }
+
     public ResourceCostList Cost { get; set; } = new ResourceCostList();
 
     public int GetPurchaseCostCalls { get; private set; }
 
-    public bool IsAvailable() => true;
+    public bool IsAvailable() => Available;
 
-    public bool CanPurchase() => true;
+    public bool CanPurchase() => Purchasable;
 
     public ResourceCostList GetPurchaseCost()
     {
@@ -1794,9 +2193,10 @@ internal class StructureSO
 
     public void Purchase(bool forceOne)
     {
+        if (forceOne && Purchasable) QueuedQuantity++;
     }
 
-    public int GetPurchaseLevel() => 0;
+    public int GetPurchaseLevel() => PurchaseLevel;
 
-    public int GetQueuedQuantity() => 0;
+    public int GetQueuedQuantity() => QueuedQuantity;
 }

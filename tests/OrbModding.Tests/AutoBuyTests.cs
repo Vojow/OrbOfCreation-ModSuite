@@ -4,6 +4,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -133,7 +134,7 @@ public sealed class AutoBuyTests
         };
         var catalog = new FakeCatalog(1, candidates)
         {
-            QueueRooms = new Queue<int>(new[] { 4, 4, 3, 2, 1 }),
+            QueueRooms = new Queue<int>(new[] { 4, 4, 4, 3, 3, 2, 2, 1 }),
         };
 
         Run(config =>
@@ -160,7 +161,7 @@ public sealed class AutoBuyTests
         };
         var catalog = new FakeCatalog(1, candidates)
         {
-            QueueRooms = new Queue<int>(new[] { 4, 4, 3, 2, 1 }),
+            QueueRooms = new Queue<int>(new[] { 4, 4, 4, 3, 3, 2, 2, 1 }),
         };
 
         Run(config =>
@@ -462,7 +463,7 @@ public sealed class AutoBuyTests
         var candidate = Candidate("prepared", AutoBuyCandidateKind.Upgrade, 1, 1_000);
         var catalog = new FakeCatalog(1, candidate)
         {
-            QueueRooms = new Queue<int>(new[] { 1, 1, 2 }),
+            QueueRooms = new Queue<int>(new[] { 1, 1, 2, 2, 2 }),
         };
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
@@ -484,6 +485,41 @@ public sealed class AutoBuyTests
         Assert.Equal(1, candidate.PurchaseCalls);
         Assert.Contains(log.Entries, entry =>
             entry?.ToString()?.Contains("waiting for native queue room", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void CapacityChangeAfterCandidateValidation_IsObservedBeforeMutation()
+    {
+        var candidate = Candidate("changing-capacity", AutoBuyCandidateKind.Structure, 1, 1_000);
+        var catalog = new FakeCatalog(0, candidate)
+        {
+            QueueCapacities = new Queue<int>(new[] { 4, 4, 1 }),
+            QueueRooms = new Queue<int>(new[] { 4, 4, 0 }),
+        };
+
+        Run(config =>
+        {
+            config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+            config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+            config.LeaveQueueSlots.Value = 0;
+        }, catalog);
+
+        Assert.Equal(0, candidate.PurchaseCalls);
+    }
+
+    [Fact]
+    public void OneSlotQueueWithoutReservation_AllowsExactlyOneQueuedLevel()
+    {
+        var candidate = Candidate("one-slot", AutoBuyCandidateKind.Structure, 1, 1_000);
+
+        Run(config =>
+        {
+            config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+            config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
+            config.LeaveQueueSlots.Value = 0;
+        }, new FakeCatalog(1, candidate) { NativeCapacity = 1 });
+
+        Assert.Equal(1, candidate.PurchaseCalls);
     }
 
     [Fact]
@@ -658,6 +694,10 @@ public sealed class AutoBuyTests
 
         public Queue<int>? QueueRooms { get; set; }
 
+        public int NativeCapacity { get; set; } = 1024;
+
+        public Queue<int>? QueueCapacities { get; set; }
+
         public int BulkDevelopment { get; set; } = 1;
 
         public int ActionMultiplier { get; set; } = 1;
@@ -668,10 +708,20 @@ public sealed class AutoBuyTests
             return _candidates;
         }
 
-        public bool TryGetRemainingQueueRoom(out int room)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            room = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : _queueRoom;
-            return true;
+            var room = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : _queueRoom;
+            var capacity = QueueCapacities is { Count: > 0 } ? QueueCapacities.Dequeue() : NativeCapacity;
+            return QueueCapacitySnapshot.TryCreate(
+                capacity,
+                room,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
