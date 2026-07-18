@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using OrbAutomata;
-using OrbModding.Tests.NativeConcepts;
 using Xunit;
 
 namespace OrbModding.Tests;

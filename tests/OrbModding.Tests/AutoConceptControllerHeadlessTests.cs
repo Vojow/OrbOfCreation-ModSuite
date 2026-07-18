@@ -4,7 +4,6 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common;
-using OrbModding.Tests.NativeConcepts;
 using Xunit;
 
 namespace OrbModding.Tests;
