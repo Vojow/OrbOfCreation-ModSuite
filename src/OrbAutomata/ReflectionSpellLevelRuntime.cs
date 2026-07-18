@@ -8,7 +8,7 @@ namespace OrbAutomata;
 
 internal sealed class ReflectionSpellLevelRuntime : IDisposable
 {
-    internal const string UnlockLevelAllSpellsUuid = "b5efd19a-9655-4359-ad27-f391bb86c2e4";
+    internal static readonly string UnlockLevelAllSpellsUuid = KnownEntities.UnlockLevelAllSpells.Uuid.ToString("D");
 
     private readonly TypedRegistryResolver _registryResolver;
     private Type? _recipeType;
@@ -193,14 +193,14 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         {
             var managerType = ReflectionUtil.FindLoadedType("SpellManager");
             _recipeType = ReflectionUtil.FindLoadedType("SpellRecipeSO");
-            var upgradeType = ReflectionUtil.FindLoadedType("UpgradeSO");
+            var upgradeType = ReflectionUtil.FindLoadedType(KnownEntities.UnlockLevelAllSpells.ManagedTypeName);
             if (managerType is null || _recipeType is null || upgradeType is null)
                 return Retry("native spell-level types are not registered yet", out reason);
 
-            var upgradeId = new Guid(UnlockLevelAllSpellsUuid);
+            var upgradeId = KnownEntities.UnlockLevelAllSpells.Uuid;
             var upgradeResolution = _registryResolver.Resolve(upgradeId, upgradeType);
             if (!upgradeResolution.IsResolved)
-                return HandleRegistryFailure("UnlockLevelAllSpells", upgradeResolution, out reason);
+                return HandleRegistryFailure(KnownEntities.UnlockLevelAllSpells.DiagnosticName, upgradeResolution, out reason);
             _levelAllUpgrade = upgradeResolution.Value;
             _levelAllResolution = upgradeResolution;
 

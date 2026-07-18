@@ -27,15 +27,15 @@ internal readonly struct MentorDomainUnlockSnapshot
 
 internal sealed class MentorDomainUnlockGate
 {
-    internal const string MasteriesEnabledUuid = "07dfae7e-76b9-4b38-bf81-38abc40b9ed7";
-    internal const string SpellbookUuid = "ca934900-0253-4f71-93e9-733fb91132b7";
-    internal const string ArtifactWorkshopUuid = "668a2a7a-468f-4e0e-b182-979b12a4b0ad";
-    internal const string AlchemyScreenUuid = "3ae45ec0-4449-4903-b3d0-b5182e03dca3";
+    internal static readonly string MasteriesEnabledUuid = KnownEntities.MasteriesEnabled.Uuid.ToString("D");
+    internal static readonly string SpellbookUuid = KnownEntities.MagicSpellbook.Uuid.ToString("D");
+    internal static readonly string ArtifactWorkshopUuid = KnownEntities.WorkshopArtifact.Uuid.ToString("D");
+    internal static readonly string AlchemyScreenUuid = KnownEntities.AlchemyScreen.Uuid.ToString("D");
 
-    private static readonly Guid MasteriesEnabledId = new(MasteriesEnabledUuid);
-    private static readonly Guid SpellbookId = new(SpellbookUuid);
-    private static readonly Guid ArtifactWorkshopId = new(ArtifactWorkshopUuid);
-    private static readonly Guid AlchemyScreenId = new(AlchemyScreenUuid);
+    private static readonly Guid MasteriesEnabledId = KnownEntities.MasteriesEnabled.Uuid;
+    private static readonly Guid SpellbookId = KnownEntities.MagicSpellbook.Uuid;
+    private static readonly Guid ArtifactWorkshopId = KnownEntities.WorkshopArtifact.Uuid;
+    private static readonly Guid AlchemyScreenId = KnownEntities.AlchemyScreen.Uuid;
 
     private const BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private readonly Func<string, Type?> _resolveType;
@@ -59,7 +59,7 @@ internal sealed class MentorDomainUnlockGate
         var domainId = DomainId(domain);
         var masteryResolution = _registryResolver.Resolve(MasteriesEnabledId, _viewType!);
         if (!masteryResolution.IsResolved)
-            return FromResolution("MasteriesEnabled", masteryResolution);
+            return FromResolution(KnownEntities.MasteriesEnabled.DiagnosticName, masteryResolution);
         var domainResolution = _registryResolver.Resolve(domainId, _viewType!);
         if (!domainResolution.IsResolved)
             return FromResolution(DomainAssetLabel(domain), domainResolution);
@@ -86,7 +86,7 @@ internal sealed class MentorDomainUnlockGate
     {
         if (_schemaFailure is not null) return false;
         if (_viewType is not null) return true;
-        var viewType = _resolveType("ViewSO");
+        var viewType = _resolveType(KnownEntities.MasteriesEnabled.ManagedTypeName);
         if (viewType is null)
         {
             _schemaFailure = "native ViewSO progression type is unavailable";
@@ -126,9 +126,9 @@ internal sealed class MentorDomainUnlockGate
 
     private static string DomainAssetLabel(MentorDomain domain) => domain switch
     {
-        MentorDomain.Spells => "MagicSpellbook",
-        MentorDomain.Artifacts => "WorkshopArtifact",
-        _ => "ScreenAlchemy",
+        MentorDomain.Spells => KnownEntities.MagicSpellbook.DiagnosticName,
+        MentorDomain.Artifacts => KnownEntities.WorkshopArtifact.DiagnosticName,
+        _ => KnownEntities.AlchemyScreen.DiagnosticName,
     };
 
     private static string DomainLabel(MentorDomain domain) => domain switch
