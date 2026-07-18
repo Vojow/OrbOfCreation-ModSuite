@@ -267,6 +267,15 @@ internal sealed class SimulatedAutoBuyWorld
 
     public int TotalCandidateEvaluations => _candidates.Sum(candidate => candidate.CanPurchaseCalls);
 
+    public int TotalPurchaseCalls => _candidates.Sum(candidate => candidate.PurchaseCalls);
+
+    public int TotalCostReads => _candidates.Sum(candidate => candidate.CostReads);
+
+    public int TotalLifecycleReads => _candidates.Sum(candidate => candidate.LifecycleReads);
+
+    public int DistinctCandidatesSubmitted =>
+        _submissionOrder.Distinct(StringComparer.Ordinal).Count();
+
     public double ResourceQuantity
     {
         get => GetResourceQuantity("resource").DivideApprox(new BigAmount(1.0, 0));
@@ -775,6 +784,12 @@ internal sealed class SimulatedAutoBuyCatalog :
 
     public int CompletionSignals { get; private set; }
 
+    public int QueueCapacityReads { get; private set; }
+
+    public int BulkDevelopmentReads { get; private set; }
+
+    public int ActionMultiplierReads { get; private set; }
+
     public bool QueueReadSucceeds { get; set; } = true;
 
     public IEnumerable<IAutoBuyCandidate> Discover() => _world.Candidates;
@@ -897,6 +912,7 @@ internal sealed class SimulatedAutoBuyCatalog :
         int manualReservation,
         out QueueCapacitySnapshot snapshot)
     {
+        QueueCapacityReads++;
         snapshot = default;
         return QueueReadSucceeds &&
                QueueCapacitySnapshot.TryCreate(
@@ -910,12 +926,14 @@ internal sealed class SimulatedAutoBuyCatalog :
 
     public bool TryGetBulkDevelopment(out int levels)
     {
+        BulkDevelopmentReads++;
         levels = 1;
         return true;
     }
 
     public bool TryGetActionMultiplier(out int multiplier)
     {
+        ActionMultiplierReads++;
         multiplier = 1;
         return true;
     }

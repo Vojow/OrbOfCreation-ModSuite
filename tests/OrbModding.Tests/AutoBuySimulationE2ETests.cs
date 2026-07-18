@@ -459,6 +459,16 @@ public sealed class AutoBuySimulationE2ETests
         var purchases = simulation.World.TotalSubmitted;
         var evaluationBudget = (4 * candidates.Length) + (4 * purchases);
 
+        AutoBuyPerformanceReporter.Record(
+            "periodic-completions",
+            simulation,
+            candidates.Length,
+            queueCapacity: 304,
+            reservedQueueSlots: simulation.Config.LeaveQueueSlots.Value,
+            frameCount: 900,
+            completionStartFrame: 400,
+            completionEveryFrames: 20);
+
         Assert.True(simulation.World.QueueHighWater >= 300,
             $"Queue high-water was only {simulation.World.QueueHighWater}/304.");
         Assert.True(simulation.World.QueueCount >= 295,
@@ -500,6 +510,17 @@ public sealed class AutoBuySimulationE2ETests
 
         var purchases = simulation.World.TotalSubmitted;
         var evaluationBudget = (4 * candidates.Length) + (4 * purchases);
+
+        AutoBuyPerformanceReporter.Record(
+            "completion-storm",
+            simulation,
+            candidates.Length,
+            queueCapacity: 304,
+            reservedQueueSlots: simulation.Config.LeaveQueueSlots.Value,
+            frameCount: 900,
+            completionStartFrame: 400,
+            completionEveryFrames: 4);
+
         Assert.True(simulation.World.QueueCount >= 295,
             $"Final queue depth was {simulation.World.QueueCount}/304.");
         Assert.True(purchases >= 416,

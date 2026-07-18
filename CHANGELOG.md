@@ -22,6 +22,7 @@
 - Keep queue feeding responsive during rapid native completions: finish the current bounded completion-settlement generation, coalesce intervening signals into one follow-up, preserve CPU-sliced scan progress, and wake a prepared candidate immediately when a completion reopens a slot.
 - Retain the 10 Hz full-queue poll only as a fallback when no completion signal arrives; every resumed candidate still refreshes native availability, costs, resources, reserves, limits, and queue room before mutation.
 - Promote the deterministic four-frame completion storm to an active performance regression gate covering near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
+- Record deterministic queue output, refill latency, modeled reads, scheduler callbacks, and normalized operations per purchase; compare CI runs with the reviewed beta baseline and retain each raw report for 90 days.
 
 ## Orb Automata 0.8.1 Beta 1 — 2026-07-18
 

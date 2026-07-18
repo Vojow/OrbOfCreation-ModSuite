@@ -77,6 +77,19 @@ Run the active deterministic performance baseline:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 ```
 
+Capture a machine-readable report and compare it with the checked-in beta
+history:
+
+```powershell
+$env:OOC_PERFORMANCE_REPORT = Join-Path $PWD 'artifacts/performance/autobuy-current.json'
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+tools/check-performance-report.ps1 -ReportPath artifacts/performance/autobuy-current.json
+```
+
+The environment variable is optional. Without it, the tests enforce their hard
+budgets but do not create an artifact. Use an absolute path when setting it
+because the test host runs from its build-output directory.
+
 Performance targets remain skipped only while they document engineering backlog rather than released behavior. Promote a target to `PerformanceSimulation` only when the production engine meets its assertions without weakening the workload or budgets.
 
 ## Determinism and performance budgets
@@ -90,6 +103,31 @@ Performance simulations assert deterministic work rather than wall-clock duratio
 - purchase count and distinct-candidate handoff order.
 
 The harness injects observation costs into production CPU-slicing seams. This makes the same run reproducible on a desktop, Steam Deck, and CI runner. Real elapsed time may still be reported diagnostically, but it must not be the sole pass/fail criterion.
+
+### Historical reports
+
+[`data/autobuy-performance-baseline.json`](../../data/autobuy-performance-baseline.json)
+is the reviewed beta reference. Each report records the exact workload, source
+commit, queue output, refill latency, candidate and catalog reads, mutation
+attempts, scheduler callbacks, and normalized evaluations and total observed
+operations per successful submission. The operation total is diagnostic: it is
+the sum of modeled native reads, native mutation attempts, and scheduler
+callbacks. It is not a claim about instructions, allocations, or real elapsed
+CPU time.
+
+`tools/check-performance-report.ps1` rejects a changed workload or scenario set
+and allows at most a 10% regression by default. Queue depth, submissions, and
+candidate diversity are higher-is-better; reads, callbacks, refill latency,
+idle frames, and normalized operation density are lower-is-better. Existing
+scenario assertions remain the stricter correctness and safety gates.
+
+CI prints the comparison table in the job summary and retains the raw current
+report for 90 days. The checked-in reference supplies the long-lived anchor;
+retained artifacts provide per-run evidence for investigations. Update the
+reference only in the same reviewed change that intentionally changes the
+workload or improves/accepts the engine result. Run the full portable suite
+first, record the previous and new values in the PR, and never refresh the file
+merely to make a regression check pass.
 
 ## Scenario design rules
 

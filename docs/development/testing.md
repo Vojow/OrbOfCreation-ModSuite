@@ -37,6 +37,14 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 ```
 
+Set `OOC_PERFORMANCE_REPORT` to an absolute JSON path to retain the deterministic
+Auto Buy measurements, then run
+`tools/check-performance-report.ps1 -ReportPath <path>` to compare them with the
+reviewed beta history. CI performs this comparison, adds its table to the job
+summary, and retains the raw report for 90 days. See
+[headless E2E simulation](headless-e2e.md#historical-reports) for metric
+definitions and the baseline-update policy.
+
 Collect portable production coverage with the checked-in assembly allowlist:
 
 ```powershell

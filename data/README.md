@@ -8,6 +8,7 @@ The directory also contains `native-contracts.json`, the audited machine-readabl
 
 - `entity-mappings.tsv` — normalized mapping with `id`, `name`, and `type` columns.
 - `entity-types.tsv` — mapping count grouped by managed type.
+- `autobuy-performance-baseline.json` — reviewed deterministic queue-performance history used by CI; update it only through the policy in [Headless E2E simulation](../docs/development/headless-e2e.md#historical-reports).
 - `source/message.txt` — preserved UTF-8 source used for the current import.
 
 The TSV format is used because it is simple to diff, search, and consume from scripts without quoting the entity names unnecessarily.
