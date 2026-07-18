@@ -329,6 +329,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void DeferredCastCancelsWhenCurrentSlotIdentityChanges()
     {
         var coordinator = Coordinator();
@@ -367,6 +368,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void LifecycleInvalidationDiscardsDeferredCastAndReplansCurrentSlot()
     {
         var coordinator = Coordinator();
@@ -636,10 +638,19 @@ public sealed class AutomataCoordinatorTests
             return _candidates;
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : RemainingRoom;
-            return true;
+            var remainingRoom = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : RemainingRoom;
+            return QueueCapacitySnapshot.TryCreate(
+                1024,
+                remainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -802,7 +813,8 @@ public sealed class AutomataCoordinatorTests
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
         }
 
@@ -838,10 +850,18 @@ public sealed class AutomataCoordinatorTests
         {
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = 4;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                4,
+                4,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)

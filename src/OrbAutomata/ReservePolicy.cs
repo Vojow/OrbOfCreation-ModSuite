@@ -57,7 +57,8 @@ internal sealed class ReservePolicy
                     cost.ResourceName,
                     cost.Cost,
                     cost.CurrentQuantity,
-                    requiredBeforeSpend));
+                    requiredBeforeSpend,
+                    cost.IsBandwidth));
                 continue;
             }
 
@@ -70,8 +71,11 @@ internal sealed class ReservePolicy
             var reason = string.Join(
                 "; ",
                 blockers.Select(blocker =>
-                    $"reserve violation for {blocker.ResourceName}: have {blocker.AvailableQuantity}, " +
-                    $"need {blocker.RequiredQuantity} including reserve"));
+                    blocker.RequiredQuantity.CompareTo(blocker.Cost) == 0
+                        ? $"insufficient {blocker.ResourceName}: have {blocker.AvailableQuantity}, " +
+                          $"need {blocker.RequiredQuantity} to cover cost"
+                        : $"reserve violation for {blocker.ResourceName}: have {blocker.AvailableQuantity}, " +
+                          $"need {blocker.RequiredQuantity} including reserve"));
             return ReserveDecision.Rejected(ReserveDecisionFailure.ReserveViolation, reason, blockers);
         }
 
