@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -26,6 +27,7 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     private MethodInfo? _getUpgradePurchaseLevel;
     private MethodInfo? _tryLevelAll;
     private string? _blockedReason;
+    private object? _lastMutationEvidence;
 
     public string? BlockedReason => _blockedReason;
     public bool IsReady => _manager is not null && _availableRecipes is not null && _blockedReason is null;
@@ -65,7 +67,6 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     public bool TryLevelSingle(NativeSpellLevelCandidate candidate, out string reason)
     {
         if (!TryInitialize(out reason)) return false;
-        var costAttempted = false;
         try
         {
             if (!ContainsExactRecipe(candidate)) return Reject("spell-level candidate changed before mutation", out reason);
@@ -81,19 +82,21 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
             if (cost is null || _costHasEnough!.Invoke(cost, Array.Empty<object>()) is not true)
                 return Reject("spell-level cost is no longer affordable", out reason);
 
-            var before = ReadMasteryLevel(recipe);
-            costAttempted = true;
-            _costPerform!.Invoke(cost, Array.Empty<object>());
-            _purchaseLevel!.Invoke(recipe, Array.Empty<object>());
-            if (ReadMasteryLevel(recipe) <= before)
-                return Block("native spell level did not advance after its cost was paid", out reason);
-            reason = string.Empty;
-            return true;
+            var evidence = NativeMutationVerifier.Execute(
+                "Auto Spell Level single",
+                candidate.Uuid,
+                "mastery level exact delta +1",
+                () => ReadMasteryLevel(recipe),
+                () =>
+                {
+                    _costPerform!.Invoke(cost, Array.Empty<object>());
+                    _purchaseLevel!.Invoke(recipe, Array.Empty<object>());
+                },
+                (before, after) => after == before + 1);
+            return CompleteMutation(evidence, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
-            if (costAttempted)
-                return Block($"native spell level failed after its cost was attempted: {ex.GetBaseException().Message}", out reason);
             reason = $"spell-level mutation failed: {ex.GetBaseException().Message}";
             return false;
         }
@@ -106,12 +109,15 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
             return false;
         try
         {
-            var before = ReadTotalMasteryLevels();
-            _tryLevelAll!.Invoke(_manager, Array.Empty<object>());
-            if (ReadTotalMasteryLevels() <= before)
-                return Reject("native level-all action did not advance a ready affordable spell", out reason);
-            reason = string.Empty;
-            return true;
+            var identity = snapshot.Candidate.Uuid;
+            var evidence = NativeMutationVerifier.Execute(
+                "Auto Spell Level all",
+                identity,
+                "total mastery level positive delta",
+                ReadTotalMasteryLevels,
+                () => _tryLevelAll!.Invoke(_manager, Array.Empty<object>()),
+                (before, after) => after > before);
+            return CompleteMutation(evidence, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
@@ -138,9 +144,25 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         _getUpgradePurchaseLevel = null;
         _tryLevelAll = null;
         _blockedReason = null;
+        _lastMutationEvidence = null;
     }
 
     public void Dispose() => InvalidateLifecycle();
+
+    private bool CompleteMutation<TState>(NativeMutationEvidence<TState> evidence, out string reason)
+    {
+        _lastMutationEvidence = evidence;
+        if (evidence.IsVerified)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = evidence.Format();
+        return evidence.MutationWasAttempted
+            ? Block($"native spell-level mutation blocked until the next lifecycle: {reason}", out reason)
+            : false;
+    }
 
     private bool TryInitialize(out string reason)
     {

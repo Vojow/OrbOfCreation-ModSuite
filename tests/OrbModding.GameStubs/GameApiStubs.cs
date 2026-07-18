@@ -78,11 +78,16 @@ public class SpellRecipeSO
     public BigDouble masteryExperience;
     public bool discovered;
     public bool readyToLevel;
+    public bool SuppressMasteryGain { get; set; }
+    public bool SuppressLevelMutation { get; set; }
+    public int MasteryGrantCalls { get; private set; }
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
     public void GainMasteryExp(BigDouble exp)
     {
+        MasteryGrantCalls++;
+        if (SuppressMasteryGain) return;
         GrantedMasteryExperience.Add(exp);
         masteryExperience = Add(masteryExperience, exp);
     }
@@ -93,7 +98,7 @@ public class SpellRecipeSO
     public ResourceCostList GetLevelCost() => levelCost;
     public void PurchaseLevel()
     {
-        if (!readyToLevel) return;
+        if (!readyToLevel || SuppressLevelMutation) return;
         masteryLevel++;
         readyToLevel = false;
     }
@@ -203,7 +208,18 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public void GainMasteryXp(BigDouble amount)
     {
         GrantedMasteryExperience.Add(amount);
-        masteryXp = amount;
+        masteryXp = Add(masteryXp, amount);
+    }
+
+    private static BigDouble Add(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right;
+        if (right.mantissa == 0) return left;
+        var exponent = Math.Max(left.exponent, right.exponent);
+        return new BigDouble(
+            left.mantissa * Math.Pow(10, left.exponent - exponent) +
+            right.mantissa * Math.Pow(10, right.exponent - exponent),
+            exponent);
     }
 }
 
@@ -491,6 +507,8 @@ public sealed class AlchemyInstance
 public sealed class AlchemyInstanceListVariable
 {
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
+    public bool SuppressAddMutation { get; set; }
+    public bool SuppressRemoveMutation { get; set; }
 
     public bool CanAddInstance(AlchemyRecipeSO recipe)
     {
@@ -504,6 +522,7 @@ public sealed class AlchemyInstanceListVariable
 
     public void AddAlchemyInstances(AlchemyRecipeSO recipe, int delta)
     {
+        if (SuppressAddMutation) return;
         var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
         if (instance is null)
         {
@@ -515,6 +534,7 @@ public sealed class AlchemyInstanceListVariable
 
     public void RemoveAlchemyInstances(AlchemyRecipeSO recipe, int delta)
     {
+        if (SuppressRemoveMutation) return;
         value.Single(item => ReferenceEquals(item.reference, recipe)).queuedQuantity -= delta;
     }
 

@@ -49,6 +49,36 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void NoOpSpellGrantBlocksDomainUntilLifecycleRecovery()
+    {
+        var source = RegisterSpell(mastery: 5);
+        var recipient = RegisterSpell(mastery: 2);
+        recipient.SuppressMasteryGain = true;
+        SpellManager.instance!.activeSpells.Add(new Spell(source));
+        using var runtime = CreateRuntime(sharePercent: 10);
+
+        Drive(runtime, 200);
+        runtime.Observe(source, new BigDouble(100, 0));
+        DriveUntil(runtime, () => runtime.IsBlocked);
+
+        Assert.Equal(1, recipient.MasteryGrantCalls);
+        Assert.Empty(recipient.GrantedMasteryExperience);
+        Assert.Equal(0, runtime.Diagnostics.NativeGrants);
+        Drive(runtime, 100);
+        Assert.Equal(1, recipient.MasteryGrantCalls);
+
+        recipient.SuppressMasteryGain = false;
+        runtime.RequestLifecycleReset();
+        Drive(runtime, 200);
+        runtime.Observe(source, new BigDouble(100, 0));
+        DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+        Assert.Equal(2, recipient.MasteryGrantCalls);
+        Assert.Single(recipient.GrantedMasteryExperience);
+    }
+
+    [Fact]
     [Trait("Category", "HeadlessIntegration")]
     public void UnequippedSpell_IsRejectedAtCaptureTime()
     {

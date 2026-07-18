@@ -410,6 +410,7 @@ internal sealed class AutoCastEngine : IDisposable
     public void InvalidateLifecycle()
     {
         ReleaseFullChargeHold("Auto Cast lifecycle invalidated");
+        (_catalog as IAutoCastMutationRecoveryCatalog)?.RecoverMutationBlocks();
         ClearPendingCandidate();
         SetCoordinatorPending(false, false);
         _secondsUntilEvaluation = 0.0f;

@@ -1,0 +1,200 @@
+using System;
+
+namespace OrbModding.Common;
+
+public enum NativeMutationOutcome
+{
+    Verified,
+    BeforeCaptureFailed,
+    ExecutionThrew,
+    AfterCaptureFailed,
+    PostconditionFailed
+}
+
+public readonly struct NativeMutationEvidence<TState>
+{
+    internal NativeMutationEvidence(
+        string feature,
+        string identity,
+        string expectedChange,
+        NativeMutationOutcome outcome,
+        bool hasBefore,
+        TState before,
+        bool hasAfter,
+        TState after,
+        string detail)
+    {
+        Feature = feature;
+        Identity = identity;
+        ExpectedChange = expectedChange;
+        Outcome = outcome;
+        HasBefore = hasBefore;
+        Before = before;
+        HasAfter = hasAfter;
+        After = after;
+        Detail = detail;
+    }
+
+    public string Feature { get; }
+    public string Identity { get; }
+    public string ExpectedChange { get; }
+    public NativeMutationOutcome Outcome { get; }
+    public bool HasBefore { get; }
+    public TState Before { get; }
+    public bool HasAfter { get; }
+    public TState After { get; }
+    public string Detail { get; }
+    public bool IsVerified => Outcome == NativeMutationOutcome.Verified;
+    public bool MutationWasAttempted => Outcome != NativeMutationOutcome.BeforeCaptureFailed;
+
+    public string Format(Func<TState, string>? formatState = null)
+    {
+        formatState ??= value => value?.ToString() ?? "<null>";
+        var before = HasBefore ? formatState(Before) : "<unavailable>";
+        var after = HasAfter ? formatState(After) : "<unavailable>";
+        return $"feature={Feature}; identity={Identity}; outcome={Outcome}; expected={ExpectedChange}; before={before}; after={after}; detail={Detail}";
+    }
+}
+
+public static class NativeMutationVerifier
+{
+    public static NativeMutationEvidence<TState> Execute<TState>(
+        string feature,
+        string identity,
+        string expectedChange,
+        Func<TState> capture,
+        Action execute,
+        Func<TState, TState, bool> verify)
+    {
+        if (string.IsNullOrWhiteSpace(feature)) throw new ArgumentException("A feature name is required.", nameof(feature));
+        if (string.IsNullOrWhiteSpace(identity)) throw new ArgumentException("A mutation identity is required.", nameof(identity));
+        if (string.IsNullOrWhiteSpace(expectedChange)) throw new ArgumentException("An expected change is required.", nameof(expectedChange));
+        if (capture is null) throw new ArgumentNullException(nameof(capture));
+        if (execute is null) throw new ArgumentNullException(nameof(execute));
+        if (verify is null) throw new ArgumentNullException(nameof(verify));
+
+        TState before;
+        try
+        {
+            before = capture();
+        }
+        catch (Exception ex)
+        {
+            return Evidence<TState>(
+                feature,
+                identity,
+                expectedChange,
+                NativeMutationOutcome.BeforeCaptureFailed,
+                false,
+                default!,
+                false,
+                default!,
+                ex.GetBaseException().Message);
+        }
+
+        try
+        {
+            execute();
+        }
+        catch (Exception executionException)
+        {
+            try
+            {
+                var afterException = capture();
+                return Evidence<TState>(
+                    feature,
+                    identity,
+                    expectedChange,
+                    NativeMutationOutcome.ExecutionThrew,
+                    true,
+                    before,
+                    true,
+                    afterException,
+                    executionException.GetBaseException().Message);
+            }
+            catch (Exception captureException)
+            {
+                return Evidence<TState>(
+                    feature,
+                    identity,
+                    expectedChange,
+                    NativeMutationOutcome.ExecutionThrew,
+                    true,
+                    before,
+                    false,
+                    default!,
+                    $"{executionException.GetBaseException().Message}; after capture failed: {captureException.GetBaseException().Message}");
+            }
+        }
+
+        TState after;
+        try
+        {
+            after = capture();
+        }
+        catch (Exception ex)
+        {
+            return Evidence<TState>(
+                feature,
+                identity,
+                expectedChange,
+                NativeMutationOutcome.AfterCaptureFailed,
+                true,
+                before,
+                false,
+                default!,
+                ex.GetBaseException().Message);
+        }
+
+        bool verified;
+        try
+        {
+            verified = verify(before, after);
+        }
+        catch (Exception ex)
+        {
+            return Evidence<TState>(
+                feature,
+                identity,
+                expectedChange,
+                NativeMutationOutcome.PostconditionFailed,
+                true,
+                before,
+                true,
+                after,
+                $"postcondition evaluation failed: {ex.GetBaseException().Message}");
+        }
+
+        return Evidence<TState>(
+            feature,
+            identity,
+            expectedChange,
+            verified ? NativeMutationOutcome.Verified : NativeMutationOutcome.PostconditionFailed,
+            true,
+            before,
+            true,
+            after,
+            verified ? "postcondition verified" : "captured state did not match the expected change");
+    }
+
+    private static NativeMutationEvidence<TState> Evidence<TState>(
+        string feature,
+        string identity,
+        string expectedChange,
+        NativeMutationOutcome outcome,
+        bool hasBefore,
+        TState before,
+        bool hasAfter,
+        TState after,
+        string detail) =>
+        new(
+            feature,
+            identity,
+            expectedChange,
+            outcome,
+            hasBefore,
+            before,
+            hasAfter,
+            after,
+            detail);
+}

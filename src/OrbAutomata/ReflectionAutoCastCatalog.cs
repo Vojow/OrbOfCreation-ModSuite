@@ -3,12 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
+internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMutationRecoveryCatalog
 {
     private const BindingFlags StaticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+    private readonly Dictionary<string, string> _mutationBlocks = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<IAutoCastCandidate> DiscoverActiveLoadout()
     {
@@ -52,7 +54,14 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
 
     public void Dispose()
     {
+        _mutationBlocks.Clear();
     }
+
+    public void RecoverMutationBlocks() => _mutationBlocks.Clear();
+
+    internal bool TryGetMutationBlock(string uuid, out string reason) => _mutationBlocks.TryGetValue(uuid, out reason!);
+
+    internal void BlockMutation(string uuid, string reason) => _mutationBlocks[uuid] = reason;
 
     internal bool FireSlotAndResolveTargets(int slotIndex, out string reason)
     {
@@ -256,7 +265,47 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
         return true;
     }
 
-    public bool TryFireAndResolveTargets(out string reason) => _catalog.FireSlotAndResolveTargets(SlotIndex, out reason);
+    public bool TryFireAndResolveTargets(out string reason)
+    {
+        if (!TryGetIdentity(out var identity, out reason))
+        {
+            return false;
+        }
+
+        if (_catalog.TryGetMutationBlock(identity.Uuid, out reason))
+        {
+            return false;
+        }
+
+        var nativeReason = string.Empty;
+        var evidence = NativeMutationVerifier.Execute(
+            "Auto Cast fire",
+            identity.Uuid,
+            "Spell.Fire hook epoch exact delta +1",
+            () => AutoCastManualSignal.FireEpoch,
+            () =>
+            {
+                if (!_catalog.FireSlotAndResolveTargets(SlotIndex, out nativeReason))
+                {
+                    throw new InvalidOperationException(nativeReason);
+                }
+            },
+            (before, after) => after == before + 1);
+        if (evidence.IsVerified)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = evidence.Format();
+        if (evidence.MutationWasAttempted)
+        {
+            reason = $"native cast blocked until the next lifecycle: {reason}";
+            _catalog.BlockMutation(identity.Uuid, reason);
+        }
+
+        return false;
+    }
 
     public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
     {

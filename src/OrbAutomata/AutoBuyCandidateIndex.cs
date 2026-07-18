@@ -690,6 +690,11 @@ internal sealed class AutoBuyCandidateIndex
                 continue;
             }
 
+            if (entry.Candidate is IAutoBuyMutationCandidate mutationCandidate)
+            {
+                mutationCandidate.RecoverMutationBlock();
+            }
+
             entry.BeginEpoch(_epoch);
             entry.NeedsEpochValidation = true;
             _epochValidationPending++;

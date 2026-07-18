@@ -74,6 +74,43 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
 
     [Fact]
     [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionConceptRuntime_NoOpAssignmentBlocksUntilLifecycleRecovery()
+    {
+        var recipe = new AlchemyRecipeSO(
+            "no-op-concept",
+            "No-op concept",
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
+        {
+            maxUsageSlots = 2,
+        };
+        var active = InstallNativeLists(recipe);
+        active.SuppressAddMutation = true;
+        using var runtime = new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier());
+        var candidate = Assert.Single(runtime.ReadCandidates(
+            new HashSet<string>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal),
+            out _));
+
+        Assert.False(runtime.TryAdd(candidate, 1, out var failedReason));
+        Assert.Contains("PostconditionFailed", failedReason);
+        Assert.NotNull(runtime.BlockedReason);
+        Assert.False(runtime.TryAdd(candidate, 1, out var blockedReason));
+        Assert.Contains("blocked until the next lifecycle", blockedReason);
+
+        active.SuppressAddMutation = false;
+        runtime.InvalidateLifecycle();
+        var recoveredCandidate = Assert.Single(runtime.ReadCandidates(
+            new HashSet<string>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal),
+            out var readReason));
+
+        Assert.Equal(string.Empty, readReason);
+        Assert.True(runtime.TryAdd(recoveredCandidate, 1, out var recoveredReason), recoveredReason);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
     public void ReflectionConceptRuntime_PositiveDrainFailsClosedWhenNativeResourceIsAtZero()
     {
         var resource = new ConceptResource { AtZero = true };

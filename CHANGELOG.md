@@ -1,5 +1,21 @@
 # Changelog
 
+## Orb Automata 0.8.3 Beta 1 — 2026-07-18
+
+- Require authoritative before/after postconditions for Auto Buy queue additions, Auto Concept assignment changes, single/all spell leveling, and Auto Cast fire submission.
+- Preserve structured feature, identity, expectation, before, after, outcome, and failure evidence for ambiguous mutations, then block repeat attempts until a scene, save-load, reset, or NG+ lifecycle recovery.
+- Verify instant and sustained casts through the audited `Spell.Fire` hook instead of relying on transient casting flags.
+
+## Orb Mentor 0.3.3 Beta 1 — 2026-07-18
+
+- Verify every spell, artifact, and ordinary-alchemy native XP grant against authoritative before/after XP with the exact expected numeric delta.
+- Cancel pending bonus work and block the affected domain for the lifecycle when a native grant is a no-op, partial, unexpectedly large, throwing, or unobservable.
+
+## Orb Modding Common 0.3.2 Beta 1 — 2026-07-18
+
+- Add the shared capture → execute → capture → verify contract and structured mutation evidence used by Automata and Mentor.
+- Preserve after-state evidence even when a native invocation throws after partially changing state, and distinguish capture, execution, and postcondition failures.
+
 ## Orb Mentor 0.3.2 Beta 1 — 2026-07-18
 
 - Exclude Scholar Concepts from Mentor's Alchemy catalog, mentor ranking, recipient relationships, XP capture, and final native grant path through the shared audited gameplay-domain classifier.

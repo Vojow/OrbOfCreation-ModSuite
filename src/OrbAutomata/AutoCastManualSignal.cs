@@ -9,7 +9,11 @@ internal static class AutoCastManualSignal
     [ThreadStatic]
     private static int _automatedDepth;
 
+    private static long _fireEpoch;
+
     public static event Action? ManualSpellFired;
+
+    public static long FireEpoch => _fireEpoch;
 
     public static IDisposable EnterAutomatedFire()
     {
@@ -19,6 +23,7 @@ internal static class AutoCastManualSignal
 
     public static void NotifySpellFire()
     {
+        _fireEpoch++;
         if (_automatedDepth == 0)
         {
             ManualSpellFired?.Invoke();
