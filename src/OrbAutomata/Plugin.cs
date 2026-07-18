@@ -33,6 +33,8 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _autoConceptUiFailureLogged;
     private string _autoCastUiFailureReason = string.Empty;
     private string _autoConceptUiFailureReason = string.Empty;
+    private long _lifecycleGeneration;
+    private GameLifecycleLease _lifecycleLease;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -90,7 +92,11 @@ public sealed class Plugin : BaseUnityPlugin
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion += OnNativeCompletion;
         AutoConceptLifecycleSignal.Changed += OnAutoConceptChanged;
+        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
+        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
+        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
@@ -120,7 +126,7 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
-        if (SceneManager.GetActiveScene().name == "Main")
+        if (IsLifecycleReady())
         {
             _autoBuyEngine?.Tick(deltaTime);
             _autoCastEngine?.Tick(deltaTime);
@@ -136,6 +142,7 @@ public sealed class Plugin : BaseUnityPlugin
         AutoBuyLifecycleSignal.UpgradeQueueChanged -= OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion -= OnNativeCompletion;
         AutoConceptLifecycleSignal.Changed -= OnAutoConceptChanged;
+        GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
         _autoBuyEngine = null;
@@ -160,41 +167,72 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
     {
-        _autoBuyEngine?.InvalidateLifecycle();
-        _autoCastEngine?.InvalidateLifecycle();
-        _autoConceptController?.InvalidateLifecycle();
-        _autoSpellLevelController?.InvalidateLifecycle();
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
     }
 
-    private void OnAutoBuyLifecycleInvalidated()
+    private void OnAutoBuyLifecycleInvalidated(GameLifecycleTransitionKind kind, object? nativeIdentity)
     {
+        ObserveLifecycle(kind, SceneManager.GetActiveScene().name, nativeIdentity);
+    }
+
+    private void OnLifecycleTransition(GameLifecycleTransition transition)
+    {
+        if (transition.Current.Generation == _lifecycleGeneration) return;
+        _lifecycleGeneration = transition.Current.Generation;
         _autoBuyEngine?.InvalidateLifecycle();
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
         _autoSpellLevelController?.InvalidateLifecycle();
+        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
+    }
+
+    private static void ObserveLifecycle(
+        GameLifecycleTransitionKind kind,
+        string sceneName,
+        object? nativeIdentity = null)
+    {
+        GameLifecycleMonitor.Shared.TryObserve(
+            new GameLifecycleObservation(
+                kind,
+                UnityEngine.Time.frameCount,
+                sceneName,
+                PluginIds.AutomataGuid,
+                nativeIdentity),
+            out _,
+            out _);
     }
 
     private void OnStructureQueueChanged(object nativeIdentity)
     {
+        if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
     }
 
     private void OnNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
     {
+        if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyNativeCompletion(nativeIdentity, completedKind);
         _autoSpellLevelController?.NotifyNativeChange();
     }
 
     private void OnUpgradeQueueChanged(object nativeIdentity)
     {
+        if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyUpgradeQueueChanged(nativeIdentity);
     }
 
     private void OnAutoConceptChanged()
     {
+        if (!IsLifecycleReady()) return;
         _autoConceptController?.NotifyNativeChange();
         _autoSpellLevelController?.NotifyNativeChange();
     }
+
+    private bool IsLifecycleReady() =>
+        SceneManager.GetActiveScene().name == "Main" &&
+        GameLifecycleMonitor.Shared.Current.IsGameplayReady &&
+        GameLifecycleMonitor.Shared.IsCurrent(_lifecycleLease);
 
     private static void LogAssemblyStatus()
     {

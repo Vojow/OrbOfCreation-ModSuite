@@ -1,5 +1,11 @@
 # Changelog
 
+## Shared lifecycle generation foundation — 2026-07-18
+
+- Add one main-thread-safe Common lifecycle monitor with explicit no-game, initializing, playing, resetting, and scene-exit states plus monotonically increasing generations and bounded structured diagnostics.
+- Coalesce equivalent lifecycle callbacks from independently installed suite plugins, expose generation leases for stale-work rejection, and keep progression-domain locks separate from global readiness.
+- Move Automata 0.8.4, Mentor 0.3.4, and Mod Config 0.6.1 onto the shared scene, save-load, runtime-ready, reset/NG+, and registry-rebuild boundary.
+
 ## Orb Automata 0.8.3 Beta 1 — 2026-07-18
 
 - Require authoritative before/after postconditions for Auto Buy queue additions, Auto Concept assignment changes, single/all spell leveling, and Auto Cast fire submission.

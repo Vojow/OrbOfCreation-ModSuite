@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -13,7 +14,7 @@ internal static class AutoBuyLifecycleSignal
     [ThreadStatic]
     private static int _automatedMutationDepth;
 
-    public static event Action? Invalidated;
+    public static event Action<GameLifecycleTransitionKind, object?>? Invalidated;
 
     public static event Action<object>? StructureQueueChanged;
 
@@ -21,9 +22,9 @@ internal static class AutoBuyLifecycleSignal
 
     public static event Action<object, AutoBuyCandidateKind>? NativeCompletion;
 
-    public static void Raise()
+    public static void Raise(GameLifecycleTransitionKind kind, object? nativeIdentity)
     {
-        Invalidated?.Invoke();
+        Invalidated?.Invoke(kind, nativeIdentity);
     }
 
     public static AutomatedMutationScope EnterAutomatedMutation(object nativeIdentity)
@@ -160,16 +161,27 @@ internal static class AutoBuyLifecyclePatch
 {
     private static IEnumerable<MethodBase> TargetMethods()
     {
-        var player = AccessTools.TypeByName("Player");
-        var managerStart = player?.GetMethod(
-            "ManagerStart",
+        var gameManager = AccessTools.TypeByName("GameManager");
+        var initGame = gameManager?.GetMethod(
+            "InitGame",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
             null,
             Type.EmptyTypes,
             null);
-        if (managerStart is not null)
+        if (initGame is not null)
         {
-            yield return managerStart;
+            yield return initGame;
+        }
+
+        var resetGameState = gameManager?.GetMethod(
+            "ResetGameState",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
+        if (resetGameState is not null)
+        {
+            yield return resetGameState;
         }
 
         var saveStateManager = AccessTools.TypeByName("SaveStateManager");
@@ -185,10 +197,48 @@ internal static class AutoBuyLifecyclePatch
         {
             yield return implementLoadedJson;
         }
+
+        var resetManager = AccessTools.TypeByName("PersistentResetManager");
+        var persistentReset = resetManager?.GetMethod(
+            "PersistentResetLogic",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
+        if (persistentReset is not null)
+        {
+            yield return persistentReset;
+        }
     }
 
-    private static void Postfix()
+    private static void Prefix(MethodBase __originalMethod, object __instance)
     {
-        AutoBuyLifecycleSignal.Raise();
+        if (__originalMethod.DeclaringType?.Name == "SaveStateManager")
+        {
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.SaveLoadStarted, __instance);
+        }
+        else if (__originalMethod.DeclaringType?.Name == "PersistentResetManager")
+        {
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.NewGamePlusStarted, __instance);
+        }
+        else if (__originalMethod.DeclaringType?.Name == "GameManager" &&
+                 __originalMethod.Name == "ResetGameState")
+        {
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.ResetStarted, null);
+        }
+    }
+
+    private static void Postfix(MethodBase __originalMethod, object __instance)
+    {
+        if (__originalMethod.DeclaringType?.Name == "SaveStateManager")
+        {
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.SaveLoaded, __instance);
+        }
+        else if (__originalMethod.DeclaringType?.Name == "GameManager" &&
+                 __originalMethod.Name == "InitGame")
+        {
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.RegistryRebuilt, __instance);
+            AutoBuyLifecycleSignal.Raise(GameLifecycleTransitionKind.RuntimeReady, __instance);
+        }
     }
 }

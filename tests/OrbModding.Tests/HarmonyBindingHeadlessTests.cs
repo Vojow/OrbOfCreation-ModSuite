@@ -28,8 +28,10 @@ public sealed class HarmonyBindingHeadlessTests
             typeof(UpgradeSO));
         AssertTargets(
             "OrbAutomata.AutoBuyLifecyclePatch",
-            (typeof(Player), "ManagerStart", Type.EmptyTypes),
-            (typeof(SaveStateManager), "ImplementLoadedJson", Type.EmptyTypes));
+            (typeof(GameManager), "InitGame", Type.EmptyTypes),
+            (typeof(GameManager), "ResetGameState", Type.EmptyTypes),
+            (typeof(SaveStateManager), "ImplementLoadedJson", Type.EmptyTypes),
+            (typeof(PersistentResetManager), "PersistentResetLogic", Type.EmptyTypes));
         AssertTargets(
             "OrbAutomata.AutoConceptActiveListPatch",
             (typeof(AlchemyInstanceListVariable), "AddAlchemyInstances", new[] { typeof(AlchemyRecipeSO), typeof(int) }),

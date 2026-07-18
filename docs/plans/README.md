@@ -13,6 +13,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Auto Concept mastery balancing](auto-concept.md) | Beta / runtime validation pending | Disabled-by-default catch-up or timed concept rotation is released through native mutation paths; post-release Proton profiling remains. |
 | [Mod suite performance](performance-suite.md) | P0-P3 implemented / runtime validation pending | Shared scheduling, lifecycle-aware indexes, dirty updates, and resource snapshots are implemented; post-release Steam Deck profiling remains. |
 | [Native mutation postconditions](native-mutation-verification.md) | Next beta / runtime validation pending | Shared capture-execute-capture-verify evidence is adopted by active Automata mutations and Mentor grants; ambiguous results block until explicit lifecycle recovery. |
+| [Shared lifecycle readiness](lifecycle-readiness.md) | Next beta / runtime validation pending | One Common state/generation monitor is consumed by Automata, Mentor, and Mod Config; late work can reject stale generation leases. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |
 | [Orb Mentor](mentor.md) | Beta / runtime validation pending | Equipped-source and highest-only spell policies are released; extended interactive validation remains. |
