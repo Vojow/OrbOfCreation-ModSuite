@@ -85,6 +85,9 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
+        Assert.Equal("ActionManager", assembly.GetFieldType("ActionManager", "instance"));
+        Assert.Equal("ActionableListVariable", assembly.GetFieldType("ActionManager", "actionableItems"));
+        Assert.Equal("IntVariable", assembly.GetFieldType("ActionableListVariable", "maxQueuedItems"));
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
         AssertMethod(assembly, "Player", "GetBulkDevelopment", true, "IntVariable");

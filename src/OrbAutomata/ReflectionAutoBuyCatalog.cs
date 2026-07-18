@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 using System.Reflection;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -28,6 +29,10 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private bool _completionEffectsDirty;
     private bool _mutationGroupActive;
     private MethodInfo? _getRemainingQueueRoom;
+    private FieldInfo? _actionManagerInstance;
+    private FieldInfo? _actionableItems;
+    private FieldInfo? _maxQueuedItems;
+    private MethodInfo? _readMaxQueuedItems;
     private MethodInfo? _getBulkDevelopment;
 
     public ReflectionAutoBuyCatalog()
@@ -194,28 +199,100 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _index.InvalidateLifecycleIncrementally();
     }
 
-    public bool TryGetRemainingQueueRoom(out int remainingRoom)
+    public bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot)
     {
-        remainingRoom = 0;
+        snapshot = default;
         var method = ResolveStaticNoArgMethod(
             ref _getRemainingQueueRoom,
             "ActionManager",
             "GetRemainingRoom",
             typeof(int));
+        if (method is null || !TryResolveQueueCapacityContract())
+        {
+            return false;
+        }
+
         try
         {
-            var value = method?.Invoke(null, Array.Empty<object>());
-            if (value is int room)
+            var manager = _actionManagerInstance!.GetValue(null);
+            var actionableItems = manager is null ? null : _actionableItems!.GetValue(manager);
+            var maxQueuedItems = actionableItems is null ? null : _maxQueuedItems!.GetValue(actionableItems);
+            if (maxQueuedItems is null ||
+                _readMaxQueuedItems!.Invoke(maxQueuedItems, Array.Empty<object>()) is not int nativeCapacity ||
+                method.Invoke(null, Array.Empty<object>()) is not int nativeRemainingRoom)
             {
-                remainingRoom = room;
-                return true;
+                return false;
             }
+
+            return QueueCapacitySnapshot.TryCreate(
+                nativeCapacity,
+                nativeRemainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        catch (Exception ex) when (
+            ex is TargetInvocationException ||
+            ex is ArgumentException ||
+            ex is InvalidOperationException ||
+            ex is TargetException)
         {
         }
 
         return false;
+    }
+
+    private bool TryResolveQueueCapacityContract()
+    {
+        if (_actionManagerInstance is not null &&
+            _actionableItems is not null &&
+            _maxQueuedItems is not null &&
+            _readMaxQueuedItems is not null)
+        {
+            return true;
+        }
+
+        var actionManagerType = ReflectionUtil.FindLoadedType("ActionManager");
+        var instance = actionManagerType?.GetField("instance", BindingFlags.Static | BindingFlags.Public);
+        var actionableItems = actionManagerType?.GetField("actionableItems", BindingFlags.Instance | BindingFlags.Public);
+        if (actionManagerType is null ||
+            instance is null ||
+            instance.FieldType != actionManagerType ||
+            actionableItems is null ||
+            !string.Equals(actionableItems.FieldType.Name, "ActionableListVariable", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var maxQueuedItems = actionableItems.FieldType.GetField(
+            "maxQueuedItems",
+            BindingFlags.Instance | BindingFlags.Public);
+        if (maxQueuedItems is null ||
+            !string.Equals(maxQueuedItems.FieldType.Name, "IntVariable", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var readMaxQueuedItems = maxQueuedItems.FieldType.GetMethod(
+            "AsInt",
+            BindingFlags.Instance | BindingFlags.Public,
+            null,
+            Type.EmptyTypes,
+            null);
+        if (readMaxQueuedItems?.ReturnType != typeof(int))
+        {
+            return false;
+        }
+
+        _actionManagerInstance = instance;
+        _actionableItems = actionableItems;
+        _maxQueuedItems = maxQueuedItems;
+        _readMaxQueuedItems = readMaxQueuedItems;
+        return true;
     }
 
     public bool TryGetBulkDevelopment(out int levels)

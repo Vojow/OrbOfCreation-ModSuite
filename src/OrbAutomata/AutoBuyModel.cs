@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -92,7 +93,10 @@ internal interface IAutoBuyCatalog : IDisposable
 {
     IEnumerable<IAutoBuyCandidate> Discover();
 
-    bool TryGetRemainingQueueRoom(out int remainingRoom);
+    bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot);
 
     bool TryGetBulkDevelopment(out int levels);
 

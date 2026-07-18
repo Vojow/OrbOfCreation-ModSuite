@@ -22,7 +22,7 @@ Baseline checked on 2026-07-14:
 - Automata, Mentor, and Mod Config built in Release against the real installed game references with zero warnings. The required Unity facade, UI, and TextMeshPro references are part of the build contract.
 - The supported-suite package rehearsal contained only Automata, Mentor, Mod Config, and Orb Modding Common DLLs; experimental DLL guards passed.
 
-The static ILSpy contract check confirmed the active `StructureSO` and `UpgradeSO` registries, availability, costs, queue state, and purchase methods; `ActionManager.GetRemainingRoom()`; native multi-buy access/restoration; concept assignment contracts; spell-leveling contracts; and Mentor's three progression-domain contracts.
+The static ILSpy contract check confirmed the active `StructureSO` and `UpgradeSO` registries, availability, costs, queue state, and purchase methods; `ActionManager.GetRemainingRoom()` plus the authoritative `ActionManager.instance.actionableItems.maxQueuedItems` capacity chain; native multi-buy access/restoration; concept assignment contracts; spell-leveling contracts; and Mentor's three progression-domain contracts.
 
 ### Historical Automata Auto Buy runtime evidence
 
@@ -174,6 +174,8 @@ Use a disposable copy of the backed-up save and enable only one mod.
 ### Automata
 
 After V3 evidence is approved, use a disposable save and ensure no other auto-buy plugin is installed. Start Disabled, set one cheap observed UUID in `AutoBuy.AllowedUuids`, choose `BatchSizingMode=Fixed` with `MaxPurchasesPerBatch=1`, then activate and immediately return to Disabled after the first visible queued level. Verify its cost, resource deduction, queue entry, and completion. Test an Upgrade and Structure separately. Repeat with independent affordability thresholds and with both zero and non-zero reserves. Finally test `RespectActionMultiplier=true` at 5×: it must submit at most five individually revalidated levels, never exceed free queue room, and stop early at a reserve boundary. Emergency disable must stop new purchases immediately. A sustained affordable-repeat test with multiple eligible candidates must add different ranked candidates on consecutive admitted frames, retain the next one during 10 Hz full-queue polling, and begin the next pass without waiting for the idle evaluation interval. Repeat with only one allowlisted candidate and confirm it can fill all usable room.
+
+For the shared queue-capacity snapshot, repeat with a one-slot queue at `LeaveQueueSlots=1` and `LeaveQueueSlots=0`, then change native queue capacity while a candidate remains prepared. Confirm the immediately following mutation uses refreshed total capacity, occupancy, and remaining room; the manual reservation is applied once; and no purchase occurs for missing or contradictory native values.
 
 ## Gate V5 — persistence and rollback
 
