@@ -19,6 +19,7 @@ internal sealed class AutoBuyCandidateIndex
     private readonly List<IAutoBuyCandidate> _dirty = new List<IAutoBuyCandidate>();
     private IEnumerator<KeyValuePair<string, Entry>>? _registryCompletionSweep;
     private ISet<string>? _registrySeen;
+    private AutoBuyCandidateKind? _registryCompletionKind;
     private int _activeRefreshCursor;
     private int _slowRefreshCursor;
     private int _epochValidationPending;
@@ -143,8 +144,14 @@ internal sealed class AutoBuyCandidateIndex
 
     public void BeginRegistryCompletion(ISet<string> seen)
     {
+        BeginRegistryCompletion(seen, null);
+    }
+
+    public void BeginRegistryCompletion(ISet<string> seen, AutoBuyCandidateKind? kind)
+    {
         _registryCompletionSweep?.Dispose();
         _registrySeen = seen;
+        _registryCompletionKind = kind;
         _registryCompletionSweep = _entries.GetEnumerator();
     }
 
@@ -153,6 +160,7 @@ internal sealed class AutoBuyCandidateIndex
         _registryCompletionSweep?.Dispose();
         _registryCompletionSweep = null;
         _registrySeen = null;
+        _registryCompletionKind = null;
     }
 
     public void ProcessRegistryCompletion(int workLimit)
@@ -168,7 +176,8 @@ internal sealed class AutoBuyCandidateIndex
         while (processed++ < Math.Max(1, workLimit) && sweep.MoveNext())
         {
             var pair = sweep.Current;
-            if (!seen.Contains(pair.Key))
+            if (!seen.Contains(pair.Key) &&
+                (!_registryCompletionKind.HasValue || pair.Value.Definition.Kind == _registryCompletionKind.Value))
             {
                 MarkInvalid(pair.Value, "candidate is no longer present in its native registry");
             }
@@ -179,6 +188,7 @@ internal sealed class AutoBuyCandidateIndex
             sweep.Dispose();
             _registryCompletionSweep = null;
             _registrySeen = null;
+            _registryCompletionKind = null;
         }
     }
 
@@ -445,6 +455,7 @@ internal sealed class AutoBuyCandidateIndex
         _registryCompletionSweep?.Dispose();
         _registryCompletionSweep = null;
         _registrySeen = null;
+        _registryCompletionKind = null;
         _active.Clear();
         _dirty.Clear();
         _activeRefreshCursor = 0;

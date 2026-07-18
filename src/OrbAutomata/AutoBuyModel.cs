@@ -11,6 +11,15 @@ internal enum AutoBuyCandidateKind
 }
 
 [Flags]
+internal enum AutoBuyCandidateKinds
+{
+    None = 0,
+    Structures = 1 << 0,
+    Upgrades = 1 << 1,
+    All = Structures | Upgrades,
+}
+
+[Flags]
 internal enum AutoBuyEconomicPriority
 {
     None = 0,
@@ -127,6 +136,11 @@ internal interface IAutoBuyIncrementalCatalog
     void NotifyNativeCompletion();
 
     void InvalidateLifecycle();
+}
+
+internal interface IAutoBuyProgressionCatalog
+{
+    void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind);
 }
 
 internal interface IAutoBuyCompletionRevalidationCatalog

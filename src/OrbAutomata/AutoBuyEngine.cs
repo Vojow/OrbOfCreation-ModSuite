@@ -429,6 +429,26 @@ internal sealed class AutoBuyEngine : IDisposable
     {
         _nativeCompletionGeneration++;
         _incrementalCatalog?.NotifyNativeCompletion();
+        HandleNativeCompletion();
+    }
+
+    public void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
+    {
+        _nativeCompletionGeneration++;
+        if (_incrementalCatalog is IAutoBuyProgressionCatalog progressionCatalog)
+        {
+            progressionCatalog.NotifyNativeCompletion(nativeIdentity, completedKind);
+        }
+        else
+        {
+            _incrementalCatalog?.NotifyNativeCompletion();
+        }
+
+        HandleNativeCompletion();
+    }
+
+    private void HandleNativeCompletion()
+    {
         if (_pendingPurchaseRecommendations is not null && _pendingWaitingForQueue)
         {
             // A native completion is exact evidence that queue occupancy
