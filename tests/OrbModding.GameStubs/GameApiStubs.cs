@@ -95,6 +95,47 @@ public class UpgradeSO
     public int queuedPurchaseLevel;
     public int GetPurchaseLevel() => purchaseLevel;
     public int GetQueuedPurchaseLevel() => queuedPurchaseLevel;
+    public void Purchase() => queuedPurchaseLevel++;
+    public void CompleteAction()
+    {
+        if (queuedPurchaseLevel <= 0) return;
+        queuedPurchaseLevel--;
+        purchaseLevel++;
+    }
+}
+
+public class StructureSO
+{
+    public int queuedQuantity;
+    public int quantity;
+    public void QueueBuild(int amount) => queuedQuantity += amount;
+    public void CompleteAction()
+    {
+        if (queuedQuantity <= 0) return;
+        queuedQuantity--;
+        quantity++;
+    }
+}
+
+public class Player
+{
+    public void ManagerStart()
+    {
+    }
+}
+
+public class SaveStateManager
+{
+    public void ImplementLoadedJson()
+    {
+    }
+}
+
+public class Spell
+{
+    public void Fire()
+    {
+    }
 }
 
 public class Prerequisites
@@ -122,7 +163,22 @@ public class SpellRecipeListVariable
 public class SpellManager
 {
     public static SpellManager? instance;
+    public static bool NativeCanCast { get; set; } = true;
     public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
+    public IList activeSpells = new List<object>();
+
+    public static bool CanCastASpell() => NativeCanCast;
+
+    public void FireSpellIndex(int index)
+    {
+        var spell = activeSpells[index];
+        spell.GetType().GetMethod(
+            "Fire",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null)?.Invoke(spell, Array.Empty<object>());
+    }
 
     public void TryLevelAllSpells()
     {
@@ -136,6 +192,13 @@ public class SpellManager
             }
         }
     }
+}
+
+public static class TargetingManager
+{
+    public static bool Targeting { get; set; }
+
+    public static bool IsTargeting() => Targeting;
 }
 
 public interface ITooltipable
@@ -221,6 +284,10 @@ namespace BepInEx.Configuration
 
         public bool SaveOnConfigSet { get; set; } = true;
 
+        public int SaveCalls { get; private set; }
+
+        public int? ThrowOnSaveCall { get; set; }
+
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, string description)
         {
             return Bind(section, key, defaultValue, new ConfigDescription(description));
@@ -241,6 +308,11 @@ namespace BepInEx.Configuration
 
         public void Save()
         {
+            SaveCalls++;
+            if (ThrowOnSaveCall == SaveCalls)
+            {
+                throw new InvalidOperationException($"simulated config save failure on call {SaveCalls}");
+            }
         }
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
@@ -498,9 +570,59 @@ namespace HarmonyLib
 
     public static class AccessTools
     {
-        public static MethodInfo? Method(string typeColonMethod) => null;
+        public static MethodInfo? Method(string typeColonMethod)
+        {
+            var separator = typeColonMethod.IndexOf(':');
+            if (separator <= 0 || separator == typeColonMethod.Length - 1)
+            {
+                return null;
+            }
 
-        public static Type? TypeByName(string name) => null;
+            var type = TypeByName(typeColonMethod.Substring(0, separator));
+            var methodName = typeColonMethod.Substring(separator + 1);
+            return type?.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(method => method.Name == methodName);
+        }
+
+        public static Type? TypeByName(string name)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var preferred = assemblies.FirstOrDefault(assembly =>
+                assembly.GetName().Name == "OrbModding.GameStubs");
+            if (preferred is not null)
+            {
+                var preferredType = FindType(preferred, name);
+                if (preferredType is not null)
+                {
+                    return preferredType;
+                }
+            }
+
+            foreach (var assembly in assemblies)
+            {
+                var match = FindType(assembly, name);
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static Type? FindType(Assembly assembly, string name)
+        {
+            try
+            {
+                return assembly.GetTypes().FirstOrDefault(type => type.Name == name || type.FullName == name);
+            }
+            catch (ReflectionTypeLoadException exception)
+            {
+                return exception.Types
+                    .Where(type => type is not null)
+                    .FirstOrDefault(type => type!.Name == name || type.FullName == name);
+            }
+        }
 
         public static List<MethodInfo> GetDeclaredMethods(Type type)
         {

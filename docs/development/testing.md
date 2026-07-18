@@ -37,6 +37,17 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 ```
 
+Collect portable production coverage with the checked-in assembly allowlist:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --collect:"XPlat Code Coverage" --settings tests/coverage.runsettings
+```
+
+Do not rely on the collector's implicit module selection. It can omit production
+plugins when they are loaded through the source-only game-stub graph. The
+runsettings file explicitly includes the four supported production assemblies
+and excludes the test and game-stub assemblies from the product baseline.
+
 See [headless E2E simulation](headless-e2e.md) for the modeled contracts, metrics, scenario rules, and non-goals.
 
 On a game computer, run the installed-assembly metadata contracts:

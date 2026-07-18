@@ -15,6 +15,16 @@ The simulation is intentionally smaller than Orb of Creation. It models only con
 - native rejection and ambiguous post-mutation failure;
 - deterministic CPU-work observations and operation counters.
 
+Native-shaped completion scenarios distinguish one native `CompleteAction`
+invocation from the number of queue slots it releases. A Structure completion
+may settle several Bulk Development levels and enqueue echo work while producing
+one completion callback. The callback is modeled before the outer action queue
+entry is removed; the engine still acts later from authoritative live queue room.
+
+Resource scenarios may use several independent resources and normalized
+`BigAmount` values. The simulated world remains authoritative for every balance
+and applies a mutation only when all resource costs and queue constraints pass.
+
 Production code remains responsible for all scheduling and purchase decisions. The simulation does not copy `AutoBuyEngine` logic or predict an independent economy.
 
 ## Test layers and ownership
