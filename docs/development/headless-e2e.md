@@ -15,14 +15,41 @@ The simulation is intentionally smaller than Orb of Creation. It models only con
 - native rejection and ambiguous post-mutation failure;
 - deterministic CPU-work observations and operation counters.
 
+Native-shaped completion scenarios distinguish one native `CompleteAction`
+invocation from the number of queue slots it releases. A Structure completion
+may settle several Bulk Development levels and enqueue echo work while producing
+one completion callback. The callback is modeled before the outer action queue
+entry is removed; the engine still acts later from authoritative live queue room.
+
+Resource scenarios may use several independent resources and normalized
+`BigAmount` values. The simulated world remains authoritative for every balance
+and applies a mutation only when all resource costs and queue constraints pass.
+
 Production code remains responsible for all scheduling and purchase decisions. The simulation does not copy `AutoBuyEngine` logic or predict an independent economy.
+
+Focused native-shaped journeys complement the queue simulation. The game-stub
+assembly deliberately identifies itself as `Assembly-CSharp`, so production
+assembly-qualified lookups are exercised rather than bypassed. These fixtures
+currently cover:
+
+- Mentor spell, artifact, and alchemy registry reconciliation, capture, native
+  XP grants, recursion prevention, domain isolation, and lifecycle cancellation;
+- Auto Buy registry reconciliation, recreated native identity, resource
+  snapshots, native cost decoding, lifecycle evidence, and verified one-level
+  queue mutations;
+- automatic spell leveling before and after the native level-all upgrade, plus
+  cancellation of a pending mutation during lifecycle invalidation.
+
+The fixture members are reduced from installed-game documentation and inspected
+assembly contracts. They remain smaller than the game and do not replace the
+installed-game contract suite or UAT.
 
 ## Test layers and ownership
 
 | Layer | Runs | Proves | Does not prove |
 |---|---|---|---|
 | Unit/component | Portable test doubles and fixtures | Individual policies, reflection ambiguity handling, lifecycle transitions, and scheduler rules | A complete automation session |
-| Headless integration | Production native adapters against focused game API stubs | Adapter selection and translation, including shared queue versus native Auto Buy queue | Installed assembly compatibility or Unity behavior |
+| Headless integration | Production native adapters against focused game API stubs | Assembly-qualified discovery and adapter translation, including Mentor, resources, spell leveling, and shared queue versus native Auto Buy queue | Installed assembly compatibility or Unity behavior |
 | Headless E2E | Real mod engine through a simulated native boundary | Queue filling, candidate handoff, resource depletion, lifecycle recovery, failure containment, and deterministic performance budgets | Unity wiring, installed assembly compatibility, visual behavior, or the real save format |
 | Installed-game contracts | PE metadata from the installed game | Audited type/member signatures and assembly hashes | Runtime behavior inside Unity |
 | UAT | Real game, disposable saves, observation, and optional computer control | Harmony/reflection wiring, visible queue behavior, save/load, UI, player control, and subjective responsiveness | Broad deterministic regression coverage |
@@ -50,13 +77,7 @@ Run the active deterministic performance baseline:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 ```
 
-Inspect performance targets that are recorded but not yet release gates:
-
-```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceTarget"
-```
-
-A skipped target is a documented engineering backlog item, not passing evidence. Remove `Skip` only when the production engine meets the assertions without weakening their workload or budgets.
+Performance targets remain skipped only while they document engineering backlog rather than released behavior. Promote a target to `PerformanceSimulation` only when the production engine meets its assertions without weakening the workload or budgets.
 
 ## Determinism and performance budgets
 

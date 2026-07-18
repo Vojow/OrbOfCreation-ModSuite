@@ -66,6 +66,9 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _successfulPurchasesThisSession;
     private long _nativePurchaseAttempts;
     private long _nativePurchaseFailures;
+    // Process-monotonic so a lifecycle rebuild cannot alias a completion
+    // generation cached by a reused native candidate wrapper.
+    private long _nativeCompletionGeneration;
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
     private bool _nativeStateSignalPending;
@@ -424,17 +427,24 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void NotifyNativeCompletion()
     {
+        _nativeCompletionGeneration++;
         _incrementalCatalog?.NotifyNativeCompletion();
-        if (_pendingCandidates is not null)
+        if (_pendingPurchaseRecommendations is not null && _pendingWaitingForQueue)
         {
-            // A completion can change cross-candidate effects. Discard only
-            // unfinished read work; a prepared repeat group remains safe
-            // because every level is revalidated immediately before mutation.
-            ResetPendingScan();
+            // A native completion is exact evidence that queue occupancy
+            // decreased. Resume the prepared fast lane immediately; its live
+            // queue-room check still fails closed if another action consumed
+            // the reopened slot before this engine tick.
+            _pendingWaitingForQueue = false;
+            _secondsUntilQueuePoll = 0.0f;
         }
 
-        if (_pendingPurchaseRecommendations is null)
+        if (_pendingCandidates is null && _pendingPurchaseRecommendations is null)
         {
+            // Completion effects are coalesced by the catalog. Do not restart
+            // a CPU-sliced scan on every native completion: its eventual
+            // recommendation is revalidated from authoritative live state
+            // before mutation, and the following scan settles broad effects.
             _secondsUntilEvaluation = 0.0f;
         }
     }
@@ -818,6 +828,27 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             var recommendation = recommendations[_pendingPurchaseIndex];
+            if (_nativeCompletionGeneration > 0 &&
+                _catalog is IAutoBuyCompletionRevalidationCatalog completionCatalog &&
+                !completionCatalog.TryRefreshCandidateAfterCompletion(
+                    recommendation.Candidate.Source,
+                    _nativeCompletionGeneration,
+                    out var completionRefreshReason))
+            {
+                if (ShouldLogNativeFailure(recommendation.Candidate.Uuid))
+                {
+                    _log.LogAutomataWarning(
+                        $"Auto Buy deferred {recommendation.Candidate.DisplayName} " +
+                        $"({recommendation.Candidate.Uuid}) because completion-state refresh failed: " +
+                        completionRefreshReason);
+                }
+
+                AdvancePurchaseCandidate();
+                _pendingPurchaseIndex = recommendations.Count;
+                _secondsUntilEvaluation = 0.0f;
+                break;
+            }
+
             var revalidated = EvaluateCandidate(
                 recommendation.Candidate.Source,
                 out var suppressResourceTracking);

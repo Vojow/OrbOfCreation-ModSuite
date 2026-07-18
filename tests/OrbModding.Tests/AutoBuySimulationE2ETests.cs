@@ -9,6 +9,22 @@ namespace OrbModding.Tests;
 public sealed class AutoBuySimulationE2ETests
 {
     [Fact]
+    public void CompletionSettlementGate_CoalescesSignalsUntilTheActivePassFinishes()
+    {
+        var gate = new AutoBuyCompletionSettlementGate();
+
+        gate.Notify();
+        Assert.True(gate.TryBegin(settlementInProgress: false));
+        Assert.False(gate.TryBegin(settlementInProgress: false));
+
+        gate.Notify();
+        gate.Notify();
+        Assert.False(gate.TryBegin(settlementInProgress: true));
+        Assert.True(gate.TryBegin(settlementInProgress: false));
+        Assert.False(gate.TryBegin(settlementInProgress: false));
+    }
+
+    [Fact]
     [Trait("Category", "HeadlessIntegration")]
     public void QueueAdapter_ReadsSharedActionQueueInsteadOfNativeAutoBuyQueue()
     {
@@ -144,6 +160,240 @@ public sealed class AutoBuySimulationE2ETests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void CompletionCostIncrease_RefreshesReserveEvidenceBeforeImmediateRefill()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 4,
+            new[]
+            {
+                new SimulatedCandidateSpec("structure", AutoBuyCandidateKind.Structure, baseCost: 10.0),
+            },
+            initialResourceQuantity: 200.0);
+        simulation.Config.AbsoluteReserve.Value = "100";
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 3, maximumFrames: 20));
+        simulation.RunFrames(5);
+        var candidate = simulation.World.Candidates[0];
+        Assert.Equal(3, simulation.World.TotalSubmitted);
+        Assert.Equal(170.0, simulation.World.ResourceQuantity, 6);
+
+        candidate.CostMultiplier = 8.0;
+        simulation.Step(completionsBeforeTick: 1);
+
+        Assert.Equal(3, simulation.World.TotalSubmitted);
+        Assert.Equal(2, simulation.World.QueueCount);
+        Assert.Equal(170.0, simulation.World.ResourceQuantity, 6);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void CompletionWake_FailsClosedWhenManualActionConsumesTheReopenedSlot()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 4,
+            new[]
+            {
+                new SimulatedCandidateSpec("structure", AutoBuyCandidateKind.Structure),
+            });
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 3, maximumFrames: 20));
+        simulation.RunFrames(5);
+        var purchasesBefore = simulation.World.TotalSubmitted;
+
+        simulation.Step(
+            completionsBeforeTick: 1,
+            afterCompletions: world => world.EnqueueManualAction());
+
+        Assert.Equal(purchasesBefore, simulation.World.TotalSubmitted);
+        Assert.Equal(3, simulation.World.QueueCount);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void LifecycleReload_DoesNotReuseAnOldCompletionRefreshGeneration()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 4,
+            new[]
+            {
+                new SimulatedCandidateSpec("structure", AutoBuyCandidateKind.Structure, baseCost: 10.0),
+            },
+            initialResourceQuantity: 200.0);
+        simulation.Config.AbsoluteReserve.Value = "100";
+        var candidate = simulation.World.Candidates[0];
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 3, maximumFrames: 20));
+        simulation.RunFrames(5);
+        candidate.CostMultiplier = 8.0;
+        simulation.Step(completionsBeforeTick: 1);
+        Assert.Equal(3, simulation.World.TotalSubmitted);
+
+        candidate.CostMultiplier = 1.0;
+        simulation.ReloadLifecycle(replaceNativeIdentities: false);
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 3, maximumFrames: 20));
+        simulation.RunFrames(5);
+        var purchasesBeforeSecondCompletion = simulation.World.TotalSubmitted;
+
+        candidate.CostMultiplier = 8.0;
+        simulation.Step(completionsBeforeTick: 1);
+
+        Assert.Equal(purchasesBeforeSecondCompletion, simulation.World.TotalSubmitted);
+        Assert.Equal(2, simulation.World.QueueCount);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void StructureBulkCompletion_OneCallbackReleasesMultipleSlotsAndRefillsFromLiveRoom()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 8,
+            new[]
+            {
+                new SimulatedCandidateSpec("structure", AutoBuyCandidateKind.Structure),
+            });
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 7, maximumFrames: 30));
+        simulation.RunFrames(5);
+        var submissionsBefore = simulation.World.TotalSubmitted;
+        var signalsBefore = simulation.Catalog.CompletionSignals;
+        var queueCountObservedBeforeOuterUnstack = -1;
+
+        var completion = simulation.StepNativeCompletion(
+            bulkLevels: 3,
+            afterSignalBeforeOuterUnstack: world =>
+                queueCountObservedBeforeOuterUnstack = world.QueueCount);
+
+        Assert.True(completion.AutomationCompletion);
+        Assert.Equal(3, completion.CompletedLevels);
+        Assert.Equal(5, completion.QueueCountAtSignal);
+        Assert.Equal(5, queueCountObservedBeforeOuterUnstack);
+        Assert.Equal(signalsBefore + 1, simulation.Catalog.CompletionSignals);
+        Assert.Equal(3, simulation.World.TotalCompleted);
+        Assert.Equal(submissionsBefore + 1, simulation.World.TotalSubmitted);
+        Assert.Equal(5, simulation.World.QueueCount);
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 7, maximumFrames: 2));
+        Assert.Equal(submissionsBefore + 3, simulation.World.TotalSubmitted);
+        Assert.Equal(7, simulation.World.QueueCount);
+        Assert.Equal(7, simulation.World.QueueHighWater);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void StructureEchoCompletion_RequeuesBeforeWakeAndNeverOverfillsLiveRoom()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 8,
+            new[]
+            {
+                new SimulatedCandidateSpec("structure", AutoBuyCandidateKind.Structure),
+            });
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 7, maximumFrames: 30));
+        simulation.RunFrames(5);
+        var submissionsBefore = simulation.World.TotalSubmitted;
+
+        var completion = simulation.StepNativeCompletion(bulkLevels: 3, echoActions: 1);
+
+        Assert.Equal(6, completion.QueueCountAtSignal);
+        Assert.Equal(3, completion.CompletedLevels);
+        Assert.Equal(1, completion.EchoActionsEnqueued);
+        Assert.Equal(submissionsBefore + 1, simulation.World.TotalSubmitted);
+        Assert.Equal(6, simulation.World.QueueCount);
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 7, maximumFrames: 1));
+        Assert.Equal(submissionsBefore + 2, simulation.World.TotalSubmitted);
+        Assert.Equal(7, simulation.World.QueueCount);
+        Assert.True(simulation.World.QueueCount <= simulation.World.QueueCapacity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void CompletionEffectsChangingAnotherCandidate_AreRevalidatedBeforeRefill()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 3,
+            new[]
+            {
+                new SimulatedCandidateSpec(
+                    "finite-structure",
+                    AutoBuyCandidateKind.Structure,
+                    maximumLevel: 1),
+                new SimulatedCandidateSpec("follow-up", AutoBuyCandidateKind.Upgrade),
+            });
+
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 2, maximumFrames: 20));
+        simulation.RunFrames(5);
+        var submissionsBefore = simulation.World.TotalSubmitted;
+        var followUp = simulation.World.Candidates.Single(candidate => candidate.Uuid == "follow-up");
+
+        simulation.StepNativeCompletion(
+            bulkLevels: 1,
+            afterCandidateEffectsBeforeSignal: _ => followUp.Available = false);
+
+        Assert.Equal(submissionsBefore, simulation.World.TotalSubmitted);
+        Assert.Equal(1, simulation.World.QueueCount);
+        Assert.Equal(1, simulation.World.Candidates.Single(candidate =>
+            candidate.Uuid == "finite-structure").CurrentLevel);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void MultipleBigResources_AllBalancesRemainAuthoritativeAcrossAdmissionAndSpend()
+    {
+        var costs = new[]
+        {
+            new SimulatedResourceCost("essence", "Essence", new BigAmount(1.0, 200)),
+            new SimulatedResourceCost(
+                "bandwidth",
+                "Bandwidth",
+                new BigAmount(5.0, 0),
+                capacity: new BigAmount(1.0, 1),
+                isBandwidth: true),
+        };
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 5,
+            new[]
+            {
+                new SimulatedCandidateSpec(
+                    "multi-resource",
+                    AutoBuyCandidateKind.Structure,
+                    resourceCosts: costs),
+            });
+        simulation.World.SetResourceQuantity("essence", new BigAmount(3.0, 200));
+        simulation.World.SetResourceQuantity("bandwidth", new BigAmount(9.0, 0));
+
+        simulation.RunFrames(20);
+
+        Assert.Equal(1, simulation.World.TotalSubmitted);
+        Assert.Equal(1, simulation.World.QueueCount);
+        Assert.Equal(0, simulation.World.GetResourceQuantity("essence").CompareTo(new BigAmount(2.0, 200)));
+        Assert.Equal(0, simulation.World.GetResourceQuantity("bandwidth").CompareTo(new BigAmount(4.0, 0)));
+        Assert.True(simulation.World.ResourceQuantity >= 0.0);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void LifecycleReload_ReplacesCandidateWrapperAndRetainsStableTypedIdentity()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 4,
+            new[]
+            {
+                new SimulatedCandidateSpec("stable-id", AutoBuyCandidateKind.Upgrade),
+            });
+        var before = simulation.World.Candidates.Single();
+
+        simulation.ReloadLifecycle(replaceCandidateWrappers: true);
+        var after = simulation.World.Candidates.Single();
+
+        Assert.NotSame(before, after);
+        Assert.NotSame(before.NativeIdentity, after.NativeIdentity);
+        Assert.Equal(before.Uuid, after.Uuid);
+        Assert.Equal(before.Kind, after.Kind);
+        Assert.True(simulation.RunUntil(world => world.QueueCount == 3, maximumFrames: 20));
+    }
+
+    [Fact]
     [Trait("Category", "PerformanceSimulation")]
     public void PeriodicCompletions_KeepPreparedHandoffAndBoundedEvaluationWork()
     {
@@ -186,9 +436,9 @@ public sealed class AutoBuySimulationE2ETests
         Assert.Equal(166, simulation.World.SubmissionOrder.Take(166).Distinct(StringComparer.Ordinal).Count());
     }
 
-    [Fact(Skip = "Known completion-storm regression: repeated completion signals can restart a CPU-sliced scan before it settles.")]
-    [Trait("Category", "PerformanceTarget")]
-    public void CompletionStorm_TargetsNearFullQueueWithoutEvaluationAmplification()
+    [Fact]
+    [Trait("Category", "PerformanceSimulation")]
+    public void CompletionStorm_KeepsQueueFullWithoutEvaluationAmplification()
     {
         var candidates = Enumerable.Range(0, 166)
             .Select(index => new SimulatedCandidateSpec(
@@ -211,9 +461,14 @@ public sealed class AutoBuySimulationE2ETests
 
         var purchases = simulation.World.TotalSubmitted;
         var evaluationBudget = (4 * candidates.Length) + (4 * purchases);
-        Assert.True(simulation.World.QueueCount >= 295);
-        Assert.True(purchases >= 416);
-        Assert.True(simulation.World.TotalCandidateEvaluations <= evaluationBudget);
-        Assert.True(simulation.Metrics.IdleFramesWithPurchasableWork <= 40);
+        Assert.True(simulation.World.QueueCount >= 295,
+            $"Final queue depth was {simulation.World.QueueCount}/304.");
+        Assert.True(purchases >= 416,
+            $"Only {purchases} purchases completed during the storm.");
+        Assert.True(simulation.World.TotalCandidateEvaluations <= evaluationBudget,
+            $"Candidate work grew to {simulation.World.TotalCandidateEvaluations} evaluations; " +
+            $"budget was {evaluationBudget}.");
+        Assert.True(simulation.Metrics.IdleFramesWithPurchasableWork <= 40,
+            $"Usable queue room was left idle for {simulation.Metrics.IdleFramesWithPurchasableWork} frames.");
     }
 }
