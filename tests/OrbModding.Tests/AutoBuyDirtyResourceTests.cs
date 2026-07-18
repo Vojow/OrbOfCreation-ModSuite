@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -543,7 +544,7 @@ public sealed class AutoBuyDirtyResourceTests
         var second = new EngineCandidate("second", 2.0, AutoBuyCandidateKind.Structure);
         var catalog = new IncrementalCatalog(first, second)
         {
-            QueueRooms = new Queue<int>(new[] { 2, 2, 1, 2, 2 }),
+            QueueRooms = new Queue<int>(new[] { 2, 2, 2, 1, 2, 2, 2 }),
         };
         var config = ActiveConfig(string.Empty);
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
@@ -1578,12 +1579,21 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = QueueRooms is { Count: > 0 }
+            var remainingRoom = QueueRooms is { Count: > 0 }
                 ? QueueRooms.Dequeue()
                 : RemainingRoom;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                1024,
+                remainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -1670,10 +1680,18 @@ public sealed class AutoBuyDirtyResourceTests
 
         public void InvalidateLifecycle() => Index.BeginLifecycleEpoch();
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = 128;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                128,
+                128,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)

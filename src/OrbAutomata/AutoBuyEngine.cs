@@ -326,8 +326,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private void PollPendingQueueRoom()
     {
         _secondsUntilQueuePoll = QueuePollIntervalSeconds;
-        var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
-        if (_catalog.TryGetRemainingQueueRoom(out var room) && room > queueReserve)
+        if (TryCaptureQueueCapacity(out var queueCapacity) &&
+            queueCapacity.UsableAutomationRoom > 0)
         {
             _pendingWaitingForQueue = false;
         }
@@ -496,7 +496,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return true;
         }
 
-        if (!_catalog.TryGetRemainingQueueRoom(out _))
+        if (!TryCaptureQueueCapacity(out _))
         {
             if (!_queueWaitingLogged)
             {
@@ -813,7 +813,6 @@ internal sealed class AutoBuyEngine : IDisposable
             ? int.MaxValue
             : Math.Max(1, _config.MaxPurchasesPerBatch.Value);
         var targetLabel = maximumPurchases == int.MaxValue ? "queue" : maximumPurchases.ToString(CultureInfo.InvariantCulture);
-        var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
         var cpuBudget = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
         var stopwatch = Stopwatch.StartNew();
         var stoppedByQueue = false;
@@ -821,7 +820,8 @@ internal sealed class AutoBuyEngine : IDisposable
 
         while (_pendingPurchaseIndex < recommendations.Count && _pendingBatchPurchased < maximumPurchases)
         {
-            if (!_catalog.TryGetRemainingQueueRoom(out var room) || room <= queueReserve)
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out var queueCapacity) ||
+                queueCapacity.UsableAutomationRoom <= 0)
             {
                 stoppedByQueue = true;
                 break;
@@ -897,11 +897,21 @@ internal sealed class AutoBuyEngine : IDisposable
                 continue;
             }
 
+            // Availability, costs, and reserves can invoke native code. Read
+            // the complete authoritative queue state again after those checks
+            // so every queued mutation receives an immediately fresh snapshot.
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out queueCapacity) ||
+                queueCapacity.UsableAutomationRoom <= 0)
+            {
+                stoppedByQueue = true;
+                break;
+            }
+
             if (_pendingCandidateRepeatLimit <= 0)
             {
                 _pendingCandidateRepeatLimit = GetCandidateRepeatLimit(
                     recommendation,
-                    Math.Max(1, room - queueReserve),
+                    queueCapacity.UsableAutomationRoom,
                     recommendations.Count);
             }
 
@@ -946,8 +956,10 @@ internal sealed class AutoBuyEngine : IDisposable
                         _pendingPurchaseIndex < recommendations.Count &&
                         _pendingBatchPurchased < maximumPurchases)
                     {
-                        if (!_catalog.TryGetRemainingQueueRoom(out var remainingRoom) ||
-                            remainingRoom <= queueReserve)
+                        if (!TryCaptureQueueCapacity(
+                                RemainingAutomationUsage(maximumPurchases),
+                                out var refreshedQueueCapacity) ||
+                            refreshedQueueCapacity.UsableAutomationRoom <= 0)
                         {
                             // Keep the already ranked next candidate prepared
                             // while the native queue is full. It will still be
@@ -1137,6 +1149,31 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private bool IsAffordableRepeatGroup =>
         !_config.RespectActionMultiplier.Value && _config.RepeatWhileAffordable.Value;
+
+    private bool TryCaptureQueueCapacity(out QueueCapacitySnapshot snapshot)
+    {
+        var automationUsageLimit = _config.AutoBuyBatchSizing.Value == AutoBuyBatchSizingMode.FillAvailableQueue
+            ? int.MaxValue
+            : Math.Max(1, _config.MaxPurchasesPerBatch.Value);
+        return TryCaptureQueueCapacity(RemainingAutomationUsage(automationUsageLimit), out snapshot);
+    }
+
+    private bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        out QueueCapacitySnapshot snapshot)
+    {
+        return _catalog.TryCaptureQueueCapacity(
+            automationUsageLimit,
+            _config.LeaveQueueSlots.Value,
+            out snapshot);
+    }
+
+    private int RemainingAutomationUsage(int automationUsageLimit)
+    {
+        return automationUsageLimit == int.MaxValue
+            ? int.MaxValue
+            : Math.Max(0, automationUsageLimit - _pendingBatchPurchased);
+    }
 
     private static bool IsPolicyExcluded(AutoBuyDecision decision)
     {

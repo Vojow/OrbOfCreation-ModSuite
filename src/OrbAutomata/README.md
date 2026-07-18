@@ -22,6 +22,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - When several Structures or Upgrades are eligible, each receives one live-validated level per ranked pass; a lone candidate may fill all usable queue room.
+- Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -83,6 +84,8 @@ Structures must pass native availability before Automata reads costs or calls th
 Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
 
 During a prepared ranked pass, each candidate refreshes its own cost immediately before its level. Shared resource-dependent invalidation is coalesced while later candidates are still live-revalidated against current resources and native state. A failed admission skips that candidate for the current pass; an ambiguous native mutation failure ends the pass so dirty state can settle safely. If the queue fills, the next ranked candidate remains prepared across the wait and is live-revalidated when a slot reopens.
+
+Queue capacity is refreshed after that live candidate/cost/reserve validation and immediately before every queued mutation. The supported native adapter reads total capacity from `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()` and live room from `ActionManager.GetRemainingRoom()`. Negative values, remaining room greater than capacity, missing native objects, or an invalid policy input reject the snapshot and submit no purchase. The snapshot derives occupancy and subtracts `LeaveQueueSlots` exactly once before applying the current batch usage limit.
 
 ## Auto Cast
 

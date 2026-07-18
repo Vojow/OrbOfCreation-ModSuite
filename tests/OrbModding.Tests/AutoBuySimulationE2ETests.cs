@@ -29,13 +29,20 @@ public sealed class AutoBuySimulationE2ETests
     public void QueueAdapter_ReadsSharedActionQueueInsteadOfNativeAutoBuyQueue()
     {
         ActionManager.RemainingRoom = 203;
+        ActionManager.instance.actionableItems.maxQueuedItems.Value = 304;
         AutoBuyManager.RemainingRoom = 11;
         using var catalog = new ReflectionAutoBuyCatalog();
 
-        var succeeded = catalog.TryGetRemainingQueueRoom(out var remainingRoom);
+        var succeeded = catalog.TryCaptureQueueCapacity(
+            automationUsageLimit: int.MaxValue,
+            manualReservation: 1,
+            out var snapshot);
 
         Assert.True(succeeded);
-        Assert.Equal(203, remainingRoom);
+        Assert.Equal(304, snapshot.NativeCapacity);
+        Assert.Equal(203, snapshot.NativeRemainingRoom);
+        Assert.Equal(101, snapshot.LiveOccupancy);
+        Assert.Equal(202, snapshot.UsableAutomationRoom);
     }
 
     [Fact]
