@@ -51,9 +51,12 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     internal const string ActiveConceptsUuid = "9121924d-2692-428b-9599-165224ccd899";
 
     private readonly AlchemyGameplayDomainClassifier _domainClassifier;
+    private readonly TypedRegistryResolver _registryResolver;
     private readonly List<object> _recipes = new();
     private readonly Dictionary<object, string> _recipeUuids = new(ReferenceEqualityComparer.Instance);
     private object? _activeConcepts;
+    private TypedRegistryResolution? _activeConceptsResolution;
+    private TypedRegistryResolution? _conceptRecipesResolution;
     private Type? _recipeType;
     private Type? _instanceType;
     private FieldInfo? _activeValuesField;
@@ -69,13 +72,22 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
-    public bool IsReady => _activeConcepts is not null && _blockedReason is null;
+    public bool IsReady =>
+        _activeConcepts is not null &&
+        _activeConceptsResolution is not null &&
+        _conceptRecipesResolution is not null &&
+        _registryResolver.IsCurrent(_activeConceptsResolution) &&
+        _registryResolver.IsCurrent(_conceptRecipesResolution) &&
+        _blockedReason is null;
     public int ScopedRecipeCount => _recipes.Count;
     public int ActiveConceptCount => _activeConceptCount;
 
-    public ReflectionConceptRuntime(AlchemyGameplayDomainClassifier domainClassifier)
+    public ReflectionConceptRuntime(
+        AlchemyGameplayDomainClassifier domainClassifier,
+        TypedRegistryResolver? registryResolver = null)
     {
         _domainClassifier = domainClassifier ?? throw new ArgumentNullException(nameof(domainClassifier));
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
     }
 
     public bool TryInitialize(out string reason)
@@ -99,27 +111,25 @@ internal sealed class ReflectionConceptRuntime : IDisposable
                     : Retry($"Auto Concept domain classifier is not ready: {classifierReason}", out reason);
             }
 
-            var idType = ReflectionUtil.FindLoadedType("IdScriptableObject");
             _recipeType = ReflectionUtil.FindLoadedType("AlchemyRecipeSO");
             _instanceType = ReflectionUtil.FindLoadedType("AlchemyInstance");
             var activeType = ReflectionUtil.FindLoadedType("AlchemyInstanceListVariable");
             var recipeListType = ReflectionUtil.FindLoadedType("AlchemyRecipeListVariable");
-            if (idType is null || _recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
+            if (_recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
                 return Retry("native concept types are not registered yet", out reason);
 
-            var lookupField = FindField(idType, "RuntimeLookup", isStatic: true);
-            if (lookupField?.GetValue(null) is not IDictionary lookup)
-                return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
             var activeId = new Guid(ActiveConceptsUuid);
             var recipesId = AlchemyGameplayDomainClassifier.ConceptRecipesUuid;
-            if (!lookup.Contains(activeId) || !lookup.Contains(recipesId))
-                return Retry("concept assets are not registered yet", out reason);
-            var active = lookup[activeId];
-            var recipes = lookup[recipesId];
-            if (active is null || active.GetType() != activeType)
-                return Fail("ActiveConcepts UUID/type mismatch", out reason);
-            if (recipes is null || recipes.GetType() != recipeListType)
-                return Fail("ConceptRecipes UUID/type mismatch", out reason);
+            var activeResolution = _registryResolver.Resolve(activeId, activeType);
+            if (!activeResolution.IsResolved)
+                return HandleRegistryFailure("ActiveConcepts", activeResolution, out reason);
+            var recipesResolution = _registryResolver.Resolve(recipesId, recipeListType);
+            if (!recipesResolution.IsResolved)
+                return HandleRegistryFailure("ConceptRecipes", recipesResolution, out reason);
+            var active = activeResolution.Value!;
+            var recipes = recipesResolution.Value!;
+            _activeConceptsResolution = activeResolution;
+            _conceptRecipesResolution = recipesResolution;
 
             _activeValuesField = FindField(activeType, "value", isStatic: false);
             var recipeValuesField = FindField(recipeListType, "value", isStatic: false);
@@ -402,6 +412,8 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     {
         _domainClassifier.InvalidateLifecycle();
         _activeConcepts = null;
+        _activeConceptsResolution = null;
+        _conceptRecipesResolution = null;
         _recipes.Clear();
         _recipeUuids.Clear();
         _activeConceptCount = 0;
@@ -507,6 +519,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     private bool IsCurrentRecipe(NativeConceptCandidate candidate)
     {
+        if (!IsReady) return false;
         if (candidate.Recipe.GetType() != _recipeType) return false;
         var classification = _domainClassifier.ClassifyRecipe(candidate.Recipe);
         if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
@@ -581,6 +594,17 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             if (method is not null) return method;
         }
         return null;
+    }
+
+    private bool HandleRegistryFailure(
+        string label,
+        TypedRegistryResolution resolution,
+        out string reason)
+    {
+        var message = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable
+            ? Retry(message, out reason)
+            : Fail(message, out reason);
     }
 
     private bool Fail(string reason, out string output)

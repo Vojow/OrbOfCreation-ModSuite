@@ -1,6 +1,6 @@
 using System;
-using System.Collections;
 using System.Reflection;
+using OrbModding.Common;
 
 namespace OrbMentor;
 
@@ -37,38 +37,34 @@ internal sealed class MentorDomainUnlockGate
     private static readonly Guid ArtifactWorkshopId = new(ArtifactWorkshopUuid);
     private static readonly Guid AlchemyScreenId = new(AlchemyScreenUuid);
 
-    private const BindingFlags StaticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
     private const BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private readonly Func<string, Type?> _resolveType;
+    private readonly TypedRegistryResolver _registryResolver;
     private Type? _viewType;
-    private FieldInfo? _runtimeLookup;
     private MethodInfo? _isAvailable;
     private string? _schemaFailure;
 
-    public MentorDomainUnlockGate(Func<string, Type?>? resolveType = null)
+    public MentorDomainUnlockGate(
+        Func<string, Type?>? resolveType = null,
+        TypedRegistryResolver? registryResolver = null)
     {
         _resolveType = resolveType ?? (name => Type.GetType(name + ", Assembly-CSharp", false));
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
     }
 
     public MentorDomainUnlockSnapshot Evaluate(MentorDomain domain)
     {
         if (!ResolveSchema()) return Blocked(_schemaFailure!);
 
-        IDictionary? lookup;
-        try { lookup = _runtimeLookup!.GetValue(null) as IDictionary; }
-        catch (Exception ex) { return Blocked($"native progression registry read failed: {BaseMessage(ex)}"); }
-        if (lookup is null) return Waiting("native progression registry is not ready");
-
         var domainId = DomainId(domain);
-        if (!lookup.Contains(MasteriesEnabledId)) return Waiting("mastery progression has not registered yet");
-        if (!lookup.Contains(domainId)) return Waiting($"{DomainLabel(domain)} progression has not registered yet");
-
-        var masteryView = lookup[MasteriesEnabledId];
-        var domainView = lookup[domainId];
-        if (masteryView is null || masteryView.GetType() != _viewType)
-            return Blocked("MasteriesEnabled UUID/type contract does not resolve to ViewSO");
-        if (domainView is null || domainView.GetType() != _viewType)
-            return Blocked($"{DomainAssetLabel(domain)} UUID/type contract does not resolve to ViewSO");
+        var masteryResolution = _registryResolver.Resolve(MasteriesEnabledId, _viewType!);
+        if (!masteryResolution.IsResolved)
+            return FromResolution("MasteriesEnabled", masteryResolution);
+        var domainResolution = _registryResolver.Resolve(domainId, _viewType!);
+        if (!domainResolution.IsResolved)
+            return FromResolution(DomainAssetLabel(domain), domainResolution);
+        var masteryView = masteryResolution.Value!;
+        var domainView = domainResolution.Value!;
 
         try
         {
@@ -91,23 +87,28 @@ internal sealed class MentorDomainUnlockGate
         if (_schemaFailure is not null) return false;
         if (_viewType is not null) return true;
         var viewType = _resolveType("ViewSO");
-        var idType = _resolveType("IdScriptableObject");
-        if (viewType is null || idType is null)
+        if (viewType is null)
         {
-            _schemaFailure = "native ViewSO/IdScriptableObject progression types are unavailable";
+            _schemaFailure = "native ViewSO progression type is unavailable";
             return false;
         }
-        var lookup = idType.GetField("RuntimeLookup", StaticFlags);
         var available = viewType.GetMethod("IsAvailable", InstanceFlags, null, Type.EmptyTypes, null);
-        if (lookup is null || available is null || available.ReturnType != typeof(bool))
+        if (available is null || available.ReturnType != typeof(bool))
         {
-            _schemaFailure = "native ViewSO.IsAvailable/IdScriptableObject.RuntimeLookup contract is unavailable";
+            _schemaFailure = "native ViewSO.IsAvailable contract is unavailable";
             return false;
         }
         _viewType = viewType;
-        _runtimeLookup = lookup;
         _isAvailable = available;
         return true;
+    }
+
+    private static MentorDomainUnlockSnapshot FromResolution(
+        string label,
+        TypedRegistryResolution resolution)
+    {
+        var reason = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable ? Waiting(reason) : Blocked(reason);
     }
 
     private static MentorDomainUnlockSnapshot Waiting(string reason) =>

@@ -70,10 +70,19 @@ public static class AutoBuyManager
     public static int GetRemainingRoom() => RemainingRoom;
 }
 
-public class SpellRecipeSO
+public class SpellRecipeSO : IdScriptableObject
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
-    public string uuid = Guid.NewGuid().ToString();
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
@@ -91,8 +100,8 @@ public class SpellRecipeSO
         GrantedMasteryExperience.Add(exp);
         masteryExperience = Add(masteryExperience, exp);
     }
-    public Guid GetGuid() => Guid.Parse(uuid);
-    public Guid GetId() => GetGuid();
+    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetId() => GetGuid();
     public bool IsDiscovered() => discovered;
     public bool IsReadyToLevelMastery() => readyToLevel;
     public ResourceCostList GetLevelCost() => levelCost;
@@ -117,9 +126,9 @@ public class SpellRecipeSO
 
 public class IdScriptableObject : UnityEngine.ScriptableObject
 {
-    public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+    public static Dictionary<Guid, IdScriptableObject> RuntimeLookup = new();
     public Guid uuid = Guid.NewGuid();
-    public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+    public static object? GetInstance(Guid guid) => RuntimeLookup.TryGetValue(guid, out var value) ? value : null;
     public Guid GetGuid() => uuid;
     public Guid GetId() => uuid;
     public void SetGuid(Guid guid) => uuid = guid;
@@ -232,10 +241,19 @@ public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyReci
 {
 }
 
-public class UpgradeSO
+public class UpgradeSO : IdScriptableObject
 {
     public static List<UpgradeSO> All = new List<UpgradeSO>();
-    public string uuid = Guid.NewGuid().ToString();
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
     public int purchaseLevel;
     public int queuedPurchaseLevel;
     public bool available = true;
@@ -243,7 +261,7 @@ public class UpgradeSO
     public bool finite;
     public int maxLevel = int.MaxValue;
     public ResourceCostList purchaseCost = new ResourceCostList();
-    public Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Upgrade";
     public bool IsAvailable() => available;
     public bool CanPurchase() => purchasable && !IsMaxQueuedLevel();
@@ -462,17 +480,26 @@ public sealed class SpellListVariable : IEnumerable
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }
 
-public sealed class EquipmentSO
+public sealed class EquipmentSO : IdScriptableObject
 {
     public static List<EquipmentSO> All = new List<EquipmentSO>();
     private readonly ExperienceElement experienceContainer = new ExperienceElement();
-    public string uuid = Guid.NewGuid().ToString();
-    public string name = "Equipment";
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
+    public new string name = "Equipment";
     public int masteryLevel;
     public BigDouble masteryXp;
     public bool isCreated = true;
-    public Guid GetGuid() => Guid.Parse(uuid);
-    public Guid GetId() => GetGuid();
+    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
     public ExperienceElement GetExperienceElement() => experienceContainer;
@@ -522,7 +549,7 @@ public sealed class AlchemyInstance
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
-public sealed class AlchemyInstanceListVariable
+public sealed class AlchemyInstanceListVariable : IdScriptableObject
 {
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
     public bool SuppressAddMutation { get; set; }

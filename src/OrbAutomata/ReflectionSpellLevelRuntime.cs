@@ -10,10 +10,12 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
 {
     internal const string UnlockLevelAllSpellsUuid = "b5efd19a-9655-4359-ad27-f391bb86c2e4";
 
+    private readonly TypedRegistryResolver _registryResolver;
     private Type? _recipeType;
     private object? _manager;
     private object? _availableRecipes;
     private object? _levelAllUpgrade;
+    private TypedRegistryResolution? _levelAllResolution;
     private FieldInfo? _recipeValuesField;
     private FieldInfo? _levelingPrerequisitesField;
     private FieldInfo? _masteryLevelField;
@@ -30,7 +32,17 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     private object? _lastMutationEvidence;
 
     public string? BlockedReason => _blockedReason;
-    public bool IsReady => _manager is not null && _availableRecipes is not null && _blockedReason is null;
+    public bool IsReady =>
+        _manager is not null &&
+        _availableRecipes is not null &&
+        _levelAllResolution is not null &&
+        _registryResolver.IsCurrent(_levelAllResolution) &&
+        _blockedReason is null;
+
+    public ReflectionSpellLevelRuntime(TypedRegistryResolver? registryResolver = null)
+    {
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
+    }
 
     public AutoSpellLevelSnapshot ReadSnapshot(out string reason)
     {
@@ -131,6 +143,7 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         _manager = null;
         _availableRecipes = null;
         _levelAllUpgrade = null;
+        _levelAllResolution = null;
         _recipeValuesField = null;
         _levelingPrerequisitesField = null;
         _masteryLevelField = null;
@@ -178,20 +191,18 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         }
         try
         {
-            var idType = ReflectionUtil.FindLoadedType("IdScriptableObject");
             var managerType = ReflectionUtil.FindLoadedType("SpellManager");
             _recipeType = ReflectionUtil.FindLoadedType("SpellRecipeSO");
             var upgradeType = ReflectionUtil.FindLoadedType("UpgradeSO");
-            if (idType is null || managerType is null || _recipeType is null || upgradeType is null)
+            if (managerType is null || _recipeType is null || upgradeType is null)
                 return Retry("native spell-level types are not registered yet", out reason);
 
-            var runtimeLookup = FindField(idType, "RuntimeLookup", true)?.GetValue(null) as IDictionary;
-            if (runtimeLookup is null) return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
             var upgradeId = new Guid(UnlockLevelAllSpellsUuid);
-            if (!runtimeLookup.Contains(upgradeId)) return Retry("level-all upgrade is not registered yet", out reason);
-            _levelAllUpgrade = runtimeLookup[upgradeId];
-            if (_levelAllUpgrade is null || _levelAllUpgrade.GetType() != upgradeType)
-                return Block("UnlockLevelAllSpells UUID/type mismatch", out reason);
+            var upgradeResolution = _registryResolver.Resolve(upgradeId, upgradeType);
+            if (!upgradeResolution.IsResolved)
+                return HandleRegistryFailure("UnlockLevelAllSpells", upgradeResolution, out reason);
+            _levelAllUpgrade = upgradeResolution.Value;
+            _levelAllResolution = upgradeResolution;
 
             _manager = FindField(managerType, "instance", true)?.GetValue(null);
             if (_manager is null || _manager.GetType() != managerType)
@@ -298,6 +309,17 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     {
         Block(message, out reason);
         return new AutoSpellLevelSnapshot(AutoSpellLevelCapability.Locked, null);
+    }
+
+    private bool HandleRegistryFailure(
+        string label,
+        TypedRegistryResolution resolution,
+        out string reason)
+    {
+        var message = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable
+            ? Retry(message, out reason)
+            : Block(message, out reason);
     }
 
     private bool Block(string message, out string reason)

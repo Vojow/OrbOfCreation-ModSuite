@@ -25,7 +25,7 @@ internal sealed class MentorAlchemyDomainGate : IDisposable
 
     public AlchemyDomainClassifierStatus Status => _classifier.Status;
     public string StatusReason => _classifier.StatusReason;
-    public int LifecycleGeneration => _classifier.LifecycleGeneration;
+    public int LifecycleGeneration => _classifier.ClassifierGeneration;
 
     public bool TryInitialize(out string reason) => _classifier.TryInitialize(out reason);
 

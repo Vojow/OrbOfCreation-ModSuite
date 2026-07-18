@@ -154,7 +154,11 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
     {
         IdScriptableObject.RuntimeLookup.Add(
             new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid),
-            new UpgradeSO { purchaseLevel = purchaseLevel });
+            new UpgradeSO
+            {
+                uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid,
+                purchaseLevel = purchaseLevel,
+            });
     }
 
     private static SpellRecipeSO AddReadySpell(string uuid, int mastery)

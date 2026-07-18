@@ -12,12 +12,12 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
 {
     public AutoConceptDomainClassifierAdoptionTests()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
     }
 
     public void Dispose()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
     }
 
     [Fact]
@@ -53,13 +53,16 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
         Assert.Single(
             log.Entries,
             entry => entry?.ToString()?.Contains(
-                "Auto Concept domain classifier is not ready: ConceptRecipes is not registered yet",
+                "Auto Concept domain classifier is not ready: ConceptRecipes resolution failed.",
                 StringComparison.Ordinal) == true);
+        Assert.Contains(
+            log.Entries,
+            entry => entry?.ToString()?.Contains("Status=NotFound", StringComparison.Ordinal) == true);
 
-        var generation = classifier.LifecycleGeneration;
+        var generation = classifier.ClassifierGeneration;
         controller.InvalidateLifecycle();
         Assert.Equal(AlchemyDomainClassifierStatus.Uninitialized, classifier.Status);
-        Assert.True(classifier.LifecycleGeneration > generation);
+        Assert.True(classifier.ClassifierGeneration > generation);
     }
 
     [Fact]

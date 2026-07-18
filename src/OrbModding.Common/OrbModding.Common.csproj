@@ -9,6 +9,10 @@
     <Description>Small shared helpers for Orb Of Creation BepInEx plugins.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrbModding.Tests" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(GameRoot)' != ''">
     <Reference Include="UnityEngine.UI">
       <HintPath>$(ManagedDir)/UnityEngine.UI.dll</HintPath>

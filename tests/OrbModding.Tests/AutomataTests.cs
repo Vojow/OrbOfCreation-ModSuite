@@ -318,6 +318,7 @@ public sealed class AutomataTests
     public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
     {
         var upgrade = new UpgradeSO();
+        upgrade.uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid;
         IdScriptableObject.RuntimeLookup.Clear();
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
         var recipe = new SpellRecipeSO { discovered = true, readyToLevel = true };
