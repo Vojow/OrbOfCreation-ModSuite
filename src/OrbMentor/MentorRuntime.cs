@@ -165,6 +165,7 @@ internal sealed class MentorRuntime : IDisposable
     private readonly Dictionary<MentorDomain, DomainState> _domains = new();
     private readonly Dictionary<MentorDomain, DomainCatalog> _catalogs = new();
     private readonly bool[] _domainResetPending = new bool[DomainOrder.Length];
+    private readonly MentorAlchemyDomainGate _alchemyDomainGate;
     private readonly MentorCoordinatorWork? _coordinatorWork;
     private bool _guarded;
     private bool _artifactWasEnabled;
@@ -180,15 +181,18 @@ internal sealed class MentorRuntime : IDisposable
     private MentorSpellSourcePolicy _spellSourcePolicy;
     private long _nextEquippedSnapshot;
     private bool _equippedSnapshotReady;
+    private long _nextAlchemyDomainInitialization;
 
     public MentorRuntime(
         MentorConfig config,
         ManualLogSource log,
         SuitePerformanceCoordinator? coordinator = null,
-        Func<long>? readFrameIdentity = null)
+        Func<long>? readFrameIdentity = null,
+        MentorAlchemyDomainGate? alchemyDomainGate = null)
     {
         _config = config;
         _log = log;
+        _alchemyDomainGate = alchemyDomainGate ?? new MentorAlchemyDomainGate();
         if (coordinator is not null)
             _coordinatorWork = new MentorCoordinatorWork(
                 coordinator,
@@ -207,6 +211,7 @@ internal sealed class MentorRuntime : IDisposable
     }
 
     internal MentorDiagnostics Diagnostics { get; }
+    internal AlchemyDomainClassifierStatus AlchemyClassifierStatus => _alchemyDomainGate.Status;
     public string? BlockedReason => _failures.Global.Reason;
     public bool IsBlocked => _failures.Global.IsBlocked;
 
@@ -279,7 +284,22 @@ internal sealed class MentorRuntime : IDisposable
 
     public void ObserveAlchemy(object source, BigDouble xp)
     {
-        if (_config.AlchemyEnabled.Value && TryAmount(xp, out var amount)) CaptureDomain(MentorDomain.Alchemy, source, amount);
+        if (!_config.Active || !DomainEnabled(MentorDomain.Alchemy)) return;
+        if (!_alchemyDomainGate.TryGetCached(source, out var classification))
+        {
+            RequestReconcile(_catalogs[MentorDomain.Alchemy]);
+            return;
+        }
+        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
+        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+        {
+            if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
+                _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
+                BlockAlchemyDomain("XP capture", classification);
+            return;
+        }
+        if (!TryAmount(xp, out var amount)) return;
+        CaptureDomain(MentorDomain.Alchemy, source, amount);
     }
 
     public void BeginArtifactTick(object source)
@@ -418,6 +438,26 @@ internal sealed class MentorRuntime : IDisposable
     public void MarkRelationshipDirty(MentorDomain domain, object? changedSource = null)
     {
         if (DomainBlocked(domain)) return;
+        if (domain == MentorDomain.Alchemy)
+        {
+            if (!DomainConfigured(domain)) return;
+            if (changedSource is not null)
+            {
+                if (!_alchemyDomainGate.TryGetCached(changedSource, out var classification))
+                {
+                    RequestReconcile(_catalogs[domain]);
+                    return;
+                }
+                if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                {
+                    if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
+                        _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
+                        BlockAlchemyDomain("progression observation", classification);
+                    return;
+                }
+            }
+        }
         var catalog = _catalogs[domain];
         RequestRelationshipRefresh(catalog, advanceProgressionEpoch: true);
         if (changedSource is null || catalog.ExpectedType is null || catalog.MasteryField is null ||
@@ -452,6 +492,7 @@ internal sealed class MentorRuntime : IDisposable
             var index = (int)domain;
             if (!_domainResetPending[index]) continue;
             _domainResetPending[index] = false;
+            if (domain == MentorDomain.Alchemy) InvalidateAlchemyDomainLifecycle();
             CancelDomain(domain, MentorDropReason.LifecycleReset, clearCatalog: true);
             _failures.For(domain).ResetLifecycle();
         }
@@ -893,6 +934,15 @@ internal sealed class MentorRuntime : IDisposable
                 Diagnostics.RecordDeferredGrant();
                 return GrantResult.Deferred;
             }
+            if (domain == MentorDomain.Alchemy)
+            {
+                var classification = _alchemyDomainGate.ClassifyAndCache(entry.Item);
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                {
+                    BlockAlchemyDomain("final grant validation", classification);
+                    return GrantResult.Dropped;
+                }
+            }
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
             var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);
@@ -1081,6 +1131,7 @@ internal sealed class MentorRuntime : IDisposable
     public void Dispose()
     {
         Cancel(MentorDropReason.LifecycleReset);
+        _alchemyDomainGate.Dispose();
         _coordinatorWork?.Dispose();
     }
 
@@ -1148,6 +1199,7 @@ internal sealed class MentorRuntime : IDisposable
     {
         _lifecycleReset.TryConsume();
         Array.Clear(_domainResetPending, 0, _domainResetPending.Length);
+        InvalidateAlchemyDomainLifecycle();
         Cancel(MentorDropReason.LifecycleReset);
         _failures.ResetLifecycle();
         _captureFailureLogged = false;
@@ -1210,6 +1262,7 @@ internal sealed class MentorRuntime : IDisposable
         {
             if (catalog.Reconcile is null)
             {
+                if (domain == MentorDomain.Alchemy && !EnsureAlchemyDomainReady(now)) return false;
                 if (!ResolveSchema(domain, catalog)) return false;
                 var registry = catalog.RegistryField!.GetValue(null) as IEnumerable;
                 if (registry is null)
@@ -1245,6 +1298,16 @@ internal sealed class MentorRuntime : IDisposable
                 {
                     var value = work.Enumerator.Current;
                     if (value is null || IsDestroyed(value)) return true;
+                    if (domain == MentorDomain.Alchemy)
+                    {
+                        var classification = _alchemyDomainGate.ClassifyAndCache(value);
+                        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return true;
+                        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                        {
+                            BlockAlchemyDomain("catalog reconciliation", classification);
+                            return false;
+                        }
+                    }
                     var uuid = ReadUuid(catalog.IdentityMethod!, value);
                     if (string.IsNullOrWhiteSpace(uuid) || work.ById.ContainsKey(uuid))
                     {
@@ -1475,6 +1538,39 @@ internal sealed class MentorRuntime : IDisposable
         _failures.IsDomainBlocked(domain);
 
     private bool DomainEnabled(MentorDomain domain) => DomainConfigured(domain) && !DomainBlocked(domain);
+
+    private bool EnsureAlchemyDomainReady(long now)
+    {
+        if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready) return true;
+        if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
+        {
+            BlockDomainTransient(MentorDomain.Alchemy,
+                $"Alchemy domain classifier blocked: {_alchemyDomainGate.StatusReason}");
+            return false;
+        }
+        if (now < _nextAlchemyDomainInitialization) return false;
+        if (_alchemyDomainGate.TryInitialize(out var reason)) return true;
+        if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
+            BlockDomainTransient(MentorDomain.Alchemy, $"Alchemy domain classifier blocked: {reason}");
+        else
+            _nextAlchemyDomainInitialization = now + LiveRefreshTicks;
+        return false;
+    }
+
+    private void BlockAlchemyDomain(string operation, AlchemyDomainClassification classification)
+    {
+        BlockDomainTransient(
+            MentorDomain.Alchemy,
+            $"Alchemy {operation} could not prove an ordinary-alchemy recipe. " +
+            $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
+            $"Evidence={classification.Evidence}, Reason={classification.Reason}");
+    }
+
+    private void InvalidateAlchemyDomainLifecycle()
+    {
+        _alchemyDomainGate.InvalidateLifecycle();
+        _nextAlchemyDomainInitialization = 0;
+    }
 
     private string DomainStatus(MentorDomain domain, double percent)
     {

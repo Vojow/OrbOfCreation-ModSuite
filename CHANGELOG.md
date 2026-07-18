@@ -1,5 +1,11 @@
 # Changelog
 
+## Orb Mentor 0.3.2 Beta 1 — 2026-07-18
+
+- Exclude Scholar Concepts from Mentor's Alchemy catalog, mentor ranking, recipient relationships, XP capture, and final native grant path through the shared audited gameplay-domain classifier.
+- Keep Harmony XP and progression callbacks cache-only; uncached recipes request bounded cooperative reconciliation without reflecting, allocating classification evidence, or guessing inside the hook.
+- Invalidate classifier evidence on scene, save-load, reset, and NG+ transitions, and fail only Alchemy closed when ordinary-domain evidence is unknown or contradictory.
+
 ## Orb Modding Common 0.3.1 Beta 1 — 2026-07-18
 
 - Add one fail-closed, lifecycle-scoped classifier for ordinary Alchemy and Scholar Concepts using exact native types, stable UUIDs, the authoritative `ConceptRecipes` snapshot, and audited type identities.

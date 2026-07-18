@@ -27,7 +27,7 @@ Configuration provides independent `Spells`, `Artifacts`, and `Alchemy` enable s
 
 ### Verified native ownership
 
-- Catalog: `AlchemyRecipeSO.All`.
+- Source registry: `AlchemyRecipeSO.All`; the Mentor catalog retains only recipes classified as ordinary alchemy by the shared UUID-and-native-type domain classifier. Scholar concepts are excluded.
 - Stable identity: inherited GUID.
 - Eligibility: `AlchemyRecipeSO.IsAvailable()`. This covers both manually discovered recipes and natural/prerequisite recipes whose native `discovered` field may remain false.
 - XP and confirmed mastery owner: `AlchemyRecipeSO.masteryXp` and `masteryLevel`.
@@ -39,9 +39,11 @@ Configuration provides independent `Spells`, `Artifacts`, and `Alchemy` enable s
 ### Implemented contract
 
 - Hook a postfix on `AlchemyRecipeSO.GainMasteryXp(BigDouble)` and observe the final positive argument.
+- Ignore XP callbacks from verified Scholar concepts. Unknown or contradictory domain evidence blocks Alchemy sharing for the lifecycle instead of guessing.
 - Include all successful native alchemy XP events, whether continuous or completion-based.
-- Rank all discovered recipes globally by `masteryLevel`; do not require a recipe to remain active after it has been discovered.
+- Rank all available ordinary-alchemy recipes globally by `masteryLevel`; do not require a recipe to remain active after it has been discovered. A higher-level Scholar concept therefore cannot displace the ordinary-alchemy mentor tier.
 - Grant through the same `GainMasteryXp` method inside the domain recursion guard.
+- Revalidate shared-classifier ordinary-alchemy evidence immediately before the native grant.
 - Accept native immediate recipient mastery level-ups and related `AlchemyTypeSO` progression. Never call `ApplyMastery`, `IncrementLevel`, or type methods separately.
 - Re-evaluate recipient eligibility immediately before delayed grants because a recipe may level automatically while work is queued.
 - Aggregate continuous events per frame before applying the existing operation and CPU budgets.
@@ -55,6 +57,7 @@ Configuration provides independent `Spells`, `Artifacts`, and `Alchemy` enable s
 - Locked recipes, equal/higher mastery recipes, and the source never receive XP.
 - Active instance creation, quantity, selection, recipe time, advancement, costs, and completion effects are untouched.
 - Save/load and reset invalidate pending recipe references without losing native source progress.
+- Save/load, scene, reset, and NG+ lifecycle signals also invalidate the classifier snapshot; disabled Alchemy sharing does not initialize it.
 
 ## Artifact vertical slice
 
