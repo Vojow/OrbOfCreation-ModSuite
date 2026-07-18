@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 using System.Reflection;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -11,7 +12,8 @@ namespace OrbAutomata;
 internal sealed class ReflectionAutoBuyCatalog :
     IAutoBuyCatalog,
     IAutoBuyIncrementalCatalog,
-    IAutoBuyProgressionCatalog
+    IAutoBuyProgressionCatalog,
+    IAutoBuyCompletionRevalidationCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LifecycleMaintenanceInterval = TimeSpan.FromMilliseconds(250);
@@ -26,12 +28,17 @@ internal sealed class ReflectionAutoBuyCatalog :
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private readonly HashSet<string> _deferredPurchaseResourceInvalidations =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly AutoBuyCompletionSettlementGate _completionSettlement =
+        new AutoBuyCompletionSettlementGate();
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
     private AutoBuyCandidateKinds _pendingRegistryRefresh;
-    private bool _completionEffectsDirty;
     private bool _mutationGroupActive;
     private MethodInfo? _getRemainingQueueRoom;
+    private FieldInfo? _actionManagerInstance;
+    private FieldInfo? _actionableItems;
+    private FieldInfo? _maxQueuedItems;
+    private MethodInfo? _readMaxQueuedItems;
     private MethodInfo? _getBulkDevelopment;
 
     public ReflectionAutoBuyCatalog()
@@ -62,9 +69,8 @@ internal sealed class ReflectionAutoBuyCatalog :
     {
         CompleteMutationGroup();
         FlushDeferredPurchaseInvalidations();
-        if (_completionEffectsDirty)
+        if (_completionSettlement.TryBegin(_index.SettlementValidationPending))
         {
-            _completionEffectsDirty = false;
             _index.InvalidateCompletionEffects();
         }
 
@@ -185,17 +191,31 @@ internal sealed class ReflectionAutoBuyCatalog :
 
     public void NotifyNativeCompletion()
     {
-        _completionEffectsDirty = true;
         _pendingRegistryRefresh |= AutoBuyCandidateKinds.All;
+        _completionSettlement.Notify();
     }
 
     public void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
     {
-        _completionEffectsDirty = true;
         _index.InvalidateQueue(nativeIdentity, completedKind);
         _pendingRegistryRefresh |= completedKind == AutoBuyCandidateKind.Structure
             ? AutoBuyCandidateKinds.Upgrades
             : AutoBuyCandidateKinds.Structures;
+        _completionSettlement.Notify();
+    }
+
+    public bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason)
+    {
+        if (candidate is ReflectionAutoBuyCandidate reflectionCandidate)
+        {
+            return reflectionCandidate.TryRefreshAfterCompletion(completionGeneration, out reason);
+        }
+
+        reason = "candidate is not backed by the audited reflection adapter";
+        return false;
     }
 
     public void InvalidateLifecycle()
@@ -205,34 +225,106 @@ internal sealed class ReflectionAutoBuyCatalog :
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
         _pendingRegistryRefresh = AutoBuyCandidateKinds.None;
-        _completionEffectsDirty = false;
+        _completionSettlement.Clear();
         _nextRegistryReconciliation = TimeSpan.Zero;
         _maintenanceCadence.Reset(Elapsed);
         _index.InvalidateLifecycleIncrementally();
     }
 
-    public bool TryGetRemainingQueueRoom(out int remainingRoom)
+    public bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot)
     {
-        remainingRoom = 0;
+        snapshot = default;
         var method = ResolveStaticNoArgMethod(
             ref _getRemainingQueueRoom,
             "ActionManager",
             "GetRemainingRoom",
             typeof(int));
+        if (method is null || !TryResolveQueueCapacityContract())
+        {
+            return false;
+        }
+
         try
         {
-            var value = method?.Invoke(null, Array.Empty<object>());
-            if (value is int room)
+            var manager = _actionManagerInstance!.GetValue(null);
+            var actionableItems = manager is null ? null : _actionableItems!.GetValue(manager);
+            var maxQueuedItems = actionableItems is null ? null : _maxQueuedItems!.GetValue(actionableItems);
+            if (maxQueuedItems is null ||
+                _readMaxQueuedItems!.Invoke(maxQueuedItems, Array.Empty<object>()) is not int nativeCapacity ||
+                method.Invoke(null, Array.Empty<object>()) is not int nativeRemainingRoom)
             {
-                remainingRoom = room;
-                return true;
+                return false;
             }
+
+            return QueueCapacitySnapshot.TryCreate(
+                nativeCapacity,
+                nativeRemainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        catch (Exception ex) when (
+            ex is TargetInvocationException ||
+            ex is ArgumentException ||
+            ex is InvalidOperationException ||
+            ex is TargetException)
         {
         }
 
         return false;
+    }
+
+    private bool TryResolveQueueCapacityContract()
+    {
+        if (_actionManagerInstance is not null &&
+            _actionableItems is not null &&
+            _maxQueuedItems is not null &&
+            _readMaxQueuedItems is not null)
+        {
+            return true;
+        }
+
+        var actionManagerType = ReflectionUtil.FindLoadedType("ActionManager");
+        var instance = actionManagerType?.GetField("instance", BindingFlags.Static | BindingFlags.Public);
+        var actionableItems = actionManagerType?.GetField("actionableItems", BindingFlags.Instance | BindingFlags.Public);
+        if (actionManagerType is null ||
+            instance is null ||
+            instance.FieldType != actionManagerType ||
+            actionableItems is null ||
+            !string.Equals(actionableItems.FieldType.Name, "ActionableListVariable", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var maxQueuedItems = actionableItems.FieldType.GetField(
+            "maxQueuedItems",
+            BindingFlags.Instance | BindingFlags.Public);
+        if (maxQueuedItems is null ||
+            !string.Equals(maxQueuedItems.FieldType.Name, "IntVariable", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var readMaxQueuedItems = maxQueuedItems.FieldType.GetMethod(
+            "AsInt",
+            BindingFlags.Instance | BindingFlags.Public,
+            null,
+            Type.EmptyTypes,
+            null);
+        if (readMaxQueuedItems?.ReturnType != typeof(int))
+        {
+            return false;
+        }
+
+        _actionManagerInstance = instance;
+        _actionableItems = actionableItems;
+        _maxQueuedItems = maxQueuedItems;
+        _readMaxQueuedItems = readMaxQueuedItems;
+        return true;
     }
 
     public bool TryGetBulkDevelopment(out int levels)
@@ -311,6 +403,7 @@ internal sealed class ReflectionAutoBuyCatalog :
         _deferredPurchaseResourceInvalidations.Clear();
         _registryReconciliation = null;
         _pendingRegistryRefresh = AutoBuyCandidateKinds.None;
+        _completionSettlement.Clear();
         _resourceSnapshots.Clear();
         _index.Clear();
     }
@@ -528,6 +621,7 @@ internal sealed class ReflectionAutoBuyCandidate :
     private long _lastAdapterWarningEpoch = long.MinValue;
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
+    private long _completionRefreshGeneration = -1;
 
     public ReflectionAutoBuyCandidate(
         object source,
@@ -773,6 +867,26 @@ internal sealed class ReflectionAutoBuyCandidate :
     {
         _cachedAvailability = evidence.IsAvailable;
         _hasCachedAvailability = true;
+    }
+
+    public bool TryRefreshAfterCompletion(long completionGeneration, out string reason)
+    {
+        if (_completionRefreshGeneration == completionGeneration)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        _hasCachedAvailability = false;
+        MarkDirty(AutoBuyDirtyReason.CostDirty);
+        if (!TryGetLifecycleEvidence(out var evidence, out reason))
+        {
+            return false;
+        }
+
+        SetLifecycleEvidence(evidence);
+        _completionRefreshGeneration = completionGeneration;
+        return true;
     }
 
     public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
