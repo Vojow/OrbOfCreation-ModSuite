@@ -47,8 +47,17 @@ public static class GlobalVariables
     public static IntVariable GetMultiBuy() => MultiBuy;
 }
 
-public static class ActionManager
+public sealed class ActionableListVariable
 {
+    public IntVariable maxQueuedItems = new IntVariable();
+}
+
+public sealed class ActionManager
+{
+    public static ActionManager instance = new ActionManager();
+
+    public ActionableListVariable actionableItems = new ActionableListVariable();
+
     public static int RemainingRoom { get; set; }
 
     public static int GetRemainingRoom() => RemainingRoom;

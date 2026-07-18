@@ -871,10 +871,20 @@ internal sealed class SimulatedAutoBuyCatalog :
         RebuildIndex();
     }
 
-    public bool TryGetRemainingQueueRoom(out int remainingRoom)
+    public bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        int manualReservation,
+        out QueueCapacitySnapshot snapshot)
     {
-        remainingRoom = _world.RemainingQueueRoom;
-        return QueueReadSucceeds;
+        snapshot = default;
+        return QueueReadSucceeds &&
+               QueueCapacitySnapshot.TryCreate(
+                   _world.QueueCapacity,
+                   _world.RemainingQueueRoom,
+                   automationUsageLimit,
+                   manualReservation,
+                   out snapshot,
+                   out _);
     }
 
     public bool TryGetBulkDevelopment(out int levels)
