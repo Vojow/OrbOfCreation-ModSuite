@@ -82,18 +82,18 @@ public sealed class AlchemyDomainClassification
 /// </summary>
 public sealed class AlchemyGameplayDomainClassifier : IDisposable
 {
-    public static readonly Guid ConceptRecipesUuid = new Guid("c8ff8e01-c042-49c2-86a2-e374f82c280c");
+    public static readonly Guid ConceptRecipesUuid = KnownEntities.ConceptRecipes.Uuid;
 
-    public static readonly Guid AlchemyTypeUuid = new Guid("f9c93e42-e9e8-4fe3-a1f3-5aec5430b5c2");
-    public static readonly Guid BrewingTypeUuid = new Guid("d2947f69-d989-465d-8159-204285ed57be");
-    public static readonly Guid DismantleTypeUuid = new Guid("7b89d22c-75ae-4945-9356-833382c9a167");
-    public static readonly Guid EnchantmentTypeUuid = new Guid("2ffcbbc4-49a7-45db-b3ae-4a3c57362255");
-    public static readonly Guid RefinementTypeUuid = new Guid("32b6b099-19f2-4470-b47b-6c2a8b0388e1");
-    public static readonly Guid TransmutationTypeUuid = new Guid("b42c6192-7d9b-40d0-aa40-3d46a9348e52");
+    public static readonly Guid AlchemyTypeUuid = KnownEntities.Alchemy.Uuid;
+    public static readonly Guid BrewingTypeUuid = KnownEntities.Brewing.Uuid;
+    public static readonly Guid DismantleTypeUuid = KnownEntities.Dismantle.Uuid;
+    public static readonly Guid EnchantmentTypeUuid = KnownEntities.Enchantment.Uuid;
+    public static readonly Guid RefinementTypeUuid = KnownEntities.Refinement.Uuid;
+    public static readonly Guid TransmutationTypeUuid = KnownEntities.Transmutation.Uuid;
 
-    public static readonly Guid ReductiveConceptTypeUuid = new Guid("47b787b9-d4cd-43c8-a7e3-63a1e4e0ae94");
-    public static readonly Guid ReflectiveConceptTypeUuid = new Guid("8f258dcc-c39a-4d64-b915-4239e746c49d");
-    public static readonly Guid ConceptualizationTypeUuid = new Guid("69842862-dfce-4a9e-a73b-f757c72e49dc");
+    public static readonly Guid ReductiveConceptTypeUuid = KnownEntities.Reductive.Uuid;
+    public static readonly Guid ReflectiveConceptTypeUuid = KnownEntities.Reflective.Uuid;
+    public static readonly Guid ConceptualizationTypeUuid = KnownEntities.Conceptualization.Uuid;
 
     private static readonly HashSet<Guid> OrdinaryTypeUuids = new HashSet<Guid>
     {
@@ -153,8 +153,8 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
         {
             var idType = FindLoadedType("IdScriptableObject");
             _recipeType = FindLoadedType("AlchemyRecipeSO");
-            _alchemyType = FindLoadedType("AlchemyTypeSO");
-            var recipeListType = FindLoadedType("AlchemyRecipeListVariable");
+            _alchemyType = FindLoadedType(KnownEntities.Alchemy.ManagedTypeName);
+            var recipeListType = FindLoadedType(KnownEntities.ConceptRecipes.ManagedTypeName);
             if (idType is null || _recipeType is null || _alchemyType is null || recipeListType is null)
                 return Retry("native alchemy classifier types are not loaded yet", out reason);
 
@@ -166,7 +166,7 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
 
             var registryResolution = _registryResolver.Resolve(ConceptRecipesUuid, recipeListType);
             if (!registryResolution.IsResolved)
-                return HandleRegistryFailure("ConceptRecipes", registryResolution, out reason);
+                return HandleRegistryFailure(KnownEntities.ConceptRecipes.DiagnosticName, registryResolution, out reason);
             _registryResolution = registryResolution;
             var registry = registryResolution.Value!;
             if (valuesField.GetValue(registry) is not IEnumerable recipes)

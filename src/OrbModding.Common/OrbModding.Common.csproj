@@ -11,7 +11,13 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbAutomata" />
+    <InternalsVisibleTo Include="OrbMentor" />
   </ItemGroup>
+
+  <Target Name="VerifyKnownEntitiesGenerated" BeforeTargets="BeforeCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\tools\generate-known-entities.ps1&quot; -Verify" />
+  </Target>
 
   <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(GameRoot)' != ''">
     <Reference Include="UnityEngine.UI">

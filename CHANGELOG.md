@@ -1,5 +1,10 @@
 # Changelog
 
+## Generated supported identities — 2026-07-18
+
+- Replace supported Alchemy, Auto Concept, spell-level, and Mentor unlock UUID literals with 16 generated declarations carrying UUID, expected managed type, and diagnostic name.
+- Verify generated output against the canonical entity mapping before compilation; duplicate or invalid IDs, unexpected mapping drift, and stale checked-in output now fail the build.
+
 ## Typed registry resolution foundation — 2026-07-18
 
 - Centralize lifecycle-stamped stable-UUID and exact-native-type resolution in Common with structured retryable, missing, wrong-type, ambiguous, contract, and stale-generation outcomes.

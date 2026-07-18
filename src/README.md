@@ -31,6 +31,8 @@ The classifier caches the verified registry snapshot and per-recipe results. Cal
 
 `OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only. See the [typed resolver plan](../docs/plans/typed-registry-resolver.md).
 
+Common's suite-internal `KnownEntities` is a checked-in generated declaration set for the small, explicitly selected supported-domain subset in `data/known-entities.tsv`. Each `KnownEntity<TContract>` has a suite-owned type marker plus UUID, expected managed type name, and diagnostic asset name; generated signatures never embed fragile game types. The build verifies it against the canonical 2,792-row mapping, while runtime consumers still resolve through `TypedRegistryResolver` and validate the installed game.
+
 ## Orb Mentor
 
 `OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.

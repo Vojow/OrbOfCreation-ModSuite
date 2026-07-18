@@ -15,6 +15,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Native mutation postconditions](native-mutation-verification.md) | Next beta / runtime validation pending | Shared capture-execute-capture-verify evidence is adopted by active Automata mutations and Mentor grants; ambiguous results block until explicit lifecycle recovery. |
 | [Shared lifecycle readiness](lifecycle-readiness.md) | Next beta / runtime validation pending | One Common state/generation monitor is consumed by Automata, Mentor, and Mod Config; late work can reject stale generation leases. |
 | [Typed registry resolver](typed-registry-resolver.md) | Next beta / runtime validation pending | Common centralizes exact UUID/type lookup, membership evidence, retry/permanent statuses, and lifecycle generation validity. |
+| [Generated known-entity identities](generated-known-entities.md) | Next beta / runtime validation pending | Deterministic explicit supported subset generated from canonical UUID/name/type mappings. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |
 | [Orb Mentor](mentor.md) | Beta / runtime validation pending | Equipped-source and highest-only spell policies are released; extended interactive validation remains. |

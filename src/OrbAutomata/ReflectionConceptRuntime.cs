@@ -48,7 +48,7 @@ internal sealed class NativeConceptCandidate
 
 internal sealed class ReflectionConceptRuntime : IDisposable
 {
-    internal const string ActiveConceptsUuid = "9121924d-2692-428b-9599-165224ccd899";
+    internal static readonly string ActiveConceptsUuid = KnownEntities.ActiveConcepts.Uuid.ToString("D");
 
     private readonly AlchemyGameplayDomainClassifier _domainClassifier;
     private readonly TypedRegistryResolver _registryResolver;
@@ -113,19 +113,19 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
             _recipeType = ReflectionUtil.FindLoadedType("AlchemyRecipeSO");
             _instanceType = ReflectionUtil.FindLoadedType("AlchemyInstance");
-            var activeType = ReflectionUtil.FindLoadedType("AlchemyInstanceListVariable");
-            var recipeListType = ReflectionUtil.FindLoadedType("AlchemyRecipeListVariable");
+            var activeType = ReflectionUtil.FindLoadedType(KnownEntities.ActiveConcepts.ManagedTypeName);
+            var recipeListType = ReflectionUtil.FindLoadedType(KnownEntities.ConceptRecipes.ManagedTypeName);
             if (_recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
                 return Retry("native concept types are not registered yet", out reason);
 
-            var activeId = new Guid(ActiveConceptsUuid);
+            var activeId = KnownEntities.ActiveConcepts.Uuid;
             var recipesId = AlchemyGameplayDomainClassifier.ConceptRecipesUuid;
             var activeResolution = _registryResolver.Resolve(activeId, activeType);
             if (!activeResolution.IsResolved)
-                return HandleRegistryFailure("ActiveConcepts", activeResolution, out reason);
+                return HandleRegistryFailure(KnownEntities.ActiveConcepts.DiagnosticName, activeResolution, out reason);
             var recipesResolution = _registryResolver.Resolve(recipesId, recipeListType);
             if (!recipesResolution.IsResolved)
-                return HandleRegistryFailure("ConceptRecipes", recipesResolution, out reason);
+                return HandleRegistryFailure(KnownEntities.ConceptRecipes.DiagnosticName, recipesResolution, out reason);
             var active = activeResolution.Value!;
             var recipes = recipesResolution.Value!;
             _activeConceptsResolution = activeResolution;
