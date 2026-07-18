@@ -70,9 +70,35 @@ public class SpellRecipeSO
     public string GetName() => "Spell";
 }
 
-public static class IdScriptableObject
+public class IdScriptableObject
 {
     public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+
+    private Guid _guid = Guid.NewGuid();
+
+    public Guid GetGuid() => _guid;
+
+    public Guid GetId() => _guid;
+
+    public void SetGuid(Guid guid) => _guid = guid;
+}
+
+public class AlchemyTypeSO : IdScriptableObject
+{
+}
+
+public class AlchemyRecipeSO : IdScriptableObject
+{
+    public List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
+}
+
+public class AbstractListVariable<T> : IdScriptableObject
+{
+    public List<T> value = new List<T>();
+}
+
+public class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
+{
 }
 
 public class UpgradeSO
