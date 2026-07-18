@@ -2,6 +2,7 @@
 
 ## Orb Automata 0.8.1 Beta 1 — 2026-07-18
 
+- Treat completed Structures and Upgrades as typed progression signals: Structure completion immediately schedules a bounded Upgrade-registry refresh, Upgrade completion schedules the corresponding Structure refresh, and bursts coalesce without discarding conservative cross-candidate settlement.
 - Prevent one cheap Structure or Upgrade from monopolizing a large shared action queue: when several candidates are ready, queue one independently validated level from each ranked candidate before repeating the pass.
 - Continue directly through the prepared ranking on consecutive frames instead of forcing a catalog rescan between candidates; a full queue retains the next candidate and feeds it into the first reopened slot.
 - Let a lone eligible candidate still consume all usable queue room, with native availability, current cost, reserves, maximum level, and final purchase validation before every queued level.

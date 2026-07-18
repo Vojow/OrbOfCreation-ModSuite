@@ -72,7 +72,7 @@ Automata finishes the configured repeat group for each candidate and advances th
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
-Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
+Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Completed Structures and Upgrades retain their native identity and family in that signal: Structure completion requests an immediate bounded Upgrade-registry refresh, Upgrade completion requests the matching Structure refresh, and a burst coalesces into one refresh of each affected family. Conservative cross-candidate cost and availability invalidation still settles before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
 
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 

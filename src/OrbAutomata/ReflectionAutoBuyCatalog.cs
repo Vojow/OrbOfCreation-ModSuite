@@ -8,7 +8,10 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
+internal sealed class ReflectionAutoBuyCatalog :
+    IAutoBuyCatalog,
+    IAutoBuyIncrementalCatalog,
+    IAutoBuyProgressionCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LifecycleMaintenanceInterval = TimeSpan.FromMilliseconds(250);
@@ -25,6 +28,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
+    private AutoBuyCandidateKinds _pendingRegistryRefresh;
     private bool _completionEffectsDirty;
     private bool _mutationGroupActive;
     private MethodInfo? _getRemainingQueueRoom;
@@ -46,6 +50,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
             new ReflectionAutoBuyResourceSnapshotReader(),
             OnResourceSnapshotChanged);
     }
+
+    internal AutoBuyCandidateKinds PendingRegistryRefresh => _pendingRegistryRefresh;
 
     public IEnumerable<IAutoBuyCandidate> Discover()
     {
@@ -180,6 +186,16 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     public void NotifyNativeCompletion()
     {
         _completionEffectsDirty = true;
+        _pendingRegistryRefresh |= AutoBuyCandidateKinds.All;
+    }
+
+    public void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
+    {
+        _completionEffectsDirty = true;
+        _index.InvalidateQueue(nativeIdentity, completedKind);
+        _pendingRegistryRefresh |= completedKind == AutoBuyCandidateKind.Structure
+            ? AutoBuyCandidateKinds.Upgrades
+            : AutoBuyCandidateKinds.Structures;
     }
 
     public void InvalidateLifecycle()
@@ -188,6 +204,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _deferredPurchaseResourceInvalidations.Clear();
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
+        _pendingRegistryRefresh = AutoBuyCandidateKinds.None;
         _completionEffectsDirty = false;
         _nextRegistryReconciliation = TimeSpan.Zero;
         _maintenanceCadence.Reset(Elapsed);
@@ -293,6 +310,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _mutationGroupActive = false;
         _deferredPurchaseResourceInvalidations.Clear();
         _registryReconciliation = null;
+        _pendingRegistryRefresh = AutoBuyCandidateKinds.None;
         _resourceSnapshots.Clear();
         _index.Clear();
     }
@@ -301,14 +319,36 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     private void StartRegistryReconciliationIfDue()
     {
-        if (_registryReconciliation is not null || Elapsed < _nextRegistryReconciliation)
+        if (_registryReconciliation is not null)
         {
             return;
         }
 
-        _registryReconciliation = new RegistryReconciliation(
-            ReadStaticList("StructureSO", "All"),
-            ReadStaticList("UpgradeSO", "All"));
+        if (_pendingRegistryRefresh != AutoBuyCandidateKinds.None)
+        {
+            var requested = _pendingRegistryRefresh;
+            _pendingRegistryRefresh = AutoBuyCandidateKinds.None;
+            _registryReconciliation = CreateRegistryReconciliation(requested);
+            return;
+        }
+
+        if (Elapsed < _nextRegistryReconciliation)
+        {
+            return;
+        }
+
+        _registryReconciliation = CreateRegistryReconciliation(AutoBuyCandidateKinds.All);
+    }
+
+    private static RegistryReconciliation CreateRegistryReconciliation(AutoBuyCandidateKinds kinds)
+    {
+        var structures = (kinds & AutoBuyCandidateKinds.Structures) != 0
+            ? ReadStaticList("StructureSO", "All")
+            : Array.Empty<object>();
+        var upgrades = (kinds & AutoBuyCandidateKinds.Upgrades) != 0
+            ? ReadStaticList("UpgradeSO", "All")
+            : Array.Empty<object>();
+        return new RegistryReconciliation(structures, upgrades, kinds);
     }
 
     private void ProcessRegistryReconciliationSlice()
@@ -356,7 +396,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         if (!reconciliation.CompletionStarted)
         {
             reconciliation.CompletionStarted = true;
-            _index.BeginRegistryCompletion(reconciliation.Seen);
+            _index.BeginRegistryCompletion(reconciliation.Seen, reconciliation.CompletionKind);
         }
 
         if (remaining <= 0)
@@ -377,7 +417,10 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         }
 
         _registryReconciliation = null;
-        _nextRegistryReconciliation = Elapsed + RegistryReconciliationInterval;
+        if (reconciliation.IsFull)
+        {
+            _nextRegistryReconciliation = Elapsed + RegistryReconciliationInterval;
+        }
     }
 
     private static IList ReadStaticList(string typeName, string memberName)
@@ -395,11 +438,26 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         private int _structureIndex;
         private int _upgradeIndex;
 
-        public RegistryReconciliation(IList structures, IList upgrades)
+        public RegistryReconciliation(
+            IList structures,
+            IList upgrades,
+            AutoBuyCandidateKinds kinds)
         {
             _structures = structures;
             _upgrades = upgrades;
+            Kinds = kinds;
         }
+
+        public AutoBuyCandidateKinds Kinds { get; }
+
+        public bool IsFull => Kinds == AutoBuyCandidateKinds.All;
+
+        public AutoBuyCandidateKind? CompletionKind => Kinds switch
+        {
+            AutoBuyCandidateKinds.Structures => AutoBuyCandidateKind.Structure,
+            AutoBuyCandidateKinds.Upgrades => AutoBuyCandidateKind.Upgrade,
+            _ => null,
+        };
 
         public HashSet<string> Seen { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

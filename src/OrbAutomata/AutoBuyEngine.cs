@@ -425,6 +425,25 @@ internal sealed class AutoBuyEngine : IDisposable
     public void NotifyNativeCompletion()
     {
         _incrementalCatalog?.NotifyNativeCompletion();
+        HandleNativeCompletion();
+    }
+
+    public void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
+    {
+        if (_incrementalCatalog is IAutoBuyProgressionCatalog progressionCatalog)
+        {
+            progressionCatalog.NotifyNativeCompletion(nativeIdentity, completedKind);
+        }
+        else
+        {
+            _incrementalCatalog?.NotifyNativeCompletion();
+        }
+
+        HandleNativeCompletion();
+    }
+
+    private void HandleNativeCompletion()
+    {
         if (_pendingCandidates is not null)
         {
             // A completion can change cross-candidate effects. Discard only

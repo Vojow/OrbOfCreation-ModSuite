@@ -295,6 +295,37 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    public void TargetedRegistryCompletion_DoesNotInvalidateTheOtherCandidateFamily()
+    {
+        var index = new AutoBuyCandidateIndex();
+        var structure = Candidate("structure", AutoBuyCandidateKind.Structure, "mana", available: true);
+        var upgrade = Candidate("upgrade", AutoBuyCandidateKind.Upgrade, "mana", available: true);
+        index.Reconcile(new[] { structure, upgrade });
+
+        index.BeginRegistryCompletion(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            AutoBuyCandidateKind.Upgrade);
+        index.ProcessRegistryCompletion(int.MaxValue);
+
+        Assert.True(index.TryGetState("structure", out var structureState));
+        Assert.Equal(AutoBuyCandidateLifecycleState.Available, structureState);
+        Assert.True(index.TryGetState("upgrade", out var upgradeState));
+        Assert.Equal(AutoBuyCandidateLifecycleState.Invalid, upgradeState);
+    }
+
+    [Fact]
+    public void ProgressionCompletions_CoalesceOppositeFamilyRegistryRefreshes()
+    {
+        using var catalog = new ReflectionAutoBuyCatalog(() => TimeSpan.Zero);
+
+        catalog.NotifyNativeCompletion(new object(), AutoBuyCandidateKind.Structure);
+        Assert.Equal(AutoBuyCandidateKinds.Upgrades, catalog.PendingRegistryRefresh);
+
+        catalog.NotifyNativeCompletion(new object(), AutoBuyCandidateKind.Upgrade);
+        Assert.Equal(AutoBuyCandidateKinds.All, catalog.PendingRegistryRefresh);
+    }
+
+    [Fact]
     public void RecreatedRegistryObjects_CoalesceIntoOneLifecycleEpoch()
     {
         var index = new AutoBuyCandidateIndex();
