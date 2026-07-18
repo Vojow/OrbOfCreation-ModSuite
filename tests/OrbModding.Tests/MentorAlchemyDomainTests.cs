@@ -13,6 +13,10 @@ public sealed class MentorAlchemyDomainTests : IDisposable
     public MentorAlchemyDomainTests()
     {
         IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        RegisterUnlockedView(MentorDomainUnlockGate.MasteriesEnabledUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.SpellbookUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.ArtifactWorkshopUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.AlchemyScreenUuid);
     }
 
     public void Dispose()
@@ -76,6 +80,7 @@ public sealed class MentorAlchemyDomainTests : IDisposable
         config.Mode.Value = MentorOperationMode.Active;
         config.AlchemyEnabled.Value = true;
         using var runtime = new MentorRuntime(config, new ManualLogSource(), alchemyDomainGate: gate);
+        runtime.LateTick();
 
         runtime.ObserveAlchemy(concept, new global::BigDouble(5, 0));
 
@@ -96,6 +101,7 @@ public sealed class MentorAlchemyDomainTests : IDisposable
         config.Mode.Value = MentorOperationMode.Active;
         config.AlchemyEnabled.Value = true;
         using var runtime = new MentorRuntime(config, new ManualLogSource(), alchemyDomainGate: gate);
+        runtime.LateTick();
 
         runtime.ObserveAlchemy(ordinary, new global::BigDouble(5, 0));
 
@@ -117,13 +123,14 @@ public sealed class MentorAlchemyDomainTests : IDisposable
         config.Mode.Value = MentorOperationMode.Active;
         config.AlchemyEnabled.Value = true;
         using var runtime = new MentorRuntime(config, new ManualLogSource(), alchemyDomainGate: gate);
+        runtime.LateTick();
 
         var classification = gate.ClassifyAndCache(unknown);
         runtime.ObserveAlchemy(unknown, new global::BigDouble(1, 0));
 
         Assert.Equal(AlchemyGameplayDomain.Unknown, classification.Domain);
         Assert.Contains("no audited ordinary alchemy", classification.Reason, StringComparison.Ordinal);
-        Assert.Equal("Blocked", runtime.CurrentMentor(MentorDomain.Alchemy));
+        Assert.StartsWith("Blocked: Alchemy XP capture could not prove an ordinary-alchemy recipe", runtime.CurrentMentor(MentorDomain.Alchemy));
         Assert.Equal(0, runtime.Diagnostics.CapturedEvents);
     }
 
@@ -166,5 +173,15 @@ public sealed class MentorAlchemyDomainTests : IDisposable
         registry.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         registry.value.AddRange(recipes);
         IdScriptableObject.RuntimeLookup[AlchemyGameplayDomainClassifier.ConceptRecipesUuid] = registry;
+    }
+
+    private static void RegisterUnlockedView(string uuid)
+    {
+        var view = new ViewSO
+        {
+            uuid = new Guid(uuid),
+            available = true,
+        };
+        IdScriptableObject.RuntimeLookup[view.uuid] = view;
     }
 }
