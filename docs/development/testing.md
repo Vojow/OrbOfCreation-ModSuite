@@ -154,6 +154,8 @@ dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.cspr
 
 That suite verifies the audited hashes and exact method, field, inheritance, overload, parameter, and return-type contracts used by Automata, Mentor, Mod Config, and their shared library. It reads PE metadata without launching Unity or loading the game assemblies into the test process. If `OOC_GAME_DIR` is absent, all installed-game tests report `SKIP` instead of pretending compatibility passed.
 
+The same project always runs portable validation of [`data/native-contracts.json`](../../data/native-contracts.json) and the bounded native-source audit. CI therefore fails when a supported gameplay reflection or Harmony source introduces an undeclared literal target, even though GitHub runners do not have the proprietary game assemblies. Framework-only and UI-plumbing reflection is exempted by exact source path with a reason in the manifest. See the [native contract manifest workflow](native-contract-manifest.md).
+
 Run both layers and all real-reference plugin builds with:
 
 ```powershell

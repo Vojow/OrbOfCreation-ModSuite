@@ -27,6 +27,9 @@ jobs:
       - name: Run game-independent tests
         run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true
 
+      - name: Audit native contract manifest and reflection declarations
+        run: dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj --configuration Release -p:UseGameStubs=true
+
   headless-behavior:
     name: Headless behavior and performance
     runs-on: windows-latest

@@ -59,7 +59,8 @@ try {
         Write-Host 'OOC_GAME_DIR is not set; verifying that installed-game contracts skip cleanly...'
         Invoke-DotNet @(
             'test',
-            'tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj'
+            'tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj',
+            '-p:UseGameStubs=true'
         )
         Write-Warning 'Installed-game contract tests and real-reference builds were skipped. Pass -GameRoot on a game computer.'
         return
