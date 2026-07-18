@@ -1,5 +1,11 @@
 # Changelog
 
+## Orb Mentor 0.3.1 Beta 1 — 2026-07-18
+
+- Gate spell, artifact, and alchemy Mentor work independently on the exact native mastery and domain progression views while preserving the user's configured switches and percentages.
+- Report locked progression as a non-error `M WAIT` state, activate within the bounded polling interval after unlock, and cancel stale catalog, relationship, plan, capture, and grant work across lifecycle transitions.
+- Keep locked domains out of catalog discovery, mastery ranking, recipient planning, XP capture, equipped-spell inspection, and native grants; isolate a broken unlock contract to the affected domain.
+
 ## Orb Modding Common 0.3.1 Beta 1 — 2026-07-18
 
 - Add one fail-closed, lifecycle-scoped classifier for ordinary Alchemy and Scholar Concepts using exact native types, stable UUIDs, the authoritative `ConceptRecipes` snapshot, and audited type identities.

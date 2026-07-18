@@ -110,19 +110,20 @@ public class SpellRecipeSO
     }
 }
 
-public class IdScriptableObject
+public class IdScriptableObject : UnityEngine.ScriptableObject
 {
     public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
-
-    private Guid _guid = Guid.NewGuid();
-
+    public Guid uuid = Guid.NewGuid();
     public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+    public Guid GetGuid() => uuid;
+    public Guid GetId() => uuid;
+    public void SetGuid(Guid guid) => uuid = guid;
+}
 
-    public Guid GetGuid() => _guid;
-
-    public Guid GetId() => _guid;
-
-    public void SetGuid(Guid guid) => _guid = guid;
+public class ViewSO : IdScriptableObject
+{
+    public bool available;
+    public bool IsAvailable() => available;
 }
 
 public sealed class AlchemyTypeSO : IdScriptableObject
@@ -141,7 +142,7 @@ public sealed class AlchemyTypeSO : IdScriptableObject
         }
     }
 
-    public string uuid;
+    public new string uuid;
 
     public new void SetGuid(Guid guid)
     {
@@ -170,8 +171,8 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
         }
     }
 
-    public string uuid;
-    public string name = "Alchemy";
+    public new string uuid;
+    public new string name = "Alchemy";
     public bool discovered = true;
     public int masteryLevel;
     public BigDouble masteryXp;

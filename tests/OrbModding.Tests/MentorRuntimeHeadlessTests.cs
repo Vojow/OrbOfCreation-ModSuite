@@ -14,6 +14,10 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         EquipmentSO.All.Clear();
         AlchemyRecipeSO.All.Clear();
         IdScriptableObject.RuntimeLookup.Clear();
+        RegisterUnlockedView(MentorDomainUnlockGate.MasteriesEnabledUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.SpellbookUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.ArtifactWorkshopUuid);
+        RegisterUnlockedView(MentorDomainUnlockGate.AlchemyScreenUuid);
         SpellManager.instance = new SpellManager();
     }
 
@@ -149,6 +153,16 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         config.OperationsPerFrame.Value = 8;
         config.CpuBudgetMilliseconds.Value = 1;
         return new MentorRuntime(config, new ManualLogSource());
+    }
+
+    private static void RegisterUnlockedView(string uuid)
+    {
+        var view = new ViewSO
+        {
+            uuid = new Guid(uuid),
+            available = true,
+        };
+        IdScriptableObject.RuntimeLookup.Add(view.uuid, view);
     }
 
     private static SpellRecipeSO RegisterSpell(int mastery)
