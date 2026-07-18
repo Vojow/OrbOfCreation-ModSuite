@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.1` fixes queue-filling Auto Buy so multiple affordable Structures and Upgrades share the prepared queue pass instead of one candidate monopolizing it, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.2` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -22,6 +22,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - All three mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - When several Structures or Upgrades are eligible, each receives one live-validated level per ranked pass; a lone candidate may fill all usable queue room.
+- Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.
 - Cost/quality Structure priority is off by default and can be enabled with `PrioritizeCostAndQualityStructures`.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
@@ -60,7 +61,7 @@ Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `S
 
 ### Queue scheduling
 
-The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A full queue is polled at 10 Hz and retains the next candidate for the first newly available slot. After one pass, reranking begins on the next frame while existing native actions continue.
+The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A native completion wakes the prepared next candidate immediately; the full queue is polled at 10 Hz only as a fallback when no completion signal arrives. After one pass, reranking begins on the next frame while existing native actions continue.
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
@@ -74,6 +75,8 @@ Active membership and ranked recommendation views use reused buffers and determi
 
 Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
 
+Rapid completion signals are generation-coalesced while a bounded lifecycle settlement is already running. They do not restart its cursor or an in-progress candidate scan; one follow-up generation retains eventual broad effect discovery. A recommendation produced across that window is advisory only and must still pass a fresh authoritative candidate and queue validation before its native mutation.
+
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 
 Structures must pass native availability before Automata reads costs or calls the purchase contract. The supported native `UpgradeSO.CanPurchase()` contract combines affordability with lifecycle, requirements, and queue admission, so Automata calls it first and then decodes the exact current cost before classifying a false result. A proven reserve or affordability failure remains subscribed to its resource dependencies; a cost-safe false result is parked outside high-frequency quantity updates for bounded lifecycle or completion retry. Native bandwidth costs are explicitly identified through `ResourceSO.IsBandwidthResource()` and remain tracked because their admission uses missing usage rather than ordinary quantity.
@@ -81,6 +84,8 @@ Structures must pass native availability before Automata reads costs or calls th
 Scan-cap deferrals are counted separately from evaluated rejections, transitions back to ready are counted explicitly, and repeated native mutation failures are rate-limited per candidate while aggregate attempt/failure totals remain visible. Reflection metadata for queue room, queued-level verification, and the global multi-buy contract is cached only after exact signature validation. The live multi-buy variable itself is fetched again for every Upgrade level so save or lifecycle replacement cannot leave a stale native reference.
 
 During a prepared ranked pass, each candidate refreshes its own cost immediately before its level. Shared resource-dependent invalidation is coalesced while later candidates are still live-revalidated against current resources and native state. A failed admission skips that candidate for the current pass; an ambiguous native mutation failure ends the pass so dirty state can settle safely. If the queue fills, the next ranked candidate remains prepared across the wait and is live-revalidated when a slot reopens.
+
+Queue capacity is refreshed after that live candidate/cost/reserve validation and immediately before every queued mutation. The supported native adapter reads total capacity from `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()` and live room from `ActionManager.GetRemainingRoom()`. Negative values, remaining room greater than capacity, missing native objects, or an invalid policy input reject the snapshot and submit no purchase. The snapshot derives occupancy and subtracts `LeaveQueueSlots` exactly once before applying the current batch usage limit.
 
 ## Auto Cast
 

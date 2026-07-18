@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -543,7 +544,7 @@ public sealed class AutoBuyDirtyResourceTests
         var second = new EngineCandidate("second", 2.0, AutoBuyCandidateKind.Structure);
         var catalog = new IncrementalCatalog(first, second)
         {
-            QueueRooms = new Queue<int>(new[] { 2, 2, 1, 2, 2 }),
+            QueueRooms = new Queue<int>(new[] { 2, 2, 2, 1, 2, 2, 2 }),
         };
         var config = ActiveConfig(string.Empty);
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
@@ -1129,6 +1130,88 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionResourceSnapshot_ReadsTheAuditedNativeResourceContract()
+    {
+        var native = new ResourceSO
+        {
+            uuid = "mana",
+            Quantity = new TestBigDouble(4.0, 2),
+            TrueQuantity = new TestBigDouble(5.0, 2),
+            AttributeCostMod = new TestBigDouble(2.0, -1),
+            Available = true,
+            Bandwidth = true,
+            quality = new ValueModifierRecord(new TestBigDouble(1.25, 2)),
+            maxQuantity = new ValueModifierRecord(new TestBigDouble(2.0, 3)),
+        };
+        var definition = new AutoBuyResourceDefinition(
+            "mana", "Mana", native, new BigAmount(1.0, 1));
+        var reader = new ReflectionAutoBuyResourceSnapshotReader();
+
+        Assert.True(reader.TryRead(definition, 7, out var snapshot));
+        Assert.Equal(4.0, snapshot.StoredQuantity.Mantissa, 12);
+        Assert.Equal(2, snapshot.StoredQuantity.Exponent);
+        Assert.Equal(5.0, snapshot.TrueQuantity.Mantissa, 12);
+        Assert.Equal(1.25, snapshot.Quality.Mantissa, 12);
+        Assert.Equal(2.0, snapshot.EffectiveAttributeCost.Mantissa, 12);
+        Assert.Equal(-1, snapshot.EffectiveAttributeCost.Exponent);
+        Assert.Equal(2.0, snapshot.Capacity!.Value.Mantissa, 12);
+        Assert.Equal(3, snapshot.Capacity.Value.Exponent);
+        Assert.True(snapshot.IsAvailable);
+        Assert.True(snapshot.IsBandwidth);
+        Assert.Equal(7, snapshot.Epoch);
+
+        Assert.False(reader.TryRead(
+            new AutoBuyResourceDefinition("other", "Other", native, new BigAmount(1.0, 0)),
+            8,
+            out _));
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void ReflectionStructureCandidate_DecodesCostsValidatesLifecycleAndQueuesExactlyOne()
+    {
+        var mana = new ResourceSO
+        {
+            uuid = "mana",
+            TrueQuantity = new TestBigDouble(5.0, 2),
+        };
+        var native = new StructureSO
+        {
+            uuid = "structure",
+            PurchaseLevel = 3,
+            QueuedQuantity = 2,
+        };
+        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(2.0, 1)));
+        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 1)));
+        var snapshots = new AutoBuyResourceSnapshotCache(
+            new ReflectionAutoBuyResourceSnapshotReader(),
+            (_, _) => { });
+        snapshots.BeginLazyEpoch();
+        var candidate = new ReflectionAutoBuyCandidate(
+            native,
+            AutoBuyCandidateKind.Structure,
+            snapshots);
+
+        var costs = candidate.GetCosts();
+        var cost = Assert.Single(costs);
+        Assert.True(candidate.HasResolvedCosts);
+        Assert.Equal("mana", cost.ResourceId);
+        Assert.Equal(5.0, cost.Cost.Mantissa, 12);
+        Assert.Equal(1, cost.Cost.Exponent);
+        Assert.Equal(5.0, cost.CurrentQuantity.Mantissa, 12);
+        Assert.Equal(new[] { "mana" }, candidate.ResourceDependencies);
+
+        Assert.True(candidate.TryGetLifecycleEvidence(out var evidence, out var lifecycleReason), lifecycleReason);
+        Assert.True(evidence.IsAvailable);
+        Assert.Equal(3, evidence.CurrentLevel);
+        Assert.Equal(2, evidence.QueuedLevels);
+
+        Assert.True(candidate.TryPurchaseOne(out var purchaseReason), purchaseReason);
+        Assert.Equal(3, native.QueuedQuantity);
+    }
+
+    [Fact]
     public void UnchangedRegistryIdentity_ReusesExistingCandidateWrapper()
     {
         var index = new AutoBuyCandidateIndex();
@@ -1496,12 +1579,21 @@ public sealed class AutoBuyDirtyResourceTests
         {
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = QueueRooms is { Count: > 0 }
+            var remainingRoom = QueueRooms is { Count: > 0 }
                 ? QueueRooms.Dequeue()
                 : RemainingRoom;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                1024,
+                remainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -1588,10 +1680,18 @@ public sealed class AutoBuyDirtyResourceTests
 
         public void InvalidateLifecycle() => Index.BeginLifecycleEpoch();
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = 128;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                128,
+                128,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -1756,9 +1856,47 @@ internal class ResourceSO
 {
     public string uuid = string.Empty;
 
+    public TestBigDouble Quantity { get; set; } = new TestBigDouble(4.0, 2);
+
+    public TestBigDouble TrueQuantity { get; set; } = new TestBigDouble(5.0, 2);
+
+    public TestBigDouble AttributeCostMod { get; set; } = new TestBigDouble(1.0, 0);
+
+    public bool Available { get; set; } = true;
+
+    public bool Bandwidth { get; set; }
+
+    public ValueModifierRecord quality = new ValueModifierRecord(new TestBigDouble(1.0, 2));
+
+    public ValueModifierRecord maxQuantity = new ValueModifierRecord(new TestBigDouble(1.0, 3));
+
     public string GetGuid() => uuid;
 
     public string GetName() => uuid;
+
+    public TestBigDouble GetQuantity() => Quantity;
+
+    public TestBigDouble GetTrueQuantity() => TrueQuantity;
+
+    public TestBigDouble GetAttributeCostMod() => AttributeCostMod;
+
+    public bool IsAvailable() => Available;
+
+    public bool IsBandwidthResource() => Bandwidth;
+
+    public TestBigDouble GetTrueAmount(TestBigDouble amount) => amount;
+}
+
+internal sealed class ValueModifierRecord
+{
+    private readonly TestBigDouble _value;
+
+    public ValueModifierRecord(TestBigDouble value)
+    {
+        _value = value;
+    }
+
+    public TestBigDouble GetValue() => _value;
 }
 
 internal readonly struct TestBigDouble
@@ -1778,13 +1916,21 @@ internal class StructureSO
 {
     public string uuid = string.Empty;
 
+    public bool Available { get; set; } = true;
+
+    public bool Purchasable { get; set; } = true;
+
+    public int PurchaseLevel { get; set; }
+
+    public int QueuedQuantity { get; set; }
+
     public ResourceCostList Cost { get; set; } = new ResourceCostList();
 
     public int GetPurchaseCostCalls { get; private set; }
 
-    public bool IsAvailable() => true;
+    public bool IsAvailable() => Available;
 
-    public bool CanPurchase() => true;
+    public bool CanPurchase() => Purchasable;
 
     public ResourceCostList GetPurchaseCost()
     {
@@ -1794,9 +1940,10 @@ internal class StructureSO
 
     public void Purchase(bool forceOne)
     {
+        if (forceOne && Purchasable) QueuedQuantity++;
     }
 
-    public int GetPurchaseLevel() => 0;
+    public int GetPurchaseLevel() => PurchaseLevel;
 
-    public int GetQueuedQuantity() => 0;
+    public int GetQueuedQuantity() => QueuedQuantity;
 }

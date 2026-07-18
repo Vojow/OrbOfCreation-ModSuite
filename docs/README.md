@@ -16,6 +16,7 @@ Choose the path that matches what you are trying to do.
 
 - [Development setup](development/setup.md)
 - [Testing and compatibility](development/testing.md)
+- [Headless E2E simulation](development/headless-e2e.md)
 - [Runtime validation protocol](development/runtime-validation.md)
 - [Orb Mentor interactive runtime checklist](development/mentor-runtime-validation.md)
 - [Release process](development/releases.md)

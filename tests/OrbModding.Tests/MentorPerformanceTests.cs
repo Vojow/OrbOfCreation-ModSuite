@@ -565,6 +565,7 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    [Trait("Category", "PerformanceSimulation")]
     public void SustainedInvalidationKeepsEvidenceBoundedAndTransfersExactXpPerDomain()
     {
         const int evidenceCapacity = 8;
@@ -628,6 +629,7 @@ public sealed class MentorPerformanceTests
     }
 
     [Fact]
+    [Trait("Category", "PerformanceSimulation")]
     public void SustainedRequestsDoNotRestartAnActiveRefreshPass()
     {
         const int passSteps = 31;

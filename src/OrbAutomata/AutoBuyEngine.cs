@@ -66,6 +66,9 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _successfulPurchasesThisSession;
     private long _nativePurchaseAttempts;
     private long _nativePurchaseFailures;
+    // Process-monotonic so a lifecycle rebuild cannot alias a completion
+    // generation cached by a reused native candidate wrapper.
+    private long _nativeCompletionGeneration;
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
     private bool _nativeStateSignalPending;
@@ -323,8 +326,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private void PollPendingQueueRoom()
     {
         _secondsUntilQueuePoll = QueuePollIntervalSeconds;
-        var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
-        if (_catalog.TryGetRemainingQueueRoom(out var room) && room > queueReserve)
+        if (TryCaptureQueueCapacity(out var queueCapacity) &&
+            queueCapacity.UsableAutomationRoom > 0)
         {
             _pendingWaitingForQueue = false;
         }
@@ -424,17 +427,24 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void NotifyNativeCompletion()
     {
+        _nativeCompletionGeneration++;
         _incrementalCatalog?.NotifyNativeCompletion();
-        if (_pendingCandidates is not null)
+        if (_pendingPurchaseRecommendations is not null && _pendingWaitingForQueue)
         {
-            // A completion can change cross-candidate effects. Discard only
-            // unfinished read work; a prepared repeat group remains safe
-            // because every level is revalidated immediately before mutation.
-            ResetPendingScan();
+            // A native completion is exact evidence that queue occupancy
+            // decreased. Resume the prepared fast lane immediately; its live
+            // queue-room check still fails closed if another action consumed
+            // the reopened slot before this engine tick.
+            _pendingWaitingForQueue = false;
+            _secondsUntilQueuePoll = 0.0f;
         }
 
-        if (_pendingPurchaseRecommendations is null)
+        if (_pendingCandidates is null && _pendingPurchaseRecommendations is null)
         {
+            // Completion effects are coalesced by the catalog. Do not restart
+            // a CPU-sliced scan on every native completion: its eventual
+            // recommendation is revalidated from authoritative live state
+            // before mutation, and the following scan settles broad effects.
             _secondsUntilEvaluation = 0.0f;
         }
     }
@@ -486,7 +496,7 @@ internal sealed class AutoBuyEngine : IDisposable
             return true;
         }
 
-        if (!_catalog.TryGetRemainingQueueRoom(out _))
+        if (!TryCaptureQueueCapacity(out _))
         {
             if (!_queueWaitingLogged)
             {
@@ -803,7 +813,6 @@ internal sealed class AutoBuyEngine : IDisposable
             ? int.MaxValue
             : Math.Max(1, _config.MaxPurchasesPerBatch.Value);
         var targetLabel = maximumPurchases == int.MaxValue ? "queue" : maximumPurchases.ToString(CultureInfo.InvariantCulture);
-        var queueReserve = Math.Max(0, _config.LeaveQueueSlots.Value);
         var cpuBudget = EffectiveCpuBudget(_config.CpuBudgetMilliseconds.Value);
         var stopwatch = Stopwatch.StartNew();
         var stoppedByQueue = false;
@@ -811,13 +820,35 @@ internal sealed class AutoBuyEngine : IDisposable
 
         while (_pendingPurchaseIndex < recommendations.Count && _pendingBatchPurchased < maximumPurchases)
         {
-            if (!_catalog.TryGetRemainingQueueRoom(out var room) || room <= queueReserve)
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out var queueCapacity) ||
+                queueCapacity.UsableAutomationRoom <= 0)
             {
                 stoppedByQueue = true;
                 break;
             }
 
             var recommendation = recommendations[_pendingPurchaseIndex];
+            if (_nativeCompletionGeneration > 0 &&
+                _catalog is IAutoBuyCompletionRevalidationCatalog completionCatalog &&
+                !completionCatalog.TryRefreshCandidateAfterCompletion(
+                    recommendation.Candidate.Source,
+                    _nativeCompletionGeneration,
+                    out var completionRefreshReason))
+            {
+                if (ShouldLogNativeFailure(recommendation.Candidate.Uuid))
+                {
+                    _log.LogAutomataWarning(
+                        $"Auto Buy deferred {recommendation.Candidate.DisplayName} " +
+                        $"({recommendation.Candidate.Uuid}) because completion-state refresh failed: " +
+                        completionRefreshReason);
+                }
+
+                AdvancePurchaseCandidate();
+                _pendingPurchaseIndex = recommendations.Count;
+                _secondsUntilEvaluation = 0.0f;
+                break;
+            }
+
             var revalidated = EvaluateCandidate(
                 recommendation.Candidate.Source,
                 out var suppressResourceTracking);
@@ -866,11 +897,21 @@ internal sealed class AutoBuyEngine : IDisposable
                 continue;
             }
 
+            // Availability, costs, and reserves can invoke native code. Read
+            // the complete authoritative queue state again after those checks
+            // so every queued mutation receives an immediately fresh snapshot.
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out queueCapacity) ||
+                queueCapacity.UsableAutomationRoom <= 0)
+            {
+                stoppedByQueue = true;
+                break;
+            }
+
             if (_pendingCandidateRepeatLimit <= 0)
             {
                 _pendingCandidateRepeatLimit = GetCandidateRepeatLimit(
                     recommendation,
-                    Math.Max(1, room - queueReserve),
+                    queueCapacity.UsableAutomationRoom,
                     recommendations.Count);
             }
 
@@ -915,8 +956,10 @@ internal sealed class AutoBuyEngine : IDisposable
                         _pendingPurchaseIndex < recommendations.Count &&
                         _pendingBatchPurchased < maximumPurchases)
                     {
-                        if (!_catalog.TryGetRemainingQueueRoom(out var remainingRoom) ||
-                            remainingRoom <= queueReserve)
+                        if (!TryCaptureQueueCapacity(
+                                RemainingAutomationUsage(maximumPurchases),
+                                out var refreshedQueueCapacity) ||
+                            refreshedQueueCapacity.UsableAutomationRoom <= 0)
                         {
                             // Keep the already ranked next candidate prepared
                             // while the native queue is full. It will still be
@@ -1106,6 +1149,31 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private bool IsAffordableRepeatGroup =>
         !_config.RespectActionMultiplier.Value && _config.RepeatWhileAffordable.Value;
+
+    private bool TryCaptureQueueCapacity(out QueueCapacitySnapshot snapshot)
+    {
+        var automationUsageLimit = _config.AutoBuyBatchSizing.Value == AutoBuyBatchSizingMode.FillAvailableQueue
+            ? int.MaxValue
+            : Math.Max(1, _config.MaxPurchasesPerBatch.Value);
+        return TryCaptureQueueCapacity(RemainingAutomationUsage(automationUsageLimit), out snapshot);
+    }
+
+    private bool TryCaptureQueueCapacity(
+        int automationUsageLimit,
+        out QueueCapacitySnapshot snapshot)
+    {
+        return _catalog.TryCaptureQueueCapacity(
+            automationUsageLimit,
+            _config.LeaveQueueSlots.Value,
+            out snapshot);
+    }
+
+    private int RemainingAutomationUsage(int automationUsageLimit)
+    {
+        return automationUsageLimit == int.MaxValue
+            ? int.MaxValue
+            : Math.Max(0, automationUsageLimit - _pendingBatchPurchased);
+    }
 
     private static bool IsPolicyExcluded(AutoBuyDecision decision)
     {

@@ -85,6 +85,9 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
+        Assert.Equal("ActionManager", assembly.GetFieldType("ActionManager", "instance"));
+        Assert.Equal("ActionableListVariable", assembly.GetFieldType("ActionManager", "actionableItems"));
+        Assert.Equal("IntVariable", assembly.GetFieldType("ActionableListVariable", "maxQueuedItems"));
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
         AssertMethod(assembly, "Player", "GetBulkDevelopment", true, "IntVariable");
@@ -228,10 +231,13 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "AlchemyRecipeSO", "GetExperienceLevel", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
+        AssertMethod(assembly, "AlchemyRecipeSO", "Discover", false, "System.Void");
+        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
 
         AssertMethod(assembly, "AlchemyInstanceListVariable", "CanAddInstance", false, "System.Boolean", "AlchemyRecipeSO");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
+        AssertMethod(assembly, "AlchemyInstanceListVariable", "RebuildCounts", false, "System.Void");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "SetupMaxSlotsValue", false, "System.Void");
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "quantity"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "queuedQuantity"));

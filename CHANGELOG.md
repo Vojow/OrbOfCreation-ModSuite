@@ -5,11 +5,21 @@
 - Add one fail-closed, lifecycle-scoped classifier for ordinary Alchemy and Scholar Concepts using exact native types, stable UUIDs, the authoritative `ConceptRecipes` snapshot, and audited type identities.
 - Make Auto Concept consume the shared classifier for catalog admission and final add/remove identity validation, removing its duplicated Scholar-type boundary.
 
+## Orb Automata 0.8.2 Beta 1 — 2026-07-18
+
+- Keep queue feeding responsive during rapid native completions: finish the current bounded completion-settlement generation, coalesce intervening signals into one follow-up, preserve CPU-sliced scan progress, and wake a prepared candidate immediately when a completion reopens a slot.
+- Retain the 10 Hz full-queue poll only as a fallback when no completion signal arrives; every resumed candidate still refreshes native availability, costs, resources, reserves, limits, and queue room before mutation.
+- Promote the deterministic four-frame completion storm to an active performance regression gate covering near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
+
 ## Orb Automata 0.8.1 Beta 1 — 2026-07-18
 
+- Add a deterministic headless E2E harness that drives the production Auto Buy engine through simulated native queue, economy, failure, and save/load boundaries; computer-controlled real-game checks remain UAT.
+- Add operation-count performance simulations for large candidate sets and shared-queue saturation, plus a documented completion-storm target for the remaining scan-restart regression.
 - Prevent one cheap Structure or Upgrade from monopolizing a large shared action queue: when several candidates are ready, queue one independently validated level from each ranked candidate before repeating the pass.
 - Continue directly through the prepared ranking on consecutive frames instead of forcing a catalog rescan between candidates; a full queue retains the next candidate and feeds it into the first reopened slot.
 - Let a lone eligible candidate still consume all usable queue room, with native availability, current cost, reserves, maximum level, and final purchase validation before every queued level.
+- Centralize queue allocation in `OrbModding.Common.QueueCapacitySnapshot`, keeping authoritative native capacity/occupancy, live remaining room, Auto Buy's usage limit, and the manual reservation distinct and provenance-tagged.
+- Refresh the complete queue-capacity snapshot after live cost/reserve validation immediately before every Auto Buy mutation; contradictory or missing native values now fail closed.
 - Add portable regressions for a 200-level lone-candidate fill and fair Structure/Upgrade handoff across multiple ranked candidates without the idle evaluation interval.
 - Validate the `0.8.1` build on a disposable high-resource Slot 3: the visible shared queue rose from `14/304` to `174/304` after five seconds and `302/304` after ten, while 1,797 successful purchases covered 166 distinct candidates with zero native failures.
 
