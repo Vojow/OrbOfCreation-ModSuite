@@ -63,7 +63,7 @@ P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate index
 
 The portable suite also includes a deterministic headless Auto Buy simulation. It drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its active performance baseline checks queue saturation, candidate handoff, operation-count budgets, and idle frames without depending on computer control or machine-speed wall-clock thresholds. Real-game computer control remains a UAT tool.
 
-An aggressive completion-storm target is recorded separately and intentionally skipped: repeated completion signals can currently restart a CPU-sliced scan before it settles, amplifying candidate evaluation and allowing queue depth to fall. This is a known P3 follow-up, not an accepted passing baseline. The target becomes an active release gate when the engine preserves resumable scan progress across those coalesced completion invalidations.
+The aggressive completion-storm scenario is an active deterministic gate. Completion signals are generation-coalesced while the current bounded settlement pass finishes, CPU-sliced scan progress is preserved, and an exact completion wakes the prepared queue-feeding path without waiting for the 10 Hz fallback poll. The gate constrains near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
 
 ## Candidate lifecycle model
 

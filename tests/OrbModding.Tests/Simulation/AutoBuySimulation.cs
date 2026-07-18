@@ -57,7 +57,10 @@ internal sealed class AutoBuySimulation : IDisposable
 
     public SimulationMetrics Metrics { get; } = new SimulationMetrics();
 
-    public void Step(int completionsBeforeTick = 0, float deltaSeconds = 1.0f / 60.0f)
+    public void Step(
+        int completionsBeforeTick = 0,
+        float deltaSeconds = 1.0f / 60.0f,
+        Action<SimulatedAutoBuyWorld>? afterCompletions = null)
     {
         ThrowIfDisposed();
         _frame++;
@@ -67,6 +70,8 @@ internal sealed class AutoBuySimulation : IDisposable
         {
             _engine.NotifyNativeCompletion();
         }
+
+        afterCompletions?.Invoke(World);
 
         var purchasesBefore = World.TotalSubmitted;
         var evaluationsBefore = World.TotalCandidateEvaluations;
@@ -107,7 +112,7 @@ internal sealed class AutoBuySimulation : IDisposable
         return condition(World);
     }
 
-    public void ReloadLifecycle(bool clearQueue = true)
+    public void ReloadLifecycle(bool clearQueue = true, bool replaceNativeIdentities = true)
     {
         ThrowIfDisposed();
         if (clearQueue)
@@ -115,7 +120,11 @@ internal sealed class AutoBuySimulation : IDisposable
             World.ClearQueueForReload();
         }
 
-        World.ReplaceNativeIdentities();
+        if (replaceNativeIdentities)
+        {
+            World.ReplaceNativeIdentities();
+        }
+
         _engine.InvalidateLifecycle();
     }
 
@@ -294,6 +303,9 @@ internal sealed class SimulatedAutoBuyCandidate :
     private readonly SimulatedAutoBuyWorld _world;
     private readonly AutoBuyCandidateSnapshot _snapshot;
     private object _nativeIdentity = new object();
+    private double _observedCost;
+    private bool _costDirty = true;
+    private long _completionRefreshGeneration = -1;
 
     public SimulatedAutoBuyCandidate(SimulatedAutoBuyWorld world, SimulatedCandidateSpec spec)
     {
@@ -337,7 +349,10 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public int DirtyMarks { get; private set; }
 
-    public double CurrentCost => BaseCost * Math.Pow(CostScaling, CurrentLevel + QueuedLevels);
+    public double CostMultiplier { get; set; } = 1.0;
+
+    public double CurrentCost =>
+        BaseCost * CostMultiplier * Math.Pow(CostScaling, CurrentLevel + QueuedLevels);
 
     public object NativeIdentity => _nativeIdentity;
 
@@ -362,12 +377,18 @@ internal sealed class SimulatedAutoBuyCandidate :
     public IReadOnlyList<ResourceAdmissionCost> GetCosts()
     {
         CostReads++;
+        if (_costDirty)
+        {
+            _observedCost = CurrentCost;
+            _costDirty = false;
+        }
+
         return new[]
         {
             new ResourceAdmissionCost(
                 "resource",
                 "Resource",
-                new BigAmount(CurrentCost, 0),
+                new BigAmount(_observedCost, 0),
                 new BigAmount(_world.ResourceQuantity, 0)),
         };
     }
@@ -421,10 +442,27 @@ internal sealed class SimulatedAutoBuyCandidate :
         {
             DirtyMarks++;
         }
+
+        if ((reasons & AutoBuyDirtyReason.CostDirty) != 0)
+        {
+            _costDirty = true;
+        }
     }
 
     public void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence)
     {
+    }
+
+    internal bool TryRefreshAfterCompletion(long completionGeneration, out string reason)
+    {
+        if (_completionRefreshGeneration != completionGeneration)
+        {
+            _completionRefreshGeneration = completionGeneration;
+            _costDirty = true;
+        }
+
+        reason = string.Empty;
+        return true;
     }
 
     internal bool CouldPurchaseNow()
@@ -453,12 +491,16 @@ internal sealed class SimulatedAutoBuyCandidate :
     internal void ReplaceNativeIdentity() => _nativeIdentity = new object();
 }
 
-internal sealed class SimulatedAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
+internal sealed class SimulatedAutoBuyCatalog :
+    IAutoBuyCatalog,
+    IAutoBuyIncrementalCatalog,
+    IAutoBuyCompletionRevalidationCatalog
 {
     private readonly SimulatedAutoBuyWorld _world;
     private readonly HashSet<string> _deferredResourceInvalidations =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    private bool _completionEffectsDirty;
+    private readonly AutoBuyCompletionSettlementGate _completionSettlement =
+        new AutoBuyCompletionSettlementGate();
     private bool _mutationGroupActive;
 
     public SimulatedAutoBuyCatalog(SimulatedAutoBuyWorld world)
@@ -484,9 +526,8 @@ internal sealed class SimulatedAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncreme
         EvaluationBatches++;
         CompleteMutationGroup();
         FlushDeferredInvalidations();
-        if (_completionEffectsDirty)
+        if (_completionSettlement.TryBegin(Index.SettlementValidationPending))
         {
-            _completionEffectsDirty = false;
             Index.InvalidateCompletionEffects();
         }
 
@@ -555,13 +596,27 @@ internal sealed class SimulatedAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncreme
     public void NotifyNativeCompletion()
     {
         CompletionSignals++;
-        _completionEffectsDirty = true;
+        _completionSettlement.Notify();
+    }
+
+    public bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason)
+    {
+        if (candidate is SimulatedAutoBuyCandidate simulatedCandidate)
+        {
+            return simulatedCandidate.TryRefreshAfterCompletion(completionGeneration, out reason);
+        }
+
+        reason = "candidate is not part of the simulated native world";
+        return false;
     }
 
     public void InvalidateLifecycle()
     {
         _mutationGroupActive = false;
-        _completionEffectsDirty = false;
+        _completionSettlement.Clear();
         _deferredResourceInvalidations.Clear();
         RebuildIndex();
     }

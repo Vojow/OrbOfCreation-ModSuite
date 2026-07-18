@@ -50,13 +50,7 @@ Run the active deterministic performance baseline:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 ```
 
-Inspect performance targets that are recorded but not yet release gates:
-
-```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceTarget"
-```
-
-A skipped target is a documented engineering backlog item, not passing evidence. Remove `Skip` only when the production engine meets the assertions without weakening their workload or budgets.
+Performance targets remain skipped only while they document engineering backlog rather than released behavior. Promote a target to `PerformanceSimulation` only when the production engine meets its assertions without weakening the workload or budgets.
 
 ## Determinism and performance budgets
 
