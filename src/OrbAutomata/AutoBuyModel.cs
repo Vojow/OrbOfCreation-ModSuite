@@ -119,7 +119,8 @@ internal interface IAutoBuyIncrementalCatalog
     void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
-        bool policyExcluded);
+        bool policyExcluded,
+        AutoBuyDecision? decision = null);
 
     void InvalidatePolicy();
 
@@ -293,7 +294,8 @@ internal readonly struct AutoBuyResourceBlocker
         string resourceName,
         BigAmount cost,
         BigAmount availableQuantity,
-        BigAmount requiredQuantity)
+        BigAmount requiredQuantity,
+        bool isBandwidth = false)
     {
         Kind = kind;
         ResourceId = resourceId;
@@ -301,6 +303,7 @@ internal readonly struct AutoBuyResourceBlocker
         Cost = cost;
         AvailableQuantity = availableQuantity;
         RequiredQuantity = requiredQuantity;
+        IsBandwidth = isBandwidth;
     }
 
     public AutoBuyResourceBlockerKind Kind { get; }
@@ -314,6 +317,8 @@ internal readonly struct AutoBuyResourceBlocker
     public BigAmount AvailableQuantity { get; }
 
     public BigAmount RequiredQuantity { get; }
+
+    public bool IsBandwidth { get; }
 }
 
 internal sealed class AutoBuyDecision

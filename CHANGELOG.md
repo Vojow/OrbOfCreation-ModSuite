@@ -23,6 +23,8 @@
 - Refresh the complete queue-capacity snapshot after live cost/reserve validation immediately before every Auto Buy mutation; contradictory or missing native values now fail closed.
 - Add portable regressions for a 200-level lone-candidate fill and fair Structure/Upgrade handoff across multiple ranked candidates without the idle evaluation interval.
 - Validate the `0.8.1` build on a disposable high-resource Slot 3: the visible shared queue rose from `14/304` to `174/304` after five seconds and `302/304` after ten, while 1,797 successful purchases covered 166 distinct candidates with zero native failures.
+- Park stable Structure reserve and affordability rejections below their exact ordinary-resource thresholds, ignore quantity-only ticks on already-satisfied dependencies, then wake immediately when a blocker crosses or conservatively when bandwidth, capacity, quality, effective cost, identity, availability, lifecycle, policy, queue, or completion state changes.
+- Keep native-first Upgrade rejection handling conservative, suppress identical verbose rejection examples until their blocking signature changes, and describe a zero-reserve shortfall as insufficient cost coverage rather than a reserve violation.
 
 ## Orb Automata 0.8.0 Beta 1 — 2026-07-17
 

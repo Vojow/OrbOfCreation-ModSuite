@@ -243,7 +243,8 @@ internal sealed class AutoBuyCandidateIndex
     public void CompleteCandidateEvaluation(
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking = false,
-        bool policyExcluded = false)
+        bool policyExcluded = false,
+        AutoBuyDecision? decision = null)
     {
         if (!TryGetEntry(candidate, out var entry))
         {
@@ -258,6 +259,7 @@ internal sealed class AutoBuyCandidateIndex
         if (suppressResourceTracking)
         {
             RemoveDependencies(entry);
+            entry.ResourceWakeThresholds.Clear();
             entry.DirtyReasons = AutoBuyDirtyReason.None;
             entry.PolicyExcluded = policyExcluded;
             return;
@@ -268,12 +270,14 @@ internal sealed class AutoBuyCandidateIndex
         if (candidate is IAutoBuyDirtyCandidate dirtyCandidate)
         {
             ReplaceDependencies(entry, dirtyCandidate.ResourceDependencies);
+            ReplaceResourceWakeThresholds(entry, decision);
             entry.DirtyReasons = dirtyCandidate.HasResolvedCosts
                 ? AutoBuyDirtyReason.None
                 : AutoBuyDirtyReason.CostDirty;
             return;
         }
 
+        entry.ResourceWakeThresholds.Clear();
         entry.DirtyReasons = AutoBuyDirtyReason.None;
     }
 
@@ -365,6 +369,15 @@ internal sealed class AutoBuyCandidateIndex
 
     public void InvalidateResource(string resourceId, AutoBuyResourceChange change)
     {
+        InvalidateResource(resourceId, change, null, null);
+    }
+
+    public void InvalidateResource(
+        string resourceId,
+        AutoBuyResourceChange change,
+        BigAmount? previousQuantity,
+        BigAmount? currentQuantity)
+    {
         if (!_resourceDependents.TryGetValue(resourceId, out var dependents))
         {
             return;
@@ -372,6 +385,21 @@ internal sealed class AutoBuyCandidateIndex
 
         foreach (var entry in dependents)
         {
+            if (change == AutoBuyResourceChange.Quantity &&
+                entry.ResourceWakeThresholds.Count > 0)
+            {
+                if (!entry.ResourceWakeThresholds.TryGetValue(resourceId, out var threshold) ||
+                    previousQuantity.HasValue &&
+                    currentQuantity.HasValue &&
+                    !AutoBuyResourceThresholdCrossing.ShouldWake(
+                        previousQuantity.Value,
+                        currentQuantity.Value,
+                        threshold))
+                {
+                    continue;
+                }
+            }
+
             var reasons = AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty;
             if ((change & (AutoBuyResourceChange.Identity |
                            AutoBuyResourceChange.Availability |
@@ -606,6 +634,15 @@ internal sealed class AutoBuyCandidateIndex
                 continue;
             }
 
+            // Stable Structure affordability waits remain lifecycle-polled,
+            // but do not rebuild the same live cost on every maintenance
+            // slice. Resource threshold crossings and conservative resource,
+            // policy, queue, completion, and lifecycle signals wake them.
+            if (refreshed.ResourceWakeThresholds.Count > 0)
+            {
+                continue;
+            }
+
             MarkDirty(refreshed, AutoBuyDirtyReason.PriorityDirty);
 
             if (refreshed.Definition.Kind == AutoBuyCandidateKind.Structure)
@@ -773,6 +810,36 @@ internal sealed class AutoBuyCandidateIndex
         }
     }
 
+    private static void ReplaceResourceWakeThresholds(Entry entry, AutoBuyDecision? decision)
+    {
+        entry.ResourceWakeThresholds.Clear();
+        if (entry.Definition.Kind != AutoBuyCandidateKind.Structure ||
+            decision is null ||
+            decision.Kind != AutoBuyDecisionKind.Rejection ||
+            decision.RejectionReason != AutoBuyRejectionReason.ReserveViolation &&
+            decision.RejectionReason != AutoBuyRejectionReason.AffordabilityThreshold)
+        {
+            return;
+        }
+
+        for (var i = 0; i < decision.ResourceBlockers.Count; i++)
+        {
+            var blocker = decision.ResourceBlockers[i];
+            if (string.IsNullOrWhiteSpace(blocker.ResourceId) ||
+                blocker.IsBandwidth ||
+                !entry.ResourceDependencies.Contains(blocker.ResourceId))
+            {
+                continue;
+            }
+
+            if (!entry.ResourceWakeThresholds.TryGetValue(blocker.ResourceId, out var threshold) ||
+                blocker.RequiredQuantity.CompareTo(threshold) > 0)
+            {
+                entry.ResourceWakeThresholds[blocker.ResourceId] = blocker.RequiredQuantity;
+            }
+        }
+    }
+
     private void RemoveDependencies(Entry entry)
     {
         foreach (var resourceId in entry.ResourceDependencies)
@@ -790,6 +857,7 @@ internal sealed class AutoBuyCandidateIndex
         }
 
         entry.ResourceDependencies.Clear();
+        entry.ResourceWakeThresholds.Clear();
     }
 
     private bool TryGetEntry(IAutoBuyCandidate candidate, out Entry entry)
@@ -868,6 +936,9 @@ internal sealed class AutoBuyCandidateIndex
         public HashSet<string> ResourceDependencies { get; } =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        public Dictionary<string, BigAmount> ResourceWakeThresholds { get; } =
+            new Dictionary<string, BigAmount>(StringComparer.OrdinalIgnoreCase);
+
         public void Replace(IAutoBuyCandidate candidate, long epoch)
         {
             Candidate = candidate;
@@ -887,6 +958,7 @@ internal sealed class AutoBuyCandidateIndex
             NeedsEpochValidation = false;
             NeedsSettlementValidation = false;
             ResourceDependencies.Clear();
+            ResourceWakeThresholds.Clear();
         }
 
         public void Restore(long epoch)

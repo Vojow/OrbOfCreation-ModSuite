@@ -380,6 +380,38 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    public void BlockedStructure_StaysParkedUntilItsExactResourceThresholdIsCrossed()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 5,
+            new[]
+            {
+                new SimulatedCandidateSpec(
+                    "threshold-structure",
+                    AutoBuyCandidateKind.Structure,
+                    baseCost: 100.0),
+            },
+            initialResourceQuantity: 50.0);
+
+        simulation.RunFrames(20);
+        var evaluationsWhileParked = simulation.Catalog.CompletedCandidateEvaluations;
+        Assert.Equal(0, simulation.World.TotalSubmitted);
+
+        simulation.SetResourceQuantity("resource", new BigAmount(99.0, 0));
+        simulation.RunFrames(20);
+        Assert.Equal(evaluationsWhileParked, simulation.Catalog.CompletedCandidateEvaluations);
+        Assert.Equal(0, simulation.World.TotalSubmitted);
+
+        simulation.SetResourceQuantity("resource", new BigAmount(100.0, 0));
+
+        Assert.True(simulation.RunUntil(
+            world => world.TotalSubmitted == 1,
+            maximumFrames: 120));
+        Assert.Equal(0.0, simulation.World.ResourceQuantity, 6);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void LifecycleReload_ReplacesCandidateWrapperAndRetainsStableTypedIdentity()
     {
         using var simulation = new AutoBuySimulation(

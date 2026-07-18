@@ -813,7 +813,8 @@ public sealed class AutomataCoordinatorTests
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
         }
 

@@ -27,12 +27,12 @@ internal sealed class AutoBuyRejectionTelemetry
 
     public int CurrentRejectedCandidates => _latestRejections.Count;
 
-    public void Record(AutoBuyDecision decision)
+    public bool Record(AutoBuyDecision decision)
     {
         if (decision.RejectionReason == AutoBuyRejectionReason.CandidateScanLimit)
         {
             ScanLimitDeferrals++;
-            return;
+            return false;
         }
 
         Evaluations++;
@@ -44,7 +44,7 @@ internal sealed class AutoBuyRejectionTelemetry
             {
                 RejectionExits++;
             }
-            return;
+            return false;
         }
 
         Rejections++;
@@ -54,12 +54,12 @@ internal sealed class AutoBuyRejectionTelemetry
         if (_latestRejections.TryGetValue(uuid, out var previous) && previous.HasSameBlockingCondition(decision))
         {
             RepeatedUnchangedRejections++;
+            return false;
         }
-        else
-        {
-            RejectionStateChanges++;
-            _latestRejections[uuid] = AutoBuyRejectionState.FromDecision(decision);
-        }
+
+        RejectionStateChanges++;
+        _latestRejections[uuid] = AutoBuyRejectionState.FromDecision(decision);
+        return true;
     }
 
     public void Remove(string uuid)
@@ -127,6 +127,7 @@ internal sealed class AutoBuyRejectionTelemetry
                 var left = ResourceBlockers[i];
                 var right = decision.ResourceBlockers[i];
                 if (left.Kind != right.Kind ||
+                    left.IsBandwidth != right.IsBandwidth ||
                     !string.Equals(left.ResourceId, right.ResourceId, StringComparison.OrdinalIgnoreCase) ||
                     left.Cost.CompareTo(right.Cost) != 0 ||
                     left.RequiredQuantity.CompareTo(right.RequiredQuantity) != 0)

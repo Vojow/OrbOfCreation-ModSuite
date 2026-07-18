@@ -85,13 +85,13 @@ internal sealed class AutoBuyResourceSnapshotCache
     private readonly Dictionary<string, Entry> _entries =
         new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
     private readonly IAutoBuyResourceSnapshotReader _reader;
-    private readonly Action<string, AutoBuyResourceChange> _onChanged;
+    private readonly Action<string, AutoBuyResourceChange, BigAmount?, BigAmount?> _onChanged;
     private readonly List<string> _staleResourceIds = new List<string>();
     private long _epoch;
 
     public AutoBuyResourceSnapshotCache(
         IAutoBuyResourceSnapshotReader reader,
-        Action<string, AutoBuyResourceChange> onChanged)
+        Action<string, AutoBuyResourceChange, BigAmount?, BigAmount?> onChanged)
     {
         _reader = reader;
         _onChanged = onChanged;
@@ -149,7 +149,7 @@ internal sealed class AutoBuyResourceSnapshotCache
             entry.ReadEpoch = 0;
             entry.FailureCount = 0;
             entry.NextRetryEpoch = 0;
-            _onChanged(definition.ResourceId, AutoBuyResourceChange.Identity);
+            _onChanged(definition.ResourceId, AutoBuyResourceChange.Identity, null, null);
         }
         else
         {
@@ -189,7 +189,9 @@ internal sealed class AutoBuyResourceSnapshotCache
             entry.NextRetryEpoch = _epoch + (1L << Math.Min(6, entry.FailureCount - 1));
             _onChanged(
                 entry.Definition.ResourceId,
-                hadSnapshot ? AutoBuyResourceChange.Unknown | AutoBuyResourceChange.Identity : AutoBuyResourceChange.Unknown);
+                hadSnapshot ? AutoBuyResourceChange.Unknown | AutoBuyResourceChange.Identity : AutoBuyResourceChange.Unknown,
+                hadSnapshot ? previous.TrueQuantity : null,
+                null);
             if (entry.FailureCount == 1 || _epoch - entry.LastWarningEpoch >= 64)
             {
                 entry.LastWarningEpoch = _epoch;
@@ -207,7 +209,11 @@ internal sealed class AutoBuyResourceSnapshotCache
         var change = hadSnapshot ? Compare(previous, current) : AutoBuyResourceChange.Identity;
         if (change != AutoBuyResourceChange.None)
         {
-            _onChanged(entry.Definition.ResourceId, change);
+            _onChanged(
+                entry.Definition.ResourceId,
+                change,
+                hadSnapshot ? previous.TrueQuantity : null,
+                current.TrueQuantity);
         }
     }
 
