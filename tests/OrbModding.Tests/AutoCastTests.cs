@@ -157,6 +157,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void ManualSpellInputReleasesOwnedFullChargeHoldAndPausesRotation()
     {
         var charged = Spell("charged", charged: true);
@@ -173,6 +174,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void LeavingGameplayReleasesOwnedFullChargeHold()
     {
         var charged = Spell("charged", charged: true);
@@ -423,6 +425,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void ActiveChannelPausesEntireRotation()
     {
         var channel = Spell("channel", kind: AutoCastSpellKind.Channel, casting: true);
@@ -478,6 +481,46 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionAutoCastCatalog_TranslatesLoadoutCostsKindAndStableIdentity()
+    {
+        var manager = new SpellManager();
+        var spell = new NativeLoadoutSpell("adapter-spell") { Channeled = true };
+        manager.activeSpells.Add(spell);
+        SpellManager.instance = manager;
+        SpellManager.NativeCanCast = true;
+        TargetingManager.Targeting = false;
+        using var catalog = new ReflectionAutoCastCatalog();
+        try
+        {
+            var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
+
+            Assert.Equal(0, candidate.SlotIndex);
+            Assert.Equal("Adapter spell", candidate.DisplayName);
+            Assert.Equal(AutoCastSpellKind.Channel, candidate.Kind);
+            Assert.True(candidate.TryGetImmediateCosts(out var costs));
+            var cost = Assert.Single(costs);
+            Assert.Equal("adapter-resource", cost.ResourceId);
+            Assert.Equal(0, cost.Cost.CompareTo(new BigAmount(2.0, 0)));
+            Assert.Equal(0, cost.CurrentQuantity.CompareTo(new BigAmount(10.0, 0)));
+            Assert.True(candidate.TryGetIdentity(out var identity, out var identityReason), identityReason);
+            Assert.Equal("adapter-spell", identity.Uuid);
+            Assert.Same(spell, identity.NativeReference);
+            Assert.Equal(typeof(NativeLoadoutSpell), identity.NativeType);
+            Assert.True(candidate.TrySetChargeHold(true, out var holdReason), holdReason);
+            Assert.True(spell.HoldingCharge);
+            Assert.True(candidate.TryFireAndResolveTargets(out var fireReason), fireReason);
+            Assert.Equal(1, spell.FireCalls);
+        }
+        finally
+        {
+            SpellManager.instance = null;
+            SpellManager.NativeCanCast = true;
+            TargetingManager.Targeting = false;
+        }
+    }
+
+    [Fact]
     public void ManualFireSignalPausesForConfiguredUnscaledTime()
     {
         var spell = Spell("paused");
@@ -494,6 +537,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void ExistingTargetingRequestPausesWithoutFiring()
     {
         var spell = Spell("targeted");
@@ -760,6 +804,76 @@ public sealed class AutoCastTests
         public int GetMaxSpellCharges() => MaximumCharges;
 
         public TestBigDouble GetCooldownTimeRemaining() => new TestBigDouble(3.0, 0);
+    }
+
+    private sealed class NativeLoadoutSpell
+    {
+        private readonly NativeLoadoutCostList _cost = new();
+
+        public NativeLoadoutSpell(string uuid)
+        {
+            reference = new NativeLoadoutRecipe { uuid = uuid };
+            _cost.costs.Add(new NativeLoadoutCostEntry(
+                new NativeLoadoutResourceSO
+                {
+                    uuid = "adapter-resource",
+                    quantity = new BigDouble(10.0, 0),
+                },
+                new BigDouble(2.0, 0)));
+        }
+
+        public NativeLoadoutRecipe reference;
+        public bool Channeled { get; set; }
+        public bool HoldingCharge { get; private set; }
+        public int FireCalls { get; private set; }
+
+        public string GetName() => "Adapter spell";
+        public bool IsChanneled() => Channeled;
+        public bool IsToggledSpell() => false;
+        public bool IsEmpty() => false;
+        public bool CanCharge() => true;
+        public bool IsCasting() => false;
+        public bool IsReadyingCast() => false;
+        public bool CanCast() => true;
+        public bool IsAttuning() => false;
+        public bool IsChargeAvailable() => true;
+        public bool HasEnoughResources() => true;
+        public NativeLoadoutCostList GetCost() => _cost;
+        public NativeLoadoutCostList GetDrainCost() => new();
+        public object GetScalingInfo() => new object();
+        public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
+        public void Fire() => FireCalls++;
+    }
+
+    private sealed class NativeLoadoutRecipe
+    {
+        public string uuid = string.Empty;
+    }
+
+    private sealed class NativeLoadoutCostList
+    {
+        public List<NativeLoadoutCostEntry> costs = new();
+    }
+
+    private sealed class NativeLoadoutCostEntry
+    {
+        public NativeLoadoutCostEntry(NativeLoadoutResourceSO resource, BigDouble value)
+        {
+            this.resource = resource;
+            Value = value;
+        }
+
+        public NativeLoadoutResourceSO resource;
+        public BigDouble Value { get; }
+        public BigDouble GetValue() => Value;
+    }
+
+    private sealed class NativeLoadoutResourceSO
+    {
+        public string uuid = string.Empty;
+        public BigDouble quantity;
+        public string GetName() => "Adapter resource";
+        public BigDouble GetQuantity() => quantity;
     }
 
     private sealed class TestBigDouble

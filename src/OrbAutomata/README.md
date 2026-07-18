@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.1` fixes queue-filling Auto Buy so multiple affordable Structures and Upgrades share the prepared queue pass instead of one candidate monopolizing it, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.2` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, alongside Auto Cast, opt-in Auto Concept rotation, and progression-aware spell leveling through the game's native APIs.
 
 ## Build
 
@@ -61,7 +61,7 @@ Set `RepeatWhileAffordable=false` to restore bounded Structure groups through `S
 
 ### Queue scheduling
 
-The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A full queue is polled at 10 Hz and retains the next candidate for the first newly available slot. After one pass, reranking begins on the next frame while existing native actions continue.
+The configured evaluation interval applies only while Auto Buy is idle. Once a scan begins, CPU-budgeted continuation slices resume on every Unity frame. A prepared ranking advances by one native mutation per admitted frame, so multiple candidates enter the queue in rapid succession without unsafe background-thread game access. A native completion wakes the prepared next candidate immediately; the full queue is polled at 10 Hz only as a fallback when no completion signal arrives. After one pass, reranking begins on the next frame while existing native actions continue.
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
@@ -74,6 +74,8 @@ Automata finishes the configured repeat group for each candidate and advances th
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 
 Native completion signals no longer discard a safely prepared Fixed, Bulk Development, or action-multiplier group. The group continues one independently revalidated level per admitted frame, then all completion effects observed during that window settle once before the next ranked group. Manual queue changes still cancel stale prepared work immediately.
+
+Rapid completion signals are generation-coalesced while a bounded lifecycle settlement is already running. They do not restart its cursor or an in-progress candidate scan; one follow-up generation retains eventual broad effect discovery. A recommendation produced across that window is advisory only and must still pass a fresh authoritative candidate and queue validation before its native mutation.
 
 Routine active and locked-content lifecycle probes run on a fixed 250 ms cadence rather than once per purchase evaluation. Each maintenance slice checks at most eight active and sixteen slow-reconciliation entries, so faster queue turnover cannot multiply background reflection work.
 

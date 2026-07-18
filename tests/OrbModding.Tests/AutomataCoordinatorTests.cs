@@ -329,6 +329,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void DeferredCastCancelsWhenCurrentSlotIdentityChanges()
     {
         var coordinator = Coordinator();
@@ -367,6 +368,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void LifecycleInvalidationDiscardsDeferredCastAndReplansCurrentSlot()
     {
         var coordinator = Coordinator();

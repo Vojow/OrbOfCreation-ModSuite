@@ -129,6 +129,14 @@ internal interface IAutoBuyIncrementalCatalog
     void InvalidateLifecycle();
 }
 
+internal interface IAutoBuyCompletionRevalidationCatalog
+{
+    bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason);
+}
+
 internal readonly struct AutoBuyEvaluationRequest
 {
     public AutoBuyEvaluationRequest(int candidateLimit, bool includeStructures, bool includeUpgrades)

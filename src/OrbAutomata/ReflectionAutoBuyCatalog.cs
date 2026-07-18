@@ -9,7 +9,10 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
+internal sealed class ReflectionAutoBuyCatalog :
+    IAutoBuyCatalog,
+    IAutoBuyIncrementalCatalog,
+    IAutoBuyCompletionRevalidationCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan LifecycleMaintenanceInterval = TimeSpan.FromMilliseconds(250);
@@ -24,9 +27,10 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private readonly HashSet<string> _deferredPurchaseResourceInvalidations =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly AutoBuyCompletionSettlementGate _completionSettlement =
+        new AutoBuyCompletionSettlementGate();
     private RegistryReconciliation? _registryReconciliation;
     private TimeSpan _nextRegistryReconciliation;
-    private bool _completionEffectsDirty;
     private bool _mutationGroupActive;
     private MethodInfo? _getRemainingQueueRoom;
     private FieldInfo? _actionManagerInstance;
@@ -61,9 +65,8 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
     {
         CompleteMutationGroup();
         FlushDeferredPurchaseInvalidations();
-        if (_completionEffectsDirty)
+        if (_completionSettlement.TryBegin(_index.SettlementValidationPending))
         {
-            _completionEffectsDirty = false;
             _index.InvalidateCompletionEffects();
         }
 
@@ -184,7 +187,21 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
 
     public void NotifyNativeCompletion()
     {
-        _completionEffectsDirty = true;
+        _completionSettlement.Notify();
+    }
+
+    public bool TryRefreshCandidateAfterCompletion(
+        IAutoBuyCandidate candidate,
+        long completionGeneration,
+        out string reason)
+    {
+        if (candidate is ReflectionAutoBuyCandidate reflectionCandidate)
+        {
+            return reflectionCandidate.TryRefreshAfterCompletion(completionGeneration, out reason);
+        }
+
+        reason = "candidate is not backed by the audited reflection adapter";
+        return false;
     }
 
     public void InvalidateLifecycle()
@@ -193,7 +210,7 @@ internal sealed class ReflectionAutoBuyCatalog : IAutoBuyCatalog, IAutoBuyIncrem
         _deferredPurchaseResourceInvalidations.Clear();
         _resourceSnapshots.Clear();
         _registryReconciliation = null;
-        _completionEffectsDirty = false;
+        _completionSettlement.Clear();
         _nextRegistryReconciliation = TimeSpan.Zero;
         _maintenanceCadence.Reset(Elapsed);
         _index.InvalidateLifecycleIncrementally();
@@ -547,6 +564,7 @@ internal sealed class ReflectionAutoBuyCandidate :
     private long _lastAdapterWarningEpoch = long.MinValue;
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
+    private long _completionRefreshGeneration = -1;
 
     public ReflectionAutoBuyCandidate(
         object source,
@@ -792,6 +810,26 @@ internal sealed class ReflectionAutoBuyCandidate :
     {
         _cachedAvailability = evidence.IsAvailable;
         _hasCachedAvailability = true;
+    }
+
+    public bool TryRefreshAfterCompletion(long completionGeneration, out string reason)
+    {
+        if (_completionRefreshGeneration == completionGeneration)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        _hasCachedAvailability = false;
+        MarkDirty(AutoBuyDirtyReason.CostDirty);
+        if (!TryGetLifecycleEvidence(out var evidence, out reason))
+        {
+            return false;
+        }
+
+        SetLifecycleEvidence(evidence);
+        _completionRefreshGeneration = completionGeneration;
+        return true;
     }
 
     public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
