@@ -17,6 +17,7 @@ internal sealed class AutoCastEngine : IDisposable
     private readonly Func<bool> _isGameplayScene;
     private readonly SuitePerformanceCoordinator? _coordinator;
     private readonly Func<long>? _readFrameIdentity;
+    private readonly AutomataFeatureStatusReporter? _featureStatus;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _operationLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -40,7 +41,8 @@ internal sealed class AutoCastEngine : IDisposable
         ManualLogSource log,
         Func<bool>? isGameplayScene = null,
         SuitePerformanceCoordinator? coordinator = null,
-        Func<long>? readFrameIdentity = null)
+        Func<long>? readFrameIdentity = null,
+        AutomataFeatureStatusReporter? featureStatus = null)
     {
         _config = config;
         _catalog = catalog;
@@ -50,6 +52,7 @@ internal sealed class AutoCastEngine : IDisposable
         _isGameplayScene = isGameplayScene ?? (() => SceneManager.GetActiveScene().name == "Main");
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
+        _featureStatus = featureStatus;
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
@@ -85,6 +88,7 @@ internal sealed class AutoCastEngine : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
         _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
+        ObserveTickStatus();
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
         if (!MaintainFullChargeHold())
@@ -112,6 +116,7 @@ internal sealed class AutoCastEngine : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
         _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
+        ObserveTickStatus();
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
         if (_config.AutoCastMode.Value != AutoCastOperationMode.Active ||
@@ -189,8 +194,13 @@ internal sealed class AutoCastEngine : IDisposable
     private void PrepareCandidate()
     {
         ClearPendingCandidate();
-        if (!_isGameplayScene() || _manualPauseRemaining > 0.0f || _catalog.IsTargeting())
+        if (!_isGameplayScene() || _manualPauseRemaining > 0.0f)
         {
+            return;
+        }
+        if (_catalog.IsTargeting())
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.TargetingInProgress, "Native spell targeting is in progress.");
             return;
         }
 
@@ -201,12 +211,18 @@ internal sealed class AutoCastEngine : IDisposable
         }
         catch (Exception ex)
         {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.Faulted,
+                FeatureStatusReasonCode.RuntimeFailure,
+                "Auto Cast could not read the active loadout.");
             _log.LogAutomataError($"Auto Cast could not read the active loadout: {ex.Message}");
             return;
         }
 
         if (loadout.Count == 0)
         {
+            _featureStatus?.ObserveOperational();
             return;
         }
 
@@ -216,16 +232,19 @@ internal sealed class AutoCastEngine : IDisposable
         UpdateChannelLifecycle(activeChannels);
         if (activeChannels.Length > 0 || _catalog.IsNativeCastBusy())
         {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.NativeBusy, "The native spell system is busy.");
             return;
         }
 
         var start = NormalizeCursor(_nextSlotIndex, loadout.Count);
+        var sawContractFailure = false;
         for (var offset = 0; offset < loadout.Count; offset++)
         {
             var index = (start + offset) % loadout.Count;
             var candidate = loadout[index];
             if (!TryAdmit(candidate, out var reason, out var resourceSummary))
             {
+                sawContractFailure |= IsContractFailure(reason);
                 LogVerboseRejection(candidate, reason);
                 continue;
             }
@@ -235,10 +254,25 @@ internal sealed class AutoCastEngine : IDisposable
                 _pendingCandidate = candidate;
                 _pendingIdentity = identity;
                 _pendingResourceSummary = resourceSummary;
+                _featureStatus?.ObserveOperational();
                 return;
             }
 
+            sawContractFailure = true;
             LogVerboseRejection(candidate, reason);
+        }
+
+        if (sawContractFailure)
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.Degraded,
+                FeatureStatusReasonCode.PartialCapabilityUnavailable,
+                "One or more equipped spell contracts are unavailable; other slots remain eligible.");
+        }
+        else
+        {
+            _featureStatus?.ObserveOperational();
         }
     }
 
@@ -266,6 +300,11 @@ internal sealed class AutoCastEngine : IDisposable
 
             if (!TryResolvePreparedCandidate(out candidate, out var identityReason))
             {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.Degraded,
+                    FeatureStatusReasonCode.IdentityMismatch,
+                    "A prepared spell identity changed before casting.");
                 _secondsUntilEvaluation = 0.0f;
                 LogVerboseRejection(_pendingCandidate!, identityReason);
                 return;
@@ -280,6 +319,7 @@ internal sealed class AutoCastEngine : IDisposable
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
+                ObserveMutationFailure("A charged-spell hold could not be established.");
                 _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
@@ -292,11 +332,13 @@ internal sealed class AutoCastEngine : IDisposable
 
             if (!candidate.TryFireAndResolveTargets(out reason))
             {
+                ObserveMutationFailure("An equipped spell mutation failed; other slots remain eligible.");
                 _log.LogAutomataWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
                 return;
             }
 
             fireSucceeded = true;
+            _featureStatus?.ObserveOperational();
 
             MarkSlotState(candidate, "active fired");
             LogOperation(
@@ -555,9 +597,65 @@ internal sealed class AutoCastEngine : IDisposable
     {
         ReleaseFullChargeHold("manual spell input");
         _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, _config.AutoCastManualPauseSeconds.Value));
+        if (_manualPauseRemaining > 0.0f)
+            ObserveTemporaryBlock(FeatureStatusReasonCode.ManualPause, "Auto Cast is paused after manual spell input.");
         ClearPendingCandidate();
         _mutationWork?.SetPending(false);
     }
+
+    private void ObserveTickStatus()
+    {
+        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active)
+        {
+            _featureStatus?.Observe(
+                false,
+                FeatureStatusState.ConfigurationDisabled,
+                FeatureStatusReasonCode.ConfigurationDisabled,
+                "Auto Cast is disabled by configuration.");
+            return;
+        }
+        if (!_config.CanStartAutoCastActively)
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.");
+            return;
+        }
+        if (!_isGameplayScene())
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.NotReady,
+                FeatureStatusReasonCode.GameplayNotReady,
+                "Gameplay lifecycle is not ready.");
+            return;
+        }
+        if (_manualPauseRemaining > 0.0f)
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.ManualPause, "Auto Cast is paused after manual spell input.");
+            return;
+        }
+
+        var currentReason = _featureStatus?.Current.Reason.Code;
+        if (currentReason is FeatureStatusReasonCode.ConfigurationDisabled or
+            FeatureStatusReasonCode.EmergencyDisabled or
+            FeatureStatusReasonCode.GameplayNotReady or
+            FeatureStatusReasonCode.ManualPause)
+            _featureStatus?.ObserveOperational();
+    }
+
+    private void ObserveTemporaryBlock(FeatureStatusReasonCode code, string summary) =>
+        _featureStatus?.Observe(true, FeatureStatusState.TemporarilyBlocked, code, summary);
+
+    private void ObserveMutationFailure(string summary) =>
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.Degraded,
+            FeatureStatusReasonCode.NativeMutationFailed,
+            summary);
+
+    private static bool IsContractFailure(string reason) =>
+        reason.IndexOf("unavailable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        reason.IndexOf("identity", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        reason.IndexOf("contract", StringComparison.OrdinalIgnoreCase) >= 0;
 
     private bool MaintainFullChargeHold()
     {

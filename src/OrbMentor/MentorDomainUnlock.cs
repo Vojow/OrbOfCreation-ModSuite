@@ -13,14 +13,19 @@ internal enum MentorDomainUnlockState
 
 internal readonly struct MentorDomainUnlockSnapshot
 {
-    public MentorDomainUnlockSnapshot(MentorDomainUnlockState state, string reason)
+    public MentorDomainUnlockSnapshot(
+        MentorDomainUnlockState state,
+        string reason,
+        FeatureStatusReasonCode statusReasonCode = FeatureStatusReasonCode.None)
     {
         State = state;
         Reason = reason;
+        StatusReasonCode = statusReasonCode;
     }
 
     public MentorDomainUnlockState State { get; }
     public string Reason { get; }
+    public FeatureStatusReasonCode StatusReasonCode { get; }
     public bool IsUnlocked => State == MentorDomainUnlockState.Unlocked;
     public bool IsContractBlocked => State == MentorDomainUnlockState.ContractBlocked;
 }
@@ -72,8 +77,8 @@ internal sealed class MentorDomainUnlockGate
             var domainAvailable = _isAvailable.Invoke(domainView, null) as bool?;
             if (!masteryAvailable.HasValue || !domainAvailable.HasValue)
                 return Blocked("ViewSO.IsAvailable did not return a boolean progression state");
-            if (!masteryAvailable.Value) return Waiting("native mastery progression is locked");
-            if (!domainAvailable.Value) return Waiting($"native {DomainLabel(domain)} progression is locked");
+            if (!masteryAvailable.Value) return ProgressionLocked("native mastery progression is locked");
+            if (!domainAvailable.Value) return ProgressionLocked($"native {DomainLabel(domain)} progression is locked");
             return new MentorDomainUnlockSnapshot(MentorDomainUnlockState.Unlocked, string.Empty);
         }
         catch (Exception ex)
@@ -108,14 +113,21 @@ internal sealed class MentorDomainUnlockGate
         TypedRegistryResolution resolution)
     {
         var reason = $"{label} resolution failed. {resolution.Format()}";
-        return resolution.IsRetryable ? Waiting(reason) : Blocked(reason);
+        return resolution.IsRetryable
+            ? Waiting(reason, FeatureStatusReasonCode.RegistryNotReady)
+            : Blocked(reason);
     }
 
-    private static MentorDomainUnlockSnapshot Waiting(string reason) =>
-        new(MentorDomainUnlockState.Waiting, reason);
+    private static MentorDomainUnlockSnapshot ProgressionLocked(string reason) =>
+        Waiting(reason, FeatureStatusReasonCode.ProgressionLocked);
+
+    private static MentorDomainUnlockSnapshot Waiting(
+        string reason,
+        FeatureStatusReasonCode reasonCode) =>
+        new(MentorDomainUnlockState.Waiting, reason, reasonCode);
 
     private static MentorDomainUnlockSnapshot Blocked(string reason) =>
-        new(MentorDomainUnlockState.ContractBlocked, reason);
+        new(MentorDomainUnlockState.ContractBlocked, reason, FeatureStatusReasonCode.ContractMismatch);
 
     private static Guid DomainId(MentorDomain domain) => domain switch
     {

@@ -56,7 +56,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         var recipient = RegisterSpell(mastery: 2);
         recipient.SuppressMasteryGain = true;
         SpellManager.instance!.activeSpells.Add(new Spell(source));
-        using var runtime = CreateRuntime(sharePercent: 10);
+        var statusRegistry = new FeatureStatusRegistry();
+        using var runtime = CreateRuntime(sharePercent: 10, featureStatusRegistry: statusRegistry);
 
         Drive(runtime, 200);
         runtime.Observe(source, new BigDouble(100, 0));
@@ -65,6 +66,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Assert.Equal(1, recipient.MasteryGrantCalls);
         Assert.Empty(recipient.GrantedMasteryExperience);
         Assert.Equal(0, runtime.Diagnostics.NativeGrants);
+        Assert.Equal(FeatureStatusState.Faulted,
+            Status(statusRegistry, MentorFeatureStatus.RootFeatureId).State);
         Drive(runtime, 100);
         Assert.Equal(1, recipient.MasteryGrantCalls);
 
@@ -76,6 +79,10 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
 
         Assert.Equal(2, recipient.MasteryGrantCalls);
         Assert.Single(recipient.GrantedMasteryExperience);
+        DriveUntil(runtime, () =>
+            Status(statusRegistry, MentorFeatureStatus.RootFeatureId).State == FeatureStatusState.Operational);
+        Assert.Equal(FeatureStatusState.Operational,
+            Status(statusRegistry, MentorFeatureStatus.RootFeatureId).State);
     }
 
     [Fact]
@@ -172,7 +179,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
     private static MentorRuntime CreateRuntime(
         double sharePercent,
         bool artifacts = false,
-        bool alchemy = false)
+        bool alchemy = false,
+        FeatureStatusRegistry? featureStatusRegistry = null)
     {
         var config = MentorConfig.Bind(new ConfigFile());
         config.Mode.Value = MentorOperationMode.Active;
@@ -184,7 +192,16 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         config.AlchemySharePercent.Value = sharePercent;
         config.OperationsPerFrame.Value = 8;
         config.CpuBudgetMilliseconds.Value = 1;
-        return new MentorRuntime(config, new ManualLogSource());
+        return new MentorRuntime(
+            config,
+            new ManualLogSource(),
+            featureStatusRegistry: featureStatusRegistry);
+    }
+
+    private static FeatureStatusSnapshot Status(FeatureStatusRegistry registry, string featureId)
+    {
+        Assert.True(registry.TryGet(new FeatureStatusKey(PluginIds.MentorGuid, featureId), out var status));
+        return status;
     }
 
     private static void RegisterUnlockedView(string uuid)

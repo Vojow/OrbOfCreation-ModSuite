@@ -432,6 +432,28 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    public void FullNativeQueueReportsTemporaryWaitingStatus()
+    {
+        var coordinator = Coordinator();
+        long frame = 55;
+        var config = Config();
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var engine = BuyEngine(
+            config,
+            new BuyCatalog(0, new BuyCandidate("queue-full", AutoBuyCandidateKind.Structure)),
+            coordinator,
+            () => frame,
+            featureStatus: statuses.AutoBuy);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, statuses.AutoBuy.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.QueueFull, statuses.AutoBuy.Current.Reason.Code);
+        Assert.Equal(AutoCastToggleVisualState.Waiting, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoBuy.Current));
+    }
+
+    [Fact]
     public void MultiBuyQuarantineDropsRankedUpgradesAndAllowsLowerRankedStructure()
     {
         NativeMultiBuyScope.ResetQuarantineForTests();
@@ -443,13 +465,17 @@ public sealed class AutomataCoordinatorTests
             var log = new ManualLogSource();
             var upgrade = new QuarantiningUpgradeCandidate("a-upgrade");
             var structure = new BuyCandidate("z-structure", AutoBuyCandidateKind.Structure);
+            var config = Config();
+            var registry = new FeatureStatusRegistry();
+            using var statuses = new AutomataFeatureStatuses(config, 1, registry);
             using var engine = BuyEngine(
-                Config(),
+                config,
                 new BuyCatalog(4, upgrade, structure),
                 coordinator,
                 () => frame,
                 log,
-                _ => 0.0);
+                _ => 0.0,
+                statuses.AutoBuy);
 
             engine.Tick(1.0f);
 
@@ -460,6 +486,8 @@ public sealed class AutomataCoordinatorTests
             Assert.Equal(0, structure.PurchaseCalls);
             var setterCallsAfterQuarantine = GlobalVariables.MultiBuy.SetCalls;
             Assert.Equal(2, setterCallsAfterQuarantine);
+            Assert.Equal(FeatureStatusState.Degraded, statuses.AutoBuy.Current.State);
+            Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, statuses.AutoBuy.Current.Reason.Code);
 
             // Lifecycle invalidation must not clear the process quarantine.
             engine.InvalidateLifecycle();
@@ -477,6 +505,12 @@ public sealed class AutomataCoordinatorTests
                 entry => entry?.ToString()?.Contains(
                     "removed automated Upgrades from admission and ranking",
                     StringComparison.Ordinal) == true);
+
+            config.AutoBuyStructures.Value = false;
+            frame++;
+            engine.Tick(1.0f);
+            Assert.Equal(FeatureStatusState.ContractUnavailable, statuses.AutoBuy.Current.State);
+            Assert.Equal(FeatureStatusReasonCode.ContractUnavailable, statuses.AutoBuy.Current.Reason.Code);
         }
         finally
         {
@@ -587,7 +621,8 @@ public sealed class AutomataCoordinatorTests
         SuitePerformanceCoordinator coordinator,
         Func<long> frameIdentity,
         ManualLogSource? log = null,
-        Func<Stopwatch, double>? readElapsedMilliseconds = null) =>
+        Func<Stopwatch, double>? readElapsedMilliseconds = null,
+        AutomataFeatureStatusReporter? featureStatus = null) =>
         new(
             config,
             catalog,
@@ -595,7 +630,8 @@ public sealed class AutomataCoordinatorTests
             log ?? new ManualLogSource(),
             readElapsedMilliseconds: readElapsedMilliseconds,
             coordinator: coordinator,
-            readFrameIdentity: frameIdentity);
+            readFrameIdentity: frameIdentity,
+            featureStatus: featureStatus);
 
     private static AutoCastEngine CastEngine(
         AutomataConfig config,

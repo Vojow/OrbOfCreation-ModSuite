@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Logging;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -84,7 +85,8 @@ internal sealed class ModConfigUiShell : IDisposable
         ConfigCatalogSnapshot catalog,
         out ModConfigUiShell? shell,
         out string reason,
-        Action? navigationChanged = null)
+        Action? navigationChanged = null,
+        IFeatureStatusSource? featureStatuses = null)
     {
         shell = null;
         reason = string.Empty;
@@ -192,7 +194,12 @@ internal sealed class ModConfigUiShell : IDisposable
             }
 
             label.text = "Mods";
-            panel = ModConfigPanel.Create(screenContent.transform, label, catalog, log);
+            panel = ModConfigPanel.Create(
+                screenContent.transform,
+                label,
+                catalog,
+                log,
+                featureStatuses ?? FeatureStatusRegistry.Shared);
             var image = buttonObject.GetComponent<Image>();
             if (image is not null && inactiveSprite is not null)
             {
@@ -289,6 +296,7 @@ internal sealed class ModConfigUiShell : IDisposable
 
         _externalRefreshSeconds = ExternalRefreshIntervalSeconds;
         _panel.RefreshExternalValues();
+        _panel.RefreshRuntimeStatusIfNeeded();
     }
 
     public void Close()

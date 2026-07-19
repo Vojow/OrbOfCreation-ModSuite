@@ -129,6 +129,7 @@ internal sealed class AutoConceptToggleButton : IDisposable
         {
             AutoCastToggleVisualState.On => new Color(0.4f, 1.0f, 0.55f),
             AutoCastToggleVisualState.Blocked => new Color(1.0f, 0.35f, 0.3f),
+            AutoCastToggleVisualState.Waiting => new Color(1.0f, 0.75f, 0.35f),
             _ => new Color(0.7f, 0.7f, 0.7f),
         };
     }
@@ -137,6 +138,7 @@ internal sealed class AutoConceptToggleButton : IDisposable
     {
         AutoCastToggleVisualState.On => "CN ON",
         AutoCastToggleVisualState.Blocked => "CN !",
+        AutoCastToggleVisualState.Waiting => "CN ~",
         _ => "CN OFF",
     };
 

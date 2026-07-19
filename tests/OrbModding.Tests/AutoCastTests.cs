@@ -4,6 +4,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -41,6 +42,7 @@ public sealed class AutoCastTests
     [InlineData(0, "AC OFF")]
     [InlineData(1, "AC ON")]
     [InlineData(2, "AC !")]
+    [InlineData(3, "AC ~")]
     public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
@@ -85,6 +87,28 @@ public sealed class AutoCastTests
 
         Assert.Equal(AutoCastOperationMode.Disabled, fixture.Config.AutoCastMode.Value);
         Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
+    public void ActiveEmptyLoadoutRemainsOperational()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var engine = new AutoCastEngine(
+            config,
+            new FakeCatalog(),
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            new ManualLogSource(),
+            () => true,
+            featureStatus: statuses.AutoCast);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoCast.Current.State);
+        Assert.Equal(AutoCastToggleVisualState.On, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoCast.Current));
     }
 
     [Fact]

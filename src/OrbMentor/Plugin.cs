@@ -36,7 +36,8 @@ public sealed class Plugin : BaseUnityPlugin
             _config,
             Logger,
             SuitePerformanceCoordinator.Shared,
-            () => Time.frameCount);
+            () => Time.frameCount,
+            featureStatusRegistry: FeatureStatusRegistry.Shared);
         _invalidationBridge = new MentorGameplayInvalidationBridge(GameplayInvalidationBus.Shared);
         _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
@@ -87,6 +88,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
             _runtime.Cancel(MentorDropReason.Disabled);
+            _runtime.RefreshFeatureStatus();
             Logger.LogInfo($"Orb Mentor is now {_config.Mode.Value}.");
         }
         var active = _config.Active;

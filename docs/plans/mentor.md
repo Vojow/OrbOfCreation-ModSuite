@@ -10,6 +10,8 @@ Reduce repetitive mastery work by sharing native XP within a progression domain.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.
 
+The next-beta [feature-health contract](feature-health-reporting.md) reports the Mentor root and each progression domain separately. Root degradation reflects a failed optional domain only when another configured domain remains operational; it never converts that sibling into a failure or changes pending XP work.
+
 Automatic spell leveling and its native resource spending are explicitly outside Orb Mentor. The beta implements that behavior under Automata's Auto Buy feature.
 
 ## Original spell MVP contract

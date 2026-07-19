@@ -22,6 +22,8 @@ Research is no longer the MVP. The release plugin removes the deprecated researc
 
 ## Current implementation status
 
+The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). Gameplay controls consume the same transition-only snapshots as Mod Config while engine scheduling and native validation remain unchanged.
+
 The first A1 implementation slice now covers both audited native purchase families:
 
 - `StructureSO.All`: availability, one-level cost, queue state, and `Purchase(true)`.

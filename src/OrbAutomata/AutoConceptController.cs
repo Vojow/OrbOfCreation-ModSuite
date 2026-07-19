@@ -47,6 +47,7 @@ internal sealed class AutoConceptController : IDisposable
     private readonly ManualLogSource _log;
     private readonly SuitePerformanceCoordinator _coordinator;
     private readonly Func<long> _readFrameIdentity;
+    private readonly AutomataFeatureStatusReporter? _featureStatus;
     private readonly SuiteWorkRegistration _readWork;
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly ConceptOwnershipLedger _ownership = new();
@@ -74,19 +75,22 @@ internal sealed class AutoConceptController : IDisposable
     private string? _preferredReplacementUuid;
     private double _preferredReplacementExpiresAtSeconds;
     private long _timedAssignmentSequence;
+    private bool _postconditionFaulted;
 
     public AutoConceptController(
         AutomataConfig config,
         ReflectionConceptRuntime runtime,
         ManualLogSource log,
         SuitePerformanceCoordinator coordinator,
-        Func<long> readFrameIdentity)
+        Func<long> readFrameIdentity,
+        AutomataFeatureStatusReporter? featureStatus = null)
     {
         _config = config;
         _runtime = runtime;
         _log = log;
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
+        _featureStatus = featureStatus;
         _readWork = coordinator.Register(
             "OrbAutomata.AutoConcept",
             "Reconcile and plan concept mastery",
@@ -106,6 +110,7 @@ internal sealed class AutoConceptController : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
         var active = _config.CanStartAutoConceptActively;
+        ObserveConfigurationStatus();
         SetEnabled(active);
         if (!active)
         {
@@ -170,6 +175,7 @@ internal sealed class AutoConceptController : IDisposable
         _preferredReplacementUuid = null;
         _preferredReplacementExpiresAtSeconds = 0.0;
         _loggedBlockedReason = null;
+        _postconditionFaulted = false;
         _secondsUntilEvaluation = 0.0f;
         _secondsUntilWatchdog = 0.0f;
     }
@@ -186,6 +192,24 @@ internal sealed class AutoConceptController : IDisposable
         var candidates = _runtime.ReadCandidates(_allowed, _blocked, out var reason);
         if (!_runtime.IsReady || !string.IsNullOrWhiteSpace(reason))
         {
+            if (_postconditionFaulted)
+            {
+                ObservePostconditionFault();
+            }
+            else
+            {
+                _featureStatus?.Observe(
+                    true,
+                    _runtime.BlockedReason is null
+                        ? FeatureStatusState.NotReady
+                        : FeatureStatusState.ContractUnavailable,
+                    _runtime.BlockedReason is null
+                        ? FeatureStatusReasonCode.RegistryNotReady
+                        : FeatureStatusReasonCode.ContractUnavailable,
+                    _runtime.BlockedReason is null
+                        ? "The native Concept registries are not ready."
+                        : "The native Concept contract is unavailable.");
+            }
             LogFailure(reason);
             _secondsUntilEvaluation = 10.0f;
             return;
@@ -196,6 +220,18 @@ internal sealed class AutoConceptController : IDisposable
                 $"Auto Concept catalog initialized. ScopedRecipes={_runtime.ScopedRecipeCount}, ActiveConcepts={_runtime.ActiveConceptCount}, EligibleCandidates={candidates.Count}.");
         }
         _cachedCandidates = candidates;
+        if (candidates.Count == 0)
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.Locked,
+                FeatureStatusReasonCode.ProgressionLocked,
+                "No compatible discovered Concepts are available.");
+        }
+        else
+        {
+            _featureStatus?.ObserveOperational();
+        }
         if (!_baselineCaptured)
         {
             for (var index = 0; index < candidates.Count; index++)
@@ -411,6 +447,7 @@ internal sealed class AutoConceptController : IDisposable
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
                 LogFailure($"Auto Concept rotation rejected for {candidate.DisplayName}: {reason}");
+                ObserveMutationRejection();
                 _secondsUntilEvaluation = 0.0f;
                 return;
             }
@@ -422,6 +459,7 @@ internal sealed class AutoConceptController : IDisposable
                 : $"train lower-mastery {pending.Value.ReplacementName}";
             LogOperation(
                 $"Auto Concept rotated out {candidate.DisplayName} ({pending.Value.TargetOrDelta} instance(s)) to {purpose}.");
+            _featureStatus?.ObserveOperational();
             _secondsUntilEvaluation = 0.25f;
             return;
         }
@@ -435,6 +473,7 @@ internal sealed class AutoConceptController : IDisposable
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
                 LogFailure($"Auto Concept removal rejected for {candidate.DisplayName}: {reason}");
+                ObserveMutationRejection();
                 _secondsUntilEvaluation = 0.0f;
                 return;
             }
@@ -443,6 +482,7 @@ internal sealed class AutoConceptController : IDisposable
                 candidate.Quantity - pending.Value.TargetOrDelta,
                 -pending.Value.TargetOrDelta);
             LogOperation($"Auto Concept removed {pending.Value.TargetOrDelta} owned {candidate.DisplayName} instance(s).");
+            _featureStatus?.ObserveOperational();
             _secondsUntilEvaluation = string.IsNullOrWhiteSpace(pending.Value.ReplacementName) ? 0.0f : 0.25f;
             return;
         }
@@ -456,6 +496,11 @@ internal sealed class AutoConceptController : IDisposable
                 out reason))
         {
             LogFailure($"Auto Concept resource revalidation rejected {candidate.DisplayName}: {reason}");
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.TemporarySafetyBlock,
+                "Concept resource safety changed before mutation.");
             _secondsUntilEvaluation = 5.0f;
             return;
         }
@@ -463,6 +508,7 @@ internal sealed class AutoConceptController : IDisposable
         if (delta <= 0 || !_runtime.TryAdd(candidate, delta, out reason))
         {
             LogFailure($"Auto Concept native mutation rejected {candidate.DisplayName}: {reason}");
+            ObserveMutationRejection();
             _secondsUntilEvaluation = 5.0f;
             return;
         }
@@ -474,6 +520,7 @@ internal sealed class AutoConceptController : IDisposable
             _preferredReplacementExpiresAtSeconds = 0.0;
         }
         LogOperation($"Auto Concept added {delta} {candidate.DisplayName} instance(s), target {safeTarget}.");
+        _featureStatus?.ObserveOperational();
         _secondsUntilEvaluation = 0.0f;
     }
 
@@ -752,6 +799,49 @@ internal sealed class AutoConceptController : IDisposable
         if (_mutationWork.IsEnabled != enabled) _mutationWork.SetEnabled(enabled);
         if (!enabled) SetPending(false, false);
     }
+
+    private void ObserveConfigurationStatus()
+    {
+        if (_config.AutoConceptMode.Value != AutoConceptOperationMode.Active)
+        {
+            _featureStatus?.Observe(
+                false,
+                FeatureStatusState.ConfigurationDisabled,
+                FeatureStatusReasonCode.ConfigurationDisabled,
+                "Auto Concept is disabled by configuration.");
+            return;
+        }
+        if (!_config.CanStartAutoConceptActively)
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.EmergencyDisabled,
+                "Automata Emergency Disable is active.");
+        }
+    }
+
+    private void ObserveMutationRejection()
+    {
+        if (_runtime.BlockedReason is not null)
+        {
+            _postconditionFaulted = true;
+            ObservePostconditionFault();
+            return;
+        }
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.TemporarilyBlocked,
+            FeatureStatusReasonCode.TemporarySafetyBlock,
+            "Concept state changed before mutation; Automata will replan.");
+    }
+
+    private void ObservePostconditionFault() =>
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.Faulted,
+            FeatureStatusReasonCode.PostconditionFailed,
+            "A native Concept mutation could not be verified and is blocked until lifecycle recovery.");
 
     private void SetPending(bool read, bool mutation)
     {

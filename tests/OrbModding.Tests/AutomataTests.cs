@@ -154,6 +154,7 @@ public sealed class AutomataTests
     [InlineData(0, "CN OFF")]
     [InlineData(1, "CN ON")]
     [InlineData(2, "CN !")]
+    [InlineData(3, "CN ~")]
     public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));

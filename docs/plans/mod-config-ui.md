@@ -120,6 +120,8 @@ Version `0.6.0` adds AND-composed staged dependencies while retaining the origin
 
 Version `0.6.1` adopts the shared lifecycle monitor and generation used by the gameplay plugins. Repeated observations of the same live scene are idempotent, while actual scene recreation disposes stale UI objects and begins a new generation.
 
+The next-beta health pass adds a separate runtime-status band. It joins Common feature snapshots to the selected catalog entry by exact plugin GUID, refreshes only after a status transition, and never changes configuration or dependencies from runtime state. Apply confirms only that configuration was saved; runtime application is reported independently when the plugin supports the shared contract.
+
 ### M0 — Runtime UI probe
 
 - Record the main navigation hierarchy, button components, layout group, selection behavior, fonts, colors, and panel activation lifecycle.

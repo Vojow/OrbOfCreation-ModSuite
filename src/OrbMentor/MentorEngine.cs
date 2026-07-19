@@ -1069,6 +1069,8 @@ internal sealed class MentorFailureState
     public string? PermanentReason { get; private set; }
     public string? TransientReason { get; private set; }
     public bool IsBlocked => PermanentReason is not null || TransientReason is not null;
+    public bool IsPermanent => PermanentReason is not null;
+    public bool IsTransient => PermanentReason is null && TransientReason is not null;
     public string? Reason => PermanentReason ?? TransientReason;
     public void BlockPermanent(string reason) => PermanentReason ??= reason;
     public void BlockTransient(string reason) => TransientReason = reason;
