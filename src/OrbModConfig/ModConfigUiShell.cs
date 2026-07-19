@@ -86,7 +86,8 @@ internal sealed class ModConfigUiShell : IDisposable
         out ModConfigUiShell? shell,
         out string reason,
         Action? navigationChanged = null,
-        IFeatureStatusSource? featureStatuses = null)
+        IFeatureStatusSource? featureStatuses = null,
+        IConfigurationSchemaStatusSource? schemaStatuses = null)
     {
         shell = null;
         reason = string.Empty;
@@ -199,6 +200,7 @@ internal sealed class ModConfigUiShell : IDisposable
                 label,
                 catalog,
                 log,
+                schemaStatuses ?? ConfigurationSchemaStatusRegistry.Shared,
                 featureStatuses ?? FeatureStatusRegistry.Shared);
             var image = buttonObject.GetComponent<Image>();
             if (image is not null && inactiveSprite is not null)
@@ -297,6 +299,7 @@ internal sealed class ModConfigUiShell : IDisposable
         _externalRefreshSeconds = ExternalRefreshIntervalSeconds;
         _panel.RefreshExternalValues();
         _panel.RefreshResponsiveLayout();
+        _panel.RefreshSchemaStatusIfNeeded();
         _panel.RefreshRuntimeStatusIfNeeded();
     }
 

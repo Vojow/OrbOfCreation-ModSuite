@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
@@ -77,7 +78,7 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesLegacyBalanceMasteryModeToActive()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "Mode", "BalanceMastery", "Legacy Auto Concept mode.");
+        configFile.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -93,7 +94,10 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesLegacyMinutesToSeconds(float legacyMinutes, int expectedSeconds)
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", legacyMinutes, "Legacy interval.");
+        configFile.SeedSerialized(
+            "AutoConcept",
+            "RebalanceIntervalMinutes",
+            legacyMinutes.ToString(CultureInfo.InvariantCulture));
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -107,7 +111,7 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesExistingRebalanceSecondsSetting()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Current interval.");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -121,9 +125,9 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_PreservesNewFallbackSettingOverLegacyValues()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "FallbackEvaluationIntervalSeconds", 45, "Current interval.");
-        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Previous interval.");
-        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", 2.0f, "Legacy interval.");
+        configFile.SeedSerialized("AutoConcept", "FallbackEvaluationIntervalSeconds", "45");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalMinutes", "2.0");
 
         var config = AutomataConfig.Bind(configFile);
 

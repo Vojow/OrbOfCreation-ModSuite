@@ -276,12 +276,12 @@ public sealed class ModConfigTests
     public void AutomataBinding_RemovesDeprecatedReleaseSettings()
     {
         var config = new ConfigFile();
-        config.Bind("AutoBuy", "RuntimeProbeConfirmed", true, "legacy");
-        config.Bind("AutoBuy", "ActivePurchaseLimitPerSession", 1, "legacy");
-        config.Bind("AutoCast", "RuntimeProbeConfirmed", true, "legacy");
-        config.Bind("Safety", "AllowUnvalidatedActiveMode", false, "legacy");
-        config.Bind("Research", "Mode", LegacyResearchAutomationMode.DryRun, "legacy");
-        config.Bind("AutoConcept", "AutoLevelSpells", false, "pre-release location");
+        config.SeedSerialized("AutoBuy", "RuntimeProbeConfirmed", "true");
+        config.SeedSerialized("AutoBuy", "ActivePurchaseLimitPerSession", "1");
+        config.SeedSerialized("AutoCast", "RuntimeProbeConfirmed", "true");
+        config.SeedSerialized("Safety", "AllowUnvalidatedActiveMode", "false");
+        config.SeedSerialized("Research", "Mode", LegacyResearchAutomationMode.DryRun.ToString());
+        config.SeedSerialized("AutoConcept", "AutoLevelSpells", "false");
 
         AutomataConfig.Bind(config);
 

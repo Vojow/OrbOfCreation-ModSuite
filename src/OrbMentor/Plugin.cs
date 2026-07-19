@@ -32,7 +32,13 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance = this;
         Log = Logger;
-        _config = MentorConfig.Bind(Config);
+        var configuration = MentorConfig.TryBind(Config);
+        if (!configuration.Success)
+        {
+            Logger.LogError(configuration.Status.Reason);
+            return;
+        }
+        _config = configuration.Config!;
         _actionFamilyOwnership = new MentorActionFamilyOwnership();
         Logger.LogWarning(
             "Mentor action-family ownership is best-effort; unknown unregistered automation cannot be proven absent and is not disabled.");

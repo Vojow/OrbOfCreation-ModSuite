@@ -31,22 +31,14 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Awake()
     {
-        _enabled = Config.Bind(
-            "General",
-            "Enabled",
-            true,
-            new ConfigDescription(
-                "Enable Orb Mod Config.",
-                null,
-                new ModConfigMetadata(0, 0, hidden: true)));
-        _enableUiShell = Config.Bind(
-            "Interface",
-            "EnableButtonShell",
-            true,
-            new ConfigDescription(
-                "Insert the Mods top-bar button and in-game configuration editor.",
-                null,
-                new ModConfigMetadata(10, 0, hidden: true)));
+        var configuration = ModConfigSettings.TryBind(Config);
+        if (!configuration.Success)
+        {
+            Logger.LogError(configuration.Status.Reason);
+            return;
+        }
+        _enabled = configuration.Config!.Enabled;
+        _enableUiShell = configuration.Config.EnableUiShell;
 
         _invalidationBus = GameplayInvalidationBus.Shared;
 

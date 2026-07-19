@@ -807,12 +807,29 @@ namespace BepInEx.Configuration
     public sealed class ConfigFile : IEnumerable<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
     {
         private readonly Dictionary<ConfigDefinition, ConfigEntryBase> _entries = new Dictionary<ConfigDefinition, ConfigEntryBase>();
+        private readonly Dictionary<ConfigDefinition, string> _orphanedEntries = new Dictionary<ConfigDefinition, string>();
+        private readonly Dictionary<ConfigDefinition, string> _persistedEntries = new Dictionary<ConfigDefinition, string>();
+
+        public ConfigFile(string configFilePath = "")
+        {
+            ConfigFilePath = configFilePath;
+        }
 
         public bool SaveOnConfigSet { get; set; } = true;
 
+        public string ConfigFilePath { get; }
+
         public int SaveCalls { get; private set; }
 
+        public int ReloadCalls { get; private set; }
+
         public int? ThrowOnSaveCall { get; set; }
+
+        public int? ThrowOnReloadCall { get; set; }
+
+        public bool ThrowOnEveryReload { get; set; }
+
+        public ConfigDefinition? ThrowOnBindDefinition { get; set; }
 
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, string description)
         {
@@ -822,12 +839,17 @@ namespace BepInEx.Configuration
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, ConfigDescription description)
         {
             var definition = new ConfigDefinition(section, key);
+            if (definition.Equals(ThrowOnBindDefinition))
+            {
+                throw new InvalidOperationException($"simulated config bind failure for [{section}] {key}");
+            }
             if (_entries.TryGetValue(definition, out var existing))
             {
                 return (ConfigEntry<T>)existing;
             }
 
             var entry = new ConfigEntry<T>(this, definition, defaultValue, description);
+            if (_orphanedEntries.Remove(definition, out var serialized)) entry.SetSerializedValue(serialized);
             _entries.Add(definition, entry);
             return entry;
         }
@@ -839,7 +861,37 @@ namespace BepInEx.Configuration
             {
                 throw new InvalidOperationException($"simulated config save failure on call {SaveCalls}");
             }
+
+            _persistedEntries.Clear();
+            foreach (var pair in _orphanedEntries) _persistedEntries[pair.Key] = pair.Value;
+            foreach (var pair in _entries) _persistedEntries[pair.Key] = pair.Value.GetSerializedValue();
         }
+
+        public void Reload()
+        {
+            ReloadCalls++;
+            if (ThrowOnEveryReload || ThrowOnReloadCall == ReloadCalls)
+            {
+                throw new InvalidOperationException($"simulated config reload failure on call {ReloadCalls}");
+            }
+
+            _orphanedEntries.Clear();
+            foreach (var pair in _persistedEntries)
+            {
+                if (_entries.TryGetValue(pair.Key, out var entry)) entry.SetSerializedValue(pair.Value);
+                else _orphanedEntries[pair.Key] = pair.Value;
+            }
+        }
+
+        public void SeedSerialized(string section, string key, string value)
+        {
+            var definition = new ConfigDefinition(section, key);
+            _orphanedEntries[definition] = value;
+            _persistedEntries[definition] = value;
+        }
+
+        public bool TryGetPersisted(string section, string key, out string value) =>
+            _persistedEntries.TryGetValue(new ConfigDefinition(section, key), out value!);
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
 

@@ -50,7 +50,15 @@ public sealed class Plugin : BaseUnityPlugin
     private void Awake()
     {
         Log = Logger;
-        _config = AutomataConfig.Bind(Config);
+        var configuration = AutomataConfig.TryBind(Config);
+        if (!configuration.Success)
+        {
+            Logger.LogError(configuration.Status.Reason);
+            return;
+        }
+        _config = configuration.Config!;
+        foreach (var diagnostic in configuration.Diagnostics)
+            Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
         _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
         _featureStatuses = new AutomataFeatureStatuses(_config, _lifecycleGeneration);
 

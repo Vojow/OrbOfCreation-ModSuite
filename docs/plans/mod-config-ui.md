@@ -102,7 +102,7 @@ Until that contract exists, settings are assumed to be saved immediately but not
 
 ## Delivery stages
 
-### Current implementation status (0.6.2)
+### Current implementation status (0.6.3)
 
 - Added the standalone `OrbModConfig` BepInEx plugin project.
 - Added deterministic discovery and grouping of loaded plugins, configuration sections, and entries.
@@ -121,6 +121,8 @@ Version `0.6.0` adds AND-composed staged dependencies while retaining the origin
 Version `0.6.1` adopts the shared lifecycle monitor and generation used by the gameplay plugins. Repeated observations of the same live scene are idempotent, while actual scene recreation disposes stale UI objects and begins a new generation.
 
 Version `0.6.2` replaces fixed-height, ellipsis-clipped setting rows with rendered-description heights. Same-page rebuilds preserve the absolute scroll offset, deliberate mod or feature-section navigation resets to the top, and width changes trigger responsive remeasurement without polling rendered text every frame.
+
+Version `0.6.3` adopts the [versioned configuration-schema transaction](configuration-schema.md) for Mod Config itself and adds a separate exact-plugin schema-status band above runtime health. It reports current, migrated, failed, or future state plus saved/loaded and backup evidence without exposing file paths or serialized values. Selection and late status transitions refresh this band independently from staged edits, Apply confirmation, and runtime feature health.
 
 The next-beta health pass adds a separate runtime-status band. It joins Common feature snapshots to the selected catalog entry by exact plugin GUID, refreshes only after a status transition, and never changes configuration or dependencies from runtime state. Apply confirms only that configuration was saved; runtime application is reported independently when the plugin supports the shared contract.
 
