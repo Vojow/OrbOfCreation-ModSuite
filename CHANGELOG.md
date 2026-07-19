@@ -1,5 +1,12 @@
 # Changelog
 
+## Versioned configuration schemas — 2026-07-19
+
+- Add a shared pre-bind configuration transaction with hidden schema markers, exact-byte rollback, verified all-or-nothing first-free sibling backups, ordered reviewed migrations, and fail-closed malformed or future-version handling.
+- Migrate Automata's proven schema-zero Concept mode and fallback-interval values, explicitly discard its reviewed obsolete keys, and leave Mentor and Mod Config value interpretation unchanged through marker-only steps.
+- Publish sanitized exact-plugin schema outcomes through Common and hand them atomically to Orb Mod Config's Unity tick separately from runtime health and Apply results. Failed/future suite plugins remain selectable as read-only status-only tabs even when no settings were bound.
+- Bump Orb Automata to 0.8.8, Orb Mentor to 0.3.8, Orb Mod Config to 0.6.3, and Orb Modding Common to 0.3.7.
+
 ## Orb Mod Config 0.6.2 Beta 1 — 2026-07-19
 
 - Size setting rows from their rendered descriptions so complete help, acceptable-value, restart, and saved-versus-runtime text remains readable instead of being ellipsis-clipped in a fixed-height area.

@@ -4,6 +4,10 @@
 
 Open the in-game **Mods** tab to configure Automata and Mentor. Orb Mod Config is optional; the same values remain available through BepInEx configuration files.
 
+Supported plugin files carry a hidden `[OrbModding] ConfigurationSchemaVersion` marker. An unversioned file is upgraded to version 1 before the plugin binds its normal settings. When an existing file requires migration, the transaction creates the first free sibling backup (`.pre-schema-v1.bak`, then `.bak.2`, and so on) before changing the file; a fresh file has no original bytes to back up. Existing backups are never overwritten. Malformed, negative, or newer unsupported schema versions stop that plugin before it changes gameplay or opens its UI; do not lower a future marker by hand. The Mods panel reports the selected plugin's schema state separately from both runtime health and the Apply result, and never displays the configuration path or saved values in that status.
+
+Automata's reviewed upgrade maps the old `AutoConcept.Mode=BalanceMastery` value to `Active`, gives the current fallback-seconds key precedence over the older seconds and minutes keys, clamps the result to 10-1800 seconds, and removes only an explicit obsolete-key list. Mentor and Mod Config retain their existing typed values and add only the version marker. See the [configuration-schema contract](../plans/configuration-schema.md) for the exact transaction and validation rules.
+
 Important controls:
 
 Disabled feature modes lock their tuning fields in Orb Mod Config. Mode controls, toggle shortcuts, gameplay-button visibility, emergency disable, and diagnostics remain editable. Nested controls unlock only when all of their staged prerequisites are selected; these UI dependencies do not change or erase saved values.

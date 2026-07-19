@@ -41,6 +41,8 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly RectTransform _sectionTabs;
     private readonly RectTransform _settingsContent;
     private readonly ScrollRect _settingsScroll;
+    private readonly IConfigurationSchemaStatusSource _schemaStatuses;
+    private readonly TextMeshProUGUI _schemaStatusText;
     private readonly IFeatureStatusSource _featureStatuses;
     private readonly TextMeshProUGUI _runtimeStatusText;
     private readonly TextMeshProUGUI _statusText;
@@ -53,6 +55,7 @@ internal sealed class ModConfigPanel : IDisposable
     private int _selectedSectionIndex;
     private float _measuredDescriptionWidth;
     private bool _disposed;
+    private readonly ConfigurationSchemaDirtyLatch _schemaStatusDirty = new(initiallyDirty: true);
     private bool _runtimeStatusDirty = true;
 
     private ModConfigPanel(
@@ -64,6 +67,8 @@ internal sealed class ModConfigPanel : IDisposable
         RectTransform sectionTabs,
         RectTransform settingsContent,
         ScrollRect settingsScroll,
+        IConfigurationSchemaStatusSource schemaStatuses,
+        TextMeshProUGUI schemaStatusText,
         IFeatureStatusSource featureStatuses,
         TextMeshProUGUI runtimeStatusText,
         TextMeshProUGUI statusText,
@@ -79,11 +84,14 @@ internal sealed class ModConfigPanel : IDisposable
         _sectionTabs = sectionTabs;
         _settingsContent = settingsContent;
         _settingsScroll = settingsScroll;
+        _schemaStatuses = schemaStatuses;
+        _schemaStatusText = schemaStatusText;
         _featureStatuses = featureStatuses;
         _runtimeStatusText = runtimeStatusText;
         _statusText = statusText;
         _applyButton = applyButton;
         _revertButton = revertButton;
+        _schemaStatuses.Transitioned += OnSchemaStatusTransitioned;
         _featureStatuses.Transitioned += OnRuntimeStatusTransitioned;
         RebuildAll(resetSettingsScroll: true);
         SetActive(false);
@@ -96,6 +104,7 @@ internal sealed class ModConfigPanel : IDisposable
         TextMeshProUGUI labelTemplate,
         ConfigCatalogSnapshot catalog,
         ManualLogSource log,
+        IConfigurationSchemaStatusSource schemaStatuses,
         IFeatureStatusSource featureStatuses)
     {
         var root = CreateRectObject(ModConfigUiShell.PanelObjectName, parent, Vector2.zero, Vector2.one, BackgroundColor);
@@ -103,10 +112,13 @@ internal sealed class ModConfigPanel : IDisposable
         var header = CreateRectObject("ModTabs", root.transform, new Vector2(0.02f, 0.875f), new Vector2(0.98f, 0.975f), BarColor);
         var sections = CreateRectObject("SectionTabs", root.transform, new Vector2(0.02f, 0.77f), new Vector2(0.98f, 0.86f), BarColor);
 
-        var runtimeBar = CreateRectObject("RuntimeStatus", root.transform, new Vector2(0.02f, 0.665f), new Vector2(0.98f, 0.75f), BarColor);
+        var schemaBar = CreateRectObject("ConfigurationSchemaStatus", root.transform, new Vector2(0.02f, 0.665f), new Vector2(0.98f, 0.75f), BarColor);
+        var schemaStatus = CreateText("ConfigurationSchemaStatusText", schemaBar.transform, new Vector2(0.015f, 0.08f), new Vector2(0.985f, 0.92f), labelTemplate, "Configuration schema: Not reported; saved: Unknown; loaded: Unknown.", TextAlignmentOptions.MidlineLeft, 0.58f);
+
+        var runtimeBar = CreateRectObject("RuntimeStatus", root.transform, new Vector2(0.02f, 0.575f), new Vector2(0.98f, 0.655f), BarColor);
         var runtimeStatus = CreateText("RuntimeStatusText", runtimeBar.transform, new Vector2(0.015f, 0.08f), new Vector2(0.985f, 0.92f), labelTemplate, "Runtime status: Not reported by this plugin.", TextAlignmentOptions.MidlineLeft, 0.58f);
 
-        var viewport = CreateRectObject("SettingsViewport", root.transform, new Vector2(0.02f, 0.15f), new Vector2(0.98f, 0.65f), new Color(0.035f, 0.043f, 0.06f, 0.98f));
+        var viewport = CreateRectObject("SettingsViewport", root.transform, new Vector2(0.02f, 0.15f), new Vector2(0.98f, 0.565f), new Color(0.035f, 0.043f, 0.06f, 0.98f));
         viewport.AddComponent<RectMask2D>();
         var scroll = viewport.AddComponent<ScrollRect>();
         scroll.horizontal = false;
@@ -142,6 +154,8 @@ internal sealed class ModConfigPanel : IDisposable
             (RectTransform)sections.transform,
             contentRect,
             scroll,
+            schemaStatuses,
+            schemaStatus,
             featureStatuses,
             runtimeStatus,
             status,
@@ -152,6 +166,7 @@ internal sealed class ModConfigPanel : IDisposable
         revert.onClick.RemoveAllListeners();
         revert.onClick.AddListener(panel.Revert);
         panel.RefreshStatus();
+        panel.RefreshSchemaStatusIfNeeded();
         panel.RefreshRuntimeStatusIfNeeded();
         return panel;
     }
@@ -165,6 +180,7 @@ internal sealed class ModConfigPanel : IDisposable
 
         if (_session.RefreshExternalValues()) RebuildSettings();
         RefreshResponsiveLayout();
+        RefreshSchemaStatusIfNeeded();
         RefreshRuntimeStatusIfNeeded();
     }
 
@@ -179,6 +195,8 @@ internal sealed class ModConfigPanel : IDisposable
     public void RefreshResponsiveLayout()
     {
         if (_disposed || !Root.activeInHierarchy || _catalog.Mods.Count == 0) return;
+        var mod = _catalog.Mods[Math.Max(0, Math.Min(_selectedModIndex, _catalog.Mods.Count - 1))];
+        if (mod.Sections.Count == 0) return;
         var descriptionWidth = CalculateDescriptionWidth(_settingsContent.rect.width);
         if (!DescriptionWidthChanged(_measuredDescriptionWidth, descriptionWidth)) return;
         RebuildSettings();
@@ -200,6 +218,19 @@ internal sealed class ModConfigPanel : IDisposable
             .FormatCompact();
     }
 
+    public void RefreshSchemaStatusIfNeeded()
+    {
+        if (_disposed || !_schemaStatusDirty.TryConsume()) return;
+        if (_catalog.Mods.Count == 0)
+        {
+            _schemaStatusText.text = "Configuration schema: No configurable plugin selected; saved: Unknown; loaded: Unknown.";
+            return;
+        }
+
+        var mod = _catalog.Mods[Math.Max(0, Math.Min(_selectedModIndex, _catalog.Mods.Count - 1))];
+        _schemaStatusText.text = ConfigurationSchemaStatusProjection.Build(mod.Guid, _schemaStatuses).Text;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -208,6 +239,7 @@ internal sealed class ModConfigPanel : IDisposable
         }
 
         _disposed = true;
+        _schemaStatuses.Transitioned -= OnSchemaStatusTransitioned;
         _featureStatuses.Transitioned -= OnRuntimeStatusTransitioned;
         UnityEngine.Object.Destroy(Root);
     }
@@ -217,7 +249,7 @@ internal sealed class ModConfigPanel : IDisposable
         ClearObjects(_modTabObjects);
         if (_catalog.Mods.Count == 0)
         {
-            _statusText.text = "No loaded plugins expose BepInEx configuration entries.";
+            _statusText.text = "No loaded plugins expose configuration entries or schema status.";
             ClearObjects(_sectionTabObjects);
             ClearObjects(_settingObjects);
             return;
@@ -240,6 +272,10 @@ internal sealed class ModConfigPanel : IDisposable
         if (mod.Sections.Count == 0)
         {
             ClearObjects(_settingObjects);
+            _settingsContent.sizeDelta = new Vector2(0f, 1f);
+            if (resetSettingsScroll) _settingsContent.anchoredPosition = Vector2.zero;
+            _measuredDescriptionWidth = 0f;
+            RefreshStatus();
             return;
         }
 
@@ -255,6 +291,14 @@ internal sealed class ModConfigPanel : IDisposable
 
     private void RebuildSettings(bool resetScroll = false)
     {
+        if (_catalog.Mods.Count == 0 || _catalog.Mods[_selectedModIndex].Sections.Count == 0)
+        {
+            ClearObjects(_settingObjects);
+            _settingsContent.sizeDelta = new Vector2(0f, 1f);
+            RefreshStatus();
+            return;
+        }
+
         var requestedScrollOffset = resetScroll ? 0f : Math.Max(0f, _settingsContent.anchoredPosition.y);
         ClearObjects(_settingObjects);
         var settings = _catalog.Mods[_selectedModIndex].Sections[_selectedSectionIndex].Settings;
@@ -433,8 +477,10 @@ internal sealed class ModConfigPanel : IDisposable
     {
         _selectedModIndex = index;
         _selectedSectionIndex = 0;
+        _schemaStatusDirty.MarkDirty();
         _runtimeStatusDirty = true;
         RebuildAll(resetSettingsScroll: true);
+        RefreshSchemaStatusIfNeeded();
         RefreshRuntimeStatusIfNeeded();
     }
 
@@ -446,6 +492,12 @@ internal sealed class ModConfigPanel : IDisposable
 
     private void Apply()
     {
+        if (_catalog.Mods.Count == 0 || _catalog.Mods[_selectedModIndex].Sections.Count == 0)
+        {
+            RefreshStatus();
+            return;
+        }
+
         if (_session.Apply(out var error, out var appliedSettings))
         {
             ModConfigInvalidationPublisher.PublishAppliedSettings(
@@ -472,8 +524,19 @@ internal sealed class ModConfigPanel : IDisposable
             _runtimeStatusDirty = true;
     }
 
+    private void OnSchemaStatusTransitioned(ConfigurationSchemaStatusTransition transition)
+    {
+        _schemaStatusDirty.MarkDirty();
+    }
+
     private void Revert()
     {
+        if (_catalog.Mods.Count == 0 || _catalog.Mods[_selectedModIndex].Sections.Count == 0)
+        {
+            RefreshStatus();
+            return;
+        }
+
         _session.RevertAll();
         _statusText.text = "Reverted staged changes.";
         RebuildSettings();
@@ -481,6 +544,24 @@ internal sealed class ModConfigPanel : IDisposable
 
     private void RefreshStatus(ConfigEditValue? changed = null)
     {
+        if (_catalog.Mods.Count == 0)
+        {
+            _statusText.color = _labelTemplate.color;
+            _statusText.text = "No loaded plugins expose configuration entries or schema status.";
+            _applyButton.interactable = false;
+            _revertButton.interactable = false;
+            return;
+        }
+
+        if (_catalog.Mods.Count > 0 && _catalog.Mods[_selectedModIndex].Sections.Count == 0)
+        {
+            _statusText.color = _labelTemplate.color;
+            _statusText.text = "Configuration schema status only; no editable settings loaded.";
+            _applyButton.interactable = false;
+            _revertButton.interactable = false;
+            return;
+        }
+
         if (changed is not null && !changed.IsValid)
         {
             _statusText.color = InvalidColor;
@@ -492,9 +573,18 @@ internal sealed class ModConfigPanel : IDisposable
             _statusText.text = _session.IsDirty ? "Unsaved changes" : "Ready";
         }
 
-        _applyButton.interactable = _session.IsDirty && _session.IsValid;
+        _applyButton.interactable = CanApplySelection(
+            _catalog.Mods[Math.Max(0, Math.Min(_selectedModIndex, _catalog.Mods.Count - 1))],
+            _session.IsDirty,
+            _session.IsValid);
         _revertButton.interactable = _session.IsDirty;
     }
+
+    internal static bool CanApplySelection(
+        ModConfigDescriptor selectedMod,
+        bool sessionDirty,
+        bool sessionValid) =>
+        selectedMod.Sections.Count > 0 && sessionDirty && sessionValid;
 
     private void BuildTabs(
         RectTransform parent,

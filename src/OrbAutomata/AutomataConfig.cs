@@ -242,10 +242,26 @@ internal sealed class AutomataConfig
 
     public static AutomataConfig Bind(ConfigFile config)
     {
-        var saveOnConfigSet = config.SaveOnConfigSet;
-        config.SaveOnConfigSet = false;
-        try
-        {
+        var result = TryBind(config);
+        if (!result.Success)
+            throw new InvalidOperationException(result.Status.Reason);
+        return result.Config!;
+    }
+
+    public static ConfigurationSchemaBindResult<AutomataConfig> TryBind(
+        ConfigFile config,
+        IConfigurationFileOperations? fileOperations = null,
+        ConfigurationSchemaStatusRegistry? statuses = null) =>
+        ConfigurationSchemaTransaction.Bind(
+            PluginIds.AutomataGuid,
+            config,
+            AutomataConfigurationSchema.Plan,
+            BindCurrent,
+            fileOperations,
+            statuses);
+
+    private static AutomataConfig BindCurrent(ConfigFile config)
+    {
             var autoBuyMode = Bind(
                 config,
                 "AutoBuy",
@@ -264,9 +280,25 @@ internal sealed class AutomataConfig
                 15,
                 0);
 
-            var autoConceptMode = BindAutoConceptMode(config);
+            var autoConceptMode = Bind(
+                config,
+                "AutoConcept",
+                "Mode",
+                AutoConceptOperationMode.Disabled,
+                "Disabled performs no concept work. Active trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
+                17,
+                0);
 
-            var autoConceptFallbackEvaluationIntervalSeconds = BindAutoConceptFallbackEvaluationIntervalSeconds(config);
+            var autoConceptFallbackEvaluationIntervalSeconds = Bind(
+                config,
+                "AutoConcept",
+                "FallbackEvaluationIntervalSeconds",
+                300,
+                "Maximum idle seconds between full concept plan evaluations. Native lifecycle, mastery, slot, quantity, and safety signals can request an earlier pass.",
+                17,
+                10,
+                new AcceptableValueRange<int>(10, 1800),
+                AutoConceptActiveDependencies);
 
             var result = new AutomataConfig(
                 Bind(config, "General", "Enabled", true, "Enable Automata.", 0, 0),
@@ -314,122 +346,7 @@ internal sealed class AutomataConfig
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
                 Bind(config, "Reserves", "RelativeReserveMultiplier", 0.0f, "Additional amount to leave after each action, expressed as a multiple of that action's cost. Affordability modes remain separate.", 20, 10));
 
-            RemoveLegacySettings(config);
-            config.Save();
             return result;
-        }
-        finally
-        {
-            config.SaveOnConfigSet = saveOnConfigSet;
-        }
-    }
-
-    private static void RemoveLegacySettings(ConfigFile config)
-    {
-        RemoveLegacy(config, "AutoBuy", "ActivePurchaseLimitPerSession", 0);
-        RemoveLegacy(config, "AutoBuy", "RuntimeProbeConfirmed", true);
-        RemoveLegacy(config, "AutoCast", "RuntimeProbeConfirmed", true);
-        RemoveLegacy(config, "Safety", "RuntimeProbeConfirmed", true);
-        RemoveLegacy(config, "Safety", "AllowUnvalidatedActiveMode", false);
-        RemoveLegacy(config, "Research", "Mode", LegacyResearchAutomationMode.Disabled);
-        RemoveLegacy(config, "Research", "EvaluationIntervalSeconds", 0.5f);
-        RemoveLegacy(config, "Research", "MaxActionsPerEvaluation", 1);
-        RemoveLegacy(config, "Performance", "MaxCandidatesPerEvaluation", 256);
-        RemoveLegacy(config, "Research", "AllowUnflaggedResearch", false);
-        RemoveLegacy(config, "Research", "PinnedResearchUuids", string.Empty);
-        RemoveLegacy(config, "Research", "BlockedResearchUuids", string.Empty);
-        RemoveLegacy(config, "Research", "CategoryPriority", string.Empty);
-        RemoveLegacy(config, "Reserves", "MaxCostToQuantityRatio", 1.0f);
-        RemoveLegacy(config, "ActiveMode", "StartMethod", "Develop");
-        RemoveLegacy(config, "AutoConcept", "AutoLevelSpells", true);
-    }
-
-    private static void RemoveLegacy<T>(ConfigFile config, string section, string key, T defaultValue)
-    {
-        var definition = new ConfigDefinition(section, key);
-        config.Bind(section, key, defaultValue, "Removed legacy setting.");
-        config.Remove(definition);
-    }
-
-    private static ConfigEntry<AutoConceptOperationMode> BindAutoConceptMode(ConfigFile config)
-    {
-        const string section = "AutoConcept";
-        const string key = "Mode";
-        var definition = new ConfigDefinition(section, key);
-        var serializedMode = config.Bind(section, key, AutoConceptOperationMode.Disabled.ToString(), "Auto Concept mode migration.").Value;
-        config.Remove(definition);
-
-        var result = Bind(
-            config,
-            section,
-            key,
-            AutoConceptOperationMode.Disabled,
-            "Disabled performs no concept work. Active trains the lowest-mastery discovered Scholar concepts through the native Active Concepts list.",
-            17,
-            0);
-        if (string.Equals(serializedMode, "Active", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(serializedMode, "BalanceMastery", StringComparison.OrdinalIgnoreCase))
-        {
-            result.Value = AutoConceptOperationMode.Active;
-        }
-
-        return result;
-    }
-
-    private static ConfigEntry<int> BindAutoConceptFallbackEvaluationIntervalSeconds(ConfigFile config)
-    {
-        const string section = "AutoConcept";
-        const string currentKey = "FallbackEvaluationIntervalSeconds";
-        var currentDefinition = new ConfigDefinition("AutoConcept", "FallbackEvaluationIntervalSeconds");
-        var currentSeconds = config.Bind(
-            section,
-            currentKey,
-            -1,
-            new ConfigDescription("Current Auto Concept fallback interval migration.")).Value;
-        config.Remove(currentDefinition);
-
-        var previousDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalSeconds");
-        var previousSeconds = config.Bind(
-            section,
-            "RebalanceIntervalSeconds",
-            -1,
-            new ConfigDescription("Previous Auto Concept fallback interval migration.")).Value;
-        config.Remove(previousDefinition);
-
-        var result = Bind(
-            config,
-            section,
-            currentKey,
-            300,
-            "Maximum idle seconds between full concept plan evaluations. Native lifecycle, mastery, slot, quantity, and safety signals can request an earlier pass.",
-            17,
-            10,
-            new AcceptableValueRange<int>(10, 1800),
-            AutoConceptActiveDependencies);
-        var legacyDefinition = new ConfigDefinition("AutoConcept", "RebalanceIntervalMinutes");
-        var legacyMinutes = config.Bind(
-            section,
-            "RebalanceIntervalMinutes",
-            -1.0f,
-            new ConfigDescription("Legacy Auto Concept interval migration.")).Value;
-        config.Remove(legacyDefinition);
-        if (currentSeconds >= 0)
-        {
-            result.Value = Math.Clamp(currentSeconds, 10, 1800);
-        }
-        else if (previousSeconds >= 0)
-        {
-            result.Value = Math.Clamp(previousSeconds, 10, 1800);
-        }
-        else if (float.IsFinite(legacyMinutes) && legacyMinutes >= 0.0f)
-        {
-            result.Value = Math.Clamp(
-                (int)Math.Round(legacyMinutes * 60.0f, MidpointRounding.AwayFromZero),
-                10,
-                1800);
-        }
-
-        return result;
     }
 
     private static ConfigEntry<T> Bind<T>(

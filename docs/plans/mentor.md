@@ -8,6 +8,8 @@
 
 Reduce repetitive mastery work by sharing native XP within a progression domain. For spells, every equipped spell can share native mastery XP with discovered spells below that source's own mastery. `EquippedSpells` is the default source policy; `HighestDiscovered` preserves the original highest-confirmed-mastery behavior. Optional artifact and alchemy domains follow separately audited native contracts. Orb Mentor does not edit saves, change loadouts, or spend leveling resources.
 
+Version `0.3.8` adopts the [versioned configuration-schema transaction](configuration-schema.md). Its schema-zero step is marker-only: existing typed values are not reinterpreted, but malformed, negative, or future schema markers stop Mentor before Harmony patches and gameplay behavior start.
+
 The next-beta [action-family ownership contract](action-family-ownership.md) claims spell, artifact, and alchemy XP grants independently. A conflict cancels only that domain's captured, planned, parked, and pending XP; healthy siblings continue and the root health becomes degraded instead of globally blocked.
 
 Orb Mentor is a separate plugin rather than an Automata module. Automata owns scheduled player actions, while Mentor reacts to progression events and grants bonus progression. The separation lets players install either behavior independently and isolates game-update failures. Both plugins still share Orb Mod Config, common utilities, visual conventions, assembly auditing, and release tooling.

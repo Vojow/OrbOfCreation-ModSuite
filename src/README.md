@@ -17,6 +17,12 @@ Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally
 
 Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance source lives only on `codex/experimental-chronomancer-resonance` and must not be inferred from old build-output directories.
 
+## Shared configuration schemas
+
+`OrbModding.Common.ConfigurationSchemaTransaction` is the supported pre-bind configuration boundary. A plugin declares ordered one-version steps and a hidden `[OrbModding] ConfigurationSchemaVersion`; the transaction snapshots the original file, creates a non-overwriting sibling backup, disables `SaveOnConfigSet`, consumes only reviewed source keys, runs normal typed binding, writes the marker last, and saves once. Current schema files bypass mutation. Malformed, negative, future, bind, and save failures return no usable configuration and restore the original file exactly before publishing a sanitized exact-GUID status.
+
+Migration code must use explicit known-key maps and closed safe failure codes. It must not surface arbitrary exception messages, file paths, serialized values, or infer meaning from unknown settings. See the [versioned configuration schema plan](../docs/plans/configuration-schema.md).
+
 ## Shared automation decisions
 
 `OrbModding.Common.AutomationDecision` is the cross-plugin diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.

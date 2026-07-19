@@ -59,7 +59,21 @@ internal sealed class MentorConfig
     public bool DevelopmentProbeEnabled => DevelopmentProbe?.Value == true;
     public bool Active => Enabled.Value && Mode.Value == MentorOperationMode.Active && !EmergencyDisable.Value;
 
-    public static MentorConfig Bind(ConfigFile file) => new(
+    public static MentorConfig Bind(ConfigFile file)
+    {
+        var result = TryBind(file);
+        if (!result.Success) throw new System.InvalidOperationException(result.Status.Reason);
+        return result.Config!;
+    }
+
+    public static ConfigurationSchemaBindResult<MentorConfig> TryBind(ConfigFile file) =>
+        ConfigurationSchemaTransaction.Bind(
+            PluginIds.MentorGuid,
+            file,
+            MentorConfigurationSchema.Plan,
+            BindCurrent);
+
+    private static MentorConfig BindCurrent(ConfigFile file) => new(
         Bind(file, "General", "Enabled", true, "Enable Orb Mentor. Mode still starts Disabled on fresh installations.", 0, 0, hidden: true),
         Bind(file, "General", "Mode", MentorOperationMode.Disabled, "Disabled rejects and clears sharing work. Active grants through native mastery paths.", 0, 0, displaySection: "Spells", displayName: "Mentor"),
         Bind(file, "General", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.M, UnityEngine.KeyCode.LeftAlt), "Toggle Disabled/Active. Default: Left Alt + M.", 0, 20, displaySection: "Spells", displayName: "Toggle shortcut"),

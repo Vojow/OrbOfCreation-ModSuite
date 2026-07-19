@@ -41,6 +41,14 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
 ```
 
+Run the versioned configuration-schema scope independently with:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~ConfigurationSchema"
+```
+
+This scope owns schema plan validation; missing/current/malformed/negative/future markers; ordered migration and typed-bind sequencing; Automata's exact mode, interval precedence, invariant conversion, clamping, and obsolete-key diagnostics; marker-only Mentor and Mod Config adoption; first-free non-overwriting backup suffixes and race collisions; all-or-nothing partial-write/flush cleanup with byte/length/hash verification; exact-byte and new-file rollback after bind/save plus first and repeated reload faults; `SaveOnConfigSet` restoration; subscriber fault isolation; sanitized failure reasons; atomic worker-thread-to-Unity-tick dirty handoff; exact-GUID status-only catalog entries; and schema projection. A path or serialized value appearing in published status is a test failure.
+
 Set `OOC_PERFORMANCE_REPORT` to an absolute JSON path to retain the deterministic
 Auto Buy measurements, then run
 `tools/check-performance-report.ps1 -ReportPath <path>` to compare them with the
@@ -156,11 +164,11 @@ regression below these current floors:
 
 | Scope | Enforced line floor | Current Release line coverage |
 |---|---:|---:|
-| Overall supported production code | 65% | 71.94% |
-| Orb Automata | 70% | 73.14% |
-| Orb Mentor | 64% | 72.09% |
-| Orb Mod Config | 24% | 26.40% |
-| Orb Modding Common | 83% | 87.76% |
+| Overall supported production code | 65% | 73.07% |
+| Orb Automata | 70% | 72.79% |
+| Orb Mentor | 64% | 72.11% |
+| Orb Mod Config | 24% | 29.19% |
+| Orb Modding Common | 83% | 89.51% |
 
 These are regression floors, not completion targets. New or materially changed
 core engines and controllers should aim for at least 80% line and 70% branch
@@ -192,6 +200,11 @@ The current P0/P1 headless scope covers:
   cancellation;
 - Mod Config staged dependencies, atomic apply/rollback, external refresh,
   UI-work scheduling, listener cleanup, and shell repair policy;
+- shared versioned configuration transactions, exact Automata schema-zero
+  mappings, marker-only Mentor/Mod Config adoption, backup collision handling,
+  verified all-or-nothing backup creation, exact rollback, reload-failure
+  containment, future-version refusal, reason privacy, atomic UI handoff, and
+  exact-GUID editable or status-only schema projection;
 - shared scheduler fairness, mutation admission, failure containment, and
   deterministic performance budgets;
 - exact per-registration performance observations for same-subsystem work,

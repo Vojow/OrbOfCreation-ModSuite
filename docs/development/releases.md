@@ -6,10 +6,10 @@
 
 The supported package is an explicit allowlist:
 
-- **Orb Automata 0.8.7:** rejection-aware, completion-responsive queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, and fail-closed native-family admission.
-- **Orb Mentor 0.3.7:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains and shared remaining-budget enforcement.
-- **Orb Mod Config 0.6.2:** optional in-game configuration UI with variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
-- **Orb Modding Common 0.3.6:** bundled shared dependency with lifecycle, invalidation, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.
+- **Orb Automata 0.8.8:** rejection-aware, completion-responsive queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed version-zero configuration migration.
+- **Orb Mentor 0.3.8:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains, shared remaining-budget enforcement, and versioned configuration ownership.
+- **Orb Mod Config 0.6.3:** optional in-game configuration UI with separate configuration-schema and runtime-health status, variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
+- **Orb Modding Common 0.3.7:** bundled shared dependency with lifecycle, invalidation, configuration-schema, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.
 
 `OrbChronomancer` and `OrbAchievementResonance` live only on the dedicated experimental branch and must not enter a supported archive. Orb Insights and Orb Toolbox remain plans rather than packaged plugins.
 
@@ -26,8 +26,9 @@ The supported package is an explicit allowlist:
 7. **Auto Cast matrix:** instant, channelled, toggle, and aura behavior; unavailable or unaffordable spells; native queue pressure; emergency disable; and scene/load transitions.
 8. **Auto Concept matrix:** disabled and timed-cycle modes, catch-up behavior, ten-second minimum, setup time, one and multiple acquired slots, zero-resource concepts, unavailable concepts, and reset/load transitions without assignment churn.
 9. **Mentor matrix:** spell source policies and independent spell, artifact, and alchemy domains; Shared Pool and Per Recipient; disabled-domain silence; native persistence; recursion suppression; and bounded processing.
-10. **Mod Config matrix:** 1280×720, 1280×800 Steam Deck, and 1920×1080; Mods available from a new game and last among available tabs; variable-height descriptions; same-page scroll retention; live resolution and UI-scale changes; Apply/Revert; compound feature locking; and operation without native Auto Queue UI.
-11. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
+10. **Mod Config matrix:** 1280×720, 1280×800 Steam Deck, and 1920×1080; Mods available from a new game and last among available tabs; readable separate configuration-schema and runtime-status bands; variable-height descriptions; same-page scroll retention; live resolution and UI-scale changes; Apply/Revert; compound feature locking; and operation without native Auto Queue UI.
+11. **Configuration-schema matrix:** fresh files, current version, reviewed version-zero migration, malformed markers and known values, verified all-or-nothing first-free backup suffixing, partial-write/flush and reload failure containment, save failure rollback, future-version read-only refusal, worker-thread status handoff, and failed/future status-only tabs. Confirm failure diagnostics contain no configuration paths or serialized values.
+12. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
 
 Interactive behavior must satisfy [runtime validation](runtime-validation.md); a successful build or package rehearsal is not runtime approval.
 
