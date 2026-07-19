@@ -71,6 +71,8 @@ The aggressive completion-storm scenario is an active deterministic gate. Comple
 
 Auto Buy diagnostics now create structured Common decisions without formatting in the candidate path. Resource blockers transfer through one exact immutable array, telemetry deduplicates canonical condition keys, and the Common publisher calls consumers only when the engine's latest condition changes. Subscriber failures are isolated, and publishing an unchanged condition adds no subscriber work. The deterministic operation-count report remains the queue-behavior gate; allocation and real elapsed-time claims still require runtime profiling.
 
+Suite feature-health reporting also stops before snapshot construction on a stable condition. Automata compares primitive configured/state/reason/generation fields at its existing engine boundaries; Mentor compares one stack-only fingerprint of cached configuration, failure, unlock, catalog, and lifecycle evidence. Only a changed fingerprint projects DTOs or touches the main-thread registry. Disabled Automata performs no UI, engine, coordinator, or per-frame health work, while lifecycle transitions still advance its registered generation.
+
 ## Candidate lifecycle model
 
 Registry membership and player progression are separate dimensions. The index retains stable identity while the live state moves through the following lifecycle:

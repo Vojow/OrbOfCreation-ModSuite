@@ -15,6 +15,7 @@ public sealed class Plugin : BaseUnityPlugin
     private const string AlchemyRecipeTypeName = "AlchemyRecipeSO";
     private Harmony? _harmony;
     private AutomataConfig? _config;
+    private AutomataFeatureStatuses? _featureStatuses;
     private AutoBuyEngine? _autoBuyEngine;
     private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
@@ -46,8 +47,14 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Log = Logger;
         _config = AutomataConfig.Bind(Config);
+        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
+        _featureStatuses = new AutomataFeatureStatuses(_config, _lifecycleGeneration);
 
         LogAssemblyStatus();
+        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
+        SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
+        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         if (!_config.Enabled.Value)
         {
@@ -59,18 +66,23 @@ public sealed class Plugin : BaseUnityPlugin
         _harmony.PatchAll(typeof(Plugin).Assembly);
 
         var reservePolicy = new ReservePolicy(_config);
-        _autoCastToggleControl = new AutoCastToggleControl(_config);
+        _autoCastToggleControl = new AutoCastToggleControl(
+            _config,
+            () => _featureStatuses.AutoCast.Current);
         _autoBuyToggleControl = new AutoBuyToggleControl(
             _config,
             () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked,
-            () => _autoBuyEngine?.LatestDecision);
+            () => _autoBuyEngine?.LatestDecision,
+            () => _featureStatuses.AutoBuy.Current,
+            () => _featureStatuses.SpellLevel.Current);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),
             reservePolicy,
             Log,
             coordinator: SuitePerformanceCoordinator.Shared,
-            readFrameIdentity: () => UnityEngine.Time.frameCount);
+            readFrameIdentity: () => UnityEngine.Time.frameCount,
+            featureStatus: _featureStatuses.AutoBuy);
         _autoCastEngine = new AutoCastEngine(
             _config,
             new ReflectionAutoCastCatalog(),
@@ -78,20 +90,25 @@ public sealed class Plugin : BaseUnityPlugin
             new ResourceFullnessPolicy(),
             Log,
             coordinator: SuitePerformanceCoordinator.Shared,
-            readFrameIdentity: () => UnityEngine.Time.frameCount);
+            readFrameIdentity: () => UnityEngine.Time.frameCount,
+            featureStatus: _featureStatuses.AutoCast);
         _autoConceptController = new AutoConceptController(
             _config,
             new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             Log,
             SuitePerformanceCoordinator.Shared,
-            () => UnityEngine.Time.frameCount);
+            () => UnityEngine.Time.frameCount,
+            _featureStatuses.AutoConcept);
         _autoSpellLevelController = new AutoSpellLevelController(
             _config,
             new ReflectionSpellLevelRuntime(),
             Log,
             SuitePerformanceCoordinator.Shared,
-            () => UnityEngine.Time.frameCount);
-        _autoConceptToggleControl = new AutoConceptToggleControl(_config);
+            () => UnityEngine.Time.frameCount,
+            _featureStatuses.SpellLevel);
+        _autoConceptToggleControl = new AutoConceptToggleControl(
+            _config,
+            () => _featureStatuses.AutoConcept.Current);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
@@ -111,12 +128,6 @@ public sealed class Plugin : BaseUnityPlugin
                 GameplayInvalidationDomains.AutomataConcepts),
             OnAutoConceptProgressionInvalidated,
             "OrbAutomata.AutoConcept.Progression");
-        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
-        SceneManager.activeSceneChanged += OnActiveSceneChanged;
-        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
-        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
-        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
-
         Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
             $"StructureAffordability={_config.AutoBuyAffordability.Value}, " +
@@ -141,6 +152,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
+        if (_config is null || !_config.Enabled.Value) return;
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
@@ -160,6 +172,10 @@ public sealed class Plugin : BaseUnityPlugin
             _autoCastEngine?.Tick(deltaTime);
             _autoConceptController?.Tick(deltaTime);
             _autoSpellLevelController?.Tick(deltaTime);
+        }
+        else if (_config is not null)
+        {
+            _featureStatuses?.ObserveLifecycleNotReady(_config, _lifecycleGeneration);
         }
     }
 
@@ -195,6 +211,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoConceptToggleButton?.Dispose();
         _autoConceptToggleButton = null;
         _autoConceptToggleControl = null;
+        _featureStatuses?.Dispose();
+        _featureStatuses = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
     }
@@ -218,6 +236,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
         _autoSpellLevelController?.InvalidateLifecycle();
+        if (_config is not null)
+            _featureStatuses?.ObserveLifecycleNotReady(_config, _lifecycleGeneration);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
     }
 

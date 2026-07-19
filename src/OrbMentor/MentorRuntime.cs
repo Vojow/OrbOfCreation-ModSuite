@@ -100,6 +100,94 @@ internal sealed class MentorRuntime : IDisposable
         public string MentorSummary = "None";
     }
 
+    private readonly struct DomainFeatureStatusFingerprint : IEquatable<DomainFeatureStatusFingerprint>
+    {
+        public DomainFeatureStatusFingerprint(
+            bool configured,
+            MentorFeatureFailureKind failure,
+            string? failureReason,
+            MentorDomainUnlockSnapshot unlock,
+            bool catalogReady)
+        {
+            Configured = configured;
+            Failure = failure;
+            FailureReason = failureReason;
+            UnlockState = unlock.State;
+            UnlockReasonCode = unlock.StatusReasonCode;
+            UnlockReason = unlock.Reason;
+            CatalogReady = catalogReady;
+        }
+
+        public bool Configured { get; }
+        public MentorFeatureFailureKind Failure { get; }
+        public string? FailureReason { get; }
+        public MentorDomainUnlockState UnlockState { get; }
+        public FeatureStatusReasonCode UnlockReasonCode { get; }
+        public string UnlockReason { get; }
+        public bool CatalogReady { get; }
+
+        public MentorDomainUnlockSnapshot Unlock =>
+            new(UnlockState, UnlockReason, UnlockReasonCode);
+
+        public bool Equals(DomainFeatureStatusFingerprint other) =>
+            Configured == other.Configured &&
+            Failure == other.Failure &&
+            string.Equals(FailureReason, other.FailureReason, StringComparison.Ordinal) &&
+            UnlockState == other.UnlockState &&
+            UnlockReasonCode == other.UnlockReasonCode &&
+            string.Equals(UnlockReason, other.UnlockReason, StringComparison.Ordinal) &&
+            CatalogReady == other.CatalogReady;
+    }
+
+    private readonly struct FeatureStatusFingerprint : IEquatable<FeatureStatusFingerprint>
+    {
+        public FeatureStatusFingerprint(
+            bool parentConfigured,
+            bool emergencyDisabled,
+            MentorFeatureFailureKind globalFailure,
+            string? globalFailureReason,
+            long lifecycleGeneration,
+            DomainFeatureStatusFingerprint spells,
+            DomainFeatureStatusFingerprint artifacts,
+            DomainFeatureStatusFingerprint alchemy)
+        {
+            ParentConfigured = parentConfigured;
+            EmergencyDisabled = emergencyDisabled;
+            GlobalFailure = globalFailure;
+            GlobalFailureReason = globalFailureReason;
+            LifecycleGeneration = lifecycleGeneration;
+            Spells = spells;
+            Artifacts = artifacts;
+            Alchemy = alchemy;
+        }
+
+        public bool ParentConfigured { get; }
+        public bool EmergencyDisabled { get; }
+        public MentorFeatureFailureKind GlobalFailure { get; }
+        public string? GlobalFailureReason { get; }
+        public long LifecycleGeneration { get; }
+        public DomainFeatureStatusFingerprint Spells { get; }
+        public DomainFeatureStatusFingerprint Artifacts { get; }
+        public DomainFeatureStatusFingerprint Alchemy { get; }
+
+        public DomainFeatureStatusFingerprint For(MentorDomain domain) => domain switch
+        {
+            MentorDomain.Spells => Spells,
+            MentorDomain.Artifacts => Artifacts,
+            _ => Alchemy,
+        };
+
+        public bool Equals(FeatureStatusFingerprint other) =>
+            ParentConfigured == other.ParentConfigured &&
+            EmergencyDisabled == other.EmergencyDisabled &&
+            GlobalFailure == other.GlobalFailure &&
+            string.Equals(GlobalFailureReason, other.GlobalFailureReason, StringComparison.Ordinal) &&
+            LifecycleGeneration == other.LifecycleGeneration &&
+            Spells.Equals(other.Spells) &&
+            Artifacts.Equals(other.Artifacts) &&
+            Alchemy.Equals(other.Alchemy);
+    }
+
     private sealed class ReconcileWork : IDisposable
     {
         public ReconcileWork(
@@ -188,6 +276,16 @@ internal sealed class MentorRuntime : IDisposable
     private readonly MentorAlchemyDomainGate _alchemyDomainGate;
     private readonly MentorCoordinatorWork? _coordinatorWork;
     private readonly Func<long> _readTimestamp;
+    private readonly Func<long> _readLifecycleGeneration;
+    private readonly FeatureStatusRegistration?[] _domainStatusRegistrations =
+        new FeatureStatusRegistration?[DomainOrder.Length];
+    private readonly FeatureStatusSnapshot[] _domainFeatureStatuses =
+        new FeatureStatusSnapshot[DomainOrder.Length];
+    private FeatureStatusRegistration? _rootStatusRegistration;
+    private FeatureStatusSnapshot _rootFeatureStatus;
+    private FeatureStatusFingerprint _featureStatusFingerprint;
+    private bool _hasFeatureStatusFingerprint;
+    private long _statusLifecycleGeneration;
     private bool _guarded;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
@@ -212,13 +310,18 @@ internal sealed class MentorRuntime : IDisposable
         Func<long>? readFrameIdentity = null,
         MentorAlchemyDomainGate? alchemyDomainGate = null,
         MentorDomainUnlockGate? unlockGate = null,
-        Func<long>? readTimestamp = null)
+        Func<long>? readTimestamp = null,
+        FeatureStatusRegistry? featureStatusRegistry = null,
+        Func<long>? readLifecycleGeneration = null)
     {
         _config = config;
         _log = log;
         _alchemyDomainGate = alchemyDomainGate ?? new MentorAlchemyDomainGate();
         _unlockGate = unlockGate ?? new MentorDomainUnlockGate();
         _readTimestamp = readTimestamp ?? Stopwatch.GetTimestamp;
+        _readLifecycleGeneration = readLifecycleGeneration ??
+            (() => GameLifecycleMonitor.Shared.Current.Generation);
+        _statusLifecycleGeneration = Math.Max(0, _readLifecycleGeneration());
         if (coordinator is not null)
             _coordinatorWork = new MentorCoordinatorWork(
                 coordinator,
@@ -230,13 +333,16 @@ internal sealed class MentorRuntime : IDisposable
             _catalogs.Add(domain, new DomainCatalog());
             _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
                 MentorDomainUnlockState.Waiting,
-                "native progression unlock is awaiting lifecycle evaluation");
+                "native progression unlock is awaiting lifecycle evaluation",
+                FeatureStatusReasonCode.Initializing);
         }
         _artifactWasEnabled = config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = config.AlchemyEnabled.Value;
         _spellSourcePolicy = config.SpellSourcePolicy.Value;
         if (BigDoubleMantissa is null || BigDoubleExponent is null)
             BlockPermanent("BigDouble mantissa/exponent contract is unavailable");
+        RefreshFeatureStatus();
+        if (featureStatusRegistry is not null) RegisterFeatureStatuses(featureStatusRegistry);
     }
 
     internal MentorDiagnostics Diagnostics { get; }
@@ -257,6 +363,97 @@ internal sealed class MentorRuntime : IDisposable
             return false;
         }
     }
+
+    internal FeatureStatusSnapshot RootFeatureStatus => _rootFeatureStatus;
+    internal FeatureStatusSnapshot DomainFeatureStatus(MentorDomain domain) =>
+        _domainFeatureStatuses[(int)domain];
+    internal long FeatureStatusProjectionCount { get; private set; }
+
+    internal void RefreshFeatureStatus()
+    {
+        var fingerprint = CaptureFeatureStatusFingerprint();
+        if (_hasFeatureStatusFingerprint && _featureStatusFingerprint.Equals(fingerprint)) return;
+        _featureStatusFingerprint = fingerprint;
+        _hasFeatureStatusFingerprint = true;
+        FeatureStatusProjectionCount++;
+
+        foreach (var domain in DomainOrder)
+        {
+            var domainFingerprint = fingerprint.For(domain);
+            var input = new MentorDomainFeatureStatusInput(
+                fingerprint.ParentConfigured,
+                domainFingerprint.Configured,
+                fingerprint.EmergencyDisabled,
+                fingerprint.GlobalFailure,
+                fingerprint.GlobalFailureReason,
+                domainFingerprint.Failure,
+                domainFingerprint.FailureReason,
+                domainFingerprint.Unlock,
+                domainFingerprint.CatalogReady,
+                fingerprint.LifecycleGeneration);
+            var status = MentorFeatureStatus.ProjectDomain(domain, input);
+            _domainFeatureStatuses[(int)domain] = status;
+            _domainStatusRegistrations[(int)domain]?.Update(status);
+        }
+
+        _rootFeatureStatus = MentorFeatureStatus.ProjectRoot(
+            fingerprint.ParentConfigured,
+            fingerprint.EmergencyDisabled,
+            fingerprint.GlobalFailure,
+            fingerprint.GlobalFailureReason,
+            _domainFeatureStatuses,
+            fingerprint.LifecycleGeneration);
+        _rootStatusRegistration?.Update(_rootFeatureStatus);
+    }
+
+    private FeatureStatusFingerprint CaptureFeatureStatusFingerprint() => new(
+        _config.Enabled.Value && _config.Mode.Value == MentorOperationMode.Active,
+        _config.EmergencyDisable.Value,
+        FailureKind(_failures.Global),
+        _failures.Global.Reason,
+        _statusLifecycleGeneration,
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Spells),
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Artifacts),
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Alchemy));
+
+    private DomainFeatureStatusFingerprint CaptureDomainFeatureStatusFingerprint(MentorDomain domain) => new(
+        DomainConfigured(domain),
+        FailureKind(_failures.For(domain)),
+        _failures.For(domain).Reason,
+        DomainUnlock(domain),
+        CatalogReady(_catalogs[domain]));
+
+    private void RegisterFeatureStatuses(FeatureStatusRegistry registry)
+    {
+        try
+        {
+            foreach (var domain in DomainOrder)
+                _domainStatusRegistrations[(int)domain] =
+                    registry.Register(_domainFeatureStatuses[(int)domain]);
+            _rootStatusRegistration = registry.Register(_rootFeatureStatus);
+        }
+        catch
+        {
+            _rootStatusRegistration?.Dispose();
+            _rootStatusRegistration = null;
+            for (var index = _domainStatusRegistrations.Length - 1; index >= 0; index--)
+            {
+                _domainStatusRegistrations[index]?.Dispose();
+                _domainStatusRegistrations[index] = null;
+            }
+            throw;
+        }
+    }
+
+    private static bool CatalogReady(DomainCatalog catalog) =>
+        catalog.Initialized && catalog.Relationship is not null && !catalog.RelationshipDirty;
+
+    private static MentorFeatureFailureKind FailureKind(MentorFailureState failure) =>
+        failure.IsPermanent
+            ? MentorFeatureFailureKind.Permanent
+            : failure.IsTransient
+                ? MentorFeatureFailureKind.Transient
+                : MentorFeatureFailureKind.None;
 
     internal MentorDomainUnlockSnapshot DomainUnlock(MentorDomain domain) => _domainUnlocks[(int)domain];
 
@@ -562,6 +759,7 @@ internal sealed class MentorRuntime : IDisposable
         if (!_config.Active || IsBlocked || unlockStateChanged)
         {
             _coordinatorWork?.SetState(false, false, false);
+            RefreshFeatureStatus();
             return;
         }
         if (!_config.ArtifactsEnabled.Value && _artifactWasEnabled)
@@ -573,6 +771,7 @@ internal sealed class MentorRuntime : IDisposable
 
         if (_coordinatorWork is null) LateTickLegacy();
         else LateTickCoordinated();
+        RefreshFeatureStatus();
     }
 
     private bool RefreshDomainUnlocks()
@@ -1311,6 +1510,9 @@ internal sealed class MentorRuntime : IDisposable
         Cancel(MentorDropReason.LifecycleReset);
         _alchemyDomainGate.Dispose();
         _coordinatorWork?.Dispose();
+        _rootStatusRegistration?.Dispose();
+        _rootStatusRegistration = null;
+        foreach (var registration in _domainStatusRegistrations) registration?.Dispose();
     }
 
     private void CancelDomain(MentorDomain domain, MentorDropReason reason, bool clearCatalog)
@@ -1381,12 +1583,15 @@ internal sealed class MentorRuntime : IDisposable
         Cancel(MentorDropReason.LifecycleReset);
         _failures.ResetLifecycle();
         _captureFailureLogged = false;
+        _statusLifecycleGeneration = Math.Max(0, _readLifecycleGeneration());
         _nextUnlockRefresh = 0;
         foreach (var domain in DomainOrder)
             if (!DomainBlocked(domain))
                 _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
                     MentorDomainUnlockState.Waiting,
-                    "native progression unlock is awaiting lifecycle evaluation");
+                    "native progression unlock is awaiting lifecycle evaluation",
+                    FeatureStatusReasonCode.LifecycleTransition);
+        RefreshFeatureStatus();
     }
 
     public void RequestLifecycleReset() => _lifecycleReset.Request();
@@ -1402,6 +1607,7 @@ internal sealed class MentorRuntime : IDisposable
         if (_failures.Global.PermanentReason is not null) return;
         _failures.Global.BlockPermanent(reason);
         Cancel(MentorDropReason.ContractFailure);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor permanently blocked: {reason}");
     }
 
@@ -1409,6 +1615,7 @@ internal sealed class MentorRuntime : IDisposable
     {
         _failures.Global.BlockTransient(reason);
         Cancel(MentorDropReason.ContractFailure);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor blocked for this lifecycle: {reason}");
     }
 
@@ -1423,6 +1630,7 @@ internal sealed class MentorRuntime : IDisposable
         if (failure.PermanentReason is not null) return;
         failure.BlockPermanent(reason);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
     }
 
@@ -1432,6 +1640,7 @@ internal sealed class MentorRuntime : IDisposable
         if (failure.PermanentReason is not null) return;
         failure.BlockPermanent(reason);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
     }
 
@@ -1444,6 +1653,7 @@ internal sealed class MentorRuntime : IDisposable
         }
         _failures.For(domain).BlockTransient(reason);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing blocked for this lifecycle: {reason}");
     }
 

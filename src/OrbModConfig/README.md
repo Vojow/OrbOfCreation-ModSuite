@@ -10,6 +10,7 @@ The current `0.6.1` build provides a simplified configuration UI:
 - no hard Steamworks dependency, so desktop and non-Steam startup remain unchanged;
 - live synchronization of clean, unstaged fields when native controls or shortcuts change them;
 - staged multi-condition dependencies, so disabled modules and inactive subfeatures lock their tuning fields immediately while re-enable, safety, and diagnostic controls remain usable;
+- a distinct transition-driven runtime-status band for plugins that publish Common feature health, joined by exact plugin GUID and kept separate from staged or saved configuration;
 
 The underlying editor continues to provide:
 
@@ -38,5 +39,7 @@ The underlying editor continues to provide:
 `0.6.1` consumes the suite's shared lifecycle generation so scene recreation and late plugin initialization use the same idempotent readiness boundary as Automata and Mentor.
 
 A fully successful Apply now publishes exact plugin GUID plus source section/key invalidations through Common's bounded completed-frame bus. Validation, save, or `SettingChanged` rollback publishes nothing. The existing 0.1-second clean-field polling remains the compatibility path for native controls and third-party plugins, and staged edits retain their conflict behavior.
+
+The next-beta health pass stops treating a successful config save as proof that runtime behavior applied immediately. The footer reports configuration transaction results, while the separate runtime band shows each selected plugin's published feature state and structured reason. Plugins that do not publish health remain supported and are shown as not reporting runtime status.
 
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

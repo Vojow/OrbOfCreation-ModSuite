@@ -12,6 +12,13 @@ internal enum AutoCastSpellKind
     Channel,
 }
 
+internal enum AutoCastAdmissionFailureKind
+{
+    None,
+    OrdinaryRejection,
+    ContractUnavailable,
+}
+
 internal interface IAutoCastCatalog : IDisposable
 {
     IReadOnlyList<IAutoCastCandidate> DiscoverActiveLoadout();
@@ -24,6 +31,11 @@ internal interface IAutoCastCatalog : IDisposable
 internal interface IAutoCastMutationRecoveryCatalog
 {
     void RecoverMutationBlocks();
+}
+
+internal interface IAutoCastAdmissionFailureEvidence
+{
+    AutoCastAdmissionFailureKind LastAdmissionFailure { get; }
 }
 
 internal interface IAutoCastCandidate

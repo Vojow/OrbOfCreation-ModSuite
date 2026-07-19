@@ -22,6 +22,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly Func<Stopwatch, double> _readPurchaseElapsedMilliseconds;
     private readonly SuitePerformanceCoordinator? _coordinator;
     private readonly Func<long>? _readFrameIdentity;
+    private readonly AutomataFeatureStatusReporter? _featureStatus;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _decisionLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -100,7 +101,8 @@ internal sealed class AutoBuyEngine : IDisposable
         Func<Stopwatch, double>? readElapsedMilliseconds = null,
         Func<Stopwatch, double>? readPurchaseElapsedMilliseconds = null,
         SuitePerformanceCoordinator? coordinator = null,
-        Func<long>? readFrameIdentity = null)
+        Func<long>? readFrameIdentity = null,
+        AutomataFeatureStatusReporter? featureStatus = null)
     {
         _config = config;
         _catalog = catalog;
@@ -111,6 +113,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _readPurchaseElapsedMilliseconds = readPurchaseElapsedMilliseconds ?? (stopwatch => stopwatch.Elapsed.TotalMilliseconds);
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
+        _featureStatus = featureStatus;
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
@@ -132,6 +135,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void Tick(float unscaledDeltaTime)
     {
+        ObserveConfigurationStatus();
         if (_coordinator is null)
         {
             TickLegacy(unscaledDeltaTime);
@@ -1321,6 +1325,10 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             ObserveQueueUnavailable();
         }
+        else if (snapshot.UsableAutomationRoom > 0)
+        {
+            ObserveOperationalStatus();
+        }
 
         return captured;
     }
@@ -1472,6 +1480,11 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private void ObserveQueueUnavailable()
     {
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.NotReady,
+            FeatureStatusReasonCode.QueueNotReady,
+            "The native action queue is not ready.");
         ObserveOperationalDecision(new AutomationDecision(
             AutoBuyDecision.FeatureId,
             "CaptureQueue",
@@ -1486,6 +1499,15 @@ internal sealed class AutoBuyEngine : IDisposable
         var code = snapshot.NativeRemainingRoom <= 0
             ? AutomationDecisionCode.QueueFull
             : AutomationDecisionCode.QueuePolicyLimit;
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.TemporarilyBlocked,
+            snapshot.NativeRemainingRoom <= 0
+                ? FeatureStatusReasonCode.QueueFull
+                : FeatureStatusReasonCode.CapacityExceeded,
+            snapshot.NativeRemainingRoom <= 0
+                ? "The native action queue is full."
+                : "Auto Buy has no queue room after its configured reservation and usage limits.");
         ObserveOperationalDecision(new AutomationDecision(
             AutoBuyDecision.FeatureId,
             "SubmitPurchase",
@@ -1612,6 +1634,7 @@ internal sealed class AutoBuyEngine : IDisposable
         }
 
         _upgradeQuarantineObserved = true;
+        ObserveUpgradeQuarantineStatus();
         UpgradeQuarantinePurgePasses++;
 
         _quarantinedUpgradeUuids.Clear();
@@ -1672,6 +1695,58 @@ internal sealed class AutoBuyEngine : IDisposable
         }
 
         return false;
+    }
+
+    private void ObserveConfigurationStatus()
+    {
+        if (_config.AutoBuyMode.Value == AutoBuyOperationMode.Disabled)
+        {
+            _featureStatus?.Observe(
+                false,
+                FeatureStatusState.ConfigurationDisabled,
+                FeatureStatusReasonCode.ConfigurationDisabled,
+                "Auto Buy is disabled by configuration.");
+            return;
+        }
+        if (!_config.CanStartAutoBuyActively)
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.EmergencyDisabled,
+                "Automata Emergency Disable is active.");
+        }
+    }
+
+    private void ObserveOperationalStatus()
+    {
+        if (NativeMultiBuyScope.TryGetMutationQuarantine(out _))
+        {
+            ObserveUpgradeQuarantineStatus();
+            return;
+        }
+        _featureStatus?.ObserveOperational();
+    }
+
+    private void ObserveUpgradeQuarantineStatus()
+    {
+        if (!_config.AutoBuyUpgrades.Value)
+        {
+            _featureStatus?.ObserveOperational();
+            return;
+        }
+        var structuresRemainOperational = _config.AutoBuyStructures.Value;
+        _featureStatus?.Observe(
+            true,
+            structuresRemainOperational
+                ? FeatureStatusState.Degraded
+                : FeatureStatusState.ContractUnavailable,
+            structuresRemainOperational
+                ? FeatureStatusReasonCode.PartialCapabilityUnavailable
+                : FeatureStatusReasonCode.ContractUnavailable,
+            structuresRemainOperational
+                ? "Upgrade automation is unavailable until the next lifecycle; Structure automation remains operational."
+                : "The required native Upgrade mutation contract is unavailable until the next lifecycle.");
     }
 
     private void ResetPendingPurchaseBatch()

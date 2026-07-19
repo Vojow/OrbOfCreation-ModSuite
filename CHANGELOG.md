@@ -6,6 +6,12 @@
 - Coalesce completed-frame bursts by stable domain/UUID/type, preserve merged change kinds and first-publication order, and conservatively promote overflow instead of dropping cache work.
 - Keep immediate lifecycle, queue, completion, and Mentor XP safety paths direct while Automata, Mentor, and Mod Config mirror or publish bounded cache and scheduling signals.
 
+## Unified feature health reporting — 2026-07-19
+
+- Add a main-thread Common registry for transition-only configured, locked, not-ready, operational, temporarily blocked, contract-unavailable, degraded, and faulted feature status.
+- Project Automata capabilities and Mentor domains from their existing cached lifecycle, unlock, decision, and failure evidence without adding native work or coupling sibling domain failures.
+- Give Orb Mod Config an exact-plugin-GUID runtime-status band separate from saved configuration, and stop claiming that a saved setting necessarily applies immediately.
+
 ## Structured Auto Buy decisions — 2026-07-19
 
 - Replace Auto Buy's private rejection enum and text-derived deduplication with Common append-only decision codes, dispositions, retry triggers, canonical identities, resource constraints, queue facts, and native states.

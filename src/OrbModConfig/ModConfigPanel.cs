@@ -29,6 +29,8 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly RectTransform _sectionTabs;
     private readonly RectTransform _settingsContent;
     private readonly ScrollRect _settingsScroll;
+    private readonly IFeatureStatusSource _featureStatuses;
+    private readonly TextMeshProUGUI _runtimeStatusText;
     private readonly TextMeshProUGUI _statusText;
     private readonly Button _applyButton;
     private readonly Button _revertButton;
@@ -38,6 +40,7 @@ internal sealed class ModConfigPanel : IDisposable
     private int _selectedModIndex;
     private int _selectedSectionIndex;
     private bool _disposed;
+    private bool _runtimeStatusDirty = true;
 
     private ModConfigPanel(
         GameObject root,
@@ -48,6 +51,8 @@ internal sealed class ModConfigPanel : IDisposable
         RectTransform sectionTabs,
         RectTransform settingsContent,
         ScrollRect settingsScroll,
+        IFeatureStatusSource featureStatuses,
+        TextMeshProUGUI runtimeStatusText,
         TextMeshProUGUI statusText,
         Button applyButton,
         Button revertButton)
@@ -61,9 +66,12 @@ internal sealed class ModConfigPanel : IDisposable
         _sectionTabs = sectionTabs;
         _settingsContent = settingsContent;
         _settingsScroll = settingsScroll;
+        _featureStatuses = featureStatuses;
+        _runtimeStatusText = runtimeStatusText;
         _statusText = statusText;
         _applyButton = applyButton;
         _revertButton = revertButton;
+        _featureStatuses.Transitioned += OnRuntimeStatusTransitioned;
         RebuildAll();
         SetActive(false);
     }
@@ -74,14 +82,18 @@ internal sealed class ModConfigPanel : IDisposable
         Transform parent,
         TextMeshProUGUI labelTemplate,
         ConfigCatalogSnapshot catalog,
-        ManualLogSource log)
+        ManualLogSource log,
+        IFeatureStatusSource featureStatuses)
     {
         var root = CreateRectObject(ModConfigUiShell.PanelObjectName, parent, Vector2.zero, Vector2.one, BackgroundColor);
 
         var header = CreateRectObject("ModTabs", root.transform, new Vector2(0.02f, 0.875f), new Vector2(0.98f, 0.975f), BarColor);
         var sections = CreateRectObject("SectionTabs", root.transform, new Vector2(0.02f, 0.77f), new Vector2(0.98f, 0.86f), BarColor);
 
-        var viewport = CreateRectObject("SettingsViewport", root.transform, new Vector2(0.02f, 0.15f), new Vector2(0.98f, 0.75f), new Color(0.035f, 0.043f, 0.06f, 0.98f));
+        var runtimeBar = CreateRectObject("RuntimeStatus", root.transform, new Vector2(0.02f, 0.665f), new Vector2(0.98f, 0.75f), BarColor);
+        var runtimeStatus = CreateText("RuntimeStatusText", runtimeBar.transform, new Vector2(0.015f, 0.08f), new Vector2(0.985f, 0.92f), labelTemplate, "Runtime status: Not reported by this plugin.", TextAlignmentOptions.MidlineLeft, 0.58f);
+
+        var viewport = CreateRectObject("SettingsViewport", root.transform, new Vector2(0.02f, 0.15f), new Vector2(0.98f, 0.65f), new Color(0.035f, 0.043f, 0.06f, 0.98f));
         viewport.AddComponent<RectMask2D>();
         var scroll = viewport.AddComponent<ScrollRect>();
         scroll.horizontal = false;
@@ -117,6 +129,8 @@ internal sealed class ModConfigPanel : IDisposable
             (RectTransform)sections.transform,
             contentRect,
             scroll,
+            featureStatuses,
+            runtimeStatus,
             status,
             apply,
             revert);
@@ -125,6 +139,7 @@ internal sealed class ModConfigPanel : IDisposable
         revert.onClick.RemoveAllListeners();
         revert.onClick.AddListener(panel.Revert);
         panel.RefreshStatus();
+        panel.RefreshRuntimeStatusIfNeeded();
         return panel;
     }
 
@@ -136,6 +151,8 @@ internal sealed class ModConfigPanel : IDisposable
             {
                 RebuildSettings();
             }
+
+            if (active) RefreshRuntimeStatusIfNeeded();
 
             Root.SetActive(active);
         }
@@ -149,6 +166,22 @@ internal sealed class ModConfigPanel : IDisposable
         }
     }
 
+    public void RefreshRuntimeStatusIfNeeded()
+    {
+        if (_disposed || !_runtimeStatusDirty) return;
+        _runtimeStatusDirty = false;
+        if (_catalog.Mods.Count == 0)
+        {
+            _runtimeStatusText.text = "Runtime status: No configurable plugin selected.";
+            return;
+        }
+
+        var mod = _catalog.Mods[Math.Max(0, Math.Min(_selectedModIndex, _catalog.Mods.Count - 1))];
+        _runtimeStatusText.text = ModRuntimeStatusProjection
+            .Build(mod.Guid, _featureStatuses.GetSnapshot())
+            .FormatCompact();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -157,6 +190,7 @@ internal sealed class ModConfigPanel : IDisposable
         }
 
         _disposed = true;
+        _featureStatuses.Transitioned -= OnRuntimeStatusTransitioned;
         UnityEngine.Object.Destroy(Root);
     }
 
@@ -236,7 +270,9 @@ internal sealed class ModConfigPanel : IDisposable
         {
             description += "  " + setting.AcceptableValuesDescription;
         }
-        description += setting.RestartRequired ? "  Restart required." : "  Applies immediately.";
+        description += setting.RestartRequired
+            ? "  Restart required."
+            : "  Saved setting; runtime effect is reported separately when supported.";
 
         CreateText("Description", row.transform, new Vector2(0.018f, 0.08f), new Vector2(0.55f, 0.52f), _labelTemplate, description, TextAlignmentOptions.TopLeft, 0.55f);
 
@@ -340,7 +376,9 @@ internal sealed class ModConfigPanel : IDisposable
     {
         _selectedModIndex = index;
         _selectedSectionIndex = 0;
+        _runtimeStatusDirty = true;
         RebuildAll();
+        RefreshRuntimeStatusIfNeeded();
     }
 
     private void SelectSection(int index)
@@ -357,7 +395,7 @@ internal sealed class ModConfigPanel : IDisposable
                 GameplayInvalidationBus.Shared,
                 Time.frameCount,
                 appliedSettings);
-            _statusText.text = "Applied and saved.";
+            _statusText.text = "Configuration saved.";
             RebuildSettings();
         }
         else
@@ -366,6 +404,15 @@ internal sealed class ModConfigPanel : IDisposable
             _statusText.text = "Apply failed: " + error;
             _log.LogWarning("Mod Config could not apply staged changes: " + error);
         }
+    }
+
+    private void OnRuntimeStatusTransitioned(FeatureStatusTransition transition)
+    {
+        if (_disposed || _catalog.Mods.Count == 0) return;
+        var selectedGuid = _catalog.Mods[Math.Max(0, Math.Min(_selectedModIndex, _catalog.Mods.Count - 1))].Guid;
+        var key = transition.Current?.Key ?? transition.Previous?.Key;
+        if (key.HasValue && string.Equals(key.Value.PluginId, selectedGuid, StringComparison.Ordinal))
+            _runtimeStatusDirty = true;
     }
 
     private void Revert()

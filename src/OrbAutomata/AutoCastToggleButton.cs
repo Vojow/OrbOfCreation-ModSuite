@@ -194,6 +194,7 @@ internal sealed class AutoCastToggleButton : IDisposable
         {
             AutoCastToggleVisualState.On => OnColor,
             AutoCastToggleVisualState.Blocked => BlockedColor,
+            AutoCastToggleVisualState.Waiting => new Color(1.0f, 0.75f, 0.35f),
             _ => OffColor,
         };
         if (_rootImage is not null)
@@ -223,6 +224,7 @@ internal sealed class AutoCastToggleButton : IDisposable
     {
         AutoCastToggleVisualState.On => "AC ON",
         AutoCastToggleVisualState.Blocked => "AC !",
+        AutoCastToggleVisualState.Waiting => "AC ~",
         _ => "AC OFF",
     };
 
@@ -278,6 +280,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             {
                 AutoCastToggleVisualState.On => "Auto Cast: ON",
                 AutoCastToggleVisualState.Blocked => "Auto Cast: BLOCKED",
+                AutoCastToggleVisualState.Waiting => "Auto Cast: WAITING",
                 _ => "Auto Cast: OFF",
             };
             var node = color is null ? null : constructor?.Invoke(new[] { (object)message, color });

@@ -4,6 +4,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -41,6 +42,7 @@ public sealed class AutoCastTests
     [InlineData(0, "AC OFF")]
     [InlineData(1, "AC ON")]
     [InlineData(2, "AC !")]
+    [InlineData(3, "AC ~")]
     public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
@@ -85,6 +87,61 @@ public sealed class AutoCastTests
 
         Assert.Equal(AutoCastOperationMode.Disabled, fixture.Config.AutoCastMode.Value);
         Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
+    public void ActiveEmptyLoadoutRemainsOperational()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var engine = new AutoCastEngine(
+            config,
+            new FakeCatalog(),
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            new ManualLogSource(),
+            () => true,
+            featureStatus: statuses.AutoCast);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoCast.Current.State);
+        Assert.Equal(AutoCastToggleVisualState.On, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoCast.Current));
+    }
+
+    [Fact]
+    public void TypedContractFailureDegradesWithoutParsingDiagnosticText()
+    {
+        var spell = Spell("typed contract failure");
+        spell.CanCastResult = false;
+        spell.CanCastReason = "adapter check 17 failed";
+        spell.AdmissionFailureKind = AutoCastAdmissionFailureKind.ContractUnavailable;
+        using var fixture = CreateWithCoordinator(spell);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Degraded, fixture.FeatureStatuses.AutoCast.Current.State);
+        Assert.Equal(
+            FeatureStatusReasonCode.PartialCapabilityUnavailable,
+            fixture.FeatureStatuses.AutoCast.Current.Reason.Code);
+    }
+
+    [Fact]
+    public void OrdinaryRejectionRemainsOperationalRegardlessOfDiagnosticWording()
+    {
+        var spell = Spell("ordinary wait");
+        spell.CanCastResult = false;
+        spell.CanCastReason = "contractually unavailable until recharge";
+        spell.AdmissionFailureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
+        using var fixture = CreateWithCoordinator(spell);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Operational, fixture.FeatureStatuses.AutoCast.Current.State);
     }
 
     [Fact]
@@ -655,23 +712,57 @@ public sealed class AutoCastTests
 
     private static Fixture Create(params FakeSpell[] spells) => Create(new FakeCatalog(spells));
 
+    private static Fixture CreateWithCoordinator(params FakeSpell[] spells)
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        var log = new ManualLogSource();
+        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var coordinator = new SuitePerformanceCoordinator(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
+        var engine = new AutoCastEngine(
+            config,
+            new FakeCatalog(spells),
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            log,
+            () => true,
+            coordinator,
+            () => 1,
+            statuses.AutoCast);
+        return new Fixture(config, log, engine, statuses);
+    }
+
     private static Fixture Create(FakeCatalog catalog)
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         var log = new ManualLogSource();
-        var engine = new AutoCastEngine(config, catalog, new ReservePolicy(config), new ResourceFullnessPolicy(), log, () => true);
-        return new Fixture(config, log, engine);
+        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var engine = new AutoCastEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            log,
+            () => true,
+            featureStatus: statuses.AutoCast);
+        return new Fixture(config, log, engine, statuses);
     }
 
     private sealed class Fixture : IDisposable
     {
-        public Fixture(AutomataConfig config, ManualLogSource log, AutoCastEngine engine)
+        public Fixture(
+            AutomataConfig config,
+            ManualLogSource log,
+            AutoCastEngine engine,
+            AutomataFeatureStatuses featureStatuses)
         {
             Config = config;
             Log = log;
             Engine = engine;
+            FeatureStatuses = featureStatuses;
         }
 
         public AutomataConfig Config { get; }
@@ -680,7 +771,13 @@ public sealed class AutoCastTests
 
         public AutoCastEngine Engine { get; }
 
-        public void Dispose() => Engine.Dispose();
+        public AutomataFeatureStatuses FeatureStatuses { get; }
+
+        public void Dispose()
+        {
+            Engine.Dispose();
+            FeatureStatuses.Dispose();
+        }
     }
 
     private sealed class FakeCatalog : IAutoCastCatalog
@@ -712,7 +809,7 @@ public sealed class AutoCastTests
         }
     }
 
-    private sealed class FakeSpell : IAutoCastCandidate
+    private sealed class FakeSpell : IAutoCastCandidate, IAutoCastAdmissionFailureEvidence
     {
         private readonly IReadOnlyList<ResourceAdmissionCost> _immediate;
         private readonly IReadOnlyList<ResourceAdmissionCost> _drain;
@@ -765,6 +862,10 @@ public sealed class AutoCastTests
         public bool CanCastResult { get; set; } = true;
 
         public string CanCastReason { get; set; } = "ready";
+
+        public AutoCastAdmissionFailureKind AdmissionFailureKind { get; set; }
+
+        public AutoCastAdmissionFailureKind LastAdmissionFailure => AdmissionFailureKind;
 
         public bool CanCast(out string reason)
         {
