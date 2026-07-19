@@ -8,6 +8,8 @@ Mentor follows the game's progression unlocks independently for spells, artifact
 
 Mentor consumes the same Common lifecycle generation as Automata and Mod Config. A shared transition cancels or defers capture, relationship, plan, parked-grant, and native-grant work under the old generation; domain progression locks remain separate from global game readiness.
 
+After Mentor records progression evidence synchronously, it mirrors stable spell, artifact, and ordinary-alchemy UUID/type invalidations through Common's bounded completed-frame bus; an uncached identity widens to its family. Spell-loadout membership changes publish broad inventory invalidation. These notifications never contain XP amounts and never replace Mentor's capture-time relationship, lifecycle cancellation, or native grant validation.
+
 Progression unlock assets resolve through Common's lifecycle-aware typed registry resolver. `MasteriesEnabled` and each domain `ViewSO` require exact UUID/type/`GetGuid()` evidence before the live native `IsAvailable()` check; late registration waits, while wrong type or contradictory identity blocks only the affected domain with structured diagnostics.
 
 Orb Mod Config keeps the toggle shortcut, emergency disable, and diagnostics editable while Mentor is disabled. Spell, artifact, alchemy, economy, and performance tuning unlock when Mentor becomes Active; artifact and alchemy percentages additionally require their own domain switch.

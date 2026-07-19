@@ -26,6 +26,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
     private ModConfigCoordinatorWork? _uiWork;
+    private GameplayInvalidationBus? _invalidationBus;
     private long _lifecycleGeneration;
 
     private void Awake()
@@ -47,6 +48,8 @@ public sealed class Plugin : BaseUnityPlugin
                 null,
                 new ModConfigMetadata(10, 0, hidden: true)));
 
+        _invalidationBus = GameplayInvalidationBus.Shared;
+
         if (!_enabled.Value)
         {
             Logger.LogInfo("Orb Mod Config is disabled by configuration.");
@@ -65,6 +68,10 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
+        _invalidationBus?.Pump(
+            Time.frameCount,
+            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+
         if (_enabled?.Value != true)
         {
             DeactivateUiWork(disposeShell: true);

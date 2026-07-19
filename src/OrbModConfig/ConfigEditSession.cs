@@ -152,9 +152,14 @@ internal sealed class ConfigEditSession
         return changed;
     }
 
-    public bool Apply(out string error)
+    public bool Apply(out string error) => Apply(out error, out _);
+
+    public bool Apply(
+        out string error,
+        out IReadOnlyList<ConfigSettingDescriptor> appliedSettings)
     {
         error = string.Empty;
+        appliedSettings = Array.Empty<ConfigSettingDescriptor>();
         var invalid = _values.Values.FirstOrDefault(value => !value.IsValid);
         if (invalid is not null)
         {
@@ -186,6 +191,12 @@ internal sealed class ConfigEditSession
                 value.AcceptAppliedValue();
             }
 
+            var committed = new ConfigSettingDescriptor[dirty.Length];
+            for (var index = 0; index < dirty.Length; index++)
+            {
+                committed[index] = dirty[index].Setting;
+            }
+            appliedSettings = committed;
             return true;
         }
         catch (Exception ex)

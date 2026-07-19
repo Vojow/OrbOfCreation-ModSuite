@@ -472,6 +472,34 @@ internal sealed class AutoBuyCandidateIndex
         return false;
     }
 
+    public bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName)
+    {
+        entityId = string.Empty;
+        expectedTypeName = string.Empty;
+        var auditedTypeName = expectedKind == AutoBuyCandidateKind.Structure
+            ? "StructureSO"
+            : "UpgradeSO";
+        if (nativeIdentity is null ||
+            !_nativeEntries.TryGetValue(nativeIdentity, out var entry) ||
+            entry.State == AutoBuyCandidateLifecycleState.Invalid ||
+            entry.NeedsEpochValidation ||
+            entry.Definition.Kind != expectedKind ||
+            !ReferenceEquals(GetNativeIdentity(entry.Candidate), nativeIdentity) ||
+            !Guid.TryParseExact(entry.Definition.Uuid, "D", out _) ||
+            !string.Equals(entry.Definition.ReflectedType, auditedTypeName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        entityId = entry.Definition.Uuid;
+        expectedTypeName = entry.Definition.ReflectedType;
+        return true;
+    }
+
     public void Clear()
     {
         _entries.Clear();

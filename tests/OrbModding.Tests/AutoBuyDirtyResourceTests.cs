@@ -1228,6 +1228,54 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(AutoBuyDirtyReason.None, unaffectedDirty);
     }
 
+    [Fact]
+    public void InvalidationIdentity_UsesIndexedUuidAndExpectedCandidateFamily()
+    {
+        const string stableUuid = "a39a2748-2bc4-4ad0-9872-2a29f5c88c90";
+        var target = Candidate(stableUuid, AutoBuyCandidateKind.Structure, "mana", available: true);
+        var index = new AutoBuyCandidateIndex();
+        PrimeDependencies(index, target);
+
+        Assert.True(index.TryResolveInvalidationTarget(
+            target.NativeIdentity,
+            AutoBuyCandidateKind.Structure,
+            out var entityId,
+            out var expectedTypeName));
+        Assert.Equal(stableUuid, entityId);
+        Assert.Equal("StructureSO", expectedTypeName);
+        Assert.False(index.TryResolveInvalidationTarget(
+            target.NativeIdentity,
+            AutoBuyCandidateKind.Upgrade,
+            out _,
+            out _));
+        Assert.False(index.TryResolveInvalidationTarget(
+            new object(),
+            AutoBuyCandidateKind.Structure,
+            out _,
+            out _));
+
+        index.InvalidateLifecycleIncrementally();
+        Assert.False(index.TryResolveInvalidationTarget(
+            target.NativeIdentity,
+            AutoBuyCandidateKind.Structure,
+            out _,
+            out _));
+    }
+
+    [Fact]
+    public void InvalidationIdentity_RejectsMalformedUuidEvenWhenCandidateIsIndexed()
+    {
+        var target = Candidate("stable-target", AutoBuyCandidateKind.Structure, "mana", available: true);
+        var index = new AutoBuyCandidateIndex();
+        PrimeDependencies(index, target);
+
+        Assert.False(index.TryResolveInvalidationTarget(
+            target.NativeIdentity,
+            AutoBuyCandidateKind.Structure,
+            out _,
+            out _));
+    }
+
     private static void AssertCpuSlicedSelfSignalingGroupCompletes(
         AutoBuyCandidateKind kind,
         Action<AutomataConfig> configure)
@@ -1707,7 +1755,12 @@ public sealed class AutoBuyDirtyResourceTests
             Uuid = uuid;
             Available = available;
             NativeIdentity = new object();
-            _snapshot = new AutoBuyCandidateSnapshot(this, uuid, uuid, kind, kind.ToString());
+            _snapshot = new AutoBuyCandidateSnapshot(
+                this,
+                uuid,
+                uuid,
+                kind,
+                kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO");
             _dependencies = new List<string> { resourceId };
         }
 

@@ -46,6 +46,8 @@ Every active native mutation now uses a capture, execute, capture, verify bounda
 
 Automata consumes the shared Common lifecycle monitor. Scene entry/exit, save loading, save completion, gameplay-manager readiness, reset/NG+, and registry-rebuild observations advance one coalesced generation across the suite. Every generation transition cancels prepared Auto Buy, Auto Cast, Auto Concept, and spell-level work before another native mutation can start; equivalent callbacks from multiple installed suite plugins are idempotent within the same frame.
 
+Queue and completion hooks now also mirror stable UUID/type invalidations through Common's bounded completed-frame bus. Manual queue changes and completion settlement still run synchronously first; the bus only coalesces secondary scheduling work. Auto Concept active-list changes wake concept evaluation as inventory events, while discovery or mastery progression also wakes spell-level capability evaluation. Unknown identities widen to the native family rather than using names or retaining native objects.
+
 `AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
 
 - `BuyAll` accepts any natively affordable action that passes reserves.

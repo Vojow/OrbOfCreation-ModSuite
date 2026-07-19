@@ -430,6 +430,26 @@ internal sealed class AutoBuyEngine : IDisposable
         _nativeStateSignalPending = true;
     }
 
+    public bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName)
+    {
+        if (_incrementalCatalog is IAutoBuyInvalidationIdentityCatalog identityCatalog)
+        {
+            return identityCatalog.TryResolveInvalidationTarget(
+                nativeIdentity,
+                expectedKind,
+                out entityId,
+                out expectedTypeName);
+        }
+
+        entityId = string.Empty;
+        expectedTypeName = string.Empty;
+        return false;
+    }
+
     public void NotifyNativeCompletion()
     {
         _nativeCompletionGeneration++;

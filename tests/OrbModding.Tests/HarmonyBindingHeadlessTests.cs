@@ -35,13 +35,45 @@ public sealed class HarmonyBindingHeadlessTests
         AssertTargets(
             "OrbAutomata.AutoConceptActiveListPatch",
             (typeof(AlchemyInstanceListVariable), "AddAlchemyInstances", new[] { typeof(AlchemyRecipeSO), typeof(int) }),
-            (typeof(AlchemyInstanceListVariable), "RemoveAlchemyInstances", new[] { typeof(AlchemyRecipeSO), typeof(int) }),
+            (typeof(AlchemyInstanceListVariable), "RemoveAlchemyInstances", new[] { typeof(AlchemyRecipeSO), typeof(int) }));
+        AssertTargets(
+            "OrbAutomata.AutoConceptActiveListBroadPatch",
             (typeof(AlchemyInstanceListVariable), "RebuildCounts", Type.EmptyTypes),
             (typeof(AlchemyInstanceListVariable), "SetupMaxSlotsValue", Type.EmptyTypes));
         AssertTargets(
             "OrbAutomata.AutoConceptProgressionPatch",
             (typeof(AlchemyRecipeSO), "Discover", Type.EmptyTypes),
             (typeof(AlchemyRecipeSO), "ApplyMastery", Type.EmptyTypes));
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void AutoConceptPatchCallbacks_SeparateInventoryFromProgression()
+    {
+        var recipe = new AlchemyRecipeSO();
+        var inventory = new List<object?>();
+        var progression = new List<object>();
+        AutoConceptLifecycleSignal.InventoryChanged += OnInventory;
+        AutoConceptLifecycleSignal.ProgressionChanged += OnProgression;
+        try
+        {
+            InvokePatch("OrbAutomata.AutoConceptActiveListPatch", "Postfix", recipe);
+            InvokePatch("OrbAutomata.AutoConceptActiveListBroadPatch", "Postfix");
+            InvokePatch("OrbAutomata.AutoConceptProgressionPatch", "Postfix", recipe);
+
+            Assert.Equal(2, inventory.Count);
+            Assert.Same(recipe, inventory[0]);
+            Assert.Null(inventory[1]);
+            Assert.Same(recipe, Assert.Single(progression));
+        }
+        finally
+        {
+            AutoConceptLifecycleSignal.InventoryChanged -= OnInventory;
+            AutoConceptLifecycleSignal.ProgressionChanged -= OnProgression;
+        }
+
+        void OnInventory(object? identity) => inventory.Add(identity);
+        void OnProgression(object identity) => progression.Add(identity);
     }
 
     [Fact]

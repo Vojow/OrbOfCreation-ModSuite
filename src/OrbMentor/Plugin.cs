@@ -18,6 +18,7 @@ public sealed class Plugin : BaseUnityPlugin
     private Harmony? _harmony;
     private MentorConfig? _config;
     private MentorRuntime? _runtime;
+    private MentorGameplayInvalidationBridge? _invalidationBridge;
     private MentorToggleButton? _button;
     private float _uiRetry;
     private bool _wasActive;
@@ -36,6 +37,7 @@ public sealed class Plugin : BaseUnityPlugin
             Logger,
             SuitePerformanceCoordinator.Shared,
             () => Time.frameCount);
+        _invalidationBridge = new MentorGameplayInvalidationBridge(GameplayInvalidationBus.Shared);
         _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
@@ -99,6 +101,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void LateUpdate()
     {
+        _invalidationBridge?.Pump(Time.frameCount);
         if (IsGameplayScene()) _runtime?.LateTick();
     }
     private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)
@@ -131,16 +134,46 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.NewGamePlusStarted, SceneManager.GetActiveScene().name, __instance);
     private static void BeforeRuntimeReset() =>
         ObserveLifecycle(GameLifecycleTransitionKind.ResetStarted, SceneManager.GetActiveScene().name);
-    private static void AfterSpellLoadoutChanged() => Instance?._runtime?.NotifyEquippedLoadoutChanged();
+    private static void AfterSpellLoadoutChanged()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.NotifyEquippedLoadoutChanged();
+        plugin?._invalidationBridge?.PublishSpellLoadout(Time.frameCount);
+    }
     private static void AfterSpellProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells, __instance);
+        PublishProgression(MentorDomain.Spells, __instance);
     private static void AfterAlchemyProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy, __instance);
+        PublishProgression(MentorDomain.Alchemy, __instance);
     private static void AfterArtifactProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts, __instance);
-    private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
-    private static void AfterAlchemyNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
-    private static void AfterArtifactNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
+        PublishProgression(MentorDomain.Artifacts, __instance);
+    private static void AfterNativeProgressionReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestLifecycleReset();
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Spells, Time.frameCount, null);
+    }
+    private static void AfterAlchemyNativeReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Alchemy, Time.frameCount, null);
+    }
+    private static void AfterArtifactNativeReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Artifacts, Time.frameCount, null);
+    }
+
+    private static void PublishProgression(MentorDomain domain, object changedSource)
+    {
+        var plugin = Instance;
+        plugin?._runtime?.MarkRelationshipDirty(domain, changedSource);
+        var entityId = plugin?._runtime?.TryGetStableProgressionEntityId(domain, changedSource, out var stableId) == true
+            ? stableId
+            : null;
+        plugin?._invalidationBridge?.PublishProgression(domain, Time.frameCount, entityId);
+    }
     private static bool IsGameplayScene() =>
         Instance is { } plugin &&
         SceneManager.GetActiveScene().name == "Main" &&
@@ -233,7 +266,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; _invalidationBridge = null; Instance = null;
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

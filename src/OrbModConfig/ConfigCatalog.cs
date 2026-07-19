@@ -77,8 +77,9 @@ internal sealed class ConfigSectionDescriptor
 
 internal sealed class ConfigSettingDescriptor
 {
-    public ConfigSettingDescriptor(ConfigEntryBase source)
+    public ConfigSettingDescriptor(string pluginGuid, ConfigEntryBase source)
     {
+        PluginGuid = pluginGuid ?? throw new ArgumentNullException(nameof(pluginGuid));
         Source = source;
         SourceSection = source.Definition.Section;
         Key = source.Definition.Key;
@@ -101,6 +102,7 @@ internal sealed class ConfigSettingDescriptor
         Dependencies = metadata?.Dependencies ?? Array.Empty<ModConfigDependency>();
     }
 
+    public string PluginGuid { get; }
     public ConfigEntryBase Source { get; }
     public string SourceSection { get; }
     public string Section { get; }
@@ -218,7 +220,7 @@ internal static class ConfigCatalog
     private static ModConfigDescriptor BuildMod(ConfigPluginSource source)
     {
         var settings = source.Config
-            .Select(pair => new ConfigSettingDescriptor(pair.Value))
+            .Select(pair => new ConfigSettingDescriptor(source.Guid, pair.Value))
             .Where(setting => !setting.Hidden);
 
         var sections = settings
