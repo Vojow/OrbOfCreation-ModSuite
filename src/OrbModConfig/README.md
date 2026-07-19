@@ -2,7 +2,7 @@
 
 Orb Mod Config is the optional in-game configuration surface for the mod suite and other loaded BepInEx plugins.
 
-The current `0.6.1` build provides a simplified configuration UI:
+The current `0.6.2` build provides a simplified configuration UI:
 
 - feature-oriented presentation groups independent of raw BepInEx sections;
 - friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
@@ -11,6 +11,9 @@ The current `0.6.1` build provides a simplified configuration UI:
 - live synchronization of clean, unstaged fields when native controls or shortcuts change them;
 - staged multi-condition dependencies, so disabled modules and inactive subfeatures lock their tuning fields immediately while re-enable, safety, and diagnostic controls remain usable;
 - a distinct transition-driven runtime-status band for plugins that publish Common feature health, joined by exact plugin GUID and kept separate from staged or saved configuration;
+- variable-height setting rows that keep complete descriptions and saved-versus-runtime guidance readable;
+- absolute same-page scroll retention across staged edits, defaults, Apply, Revert, and external refreshes;
+- responsive row remeasurement after resolution, window-size, or UI-scale width changes;
 
 The underlying editor continues to provide:
 
@@ -37,6 +40,8 @@ The underlying editor continues to provide:
 `0.6.0` lets one setting require multiple staged values and evaluates all requirements without writing configuration early. Enum changes rebuild the current settings rows immediately, matching the existing boolean behavior, so enabling or disabling a module updates its dependent editors in the same interaction.
 
 `0.6.1` consumes the suite's shared lifecycle generation so scene recreation and late plugin initialization use the same idempotent readiness boundary as Automata and Mentor.
+
+`0.6.2` sizes each setting row from its rendered description, preserves the current absolute scroll offset when the same page rebuilds, and remeasures rows when the available content width changes. Selecting another mod or feature section still begins at the top.
 
 A fully successful Apply now publishes exact plugin GUID plus source section/key invalidations through Common's bounded completed-frame bus. Validation, save, or `SettingChanged` rollback publishes nothing. The existing 0.1-second clean-field polling remains the compatibility path for native controls and third-party plugins, and staged edits retain their conflict behavior.
 

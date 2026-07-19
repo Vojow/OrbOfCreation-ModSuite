@@ -1509,6 +1509,23 @@ namespace TMPro
         public TextAlignmentOptions alignment { get; set; }
         public TextWrappingModes textWrappingMode { get; set; }
         public TextOverflowModes overflowMode { get; set; }
+
+        public UnityEngine.Vector2 GetPreferredValues(string value, float width, float height)
+        {
+            var characterWidth = Math.Max(1f, fontSize * 0.5f);
+            var charactersPerLine = Math.Max(1, (int)(Math.Max(1f, width) / characterWidth));
+            var lineCount = 0;
+            var maximumLineLength = 0;
+            foreach (var line in (value ?? string.Empty).Split('\n'))
+            {
+                maximumLineLength = Math.Max(maximumLineLength, line.Length);
+                lineCount += Math.Max(1, (line.Length + charactersPerLine - 1) / charactersPerLine);
+            }
+
+            return new UnityEngine.Vector2(
+                Math.Min(Math.Max(1f, width), maximumLineLength * characterWidth),
+                Math.Max(fontSize, lineCount * fontSize * 1.2f));
+        }
     }
 
     public class TMP_InputField : UnityEngine.UI.Selectable

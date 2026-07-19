@@ -1,5 +1,11 @@
 # Changelog
 
+## Orb Mod Config 0.6.2 Beta 1 — 2026-07-19
+
+- Size setting rows from their rendered descriptions so complete help, acceptable-value, restart, and saved-versus-runtime text remains readable instead of being ellipsis-clipped in a fixed-height area.
+- Preserve the absolute scroll offset when staged edits, Default, Apply, Revert, external refreshes, or responsive width changes rebuild the same page; reset to the top only when selecting another mod or feature section.
+- Remeasure visible rows when resolution, window width, or UI scale changes while retaining the separate exact-plugin runtime-status band and configuration-only save confirmation.
+
 ## Enforced shared performance profile — 2026-07-19
 
 - Apply the checked V1 profile's exact starvation thresholds to all twelve supported coordinator identities while retaining the constructor fallback for unknown work and allowing test coordinators to select a tighter threshold.

@@ -23,7 +23,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Action-family ownership isolation](action-family-ownership.md) | Next beta / runtime validation pending | Atomic independent claims and exact known-conflict detection stop only overlapping native mutations. |
 | [Automation admission adapters](automation-admission-adapters.md) | Next beta / runtime validation pending | Shared policy consumes fail-closed normalized facts while explicit native-family adapters retain live validation and verified mutation. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
-| [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |
+| [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing, compound dependencies, readable variable-height rows, and stable responsive same-page scrolling; interactive validation remains. |
 | [Orb Mentor](mentor.md) | Beta / runtime validation pending | Equipped-source and highest-only spell policies are released; extended interactive validation remains. |
 | [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) | Beta / runtime validation pending | Independent, disabled-by-default domains are released; interactive native-progression and performance gates remain. |
 | [Orb Insights](insights.md) | Planned | Design only. |
