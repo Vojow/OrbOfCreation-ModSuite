@@ -62,7 +62,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastToggleControl = new AutoCastToggleControl(_config);
         _autoBuyToggleControl = new AutoBuyToggleControl(
             _config,
-            () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked);
+            () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked,
+            () => _autoBuyEngine?.LatestDecision);
         _autoBuyEngine = new AutoBuyEngine(
             _config,
             new ReflectionAutoBuyCatalog(),

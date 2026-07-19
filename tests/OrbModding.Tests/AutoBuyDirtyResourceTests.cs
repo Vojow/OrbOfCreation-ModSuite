@@ -532,7 +532,6 @@ public sealed class AutoBuyDirtyResourceTests
             new ManualLogSource(),
             _ => 0.0,
             _ => 0.0);
-
         engine.Tick(config.AutoBuyIntervalSeconds.Value);
         engine.Tick(0.0f);
 
@@ -565,7 +564,6 @@ public sealed class AutoBuyDirtyResourceTests
             new ManualLogSource(),
             _ => 0.0,
             _ => 0.0);
-
         engine.Tick(config.AutoBuyIntervalSeconds.Value);
         Assert.Equal(1, candidate.CostReads);
         Assert.Equal(1, candidate.CanPurchaseCalls);
@@ -630,16 +628,34 @@ public sealed class AutoBuyDirtyResourceTests
             new ManualLogSource(),
             _ => 0.0,
             _ => 0.0);
+        var sink = new CandidateDecisionSink("structure-resource-wait", AutomationDecisionCode.ReserveFloor);
+        using var subscription = AutomationDecisionPublisher.Subscribe(sink);
 
         engine.Tick(config.AutoBuyIntervalSeconds.Value);
 
         Assert.Equal(1, structure.CanPurchaseCalls);
         Assert.Equal(1, structure.CostReads);
         Assert.NotNull(catalog.FirstDecision);
-        Assert.Equal(AutoBuyRejectionReason.ReserveViolation, catalog.FirstDecision!.RejectionReason);
-        var blocker = Assert.Single(catalog.FirstDecision.ResourceBlockers);
-        Assert.Equal("resource", blocker.ResourceId);
-        Assert.Equal(0, blocker.RequiredQuantity.CompareTo(new BigAmount(10, 0)));
+        Assert.Equal(AutomationDecisionCode.ReserveFloor, catalog.FirstDecision!.Code);
+        Assert.Equal(AutomationDecisionCode.ReserveFloor, engine.LatestDecision?.Code);
+        var firstDecision = engine.LatestDecision!.Value;
+        var constraints = catalog.FirstDecision.StructuredDecision.ResourceConstraints;
+        Assert.True(constraints.Count == 1);
+        var blocker = constraints[0];
+        Assert.Equal("resource", blocker.Resource.StableId);
+        Assert.Equal(
+            0,
+            new BigAmount(blocker.Required.Mantissa, blocker.Required.Exponent)
+                .CompareTo(new BigAmount(10, 0)));
+
+        engine.InvalidateLifecycle();
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        var secondDecision = engine.LatestDecision!.Value;
+        Assert.Equal(firstDecision.ConditionKey, secondDecision.ConditionKey);
+        Assert.NotEqual(firstDecision.InstanceKey, secondDecision.InstanceKey);
+        Assert.Equal(firstDecision.LifecycleGeneration + 1, secondDecision.LifecycleGeneration);
+        Assert.Equal(2, sink.ObservationCount);
     }
 
     [Fact]
@@ -1679,8 +1695,9 @@ public sealed class AutoBuyDirtyResourceTests
     {
         return AutoBuyDecision.Rejected(
             candidate.Snapshot(),
-            AutoBuyRejectionReason.AffordabilityThreshold,
+            AutomationDecisionCode.AffordabilityThreshold,
             "resource threshold not met",
+            AutomationRetryTrigger.ResourceQuantity,
             new[]
             {
                 new AutoBuyResourceBlocker(
@@ -1705,6 +1722,29 @@ public sealed class AutoBuyDirtyResourceTests
         foreach (var candidate in batch.DirtyCandidates)
         {
             index.CompleteCandidateEvaluation(candidate);
+        }
+    }
+
+    private sealed class CandidateDecisionSink : IAutomationDecisionSink
+    {
+        private readonly string _stableId;
+        private readonly AutomationDecisionCode _code;
+
+        public CandidateDecisionSink(string stableId, AutomationDecisionCode code)
+        {
+            _stableId = stableId;
+            _code = code;
+        }
+
+        public int ObservationCount { get; private set; }
+
+        public void Observe(in AutomationDecision decision)
+        {
+            if (decision.Code == _code &&
+                string.Equals(decision.Subject.StableId, _stableId, StringComparison.Ordinal))
+            {
+                ObservationCount++;
+            }
         }
     }
 

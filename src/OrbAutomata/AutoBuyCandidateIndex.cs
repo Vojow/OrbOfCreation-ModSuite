@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -849,26 +850,29 @@ internal sealed class AutoBuyCandidateIndex
         if (entry.Definition.Kind != AutoBuyCandidateKind.Structure ||
             decision is null ||
             decision.Kind != AutoBuyDecisionKind.Rejection ||
-            decision.RejectionReason != AutoBuyRejectionReason.ReserveViolation &&
-            decision.RejectionReason != AutoBuyRejectionReason.AffordabilityThreshold)
+            decision.Code != AutomationDecisionCode.ReserveFloor &&
+            decision.Code != AutomationDecisionCode.AffordabilityThreshold)
         {
             return;
         }
 
-        for (var i = 0; i < decision.ResourceBlockers.Count; i++)
+        var constraints = decision.StructuredDecision.ResourceConstraints;
+        for (var i = 0; i < constraints.Count; i++)
         {
-            var blocker = decision.ResourceBlockers[i];
-            if (string.IsNullOrWhiteSpace(blocker.ResourceId) ||
-                blocker.IsBandwidth ||
-                !entry.ResourceDependencies.Contains(blocker.ResourceId))
+            var constraint = constraints[i];
+            var resourceId = constraint.Resource.StableId;
+            if (string.IsNullOrWhiteSpace(resourceId) ||
+                constraint.IsBandwidth ||
+                !entry.ResourceDependencies.Contains(resourceId))
             {
                 continue;
             }
 
-            if (!entry.ResourceWakeThresholds.TryGetValue(blocker.ResourceId, out var threshold) ||
-                blocker.RequiredQuantity.CompareTo(threshold) > 0)
+            var required = new BigAmount(constraint.Required.Mantissa, constraint.Required.Exponent);
+            if (!entry.ResourceWakeThresholds.TryGetValue(resourceId, out var threshold) ||
+                required.CompareTo(threshold) > 0)
             {
-                entry.ResourceWakeThresholds[blocker.ResourceId] = blocker.RequiredQuantity;
+                entry.ResourceWakeThresholds[resourceId] = required;
             }
         }
     }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -32,8 +33,16 @@ internal sealed class AutoBuyTooltip : ITooltipable
             new TooltipNode($"Repeat policy: {(Config.RespectActionMultiplier.Value ? "Action multiplier" : Config.RepeatWhileAffordable.Value ? "While affordable" : Config.StructureRepeatMode.Value.ToString())}"),
             new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         };
-        if (_control.State == AutoCastToggleVisualState.Blocked)
-            nodes.Add(new TooltipNode("Blocked: Automata Emergency Disable is active.", new Color(1, .35f, .3f)));
+        var latestDecision = _control.LatestDecision;
+        if (latestDecision.HasValue)
+        {
+            var decision = latestDecision.Value;
+            nodes.Add(new TooltipNode(
+                $"Decision: {AutomationDecisionPresenter.Format(decision)}",
+                decision.Disposition == AutomationDecisionDisposition.Accepted
+                    ? new Color(.4f, 1, .55f)
+                    : new Color(1, .75f, .35f)));
+        }
         return nodes;
     }
     public List<TooltipNode> GetAltTooltipNodes() => new();

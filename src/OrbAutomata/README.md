@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.4` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, alongside Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, and shared lifecycle generation isolation.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.4` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, with structured decision evidence shared by telemetry, logs, and its tooltip. It also provides Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, and shared lifecycle generation isolation.
 
 ## Build
 
@@ -130,6 +130,8 @@ Enabling the feature initializes the scoped shared classifier and snapshots curr
 Transient shared classifier readiness failures use the existing 30-second Auto Concept warning gate. A contradictory or permanently invalid concept-domain contract blocks Auto Concept for that lifecycle and is logged once; `Unknown` evidence never falls back to ordinary names or broad alchemy membership.
 
 Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
+
+Auto Buy decisions use append-only Common codes rather than parsing diagnostic text. Candidate threshold parking, rejection telemetry, the latest tooltip status, and verbose rejection records all consume the same immutable decision. Observed quantities and wording can change without producing a new condition; stable thresholds, identities, policy, queue limits, and native states do produce a transition. Equivalent conditions are not republished to future Insights subscribers.
 
 Every Orb Automata message includes local date, time to milliseconds, and UTC offset so runtime reports can identify when a failure began.
 Successful Auto Concept initialization records separate scoped-recipe, active-loadout, and eligible-candidate counts. When operational logging is enabled, assignment reservation, settled training start, catch-up/timeout completion, rotation, and a rate-limited no-change summary distinguish an active or idle balancer from a missed evaluation.

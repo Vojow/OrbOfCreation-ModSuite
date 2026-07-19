@@ -12,14 +12,16 @@ The current beta centers on Orb Automata: queue-aware Auto Buy with progression-
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.8.4** | Beta | Rejection-aware, completion-responsive queue-filling Auto Buy with shared lifecycle and bounded invalidation, coordinated Auto Cast, Concept rotation, and progression-aware spell leveling. |
-| **Orb Mod Config 0.6.1** | Beta | Mods tab with shared lifecycle and transactional invalidation, typed staged editors, multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
+| **Orb Automata 0.8.4** | Beta | Structured, rejection-aware and completion-responsive queue-filling Auto Buy with shared lifecycle generations and bounded invalidation, coordinated Auto Cast, timed or catch-up Concept rotation, and progression-aware spell leveling. |
+| **Orb Mod Config 0.6.1** | Beta | Mods tab with shared lifecycle tracking and transactional invalidation, typed staged editors, multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
 | **Orb Mentor 0.3.4** | Beta | Progression-gated spell, artifact, and ordinary-alchemy mastery sharing with shared lifecycle/invalidation, verified XP deltas, independent opt-in domains, and equipped-spell sources. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton with BepInEx 5, but ModSuite 0.3.0 Beta 1 still requires post-release Proton validation.
 
 Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on the `codex/experimental-chronomancer-resonance` branch and is not part of supported `main` builds or packages.
+
+The next beta's Auto Buy diagnostics use stable Common decision codes and immutable evidence across telemetry, logs, and the gameplay tooltip. Future Orb Insights consumers can observe condition transitions without referencing Automata internals; broader module adoption remains planned rather than implied as released behavior.
 
 ## Get started
 

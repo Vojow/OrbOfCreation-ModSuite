@@ -269,29 +269,14 @@ internal sealed class AutoBuyCandidateSnapshot
     public AutoBuyCandidateKind Kind { get; }
 
     public string ReflectedType { get; }
+
+    internal long LifecycleGeneration { get; set; }
 }
 
 internal enum AutoBuyDecisionKind
 {
     Recommendation,
     Rejection
-}
-
-internal enum AutoBuyRejectionReason
-{
-    None,
-    MutationQuarantined,
-    NotAllowed,
-    ConfigurationBlocked,
-    NativeNotPurchasable,
-    Unavailable,
-    Locked,
-    CostSnapshotUnavailable,
-    InvalidReservePolicy,
-    InvalidResourceSnapshot,
-    ReserveViolation,
-    AffordabilityThreshold,
-    CandidateScanLimit,
 }
 
 internal enum AutoBuyResourceBlockerKind
@@ -337,22 +322,23 @@ internal readonly struct AutoBuyResourceBlocker
 
 internal sealed class AutoBuyDecision
 {
+    internal const string FeatureId = "OrbAutomata.AutoBuy";
+    internal const string EvaluateOperationId = "EvaluatePurchase";
+
     private AutoBuyDecision(
         AutoBuyDecisionKind kind,
         AutoBuyCandidateSnapshot candidate,
         double costRatio,
         int priorityRank,
         string detail,
-        AutoBuyRejectionReason rejectionReason,
-        IReadOnlyList<AutoBuyResourceBlocker> resourceBlockers)
+        AutomationDecision structuredDecision)
     {
         Kind = kind;
         Candidate = candidate;
         CostRatio = costRatio;
         PriorityRank = priorityRank;
         Detail = detail;
-        RejectionReason = rejectionReason;
-        ResourceBlockers = resourceBlockers;
+        StructuredDecision = structuredDecision;
     }
 
     public AutoBuyDecisionKind Kind { get; }
@@ -365,9 +351,9 @@ internal sealed class AutoBuyDecision
 
     public string Detail { get; }
 
-    public AutoBuyRejectionReason RejectionReason { get; }
+    public AutomationDecision StructuredDecision { get; }
 
-    public IReadOnlyList<AutoBuyResourceBlocker> ResourceBlockers { get; }
+    public AutomationDecisionCode Code => StructuredDecision.Code;
 
     public static AutoBuyDecision Recommended(
         AutoBuyCandidateSnapshot candidate,
@@ -375,34 +361,114 @@ internal sealed class AutoBuyDecision
         string detail,
         int priorityRank = 0)
     {
+        var structuredDecision = CreateStructuredDecision(
+            candidate,
+            AutomationDecisionDisposition.Accepted,
+            AutomationDecisionCode.Eligible,
+            detail,
+            AutomationRetryTrigger.None,
+            null,
+            default);
         return new AutoBuyDecision(
             AutoBuyDecisionKind.Recommendation,
             candidate,
             costRatio,
             priorityRank,
             detail,
-            AutoBuyRejectionReason.None,
-            Array.Empty<AutoBuyResourceBlocker>());
+            structuredDecision);
     }
 
     public static AutoBuyDecision Rejected(
         AutoBuyCandidateSnapshot candidate,
-        AutoBuyRejectionReason rejectionReason,
+        AutomationDecisionCode code,
         string detail,
-        IReadOnlyList<AutoBuyResourceBlocker>? resourceBlockers = null)
+        AutomationRetryTrigger retryTriggers,
+        IReadOnlyList<AutoBuyResourceBlocker>? resourceBlockers = null,
+        AutomationDecisionDisposition disposition = AutomationDecisionDisposition.Rejected,
+        AutomationNativeDetail native = default)
     {
-        if (rejectionReason == AutoBuyRejectionReason.None)
+        if (code == AutomationDecisionCode.None || code == AutomationDecisionCode.Eligible)
         {
-            throw new ArgumentOutOfRangeException(nameof(rejectionReason));
+            throw new ArgumentOutOfRangeException(nameof(code));
         }
 
+        var structuredDecision = CreateStructuredDecision(
+            candidate,
+            disposition,
+            code,
+            detail,
+            retryTriggers,
+            resourceBlockers,
+            native);
         return new AutoBuyDecision(
             AutoBuyDecisionKind.Rejection,
             candidate,
             double.PositiveInfinity,
             0,
             detail,
-            rejectionReason,
-            resourceBlockers ?? Array.Empty<AutoBuyResourceBlocker>());
+            structuredDecision);
     }
+
+    private static AutomationDecision CreateStructuredDecision(
+        AutoBuyCandidateSnapshot candidate,
+        AutomationDecisionDisposition disposition,
+        AutomationDecisionCode code,
+        string detail,
+        AutomationRetryTrigger retryTriggers,
+        IReadOnlyList<AutoBuyResourceBlocker>? resourceBlockers,
+        AutomationNativeDetail native)
+    {
+        var expectedNativeType = string.IsNullOrWhiteSpace(candidate.ReflectedType)
+            ? candidate.Kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO"
+            : candidate.ReflectedType;
+        var subject = new AutomationEntityIdentity(
+            candidate.Kind == AutoBuyCandidateKind.Structure ? "orb.structure" : "orb.upgrade",
+            candidate.Uuid,
+            expectedNativeType,
+            candidate.DisplayName);
+
+        AutomationResourceConstraint[]? constraints = null;
+        if (resourceBlockers is not null && resourceBlockers.Count > 0)
+        {
+            constraints = new AutomationResourceConstraint[resourceBlockers.Count];
+            for (var index = 0; index < resourceBlockers.Count; index++)
+            {
+                var blocker = resourceBlockers[index];
+                constraints[index] = new AutomationResourceConstraint(
+                    blocker.Kind == AutoBuyResourceBlockerKind.ReserveFloor
+                        ? AutomationResourceConstraintKind.ReserveFloor
+                        : AutomationResourceConstraintKind.AffordabilityThreshold,
+                    new AutomationEntityIdentity(
+                        "orb.resource",
+                        blocker.ResourceId,
+                        "ResourceSO",
+                        blocker.ResourceName),
+                    ToScientificValue(blocker.Cost),
+                    ToScientificValue(blocker.AvailableQuantity),
+                    ToScientificValue(blocker.RequiredQuantity),
+                    blocker.IsBandwidth);
+            }
+        }
+
+        // Ownership of the exact array transfers to Common. The public DTO
+        // never exposes that array, so rejected candidates pay for one
+        // normalized constraint array instead of a second defensive clone.
+        return AutomationDecision.CreateWithOwnedResourceConstraints(
+            FeatureId,
+            EvaluateOperationId,
+            disposition,
+            code,
+            subject,
+            default,
+            candidate.LifecycleGeneration,
+            retryTriggers,
+            constraints,
+            null,
+            native,
+            1,
+            detail);
+    }
+
+    private static AutomationScientificValue ToScientificValue(BigAmount value) =>
+        new AutomationScientificValue(value.Mantissa, value.Exponent);
 }

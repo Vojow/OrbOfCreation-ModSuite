@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -90,8 +91,8 @@ public sealed class AutoBuyRejectionTelemetryTests
         Assert.Equal(2, result.RejectionStateChanges);
         Assert.Equal(1, result.RejectionExits);
         Assert.Equal(0, result.CurrentRejectedCandidates);
-        Assert.Equal(3, result.RejectionsByReason[AutoBuyRejectionReason.AffordabilityThreshold]);
-        Assert.Equal("AffordabilityThreshold=3", result.FormatReasonCounts());
+        Assert.Equal(3, result.RejectionsByCode[AutomationDecisionCode.AffordabilityThreshold]);
+        Assert.Equal("AffordabilityThreshold=3", result.FormatCodeCounts());
     }
 
     [Fact]
@@ -106,7 +107,7 @@ public sealed class AutoBuyRejectionTelemetryTests
     }
 
     [Fact]
-    public void Telemetry_TreatsDifferentNativeReasonsAsDifferentStates()
+    public void Telemetry_ExcludesTechnicalDetailFromTheStructuredConditionKey()
     {
         var candidate = new FakeCandidate("native");
         var snapshot = candidate.Snapshot();
@@ -114,16 +115,18 @@ public sealed class AutoBuyRejectionTelemetryTests
 
         telemetry.Record(AutoBuyDecision.Rejected(
             snapshot,
-            AutoBuyRejectionReason.NativeNotPurchasable,
-            "prerequisite missing"));
+            AutomationDecisionCode.NativeAdmissionRejected,
+            "prerequisite missing",
+            AutomationRetryTrigger.Lifecycle));
         telemetry.Record(AutoBuyDecision.Rejected(
             snapshot,
-            AutoBuyRejectionReason.NativeNotPurchasable,
-            "already queued"));
+            AutomationDecisionCode.NativeAdmissionRejected,
+            "already queued",
+            AutomationRetryTrigger.Lifecycle));
 
         var result = telemetry.Snapshot();
-        Assert.Equal(0, result.RepeatedUnchangedRejections);
-        Assert.Equal(2, result.RejectionStateChanges);
+        Assert.Equal(1, result.RepeatedUnchangedRejections);
+        Assert.Equal(1, result.RejectionStateChanges);
         Assert.Equal(1, result.CurrentRejectedCandidates);
     }
 
@@ -135,8 +138,10 @@ public sealed class AutoBuyRejectionTelemetryTests
 
         telemetry.Record(AutoBuyDecision.Rejected(
             candidate.Snapshot(),
-            AutoBuyRejectionReason.CandidateScanLimit,
-            "candidate scan limit reached"));
+            AutomationDecisionCode.ScanLimitDeferred,
+            "candidate scan limit reached",
+            AutomationRetryTrigger.SchedulerTurn,
+            disposition: AutomationDecisionDisposition.Deferred));
 
         var result = telemetry.Snapshot();
         Assert.Equal(0, result.Evaluations);
@@ -144,7 +149,79 @@ public sealed class AutoBuyRejectionTelemetryTests
         Assert.Equal(0, result.RejectionStateChanges);
         Assert.Equal(0, result.CurrentRejectedCandidates);
         Assert.Equal(1, result.ScanLimitDeferrals);
-        Assert.Empty(result.RejectionsByReason);
+        Assert.Empty(result.RejectionsByCode);
+    }
+
+    [Fact]
+    public void Telemetry_NormalizesBlockerOrderAndIgnoresObservedQuantity()
+    {
+        var snapshot = new FakeCandidate("multi-resource", "Original candidate name").Snapshot();
+        var renamedSnapshot = new FakeCandidate("multi-resource", "Renamed candidate").Snapshot();
+        var telemetry = new AutoBuyRejectionTelemetry();
+
+        Assert.True(telemetry.Record(ResourceRejection(
+            snapshot,
+            new AutoBuyResourceBlocker(
+                AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                "mana",
+                "Mana",
+                new BigAmount(10, 0),
+                new BigAmount(50, 0),
+                new BigAmount(100, 0)),
+            new AutoBuyResourceBlocker(
+                AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                "knowledge",
+                "Knowledge",
+                new BigAmount(5, 0),
+                new BigAmount(20, 0),
+                new BigAmount(50, 0)))));
+        Assert.False(telemetry.Record(ResourceRejection(
+            renamedSnapshot,
+            new AutoBuyResourceBlocker(
+                AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                "knowledge",
+                "Renamed Knowledge",
+                new BigAmount(5, 0),
+                new BigAmount(30, 0),
+                new BigAmount(50, 0)),
+            new AutoBuyResourceBlocker(
+                AutoBuyResourceBlockerKind.AffordabilityThreshold,
+                "mana",
+                "Renamed Mana",
+                new BigAmount(10, 0),
+                new BigAmount(75, 0),
+                new BigAmount(100, 0)))));
+
+        var result = telemetry.Snapshot();
+        Assert.Equal(1, result.RepeatedUnchangedRejections);
+        Assert.Equal(1, result.RejectionStateChanges);
+    }
+
+    [Fact]
+    public void ToggleControl_ExposesLatestStructuredDecisionAndConfigurationStatus()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        var latest = ResourceRejection(
+            new FakeCandidate("tooltip-candidate").Snapshot(),
+            available: 50,
+            required: 100).StructuredDecision;
+        var control = new AutoBuyToggleControl(
+            config,
+            readLatestDecision: () => latest);
+
+        Assert.Equal(latest.ConditionKey, control.LatestDecision?.ConditionKey);
+        Assert.Equal(
+            AutomationDecisionPresenter.Format(latest),
+            AutomationDecisionPresenter.Format(control.LatestDecision!.Value));
+
+        config.EmergencyDisable.Value = true;
+
+        Assert.Equal(AutomationDecisionCode.ConfigurationDisabled, control.LatestDecision?.Code);
+        Assert.Contains(
+            "Disabled by configuration",
+            AutomationDecisionPresenter.Format(control.LatestDecision!.Value),
+            StringComparison.Ordinal);
     }
 
     private static ResourceAdmissionCost Cost(string resourceId, double cost, double available)
@@ -163,8 +240,9 @@ public sealed class AutoBuyRejectionTelemetryTests
     {
         return AutoBuyDecision.Rejected(
             snapshot,
-            AutoBuyRejectionReason.AffordabilityThreshold,
+            AutomationDecisionCode.AffordabilityThreshold,
             "resource threshold not met",
+            AutomationRetryTrigger.ResourceQuantity,
             new[]
             {
                 new AutoBuyResourceBlocker(
@@ -177,16 +255,28 @@ public sealed class AutoBuyRejectionTelemetryTests
             });
     }
 
+    private static AutoBuyDecision ResourceRejection(
+        AutoBuyCandidateSnapshot snapshot,
+        params AutoBuyResourceBlocker[] blockers)
+    {
+        return AutoBuyDecision.Rejected(
+            snapshot,
+            AutomationDecisionCode.AffordabilityThreshold,
+            "resource threshold not met",
+            AutomationRetryTrigger.ResourceQuantity,
+            blockers);
+    }
+
     private sealed class FakeCandidate : IAutoBuyCandidate
     {
         private readonly AutoBuyCandidateSnapshot _snapshot;
 
-        public FakeCandidate(string uuid)
+        public FakeCandidate(string uuid, string? displayName = null)
         {
             _snapshot = new AutoBuyCandidateSnapshot(
                 this,
                 uuid,
-                uuid,
+                displayName ?? uuid,
                 AutoBuyCandidateKind.Structure,
                 nameof(FakeCandidate));
         }

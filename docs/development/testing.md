@@ -94,11 +94,11 @@ regression below these current floors:
 
 | Scope | Enforced line floor | Current Release line coverage |
 |---|---:|---:|
-| Overall supported production code | 65% | 67.47% |
-| Orb Automata | 70% | 73.54% |
-| Orb Mentor | 64% | 67.70% |
-| Orb Mod Config | 24% | 24.75% |
-| Orb Modding Common | 83% | 84.28% |
+| Overall supported production code | 65% | 70.93% |
+| Orb Automata | 70% | 74.50% |
+| Orb Mentor | 64% | 69.85% |
+| Orb Mod Config | 24% | 24.33% |
+| Orb Modding Common | 83% | 86.00% |
 
 These are regression floors, not completion targets. New or materially changed
 core engines and controllers should aim for at least 80% line and 70% branch
