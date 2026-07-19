@@ -17,7 +17,8 @@ Baseline checked on 2026-07-14:
 - `Assembly-CSharp.dll`: `5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F`.
 - `Assembly-CSharp-firstpass.dll`: `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A`.
 - Both installed assembly hashes match the audited repository baseline.
-- On 2026-07-19, the combined invalidation, structured-decision, and feature-health stack passed the supported game-independent behavior and knowledge-map tests with `UseGameStubs=true`; exact counts and coverage are recorded after rebased-stack verification.
+- On 2026-07-19, all 527 supported game-independent behavior and knowledge-map tests passed in Release with `UseGameStubs=true` on the combined invalidation, structured-decision, and feature-health stack.
+- The checked-in coverage gate passed at 71.76% overall production line coverage: Automata 73.66%, Mentor 71.39%, Mod Config 26.40%, and Orb Modding Common 87.50%.
 - On 2026-07-19, all 19 supported installed-game metadata contract tests passed against the audited assemblies.
 - Automata, Mentor, and Mod Config built in Release against the real installed game references with zero warnings. The required Unity facade, UI, and TextMeshPro references are part of the build contract.
 - The supported-suite package rehearsal contained only Automata, Mentor, Mod Config, and Orb Modding Common DLLs; experimental DLL guards passed.

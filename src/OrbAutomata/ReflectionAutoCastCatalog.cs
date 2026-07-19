@@ -141,7 +141,7 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMut
     }
 }
 
-internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
+internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate, IAutoCastAdmissionFailureEvidence
 {
     private const string AutoCastChargeInput = "OrbAutomata.AutoCast.FullCharge";
     private readonly ReflectionAutoCastCatalog _catalog;
@@ -181,19 +181,25 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
     public bool IsReadyingCast => ReadBool("IsReadyingCast", fallback: false);
 
+    public AutoCastAdmissionFailureKind LastAdmissionFailure { get; private set; }
+
     public bool CanCast(out string reason)
     {
         if (!ReflectionUtil.TryInvokeBool(_spell, out var canCast, "CanCast"))
         {
             reason = "Spell.CanCast unavailable";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
             return false;
         }
 
         if (canCast)
         {
             reason = "native readiness passed";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
             return true;
         }
+
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.OrdinaryRejection;
 
         if (ReadBool("IsAttuning", fallback: false))
         {
@@ -232,6 +238,7 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
         if (reference is null || scaling is null)
         {
             reason = "spell recipe or scaling unavailable";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
             return false;
         }
 
@@ -243,6 +250,7 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
             if (options is null || method is null)
             {
                 reason = "target preflight contract unavailable";
+                LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
                 return false;
             }
 
@@ -251,17 +259,20 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
                 if (method.Invoke(options, new[] { scaling }) is not true)
                 {
                     reason = "native target selector has no valid target";
+                    LastAdmissionFailure = AutoCastAdmissionFailureKind.OrdinaryRejection;
                     return false;
                 }
             }
             catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException)
             {
                 reason = ex.InnerException?.Message ?? ex.Message;
+                LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
                 return false;
             }
         }
 
         reason = "target preflight passed";
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
         return true;
     }
 
@@ -356,10 +367,12 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
         if (container is null)
         {
             costs = Array.Empty<ResourceAdmissionCost>();
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
             return false;
         }
 
         costs = ReflectionCostReader.Read(container);
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
         return true;
     }
 

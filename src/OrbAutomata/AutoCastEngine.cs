@@ -242,9 +242,9 @@ internal sealed class AutoCastEngine : IDisposable
         {
             var index = (start + offset) % loadout.Count;
             var candidate = loadout[index];
-            if (!TryAdmit(candidate, out var reason, out var resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out var resourceSummary, out var failureKind))
             {
-                sawContractFailure |= IsContractFailure(reason);
+                sawContractFailure |= failureKind == AutoCastAdmissionFailureKind.ContractUnavailable;
                 LogVerboseRejection(candidate, reason);
                 continue;
             }
@@ -310,7 +310,7 @@ internal sealed class AutoCastEngine : IDisposable
                 return;
             }
 
-            if (!TryAdmit(candidate, out var reason, out resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out resourceSummary, out _))
             {
                 LogVerboseRejection(candidate, reason);
                 return;
@@ -505,7 +505,7 @@ internal sealed class AutoCastEngine : IDisposable
         {
             var index = (start + offset) % loadout.Count;
             var candidate = loadout[index];
-            if (!TryAdmit(candidate, out var reason, out var resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out var resourceSummary, out _))
             {
                 LogVerboseRejection(candidate, reason);
                 continue;
@@ -542,18 +542,25 @@ internal sealed class AutoCastEngine : IDisposable
         }
     }
 
-    private bool TryAdmit(IAutoCastCandidate candidate, out string reason, out string resourceSummary)
+    private bool TryAdmit(
+        IAutoCastCandidate candidate,
+        out string reason,
+        out string resourceSummary,
+        out AutoCastAdmissionFailureKind failureKind)
     {
         resourceSummary = string.Empty;
+        failureKind = AutoCastAdmissionFailureKind.None;
         if (candidate.IsEmpty)
         {
             reason = "empty slot";
+            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
         if (candidate.IsCasting)
         {
             reason = candidate.Kind == AutoCastSpellKind.Aura ? "aura already active" : "already casting";
+            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
@@ -566,6 +573,7 @@ internal sealed class AutoCastEngine : IDisposable
                 reason = "native readiness or costs unavailable";
             }
 
+            failureKind = ReadAdmissionFailure(candidate);
             return false;
         }
 
@@ -581,16 +589,24 @@ internal sealed class AutoCastEngine : IDisposable
             if (!reserve.Passed)
             {
                 reason = reserve.Reason;
+                failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
                 return false;
             }
         }
 
         if (!_fullnessPolicy.Evaluate(immediateCosts, drainCosts, _config.AutoCastStartResourcePercent.Value, out reason))
         {
+            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
-        return candidate.HasValidTargets(out reason);
+        if (!candidate.HasValidTargets(out reason))
+        {
+            failureKind = ReadAdmissionFailure(candidate);
+            return false;
+        }
+
+        return true;
     }
 
     private void OnManualSpellFired()
@@ -652,10 +668,11 @@ internal sealed class AutoCastEngine : IDisposable
             FeatureStatusReasonCode.NativeMutationFailed,
             summary);
 
-    private static bool IsContractFailure(string reason) =>
-        reason.IndexOf("unavailable", StringComparison.OrdinalIgnoreCase) >= 0 ||
-        reason.IndexOf("identity", StringComparison.OrdinalIgnoreCase) >= 0 ||
-        reason.IndexOf("contract", StringComparison.OrdinalIgnoreCase) >= 0;
+    private static AutoCastAdmissionFailureKind ReadAdmissionFailure(IAutoCastCandidate candidate) =>
+        candidate is IAutoCastAdmissionFailureEvidence evidence &&
+        evidence.LastAdmissionFailure != AutoCastAdmissionFailureKind.None
+            ? evidence.LastAdmissionFailure
+            : AutoCastAdmissionFailureKind.OrdinaryRejection;
 
     private bool MaintainFullChargeHold()
     {
