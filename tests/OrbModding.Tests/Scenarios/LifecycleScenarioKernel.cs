@@ -82,6 +82,16 @@ internal sealed class LifecycleScenarioKernel : IDisposable
     {
         ThrowIfDisposed();
         AdvanceFrame(TimeSpan.Zero);
+        return ObserveAtCurrentFrame(kind, sceneName, nativeIdentity, source);
+    }
+
+    public GameLifecycleTransition ObserveAtCurrentFrame(
+        GameLifecycleTransitionKind kind,
+        string sceneName = "Main",
+        object? nativeIdentity = null,
+        string source = "scenario")
+    {
+        ThrowIfDisposed();
         if (!Lifecycle.TryObserve(
                 new GameLifecycleObservation(kind, Frame, sceneName, source, nativeIdentity),
                 out var transition,

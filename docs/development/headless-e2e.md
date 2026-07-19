@@ -2,6 +2,9 @@
 
 [Back to compatibility and testing](testing.md) · [Runtime UAT protocol](runtime-validation.md) · [Performance architecture](../plans/performance-suite.md)
 
+See also [sanitized runtime replay fixtures](runtime-replay.md) for the strict,
+versioned event format used to reproduce selected ordering-sensitive journeys.
+
 ## Purpose
 
 Headless E2E tests run the real mod engine, scheduler, candidate index, reserve policy, and queue-planning behavior against a deterministic simulation of the native game boundary. They require neither Unity nor computer control and are suitable for local development and CI.
@@ -72,6 +75,22 @@ The fixture members are reduced from installed-game documentation and inspected
 assembly contracts. They remain smaller than the game and do not replace the
 installed-game contract suite or UAT.
 
+### Structured runtime replay
+
+`tests/OrbModding.RuntimeReplay/` defines a dependency-free V1 model and strict
+canonical JSON codec for lifecycle, resource, queue, progression, inventory,
+configuration, and completion observations. The scenario dispatcher reuses
+`LifecycleScenarioKernel` and `ScenarioAutoBuyFeature`; it does not duplicate
+their lifecycle clock, scheduler, invalidation bus, or engine simulation.
+
+The two checked-in replay fixtures cover completion-driven queue refill and
+chained progression invalidation. Repeated runs assert identical frames,
+integer-microsecond timestamps, lifecycle generations, mutation requests, and
+queue outcomes. Old-generation invalidation is rejected by the production bus.
+The separate converter accepts only a reviewed typed setup plus sanitized JSONL
+events and publishes atomically after complete validation. See the
+[schema and conversion workflow](runtime-replay.md).
+
 ## Test layers and ownership
 
 | Layer | Runs | Proves | Does not prove |
@@ -104,6 +123,12 @@ kernel or a feature driver:
 
 ```powershell
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
+```
+
+Run the structured runtime replay fixtures and codec/converter contracts:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
 ```
 
 Run the active deterministic performance baseline:
@@ -207,6 +232,8 @@ gate only between reports with equivalent engine semantics.
   old generation is rejected explicitly rather than relying on timing luck.
 - Give every simulated mutation request a stable request identity and run the
   mutation uniqueness oracle in mixed-feature journeys.
+- Keep replay observations inside the strict versioned schema. Do not add opaque
+  payload dictionaries, private save fields, or free-text log ingestion.
 
 ## UAT handoff
 

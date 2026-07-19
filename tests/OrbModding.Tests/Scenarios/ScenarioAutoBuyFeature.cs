@@ -14,6 +14,8 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
     private readonly LifecycleScenarioKernel _kernel;
     private readonly AutoBuyEngine _engine;
     private readonly IDisposable _invalidationSubscription;
+    private readonly Dictionary<string, SimulatedAutoBuyCandidate> _candidatesByUuid =
+        new(StringComparer.Ordinal);
     private int _recordedSubmissions;
     private bool _disposed;
 
@@ -29,7 +31,10 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
         {
             if (!Guid.TryParseExact(spec.Uuid, "D", out _))
                 throw new ArgumentException("Scenario candidate identities must be canonical UUIDs.", nameof(candidateSpecs));
-            World.AddCandidate(spec);
+            if (_candidatesByUuid.ContainsKey(spec.Uuid))
+                throw new ArgumentException($"Scenario candidate UUID {spec.Uuid} is duplicated.", nameof(candidateSpecs));
+            var candidate = World.AddCandidate(spec);
+            _candidatesByUuid.Add(spec.Uuid, candidate);
         }
         Config = CreateConfig();
         Catalog = new SimulatedAutoBuyCatalog(World);
@@ -61,17 +66,41 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
 
     public bool Enabled => Config.AutoBuyMode.Value == AutoBuyOperationMode.Active;
 
-    public SimulatedAutoBuyCandidate Candidate(string uuid) =>
-        World.Candidates.Single(candidate => string.Equals(candidate.Uuid, uuid, StringComparison.Ordinal));
+    public SimulatedAutoBuyCandidate Candidate(string uuid)
+    {
+        if (uuid is null) throw new ArgumentNullException(nameof(uuid));
+        if (_candidatesByUuid.TryGetValue(uuid, out var candidate)) return candidate;
+        throw new KeyNotFoundException($"Scenario candidate UUID {uuid} is not registered.");
+    }
+
+    public SimulatedAutoBuyCandidate Candidate(string uuid, AutoBuyCandidateKind expectedKind)
+    {
+        var candidate = Candidate(uuid);
+        if (candidate.Kind != expectedKind)
+            throw new InvalidOperationException(
+                $"Scenario candidate {uuid} is {candidate.Kind}, not expected {expectedKind}.");
+        return candidate;
+    }
 
     public void SetAvailable(string uuid, bool available)
     {
         var candidate = Candidate(uuid);
+        SetAvailable(candidate, available);
+    }
+
+    public void SetAvailable(string uuid, AutoBuyCandidateKind expectedKind, bool available)
+    {
+        var candidate = Candidate(uuid, expectedKind);
+        SetAvailable(candidate, available);
+    }
+
+    private void SetAvailable(SimulatedAutoBuyCandidate candidate, bool available)
+    {
         candidate.Available = available;
         _kernel.PublishInvalidation(
             GameplayInvalidationKind.Progression | GameplayInvalidationKind.Registry,
             Domain(candidate.Kind),
-            uuid,
+            candidate.Uuid,
             ExpectedNativeType(candidate.Kind),
             "scenario progression unlock");
     }
@@ -86,6 +115,21 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
         _kernel.PublishInvalidation(
             GameplayInvalidationKind.Configuration,
             source: enabled ? "scenario enable" : "scenario disable");
+    }
+
+    public void SetResourceQuantity(string resourceId, BigAmount quantity)
+    {
+        if (string.IsNullOrWhiteSpace(resourceId))
+            throw new ArgumentException("A resource UUID is required.", nameof(resourceId));
+        var previous = World.GetResourceQuantity(resourceId);
+        World.SetResourceQuantity(resourceId, quantity);
+        Catalog.NotifyResourceChanged(resourceId, previous, quantity);
+        _kernel.PublishInvalidation(
+            GameplayInvalidationKind.ResourceQuantity,
+            domain: "resources",
+            entityId: resourceId,
+            expectedTypeName: "ResourceSO",
+            source: "scenario resource observation");
     }
 
     public int CompleteOne()
@@ -106,6 +150,7 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
     public void RecreateNativeWrappers()
     {
         World.ReplaceCandidateWrappers();
+        RebuildCandidateIndex();
         _engine.InvalidateLifecycle();
     }
 
@@ -126,6 +171,7 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
             GameLifecycleTransitionKind.ResetCompleted)
         {
             World.ReplaceCandidateWrappers();
+            RebuildCandidateIndex();
         }
 
         _engine.InvalidateLifecycle();
@@ -166,6 +212,16 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
     {
         if ((invalidation.Kinds & (GameplayInvalidationKind.Progression | GameplayInvalidationKind.Registry)) != 0)
             Catalog.Index.InvalidateLifecycleIncrementally();
+    }
+
+    private void RebuildCandidateIndex()
+    {
+        _candidatesByUuid.Clear();
+        foreach (var candidate in World.Candidates)
+        {
+            if (!_candidatesByUuid.TryAdd(candidate.Uuid, candidate))
+                throw new InvalidOperationException($"Scenario candidate UUID {candidate.Uuid} is duplicated after lifecycle recreation.");
+        }
     }
 
     private static string Domain(AutoBuyCandidateKind kind) =>

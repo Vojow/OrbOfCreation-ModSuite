@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../OrbModding.GameStubs/OrbModding.GameStubs.csproj" />
+    <ProjectReference Include="../OrbModding.RuntimeReplay/OrbModding.RuntimeReplay.csproj" />
+    <ProjectReference Include="../../tools/OrbModding.ReplayConverter/OrbModding.ReplayConverter.csproj" />
     <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj" />
     <ProjectReference Include="../../src/OrbModConfig/OrbModConfig.csproj" />
     <ProjectReference Include="../../src/OrbMentor/OrbMentor.csproj" />
@@ -33,5 +35,6 @@
     <None Include="../../data/known-entities.tsv" Link="data/known-entities.tsv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/generate-known-entities.ps1" Link="tools/generate-known-entities.ps1" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../fixtures/automata/*.log" Link="fixtures/automata/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../fixtures/replays/*.json" Link="fixtures/replays/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

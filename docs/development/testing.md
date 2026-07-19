@@ -2,6 +2,9 @@
 
 [Back to roadmap](../plans/roadmap.md) · [Headless E2E simulation](headless-e2e.md) · [Local runtime UAT protocol](runtime-validation.md)
 
+Ordering-sensitive headless regressions may also use the
+[sanitized runtime replay format](runtime-replay.md).
+
 ## Supported baseline
 
 - Windows 64-bit
@@ -35,6 +38,7 @@ Run the headless E2E and deterministic performance scopes independently with:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessIntegration"
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessE2E"
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
 ```
 
 Set `OOC_PERFORMANCE_REPORT` to an absolute JSON path to retain the deterministic
@@ -135,6 +139,9 @@ The current P0/P1 headless scope covers:
 - reusable lifecycle state-machine journeys spanning no-save, load, registry
   readiness, unlock, action, completion, reset, stale callbacks, disable and
   re-enable, same-name scene recreation, and mixed Automata/Mentor isolation.
+- strict V1 structured replays for deterministic frame/time ordering,
+  completion-driven queue refill, chained progression invalidation, canonical
+  sanitized fixtures, and converter failure containment.
 
 The reusable lifecycle fixtures live under
 `tests/OrbModding.Tests/Scenarios/`. They use the production lifecycle monitor,
@@ -145,6 +152,11 @@ them independently with:
 ```powershell
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
 ```
+
+Runtime replay fixtures reuse that same kernel and production Auto Buy feature
+driver. Their schema contains no arbitrary payload or private save data; see
+[runtime replay fixtures](runtime-replay.md) for the event allowlist and reviewed
+conversion workflow.
 
 P2 remains runtime-focused: actual Unity layout and navigation, real save/cloud
 behavior, a combined-suite soak, real frame-time profiling, and Steam Deck or
