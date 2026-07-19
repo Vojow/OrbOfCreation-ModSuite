@@ -129,6 +129,69 @@ public sealed class AutomataCoordinatorTests
         Assert.Equal(1, catalog.DiscoverCalls);
     }
 
+    [Fact]
+    public void CapacityIncreaseIsUsedByImmediateRerankAfterPreparedClampSettles()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.RepeatWhileAffordable.Value = false;
+        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
+        config.FixedStructureLevelsPerCandidate.Value = 20;
+        config.LeaveQueueSlots.Value = 0;
+        var candidate = new BuyCandidate("capacity-growth", AutoBuyCandidateKind.Structure);
+        var catalog = new BuyCatalog(2, candidate);
+        candidate.OnPurchase = () => catalog.RemainingRoom--;
+        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        Assert.Equal(1, candidate.PurchaseCalls);
+        catalog.RemainingRoom = 5;
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal(2, candidate.PurchaseCalls);
+        frame++;
+        engine.Tick(0.0f);
+
+        Assert.Equal(3, candidate.PurchaseCalls);
+        Assert.Equal(2, catalog.DiscoverCalls);
+    }
+
+    [Fact]
+    public void NewlyUnlockedHigherRankPreemptsNextRepeatPassAfterPreparedWorkSettles()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.RepeatWhileAffordable.Value = true;
+        config.RespectActionMultiplier.Value = false;
+        config.LeaveQueueSlots.Value = 0;
+        var higher = new BuyCandidate("a-higher", AutoBuyCandidateKind.Structure) { Available = false };
+        var repeating = new BuyCandidate("b-repeating", AutoBuyCandidateKind.Structure);
+        var catalog = new BuyCatalog(2, higher, repeating);
+        higher.OnPurchase = () => catalog.RemainingRoom--;
+        repeating.OnPurchase = () => catalog.RemainingRoom--;
+        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        Assert.Equal((0, 1), (higher.PurchaseCalls, repeating.PurchaseCalls));
+
+        higher.Available = true;
+        catalog.RemainingRoom = 2;
+        engine.NotifyNativeCompletion();
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal((0, 2), (higher.PurchaseCalls, repeating.PurchaseCalls));
+
+        catalog.RemainingRoom = 1;
+        frame++;
+        engine.Tick(0.0f);
+
+        Assert.Equal((1, 2), (higher.PurchaseCalls, repeating.PurchaseCalls));
+        Assert.Equal(2, catalog.DiscoverCalls);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -719,14 +782,16 @@ public sealed class AutomataCoordinatorTests
 
         public Action? OnPurchase { get; set; }
 
+        public bool Available { get; set; } = true;
+
         public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
-        public bool IsAvailable() => true;
+        public bool IsAvailable() => Available;
 
         public bool CanPurchase(out string reason)
         {
-            reason = string.Empty;
-            return true;
+            reason = Available ? string.Empty : "candidate is locked";
+            return Available;
         }
 
         public IReadOnlyList<ResourceAdmissionCost> GetCosts() => Array.Empty<ResourceAdmissionCost>();

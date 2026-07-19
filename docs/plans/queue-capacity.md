@@ -29,6 +29,12 @@ Auto Buy creates a complete snapshot when it probes a waiting queue, before scan
 
 The ranked scheduler remains unchanged: multiple prepared recommendations receive one independently validated level per pass, while a lone recommendation may use the snapshot's full usable room.
 
+A prepared fixed/Bulk Development/action-multiplier group keeps the safe usable-room clamp captured when that group starts. A later capacity decrease is still enforced by the fresh pre-mutation snapshot; a capacity increase is consumed by the immediate rerank after the prepared clamp settles, without waiting for the idle evaluation interval. This avoids silently expanding an already planned mutation group while still using newly available capacity promptly.
+
+Native completion retains the already prepared candidate for the first reopened slot, with full live validation. Broad completion effects then settle before the next repeat pass; a newly unlocked higher-ranked candidate therefore pre-empts further repetitions at that next pass rather than invalidating safe prepared work on every completion callback.
+
+The portable acceptance matrix now covers native capacity above and equal to the automation limit, smaller limits, partial occupancy, reservation exactly once, multiple/one usable slots, mid-batch resource loss, a finite Upgrade reaching native maximum, capacity growth across a prepared clamp, and newly unlocked ranking at the next pass. Interactive capacity changes remain a release-validation gate because headless evidence cannot prove the installed UI queue and native observers.
+
 ## Validation still required
 
 On a disposable save, change native queue capacity while Auto Buy has prepared work and confirm the next queued level uses the refreshed capacity and occupancy. Repeat with a one-slot queue both with `LeaveQueueSlots=1` (no automated mutation) and `LeaveQueueSlots=0` (one independently validated level). Confirm manual reservation remains free and no contradictory snapshot produces a purchase.
