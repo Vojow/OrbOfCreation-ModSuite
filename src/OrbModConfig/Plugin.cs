@@ -68,15 +68,15 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
-        _invalidationBus?.Pump(
-            Time.frameCount,
-            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
-
         if (_enabled?.Value != true)
         {
             DeactivateUiWork(disposeShell: true);
             return;
         }
+
+        _invalidationBus?.Pump(
+            Time.frameCount,
+            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
 
         if (SceneManager.GetActiveScene().name != "Main")
         {

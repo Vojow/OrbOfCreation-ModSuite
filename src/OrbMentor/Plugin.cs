@@ -101,7 +101,8 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void LateUpdate()
     {
-        _invalidationBridge?.Pump(Time.frameCount);
+        if (_config?.Active == true && _runtime?.IsBlocked != true)
+            _invalidationBridge?.Pump(Time.frameCount);
         if (IsGameplayScene()) _runtime?.LateTick();
     }
     private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)

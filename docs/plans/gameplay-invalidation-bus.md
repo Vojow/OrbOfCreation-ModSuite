@@ -26,11 +26,11 @@ Events with the same generation, frame, and target coalesce by merging their kin
 
 ## Delivery and boundedness
 
-Publish and delivery are main-thread-only. `Pump(Time.frameCount, GameplayInvalidationBus.DefaultMaxOperationsPerFrame)` delivers only completed frame bursts, so plugin `Update` order cannot split same-frame coalescing. The shared bus applies one 64-operation cap across every plugin call in a frame and resumes the exact event/subscriber cursor later.
+Publish and delivery are main-thread-only. `Pump(Time.frameCount, GameplayInvalidationBus.DefaultMaxOperationsPerFrame)` delivers only completed frame bursts, so plugin `Update` order cannot split same-frame coalescing. The shared bus applies one 64-operation cap across every plugin call in a frame and resumes the exact event/subscriber cursor later. Delivery also uses one measured `SuitePerformanceCoordinator` work item and eight-operation cooperative leases, so plugin load order cannot multiply or hide callback time from the shared soft/hard CPU budget.
 
 Subscriber callbacks may only mark owned work dirty or request an existing bounded worker. They must not scan registries, reflect native contracts, sort complete catalogs, log per event, or mutate gameplay. Callback failures are isolated in a 32-entry diagnostic ring.
 
-Pending work is capacity-bounded. When precise capacity is exhausted, the bus replaces it with a conservative global invalidation instead of silently dropping correctness work. Metrics expose publications, coalescing, supersession, overflow promotion, stale discards, delivery operations, callback failures, and off-thread rejections.
+Pending work is capacity-bounded. When precise capacity is exhausted, the bus replaces it with a conservative global invalidation instead of silently dropping correctness work. Metrics expose publications, coalescing, supersession, overflow promotion, stale discards, delivery operations, callback failures, and off-thread rejections. Publishing alone never executes delivery; disabled Automata, Mentor, and Mod Config owners do not call `Pump`, while another enabled suite owner may drain shared events without waking disabled feature catalogs.
 
 ## Lifecycle barrier
 
@@ -47,6 +47,6 @@ Plugins still handle lifecycle cancellation synchronously. Auto Buy prepared mut
 
 ## Verification
 
-Portable tests cover 10,000-event burst coalescing, merged kinds, distinct frames, broad dominance, targeted filtering, FIFO delivery, shared frame budgets, resumable subscribers, callback deferral and failure isolation, conservative overflow, main-thread enforcement, lifecycle purging, late-generation rejection, and newest-barrier dominance. Module tests cover immediate native safety paths alongside mirrored delivery and transactional configuration publication.
+Portable tests cover 10,000-event burst coalescing, merged kinds, distinct frames, broad dominance, targeted filtering, FIFO delivery, shared operation and measured CPU budgets, lossless coordinator resumption, multiple matching/nonmatching subscribers, disabled-owner idleness, callback deferral and failure isolation, conservative overflow, main-thread enforcement, lifecycle purging, late-generation rejection, and newest-barrier dominance. Module tests cover immediate native safety paths alongside mirrored delivery and transactional configuration publication.
 
 Interactive validation still must confirm that real completion and configuration bursts remain responsive, the shared pending peak stays bounded, no stale work crosses save/load or NG+ boundaries, and disabled modules do not start catalog work merely because another plugin publishes.

@@ -231,9 +231,13 @@ public sealed class GameplayInvalidationBus : IDisposable
 {
     private const int DefaultCapacity = 128;
     private const int FailureCapacity = 32;
+    private const int DefaultCoordinatorSliceOperations = 8;
     public const int DefaultMaxOperationsPerFrame = 64;
     private readonly GameLifecycleMonitor _lifecycle;
     private readonly Func<int> _readThreadId;
+    private readonly SuitePerformanceCoordinator? _coordinator;
+    private readonly SuiteWorkRegistration? _deliveryWork;
+    private readonly int _coordinatorSliceOperations;
     private readonly int _capacity;
     private readonly Queue<InvalidationKey> _order;
     private readonly Dictionary<InvalidationKey, GameplayInvalidation> _pending;
@@ -268,20 +272,33 @@ public sealed class GameplayInvalidationBus : IDisposable
     public GameplayInvalidationBus(
         GameLifecycleMonitor lifecycle,
         int capacity = DefaultCapacity,
-        Func<int>? readThreadId = null)
+        Func<int>? readThreadId = null,
+        SuitePerformanceCoordinator? coordinator = null,
+        int coordinatorSliceOperations = DefaultCoordinatorSliceOperations)
     {
         _lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
         if (capacity < 2) throw new ArgumentOutOfRangeException(nameof(capacity));
+        if (coordinatorSliceOperations <= 0)
+            throw new ArgumentOutOfRangeException(nameof(coordinatorSliceOperations));
         _capacity = capacity;
         _readThreadId = readThreadId ?? (() => Environment.CurrentManagedThreadId);
+        _coordinator = coordinator;
+        _coordinatorSliceOperations = coordinatorSliceOperations;
         _order = new Queue<InvalidationKey>(capacity);
         _pending = new Dictionary<InvalidationKey, GameplayInvalidation>(capacity);
         _supersededScratch = new List<InvalidationKey>(capacity);
         _supersededSet = new HashSet<InvalidationKey>(capacity);
+        _deliveryWork = coordinator?.Register(
+            "OrbModding.Common",
+            "Deliver gameplay invalidations",
+            SuiteBudgetClass.SoftLimited,
+            SuiteWorkExecutionKind.Cooperative);
         _lifecycle.Transitioned += OnLifecycleTransition;
     }
 
-    public static GameplayInvalidationBus Shared { get; } = new(GameLifecycleMonitor.Shared);
+    public static GameplayInvalidationBus Shared { get; } = new(
+        GameLifecycleMonitor.Shared,
+        coordinator: SuitePerformanceCoordinator.Shared);
 
     public IReadOnlyList<GameplayInvalidationDispatchFailure> DispatchFailures
     {
@@ -349,6 +366,7 @@ public sealed class GameplayInvalidationBus : IDisposable
 
         _published++;
         Enqueue(request, checked(++_nextSequence));
+        _deliveryWork?.SetPending(true);
         reason = string.Empty;
         return true;
     }
@@ -364,6 +382,65 @@ public sealed class GameplayInvalidationBus : IDisposable
         if (currentBurstExclusive < 0) throw new ArgumentOutOfRangeException(nameof(currentBurstExclusive));
         if (maxOperationsPerFrame <= 0) throw new ArgumentOutOfRangeException(nameof(maxOperationsPerFrame));
         if (_isPumping) throw new InvalidOperationException("Invalidation delivery cannot pump recursively.");
+        return _coordinator is null || _deliveryWork is null
+            ? PumpCore(currentBurstExclusive, maxOperationsPerFrame)
+            : PumpCoordinated(currentBurstExclusive, maxOperationsPerFrame);
+    }
+
+    private GameplayInvalidationPumpResult PumpCoordinated(
+        long currentBurstExclusive,
+        int maxOperationsPerFrame)
+    {
+        var operations = 0;
+        var completed = 0;
+        var coordinatorBlocked = false;
+        _deliveryWork!.SetPending(PendingCount > 0);
+        while (operations < maxOperationsPerFrame && PendingCount > 0)
+        {
+            var admission = _coordinator!.RequestWork(
+                _deliveryWork,
+                currentBurstExclusive,
+                out var lease);
+            if (admission != SuiteWorkAdmission.Granted)
+            {
+                coordinatorBlocked = admission is SuiteWorkAdmission.WaitingForTurn or
+                    SuiteWorkAdmission.SoftBudgetExhausted or
+                    SuiteWorkAdmission.HardBudgetExhausted or
+                    SuiteWorkAdmission.WorkInProgress;
+                break;
+            }
+
+            GameplayInvalidationPumpResult slice;
+            using (lease)
+            {
+                slice = PumpCore(
+                    currentBurstExclusive,
+                    Math.Min(
+                        maxOperationsPerFrame,
+                        checked(_frameOperations + _coordinatorSliceOperations)));
+                lease.Complete(slice.Operations);
+            }
+
+            operations += slice.Operations;
+            completed += slice.CompletedEvents;
+            _deliveryWork.SetPending(PendingCount > 0);
+            if (slice.Operations == 0) break;
+        }
+
+        var pendingCount = PendingCount;
+        _deliveryWork.SetPending(pendingCount > 0);
+        return new GameplayInvalidationPumpResult(
+            operations,
+            completed,
+            pendingCount,
+            pendingCount > 0 &&
+            (coordinatorBlocked || _frameOperations >= maxOperationsPerFrame));
+    }
+
+    private GameplayInvalidationPumpResult PumpCore(
+        long currentBurstExclusive,
+        int maxOperationsPerFrame)
+    {
         if (_pumpFrame != currentBurstExclusive)
         {
             _pumpFrame = currentBurstExclusive;
@@ -471,6 +548,7 @@ public sealed class GameplayInvalidationBus : IDisposable
         EnsureOwnerThread();
         _disposed = true;
         _lifecycle.Transitioned -= OnLifecycleTransition;
+        _deliveryWork?.Dispose();
         _order.Clear();
         _pending.Clear();
         _subscriptions.Clear();
@@ -674,6 +752,7 @@ public sealed class GameplayInvalidationBus : IDisposable
                 Math.Max(0, transition.Current.LastFrame),
                 source: transition.Source),
             checked(++_nextSequence));
+        _deliveryWork?.SetPending(true);
     }
 
     private void Deactivate(Subscription subscription)

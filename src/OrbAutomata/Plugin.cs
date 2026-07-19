@@ -144,9 +144,15 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
-        _invalidationBus?.Pump(
-            UnityEngine.Time.frameCount,
-            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        if (_config is not null &&
+            (_config.CanStartAutoBuyActively ||
+             _config.CanStartAutoCastActively ||
+             _config.CanStartAutoConceptActively))
+        {
+            _invalidationBus?.Pump(
+                UnityEngine.Time.frameCount,
+                GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        }
         if (IsLifecycleReady())
         {
             _autoBuyEngine?.Tick(deltaTime);
