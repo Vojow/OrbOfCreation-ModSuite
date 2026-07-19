@@ -22,6 +22,13 @@ internal readonly struct DecodedResourceCost
     public BigAmount Amount { get; }
 }
 
+internal enum NativeResourceCostReadFailureKind
+{
+    None,
+    TransientState,
+    Contract,
+}
+
 internal static class NativeResourceCostAdapter
 {
     private static readonly Dictionary<Type, Accessors?> AccessorsByContainerType =
@@ -37,9 +44,20 @@ internal static class NativeResourceCostAdapter
         out int tupleCount,
         out string reason)
     {
+        return TryRead(container, destination, out tupleCount, out reason, out _);
+    }
+
+    public static bool TryRead(
+        object container,
+        List<DecodedResourceCost> destination,
+        out int tupleCount,
+        out string reason,
+        out NativeResourceCostReadFailureKind failureKind)
+    {
         destination.Clear();
         tupleCount = 0;
         reason = string.Empty;
+        failureKind = NativeResourceCostReadFailureKind.None;
         var type = container.GetType();
         if (!AccessorsByContainerType.TryGetValue(type, out var accessors))
         {
@@ -50,6 +68,7 @@ internal static class NativeResourceCostAdapter
         if (accessors is null)
         {
             reason = "native ResourceCostList schema is not audited";
+            failureKind = NativeResourceCostReadFailureKind.Contract;
             return false;
         }
 
@@ -61,12 +80,14 @@ internal static class NativeResourceCostAdapter
         catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is TargetException)
         {
             reason = "native ResourceCostList entries are unreadable";
+            failureKind = NativeResourceCostReadFailureKind.TransientState;
             return false;
         }
 
         if (tuples is null)
         {
             reason = "native ResourceCostList entries are unavailable";
+            failureKind = NativeResourceCostReadFailureKind.TransientState;
             return false;
         }
 
@@ -78,6 +99,7 @@ internal static class NativeResourceCostAdapter
             {
                 destination.Clear();
                 reason = "native ResourceTuple type is contradictory";
+                failureKind = NativeResourceCostReadFailureKind.Contract;
                 return false;
             }
 
@@ -92,22 +114,33 @@ internal static class NativeResourceCostAdapter
             {
                 destination.Clear();
                 reason = "native ResourceTuple could not be decoded";
+                failureKind = NativeResourceCostReadFailureKind.TransientState;
                 return false;
             }
 
-            if (resource is null || resource is UnityEngine.Object unityResource && unityResource == null ||
-                !HasResourceBaseType(resource.GetType()) ||
-                !BigAmount.TryRead(nativeAmount, out var amount))
+            if (resource is null || resource is UnityEngine.Object unityResource && unityResource == null)
             {
                 destination.Clear();
-                reason = "native ResourceTuple resource or amount is invalid";
+                reason = "native ResourceTuple resource is unavailable";
+                failureKind = NativeResourceCostReadFailureKind.TransientState;
                 return false;
             }
 
-            if (!TryReadResourceId(resource, out var resourceId))
+            if (!HasResourceBaseType(resource.GetType()) || !BigAmount.TryRead(nativeAmount, out var amount))
+            {
+                destination.Clear();
+                reason = "native ResourceTuple resource type or amount contract is invalid";
+                failureKind = NativeResourceCostReadFailureKind.Contract;
+                return false;
+            }
+
+            if (!TryReadResourceId(resource, out var resourceId, out var idContractFailure))
             {
                 destination.Clear();
                 reason = "native ResourceTuple resource UUID is unavailable";
+                failureKind = idContractFailure
+                    ? NativeResourceCostReadFailureKind.Contract
+                    : NativeResourceCostReadFailureKind.TransientState;
                 return false;
             }
 
@@ -135,12 +168,14 @@ internal static class NativeResourceCostAdapter
         }
     }
 
-    private static bool TryReadResourceId(object resource, out string resourceId)
+    private static bool TryReadResourceId(object resource, out string resourceId, out bool contractFailure)
     {
         resourceId = string.Empty;
+        contractFailure = false;
         var accessors = GetResourceAccessors(resource.GetType());
         if (accessors is null)
         {
+            contractFailure = true;
             return false;
         }
 

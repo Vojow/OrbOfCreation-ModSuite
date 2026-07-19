@@ -81,6 +81,99 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(2, reader.ReadCalls);
         cache.BeginEvaluationEpoch(_ => true);
         Assert.Equal(2, reader.ReadCalls);
+
+        Assert.True(cache.NotifyAuthoritativeChange("missing"));
+        Assert.False(cache.TryResolve(missing, out _));
+        Assert.Equal(3, reader.ReadCalls);
+    }
+
+    [Fact]
+    public void CandidateResourceCircuit_IgnoresOrdinaryDirtyReplayAndWakesOnlyFromExactEvent()
+    {
+        var native = new StructureSO
+        {
+            uuid = "resource-circuit",
+            Cost = new ResourceCostList(),
+        };
+        native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
+        var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _, _, _) => { });
+        var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
+
+        snapshots.BeginLazyEpoch();
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(1, native.GetPurchaseCostCalls);
+        for (var replay = 0; replay < 20; replay++)
+        {
+            candidate.MarkDirty(AutoBuyDirtyReason.CostDirty | AutoBuyDirtyReason.ResourceDirty);
+            Assert.False(candidate.CanEvaluate());
+        }
+        Assert.Equal(1, native.GetPurchaseCostCalls);
+
+        candidate.WakeCircuit(AutomationRetryTrigger.Queue, 0);
+        Assert.False(candidate.CanEvaluate());
+        candidate.WakeCircuit(AutomationRetryTrigger.ResourceQuantity, 0);
+        Assert.True(candidate.CanEvaluate());
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(2, native.GetPurchaseCostCalls);
+
+        snapshots.BeginLazyEpoch();
+        Assert.False(candidate.CanEvaluate());
+        snapshots.BeginLazyEpoch();
+        Assert.True(candidate.CanEvaluate());
+    }
+
+    [Fact]
+    public void ValidCostWithUnavailableResource_GrowsCandidateBackoffUntilCompleteReadSucceeds()
+    {
+        var missing = new ResourceSO { uuid = "missing" };
+        var native = new StructureSO
+        {
+            uuid = "valid-cost-missing-resource",
+            Cost = new ResourceCostList(),
+        };
+        native.Cost.costs.Add(new ResourceTuple(missing, new TestBigDouble(1.0, 0)));
+        var reader = new FakeResourceReader();
+        var snapshots = new AutoBuyResourceSnapshotCache(reader, (_, _, _, _) => { });
+        var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
+
+        snapshots.BeginLazyEpoch();
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(1, candidate.CircuitSnapshot.ConsecutiveFailures);
+
+        snapshots.BeginLazyEpoch();
+        Assert.True(candidate.CanEvaluate());
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(2, candidate.CircuitSnapshot.ConsecutiveFailures);
+
+        snapshots.BeginLazyEpoch();
+        Assert.False(candidate.CanEvaluate());
+        snapshots.BeginLazyEpoch();
+        Assert.True(candidate.CanEvaluate());
+        Assert.Empty(candidate.GetCosts());
+        Assert.Equal(3, candidate.CircuitSnapshot.ConsecutiveFailures);
+        Assert.Equal(1, native.GetPurchaseCostCalls);
+        Assert.Equal(3, reader.ReadCalls);
+    }
+
+    [Fact]
+    public void OpenCandidates_DoNotConsumeTheCandidateLimitOrStarveHealthySibling()
+    {
+        var candidates = new List<IAutoBuyCandidate>();
+        for (var index = 0; index < 8; index++)
+            candidates.Add(new CircuitDirtyCandidate($"blocked-{index}", contractFailed: true));
+        var healthy = new CircuitDirtyCandidate("healthy", contractFailed: false);
+        candidates.Add(healthy);
+        var candidateIndex = new AutoBuyCandidateIndex();
+
+        candidateIndex.Reconcile(candidates);
+        var batch = candidateIndex.PrepareEvaluation(
+            new AutoBuyEvaluationRequest(1, true, true),
+            lifecycleWorkLimit: 64,
+            activeRefreshCount: 0,
+            slowRefreshCount: 0);
+
+        Assert.Same(healthy, Assert.Single(batch.ActiveCandidates));
+        Assert.Null(batch.FirstExcludedCandidate);
     }
 
     [Fact]
@@ -602,6 +695,28 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(1, candidate.CostReads);
         Assert.Equal(0, candidate.PurchaseCalls);
         Assert.False(catalog.FirstResourceTrackingSuppressed);
+    }
+
+    [Fact]
+    public void ContractCircuit_ProducesTerminalStructuredDecision()
+    {
+        var candidate = new CircuitEngineCandidate("contract-cost", 1.0);
+        candidate.OpenContract();
+        var catalog = new IncrementalCatalog(candidate, new EngineCandidate("healthy", 2.0));
+        var config = ActiveConfig("contract-cost");
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
+
+        engine.Tick(config.AutoBuyIntervalSeconds.Value);
+
+        Assert.NotNull(catalog.FirstDecision);
+        Assert.Equal(AutomationDecisionCode.ContractUnresolved, catalog.FirstDecision!.Code);
+        Assert.Equal(AutomationRetryTrigger.None, catalog.FirstDecision.StructuredDecision.RetryTriggers);
     }
 
     [Fact]
@@ -1371,9 +1486,23 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(afterFirst, NativeResourceCostAdapter.CachedSchemaCount);
 
         valid.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
-        Assert.False(NativeResourceCostAdapter.TryRead(valid, decoded, out tupleCount, out _));
+        Assert.False(NativeResourceCostAdapter.TryRead(
+            valid,
+            decoded,
+            out tupleCount,
+            out _,
+            out var transientFailure));
         Assert.Equal(3, tupleCount);
         Assert.Empty(decoded);
+        Assert.Equal(NativeResourceCostReadFailureKind.TransientState, transientFailure);
+
+        Assert.False(NativeResourceCostAdapter.TryRead(
+            new object(),
+            decoded,
+            out _,
+            out _,
+            out var contractFailure));
+        Assert.Equal(NativeResourceCostReadFailureKind.Contract, contractFailure);
     }
 
     [Fact]
@@ -1395,7 +1524,7 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
-    public void CostAdapterFailure_BacksOffBeforeRetryingNativeReflection()
+    public void CostAdapterTransientFailure_BacksOffBeforeRetryingNativeReflection()
     {
         var native = new StructureSO
         {
@@ -1517,7 +1646,7 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Contains("blocked until the next lifecycle", blockedReason);
 
         native.ApplyPurchaseMutation = true;
-        candidate.RecoverMutationBlock();
+        candidate.RecoverMutationBlock(1);
 
         Assert.True(candidate.TryPurchaseOne(out var recoveredReason), recoveredReason);
         Assert.Equal(1, native.QueuedQuantity);
@@ -1781,7 +1910,7 @@ public sealed class AutoBuyDirtyResourceTests
         }
     }
 
-    private sealed class DirtyCandidate :
+    private class DirtyCandidate :
         IAutoBuyCandidate,
         IAutoBuyLifecycleCandidate,
         IAutoBuyNativeIdentity,
@@ -1855,6 +1984,23 @@ public sealed class AutoBuyDirtyResourceTests
         public void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence)
         {
         }
+    }
+
+    private sealed class CircuitDirtyCandidate : DirtyCandidate, IAutoBuyCircuitCandidate
+    {
+        private readonly AutomationCircuitBreaker _circuit = new AutomationCircuitBreaker();
+
+        public CircuitDirtyCandidate(string uuid, bool contractFailed)
+            : base(uuid, AutoBuyCandidateKind.Structure, "mana", available: true)
+        {
+            if (contractFailed)
+                _circuit.FailContract(AutomationDecisionCode.ContractUnresolved, 0);
+        }
+
+        public AutomationCircuitSnapshot CircuitSnapshot => _circuit.Snapshot;
+        public bool CanEvaluate() => _circuit.CanAttemptAt(0);
+        public void WakeCircuit(AutomationRetryTrigger trigger, long lifecycleGeneration) =>
+            _circuit.Wake(trigger, 0, lifecycleGeneration);
     }
 
     private sealed class IncrementalCatalog : IAutoBuyCatalog, IAutoBuyIncrementalCatalog
@@ -2083,7 +2229,7 @@ public sealed class AutoBuyDirtyResourceTests
         }
     }
 
-    private sealed class EngineCandidate :
+    private class EngineCandidate :
         IAutoBuyCandidate,
         IAutoBuyNativeIdentity,
         IAutoBuyDirtyCandidate,
@@ -2201,6 +2347,24 @@ public sealed class AutoBuyDirtyResourceTests
         public void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence)
         {
         }
+    }
+
+    private sealed class CircuitEngineCandidate : EngineCandidate, IAutoBuyCircuitCandidate
+    {
+        private readonly AutomationCircuitBreaker _circuit = new AutomationCircuitBreaker();
+
+        public CircuitEngineCandidate(string uuid, double cost)
+            : base(uuid, cost)
+        {
+            CostsResolved = false;
+        }
+
+        public AutomationCircuitSnapshot CircuitSnapshot => _circuit.Snapshot;
+        public bool CanEvaluate() => _circuit.CanAttemptAt(0);
+        public void WakeCircuit(AutomationRetryTrigger trigger, long lifecycleGeneration) =>
+            _circuit.Wake(trigger, 0, lifecycleGeneration);
+        public void OpenContract() =>
+            _circuit.FailContract(AutomationDecisionCode.ContractUnresolved, 0);
     }
 }
 

@@ -19,8 +19,10 @@ internal readonly struct MentorDomainFeatureStatusInput
         bool emergencyDisabled,
         MentorFeatureFailureKind globalFailure,
         string? globalFailureReason,
+        AutomationDecisionCode globalFailureCause,
         MentorFeatureFailureKind domainFailure,
         string? domainFailureReason,
+        AutomationDecisionCode domainFailureCause,
         MentorDomainUnlockSnapshot unlock,
         bool catalogInitialized,
         long lifecycleGeneration)
@@ -30,8 +32,10 @@ internal readonly struct MentorDomainFeatureStatusInput
         EmergencyDisabled = emergencyDisabled;
         GlobalFailure = globalFailure;
         GlobalFailureReason = globalFailureReason;
+        GlobalFailureCause = globalFailureCause;
         DomainFailure = domainFailure;
         DomainFailureReason = domainFailureReason;
+        DomainFailureCause = domainFailureCause;
         Unlock = unlock;
         CatalogInitialized = catalogInitialized;
         LifecycleGeneration = lifecycleGeneration;
@@ -42,8 +46,10 @@ internal readonly struct MentorDomainFeatureStatusInput
     public bool EmergencyDisabled { get; }
     public MentorFeatureFailureKind GlobalFailure { get; }
     public string? GlobalFailureReason { get; }
+    public AutomationDecisionCode GlobalFailureCause { get; }
     public MentorFeatureFailureKind DomainFailure { get; }
     public string? DomainFailureReason { get; }
+    public AutomationDecisionCode DomainFailureCause { get; }
     public MentorDomainUnlockSnapshot Unlock { get; }
     public bool CatalogInitialized { get; }
     public long LifecycleGeneration { get; }
@@ -73,9 +79,11 @@ internal static class MentorFeatureStatus
             return Blocked(key, name, FeatureStatusState.TemporarilyBlocked,
                 FeatureStatusReasonCode.EmergencyDisabled, "emergency disable is active", input.LifecycleGeneration);
         if (input.GlobalFailure != MentorFeatureFailureKind.None)
-            return Failure(key, name, input.GlobalFailure, input.GlobalFailureReason, input.LifecycleGeneration);
+            return Failure(key, name, input.GlobalFailure, input.GlobalFailureReason,
+                input.GlobalFailureCause, input.LifecycleGeneration);
         if (input.DomainFailure != MentorFeatureFailureKind.None)
-            return Failure(key, name, input.DomainFailure, input.DomainFailureReason, input.LifecycleGeneration);
+            return Failure(key, name, input.DomainFailure, input.DomainFailureReason,
+                input.DomainFailureCause, input.LifecycleGeneration);
         if (!input.Unlock.IsUnlocked)
         {
             var reasonCode = input.Unlock.StatusReasonCode == FeatureStatusReasonCode.None
@@ -99,6 +107,7 @@ internal static class MentorFeatureStatus
         bool emergencyDisabled,
         MentorFeatureFailureKind globalFailure,
         string? globalFailureReason,
+        AutomationDecisionCode globalFailureCause,
         IReadOnlyList<FeatureStatusSnapshot> domains,
         long lifecycleGeneration)
     {
@@ -110,7 +119,8 @@ internal static class MentorFeatureStatus
             return Blocked(key, "Orb Mentor", FeatureStatusState.TemporarilyBlocked,
                 FeatureStatusReasonCode.EmergencyDisabled, "emergency disable is active", lifecycleGeneration);
         if (globalFailure != MentorFeatureFailureKind.None)
-            return Failure(key, "Orb Mentor", globalFailure, globalFailureReason, lifecycleGeneration);
+            return Failure(key, "Orb Mentor", globalFailure, globalFailureReason,
+                globalFailureCause, lifecycleGeneration);
 
         FeatureStatusSnapshot? firstContractFailure = null;
         FeatureStatusSnapshot? firstWaiting = null;
@@ -147,11 +157,17 @@ internal static class MentorFeatureStatus
         string name,
         MentorFeatureFailureKind kind,
         string? reason,
+        AutomationDecisionCode cause,
         long generation) => kind == MentorFeatureFailureKind.Permanent
         ? Blocked(key, name, FeatureStatusState.ContractUnavailable,
             FeatureStatusReasonCode.ContractUnavailable, reason ?? "required native contract is unavailable", generation)
         : Blocked(key, name, FeatureStatusState.Faulted,
-            FeatureStatusReasonCode.NativeMutationFailed, reason ?? "native runtime operation failed", generation);
+            cause == AutomationDecisionCode.PostconditionFailed
+                ? FeatureStatusReasonCode.PostconditionFailed
+                : cause == AutomationDecisionCode.CapacityOverflow
+                    ? FeatureStatusReasonCode.CapacityExceeded
+                    : FeatureStatusReasonCode.NativeMutationFailed,
+            reason ?? "native runtime operation failed", generation);
 
     private static FeatureStatusSnapshot Operational(FeatureStatusKey key, string name, long generation) =>
         new(key, name, true, FeatureStatusState.Operational, lifecycleGeneration: generation);

@@ -115,6 +115,8 @@ internal sealed class AutoBuyCandidateIndex
             MarkDirty(entry, AutoBuyDirtyReason.All);
         }
 
+        WakeCircuit(entry, AutomationRetryTrigger.Registry);
+
         return false;
     }
 
@@ -224,6 +226,12 @@ internal sealed class AutoBuyCandidateIndex
                 continue;
             }
 
+            if (entry.Candidate is IAutoBuyCircuitCandidate circuitCandidate &&
+                !circuitCandidate.CanEvaluate())
+            {
+                continue;
+            }
+
             if (_active.Count >= limit)
             {
                 firstExcluded ??= entry.Candidate;
@@ -292,6 +300,7 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             entry.PolicyExcluded = false;
+            WakeCircuit(entry, AutomationRetryTrigger.Configuration);
             MarkDirty(entry, AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty);
         }
     }
@@ -336,6 +345,7 @@ internal sealed class AutoBuyCandidateIndex
         }
 
         MarkSettlementPending(entry);
+        WakeCircuit(entry, AutomationRetryTrigger.Queue);
         MarkDirty(
             entry,
             AutoBuyDirtyReason.AvailabilityDirty |
@@ -357,6 +367,7 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             MarkSettlementPending(entry);
+            WakeCircuit(entry, AutomationRetryTrigger.Progression | AutomationRetryTrigger.Queue);
 
             MarkDirty(
                 entry,
@@ -415,6 +426,16 @@ internal sealed class AutoBuyCandidateIndex
                 reasons |= AutoBuyDirtyReason.CostDirty;
             }
 
+            var trigger = AutomationRetryTrigger.ResourceQuantity;
+            if ((change & (AutoBuyResourceChange.Quality |
+                           AutoBuyResourceChange.AttributeCost |
+                           AutoBuyResourceChange.Capacity)) != 0)
+                trigger |= AutomationRetryTrigger.ResourceRate;
+            if ((change & (AutoBuyResourceChange.Identity |
+                           AutoBuyResourceChange.Availability |
+                           AutoBuyResourceChange.Unknown)) != 0)
+                trigger |= AutomationRetryTrigger.Registry;
+            WakeCircuit(entry, trigger);
             MarkDirty(entry, reasons);
         }
     }
@@ -624,6 +645,7 @@ internal sealed class AutoBuyCandidateIndex
         entry.DirtyReasons &= ~AutoBuyDirtyReason.LifecycleDirty;
         if (levelChanged || queueChanged)
         {
+            WakeCircuit(entry, AutomationRetryTrigger.Progression | AutomationRetryTrigger.Queue);
             // Manual purchases and native action completion can change the
             // next cost without going through Automata's purchase callback.
             MarkDirty(
@@ -652,6 +674,11 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             var refreshed = _activeEntries[_activeRefreshCursor++];
+            if (refreshed.Candidate is IAutoBuyCircuitCandidate circuitCandidate &&
+                !circuitCandidate.CanEvaluate())
+            {
+                continue;
+            }
             MarkDirty(
                 refreshed,
                 AutoBuyDirtyReason.AvailabilityDirty |
@@ -697,7 +724,9 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             var entry = _lifecycleEntries[_slowRefreshCursor++];
-            if (entry.State != AutoBuyCandidateLifecycleState.Invalid)
+            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
+                (entry.Candidate is not IAutoBuyCircuitCandidate circuitCandidate ||
+                 circuitCandidate.CanEvaluate()))
             {
                 MarkDirty(entry, AutoBuyDirtyReason.LifecycleDirty);
             }
@@ -721,7 +750,7 @@ internal sealed class AutoBuyCandidateIndex
 
             if (entry.Candidate is IAutoBuyMutationCandidate mutationCandidate)
             {
-                mutationCandidate.RecoverMutationBlock();
+                mutationCandidate.RecoverMutationBlock(_epoch);
             }
 
             entry.BeginEpoch(_epoch);
@@ -756,6 +785,12 @@ internal sealed class AutoBuyCandidateIndex
             entry.LifecycleQueued = true;
             _lifecycleDirty.Enqueue(entry);
         }
+    }
+
+    private void WakeCircuit(Entry entry, AutomationRetryTrigger trigger)
+    {
+        if (entry.Candidate is IAutoBuyCircuitCandidate circuitCandidate)
+            circuitCandidate.WakeCircuit(trigger, _epoch);
     }
 
     private void MarkInvalid(Entry entry, string reason)

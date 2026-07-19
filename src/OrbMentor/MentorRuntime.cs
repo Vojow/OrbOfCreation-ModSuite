@@ -106,12 +106,14 @@ internal sealed class MentorRuntime : IDisposable
             bool configured,
             MentorFeatureFailureKind failure,
             string? failureReason,
+            AutomationDecisionCode failureCause,
             MentorDomainUnlockSnapshot unlock,
             bool catalogReady)
         {
             Configured = configured;
             Failure = failure;
             FailureReason = failureReason;
+            FailureCause = failureCause;
             UnlockState = unlock.State;
             UnlockReasonCode = unlock.StatusReasonCode;
             UnlockReason = unlock.Reason;
@@ -121,6 +123,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool Configured { get; }
         public MentorFeatureFailureKind Failure { get; }
         public string? FailureReason { get; }
+        public AutomationDecisionCode FailureCause { get; }
         public MentorDomainUnlockState UnlockState { get; }
         public FeatureStatusReasonCode UnlockReasonCode { get; }
         public string UnlockReason { get; }
@@ -132,6 +135,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool Equals(DomainFeatureStatusFingerprint other) =>
             Configured == other.Configured &&
             Failure == other.Failure &&
+            FailureCause == other.FailureCause &&
             string.Equals(FailureReason, other.FailureReason, StringComparison.Ordinal) &&
             UnlockState == other.UnlockState &&
             UnlockReasonCode == other.UnlockReasonCode &&
@@ -146,6 +150,7 @@ internal sealed class MentorRuntime : IDisposable
             bool emergencyDisabled,
             MentorFeatureFailureKind globalFailure,
             string? globalFailureReason,
+            AutomationDecisionCode globalFailureCause,
             long lifecycleGeneration,
             DomainFeatureStatusFingerprint spells,
             DomainFeatureStatusFingerprint artifacts,
@@ -155,6 +160,7 @@ internal sealed class MentorRuntime : IDisposable
             EmergencyDisabled = emergencyDisabled;
             GlobalFailure = globalFailure;
             GlobalFailureReason = globalFailureReason;
+            GlobalFailureCause = globalFailureCause;
             LifecycleGeneration = lifecycleGeneration;
             Spells = spells;
             Artifacts = artifacts;
@@ -165,6 +171,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool EmergencyDisabled { get; }
         public MentorFeatureFailureKind GlobalFailure { get; }
         public string? GlobalFailureReason { get; }
+        public AutomationDecisionCode GlobalFailureCause { get; }
         public long LifecycleGeneration { get; }
         public DomainFeatureStatusFingerprint Spells { get; }
         public DomainFeatureStatusFingerprint Artifacts { get; }
@@ -181,6 +188,7 @@ internal sealed class MentorRuntime : IDisposable
             ParentConfigured == other.ParentConfigured &&
             EmergencyDisabled == other.EmergencyDisabled &&
             GlobalFailure == other.GlobalFailure &&
+            GlobalFailureCause == other.GlobalFailureCause &&
             string.Equals(GlobalFailureReason, other.GlobalFailureReason, StringComparison.Ordinal) &&
             LifecycleGeneration == other.LifecycleGeneration &&
             Spells.Equals(other.Spells) &&
@@ -386,8 +394,10 @@ internal sealed class MentorRuntime : IDisposable
                 fingerprint.EmergencyDisabled,
                 fingerprint.GlobalFailure,
                 fingerprint.GlobalFailureReason,
+                fingerprint.GlobalFailureCause,
                 domainFingerprint.Failure,
                 domainFingerprint.FailureReason,
+                domainFingerprint.FailureCause,
                 domainFingerprint.Unlock,
                 domainFingerprint.CatalogReady,
                 fingerprint.LifecycleGeneration);
@@ -401,6 +411,7 @@ internal sealed class MentorRuntime : IDisposable
             fingerprint.EmergencyDisabled,
             fingerprint.GlobalFailure,
             fingerprint.GlobalFailureReason,
+            fingerprint.GlobalFailureCause,
             _domainFeatureStatuses,
             fingerprint.LifecycleGeneration);
         _rootStatusRegistration?.Update(_rootFeatureStatus);
@@ -411,6 +422,7 @@ internal sealed class MentorRuntime : IDisposable
         _config.EmergencyDisable.Value,
         FailureKind(_failures.Global),
         _failures.Global.Reason,
+        _failures.Global.Circuit.Cause,
         _statusLifecycleGeneration,
         CaptureDomainFeatureStatusFingerprint(MentorDomain.Spells),
         CaptureDomainFeatureStatusFingerprint(MentorDomain.Artifacts),
@@ -420,6 +432,7 @@ internal sealed class MentorRuntime : IDisposable
         DomainConfigured(domain),
         FailureKind(_failures.For(domain)),
         _failures.For(domain).Reason,
+        _failures.For(domain).Circuit.Cause,
         DomainUnlock(domain),
         CatalogReady(_catalogs[domain]));
 
@@ -1215,7 +1228,10 @@ internal sealed class MentorRuntime : IDisposable
                 if (parkResult == MentorParkResult.Overflow)
                 {
                     Diagnostics.RecordParkedGrantOverflow();
-                    BlockDomainTransient(domain, $"{domain} parked grant capacity exceeded");
+                    BlockDomainTransient(
+                        domain,
+                        $"{domain} parked grant capacity exceeded",
+                        AutomationDecisionCode.CapacityOverflow);
                     return GrantResult.Dropped;
                 }
                 if (!state.Engine.Complete(grant))
@@ -1263,7 +1279,8 @@ internal sealed class MentorRuntime : IDisposable
             {
                 BlockDomainTransient(
                     domain,
-                    $"native XP mutation postcondition failed: {evidence.Format(state => state.ToString())}");
+                    $"native XP mutation postcondition failed: {evidence.Format(state => state.ToString())}",
+                    AutomationDecisionCode.PostconditionFailed);
                 return GrantResult.Dropped;
             }
             // The native grant may synchronously trigger a domain-specific
@@ -1281,6 +1298,7 @@ internal sealed class MentorRuntime : IDisposable
                 epochAlreadyAdvanced: catalog.ProgressionEpoch != progressionEpochBeforeGrant);
             state.Engine.Complete(grant);
             Diagnostics.RecordGrant();
+            _failures.RecordSuccess(domain);
             if (_config.DetailedLogging.Value)
                 _log.LogInfo($"Mentor {domain} grant: recipient={entry.DisplayName} ({grantUuid}), amount={grantAmount.Mantissa}e{grantAmount.Exponent}");
             return GrantResult.Granted;
@@ -1611,9 +1629,11 @@ internal sealed class MentorRuntime : IDisposable
         _log.LogError($"Orb Mentor permanently blocked: {reason}");
     }
 
-    private void BlockTransient(string reason)
+    private void BlockTransient(
+        string reason,
+        AutomationDecisionCode cause = AutomationDecisionCode.NativeMutationFailed)
     {
-        _failures.Global.BlockTransient(reason);
+        _failures.Global.BlockTransient(reason, cause);
         Cancel(MentorDropReason.ContractFailure);
         RefreshFeatureStatus();
         _log.LogError($"Orb Mentor blocked for this lifecycle: {reason}");
@@ -1644,14 +1664,17 @@ internal sealed class MentorRuntime : IDisposable
         _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
     }
 
-    private void BlockDomainTransient(MentorDomain domain, string reason)
+    private void BlockDomainTransient(
+        MentorDomain domain,
+        string reason,
+        AutomationDecisionCode cause = AutomationDecisionCode.NativeMutationFailed)
     {
         if (domain == MentorDomain.Spells)
         {
-            BlockTransient(reason);
+            BlockTransient(reason, cause);
             return;
         }
-        _failures.For(domain).BlockTransient(reason);
+        _failures.For(domain).BlockTransient(reason, cause);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
         RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing blocked for this lifecycle: {reason}");

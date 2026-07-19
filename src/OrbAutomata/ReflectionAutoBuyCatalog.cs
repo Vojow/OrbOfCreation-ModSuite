@@ -124,7 +124,9 @@ internal sealed class ReflectionAutoBuyCatalog :
         {
             for (var i = 0; i < dirtyCandidate.ResourceDependencies.Count; i++)
             {
-                _deferredPurchaseResourceInvalidations.Add(dirtyCandidate.ResourceDependencies[i]);
+                var resourceId = dirtyCandidate.ResourceDependencies[i];
+                _resourceSnapshots.NotifyAuthoritativeChange(resourceId);
+                _deferredPurchaseResourceInvalidations.Add(resourceId);
             }
 
             // The selected candidate must refresh its own live cost and level
@@ -610,7 +612,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     IAutoBuyNativeIdentity,
     IAutoBuyDirtyCandidate,
     IAutoBuyPriorityCandidate,
-    IAutoBuyMutationCandidate
+    IAutoBuyMutationCandidate,
+    IAutoBuyCircuitCandidate
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
@@ -636,8 +639,9 @@ internal sealed class ReflectionAutoBuyCandidate :
     private AutoBuyCandidateSnapshot? _snapshot;
     private bool _costDirty = true;
     private bool _hasResolvedCosts;
-    private int _adapterFailureCount;
-    private long _nextAdapterRetryEpoch;
+    private readonly AutomationCircuitBreaker _readCircuit = new AutomationCircuitBreaker(1, 64);
+    private readonly AutomationCircuitBreaker _mutationCircuit = new AutomationCircuitBreaker(1, 64);
+    private long _lifecycleGeneration;
     private long _lastAdapterWarningEpoch = long.MinValue;
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
@@ -695,6 +699,21 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     public bool HasResolvedCosts => !_costDirty && _hasResolvedCosts;
 
+    public AutomationCircuitSnapshot CircuitSnapshot => Stronger(
+        _readCircuit.Snapshot,
+        _mutationCircuit.Snapshot);
+
+    public bool CanEvaluate() =>
+        _readCircuit.CanAttemptAt(_resourceSnapshots.Epoch) &&
+        _mutationCircuit.CanAttemptAt(_resourceSnapshots.Epoch);
+
+    public void WakeCircuit(AutomationRetryTrigger trigger, long lifecycleGeneration)
+    {
+        _lifecycleGeneration = Math.Max(_lifecycleGeneration, lifecycleGeneration);
+        _readCircuit.Wake(trigger, _resourceSnapshots.Epoch, lifecycleGeneration);
+        _mutationCircuit.Wake(trigger, _resourceSnapshots.Epoch, lifecycleGeneration);
+    }
+
     public AutoBuyCandidateSnapshot Snapshot()
     {
         return _snapshot ??= new AutoBuyCandidateSnapshot(
@@ -735,8 +754,15 @@ internal sealed class ReflectionAutoBuyCandidate :
         if (_costDirty)
         {
             _hasResolvedCosts = false;
-            if (_resourceSnapshots.Epoch < _nextAdapterRetryEpoch)
+            if (!_readCircuit.CanAttemptAt(_resourceSnapshots.Epoch))
             {
+                _admissionCosts.Clear();
+                return _admissionCosts;
+            }
+
+            if (_getPurchaseCost is null)
+            {
+                RecordAdapterFailure("native GetPurchaseCost contract is unavailable", contractFailure: true);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
@@ -753,21 +779,22 @@ internal sealed class ReflectionAutoBuyCandidate :
                     costContainer,
                     _decodedCosts,
                     out _,
-                    out var adapterReason) ||
+                    out var adapterReason,
+                    out var adapterFailureKind) ||
                 !ApplyDecodedCosts())
             {
                 RecordAdapterFailure(
                     string.IsNullOrWhiteSpace(adapterReason)
                         ? "native ResourceCostList contained contradictory duplicate resources"
-                        : adapterReason);
+                        : adapterReason,
+                    contractFailure: !string.IsNullOrWhiteSpace(adapterReason) &&
+                                     adapterFailureKind == NativeResourceCostReadFailureKind.Contract);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
 
             _costDirty = false;
             _hasResolvedCosts = true;
-            _adapterFailureCount = 0;
-            _nextAdapterRetryEpoch = 0;
         }
 
         _admissionCosts.Clear();
@@ -777,6 +804,14 @@ internal sealed class ReflectionAutoBuyCandidate :
             if (!_resourceSnapshots.TryResolve(definition, out var resource))
             {
                 _hasResolvedCosts = false;
+                _readCircuit.RetryAfterTime(
+                    AutomationDecisionCode.NativeStateUnavailable,
+                    AutomationRetryTrigger.ResourceQuantity |
+                    AutomationRetryTrigger.ResourceRate |
+                    AutomationRetryTrigger.Registry |
+                    AutomationRetryTrigger.Lifecycle,
+                    _resourceSnapshots.Epoch,
+                    _lifecycleGeneration);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
@@ -789,6 +824,8 @@ internal sealed class ReflectionAutoBuyCandidate :
                 resource.Capacity,
                 resource.IsBandwidth));
         }
+
+        _readCircuit.RecordSuccess();
 
         return _admissionCosts;
     }
@@ -867,18 +904,34 @@ internal sealed class ReflectionAutoBuyCandidate :
         return true;
     }
 
-    private void RecordAdapterFailure(string reason)
+    private void RecordAdapterFailure(string reason, bool contractFailure = false)
     {
-        _adapterFailureCount = Math.Min(16, _adapterFailureCount + 1);
-        var backoff = 1L << Math.Min(6, _adapterFailureCount - 1);
-        _nextAdapterRetryEpoch = _resourceSnapshots.Epoch + backoff;
-        if (_adapterFailureCount == 1 ||
+        if (contractFailure)
+        {
+            _readCircuit.FailContract(
+                AutomationDecisionCode.ContractUnresolved,
+                _lifecycleGeneration);
+        }
+        else
+        {
+            _readCircuit.RetryAfterTime(
+                AutomationDecisionCode.CostUnavailable,
+                AutomationRetryTrigger.Registry |
+                AutomationRetryTrigger.Progression |
+                AutomationRetryTrigger.ResourceQuantity |
+                AutomationRetryTrigger.ResourceRate |
+                AutomationRetryTrigger.Lifecycle,
+                _resourceSnapshots.Epoch,
+                _lifecycleGeneration);
+        }
+        if (_readCircuit.Snapshot.ConsecutiveFailures == 1 ||
             _resourceSnapshots.Epoch - _lastAdapterWarningEpoch >= 64)
         {
             _lastAdapterWarningEpoch = _resourceSnapshots.Epoch;
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Buy quarantined cost evaluation for {Snapshot().Uuid}; " +
-                $"retryEpoch={_nextAdapterRetryEpoch}; reason={reason}");
+                $"state={_readCircuit.State}; " +
+                $"retryEpoch={_readCircuit.Snapshot.RetryAtTimestamp}; reason={reason}");
         }
     }
 
@@ -1041,6 +1094,7 @@ internal sealed class ReflectionAutoBuyCandidate :
         _lastMutationEvidence = evidence;
         if (evidence.IsVerified)
         {
+            _mutationCircuit.RecordSuccess();
             reason = string.Empty;
             return true;
         }
@@ -1048,6 +1102,9 @@ internal sealed class ReflectionAutoBuyCandidate :
         reason = evidence.Format();
         if (evidence.MutationWasAttempted)
         {
+            _mutationCircuit.RetryAfterLifecycle(
+                AutomationDecisionCode.PostconditionFailed,
+                _lifecycleGeneration);
             _mutationBlockedReason = $"native mutation blocked until the next lifecycle: {reason}";
             Plugin.Log?.LogAutomataWarning(_mutationBlockedReason);
         }
@@ -1055,11 +1112,38 @@ internal sealed class ReflectionAutoBuyCandidate :
         return false;
     }
 
-    public void RecoverMutationBlock()
+    public void RecoverMutationBlock(long lifecycleGeneration)
     {
+        var hadMutationBlock = _mutationBlockedReason is not null;
+        _lifecycleGeneration = lifecycleGeneration;
+        var woke = _mutationCircuit.Wake(
+                AutomationRetryTrigger.Lifecycle,
+                _resourceSnapshots.Epoch,
+                lifecycleGeneration);
+        if (hadMutationBlock && !woke)
+        {
+            return;
+        }
+
         _mutationBlockedReason = null;
         _lastMutationEvidence = null;
     }
+
+    private static AutomationCircuitSnapshot Stronger(
+        AutomationCircuitSnapshot left,
+        AutomationCircuitSnapshot right)
+    {
+        return CircuitStrength(right.State) > CircuitStrength(left.State) ? right : left;
+    }
+
+    private static int CircuitStrength(AutomationCircuitState state) => state switch
+    {
+        AutomationCircuitState.ContractFailed => 4,
+        AutomationCircuitState.RetryAfterLifecycle => 3,
+        AutomationCircuitState.QuarantinedUntilConfigChange => 2,
+        AutomationCircuitState.RetryAfterTime => 1,
+        _ => 0,
+    };
 
     private int CaptureQueuedState()
     {

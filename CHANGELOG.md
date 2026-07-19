@@ -1,5 +1,11 @@
 # Changelog
 
+## Bounded automation failure circuits — 2026-07-19
+
+- Add a shared circuit state machine with allocation-free transition/attempt checks, capped exponential backoff, and explicit authoritative-event, lifecycle, configuration, and process-lifetime recovery contracts.
+- Stop retrying contradictory Auto Buy cost schemas, wake transient resource reads from exact changes, and keep attempted-but-unverified purchases blocked until a newer lifecycle while later healthy candidates remain eligible.
+- Isolate Mentor's global and three fixed domain failure circuits so lifecycle recovery clears only transient ambiguity and optional-domain faults do not starve healthy siblings.
+
 ## Shared gameplay invalidation foundation — 2026-07-19
 
 - Add one bounded, main-thread Common bus for lifecycle-stamped queue, progression, inventory, registry, resource, and configuration invalidations, with delivery charged through the suite's shared CPU coordinator.

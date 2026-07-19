@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -147,8 +148,7 @@ internal sealed class AutoBuyResourceSnapshotCache
             entry.Definition = definition;
             entry.HasSnapshot = false;
             entry.ReadEpoch = 0;
-            entry.FailureCount = 0;
-            entry.NextRetryEpoch = 0;
+            entry.Circuit = new AutomationCircuitBreaker();
             _onChanged(definition.ResourceId, AutoBuyResourceChange.Identity, null, null);
         }
         else
@@ -171,10 +171,27 @@ internal sealed class AutoBuyResourceSnapshotCache
         _epoch++;
     }
 
+    public bool NotifyAuthoritativeChange(string resourceId)
+    {
+        if (string.IsNullOrWhiteSpace(resourceId) ||
+            !_entries.TryGetValue(resourceId, out var entry) ||
+            !entry.Circuit.Wake(
+                AutomationRetryTrigger.ResourceQuantity |
+                AutomationRetryTrigger.ResourceRate,
+                _epoch,
+                lifecycleGeneration: 0))
+        {
+            return false;
+        }
+
+        entry.ReadEpoch = 0;
+        return true;
+    }
+
     private void ReadEntry(Entry entry)
     {
         entry.ReadEpoch = _epoch;
-        if (_epoch < entry.NextRetryEpoch)
+        if (entry.Circuit.IsOpen && !entry.Circuit.CanAttemptAt(_epoch))
         {
             return;
         }
@@ -185,27 +202,32 @@ internal sealed class AutoBuyResourceSnapshotCache
         {
             entry.HasSnapshot = false;
             entry.Snapshot = default;
-            entry.FailureCount = Math.Min(16, entry.FailureCount + 1);
-            entry.NextRetryEpoch = _epoch + (1L << Math.Min(6, entry.FailureCount - 1));
+            var nextRetryEpoch = entry.Circuit.RetryAfterTime(
+                AutomationDecisionCode.NativeStateUnavailable,
+                AutomationRetryTrigger.ResourceQuantity |
+                AutomationRetryTrigger.ResourceRate |
+                AutomationRetryTrigger.Registry |
+                AutomationRetryTrigger.Lifecycle,
+                _epoch,
+                lifecycleGeneration: 0);
             _onChanged(
                 entry.Definition.ResourceId,
                 hadSnapshot ? AutoBuyResourceChange.Unknown | AutoBuyResourceChange.Identity : AutoBuyResourceChange.Unknown,
                 hadSnapshot ? previous.TrueQuantity : null,
                 null);
-            if (entry.FailureCount == 1 || _epoch - entry.LastWarningEpoch >= 64)
+            if (entry.Circuit.Snapshot.ConsecutiveFailures == 1 || _epoch - entry.LastWarningEpoch >= 64)
             {
                 entry.LastWarningEpoch = _epoch;
                 Plugin.Log?.LogAutomataWarning(
                     $"Auto Buy quarantined resource snapshot {entry.Definition.ResourceId}; " +
-                    $"retryEpoch={entry.NextRetryEpoch}.");
+                    $"retryEpoch={nextRetryEpoch}.");
             }
             return;
         }
 
         entry.HasSnapshot = true;
         entry.Snapshot = current;
-        entry.FailureCount = 0;
-        entry.NextRetryEpoch = 0;
+        entry.Circuit.RecordSuccess();
         var change = hadSnapshot ? Compare(previous, current) : AutoBuyResourceChange.Identity;
         if (change != AutoBuyResourceChange.None)
         {
@@ -282,9 +304,7 @@ internal sealed class AutoBuyResourceSnapshotCache
 
         public long ReadEpoch { get; set; }
 
-        public int FailureCount { get; set; }
-
-        public long NextRetryEpoch { get; set; }
+        public AutomationCircuitBreaker Circuit { get; set; } = new AutomationCircuitBreaker();
 
         public long LastWarningEpoch { get; set; } = long.MinValue;
     }

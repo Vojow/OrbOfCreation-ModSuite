@@ -668,7 +668,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 snapshot,
                 AutomationDecisionCode.MutationQuarantined,
                 "automated Upgrade mutations are quarantined for this process",
-                AutomationRetryTrigger.Lifecycle);
+                AutomationRetryTrigger.None);
         }
 
         if (_allowedUuids.Count > 0 && !_allowedUuids.Contains(snapshot.Uuid))
@@ -736,6 +736,21 @@ internal sealed class AutoBuyEngine : IDisposable
 
         if (!costsResolved)
         {
+            if (candidate is IAutoBuyCircuitCandidate circuitCandidate &&
+                circuitCandidate.CircuitSnapshot.IsOpen)
+            {
+                var circuit = circuitCandidate.CircuitSnapshot;
+                return AutoBuyDecision.Rejected(
+                    snapshot,
+                    circuit.Cause == AutomationDecisionCode.None
+                        ? AutomationDecisionCode.CostUnavailable
+                        : circuit.Cause,
+                    $"native cost or resource snapshot circuit is {circuit.State}",
+                    circuit.State == AutomationCircuitState.ContractFailed
+                        ? AutomationRetryTrigger.None
+                        : circuit.WakeTriggers);
+            }
+
             return AutoBuyDecision.Rejected(
                 snapshot,
                 AutomationDecisionCode.CostUnavailable,
@@ -1745,8 +1760,8 @@ internal sealed class AutoBuyEngine : IDisposable
                 ? FeatureStatusReasonCode.PartialCapabilityUnavailable
                 : FeatureStatusReasonCode.ContractUnavailable,
             structuresRemainOperational
-                ? "Upgrade automation is unavailable until the next lifecycle; Structure automation remains operational."
-                : "The required native Upgrade mutation contract is unavailable until the next lifecycle.");
+                ? "Upgrade automation is unavailable for this process; Structure automation remains operational."
+                : "The required native Upgrade mutation contract is unavailable for this process.");
     }
 
     private void ResetPendingPurchaseBatch()
