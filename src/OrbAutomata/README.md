@@ -1,6 +1,8 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.5` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, with structured decision evidence shared by telemetry, logs, and its tooltip. Bounded candidate/resource circuits keep transient native failures from consuming every pass, quarantine exact contract contradictions, and allow only a newer lifecycle to recover an attempted but unverified purchase. It also provides Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, and shared lifecycle generation isolation.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.6` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, with structured decision evidence shared by telemetry, logs, and its tooltip. Bounded candidate/resource circuits keep transient native failures from consuming every pass, quarantine exact contract contradictions, and allow only a newer lifecycle to recover an attempted but unverified purchase. Independent action-family ownership isolates known overlapping automation before native mutation. It also provides Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, and shared lifecycle generation isolation.
+
+Automata claims Structure, Upgrade plus native multi-buy override, Spell Cast, Concept Assignment, and Spell Level Purchase independently. The exact AutobuyOrb GUID blocks only Structure and Upgrade automation. Claims are released on configuration/lifecycle teardown, prepared work is cancelled on loss, and ownership is rechecked after live native validation immediately before mutation. Unknown unregistered automation is not disabled and cannot be proven absent.
 
 ## Build
 

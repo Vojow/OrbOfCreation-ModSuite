@@ -23,6 +23,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly SuitePerformanceCoordinator? _coordinator;
     private readonly Func<long>? _readFrameIdentity;
     private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly Func<AutoBuyCandidateKind, bool> _ownsActionFamily;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _decisionLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -84,6 +85,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _diagnosticQueueWaitedBatchCount;
     private double _diagnosticBatchElapsedMilliseconds;
     private AutomationDecisionConditionKey? _lastPublishedDecision;
+    private int _lastOwnershipMask = -1;
 
     internal int UpgradeQuarantinePurgePasses { get; private set; }
 
@@ -102,7 +104,8 @@ internal sealed class AutoBuyEngine : IDisposable
         Func<Stopwatch, double>? readPurchaseElapsedMilliseconds = null,
         SuitePerformanceCoordinator? coordinator = null,
         Func<long>? readFrameIdentity = null,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<AutoBuyCandidateKind, bool>? ownsActionFamily = null)
     {
         _config = config;
         _catalog = catalog;
@@ -114,6 +117,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
+        _ownsActionFamily = ownsActionFamily ?? (_ => true);
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
@@ -136,6 +140,18 @@ internal sealed class AutoBuyEngine : IDisposable
     public void Tick(float unscaledDeltaTime)
     {
         ObserveConfigurationStatus();
+        RefreshOwnershipStateIfNeeded();
+        if (_config.AutoBuyMode.Value == AutoBuyOperationMode.Active &&
+            HasAnyConfiguredFamily() &&
+            !HasAnyOwnedConfiguredFamily())
+        {
+            ResetAllPendingWork();
+            SetCoordinatorEnabled(false);
+            ObserveOwnershipStatus();
+            return;
+        }
+        if (_config.AutoBuyMode.Value == AutoBuyOperationMode.Active && !HasAllOwnedConfiguredFamilies())
+            ObserveOwnershipStatus();
         if (_coordinator is null)
         {
             TickLegacy(unscaledDeltaTime);
@@ -442,6 +458,13 @@ internal sealed class AutoBuyEngine : IDisposable
         _catalog.Dispose();
     }
 
+    internal void CancelPreparedWork()
+    {
+        ResetAllPendingWork();
+        SetCoordinatorEnabled(false);
+        _secondsUntilEvaluation = 0.0f;
+    }
+
     public void InvalidateLifecycle()
     {
         _lifecycleGeneration = checked(_lifecycleGeneration + 1);
@@ -603,8 +626,8 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             var batch = _incrementalCatalog.BeginEvaluation(new AutoBuyEvaluationRequest(
                 limit,
-                _config.AutoBuyStructures.Value,
-                _config.AutoBuyUpgrades.Value));
+                _config.AutoBuyStructures.Value && _ownsActionFamily(AutoBuyCandidateKind.Structure),
+                _config.AutoBuyUpgrades.Value && _ownsActionFamily(AutoBuyCandidateKind.Upgrade)));
             _pendingCandidates = batch.DirtyCandidates;
             _pendingActiveCandidates = batch.ActiveCandidates;
             _registryReconciliationPending = batch.ReconciliationPending;
@@ -661,6 +684,15 @@ internal sealed class AutoBuyEngine : IDisposable
     {
         suppressResourceTracking = false;
         var snapshot = CaptureSnapshot(candidate);
+        if (!_ownsActionFamily(snapshot.Kind))
+        {
+            suppressResourceTracking = true;
+            return AutoBuyDecision.Rejected(
+                snapshot,
+                AutomationDecisionCode.ActionFamilyConflict,
+                "another automation owner holds this native action family",
+                AutomationRetryTrigger.Configuration | AutomationRetryTrigger.Lifecycle);
+        }
         if (snapshot.Kind == AutoBuyCandidateKind.Upgrade &&
             NativeMultiBuyScope.TryGetMutationQuarantine(out _))
         {
@@ -1082,6 +1114,13 @@ internal sealed class AutoBuyEngine : IDisposable
 
             _pendingBatchAttempted++;
             _nativePurchaseAttempts++;
+            if (!_ownsActionFamily(recommendation.Candidate.Kind))
+            {
+                ObserveOwnershipStatus();
+                ResetPendingPurchaseBatch();
+                _secondsUntilEvaluation = 0.0f;
+                break;
+            }
             bool purchaseSucceeded;
             string reason;
             using (AutoBuyLifecycleSignal.EnterAutomatedMutation(
@@ -1557,8 +1596,10 @@ internal sealed class AutoBuyEngine : IDisposable
     {
         return candidate.Snapshot().Kind switch
         {
-            AutoBuyCandidateKind.Structure => _config.AutoBuyStructures.Value,
-            AutoBuyCandidateKind.Upgrade => _config.AutoBuyUpgrades.Value,
+            AutoBuyCandidateKind.Structure =>
+                _config.AutoBuyStructures.Value && _ownsActionFamily(AutoBuyCandidateKind.Structure),
+            AutoBuyCandidateKind.Upgrade =>
+                _config.AutoBuyUpgrades.Value && _ownsActionFamily(AutoBuyCandidateKind.Upgrade),
             _ => false,
         };
     }
@@ -1735,12 +1776,55 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private void ObserveOperationalStatus()
     {
+        if (!HasAllOwnedConfiguredFamilies())
+        {
+            ObserveOwnershipStatus();
+            return;
+        }
         if (NativeMultiBuyScope.TryGetMutationQuarantine(out _))
         {
             ObserveUpgradeQuarantineStatus();
             return;
         }
         _featureStatus?.ObserveOperational();
+    }
+
+    private bool HasAnyOwnedConfiguredFamily() =>
+        (_config.AutoBuyStructures.Value && _ownsActionFamily(AutoBuyCandidateKind.Structure)) ||
+        (_config.AutoBuyUpgrades.Value && _ownsActionFamily(AutoBuyCandidateKind.Upgrade));
+
+    private bool HasAnyConfiguredFamily() =>
+        _config.AutoBuyStructures.Value || _config.AutoBuyUpgrades.Value;
+
+    private bool HasAllOwnedConfiguredFamilies() =>
+        (!_config.AutoBuyStructures.Value || _ownsActionFamily(AutoBuyCandidateKind.Structure)) &&
+        (!_config.AutoBuyUpgrades.Value || _ownsActionFamily(AutoBuyCandidateKind.Upgrade));
+
+    private void ObserveOwnershipStatus()
+    {
+        var anyOwned = HasAnyOwnedConfiguredFamily();
+        _featureStatus?.Observe(
+            true,
+            anyOwned ? FeatureStatusState.Degraded : FeatureStatusState.TemporarilyBlocked,
+            anyOwned ? FeatureStatusReasonCode.PartialCapabilityUnavailable : FeatureStatusReasonCode.ActionFamilyConflict,
+            anyOwned
+                ? "Another automation owner blocks one configured purchase family; the independent family remains operational."
+                : "Another automation owner holds every configured native purchase family.");
+    }
+
+    private void RefreshOwnershipStateIfNeeded()
+    {
+        var mask = (_ownsActionFamily(AutoBuyCandidateKind.Structure) ? 1 : 0) |
+                   (_ownsActionFamily(AutoBuyCandidateKind.Upgrade) ? 2 : 0);
+        if (mask == _lastOwnershipMask) return;
+        _lastOwnershipMask = mask;
+        ResetAllPendingWork();
+        _cachedDecisions.Clear();
+        _rankedRecommendations.Clear();
+        _rejectionTelemetry.ClearCurrentStates();
+        _changedVerboseRejections.Clear();
+        _incrementalCatalog?.InvalidatePolicy();
+        _secondsUntilEvaluation = 0.0f;
     }
 
     private void ObserveUpgradeQuarantineStatus()

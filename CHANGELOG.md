@@ -1,5 +1,12 @@
 # Changelog
 
+## Action-family ownership isolation — 2026-07-19
+
+- Add atomic, process-local ownership leases for independent native purchase, cast, concept, spell-level, and mastery-XP action families, with synchronous known-conflict revocation and explicit lifecycle/configuration release.
+- Detect the exact AutobuyOrb plugin GUID and block only Automata Structure and Upgrade mutations; Auto Cast, Auto Concept, Spell Leveling, and all Mentor domains remain independently available.
+- Gate every supported native mutation again after ordinary live validation, cancel prepared work on ownership loss, expose structured conflict health, and warn honestly that unknown unregistered automation cannot be proven absent or controlled.
+- Bump Orb Automata to 0.8.6, Orb Mentor to 0.3.6, and Orb Modding Common to 0.3.5.
+
 ## Bounded automation failure circuits — 2026-07-19
 
 - Add a shared circuit state machine with allocation-free transition/attempt checks, capped exponential backoff, and explicit authoritative-event, lifecycle, configuration, and process-lifetime recovery contracts.

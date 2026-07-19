@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using BepInEx;
+using BepInEx.Bootstrap;
 using BepInEx.Logging;
 using HarmonyLib;
 using OrbModding.Common;
@@ -20,6 +21,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
     private AutoSpellLevelController? _autoSpellLevelController;
+    private AutomataActionFamilyOwnership? _actionFamilyOwnership;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
@@ -40,6 +42,7 @@ public sealed class Plugin : BaseUnityPlugin
     private GameplayInvalidationBus? _invalidationBus;
     private IDisposable? _conceptInventorySubscription;
     private IDisposable? _conceptProgressionSubscription;
+    private bool _knownOwnershipWarningLogged;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -66,6 +69,12 @@ public sealed class Plugin : BaseUnityPlugin
         _harmony.PatchAll(typeof(Plugin).Assembly);
 
         var reservePolicy = new ReservePolicy(_config);
+        _actionFamilyOwnership = new AutomataActionFamilyOwnership();
+        Log.LogAutomataWarning(
+            "Action-family ownership is best-effort: exact known conflicts and cooperative suite owners are isolated, but unknown plugins that invoke native actions without registering cannot be proven absent and are not disabled.");
+        _actionFamilyOwnership.RefreshLoadedPluginInventory(
+            Chainloader.PluginInfos.Count,
+            guid => Chainloader.PluginInfos.ContainsKey(guid));
         _autoCastToggleControl = new AutoCastToggleControl(
             _config,
             () => _featureStatuses.AutoCast.Current);
@@ -82,7 +91,8 @@ public sealed class Plugin : BaseUnityPlugin
             Log,
             coordinator: SuitePerformanceCoordinator.Shared,
             readFrameIdentity: () => UnityEngine.Time.frameCount,
-            featureStatus: _featureStatuses.AutoBuy);
+            featureStatus: _featureStatuses.AutoBuy,
+            ownsActionFamily: kind => _actionFamilyOwnership?.OwnsAutoBuy(kind) == true);
         _autoCastEngine = new AutoCastEngine(
             _config,
             new ReflectionAutoCastCatalog(),
@@ -91,21 +101,24 @@ public sealed class Plugin : BaseUnityPlugin
             Log,
             coordinator: SuitePerformanceCoordinator.Shared,
             readFrameIdentity: () => UnityEngine.Time.frameCount,
-            featureStatus: _featureStatuses.AutoCast);
+            featureStatus: _featureStatuses.AutoCast,
+            ownsActionFamily: () => _actionFamilyOwnership?.OwnsCast == true);
         _autoConceptController = new AutoConceptController(
             _config,
             new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount,
-            _featureStatuses.AutoConcept);
+            _featureStatuses.AutoConcept,
+            () => _actionFamilyOwnership?.OwnsConcept == true);
         _autoSpellLevelController = new AutoSpellLevelController(
             _config,
             new ReflectionSpellLevelRuntime(),
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount,
-            _featureStatuses.SpellLevel);
+            _featureStatuses.SpellLevel,
+            () => _actionFamilyOwnership?.OwnsSpellLevel == true);
         _autoConceptToggleControl = new AutoConceptToggleControl(
             _config,
             () => _featureStatuses.AutoConcept.Current);
@@ -152,8 +165,26 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
-        if (_config is null || !_config.Enabled.Value) return;
+        if (_config is null) return;
+        if (!_config.Enabled.Value)
+        {
+            CancelPreparedAutomationForOwnershipRelease();
+            _actionFamilyOwnership?.Refresh(_config, lifecycleReady: false, UnityEngine.Time.frameCount);
+            return;
+        }
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
+        var lifecycleReady = IsLifecycleReady();
+        _actionFamilyOwnership?.RefreshLoadedPluginInventory(
+            Chainloader.PluginInfos.Count,
+            guid => Chainloader.PluginInfos.ContainsKey(guid));
+        if (!_knownOwnershipWarningLogged &&
+            _actionFamilyOwnership?.KnownAutoBuyLoaded == true)
+        {
+            _knownOwnershipWarningLogged = true;
+            Log.LogAutomataWarning(
+                "AutobuyOrb is loaded. Automata will block Structure and Upgrade purchases because those native action families overlap; Auto Cast, Auto Concept, Spell Leveling, and Mentor remain independent.");
+        }
+        _actionFamilyOwnership?.Refresh(_config, lifecycleReady, UnityEngine.Time.frameCount);
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
@@ -166,7 +197,7 @@ public sealed class Plugin : BaseUnityPlugin
                 UnityEngine.Time.frameCount,
                 GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
         }
-        if (IsLifecycleReady())
+        if (lifecycleReady)
         {
             _autoBuyEngine?.Tick(deltaTime);
             _autoCastEngine?.Tick(deltaTime);
@@ -202,6 +233,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoConceptController = null;
         _autoSpellLevelController?.Dispose();
         _autoSpellLevelController = null;
+        _actionFamilyOwnership?.Dispose();
+        _actionFamilyOwnership = null;
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
@@ -215,6 +248,20 @@ public sealed class Plugin : BaseUnityPlugin
         _featureStatuses = null;
         _harmony?.UnpatchSelf();
         _harmony = null;
+    }
+
+    private void OnDisable()
+    {
+        CancelPreparedAutomationForOwnershipRelease();
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
+    }
+
+    private void CancelPreparedAutomationForOwnershipRelease()
+    {
+        _autoBuyEngine?.CancelPreparedWork();
+        _autoCastEngine?.CancelPreparedWork();
+        _autoConceptController?.CancelPreparedWork();
+        _autoSpellLevelController?.CancelPreparedWork();
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
@@ -236,6 +283,7 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
         _autoSpellLevelController?.InvalidateLifecycle();
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
         if (_config is not null)
             _featureStatuses?.ObserveLifecycleNotReady(_config, _lifecycleGeneration);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();

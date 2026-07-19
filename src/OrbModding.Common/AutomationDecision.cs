@@ -42,6 +42,7 @@ public enum AutomationDecisionCode
     MutationQuarantined = 207,
     NativeMutationFailed = 208,
     PostconditionFailed = 209,
+    ActionFamilyConflict = 210,
 
     CostUnavailable = 300,
     InvalidConfiguration = 301,
@@ -633,6 +634,7 @@ public readonly struct AutomationDecision
         AutomationDecisionCode.MutationQuarantined or
         AutomationDecisionCode.NativeMutationFailed or
         AutomationDecisionCode.PostconditionFailed or
+        AutomationDecisionCode.ActionFamilyConflict or
         AutomationDecisionCode.CostUnavailable or
         AutomationDecisionCode.InvalidConfiguration or
         AutomationDecisionCode.InvalidResourceState or
@@ -922,6 +924,7 @@ public static class AutomationDecisionPresenter
         AutomationDecisionCode.MutationQuarantined => "Mutation quarantined",
         AutomationDecisionCode.NativeMutationFailed => "Native mutation failed",
         AutomationDecisionCode.PostconditionFailed => "Mutation postcondition failed",
+        AutomationDecisionCode.ActionFamilyConflict => "Action family owned by another automation feature",
         AutomationDecisionCode.CostUnavailable => "Cost unavailable",
         AutomationDecisionCode.InvalidConfiguration => "Invalid configuration",
         AutomationDecisionCode.InvalidResourceState => "Invalid resource state",

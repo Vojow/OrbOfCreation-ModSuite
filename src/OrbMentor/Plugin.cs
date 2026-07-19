@@ -18,6 +18,7 @@ public sealed class Plugin : BaseUnityPlugin
     private Harmony? _harmony;
     private MentorConfig? _config;
     private MentorRuntime? _runtime;
+    private MentorActionFamilyOwnership? _actionFamilyOwnership;
     private MentorGameplayInvalidationBridge? _invalidationBridge;
     private MentorToggleButton? _button;
     private float _uiRetry;
@@ -32,12 +33,18 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
         _config = MentorConfig.Bind(Config);
+        _actionFamilyOwnership = new MentorActionFamilyOwnership();
+        Logger.LogWarning(
+            "Mentor action-family ownership is best-effort; unknown unregistered automation cannot be proven absent and is not disabled.");
         _runtime = new MentorRuntime(
             _config,
             Logger,
             SuitePerformanceCoordinator.Shared,
             () => Time.frameCount,
-            featureStatusRegistry: FeatureStatusRegistry.Shared);
+            featureStatusRegistry: FeatureStatusRegistry.Shared,
+            ownsActionFamily: domain => _actionFamilyOwnership?.IsHeld(domain) == true,
+            captureActionFamilyMutation: domain =>
+                _actionFamilyOwnership?.TryCaptureMutationPermit(domain) == true);
         _invalidationBridge = new MentorGameplayInvalidationBridge(GameplayInvalidationBus.Shared);
         _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
@@ -84,6 +91,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         if (_config is null || _runtime is null) return;
+        _actionFamilyOwnership?.Refresh(_config, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _config.ToggleShortcut.Value.IsDown())
         {
             _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
@@ -246,6 +254,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (transition.Current.Generation == _lifecycleGeneration) return;
         _lifecycleGeneration = transition.Current.Generation;
         _runtime?.ResetLifecycle();
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
     }
 
@@ -269,7 +278,13 @@ public sealed class Plugin : BaseUnityPlugin
     {
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; _invalidationBridge = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Dispose(); _runtime = null; _actionFamilyOwnership?.Dispose(); _actionFamilyOwnership = null; _harmony?.UnpatchSelf(); _harmony = null; _invalidationBridge = null; Instance = null;
+    }
+
+    private void OnDisable()
+    {
+        _runtime?.Cancel(MentorDropReason.Disabled);
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

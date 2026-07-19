@@ -511,11 +511,13 @@ public sealed class ExperienceElement
     private BigDouble experience;
     public int GainedLevels { get; set; }
     public List<BigDouble> Grants { get; } = new List<BigDouble>();
+    public Action? AfterGainExperience { get; set; }
 
     public void GainExperience(BigDouble amount)
     {
         Grants.Add(amount);
         experience = Add(experience, amount);
+        AfterGainExperience?.Invoke();
     }
 
     public int GetGainedLevels() => GainedLevels;

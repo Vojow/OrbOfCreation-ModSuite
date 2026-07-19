@@ -12,6 +12,7 @@ internal sealed class AutoSpellLevelController : IDisposable
     private readonly SuitePerformanceCoordinator _coordinator;
     private readonly Func<long> _readFrameIdentity;
     private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly Func<bool> _ownsActionFamily;
     private readonly SuiteWorkRegistration _readWork;
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly DecisionLogGate _failureLogGate = new(TimeSpan.FromSeconds(30));
@@ -30,7 +31,8 @@ internal sealed class AutoSpellLevelController : IDisposable
         ManualLogSource log,
         SuitePerformanceCoordinator coordinator,
         Func<long> readFrameIdentity,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<bool>? ownsActionFamily = null)
     {
         _config = config;
         _runtime = runtime;
@@ -38,6 +40,7 @@ internal sealed class AutoSpellLevelController : IDisposable
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
+        _ownsActionFamily = ownsActionFamily ?? (() => true);
         _readWork = coordinator.Register(
             "OrbAutomata.AutoSpellLevel",
             "Evaluate native spell leveling",
@@ -58,6 +61,17 @@ internal sealed class AutoSpellLevelController : IDisposable
         _elapsedSeconds += elapsed;
         var enabled = _config.CanStartAutoBuyActively && _config.AutoLevelSpells.Value;
         ObserveConfigurationStatus();
+        if (enabled && !_ownsActionFamily())
+        {
+            _pending = null;
+            SetEnabled(false);
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ActionFamilyConflict,
+                "Another automation owner holds the native spell-level purchase action family.");
+            return;
+        }
         SetEnabled(enabled);
         if (!enabled)
         {
@@ -168,6 +182,15 @@ internal sealed class AutoSpellLevelController : IDisposable
         var capability = _pendingCapability;
         _pending = null;
         if (candidate is null || !_config.CanStartAutoBuyActively || !_config.AutoLevelSpells.Value) return;
+        if (!_ownsActionFamily())
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ActionFamilyConflict,
+                "Spell-level ownership changed before mutation.");
+            return;
+        }
         var succeeded = capability == AutoSpellLevelCapability.All
             ? _runtime.TryLevelAll(out var reason)
             : _runtime.TryLevelSingle(candidate, out reason);
@@ -260,5 +283,13 @@ internal sealed class AutoSpellLevelController : IDisposable
         SetEnabled(false);
         _runtime.Dispose();
         _pending = null;
+    }
+
+    internal void CancelPreparedWork()
+    {
+        _pending = null;
+        _wasEnabled = false;
+        _secondsUntilEvaluation = 0.0f;
+        SetEnabled(false);
     }
 }

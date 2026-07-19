@@ -6,7 +6,7 @@ public static class PluginIds
 
     public const string AutomataGuid = "dev.vojow.orbofcreation.automata";
     public const string AutomataName = "Orb Automata";
-    public const string AutomataVersion = "0.8.5";
+    public const string AutomataVersion = "0.8.6";
 
     public const string ModConfigGuid = "dev.vojow.orbofcreation.modconfig";
     public const string ModConfigName = "Orb Mod Config";
@@ -14,7 +14,7 @@ public static class PluginIds
 
     public const string MentorGuid = "dev.vojow.orbofcreation.mentor";
     public const string MentorName = "Orb Mentor";
-    public const string MentorVersion = "0.3.5";
+    public const string MentorVersion = "0.3.6";
 
-    public const string Version = "0.3.4";
+    public const string Version = "0.3.5";
 }

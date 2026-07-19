@@ -41,6 +41,8 @@ Common's suite-internal `KnownEntities` is a checked-in generated declaration se
 
 `OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across supported plugins. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct. See the [invalidation bus plan](../docs/plans/gameplay-invalidation-bus.md).
 
+`OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation. See the [ownership plan](../docs/plans/action-family-ownership.md).
+
 ## Orb Mentor
 
 `OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.
