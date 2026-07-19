@@ -122,6 +122,92 @@ public sealed class RollingPerformanceMetrics
             percentile,
             _percentileScratch[percentileIndex]);
     }
+
+    /// <summary>
+    /// Freezes the standard diagnostic distribution from one copy and one sort.
+    /// This is intentionally a low-frequency operation; <see cref="Record"/>
+    /// remains allocation-free.
+    /// </summary>
+    public RollingPerformanceDistributionSnapshot GetDistributionSnapshot()
+    {
+        if (_count == 0)
+        {
+            return new RollingPerformanceDistributionSnapshot(
+                Capacity,
+                0,
+                _totalSamples,
+                0,
+                _totalOperations,
+                0.0,
+                0.0,
+                0.0,
+                0.0);
+        }
+
+        var maximum = 0.0;
+        for (var i = 0; i < _count; i++)
+        {
+            var sample = _milliseconds[i];
+            _percentileScratch[i] = sample;
+            if (sample > maximum)
+            {
+                maximum = sample;
+            }
+        }
+
+        Array.Sort(_percentileScratch, 0, _count);
+        return new RollingPerformanceDistributionSnapshot(
+            Capacity,
+            _count,
+            _totalSamples,
+            _windowOperations,
+            _totalOperations,
+            _windowMilliseconds / _count,
+            maximum,
+            ReadPercentile(0.95),
+            ReadPercentile(0.99));
+    }
+
+    private double ReadPercentile(double percentile)
+    {
+        var index = (int)Math.Ceiling(percentile * _count) - 1;
+        return _percentileScratch[Math.Max(0, index)];
+    }
+}
+
+public readonly struct RollingPerformanceDistributionSnapshot
+{
+    public RollingPerformanceDistributionSnapshot(
+        int capacity,
+        int sampleCount,
+        long totalSamples,
+        long operations,
+        long totalOperations,
+        double averageMilliseconds,
+        double maximumMilliseconds,
+        double p95Milliseconds,
+        double p99Milliseconds)
+    {
+        Capacity = capacity;
+        SampleCount = sampleCount;
+        TotalSamples = totalSamples;
+        Operations = operations;
+        TotalOperations = totalOperations;
+        AverageMilliseconds = averageMilliseconds;
+        MaximumMilliseconds = maximumMilliseconds;
+        P95Milliseconds = p95Milliseconds;
+        P99Milliseconds = p99Milliseconds;
+    }
+
+    public int Capacity { get; }
+    public int SampleCount { get; }
+    public long TotalSamples { get; }
+    public long Operations { get; }
+    public long TotalOperations { get; }
+    public double AverageMilliseconds { get; }
+    public double MaximumMilliseconds { get; }
+    public double P95Milliseconds { get; }
+    public double P99Milliseconds { get; }
 }
 
 public readonly struct RollingPerformanceSnapshot

@@ -77,6 +77,7 @@ internal sealed class AutoConceptController : IDisposable
     private double _preferredReplacementExpiresAtSeconds;
     private long _timedAssignmentSequence;
     private bool _postconditionFaulted;
+    private NativeMutationCallOutcome _activeMutationOutcome;
 
     public AutoConceptController(
         AutomataConfig config,
@@ -168,8 +169,16 @@ internal sealed class AutoConceptController : IDisposable
         {
             using (mutationLease)
             {
-                ExecuteMutation();
-                mutationLease.Complete();
+                _activeMutationOutcome = default;
+                try
+                {
+                    mutationLease.Complete(ExecuteMutation());
+                }
+                catch
+                {
+                    mutationLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                    throw;
+                }
             }
         }
         SetPending(false, _pending is not null);
@@ -426,14 +435,14 @@ internal sealed class AutoConceptController : IDisposable
         return false;
     }
 
-    private void ExecuteMutation()
+    private SuiteWorkCompletion ExecuteMutation()
     {
         var pending = _pending;
         _pending = null;
         if (pending is null || !_config.CanStartAutoConceptActively || !_ownsActionFamily())
         {
             if (pending is not null && !_ownsActionFamily()) ObserveOwnershipConflict();
-            return;
+            return NoMutationCompletion();
         }
         var candidates = _runtime.ReadCandidates(_allowed, _blocked, out var reason);
         _cachedCandidates = candidates;
@@ -447,14 +456,14 @@ internal sealed class AutoConceptController : IDisposable
         if (candidate is null || !candidate.IsSettled)
         {
             _secondsUntilEvaluation = 0.0f;
-            return;
+            return NoMutationCompletion();
         }
 
         if (!IsReplacementStillValid(pending.Value, candidate, candidates))
         {
             LogFailure($"Auto Concept rotation target, slot, or resource safety changed before removing {candidate.DisplayName}; replanning.");
             _secondsUntilEvaluation = 0.0f;
-            return;
+            return NoMutationCompletion();
         }
 
         if (pending.Value.Kind == MutationKind.RotateOut)
@@ -463,22 +472,31 @@ internal sealed class AutoConceptController : IDisposable
                 candidate.Quantity != pending.Value.TargetOrDelta)
             {
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return NoMutationCompletion();
             }
             if (!_ownsActionFamily())
             {
                 ObserveOwnershipConflict();
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return NoMutationCompletion();
             }
-            if (
-                !_runtime.TryRemoveForRotation(candidate, pending.Value.TargetOrDelta, out reason))
+            bool removedForRotation;
+            try
+            {
+                removedForRotation =
+                    _runtime.TryRemoveForRotation(candidate, pending.Value.TargetOrDelta, out reason);
+            }
+            finally
+            {
+                _activeMutationOutcome = _runtime.LastNativeMutationOutcome;
+            }
+            if (!removedForRotation)
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
                 LogFailure($"Auto Concept rotation rejected for {candidate.DisplayName}: {reason}");
                 ObserveMutationRejection();
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return _activeMutationOutcome.ToWorkCompletion();
             }
             _ownership.ObserveBaseline(candidate.Uuid, 0);
             _preferredReplacementUuid = pending.Value.ReplacementUuid;
@@ -490,7 +508,7 @@ internal sealed class AutoConceptController : IDisposable
                 $"Auto Concept rotated out {candidate.DisplayName} ({pending.Value.TargetOrDelta} instance(s)) to {purpose}.");
             _featureStatus?.ObserveOperational();
             _secondsUntilEvaluation = 0.25f;
-            return;
+            return _activeMutationOutcome.ToWorkCompletion();
         }
 
         if (pending.Value.Kind == MutationKind.RemoveOwned)
@@ -501,22 +519,31 @@ internal sealed class AutoConceptController : IDisposable
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return NoMutationCompletion();
             }
             if (!_ownsActionFamily())
             {
                 ObserveOwnershipConflict();
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return NoMutationCompletion();
             }
-            if (
-                !_runtime.TryRemoveOwned(candidate, pending.Value.TargetOrDelta, out reason))
+            bool removedOwned;
+            try
+            {
+                removedOwned =
+                    _runtime.TryRemoveOwned(candidate, pending.Value.TargetOrDelta, out reason);
+            }
+            finally
+            {
+                _activeMutationOutcome = _runtime.LastNativeMutationOutcome;
+            }
+            if (!removedOwned)
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
                 LogFailure($"Auto Concept removal rejected for {candidate.DisplayName}: {reason}");
                 ObserveMutationRejection();
                 _secondsUntilEvaluation = 0.0f;
-                return;
+                return _activeMutationOutcome.ToWorkCompletion();
             }
             _ownership.RecordAutomatedDelta(
                 candidate.Uuid,
@@ -525,7 +552,7 @@ internal sealed class AutoConceptController : IDisposable
             LogOperation($"Auto Concept removed {pending.Value.TargetOrDelta} owned {candidate.DisplayName} instance(s).");
             _featureStatus?.ObserveOperational();
             _secondsUntilEvaluation = string.IsNullOrWhiteSpace(pending.Value.ReplacementName) ? 0.0f : 0.25f;
-            return;
+            return _activeMutationOutcome.ToWorkCompletion();
         }
 
         if (!_runtime.TryFindSafeTarget(
@@ -543,26 +570,35 @@ internal sealed class AutoConceptController : IDisposable
                 FeatureStatusReasonCode.TemporarySafetyBlock,
                 "Concept resource safety changed before mutation.");
             _secondsUntilEvaluation = 5.0f;
-            return;
+            return NoMutationCompletion();
         }
         var delta = safeTarget - candidate.Quantity;
         if (delta <= 0)
         {
             _secondsUntilEvaluation = 0.0f;
-            return;
+            return NoMutationCompletion();
         }
         if (!_ownsActionFamily())
         {
             ObserveOwnershipConflict();
             _secondsUntilEvaluation = 0.0f;
-            return;
+            return NoMutationCompletion();
         }
-        if (!_runtime.TryAdd(candidate, delta, out reason))
+        bool added;
+        try
+        {
+            added = _runtime.TryAdd(candidate, delta, out reason);
+        }
+        finally
+        {
+            _activeMutationOutcome = _runtime.LastNativeMutationOutcome;
+        }
+        if (!added)
         {
             LogFailure($"Auto Concept native mutation rejected {candidate.DisplayName}: {reason}");
             ObserveMutationRejection();
             _secondsUntilEvaluation = 5.0f;
-            return;
+            return _activeMutationOutcome.ToWorkCompletion();
         }
         if (candidate.Quantity == 0) BeginTrainingSession(candidate, candidates);
         _ownership.RecordAutomatedDelta(candidate.Uuid, candidate.Quantity + delta, delta);
@@ -574,7 +610,10 @@ internal sealed class AutoConceptController : IDisposable
         LogOperation($"Auto Concept added {delta} {candidate.DisplayName} instance(s), target {safeTarget}.");
         _featureStatus?.ObserveOperational();
         _secondsUntilEvaluation = 0.0f;
+        return _activeMutationOutcome.ToWorkCompletion();
     }
+
+    private static SuiteWorkCompletion NoMutationCompletion() => new(1);
 
     private void ObserveOwnershipConflict() =>
         _featureStatus?.Observe(

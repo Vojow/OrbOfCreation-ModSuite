@@ -305,6 +305,18 @@ public sealed class AutomataCoordinatorTests
             Assert.Equal(1, spell.ReleaseCalls);
             AutoCastManualSignal.NotifySpellFire();
             Assert.Equal(1, manualSignals);
+            Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoCast", out var failed));
+            Assert.Equal(1, failed.FailedWorkItems);
+            Assert.Equal(
+                1,
+                Assert.Single(
+                    coordinator.GetRegistrationSnapshots(),
+                    item => item.Subsystem == "OrbAutomata.AutoCast" &&
+                            item.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+                    .TotalOperations);
+            Assert.Equal(3, failed.NativeCallsAttempted);
+            Assert.Equal(3, failed.NativeMutationAttempts);
+            Assert.Equal(2, failed.NativeMutationsCommitted);
 
             var probe = coordinator.Register(
                 "test",
@@ -362,6 +374,13 @@ public sealed class AutomataCoordinatorTests
         Assert.Equal(1, spell.FireCalls);
         Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoCast", out var snapshot));
         Assert.Equal(2, snapshot.NativeMutationsStarted);
+        Assert.Equal(
+            2,
+            Assert.Single(
+                coordinator.GetRegistrationSnapshots(),
+                item => item.Subsystem == "OrbAutomata.AutoCast" &&
+                        item.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+                .TotalOperations);
         blocker.Dispose();
     }
 
@@ -563,6 +582,13 @@ public sealed class AutomataCoordinatorTests
             Assert.Equal(1, structure.PurchaseCalls);
             Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoBuy", out var snapshot));
             Assert.Equal(2, snapshot.NativeMutationsStarted);
+            Assert.Equal(
+                2,
+                Assert.Single(
+                    coordinator.GetRegistrationSnapshots(),
+                    item => item.Subsystem == "OrbAutomata.AutoBuy" &&
+                            item.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+                    .TotalOperations);
             Assert.Single(
                 log.Entries,
                 entry => entry?.ToString()?.Contains(

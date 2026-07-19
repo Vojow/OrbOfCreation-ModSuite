@@ -6,7 +6,7 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionSpellLevelRuntime : IDisposable
+internal sealed class ReflectionSpellLevelRuntime : IDisposable, INativeMutationOutcomeSource
 {
     internal static readonly string UnlockLevelAllSpellsUuid = KnownEntities.UnlockLevelAllSpells.Uuid.ToString("D");
 
@@ -30,8 +30,10 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     private MethodInfo? _tryLevelAll;
     private string? _blockedReason;
     private object? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public string? BlockedReason => _blockedReason;
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
     public bool IsReady =>
         _manager is not null &&
         _availableRecipes is not null &&
@@ -78,6 +80,7 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
 
     public bool TryLevelSingle(NativeSpellLevelCandidate candidate, out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (!TryInitialize(out reason)) return false;
         try
         {
@@ -94,6 +97,7 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
             if (cost is null || _costHasEnough!.Invoke(cost, Array.Empty<object>()) is not true)
                 return Reject("spell-level cost is no longer affordable", out reason);
 
+            var nativeCallsAttempted = 0;
             var evidence = NativeMutationVerifier.Execute(
                 "Auto Spell Level single",
                 candidate.Uuid,
@@ -101,11 +105,13 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
                 () => ReadMasteryLevel(recipe),
                 () =>
                 {
+                    nativeCallsAttempted++;
                     _costPerform!.Invoke(cost, Array.Empty<object>());
+                    nativeCallsAttempted++;
                     _purchaseLevel!.Invoke(recipe, Array.Empty<object>());
                 },
                 (before, after) => after == before + 1);
-            return CompleteMutation(evidence, out reason);
+            return CompleteMutation(evidence, nativeCallsAttempted, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
@@ -116,20 +122,26 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
 
     public bool TryLevelAll(out string reason)
     {
+        _lastNativeMutationOutcome = default;
         var snapshot = ReadSnapshot(out reason);
         if (!string.IsNullOrWhiteSpace(reason) || snapshot.Capability != AutoSpellLevelCapability.All || snapshot.Candidate is null)
             return false;
         try
         {
             var identity = snapshot.Candidate.Uuid;
+            var nativeCallsAttempted = 0;
             var evidence = NativeMutationVerifier.Execute(
                 "Auto Spell Level all",
                 identity,
                 "total mastery level positive delta",
                 ReadTotalMasteryLevels,
-                () => _tryLevelAll!.Invoke(_manager, Array.Empty<object>()),
+                () =>
+                {
+                    nativeCallsAttempted++;
+                    _tryLevelAll!.Invoke(_manager, Array.Empty<object>());
+                },
                 (before, after) => after > before);
-            return CompleteMutation(evidence, out reason);
+            return CompleteMutation(evidence, nativeCallsAttempted, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
@@ -158,13 +170,23 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         _tryLevelAll = null;
         _blockedReason = null;
         _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
     }
 
     public void Dispose() => InvalidateLifecycle();
 
-    private bool CompleteMutation<TState>(NativeMutationEvidence<TState> evidence, out string reason)
+    private bool CompleteMutation<TState>(
+        NativeMutationEvidence<TState> evidence,
+        int nativeCallsAttempted,
+        out string reason)
     {
         _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = evidence.MutationWasAttempted && nativeCallsAttempted > 0
+            ? new NativeMutationCallOutcome(
+                nativeCallsAttempted,
+                1,
+                evidence.IsVerified ? 1 : 0)
+            : default;
         if (evidence.IsVerified)
         {
             reason = string.Empty;

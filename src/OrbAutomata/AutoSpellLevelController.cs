@@ -24,6 +24,7 @@ internal sealed class AutoSpellLevelController : IDisposable
     private bool _wasEnabled;
     private bool _capabilityReported;
     private bool _postconditionFaulted;
+    private NativeMutationCallOutcome _activeMutationOutcome;
 
     public AutoSpellLevelController(
         AutomataConfig config,
@@ -103,8 +104,16 @@ internal sealed class AutoSpellLevelController : IDisposable
         {
             using (mutationLease)
             {
-                ExecuteMutation();
-                mutationLease.Complete();
+                _activeMutationOutcome = default;
+                try
+                {
+                    mutationLease.Complete(ExecuteMutation());
+                }
+                catch
+                {
+                    mutationLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                    throw;
+                }
             }
         }
         _mutationWork.SetPending(_pending is not null);
@@ -176,12 +185,13 @@ internal sealed class AutoSpellLevelController : IDisposable
         _pending = snapshot.Candidate;
     }
 
-    private void ExecuteMutation()
+    private SuiteWorkCompletion ExecuteMutation()
     {
         var candidate = _pending;
         var capability = _pendingCapability;
         _pending = null;
-        if (candidate is null || !_config.CanStartAutoBuyActively || !_config.AutoLevelSpells.Value) return;
+        if (candidate is null || !_config.CanStartAutoBuyActively || !_config.AutoLevelSpells.Value)
+            return NoMutationCompletion();
         if (!_ownsActionFamily())
         {
             _featureStatus?.Observe(
@@ -189,11 +199,20 @@ internal sealed class AutoSpellLevelController : IDisposable
                 FeatureStatusState.TemporarilyBlocked,
                 FeatureStatusReasonCode.ActionFamilyConflict,
                 "Spell-level ownership changed before mutation.");
-            return;
+            return NoMutationCompletion();
         }
-        var succeeded = capability == AutoSpellLevelCapability.All
-            ? _runtime.TryLevelAll(out var reason)
-            : _runtime.TryLevelSingle(candidate, out reason);
+        bool succeeded;
+        string reason;
+        try
+        {
+            succeeded = capability == AutoSpellLevelCapability.All
+                ? _runtime.TryLevelAll(out reason)
+                : _runtime.TryLevelSingle(candidate, out reason);
+        }
+        finally
+        {
+            _activeMutationOutcome = _runtime.LastNativeMutationOutcome;
+        }
         if (!succeeded)
         {
             if (!string.IsNullOrWhiteSpace(reason)) LogFailure($"Auto Spell Leveling rejected: {reason}");
@@ -211,7 +230,7 @@ internal sealed class AutoSpellLevelController : IDisposable
                     FeatureStatusReasonCode.TemporarySafetyBlock,
                     "Spell-level state changed before mutation; Automata will retry.");
             }
-            return;
+            return _activeMutationOutcome.ToWorkCompletion();
         }
         if (_config.IsOperationalLoggingEnabled)
             _log.LogAutomataInfo(capability == AutoSpellLevelCapability.All
@@ -219,7 +238,10 @@ internal sealed class AutoSpellLevelController : IDisposable
                 : $"Auto Spell Leveling raised {candidate.DisplayName} from mastery level {candidate.MasteryLevel}.");
         _secondsUntilEvaluation = 1.0f;
         _featureStatus?.ObserveOperational();
+        return _activeMutationOutcome.ToWorkCompletion();
     }
+
+    private static SuiteWorkCompletion NoMutationCompletion() => new(1);
 
     private bool TryAcquire(SuiteWorkRegistration registration, out SuiteWorkLease lease) =>
         _coordinator.RequestWork(registration, _readFrameIdentity(), out lease) == SuiteWorkAdmission.Granted;

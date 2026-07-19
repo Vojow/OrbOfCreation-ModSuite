@@ -68,7 +68,10 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
             out var projectionReason), projectionReason);
         Assert.Equal(2, safeTarget);
         Assert.False(runtime.TryAdd(candidate, 3, out _));
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
         Assert.True(runtime.TryAdd(candidate, 2, out var addReason), addReason);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.MutationsCommitted);
         Assert.Equal(2, Assert.Single(active.value).queuedQuantity);
     }
 
@@ -93,9 +96,12 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
 
         Assert.False(runtime.TryAdd(candidate, 1, out var failedReason));
         Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.MutationsCommitted);
         Assert.NotNull(runtime.BlockedReason);
         Assert.False(runtime.TryAdd(candidate, 1, out var blockedReason));
         Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
 
         active.SuppressAddMutation = false;
         runtime.InvalidateLifecycle();

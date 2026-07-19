@@ -1624,6 +1624,9 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(2, evidence.QueuedLevels);
 
         Assert.True(candidate.TryPurchaseOne(out var purchaseReason), purchaseReason);
+        Assert.Equal(1, candidate.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(1, candidate.LastNativeMutationOutcome.MutationAttempts);
+        Assert.Equal(1, candidate.LastNativeMutationOutcome.MutationsCommitted);
         Assert.Equal(3, native.QueuedQuantity);
     }
 
@@ -1643,8 +1646,11 @@ public sealed class AutoBuyDirtyResourceTests
 
         Assert.False(candidate.TryPurchaseOne(out var failedReason));
         Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(1, candidate.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(0, candidate.LastNativeMutationOutcome.MutationsCommitted);
         Assert.False(candidate.TryPurchaseOne(out var blockedReason));
         Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(0, candidate.LastNativeMutationOutcome.NativeCallsAttempted);
 
         native.ApplyPurchaseMutation = true;
         candidate.RecoverMutationBlock(1);

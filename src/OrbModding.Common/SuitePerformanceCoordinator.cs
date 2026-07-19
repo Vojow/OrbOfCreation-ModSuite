@@ -71,6 +71,7 @@ public sealed class SuitePerformanceCoordinator
 {
     private const int DefaultMetricsWindow = 300;
     private const int DefaultMissedRequestFrames = 2;
+    private const int DefaultStarvationThresholdFrames = 120;
     private readonly IPerformanceClock _clock;
     private readonly int _ownerThreadId;
     private readonly List<SuiteWorkRegistration> _registrations = new();
@@ -79,6 +80,7 @@ public sealed class SuitePerformanceCoordinator
     private readonly RollingPerformanceMetrics _suiteFrameMetrics;
     private readonly int _metricsWindow;
     private readonly int _missedRequestFrames;
+    private readonly int _starvationThresholdFrames;
     private int _nextRegistrationId;
     private int _roundRobinIndex;
     private long _frameIdentity;
@@ -97,7 +99,8 @@ public sealed class SuitePerformanceCoordinator
         double softBudgetMilliseconds = 0.75,
         double hardBudgetMilliseconds = 1.0,
         int metricsWindow = DefaultMetricsWindow,
-        int missedRequestFrames = DefaultMissedRequestFrames)
+        int missedRequestFrames = DefaultMissedRequestFrames,
+        int starvationThresholdFrames = DefaultStarvationThresholdFrames)
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         ValidateBudgets(softBudgetMilliseconds, hardBudgetMilliseconds);
@@ -113,11 +116,19 @@ public sealed class SuitePerformanceCoordinator
                 "The missed-request watchdog must allow at least one frame.");
         }
 
+        if (starvationThresholdFrames <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(starvationThresholdFrames),
+                "The starvation threshold must allow at least one frame.");
+        }
+
         _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
         SoftBudgetMilliseconds = softBudgetMilliseconds;
         HardBudgetMilliseconds = hardBudgetMilliseconds;
         _metricsWindow = metricsWindow;
         _missedRequestFrames = missedRequestFrames;
+        _starvationThresholdFrames = starvationThresholdFrames;
         _suiteFrameMetrics = new RollingPerformanceMetrics(metricsWindow);
     }
 
@@ -204,7 +215,8 @@ public sealed class SuitePerformanceCoordinator
             executionKind,
             schedulingWeight,
             _frameEpoch,
-            subsystemState);
+            subsystemState,
+            new RegistrationState(_metricsWindow, _starvationThresholdFrames));
         _registrations.Add(registration);
         return registration;
     }
@@ -229,6 +241,8 @@ public sealed class SuitePerformanceCoordinator
             return;
         }
 
+        var frameIdentityWentBackward = _hasFrame && frameIdentity < _frameIdentity;
+
         RecoverAbandonedLease();
 
         FlushFrameMetrics();
@@ -238,6 +252,21 @@ public sealed class SuitePerformanceCoordinator
         _frameHadWork = false;
         _frameElapsedMilliseconds = 0.0;
         _nativeMutationAdmitted = false;
+        if (frameIdentityWentBackward)
+        {
+            for (var index = 0; index < _registrations.Count; index++)
+            {
+                var registration = _registrations[index];
+                if (!registration.HasPendingWork)
+                {
+                    continue;
+                }
+
+                registration.PendingSinceFrameIdentity = frameIdentity;
+                registration.HasPendingFrameIdentity = true;
+                registration.PerformanceState.ResetFrameIdentityDiscontinuity();
+            }
+        }
     }
 
     public SuiteWorkAdmission RequestWork(
@@ -268,35 +297,30 @@ public sealed class SuitePerformanceCoordinator
 
         if (_activeRegistration is not null)
         {
-            registration.SubsystemState.DeferredAdmissions++;
-            return SuiteWorkAdmission.WorkInProgress;
+            return RecordDeferral(registration, SuiteWorkAdmission.WorkInProgress);
         }
 
         if (_frameElapsedMilliseconds >= HardBudgetMilliseconds)
         {
-            registration.SubsystemState.DeferredAdmissions++;
-            return SuiteWorkAdmission.HardBudgetExhausted;
+            return RecordDeferral(registration, SuiteWorkAdmission.HardBudgetExhausted);
         }
 
         if (registration.BudgetClass == SuiteBudgetClass.SoftLimited &&
             _frameElapsedMilliseconds >= SoftBudgetMilliseconds)
         {
-            registration.SubsystemState.DeferredAdmissions++;
-            return SuiteWorkAdmission.SoftBudgetExhausted;
+            return RecordDeferral(registration, SuiteWorkAdmission.SoftBudgetExhausted);
         }
 
         if (registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation &&
             _nativeMutationAdmitted)
         {
-            registration.SubsystemState.DeferredAdmissions++;
-            return SuiteWorkAdmission.NativeMutationAlreadyAdmitted;
+            return RecordDeferral(registration, SuiteWorkAdmission.NativeMutationAlreadyAdmitted);
         }
 
         var nextIndex = FindNextAdmissibleRegistration(registration);
         if (nextIndex < 0 || !ReferenceEquals(_registrations[nextIndex], registration))
         {
-            registration.SubsystemState.DeferredAdmissions++;
-            return SuiteWorkAdmission.WaitingForTurn;
+            return RecordDeferral(registration, SuiteWorkAdmission.WaitingForTurn);
         }
 
         long startTimestamp;
@@ -307,6 +331,7 @@ public sealed class SuitePerformanceCoordinator
         catch
         {
             registration.SubsystemState.MeasurementFailures++;
+            registration.PerformanceState.MeasurementFailures++;
             throw;
         }
 
@@ -316,19 +341,79 @@ public sealed class SuitePerformanceCoordinator
         _activeExecutionKind = registration.ExecutionKind;
         _activeLeaseToken++;
         registration.SubsystemState.AdmittedWorkItems++;
+        registration.PerformanceState.AdmittedWorkItems++;
+        registration.PerformanceState.ClosePendingWait(
+            ReadPendingWaitFrames(registration, _frameIdentity));
+        registration.PerformanceState.ResetWaitAfterAdmission();
+        registration.PendingSinceEpoch = _frameEpoch;
+        registration.PendingSinceFrameIdentity = _frameIdentity;
+        registration.HasPendingFrameIdentity = true;
         if (registration.ExecutionKind != SuiteWorkExecutionKind.Cooperative)
         {
             registration.SubsystemState.NativeCallsStarted++;
+            registration.SubsystemState.NativeLeaseAdmissions++;
+            registration.PerformanceState.NativeLeaseAdmissions++;
         }
 
         if (registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
         {
             _nativeMutationAdmitted = true;
             registration.SubsystemState.NativeMutationsStarted++;
+            registration.SubsystemState.NativeMutationLeaseAdmissions++;
+            registration.PerformanceState.NativeMutationLeaseAdmissions++;
         }
 
         lease = new SuiteWorkLease(this, _activeLeaseToken);
         return SuiteWorkAdmission.Granted;
+    }
+
+    private SuiteWorkAdmission RecordDeferral(
+        SuiteWorkRegistration registration,
+        SuiteWorkAdmission reason)
+    {
+        registration.SubsystemState.DeferredAdmissions++;
+        registration.PerformanceState.RecordDeferral(
+            reason,
+            _frameIdentity,
+            ReadPendingWaitFrames(registration, _frameIdentity));
+        return reason;
+    }
+
+    private long ReadPendingWaitFrames(
+        SuiteWorkRegistration registration,
+        long currentFrameIdentity)
+    {
+        if (!registration.HasPendingFrameIdentity)
+        {
+            registration.PendingSinceFrameIdentity = currentFrameIdentity;
+            registration.HasPendingFrameIdentity = true;
+            return 0;
+        }
+
+        if (currentFrameIdentity < 0 ||
+            registration.PendingSinceFrameIdentity < 0 ||
+            currentFrameIdentity < registration.PendingSinceFrameIdentity)
+        {
+            registration.PendingSinceFrameIdentity = currentFrameIdentity;
+            registration.PerformanceState.ResetFrameIdentityDiscontinuity();
+            return 0;
+        }
+
+        return currentFrameIdentity - registration.PendingSinceFrameIdentity;
+    }
+
+    private void ClosePendingWait(SuiteWorkRegistration registration)
+    {
+        if (!registration.HasPendingFrameIdentity)
+        {
+            return;
+        }
+
+        var waitFrames = _hasFrame
+            ? ReadPendingWaitFrames(registration, _frameIdentity)
+            : 0;
+        registration.PerformanceState.ClosePendingWait(waitFrames);
+        registration.HasPendingFrameIdentity = false;
     }
 
     public SuiteCoordinatorSnapshot GetSnapshot(double percentile = 0.95)
@@ -367,12 +452,58 @@ public sealed class SuitePerformanceCoordinator
                 state.NativeHardBudgetOverruns,
                 state.MeasurementFailures,
                 state.WorkItemMetrics.GetSnapshot(percentile),
-                state.FrameMetrics.GetSnapshot(percentile));
+                state.FrameMetrics.GetSnapshot(percentile),
+                state.NativeLeaseAdmissions,
+                state.NativeMutationLeaseAdmissions,
+                state.NativeCallsAttempted,
+                state.NativeMutationAttempts,
+                state.NativeMutationsCommitted);
             return true;
         }
 
         snapshot = default;
         return false;
+    }
+
+    public bool TryGetRegistrationSnapshot(
+        SuiteWorkRegistration registration,
+        out RegistrationPerformanceSnapshot snapshot)
+    {
+        EnsureOwnerThread();
+        if (registration is null || !ReferenceEquals(registration.Coordinator, this))
+        {
+            snapshot = default;
+            return false;
+        }
+
+        snapshot = registration.PerformanceState.Freeze(
+            registration,
+            _hasFrame && registration.HasPendingWork
+                ? ReadPendingWaitFrames(registration, _frameIdentity)
+                : 0);
+        return true;
+    }
+
+    /// <summary>
+    /// Freezes all currently registered work identities for low-frequency
+    /// diagnostics. The returned array is intentionally allocated here, never
+    /// while admitting, deferring, or recording work.
+    /// </summary>
+    public RegistrationPerformanceSnapshot[] GetRegistrationSnapshots()
+    {
+        EnsureOwnerThread();
+        var snapshots = new RegistrationPerformanceSnapshot[_registrations.Count];
+        for (var index = 0; index < _registrations.Count; index++)
+        {
+            var registration = _registrations[index];
+            snapshots[index] = registration.PerformanceState.Freeze(
+                registration,
+                _hasFrame && registration.HasPendingWork
+                    ? ReadPendingWaitFrames(registration, _frameIdentity)
+                    : 0);
+        }
+
+        return snapshots;
     }
 
     internal void SetEnabled(SuiteWorkRegistration registration, bool enabled)
@@ -386,7 +517,9 @@ public sealed class SuitePerformanceCoordinator
         registration.Enabled = enabled;
         if (!enabled)
         {
+            ClosePendingWait(registration);
             registration.HasPendingWork = false;
+            registration.PerformanceState.ResetPendingWait();
         }
     }
 
@@ -400,6 +533,14 @@ public sealed class SuitePerformanceCoordinator
             if (becamePending)
             {
                 registration.PendingSinceEpoch = _frameEpoch;
+                registration.PendingSinceFrameIdentity = _frameIdentity;
+                registration.HasPendingFrameIdentity = _hasFrame;
+                registration.PerformanceState.BeginPendingWait();
+            }
+            else if (!pending)
+            {
+                ClosePendingWait(registration);
+                registration.PerformanceState.ResetPendingWait();
             }
         }
     }
@@ -417,6 +558,9 @@ public sealed class SuitePerformanceCoordinator
         {
             throw new InvalidOperationException("Cannot unregister work while its lease is active.");
         }
+        ClosePendingWait(registration);
+        registration.PerformanceState.ResetPendingWait();
+        FlushRegistrationFrame(registration.PerformanceState);
 
         _registrations.RemoveAt(index);
         registration.MarkDisposed();
@@ -438,7 +582,7 @@ public sealed class SuitePerformanceCoordinator
         }
     }
 
-    internal void CompleteLease(long token, int operations)
+    internal void CompleteLease(long token, SuiteWorkCompletion completion)
     {
         EnsureOwnerThread();
         if (_activeRegistration is null || token != _activeLeaseToken)
@@ -449,12 +593,16 @@ public sealed class SuitePerformanceCoordinator
         var registration = _activeRegistration;
         try
         {
-            if (operations < 0)
+            if (_activeExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation &&
+                completion.Operations == 0)
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(operations),
-                    "The operation count cannot be negative.");
+                completion = new SuiteWorkCompletion(
+                    1,
+                    completion.NativeCallsAttempted,
+                    completion.NativeMutationAttempts,
+                    completion.NativeMutationsCommitted);
             }
+            completion.Validate(_activeExecutionKind);
 
             double elapsed;
             try
@@ -464,15 +612,18 @@ public sealed class SuitePerformanceCoordinator
             catch
             {
                 registration.SubsystemState.MeasurementFailures++;
+                registration.PerformanceState.MeasurementFailures++;
                 throw;
             }
 
-            AccountActiveLease(registration, elapsed, operations);
+            AccountActiveLease(registration, elapsed, completion);
             registration.SubsystemState.CompletedWorkItems++;
+            registration.PerformanceState.CompletedWorkItems++;
         }
         catch
         {
             registration.SubsystemState.FailedWorkItems++;
+            registration.PerformanceState.FailedWorkItems++;
             throw;
         }
         finally
@@ -500,7 +651,7 @@ public sealed class SuitePerformanceCoordinator
         }
     }
 
-    internal void FailLease(long token)
+    internal void FailLease(long token, SuiteWorkCompletion completion = default)
     {
         EnsureOwnerThread();
         if (_activeRegistration is null || token != _activeLeaseToken)
@@ -511,17 +662,29 @@ public sealed class SuitePerformanceCoordinator
         var registration = _activeRegistration;
         try
         {
+            if (_activeExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation &&
+                completion.Operations == 0)
+            {
+                completion = new SuiteWorkCompletion(
+                    1,
+                    completion.NativeCallsAttempted,
+                    completion.NativeMutationAttempts,
+                    completion.NativeMutationsCommitted);
+            }
+            completion.Validate(_activeExecutionKind);
             try
             {
                 var elapsed = MeasureActiveLease();
-                AccountActiveLease(registration, elapsed, 0);
+                AccountActiveLease(registration, elapsed, completion);
             }
             catch
             {
                 registration.SubsystemState.MeasurementFailures++;
+                registration.PerformanceState.MeasurementFailures++;
             }
 
             registration.SubsystemState.FailedWorkItems++;
+            registration.PerformanceState.FailedWorkItems++;
         }
         finally
         {
@@ -632,7 +795,7 @@ public sealed class SuitePerformanceCoordinator
     private void AccountActiveLease(
         SuiteWorkRegistration registration,
         double elapsed,
-        int operations)
+        SuiteWorkCompletion completion)
     {
         var beforeCompletion = _frameElapsedMilliseconds;
         _frameElapsedMilliseconds += elapsed;
@@ -641,14 +804,27 @@ public sealed class SuitePerformanceCoordinator
         var subsystem = registration.SubsystemState;
         subsystem.CurrentFrameElapsedMilliseconds += elapsed;
         subsystem.FrameTouched = true;
-        subsystem.TotalOperations += operations;
-        subsystem.WorkItemMetrics.Record(elapsed, operations);
+        subsystem.TotalOperations += completion.Operations;
+        subsystem.NativeCallsAttempted += completion.NativeCallsAttempted;
+        subsystem.NativeMutationAttempts += completion.NativeMutationAttempts;
+        subsystem.NativeMutationsCommitted += completion.NativeMutationsCommitted;
+        subsystem.WorkItemMetrics.Record(elapsed, completion.Operations);
+
+        var registrationState = registration.PerformanceState;
+        registrationState.CurrentFrameElapsedMilliseconds += elapsed;
+        registrationState.FrameTouched = true;
+        registrationState.TotalOperations += completion.Operations;
+        registrationState.NativeCallsAttempted += completion.NativeCallsAttempted;
+        registrationState.NativeMutationAttempts += completion.NativeMutationAttempts;
+        registrationState.NativeMutationsCommitted += completion.NativeMutationsCommitted;
+        registrationState.WorkItemMetrics.Record(elapsed, completion.Operations);
 
         if (_activeExecutionKind != SuiteWorkExecutionKind.Cooperative &&
             beforeCompletion < HardBudgetMilliseconds &&
             _frameElapsedMilliseconds > HardBudgetMilliseconds)
         {
             subsystem.NativeHardBudgetOverruns++;
+            registrationState.NativeHardBudgetOverruns++;
         }
     }
 
@@ -665,15 +841,21 @@ public sealed class SuitePerformanceCoordinator
             try
             {
                 var elapsed = MeasureActiveLease();
-                AccountActiveLease(registration, elapsed, 0);
+                var completion = _activeExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation
+                    ? new SuiteWorkCompletion(1)
+                    : default;
+                AccountActiveLease(registration, elapsed, completion);
             }
             catch
             {
                 registration.SubsystemState.MeasurementFailures++;
+                registration.PerformanceState.MeasurementFailures++;
             }
 
             registration.SubsystemState.FailedWorkItems++;
             registration.SubsystemState.AbandonedWorkItems++;
+            registration.PerformanceState.FailedWorkItems++;
+            registration.PerformanceState.AbandonedWorkItems++;
         }
         finally
         {
@@ -719,6 +901,22 @@ public sealed class SuitePerformanceCoordinator
             subsystem.CurrentFrameElapsedMilliseconds = 0.0;
             subsystem.FrameTouched = false;
         }
+
+        for (var index = 0; index < _registrations.Count; index++)
+        {
+            FlushRegistrationFrame(_registrations[index].PerformanceState);
+        }
+    }
+
+    private static void FlushRegistrationFrame(RegistrationState state)
+    {
+        if (state.FrameTouched)
+        {
+            state.FrameMetrics.Record(state.CurrentFrameElapsedMilliseconds);
+        }
+
+        state.CurrentFrameElapsedMilliseconds = 0.0;
+        state.FrameTouched = false;
     }
 
     internal sealed class SubsystemState
@@ -755,9 +953,175 @@ public sealed class SuitePerformanceCoordinator
 
         public long NativeMutationsStarted { get; set; }
 
-        public long NativeHardBudgetOverruns { get; set; }
+        public long NativeLeaseAdmissions { get; set; }
 
+        public long NativeMutationLeaseAdmissions { get; set; }
+
+        public long NativeCallsAttempted { get; set; }
+
+        public long NativeMutationAttempts { get; set; }
+
+        public long NativeMutationsCommitted { get; set; }
+
+        public long NativeHardBudgetOverruns { get; set; }
         public long MeasurementFailures { get; set; }
+    }
+
+    internal sealed class RegistrationState
+    {
+        private readonly long[] _deferralsByReason =
+            new long[(int)SuiteWorkAdmission.NativeMutationAlreadyAdmitted + 1];
+        private long _lastDeferredFrameIdentity = -1;
+        private long _lastConsecutiveDeferredFrameIdentity = -1;
+        private bool _starvationReported;
+
+        public RegistrationState(int metricsWindow, int starvationThresholdFrames)
+        {
+            WorkItemMetrics = new RollingPerformanceMetrics(metricsWindow);
+            FrameMetrics = new RollingPerformanceMetrics(metricsWindow);
+            StarvationThresholdFrames = starvationThresholdFrames;
+        }
+
+        public RollingPerformanceMetrics WorkItemMetrics { get; }
+        public RollingPerformanceMetrics FrameMetrics { get; }
+        public int StarvationThresholdFrames { get; }
+        public double CurrentFrameElapsedMilliseconds { get; set; }
+        public bool FrameTouched { get; set; }
+        public long AdmittedWorkItems { get; set; }
+        public long CompletedWorkItems { get; set; }
+        public long FailedWorkItems { get; set; }
+        public long AbandonedWorkItems { get; set; }
+        public long TotalOperations { get; set; }
+        public long DeferredAttempts { get; private set; }
+        public long DeferredFrames { get; private set; }
+        public long ConsecutiveDeferrals { get; private set; }
+        public long MaximumConsecutiveDeferrals { get; private set; }
+        public long MaximumPendingWaitFrames { get; private set; }
+        public long StarvationEvents { get; private set; }
+        public long NativeLeaseAdmissions { get; set; }
+        public long NativeMutationLeaseAdmissions { get; set; }
+        public long NativeCallsAttempted { get; set; }
+        public long NativeMutationAttempts { get; set; }
+        public long NativeMutationsCommitted { get; set; }
+        public long NativeHardBudgetOverruns { get; set; }
+        public long MeasurementFailures { get; set; }
+
+        public void BeginPendingWait()
+        {
+            ConsecutiveDeferrals = 0;
+            _lastConsecutiveDeferredFrameIdentity = -1;
+            _starvationReported = false;
+        }
+
+        public void ResetPendingWait()
+        {
+            ConsecutiveDeferrals = 0;
+            _lastConsecutiveDeferredFrameIdentity = -1;
+            _starvationReported = false;
+        }
+
+        public void ResetWaitAfterAdmission()
+        {
+            ConsecutiveDeferrals = 0;
+            _lastConsecutiveDeferredFrameIdentity = -1;
+            _starvationReported = false;
+        }
+
+        public void ClosePendingWait(long waitFrames)
+        {
+            if (waitFrames > MaximumPendingWaitFrames)
+            {
+                MaximumPendingWaitFrames = waitFrames;
+            }
+
+            if (!_starvationReported && waitFrames >= StarvationThresholdFrames)
+            {
+                _starvationReported = true;
+                StarvationEvents++;
+            }
+        }
+
+        public void ResetFrameIdentityDiscontinuity()
+        {
+            ConsecutiveDeferrals = 0;
+            _lastDeferredFrameIdentity = -1;
+            _lastConsecutiveDeferredFrameIdentity = -1;
+            _starvationReported = false;
+        }
+
+        public void RecordDeferral(SuiteWorkAdmission reason, long frameIdentity, long waitFrames)
+        {
+            DeferredAttempts++;
+            _deferralsByReason[(int)reason]++;
+
+            if (_lastConsecutiveDeferredFrameIdentity != frameIdentity)
+            {
+                ConsecutiveDeferrals = _lastConsecutiveDeferredFrameIdentity == frameIdentity - 1
+                    ? ConsecutiveDeferrals + 1
+                    : 1;
+                _lastConsecutiveDeferredFrameIdentity = frameIdentity;
+                if (ConsecutiveDeferrals > MaximumConsecutiveDeferrals)
+                {
+                    MaximumConsecutiveDeferrals = ConsecutiveDeferrals;
+                }
+            }
+
+            if (_lastDeferredFrameIdentity != frameIdentity)
+            {
+                _lastDeferredFrameIdentity = frameIdentity;
+                DeferredFrames++;
+            }
+
+            if (waitFrames > MaximumPendingWaitFrames)
+            {
+                MaximumPendingWaitFrames = waitFrames;
+            }
+
+            if (!_starvationReported && waitFrames >= StarvationThresholdFrames)
+            {
+                _starvationReported = true;
+                StarvationEvents++;
+            }
+        }
+
+        public RegistrationPerformanceSnapshot Freeze(
+            SuiteWorkRegistration registration,
+            long currentPendingWaitFrames)
+        {
+            return new RegistrationPerformanceSnapshot(
+                registration.RegistrationId,
+                registration.Subsystem,
+                registration.WorkName,
+                registration.BudgetClass,
+                registration.ExecutionKind,
+                registration.IsEnabled,
+                registration.IsPending,
+                registration.IsDisposed,
+                currentPendingWaitFrames,
+                Math.Max(MaximumPendingWaitFrames, currentPendingWaitFrames),
+                StarvationThresholdFrames,
+                currentPendingWaitFrames >= StarvationThresholdFrames,
+                StarvationEvents,
+                AdmittedWorkItems,
+                CompletedWorkItems,
+                FailedWorkItems,
+                AbandonedWorkItems,
+                TotalOperations,
+                DeferredAttempts,
+                DeferredFrames,
+                ConsecutiveDeferrals,
+                MaximumConsecutiveDeferrals,
+                new SuiteWorkAdmissionCountsSnapshot(_deferralsByReason),
+                NativeLeaseAdmissions,
+                NativeMutationLeaseAdmissions,
+                NativeCallsAttempted,
+                NativeMutationAttempts,
+                NativeMutationsCommitted,
+                NativeHardBudgetOverruns,
+                MeasurementFailures,
+                WorkItemMetrics.GetDistributionSnapshot(),
+                FrameMetrics.GetDistributionSnapshot());
+        }
     }
 }
 
@@ -772,7 +1136,8 @@ public sealed class SuiteWorkRegistration : IDisposable
         SuiteWorkExecutionKind executionKind,
         int schedulingWeight,
         long registeredEpoch,
-        SuitePerformanceCoordinator.SubsystemState subsystemState)
+        SuitePerformanceCoordinator.SubsystemState subsystemState,
+        SuitePerformanceCoordinator.RegistrationState performanceState)
     {
         Coordinator = coordinator;
         RegistrationId = registrationId;
@@ -784,12 +1149,15 @@ public sealed class SuiteWorkRegistration : IDisposable
         PendingSinceEpoch = registeredEpoch;
         LastRequestEpoch = registeredEpoch;
         SubsystemState = subsystemState;
+        PerformanceState = performanceState;
         Enabled = true;
     }
 
     internal SuitePerformanceCoordinator Coordinator { get; }
 
     internal SuitePerformanceCoordinator.SubsystemState SubsystemState { get; }
+
+    internal SuitePerformanceCoordinator.RegistrationState PerformanceState { get; }
 
     internal bool Enabled { get; set; }
 
@@ -798,6 +1166,10 @@ public sealed class SuiteWorkRegistration : IDisposable
     internal bool IsDisposed { get; private set; }
 
     internal long PendingSinceEpoch { get; set; }
+
+    internal long PendingSinceFrameIdentity { get; set; }
+
+    internal bool HasPendingFrameIdentity { get; set; }
 
     internal long LastRequestEpoch { get; set; }
 
@@ -844,6 +1216,59 @@ public sealed class SuiteWorkRegistration : IDisposable
     }
 }
 
+public readonly struct SuiteWorkCompletion
+{
+    public SuiteWorkCompletion(
+        int operations,
+        int nativeCallsAttempted = 0,
+        int nativeMutationAttempts = 0,
+        int nativeMutationsCommitted = 0)
+    {
+        Operations = operations;
+        NativeCallsAttempted = nativeCallsAttempted;
+        NativeMutationAttempts = nativeMutationAttempts;
+        NativeMutationsCommitted = nativeMutationsCommitted;
+    }
+
+    public int Operations { get; }
+    public int NativeCallsAttempted { get; }
+    public int NativeMutationAttempts { get; }
+    public int NativeMutationsCommitted { get; }
+
+    public static SuiteWorkCompletion NativeMutation(
+        int attempted,
+        int committed,
+        int operations = 1) =>
+        new(operations, attempted, attempted, committed);
+
+    internal void Validate(SuiteWorkExecutionKind executionKind)
+    {
+        if (Operations < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(Operations), "The operation count cannot be negative.");
+        }
+
+        if (NativeCallsAttempted < 0 || NativeMutationAttempts < 0 || NativeMutationsCommitted < 0 ||
+            NativeMutationAttempts > NativeCallsAttempted ||
+            NativeMutationsCommitted > NativeMutationAttempts)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(NativeCallsAttempted),
+                "Native outcome counts must be non-negative and committed mutations cannot exceed attempts.");
+        }
+
+        if (executionKind == SuiteWorkExecutionKind.Cooperative && NativeCallsAttempted != 0)
+        {
+            throw new InvalidOperationException("Cooperative work cannot report non-preemptible native calls.");
+        }
+
+        if (executionKind != SuiteWorkExecutionKind.NonPreemptibleNativeMutation && NativeMutationAttempts != 0)
+        {
+            throw new InvalidOperationException("Only a native-mutation lease can report mutation outcomes.");
+        }
+    }
+}
+
 public readonly struct SuiteWorkLease : IDisposable
 {
     private readonly SuitePerformanceCoordinator? _coordinator;
@@ -863,7 +1288,12 @@ public readonly struct SuiteWorkLease : IDisposable
     /// </summary>
     public void Complete(int operations = 1)
     {
-        _coordinator?.CompleteLease(_token, operations);
+        _coordinator?.CompleteLease(_token, new SuiteWorkCompletion(operations));
+    }
+
+    public void Complete(SuiteWorkCompletion completion)
+    {
+        _coordinator?.CompleteLease(_token, completion);
     }
 
     /// <summary>
@@ -873,6 +1303,11 @@ public readonly struct SuiteWorkLease : IDisposable
     public void Fail()
     {
         _coordinator?.FailLease(_token);
+    }
+
+    public void Fail(SuiteWorkCompletion completion)
+    {
+        _coordinator?.FailLease(_token, completion);
     }
 
     public void Dispose()
@@ -940,7 +1375,12 @@ public readonly struct SubsystemPerformanceSnapshot
         long nativeHardBudgetOverruns,
         long measurementFailures,
         RollingPerformanceSnapshot workItemTiming,
-        RollingPerformanceSnapshot frameTiming)
+        RollingPerformanceSnapshot frameTiming,
+        long nativeLeaseAdmissions = 0,
+        long nativeMutationLeaseAdmissions = 0,
+        long nativeCallsAttempted = 0,
+        long nativeMutationAttempts = 0,
+        long nativeMutationsCommitted = 0)
     {
         CurrentFrameElapsedMilliseconds = currentFrameElapsedMilliseconds;
         AdmittedWorkItems = admittedWorkItems;
@@ -956,6 +1396,11 @@ public readonly struct SubsystemPerformanceSnapshot
         MeasurementFailures = measurementFailures;
         WorkItemTiming = workItemTiming;
         FrameTiming = frameTiming;
+        NativeLeaseAdmissions = nativeLeaseAdmissions;
+        NativeMutationLeaseAdmissions = nativeMutationLeaseAdmissions;
+        NativeCallsAttempted = nativeCallsAttempted;
+        NativeMutationAttempts = nativeMutationAttempts;
+        NativeMutationsCommitted = nativeMutationsCommitted;
     }
 
     public double CurrentFrameElapsedMilliseconds { get; }
@@ -974,9 +1419,28 @@ public readonly struct SubsystemPerformanceSnapshot
 
     public long MissedRequestExpirations { get; }
 
+    /// <summary>
+    /// Compatibility counter for admitted non-cooperative native leases. Use
+    /// <see cref="NativeCallsAttempted"/> for actual audited invocations.
+    /// </summary>
     public long NativeCallsStarted { get; }
 
+    /// <summary>
+    /// Compatibility counter for admitted mutation leases. Use
+    /// <see cref="NativeMutationAttempts"/> for attempts that reached the
+    /// audited native boundary.
+    /// </summary>
     public long NativeMutationsStarted { get; }
+
+    public long NativeLeaseAdmissions { get; }
+
+    public long NativeMutationLeaseAdmissions { get; }
+
+    public long NativeCallsAttempted { get; }
+
+    public long NativeMutationAttempts { get; }
+
+    public long NativeMutationsCommitted { get; }
 
     public long NativeHardBudgetOverruns { get; }
 
@@ -989,4 +1453,128 @@ public readonly struct SubsystemPerformanceSnapshot
     /// intentionally omitted rather than reported as zero-duration work.
     /// </summary>
     public RollingPerformanceSnapshot FrameTiming { get; }
+}
+
+public readonly struct SuiteWorkAdmissionCountsSnapshot
+{
+    internal SuiteWorkAdmissionCountsSnapshot(long[] counts)
+    {
+        WorkInProgress = counts[(int)SuiteWorkAdmission.WorkInProgress];
+        WaitingForTurn = counts[(int)SuiteWorkAdmission.WaitingForTurn];
+        SoftBudgetExhausted = counts[(int)SuiteWorkAdmission.SoftBudgetExhausted];
+        HardBudgetExhausted = counts[(int)SuiteWorkAdmission.HardBudgetExhausted];
+        NativeMutationAlreadyAdmitted = counts[(int)SuiteWorkAdmission.NativeMutationAlreadyAdmitted];
+    }
+
+    public long WorkInProgress { get; }
+    public long WaitingForTurn { get; }
+    public long SoftBudgetExhausted { get; }
+    public long HardBudgetExhausted { get; }
+    public long NativeMutationAlreadyAdmitted { get; }
+}
+
+public readonly struct RegistrationPerformanceSnapshot
+{
+    public RegistrationPerformanceSnapshot(
+        int registrationId,
+        string subsystem,
+        string workName,
+        SuiteBudgetClass budgetClass,
+        SuiteWorkExecutionKind executionKind,
+        bool isEnabled,
+        bool isPending,
+        bool isDisposed,
+        long currentPendingWaitFrames,
+        long maximumPendingWaitFrames,
+        int starvationThresholdFrames,
+        bool isStarved,
+        long starvationEvents,
+        long admittedWorkItems,
+        long completedWorkItems,
+        long failedWorkItems,
+        long abandonedWorkItems,
+        long totalOperations,
+        long deferredAttempts,
+        long deferredFrames,
+        long consecutiveDeferrals,
+        long maximumConsecutiveDeferrals,
+        SuiteWorkAdmissionCountsSnapshot deferralsByReason,
+        long nativeLeaseAdmissions,
+        long nativeMutationLeaseAdmissions,
+        long nativeCallsAttempted,
+        long nativeMutationAttempts,
+        long nativeMutationsCommitted,
+        long nativeHardBudgetOverruns,
+        long measurementFailures,
+        RollingPerformanceDistributionSnapshot workItemTiming,
+        RollingPerformanceDistributionSnapshot frameTiming)
+    {
+        RegistrationId = registrationId;
+        Subsystem = subsystem;
+        WorkName = workName;
+        BudgetClass = budgetClass;
+        ExecutionKind = executionKind;
+        IsEnabled = isEnabled;
+        IsPending = isPending;
+        IsDisposed = isDisposed;
+        CurrentPendingWaitFrames = currentPendingWaitFrames;
+        MaximumPendingWaitFrames = maximumPendingWaitFrames;
+        StarvationThresholdFrames = starvationThresholdFrames;
+        IsStarved = isStarved;
+        StarvationEvents = starvationEvents;
+        AdmittedWorkItems = admittedWorkItems;
+        CompletedWorkItems = completedWorkItems;
+        FailedWorkItems = failedWorkItems;
+        AbandonedWorkItems = abandonedWorkItems;
+        TotalOperations = totalOperations;
+        DeferredAttempts = deferredAttempts;
+        DeferredFrames = deferredFrames;
+        ConsecutiveDeferrals = consecutiveDeferrals;
+        MaximumConsecutiveDeferrals = maximumConsecutiveDeferrals;
+        DeferralsByReason = deferralsByReason;
+        NativeLeaseAdmissions = nativeLeaseAdmissions;
+        NativeMutationLeaseAdmissions = nativeMutationLeaseAdmissions;
+        NativeCallsAttempted = nativeCallsAttempted;
+        NativeMutationAttempts = nativeMutationAttempts;
+        NativeMutationsCommitted = nativeMutationsCommitted;
+        NativeHardBudgetOverruns = nativeHardBudgetOverruns;
+        MeasurementFailures = measurementFailures;
+        WorkItemTiming = workItemTiming;
+        FrameTiming = frameTiming;
+    }
+
+    public int RegistrationId { get; }
+    public string Subsystem { get; }
+    public string WorkName { get; }
+    public SuiteBudgetClass BudgetClass { get; }
+    public SuiteWorkExecutionKind ExecutionKind { get; }
+    public bool IsEnabled { get; }
+    public bool IsPending { get; }
+    public bool IsDisposed { get; }
+    public long CurrentPendingWaitFrames { get; }
+    public long MaximumPendingWaitFrames { get; }
+    public int StarvationThresholdFrames { get; }
+    public bool IsStarved { get; }
+    public long StarvationEvents { get; }
+    public long AdmittedWorkItems { get; }
+    public long CompletedWorkItems { get; }
+    public long FailedWorkItems { get; }
+    public long AbandonedWorkItems { get; }
+    public long TotalOperations { get; }
+    public long DeferredAttempts { get; }
+    public long DeferredFrames { get; }
+    public long ConsecutiveDeferrals { get; }
+    public long MaximumConsecutiveDeferrals { get; }
+    public long ConsecutiveDeferredFrames => ConsecutiveDeferrals;
+    public long MaximumConsecutiveDeferredFrames => MaximumConsecutiveDeferrals;
+    public SuiteWorkAdmissionCountsSnapshot DeferralsByReason { get; }
+    public long NativeLeaseAdmissions { get; }
+    public long NativeMutationLeaseAdmissions { get; }
+    public long NativeCallsAttempted { get; }
+    public long NativeMutationAttempts { get; }
+    public long NativeMutationsCommitted { get; }
+    public long NativeHardBudgetOverruns { get; }
+    public long MeasurementFailures { get; }
+    public RollingPerformanceDistributionSnapshot WorkItemTiming { get; }
+    public RollingPerformanceDistributionSnapshot FrameTiming { get; }
 }

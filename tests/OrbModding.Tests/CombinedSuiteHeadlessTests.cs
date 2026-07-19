@@ -31,7 +31,7 @@ public sealed class CombinedSuiteHeadlessTests
                     {
                         grantsThisFrame++;
                         producer.Grants++;
-                        lease.Complete(1);
+                        lease.Complete(SuiteWorkCompletion.NativeMutation(1, 1));
                     }
                     else
                     {
@@ -86,7 +86,7 @@ public sealed class CombinedSuiteHeadlessTests
 
                     producer.Grants++;
                     grantOrder.Add(producer.Name);
-                    lease.Complete(1);
+                    lease.Complete(SuiteWorkCompletion.NativeMutation(1, 1));
                 }
             }
 
@@ -101,6 +101,8 @@ public sealed class CombinedSuiteHeadlessTests
             {
                 Assert.True(coordinator.TryGetSubsystemSnapshot(producer.Name, out var snapshot));
                 Assert.Equal(100, snapshot.NativeMutationsStarted);
+                Assert.Equal(100, snapshot.NativeMutationAttempts);
+                Assert.Equal(100, snapshot.NativeMutationsCommitted);
                 Assert.Equal(100, snapshot.CompletedWorkItems);
             });
         }

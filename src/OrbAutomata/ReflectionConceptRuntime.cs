@@ -46,7 +46,7 @@ internal sealed class NativeConceptCandidate
     public bool IsSettled => Quantity == QueuedQuantity;
 }
 
-internal sealed class ReflectionConceptRuntime : IDisposable
+internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOutcomeSource
 {
     internal static readonly string ActiveConceptsUuid = KnownEntities.ActiveConcepts.Uuid.ToString("D");
 
@@ -69,6 +69,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     private MethodInfo? _removeInstances;
     private string? _blockedReason;
     private NativeMutationEvidence<int>? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
     private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
@@ -81,6 +82,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         _blockedReason is null;
     public int ScopedRecipeCount => _recipes.Count;
     public int ActiveConceptCount => _activeConceptCount;
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
     public bool TryResolveInvalidationEntityId(object nativeRecipe, out string entityId)
     {
@@ -285,6 +287,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     public bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (_blockedReason is not null)
         {
             reason = _blockedReason;
@@ -330,6 +333,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         string quantityDescription,
         out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (_blockedReason is not null)
         {
             reason = _blockedReason;
@@ -374,6 +378,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             execute,
             verify);
         _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
         if (evidence.IsVerified)
         {
             reason = string.Empty;
@@ -433,6 +438,7 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         _activeConceptCount = 0;
         _blockedReason = null;
         _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
     }
 
     public void Dispose() => InvalidateLifecycle();

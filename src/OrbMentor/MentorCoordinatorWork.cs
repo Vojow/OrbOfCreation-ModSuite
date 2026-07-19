@@ -55,14 +55,34 @@ internal sealed class MentorCoordinatorWork : IDisposable
 
     public bool TryRunMutation(Func<int> run)
     {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        return TryRunMutation(() => new SuiteWorkCompletion(run()));
+    }
+
+    public bool TryRunMutation(Func<SuiteWorkCompletion> run)
+    {
+        return TryRunMutation(run, readFailureCompletion: null);
+    }
+
+    public bool TryRunMutation(
+        Func<SuiteWorkCompletion> run,
+        Func<SuiteWorkCompletion>? readFailureCompletion)
+    {
         if (!_mutationWork.IsPending ||
             _coordinator.RequestWork(_mutationWork, _readFrameIdentity(), out var lease) != SuiteWorkAdmission.Granted)
             return false;
         using (lease)
         {
-            var operations = run();
-            lease.Complete(operations);
-            return true;
+            try
+            {
+                lease.Complete(run());
+                return true;
+            }
+            catch
+            {
+                lease.Fail(readFailureCompletion?.Invoke() ?? new SuiteWorkCompletion(1));
+                throw;
+            }
         }
     }
 

@@ -83,9 +83,12 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
 
         Assert.False(runtime.TryLevelSingle(candidate!, out var failedReason));
         Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(2, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.MutationsCommitted);
         Assert.Equal(1, recipe.levelCost.PerformCalls);
         Assert.False(runtime.TryLevelSingle(candidate, out var blockedReason));
         Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
         Assert.Equal(1, recipe.levelCost.PerformCalls);
 
         recipe.SuppressLevelMutation = false;

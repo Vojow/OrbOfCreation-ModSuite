@@ -594,8 +594,13 @@ public sealed class AutoCastTests
             Assert.Same(spell, identity.NativeReference);
             Assert.Equal(typeof(global::Spell), identity.NativeType);
             Assert.True(candidate.TrySetChargeHold(true, out var holdReason), holdReason);
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
             Assert.True(spell.HoldingCharge);
             Assert.True(candidate.TryFireAndResolveTargets(out var fireReason), fireReason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
             Assert.Equal(1, spell.FireCalls);
         }
         finally
@@ -623,10 +628,14 @@ public sealed class AutoCastTests
             var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
 
             Assert.False(candidate.TryFireAndResolveTargets(out var failedReason));
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
             Assert.Contains("PostconditionFailed", failedReason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
             Assert.Equal(1, spell.FireCalls);
             Assert.False(candidate.TryFireAndResolveTargets(out var blockedReason));
             Assert.Contains("blocked until the next lifecycle", blockedReason);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
             Assert.Equal(1, spell.FireCalls);
 
             spell.EmitFireSignal = true;
@@ -634,6 +643,36 @@ public sealed class AutoCastTests
 
             Assert.True(candidate.TryFireAndResolveTargets(out var recoveredReason), recoveredReason);
             Assert.Equal(2, spell.FireCalls);
+        }
+        finally
+        {
+            SpellManager.instance = null;
+            global::Spell.FireSignal = null;
+            TargetingManager.Targeting = false;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionAutoCastCandidate_NativeExecutionThrowIsAttemptedButUncommitted()
+    {
+        var manager = new SpellManager();
+        var spell = new global::Spell(new SpellRecipeSO { uuid = "33333333-3333-3333-3333-333333333333" });
+        manager.activeSpells.Add(spell);
+        SpellManager.instance = manager;
+        global::Spell.FireSignal = () => throw new InvalidOperationException("simulated native fire failure");
+        TargetingManager.Targeting = false;
+        using var catalog = new ReflectionAutoCastCatalog();
+        try
+        {
+            var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
+
+            Assert.False(candidate.TryFireAndResolveTargets(out var reason));
+            Assert.Contains("ExecutionThrew", reason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.MutationAttempts);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
         }
         finally
         {

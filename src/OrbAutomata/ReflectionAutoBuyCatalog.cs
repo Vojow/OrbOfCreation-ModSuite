@@ -844,7 +844,8 @@ internal sealed class ReflectionAutoBuyCandidate :
     IAutoBuyMutationCandidate,
     IAutoBuyCircuitCandidate,
     IAutoBuyAdmissionContractEvidence,
-    IAutoBuyAvailabilityEvidence
+    IAutoBuyAvailabilityEvidence,
+    INativeMutationOutcomeSource
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
@@ -871,6 +872,7 @@ internal sealed class ReflectionAutoBuyCandidate :
     private long _completionRefreshGeneration = -1;
     private string? _mutationBlockedReason;
     private NativeMutationEvidence<int>? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public ReflectionAutoBuyCandidate(
         object source,
@@ -920,6 +922,8 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     public bool HasCompleteNativeContract =>
         _nativeAction.HasCompleteContract && _getPurchaseCost is not null;
+
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
     public bool CanEvaluate() =>
         _readCircuit.CanAttemptAt(_resourceSnapshots.Epoch) &&
@@ -1226,6 +1230,7 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     public bool TryPurchaseOne(out string reason)
     {
+        _lastNativeMutationOutcome = default;
         reason = string.Empty;
         if (_mutationBlockedReason is not null)
         {
@@ -1300,6 +1305,7 @@ internal sealed class ReflectionAutoBuyCandidate :
             _nativeAction.InvokePurchase,
             (before, after) => after == before + 1);
         _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
         if (evidence.IsVerified)
         {
             _mutationCircuit.RecordSuccess();
@@ -1335,6 +1341,7 @@ internal sealed class ReflectionAutoBuyCandidate :
 
         _mutationBlockedReason = null;
         _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
     }
 
     private static AutomationCircuitSnapshot Stronger(

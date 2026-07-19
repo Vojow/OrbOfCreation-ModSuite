@@ -69,6 +69,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private bool _queueWaitingLogged;
     private int _successfulPurchasesThisSession;
     private long _nativePurchaseAttempts;
+    private NativeMutationCallOutcome _activeMutationOutcome;
     private long _nativePurchaseFailures;
     // Process-monotonic so a lifecycle rebuild cannot alias a completion
     // generation cached by a reused native candidate wrapper.
@@ -339,13 +340,24 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             using (mutationLease)
             {
-                if (_pendingWaitingForQueue)
+                _activeMutationOutcome = default;
+                var completion = new SuiteWorkCompletion(1);
+                try
                 {
-                    _secondsUntilQueuePoll = QueuePollIntervalSeconds;
-                }
+                    if (_pendingWaitingForQueue)
+                    {
+                        _secondsUntilQueuePoll = QueuePollIntervalSeconds;
+                    }
 
-                ContinueRankedBatch(singleStep: true);
-                mutationLease.Complete();
+                    ContinueRankedBatch(singleStep: true);
+                    completion = _activeMutationOutcome.ToWorkCompletion();
+                    mutationLease.Complete(completion);
+                }
+                catch
+                {
+                    mutationLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                    throw;
+                }
                 mutationCompleted = true;
             }
         }
@@ -1124,11 +1136,22 @@ internal sealed class AutoBuyEngine : IDisposable
             }
             bool purchaseSucceeded;
             string reason;
-            using (AutoBuyLifecycleSignal.EnterAutomatedMutation(
-                       GetNativeIdentity(recommendation.Candidate.Source)))
+            try
             {
-                purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out reason);
+                using (AutoBuyLifecycleSignal.EnterAutomatedMutation(
+                           GetNativeIdentity(recommendation.Candidate.Source)))
+                {
+                    purchaseSucceeded = recommendation.Candidate.Source.TryPurchaseOne(out reason);
+                }
             }
+            catch
+            {
+                _activeMutationOutcome = _activeMutationOutcome.Add(
+                    ReadMutationOutcome(recommendation.Candidate.Source, succeeded: false));
+                throw;
+            }
+            _activeMutationOutcome = _activeMutationOutcome.Add(
+                ReadMutationOutcome(recommendation.Candidate.Source, purchaseSucceeded));
             _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
             var upgradeQuarantineActive = SynchronizeUpgradeQuarantine(cancelPendingBatch: false);
             if (upgradeQuarantineActive && recommendation.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
@@ -1265,6 +1288,13 @@ internal sealed class AutoBuyEngine : IDisposable
             _secondsUntilEvaluation = 0.0f;
         }
     }
+
+    private static NativeMutationCallOutcome ReadMutationOutcome(
+        IAutoBuyCandidate candidate,
+        bool succeeded) =>
+        candidate is INativeMutationOutcomeSource source
+            ? source.LastNativeMutationOutcome
+            : new NativeMutationCallOutcome(1, 1, succeeded ? 1 : 0);
 
     private bool ReachedPurchaseSliceBudget(Stopwatch stopwatch, double cpuBudget)
     {
