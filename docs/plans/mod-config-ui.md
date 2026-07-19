@@ -102,7 +102,7 @@ Until that contract exists, settings are assumed to be saved immediately but not
 
 ## Delivery stages
 
-### Current implementation status (0.6.0)
+### Current implementation status (0.6.1)
 
 - Added the standalone `OrbModConfig` BepInEx plugin project.
 - Added deterministic discovery and grouping of loaded plugins, configuration sections, and entries.
@@ -117,6 +117,8 @@ Runtime evidence on 2026-07-14 found the exact main row at `Canvas/ContentArea/M
 The `0.2.0` runtime session confirmed correct placement after Time, repeated open/close behavior, seven native close bindings, and clean teardown. Version `0.3.0` completed the configuration MVP in one iteration: loaded mods are horizontal tabs, config sections are a second tab row, and settings are rendered in a scrollable list. Boolean and enum editors use buttons; numeric, string, and keyboard-shortcut serialization use exact text input. Values remain staged until Apply, with type/range validation, per-setting Default, global Revert, config-file saving, and best-effort rollback after write failures. Unsupported custom types remain read-only. Version `0.3.1` restored the native inactive top-tab sprite; `0.3.2` integrated Mods with native top-level activation. Version `0.4.0` adds explicit public section/setting ordering, hides inert legacy settings, removes the completed navigation probe from runtime, and stops routine UI interaction logging.
 
 Version `0.6.0` adds AND-composed staged dependencies while retaining the original single-dependency metadata contract. Disabled feature modes lock their tuning rows, nested fields require every applicable switch or policy, and enum edits rebuild the visible rows immediately. Re-enable, shortcut, status-button, safety, and diagnostic controls remain available by policy.
+
+Version `0.6.1` replaces fixed-height, ellipsis-clipped setting rows with description-driven row heights. Same-page rebuilds preserve the absolute scroll offset, while deliberate mod or feature-section navigation resets to the top.
 
 ### M0 — Runtime UI probe
 

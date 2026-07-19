@@ -1,5 +1,10 @@
 # Changelog
 
+## Orb Mod Config 0.6.1 Beta 1 — 2026-07-18
+
+- Size setting rows from their rendered descriptions so complete help, acceptable-value, and apply/restart text remains readable instead of being truncated by a fixed two-line area.
+- Preserve the current absolute scroll offset when staged boolean/enum/default changes, Apply, Revert, or external configuration refresh rebuilds the same settings page; reset to the top only when switching mod or feature section.
+
 ## Orb Mentor 0.3.2 Beta 1 — 2026-07-18
 
 - Exclude Scholar Concepts from Mentor's Alchemy catalog, mentor ranking, recipient relationships, XP capture, and final native grant path through the shared audited gameplay-domain classifier.

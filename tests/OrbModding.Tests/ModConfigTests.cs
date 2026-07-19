@@ -481,4 +481,38 @@ public sealed class ModConfigTests
         Assert.Equal(2, secondConfig.SaveCalls);
         Assert.True(session.IsDirty);
     }
+
+    [Fact]
+    public void PanelLayout_ExpandsRowsForRenderedDescriptionHeight()
+    {
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(0f));
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(20f));
+        Assert.Equal(129f, ModConfigPanel.CalculateSettingRowHeight(80f));
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(float.NaN));
+    }
+
+    [Theory]
+    [InlineData(-10f, 500f, 200f, 0f)]
+    [InlineData(125f, 500f, 200f, 125f)]
+    [InlineData(400f, 500f, 200f, 300f)]
+    [InlineData(50f, 100f, 200f, 0f)]
+    public void PanelLayout_ClampsPreservedAbsoluteScrollOffset(
+        float requestedOffset,
+        float contentHeight,
+        float viewportHeight,
+        float expectedOffset)
+    {
+        Assert.Equal(
+            expectedOffset,
+            ModConfigPanel.ClampScrollOffset(requestedOffset, contentHeight, viewportHeight));
+    }
+
+    [Fact]
+    public void PanelLayout_ConvertsPreservedOffsetToUnityNormalizedPosition()
+    {
+        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(0f, 500f, 200f));
+        Assert.Equal(0.5f, ModConfigPanel.CalculateVerticalNormalizedPosition(150f, 500f, 200f), 3);
+        Assert.Equal(0f, ModConfigPanel.CalculateVerticalNormalizedPosition(300f, 500f, 200f));
+        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(50f, 100f, 200f));
+    }
 }
