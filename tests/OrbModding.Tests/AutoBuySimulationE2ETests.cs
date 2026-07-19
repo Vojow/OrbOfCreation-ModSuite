@@ -345,6 +345,28 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    public void FiniteUpgradeRepeat_StopsAtNativeMaximumBeforeQueueCapacity()
+    {
+        using var simulation = new AutoBuySimulation(
+            queueCapacity: 8,
+            new[]
+            {
+                new SimulatedCandidateSpec(
+                    "finite-upgrade",
+                    AutoBuyCandidateKind.Upgrade,
+                    maximumLevel: 3),
+            });
+
+        Assert.True(simulation.RunUntil(world => world.TotalSubmitted == 3, maximumFrames: 20));
+        simulation.RunFrames(10);
+
+        Assert.Equal(3, simulation.World.TotalSubmitted);
+        Assert.Equal(3, simulation.World.QueueCount);
+        Assert.True(simulation.World.QueueCount < simulation.World.QueueCapacity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void MultipleBigResources_AllBalancesRemainAuthoritativeAcrossAdmissionAndSpend()
     {
         var costs = new[]
