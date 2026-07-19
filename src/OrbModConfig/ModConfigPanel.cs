@@ -13,7 +13,19 @@ namespace OrbModConfig;
 
 internal sealed class ModConfigPanel : IDisposable
 {
-    private const float SettingRowHeight = 86f;
+    private const float MinimumSettingRowHeight = 86f;
+    private const float SettingRowGap = 7f;
+    private const float SettingRowTopInset = 4f;
+    private const float SettingTitleTopInset = 5f;
+    private const float SettingTitleHeight = 28f;
+    private const float SettingDescriptionTopInset = 34f;
+    private const float SettingDescriptionBottomInset = 6f;
+    private const float SettingDescriptionHeightPadding = 2f;
+    private const float MinimumMeasurableContentWidth = 320f;
+    private const float FallbackDescriptionWidth = 600f;
+    private const float DescriptionWidthChangeTolerance = 0.5f;
+    internal const string SavedRuntimeMessage = "Saved setting; runtime effect is reported separately.";
+    internal const string ConfigurationSavedMessage = "Configuration saved.";
     private static readonly Color BackgroundColor = new Color(0.055f, 0.065f, 0.085f, 0.985f);
     private static readonly Color BarColor = new Color(0.09f, 0.105f, 0.135f, 1f);
     private static readonly Color ButtonColor = new Color(0.16f, 0.18f, 0.23f, 1f);
@@ -39,6 +51,7 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly List<GameObject> _settingObjects = new List<GameObject>();
     private int _selectedModIndex;
     private int _selectedSectionIndex;
+    private float _measuredDescriptionWidth;
     private bool _disposed;
     private bool _runtimeStatusDirty = true;
 
@@ -72,7 +85,7 @@ internal sealed class ModConfigPanel : IDisposable
         _applyButton = applyButton;
         _revertButton = revertButton;
         _featureStatuses.Transitioned += OnRuntimeStatusTransitioned;
-        RebuildAll();
+        RebuildAll(resetSettingsScroll: true);
         SetActive(false);
     }
 
@@ -145,17 +158,14 @@ internal sealed class ModConfigPanel : IDisposable
 
     public void SetActive(bool active)
     {
-        if (!_disposed)
-        {
-            if (active && _session.RefreshExternalValues())
-            {
-                RebuildSettings();
-            }
+        if (_disposed) return;
 
-            if (active) RefreshRuntimeStatusIfNeeded();
+        Root.SetActive(active);
+        if (!active) return;
 
-            Root.SetActive(active);
-        }
+        if (_session.RefreshExternalValues()) RebuildSettings();
+        RefreshResponsiveLayout();
+        RefreshRuntimeStatusIfNeeded();
     }
 
     public void RefreshExternalValues()
@@ -164,6 +174,14 @@ internal sealed class ModConfigPanel : IDisposable
         {
             RebuildSettings();
         }
+    }
+
+    public void RefreshResponsiveLayout()
+    {
+        if (_disposed || !Root.activeInHierarchy || _catalog.Mods.Count == 0) return;
+        var descriptionWidth = CalculateDescriptionWidth(_settingsContent.rect.width);
+        if (!DescriptionWidthChanged(_measuredDescriptionWidth, descriptionWidth)) return;
+        RebuildSettings();
     }
 
     public void RefreshRuntimeStatusIfNeeded()
@@ -194,7 +212,7 @@ internal sealed class ModConfigPanel : IDisposable
         UnityEngine.Object.Destroy(Root);
     }
 
-    private void RebuildAll()
+    private void RebuildAll(bool resetSettingsScroll)
     {
         ClearObjects(_modTabObjects);
         if (_catalog.Mods.Count == 0)
@@ -212,10 +230,10 @@ internal sealed class ModConfigPanel : IDisposable
             _selectedModIndex,
             _modTabObjects,
             SelectMod);
-        RebuildSections();
+        RebuildSections(resetSettingsScroll);
     }
 
-    private void RebuildSections()
+    private void RebuildSections(bool resetSettingsScroll)
     {
         ClearObjects(_sectionTabObjects);
         var mod = _catalog.Mods[_selectedModIndex];
@@ -232,25 +250,33 @@ internal sealed class ModConfigPanel : IDisposable
             _selectedSectionIndex,
             _sectionTabObjects,
             SelectSection);
-        RebuildSettings();
+        RebuildSettings(resetSettingsScroll);
     }
 
-    private void RebuildSettings()
+    private void RebuildSettings(bool resetScroll = false)
     {
+        var requestedScrollOffset = resetScroll ? 0f : Math.Max(0f, _settingsContent.anchoredPosition.y);
         ClearObjects(_settingObjects);
         var settings = _catalog.Mods[_selectedModIndex].Sections[_selectedSectionIndex].Settings;
-        _settingsContent.sizeDelta = new Vector2(0f, Math.Max(1, settings.Count) * SettingRowHeight);
-        _settingsScroll.verticalNormalizedPosition = 1f;
+        var descriptionWidth = CalculateDescriptionWidth(_settingsContent.rect.width);
+        var contentHeight = 0f;
 
-        for (var index = 0; index < settings.Count; index++)
+        foreach (var setting in settings)
         {
-            CreateSettingRow(settings[index], index);
+            contentHeight += CreateSettingRow(setting, contentHeight, descriptionWidth);
         }
 
+        contentHeight = Math.Max(1f, contentHeight);
+        _settingsContent.sizeDelta = new Vector2(0f, contentHeight);
+        _measuredDescriptionWidth = descriptionWidth;
+        RestoreScrollOffset(requestedScrollOffset, contentHeight);
         RefreshStatus();
     }
 
-    private void CreateSettingRow(ConfigSettingDescriptor setting, int index)
+    private float CreateSettingRow(
+        ConfigSettingDescriptor setting,
+        float topOffset,
+        float descriptionWidth)
     {
         var edit = _session.Get(setting);
         var row = new GameObject("Setting." + setting.Key, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -259,12 +285,22 @@ internal sealed class ModConfigPanel : IDisposable
         rowRect.anchorMin = new Vector2(0.01f, 1f);
         rowRect.anchorMax = new Vector2(0.99f, 1f);
         rowRect.pivot = new Vector2(0.5f, 1f);
-        rowRect.anchoredPosition = new Vector2(0f, -index * SettingRowHeight - 4f);
-        rowRect.sizeDelta = new Vector2(0f, SettingRowHeight - 7f);
+        rowRect.anchoredPosition = new Vector2(0f, -topOffset - SettingRowTopInset);
+        rowRect.sizeDelta = new Vector2(0f, MinimumSettingRowHeight - SettingRowGap);
         row.GetComponent<Image>()!.color = RowColor;
         _settingObjects.Add(row);
 
-        CreateText("Key", row.transform, new Vector2(0.018f, 0.51f), new Vector2(0.53f, 0.94f), _labelTemplate, setting.DisplayName, TextAlignmentOptions.MidlineLeft, 0.78f);
+        var keyText = CreateText(
+            "Key",
+            row.transform,
+            new Vector2(0.018f, 1f),
+            new Vector2(0.53f, 1f),
+            _labelTemplate,
+            setting.DisplayName,
+            TextAlignmentOptions.MidlineLeft,
+            0.78f);
+        SetTopAnchoredHeight((RectTransform)keyText.transform, SettingTitleTopInset, SettingTitleHeight);
+
         var description = setting.Description;
         if (!string.IsNullOrWhiteSpace(setting.AcceptableValuesDescription))
         {
@@ -272,15 +308,34 @@ internal sealed class ModConfigPanel : IDisposable
         }
         description += setting.RestartRequired
             ? "  Restart required."
-            : "  Saved setting; runtime effect is reported separately when supported.";
+            : "  " + SavedRuntimeMessage;
 
-        CreateText("Description", row.transform, new Vector2(0.018f, 0.08f), new Vector2(0.55f, 0.52f), _labelTemplate, description, TextAlignmentOptions.TopLeft, 0.55f);
+        var descriptionText = CreateText(
+            "Description",
+            row.transform,
+            new Vector2(0.018f, 1f),
+            new Vector2(0.55f, 1f),
+            _labelTemplate,
+            description,
+            TextAlignmentOptions.TopLeft,
+            0.55f,
+            TextOverflowModes.Overflow);
+        var preferredDescriptionHeight = descriptionText
+            .GetPreferredValues(description, descriptionWidth, 0f)
+            .y;
+        var rowHeight = CalculateSettingRowHeight(preferredDescriptionHeight);
+        var visibleRowHeight = rowHeight - SettingRowGap;
+        rowRect.sizeDelta = new Vector2(0f, visibleRowHeight);
+        SetTopAnchoredHeight(
+            (RectTransform)descriptionText.transform,
+            SettingDescriptionTopInset,
+            Math.Max(1f, visibleRowHeight - SettingDescriptionTopInset - SettingDescriptionBottomInset));
 
         if (!_session.DependencySatisfied(setting))
         {
             var dependencyMessage = _session.DescribeUnsatisfiedDependencies(setting);
             CreateText("Dependency", row.transform, new Vector2(0.58f, 0.2f), new Vector2(0.98f, 0.8f), _labelTemplate, dependencyMessage, TextAlignmentOptions.Midline, 0.6f);
-            return;
+            return rowHeight;
         }
 
         switch (setting.Kind)
@@ -317,6 +372,8 @@ internal sealed class ModConfigPanel : IDisposable
                     RebuildSettings();
                 });
         }
+
+        return rowHeight;
     }
 
     private void CreateBooleanEditor(Transform parent, ConfigEditValue edit)
@@ -377,14 +434,14 @@ internal sealed class ModConfigPanel : IDisposable
         _selectedModIndex = index;
         _selectedSectionIndex = 0;
         _runtimeStatusDirty = true;
-        RebuildAll();
+        RebuildAll(resetSettingsScroll: true);
         RefreshRuntimeStatusIfNeeded();
     }
 
     private void SelectSection(int index)
     {
         _selectedSectionIndex = index;
-        RebuildSections();
+        RebuildSections(resetSettingsScroll: true);
     }
 
     private void Apply()
@@ -395,8 +452,8 @@ internal sealed class ModConfigPanel : IDisposable
                 GameplayInvalidationBus.Shared,
                 Time.frameCount,
                 appliedSettings);
-            _statusText.text = "Configuration saved.";
             RebuildSettings();
+            _statusText.text = ConfigurationSavedMessage;
         }
         else
         {
@@ -493,7 +550,8 @@ internal sealed class ModConfigPanel : IDisposable
         TextMeshProUGUI template,
         string value,
         TextAlignmentOptions alignment,
-        float sizeScale)
+        float sizeScale,
+        TextOverflowModes overflowMode = TextOverflowModes.Ellipsis)
     {
         var gameObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         gameObject.transform.SetParent(parent, false);
@@ -509,10 +567,83 @@ internal sealed class ModConfigPanel : IDisposable
         text.color = template.color;
         text.alignment = alignment;
         text.textWrappingMode = TextWrappingModes.Normal;
-        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.overflowMode = overflowMode;
         text.raycastTarget = false;
         text.text = value;
         return text;
+    }
+
+    private void RestoreScrollOffset(float requestedOffset, float contentHeight)
+    {
+        var viewportHeight = _settingsScroll.viewport?.rect.height ?? 0f;
+        var clampedOffset = ClampScrollOffset(requestedOffset, contentHeight, viewportHeight);
+        _settingsScroll.verticalNormalizedPosition = CalculateVerticalNormalizedPosition(
+            clampedOffset,
+            contentHeight,
+            viewportHeight);
+    }
+
+    internal static float CalculateSettingRowHeight(float preferredDescriptionHeight)
+    {
+        if (!IsFiniteNonNegative(preferredDescriptionHeight)) preferredDescriptionHeight = 0f;
+
+        return Math.Max(
+            MinimumSettingRowHeight,
+            SettingDescriptionTopInset +
+            preferredDescriptionHeight +
+            SettingDescriptionHeightPadding +
+            SettingDescriptionBottomInset +
+            SettingRowGap);
+    }
+
+    internal static float ClampScrollOffset(float requestedOffset, float contentHeight, float viewportHeight)
+    {
+        if (!IsFiniteNonNegative(requestedOffset)) requestedOffset = 0f;
+        if (!IsFiniteNonNegative(contentHeight)) contentHeight = 0f;
+        if (!IsFiniteNonNegative(viewportHeight)) viewportHeight = 0f;
+        var maximumOffset = Math.Max(0f, contentHeight - viewportHeight);
+        return Math.Max(0f, Math.Min(requestedOffset, maximumOffset));
+    }
+
+    internal static float CalculateVerticalNormalizedPosition(
+        float scrollOffset,
+        float contentHeight,
+        float viewportHeight)
+    {
+        if (!IsFiniteNonNegative(contentHeight)) contentHeight = 0f;
+        if (!IsFiniteNonNegative(viewportHeight)) viewportHeight = 0f;
+        var maximumOffset = Math.Max(0f, contentHeight - viewportHeight);
+        if (maximumOffset <= 0f) return 1f;
+
+        return 1f - ClampScrollOffset(scrollOffset, contentHeight, viewportHeight) / maximumOffset;
+    }
+
+    internal static float CalculateDescriptionWidth(float contentWidth)
+    {
+        if (!IsFiniteNonNegative(contentWidth) || contentWidth < MinimumMeasurableContentWidth)
+            return FallbackDescriptionWidth;
+
+        const float rowWidthFraction = 0.98f;
+        const float descriptionWidthFraction = 0.55f - 0.018f;
+        return contentWidth * rowWidthFraction * descriptionWidthFraction;
+    }
+
+    internal static bool DescriptionWidthChanged(float previousWidth, float currentWidth)
+    {
+        if (!IsFiniteNonNegative(currentWidth) || currentWidth <= 0f) return false;
+        return !IsFiniteNonNegative(previousWidth) ||
+            previousWidth <= 0f ||
+            Math.Abs(previousWidth - currentWidth) > DescriptionWidthChangeTolerance;
+    }
+
+    private static bool IsFiniteNonNegative(float value) =>
+        !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f;
+
+    private static void SetTopAnchoredHeight(RectTransform rect, float topInset, float height)
+    {
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, -topInset);
+        rect.sizeDelta = new Vector2(0f, height);
     }
 
     private static Button CreateButton(

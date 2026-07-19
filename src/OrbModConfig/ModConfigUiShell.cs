@@ -296,6 +296,7 @@ internal sealed class ModConfigUiShell : IDisposable
 
         _externalRefreshSeconds = ExternalRefreshIntervalSeconds;
         _panel.RefreshExternalValues();
+        _panel.RefreshResponsiveLayout();
         _panel.RefreshRuntimeStatusIfNeeded();
     }
 
