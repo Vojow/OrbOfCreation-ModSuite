@@ -44,12 +44,19 @@ internal sealed class MentorCoordinatorWork : IDisposable
 
     public bool TryRunCooperative(Func<int> run)
     {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        return TryRunCooperative(_ => run());
+    }
+
+    public bool TryRunCooperative(Func<double, int> run)
+    {
+        if (run is null) throw new ArgumentNullException(nameof(run));
         if (!_cooperativeWork.IsPending ||
             _coordinator.RequestWork(_cooperativeWork, _readFrameIdentity(), out var lease) != SuiteWorkAdmission.Granted)
             return false;
         using (lease)
         {
-            var operations = run();
+            var operations = run(_coordinator.RemainingSoftBudgetMilliseconds);
             lease.Complete(operations);
             return true;
         }

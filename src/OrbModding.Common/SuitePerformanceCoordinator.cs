@@ -149,6 +149,21 @@ public sealed class SuitePerformanceCoordinator
 
     public double CurrentFrameElapsedMilliseconds => _frameElapsedMilliseconds;
 
+    /// <summary>
+    /// Returns the non-negative shared soft-budget capacity still available in
+    /// the current frame. Before the first frame begins, the full configured
+    /// soft budget remains available.
+    /// </summary>
+    public double RemainingSoftBudgetMilliseconds
+    {
+        get
+        {
+            EnsureOwnerThread();
+            if (!_hasFrame) return SoftBudgetMilliseconds;
+            return Math.Max(0.0, SoftBudgetMilliseconds - _frameElapsedMilliseconds);
+        }
+    }
+
     public bool IsHardBudgetExceeded =>
         _hasFrame && _frameElapsedMilliseconds >= HardBudgetMilliseconds;
 
@@ -216,7 +231,14 @@ public sealed class SuitePerformanceCoordinator
             schedulingWeight,
             _frameEpoch,
             subsystemState,
-            new RegistrationState(_metricsWindow, _starvationThresholdFrames));
+            new RegistrationState(
+                _metricsWindow,
+                SuitePerformanceWorkIdentities.ResolveStarvationThresholdFrames(
+                    subsystem,
+                    workName,
+                    budgetClass,
+                    executionKind,
+                    _starvationThresholdFrames)));
         _registrations.Add(registration);
         return registration;
     }
@@ -225,6 +247,11 @@ public sealed class SuitePerformanceCoordinator
     {
         EnsureOwnerThread();
         ValidateBudgets(softBudgetMilliseconds, hardBudgetMilliseconds);
+        if (softBudgetMilliseconds > SoftBudgetMilliseconds ||
+            hardBudgetMilliseconds > HardBudgetMilliseconds)
+        {
+            throw new InvalidOperationException("Shared suite budgets may only be tightened after construction.");
+        }
         SoftBudgetMilliseconds = softBudgetMilliseconds;
         HardBudgetMilliseconds = hardBudgetMilliseconds;
     }

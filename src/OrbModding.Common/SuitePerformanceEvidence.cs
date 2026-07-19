@@ -17,18 +17,21 @@ public readonly struct SuitePerformanceWorkIdentity
         string subsystem,
         string workName,
         SuiteBudgetClass budgetClass,
-        SuiteWorkExecutionKind executionKind)
+        SuiteWorkExecutionKind executionKind,
+        int maximumPendingWaitFrames)
     {
         Subsystem = subsystem;
         WorkName = workName;
         BudgetClass = budgetClass;
         ExecutionKind = executionKind;
+        MaximumPendingWaitFrames = maximumPendingWaitFrames;
     }
 
     public string Subsystem { get; }
     public string WorkName { get; }
     public SuiteBudgetClass BudgetClass { get; }
     public SuiteWorkExecutionKind ExecutionKind { get; }
+    public int MaximumPendingWaitFrames { get; }
 }
 
 /// <summary>
@@ -39,29 +42,29 @@ public readonly struct SuitePerformanceWorkIdentity
 public static class SuitePerformanceWorkIdentities
 {
     public static readonly SuitePerformanceWorkIdentity AutoBuyEvaluate = new(
-        "OrbAutomata.AutoBuy", "Evaluate candidates", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbAutomata.AutoBuy", "Evaluate candidates", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity AutoBuyMutation = new(
-        "OrbAutomata.AutoBuy", "Submit one purchase", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        "OrbAutomata.AutoBuy", "Submit one purchase", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 10);
     public static readonly SuitePerformanceWorkIdentity AutoCastEvaluate = new(
-        "OrbAutomata.AutoCast", "Evaluate loadout", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbAutomata.AutoCast", "Evaluate loadout", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity AutoCastMutation = new(
-        "OrbAutomata.AutoCast", "Fire spell or release charge hold", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        "OrbAutomata.AutoCast", "Fire spell or release charge hold", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
     public static readonly SuitePerformanceWorkIdentity AutoConceptMutation = new(
-        "OrbAutomata.AutoConcept", "Change Active Concept quantity", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        "OrbAutomata.AutoConcept", "Change Active Concept quantity", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
     public static readonly SuitePerformanceWorkIdentity AutoConceptEvaluate = new(
-        "OrbAutomata.AutoConcept", "Reconcile and plan concept mastery", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbAutomata.AutoConcept", "Reconcile and plan concept mastery", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity AutoSpellLevelEvaluate = new(
-        "OrbAutomata.AutoSpellLevel", "Evaluate native spell leveling", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbAutomata.AutoSpellLevel", "Evaluate native spell leveling", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity AutoSpellLevelMutation = new(
-        "OrbAutomata.AutoSpellLevel", "Level native spells", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        "OrbAutomata.AutoSpellLevel", "Level native spells", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
     public static readonly SuitePerformanceWorkIdentity MentorMutation = new(
-        "OrbMentor", "Grant one mastery XP mutation", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        "OrbMentor", "Grant one mastery XP mutation", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
     public static readonly SuitePerformanceWorkIdentity MentorEvaluate = new(
-        "OrbMentor", "Reconcile, resolve, and plan XP", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbMentor", "Reconcile, resolve, and plan XP", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity ModConfigWork = new(
-        "OrbModConfig", "Install or repair UI", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbModConfig", "Install or repair UI", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 30);
     public static readonly SuitePerformanceWorkIdentity GameplayInvalidationDelivery = new(
-        "OrbModding.Common", "Deliver gameplay invalidations", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative);
+        "OrbModding.Common", "Deliver gameplay invalidations", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
 
     public const int SupportedSuiteV1Count = 12;
 
@@ -81,6 +84,28 @@ public static class SuitePerformanceWorkIdentities
         11 => GameplayInvalidationDelivery,
         _ => throw new ArgumentOutOfRangeException(nameof(index)),
     };
+
+    internal static int ResolveStarvationThresholdFrames(
+        string subsystem,
+        string workName,
+        SuiteBudgetClass budgetClass,
+        SuiteWorkExecutionKind executionKind,
+        int fallbackThresholdFrames)
+    {
+        for (var index = 0; index < SupportedSuiteV1Count; index++)
+        {
+            var identity = GetSupportedSuiteV1(index);
+            if (identity.BudgetClass == budgetClass &&
+                identity.ExecutionKind == executionKind &&
+                string.Equals(identity.Subsystem, subsystem, StringComparison.Ordinal) &&
+                string.Equals(identity.WorkName, workName, StringComparison.Ordinal))
+            {
+                return Math.Min(fallbackThresholdFrames, identity.MaximumPendingWaitFrames);
+            }
+        }
+
+        return fallbackThresholdFrames;
+    }
 }
 
 /// <summary>

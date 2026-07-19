@@ -43,12 +43,16 @@ try
         PerformanceEvidencePipeline.WriteAtomic(markdownOutput, markdown);
     }
 
+    var gate = PerformanceEvidencePipeline.EvaluateGate(profile, evaluation);
     var exceeded = evaluation.Results.Count(result => result.Classification == "exceeded");
-    Console.WriteLine($"Validated {evaluation.Results.Count} suite metrics; {exceeded} target exceedance(s). Slice B remains observational.");
-    return 0; // Slice B is observational: target exceedance does not fail CI.
+    var insufficient = evaluation.Results.Count(result =>
+        result.Classification == "insufficient-samples" || result.Classification == "insufficient-window");
+    Console.WriteLine(
+        $"Validated {evaluation.Results.Count} suite metrics; {exceeded} target exceedance(s), {insufficient} insufficient enforced result(s); gate={gate}.");
+    return gate == PerformanceGateStatus.Passed ? 0 : 3;
 }
 catch (Exception exception)
 {
     Console.Error.WriteLine(exception.Message);
-    return 1;
+    return 1; // Invalid or incompatible input is distinct from target failure (3).
 }

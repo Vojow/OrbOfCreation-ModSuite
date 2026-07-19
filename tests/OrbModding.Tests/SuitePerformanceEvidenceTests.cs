@@ -157,6 +157,86 @@ public sealed class SuitePerformanceEvidenceTests
             result.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
             result.Metric == "workItemTiming.p99Milliseconds" &&
             result.Classification == "observe-only");
+        Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
+    }
+
+    [Fact]
+    public void EnforcedGatePassesReviewedEvidenceAndFailsExceededOrInsufficientResults()
+    {
+        var captured = CaptureSupportedSuite(samplesPerWork: 30);
+        var passing = PerformanceEvidencePipeline.Evaluate(captured.Profile, captured.Evidence);
+        Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, passing));
+
+        var cooperativeIndex = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Evaluate candidates");
+        var cooperative = captured.Evidence.End.Work[cooperativeIndex];
+        var slow = cooperative with
+        {
+            WorkItemTiming = cooperative.WorkItemTiming with
+            {
+                P95Milliseconds = 0.6,
+                P99Milliseconds = 0.8,
+                MaximumMilliseconds = 1.1,
+            },
+        };
+        var exceeded = PerformanceEvidencePipeline.Evaluate(
+            captured.Profile,
+            ReplaceEndWork(captured.Evidence, cooperativeIndex, slow));
+        Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, exceeded));
+
+        var sparse = CaptureSupportedSuite(samplesPerWork: 5);
+        var insufficient = PerformanceEvidencePipeline.Evaluate(sparse.Profile, sparse.Evidence);
+        Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(sparse.Profile, insufficient));
+
+        var failedWork = cooperative with
+        {
+            CompletedWorkItems = cooperative.CompletedWorkItems - 1,
+            FailedWorkItems = cooperative.FailedWorkItems + 1,
+        };
+        var failed = PerformanceEvidencePipeline.Evaluate(
+            captured.Profile,
+            ReplaceEndWork(captured.Evidence, cooperativeIndex, failedWork));
+        Assert.Contains(failed.Results, result =>
+            result.Metric == "failedWorkItems" && result.Classification == "exceeded");
+        Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, failed));
+    }
+
+    [Fact]
+    public void EnforcedGateRejectsUnqualifiedObserveOnlyNativeTiming()
+    {
+        var captured = CaptureSupportedSuite(samplesPerWork: 30);
+        var nativeIdentity = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Submit one purchase");
+        var nativeStart = captured.Evidence.Start.Work[nativeIdentity] with
+        {
+            WorkItemTiming = captured.Evidence.Start.Work[nativeIdentity].WorkItemTiming with
+            {
+                SampleCount = 1,
+                TotalSamples = 1,
+            },
+            FrameTiming = captured.Evidence.Start.Work[nativeIdentity].FrameTiming with
+            {
+                SampleCount = 1,
+                TotalSamples = 1,
+            },
+        };
+        var nativeEnd = captured.Evidence.End.Work[nativeIdentity] with
+        {
+            WorkItemTiming = captured.Evidence.End.Work[nativeIdentity].WorkItemTiming with
+            {
+                SampleCount = 31,
+                TotalSamples = 31,
+            },
+            FrameTiming = captured.Evidence.End.Work[nativeIdentity].FrameTiming with
+            {
+                SampleCount = 31,
+                TotalSamples = 31,
+            },
+        };
+        var contaminatedNative = ReplaceWork(captured.Evidence, nativeIdentity, nativeStart, nativeEnd);
+        var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, contaminatedNative);
+        Assert.Contains(evaluation.Results, result =>
+            result.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
+            result.Classification == "insufficient-window");
+        Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
     }
 
     [Fact]
@@ -374,6 +454,8 @@ public sealed class SuitePerformanceEvidenceTests
             Assert.Equal(expected.WorkName, rule.WorkName);
             Assert.Equal(BudgetName(expected.BudgetClass), rule.BudgetClass);
             Assert.Equal(ExecutionName(expected.ExecutionKind), rule.ExecutionKind);
+            Assert.Equal(expected.MaximumPendingWaitFrames, rule.MaximumPendingWaitFrames);
+            Assert.Equal(expected.MaximumPendingWaitFrames, rule.MaximumConsecutiveDeferredFrames);
         }
     }
 
