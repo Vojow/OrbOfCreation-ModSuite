@@ -71,6 +71,7 @@ internal sealed class AutoBuyEngine : IDisposable
     // Process-monotonic so a lifecycle rebuild cannot alias a completion
     // generation cached by a reused native candidate wrapper.
     private long _nativeCompletionGeneration;
+    private long _lifecycleGeneration;
     private bool _registryReconciliationPending;
     private AutoBuyPolicyFingerprint? _lastPolicy;
     private bool _nativeStateSignalPending;
@@ -81,12 +82,15 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _diagnosticCpuSlicedBatchCount;
     private int _diagnosticQueueWaitedBatchCount;
     private double _diagnosticBatchElapsedMilliseconds;
+    private AutomationDecisionConditionKey? _lastPublishedDecision;
 
     internal int UpgradeQuarantinePurgePasses { get; private set; }
 
     internal int UpgradeQuarantineCacheEntriesInspected { get; private set; }
 
     internal int UpgradeQuarantineDecisionsRemoved { get; private set; }
+
+    internal AutomationDecision? LatestDecision { get; private set; }
 
     public AutoBuyEngine(
         AutomataConfig config,
@@ -150,12 +154,14 @@ internal sealed class AutoBuyEngine : IDisposable
         if (mode == AutoBuyOperationMode.Disabled)
         {
             ResetAllPendingWork();
+            ObserveOperationalDecision(CreateConfigurationDecision("Auto Buy mode is disabled."));
             return;
         }
 
         if (!_config.CanStartAutoBuyActively)
         {
             ResetAllPendingWork();
+            ObserveOperationalDecision(CreateConfigurationDecision("Automata Emergency Disable is active."));
             return;
         }
 
@@ -235,6 +241,10 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             ResetAllPendingWork();
             SetCoordinatorEnabled(false);
+            ObserveOperationalDecision(CreateConfigurationDecision(
+                mode == AutoBuyOperationMode.Disabled
+                    ? "Auto Buy mode is disabled."
+                    : "Automata Emergency Disable is active."));
             return;
         }
 
@@ -329,11 +339,18 @@ internal sealed class AutoBuyEngine : IDisposable
     private void PollPendingQueueRoom()
     {
         _secondsUntilQueuePoll = QueuePollIntervalSeconds;
-        if (TryCaptureQueueCapacity(out var queueCapacity) &&
-            queueCapacity.UsableAutomationRoom > 0)
+        if (!TryCaptureQueueCapacity(out var queueCapacity))
+        {
+            return;
+        }
+
+        if (queueCapacity.UsableAutomationRoom > 0)
         {
             _pendingWaitingForQueue = false;
+            return;
         }
+
+        ObserveQueueWait(queueCapacity);
     }
 
     private void RefreshPolicyIfNeeded()
@@ -364,10 +381,28 @@ internal sealed class AutoBuyEngine : IDisposable
     private bool TryAcquire(SuiteWorkRegistration? registration, out SuiteWorkLease lease)
     {
         lease = default;
-        return registration is not null &&
-               _coordinator is not null &&
-               _readFrameIdentity is not null &&
-               _coordinator.RequestWork(registration, _readFrameIdentity(), out lease) == SuiteWorkAdmission.Granted;
+        if (registration is null || _coordinator is null || _readFrameIdentity is null)
+        {
+            return false;
+        }
+
+        var admission = _coordinator.RequestWork(registration, _readFrameIdentity(), out lease);
+        if (admission == SuiteWorkAdmission.Granted)
+        {
+            return true;
+        }
+
+        ObserveOperationalDecision(new AutomationDecision(
+            AutoBuyDecision.FeatureId,
+            registration.WorkName,
+            AutomationDecisionDisposition.Deferred,
+            admission == SuiteWorkAdmission.WaitingForTurn ||
+            admission == SuiteWorkAdmission.NativeMutationAlreadyAdmitted
+                ? AutomationDecisionCode.WaitingForTurn
+                : AutomationDecisionCode.BudgetDeferred,
+            lifecycleGeneration: _lifecycleGeneration,
+            retryTriggers: AutomationRetryTrigger.SchedulerTurn));
+        return false;
     }
 
     private void SetCoordinatorEnabled(bool enabled)
@@ -405,6 +440,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void InvalidateLifecycle()
     {
+        _lifecycleGeneration = checked(_lifecycleGeneration + 1);
         ResetAllPendingWork();
         _cachedDecisions.Clear();
         _rankedRecommendations.Clear();
@@ -416,6 +452,8 @@ internal sealed class AutoBuyEngine : IDisposable
         _incrementalCatalog?.InvalidateLifecycle();
         _secondsUntilEvaluation = 0.0f;
         SetCoordinatorPending(false, false);
+        LatestDecision = null;
+        _lastPublishedDecision = null;
     }
 
     public void NotifyStructureQueueChanged(object nativeIdentity)
@@ -570,9 +608,11 @@ internal sealed class AutoBuyEngine : IDisposable
             if (batch.FirstExcludedCandidate is not null)
             {
                 var excluded = AutoBuyDecision.Rejected(
-                    batch.FirstExcludedCandidate.Snapshot(),
-                    AutoBuyRejectionReason.CandidateScanLimit,
-                    "candidate scan limit reached");
+                    CaptureSnapshot(batch.FirstExcludedCandidate),
+                    AutomationDecisionCode.ScanLimitDeferred,
+                    "candidate scan limit reached",
+                    AutomationRetryTrigger.SchedulerTurn,
+                    disposition: AutomationDecisionDisposition.Deferred);
                 _pendingDecisions.Add(excluded);
                 RecordDecision(excluded);
             }
@@ -587,9 +627,11 @@ internal sealed class AutoBuyEngine : IDisposable
             if (discovered.Length > limit)
             {
                 var excluded = AutoBuyDecision.Rejected(
-                    discovered[limit].Snapshot(),
-                    AutoBuyRejectionReason.CandidateScanLimit,
-                    "candidate scan limit reached");
+                    CaptureSnapshot(discovered[limit]),
+                    AutomationDecisionCode.ScanLimitDeferred,
+                    "candidate scan limit reached",
+                    AutomationRetryTrigger.SchedulerTurn,
+                    disposition: AutomationDecisionDisposition.Deferred);
                 _pendingDecisions.Add(excluded);
                 RecordDecision(excluded);
             }
@@ -614,14 +656,15 @@ internal sealed class AutoBuyEngine : IDisposable
     private AutoBuyDecision EvaluateCandidate(IAutoBuyCandidate candidate, out bool suppressResourceTracking)
     {
         suppressResourceTracking = false;
-        var snapshot = candidate.Snapshot();
+        var snapshot = CaptureSnapshot(candidate);
         if (snapshot.Kind == AutoBuyCandidateKind.Upgrade &&
             NativeMultiBuyScope.TryGetMutationQuarantine(out _))
         {
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.MutationQuarantined,
-                "automated Upgrade mutations are quarantined for this process");
+                AutomationDecisionCode.MutationQuarantined,
+                "automated Upgrade mutations are quarantined for this process",
+                AutomationRetryTrigger.Lifecycle);
         }
 
         if (_allowedUuids.Count > 0 && !_allowedUuids.Contains(snapshot.Uuid))
@@ -629,8 +672,9 @@ internal sealed class AutoBuyEngine : IDisposable
             suppressResourceTracking = true;
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.NotAllowed,
-                "not included in the configured allowlist");
+                AutomationDecisionCode.PolicyExcluded,
+                "not included in the configured allowlist",
+                AutomationRetryTrigger.Configuration);
         }
 
         if (_blockedUuids.Contains(snapshot.Uuid))
@@ -638,8 +682,9 @@ internal sealed class AutoBuyEngine : IDisposable
             suppressResourceTracking = true;
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.ConfigurationBlocked,
-                "blocked by configuration");
+                AutomationDecisionCode.PolicyExcluded,
+                "blocked by configuration",
+                AutomationRetryTrigger.Configuration);
         }
 
         var nativeCanPurchase = true;
@@ -657,16 +702,18 @@ internal sealed class AutoBuyEngine : IDisposable
                 suppressResourceTracking = true;
                 return AutoBuyDecision.Rejected(
                     snapshot,
-                    AutoBuyRejectionReason.Unavailable,
-                "upgrade is not available");
+                    AutomationDecisionCode.Unavailable,
+                    "upgrade is not available",
+                    AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Progression);
             }
         }
         else if (!candidate.IsAvailable())
         {
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.Locked,
-                "structure is locked");
+                AutomationDecisionCode.Locked,
+                "structure is locked",
+                AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Progression);
         }
         else
         {
@@ -687,24 +734,35 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.CostSnapshotUnavailable,
-                "native cost or resource snapshot unavailable");
+                AutomationDecisionCode.CostUnavailable,
+                "native cost or resource snapshot unavailable",
+                AutomationRetryTrigger.Lifecycle |
+                AutomationRetryTrigger.Registry |
+                AutomationRetryTrigger.ResourceQuantity);
         }
 
         costs ??= candidate.GetCosts();
         var reserve = _reservePolicy.Evaluate(costs);
         if (!reserve.Passed)
         {
-            var rejectionReason = reserve.Failure switch
+            var decisionCode = reserve.Failure switch
             {
-                ReserveDecisionFailure.InvalidPolicy => AutoBuyRejectionReason.InvalidReservePolicy,
-                ReserveDecisionFailure.InvalidResourceSnapshot => AutoBuyRejectionReason.InvalidResourceSnapshot,
-                _ => AutoBuyRejectionReason.ReserveViolation,
+                ReserveDecisionFailure.InvalidPolicy => AutomationDecisionCode.InvalidConfiguration,
+                ReserveDecisionFailure.InvalidResourceSnapshot => AutomationDecisionCode.InvalidResourceState,
+                _ => AutomationDecisionCode.ReserveFloor,
+            };
+            var retryTriggers = reserve.Failure switch
+            {
+                ReserveDecisionFailure.InvalidPolicy => AutomationRetryTrigger.Configuration,
+                ReserveDecisionFailure.InvalidResourceSnapshot =>
+                    AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.ResourceQuantity,
+                _ => AutomationRetryTrigger.ResourceQuantity,
             };
             return AutoBuyDecision.Rejected(
                 snapshot,
-                rejectionReason,
+                decisionCode,
                 reserve.Reason,
+                retryTriggers,
                 reserve.ResourceBlockers);
         }
 
@@ -716,10 +774,11 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.AffordabilityThreshold,
+                AutomationDecisionCode.AffordabilityThreshold,
                 $"{snapshot.Kind} affordability mode {affordabilityMode} rejected " +
                 $"maxCostRatio={reserve.MaxCostToQuantityRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}; " +
                 $"limit={maximumRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}",
+                AutomationRetryTrigger.ResourceQuantity,
                 BuildAffordabilityBlockers(costs, maximumRatio));
         }
 
@@ -734,8 +793,17 @@ internal sealed class AutoBuyEngine : IDisposable
                                        !ContainsBandwidthCost(costs);
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutoBuyRejectionReason.NativeNotPurchasable,
-                nativeReason);
+                AutomationDecisionCode.NativeAdmissionRejected,
+                nativeReason,
+                AutomationRetryTrigger.Lifecycle |
+                AutomationRetryTrigger.Progression |
+                AutomationRetryTrigger.Queue |
+                AutomationRetryTrigger.ResourceQuantity,
+                native: new AutomationNativeDetail(
+                    snapshot.Kind == AutoBuyCandidateKind.Upgrade
+                        ? "UpgradeSO.CanPurchase"
+                        : "StructureSO.CanPurchase",
+                    AutomationNativeStateCode.Unknown));
         }
 
         var priorityRank = _config.PrioritizeCostAndQualityStructures.Value &&
@@ -796,6 +864,27 @@ internal sealed class AutoBuyEngine : IDisposable
         }
 
         var recommendation = recommendations.Count > 0 ? recommendations[0] : null;
+        if (recommendation is not null)
+        {
+            ObserveOperationalDecision(recommendation.StructuredDecision);
+        }
+        else if (decisions.Count == 0)
+        {
+            ObserveOperationalDecision(new AutomationDecision(
+                AutoBuyDecision.FeatureId,
+                AutoBuyDecision.EvaluateOperationId,
+                AutomationDecisionDisposition.Skipped,
+                AutomationDecisionCode.NoEligibleTargets,
+                lifecycleGeneration: _lifecycleGeneration,
+                retryTriggers: AutomationRetryTrigger.Lifecycle |
+                AutomationRetryTrigger.Progression |
+                AutomationRetryTrigger.ResourceQuantity |
+                AutomationRetryTrigger.Queue));
+        }
+        else
+        {
+            ObserveOperationalDecision(decisions[0].StructuredDecision);
+        }
 
         try
         {
@@ -865,9 +954,14 @@ internal sealed class AutoBuyEngine : IDisposable
 
         while (_pendingPurchaseIndex < recommendations.Count && _pendingBatchPurchased < maximumPurchases)
         {
-            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out var queueCapacity) ||
-                queueCapacity.UsableAutomationRoom <= 0)
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out var queueCapacity))
             {
+                stoppedByQueue = true;
+                break;
+            }
+            if (queueCapacity.UsableAutomationRoom <= 0)
+            {
+                ObserveQueueWait(queueCapacity);
                 stoppedByQueue = true;
                 break;
             }
@@ -898,6 +992,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 recommendation.Candidate.Source,
                 out var suppressResourceTracking);
             RecordDecision(revalidated);
+            ObserveOperationalDecision(revalidated.StructuredDecision);
             if (revalidated.Kind != AutoBuyDecisionKind.Recommendation)
             {
                 if (_incrementalCatalog is not null)
@@ -915,7 +1010,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 {
                     _log.LogAutomataInfo(
                         $"Auto Buy batch deferred {recommendation.Candidate.DisplayName} because its state changed: " +
-                        revalidated.Detail);
+                        AutomationDecisionPresenter.Format(revalidated.StructuredDecision));
                 }
 
                 AdvancePurchaseCandidate();
@@ -946,9 +1041,14 @@ internal sealed class AutoBuyEngine : IDisposable
             // Availability, costs, and reserves can invoke native code. Read
             // the complete authoritative queue state again after those checks
             // so every queued mutation receives an immediately fresh snapshot.
-            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out queueCapacity) ||
-                queueCapacity.UsableAutomationRoom <= 0)
+            if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out queueCapacity))
             {
+                stoppedByQueue = true;
+                break;
+            }
+            if (queueCapacity.UsableAutomationRoom <= 0)
+            {
+                ObserveQueueWait(queueCapacity);
                 stoppedByQueue = true;
                 break;
             }
@@ -1004,12 +1104,17 @@ internal sealed class AutoBuyEngine : IDisposable
                     {
                         if (!TryCaptureQueueCapacity(
                                 RemainingAutomationUsage(maximumPurchases),
-                                out var refreshedQueueCapacity) ||
-                            refreshedQueueCapacity.UsableAutomationRoom <= 0)
+                                out var refreshedQueueCapacity))
                         {
                             // Keep the already ranked next candidate prepared
                             // while the native queue is full. It will still be
                             // live-revalidated when a slot reopens.
+                            stoppedByQueue = true;
+                            break;
+                        }
+                        if (refreshedQueueCapacity.UsableAutomationRoom <= 0)
+                        {
+                            ObserveQueueWait(refreshedQueueCapacity);
                             stoppedByQueue = true;
                             break;
                         }
@@ -1208,10 +1313,16 @@ internal sealed class AutoBuyEngine : IDisposable
         int automationUsageLimit,
         out QueueCapacitySnapshot snapshot)
     {
-        return _catalog.TryCaptureQueueCapacity(
+        var captured = _catalog.TryCaptureQueueCapacity(
             automationUsageLimit,
             _config.LeaveQueueSlots.Value,
             out snapshot);
+        if (!captured)
+        {
+            ObserveQueueUnavailable();
+        }
+
+        return captured;
     }
 
     private int RemainingAutomationUsage(int automationUsageLimit)
@@ -1223,8 +1334,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
     private static bool IsPolicyExcluded(AutoBuyDecision decision)
     {
-        return decision.RejectionReason == AutoBuyRejectionReason.NotAllowed ||
-               decision.RejectionReason == AutoBuyRejectionReason.ConfigurationBlocked;
+        return decision.Code == AutomationDecisionCode.PolicyExcluded;
     }
 
     private bool ShouldLogNativeFailure(string uuid)
@@ -1279,10 +1389,12 @@ internal sealed class AutoBuyEngine : IDisposable
         }
         else
         {
+            var presentedDecision = AutomationDecisionPresenter.Format(
+                recommendation.StructuredDecision);
             _log.LogAutomataInfo(
                 $"Auto Buy recommendation: {recommendation.Candidate.DisplayName} ({recommendation.Candidate.Uuid}); " +
                 $"Kind={recommendation.Candidate.Kind}; MaxCostRatio={recommendation.CostRatio.ToString("0.###e+0", CultureInfo.InvariantCulture)}; " +
-                $"Admission={recommendation.Detail}; Scanned={scanned}, ElapsedMs={elapsedMilliseconds:0.###}.");
+                $"Decision={presentedDecision}; Scanned={scanned}, ElapsedMs={elapsedMilliseconds:0.###}.");
         }
 
         var rejectionTelemetry = _rejectionTelemetry.Snapshot();
@@ -1296,7 +1408,7 @@ internal sealed class AutoBuyEngine : IDisposable
             $"StateExits={rejectionTelemetry.RejectionExits}; " +
             $"ScanLimitDeferrals={rejectionTelemetry.ScanLimitDeferrals}; " +
             $"CurrentRejected={rejectionTelemetry.CurrentRejectedCandidates}; " +
-            $"ByReason={rejectionTelemetry.FormatReasonCounts()}.");
+            $"ByCode={rejectionTelemetry.FormatCodeCounts()}.");
 
         if (_config.DecisionLogLevel.Value != AutomataDecisionLogLevel.Verbose)
         {
@@ -1314,8 +1426,8 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             _log.LogAutomataInfo(
-                $"Auto Buy rejected: {decision.Candidate.DisplayName} ({decision.Candidate.Uuid}) " +
-                $"[{decision.Candidate.Kind}/{decision.RejectionReason}] - {decision.Detail}");
+                $"Auto Buy rejected [{decision.Candidate.Kind}/{decision.Code}]: " +
+                AutomationDecisionPresenter.Format(decision.StructuredDecision));
             _changedVerboseRejections.Remove(decision.Candidate.Uuid);
         }
     }
@@ -1330,6 +1442,65 @@ internal sealed class AutoBuyEngine : IDisposable
         {
             _changedVerboseRejections.Remove(decision.Candidate.Uuid);
         }
+    }
+
+    private void ObserveOperationalDecision(AutomationDecision decision)
+    {
+        LatestDecision = decision;
+        var conditionKey = decision.ConditionKey;
+        if (_lastPublishedDecision.HasValue &&
+            _lastPublishedDecision.Value.Equals(conditionKey))
+        {
+            return;
+        }
+
+        _lastPublishedDecision = conditionKey;
+        AutomationDecisionPublisher.Publish(in decision);
+    }
+
+    private AutomationDecision CreateConfigurationDecision(string detail)
+    {
+        return new AutomationDecision(
+            AutoBuyDecision.FeatureId,
+            "Operate",
+            AutomationDecisionDisposition.Skipped,
+            AutomationDecisionCode.ConfigurationDisabled,
+            lifecycleGeneration: _lifecycleGeneration,
+            retryTriggers: AutomationRetryTrigger.Configuration,
+            technicalDetail: detail);
+    }
+
+    private void ObserveQueueUnavailable()
+    {
+        ObserveOperationalDecision(new AutomationDecision(
+            AutoBuyDecision.FeatureId,
+            "CaptureQueue",
+            AutomationDecisionDisposition.Deferred,
+            AutomationDecisionCode.QueueUnavailable,
+            lifecycleGeneration: _lifecycleGeneration,
+            retryTriggers: AutomationRetryTrigger.Queue | AutomationRetryTrigger.Lifecycle));
+    }
+
+    private void ObserveQueueWait(QueueCapacitySnapshot snapshot)
+    {
+        var code = snapshot.NativeRemainingRoom <= 0
+            ? AutomationDecisionCode.QueueFull
+            : AutomationDecisionCode.QueuePolicyLimit;
+        ObserveOperationalDecision(new AutomationDecision(
+            AutoBuyDecision.FeatureId,
+            "SubmitPurchase",
+            AutomationDecisionDisposition.Deferred,
+            code,
+            lifecycleGeneration: _lifecycleGeneration,
+            retryTriggers: AutomationRetryTrigger.Queue,
+            queue: AutomationQueueDetail.FromSnapshot(snapshot, 1)));
+    }
+
+    private AutoBuyCandidateSnapshot CaptureSnapshot(IAutoBuyCandidate candidate)
+    {
+        var snapshot = candidate.Snapshot();
+        snapshot.LifecycleGeneration = _lifecycleGeneration;
+        return snapshot;
     }
 
     private void LogScanProgress(int processed, int total, double elapsedMilliseconds)

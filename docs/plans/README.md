@@ -17,6 +17,7 @@ These documents record design intent, implementation sequencing, or historical d
 | [Shared gameplay invalidation bus](gameplay-invalidation-bus.md) | Next beta / runtime validation pending | Completed-frame bursts coalesce into bounded, generation-stamped, stable-target cache and scheduling invalidations without delaying native safety paths. |
 | [Typed registry resolver](typed-registry-resolver.md) | Next beta / runtime validation pending | Common centralizes exact UUID/type lookup, membership evidence, retry/permanent statuses, and lifecycle generation validity. |
 | [Generated known-entity identities](generated-known-entities.md) | Next beta / runtime validation pending | Deterministic explicit supported subset generated from canonical UUID/name/type mappings. |
+| [Structured automation decisions](structured-automation-decisions.md) | Auto Buy implemented / broader adoption pending | Common stable codes, immutable evidence, deduplication keys, presentation, and an Insights-ready publisher are adopted by Auto Buy. |
 | [Auto Cast MVP](auto-cast-mvp.md) | Implemented | Historical MVP contract; current behavior lives in the mod reference. |
 | [Orb Mod Config](mod-config-ui.md) | Implemented / evolving | Optional configuration UI supports staged typed editing and compound feature dependencies; interactive validation of the unified locking pass remains. |
 | [Orb Mentor](mentor.md) | Beta / runtime validation pending | Equipped-source and highest-only spell policies are released; extended interactive validation remains. |

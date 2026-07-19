@@ -6,6 +6,12 @@
 - Coalesce completed-frame bursts by stable domain/UUID/type, preserve merged change kinds and first-publication order, and conservatively promote overflow instead of dropping cache work.
 - Keep immediate lifecycle, queue, completion, and Mentor XP safety paths direct while Automata, Mentor, and Mod Config mirror or publish bounded cache and scheduling signals.
 
+## Structured Auto Buy decisions — 2026-07-19
+
+- Replace Auto Buy's private rejection enum and text-derived deduplication with Common append-only decision codes, dispositions, retry triggers, canonical identities, resource constraints, queue facts, and native states.
+- Make candidate parking, telemetry, rate-limited logs, and the gameplay tooltip consume the same immutable decision evidence; publish only condition transitions through an exception-isolated Common channel for future Orb Insights consumers.
+- Preserve existing queue output and operation counts while avoiding per-decision formatting and redundant blocker-array allocations in the candidate path.
+
 ## Generated supported identities — 2026-07-18
 
 - Replace supported Alchemy, Auto Concept, spell-level, and Mentor unlock UUID literals with 16 generated declarations carrying UUID, expected managed type, and diagnostic name.

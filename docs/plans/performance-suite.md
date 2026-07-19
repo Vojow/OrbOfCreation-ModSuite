@@ -69,6 +69,8 @@ A source-level compatibility runner also compiles the identical workload against
 
 The aggressive completion-storm scenario is an active deterministic gate. Completion signals are generation-coalesced while the current bounded settlement pass finishes, CPU-sliced scan progress is preserved, and an exact completion wakes the prepared queue-feeding path without waiting for the 10 Hz fallback poll. The gate constrains near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
 
+Auto Buy diagnostics now create structured Common decisions without formatting in the candidate path. Resource blockers transfer through one exact immutable array, telemetry deduplicates canonical condition keys, and the Common publisher calls consumers only when the engine's latest condition changes. Subscriber failures are isolated, and publishing an unchanged condition adds no subscriber work. The deterministic operation-count report remains the queue-behavior gate; allocation and real elapsed-time claims still require runtime profiling.
+
 ## Candidate lifecycle model
 
 Registry membership and player progression are separate dimensions. The index retains stable identity while the live state moves through the following lifecycle:

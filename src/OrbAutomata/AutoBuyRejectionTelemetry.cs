@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
 internal sealed class AutoBuyRejectionTelemetry
 {
-    private readonly Dictionary<AutoBuyRejectionReason, long> _rejectionsByReason =
-        new Dictionary<AutoBuyRejectionReason, long>();
-    private readonly Dictionary<string, AutoBuyRejectionState> _latestRejections =
-        new Dictionary<string, AutoBuyRejectionState>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<AutomationDecisionCode, long> _rejectionsByCode =
+        new Dictionary<AutomationDecisionCode, long>();
+    private readonly Dictionary<string, AutomationDecisionConditionKey> _latestRejections =
+        new Dictionary<string, AutomationDecisionConditionKey>(StringComparer.OrdinalIgnoreCase);
 
     public long Evaluations { get; private set; }
 
@@ -29,7 +30,7 @@ internal sealed class AutoBuyRejectionTelemetry
 
     public bool Record(AutoBuyDecision decision)
     {
-        if (decision.RejectionReason == AutoBuyRejectionReason.CandidateScanLimit)
+        if (decision.Code == AutomationDecisionCode.ScanLimitDeferred)
         {
             ScanLimitDeferrals++;
             return false;
@@ -48,17 +49,18 @@ internal sealed class AutoBuyRejectionTelemetry
         }
 
         Rejections++;
-        _rejectionsByReason.TryGetValue(decision.RejectionReason, out var reasonCount);
-        _rejectionsByReason[decision.RejectionReason] = reasonCount + 1;
+        _rejectionsByCode.TryGetValue(decision.Code, out var reasonCount);
+        _rejectionsByCode[decision.Code] = reasonCount + 1;
 
-        if (_latestRejections.TryGetValue(uuid, out var previous) && previous.HasSameBlockingCondition(decision))
+        var conditionKey = decision.StructuredDecision.ConditionKey;
+        if (_latestRejections.TryGetValue(uuid, out var previous) && previous.Equals(conditionKey))
         {
             RepeatedUnchangedRejections++;
             return false;
         }
 
         RejectionStateChanges++;
-        _latestRejections[uuid] = AutoBuyRejectionState.FromDecision(decision);
+        _latestRejections[uuid] = conditionKey;
         return true;
     }
 
@@ -83,61 +85,7 @@ internal sealed class AutoBuyRejectionTelemetry
             RejectionExits,
             ScanLimitDeferrals,
             CurrentRejectedCandidates,
-            new Dictionary<AutoBuyRejectionReason, long>(_rejectionsByReason));
-    }
-
-    private sealed class AutoBuyRejectionState
-    {
-        private AutoBuyRejectionState(
-            AutoBuyRejectionReason reason,
-            string nonResourceDetail,
-            IReadOnlyList<AutoBuyResourceBlocker> resourceBlockers)
-        {
-            Reason = reason;
-            NonResourceDetail = nonResourceDetail;
-            ResourceBlockers = resourceBlockers;
-        }
-
-        private AutoBuyRejectionReason Reason { get; }
-
-        private string NonResourceDetail { get; }
-
-        private IReadOnlyList<AutoBuyResourceBlocker> ResourceBlockers { get; }
-
-        public static AutoBuyRejectionState FromDecision(AutoBuyDecision decision)
-        {
-            return new AutoBuyRejectionState(
-                decision.RejectionReason,
-                decision.ResourceBlockers.Count == 0 ? decision.Detail : string.Empty,
-                decision.ResourceBlockers);
-        }
-
-        public bool HasSameBlockingCondition(AutoBuyDecision decision)
-        {
-            var nonResourceDetail = decision.ResourceBlockers.Count == 0 ? decision.Detail : string.Empty;
-            if (Reason != decision.RejectionReason ||
-                !string.Equals(NonResourceDetail, nonResourceDetail, StringComparison.Ordinal) ||
-                ResourceBlockers.Count != decision.ResourceBlockers.Count)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < ResourceBlockers.Count; i++)
-            {
-                var left = ResourceBlockers[i];
-                var right = decision.ResourceBlockers[i];
-                if (left.Kind != right.Kind ||
-                    left.IsBandwidth != right.IsBandwidth ||
-                    !string.Equals(left.ResourceId, right.ResourceId, StringComparison.OrdinalIgnoreCase) ||
-                    left.Cost.CompareTo(right.Cost) != 0 ||
-                    left.RequiredQuantity.CompareTo(right.RequiredQuantity) != 0)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+            new Dictionary<AutomationDecisionCode, long>(_rejectionsByCode));
     }
 }
 
@@ -152,7 +100,7 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
         long rejectionExits,
         long scanLimitDeferrals,
         int currentRejectedCandidates,
-        IReadOnlyDictionary<AutoBuyRejectionReason, long> rejectionsByReason)
+        IReadOnlyDictionary<AutomationDecisionCode, long> rejectionsByCode)
     {
         Evaluations = evaluations;
         Recommendations = recommendations;
@@ -162,7 +110,7 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
         RejectionExits = rejectionExits;
         ScanLimitDeferrals = scanLimitDeferrals;
         CurrentRejectedCandidates = currentRejectedCandidates;
-        RejectionsByReason = rejectionsByReason;
+        RejectionsByCode = rejectionsByCode;
     }
 
     public long Evaluations { get; }
@@ -181,15 +129,15 @@ internal sealed class AutoBuyRejectionTelemetrySnapshot
 
     public int CurrentRejectedCandidates { get; }
 
-    public IReadOnlyDictionary<AutoBuyRejectionReason, long> RejectionsByReason { get; }
+    public IReadOnlyDictionary<AutomationDecisionCode, long> RejectionsByCode { get; }
 
-    public string FormatReasonCounts()
+    public string FormatCodeCounts()
     {
-        return RejectionsByReason.Count == 0
+        return RejectionsByCode.Count == 0
             ? "none"
             : string.Join(
                 ",",
-                RejectionsByReason
+                RejectionsByCode
                     .OrderBy(pair => pair.Key)
                     .Select(pair => $"{pair.Key}={pair.Value}"));
     }
