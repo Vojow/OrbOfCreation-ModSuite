@@ -11,82 +11,247 @@ internal static class ReflectionCostReader
 {
     public static IReadOnlyList<ResourceAdmissionCost> Read(object? container)
     {
-        if (container is null)
-        {
-            return Array.Empty<ResourceAdmissionCost>();
-        }
-
-        var costs = new List<ResourceAdmissionCost>();
-        foreach (var item in FlattenCostObjects(container, 0).Take(128))
-        {
-            if (!TryReadResourceAndAmount(item, out var resource, out var amount) ||
-                !TryReadQuantity(resource, out var quantity))
-            {
-                continue;
-            }
-
-            costs.Add(new ResourceAdmissionCost(
-                ReflectionUtil.ReadStableId(resource) ?? ObjectName(resource),
-                ReflectionUtil.ReadDisplayName(resource) ?? ObjectName(resource),
-                amount,
-                quantity,
-                TryReadCapacity(resource, out var capacity) ? capacity : null));
-        }
-
-        return costs
-            .GroupBy(cost => cost.ResourceId, StringComparer.OrdinalIgnoreCase)
-            .Select(group =>
-            {
-                var first = group.First();
-                return new ResourceAdmissionCost(
-                    first.ResourceId,
-                    first.ResourceName,
-                    group.Select(cost => cost.Cost).Aggregate(default(BigAmount), (sum, item) => sum.Add(item)),
-                    first.CurrentQuantity,
-                    first.Capacity);
-            })
-            .ToArray();
+        return TryRead(container, out var costs, out _) ? costs : Array.Empty<ResourceAdmissionCost>();
     }
 
-    private static IEnumerable<object> FlattenCostObjects(object value, int depth)
+    public static bool TryRead(
+        object? container,
+        out IReadOnlyList<ResourceAdmissionCost> costs,
+        out string reason)
     {
-        if (depth > 3 || value is string)
+        if (container is null)
         {
-            yield break;
+            costs = Array.Empty<ResourceAdmissionCost>();
+            reason = "native cost container is unavailable";
+            return false;
+        }
+
+        var combined = new List<(object Resource, ResourceAdmissionCost Cost)>();
+        var entryCount = 0;
+        if (!TryTraverseCostContainer(container, 0, combined, ref entryCount, out reason))
+        {
+            costs = Array.Empty<ResourceAdmissionCost>();
+            return false;
+        }
+
+        var result = new ResourceAdmissionCost[combined.Count];
+        for (var index = 0; index < combined.Count; index++) result[index] = combined[index].Cost;
+        costs = result;
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryTraverseCostContainer(
+        object value,
+        int depth,
+        List<(object Resource, ResourceAdmissionCost Cost)> combined,
+        ref int entryCount,
+        out string reason)
+    {
+        if (depth > 3)
+        {
+            reason = "native cost container exceeded the audited nesting depth";
+            return false;
+        }
+
+        if (value is string)
+        {
+            reason = "native cost container contained an unexpected string leaf";
+            return false;
         }
 
         if (value is IEnumerable enumerable)
         {
-            foreach (var item in enumerable)
+            try
             {
-                if (item is null)
+                foreach (var item in enumerable)
                 {
-                    continue;
-                }
+                    if (item is null)
+                    {
+                        reason = "native cost container contained a null entry";
+                        return false;
+                    }
 
-                foreach (var nested in FlattenCostObjects(item, depth + 1))
-                {
-                    yield return nested;
+                    if (!TryTraverseCostContainer(item, depth + 1, combined, ref entryCount, out reason))
+                    {
+                        return false;
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                reason = $"native cost enumeration failed: {ex.GetBaseException().Message}";
+                return false;
+            }
 
-            yield break;
+            reason = string.Empty;
+            return true;
         }
 
-        yield return value;
-        foreach (var memberValue in ReflectionUtil.ReadLikelyCollectionMembers(value))
+        if (!TryTraverseNamedCollections(value, depth, combined, ref entryCount, out var foundCollection, out reason))
         {
-            foreach (var nested in FlattenCostObjects(memberValue, depth + 1))
-            {
-                yield return nested;
-            }
+            return false;
         }
+        if (foundCollection)
+        {
+            return true;
+        }
+
+        var costShape = TryReadResourceAndAmount(
+            value,
+            out var resource,
+            out var amount,
+            out var sawResource,
+            out var sawAmount);
+        if (costShape)
+        {
+            entryCount++;
+            if (entryCount > 128)
+            {
+                reason = "native cost container exceeded the audited 128-entry bound";
+                return false;
+            }
+
+            return TryAddDecodedCost(resource, amount, combined, out reason);
+        }
+
+        if (sawResource || sawAmount)
+        {
+            reason = $"native cost entry {value.GetType().FullName ?? value.GetType().Name} could not be decoded completely";
+            return false;
+        }
+
+        var type = value.GetType();
+        reason = $"native cost leaf {type.FullName ?? type.Name} has no audited cost shape";
+        return false;
     }
 
-    private static bool TryReadResourceAndAmount(object item, out object resource, out BigAmount amount)
+    private static bool TryTraverseNamedCollections(
+        object value,
+        int depth,
+        List<(object Resource, ResourceAdmissionCost Cost)> combined,
+        ref int entryCount,
+        out bool foundCollection,
+        out string reason)
+    {
+        foundCollection = false;
+        var type = value.GetType();
+        foreach (var field in type.GetFields(ReflectionUtil.InstanceFlags))
+        {
+            if (!IsCollectionMember(field.Name, field.FieldType)) continue;
+            foundCollection = true;
+            object? memberValue;
+            try
+            {
+                memberValue = field.GetValue(value);
+            }
+            catch (Exception ex)
+            {
+                reason = $"native cost collection member {field.Name} could not be read: {ex.GetBaseException().Message}";
+                return false;
+            }
+            if (memberValue is null)
+            {
+                reason = $"native cost collection member {field.Name} is null";
+                return false;
+            }
+            if (!TryTraverseCostContainer(memberValue, depth + 1, combined, ref entryCount, out reason))
+            {
+                return false;
+            }
+        }
+
+        foreach (var property in type.GetProperties(ReflectionUtil.InstanceFlags))
+        {
+            if (property.GetIndexParameters().Length > 0 || !IsCollectionMember(property.Name, property.PropertyType)) continue;
+            foundCollection = true;
+            object? memberValue;
+            try
+            {
+                memberValue = property.GetValue(value);
+            }
+            catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+            {
+                reason = $"native cost collection member {property.Name} could not be read: {ex.GetBaseException().Message}";
+                return false;
+            }
+            if (memberValue is null)
+            {
+                reason = $"native cost collection member {property.Name} is null";
+                return false;
+            }
+            if (!TryTraverseCostContainer(memberValue, depth + 1, combined, ref entryCount, out reason))
+            {
+                return false;
+            }
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryAddDecodedCost(
+        object resource,
+        BigAmount amount,
+        List<(object Resource, ResourceAdmissionCost Cost)> combined,
+        out string reason)
+    {
+        if (!TryReadQuantity(resource, out var quantity))
+        {
+            reason = "native cost resource quantity is unavailable";
+            return false;
+        }
+
+        var resourceId = ReflectionUtil.ReadStableId(resource);
+        if (string.IsNullOrWhiteSpace(resourceId))
+        {
+            reason = "native cost resource has no stable UUID";
+            return false;
+        }
+
+        var decoded = new ResourceAdmissionCost(
+            resourceId,
+            ReflectionUtil.ReadDisplayName(resource) ?? ObjectName(resource),
+            amount,
+            quantity,
+            TryReadCapacity(resource, out var capacity) ? capacity : null);
+        for (var index = 0; index < combined.Count; index++)
+        {
+            var existing = combined[index];
+            if (!string.Equals(existing.Cost.ResourceId, resourceId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!ReferenceEquals(existing.Resource, resource))
+            {
+                reason = $"native cost vector maps UUID {resourceId} to multiple resource objects";
+                return false;
+            }
+
+            combined[index] = (resource, new ResourceAdmissionCost(
+                existing.Cost.ResourceId,
+                existing.Cost.ResourceName,
+                existing.Cost.Cost.Add(amount),
+                existing.Cost.CurrentQuantity,
+                existing.Cost.Capacity));
+            reason = string.Empty;
+            return true;
+        }
+
+        combined.Add((resource, decoded));
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryReadResourceAndAmount(
+        object item,
+        out object resource,
+        out BigAmount amount,
+        out bool sawResource,
+        out bool sawAmount)
     {
         resource = null!;
         amount = default;
+        var amountRead = false;
+        sawResource = false;
+        sawAmount = false;
 
         foreach (var member in ReflectionUtil.ReadAllMembers(item))
         {
@@ -98,22 +263,40 @@ internal static class ReflectionCostReader
             if (IsResourceLike(member.Value) && resource is null)
             {
                 resource = member.Value;
+                sawResource = true;
                 continue;
             }
 
-            if (IsAmountName(member.Name) && BigAmount.TryRead(member.Value, out var candidateAmount))
+            if (IsAmountName(member.Name) &&
+                !string.Equals(member.Name, "costs", StringComparison.OrdinalIgnoreCase) &&
+                member.Value is not IEnumerable)
             {
-                amount = candidateAmount;
+                sawAmount = true;
+                if (BigAmount.TryRead(member.Value, out var candidateAmount))
+                {
+                    amount = candidateAmount;
+                    amountRead = true;
+                }
             }
         }
 
-        if (amount.IsZero)
+        if (!amountRead)
         {
             var nativeValue = ReflectionUtil.InvokeNoArgs(item, "GetValue");
-            BigAmount.TryRead(nativeValue, out amount);
+            amountRead = BigAmount.TryRead(nativeValue, out amount);
         }
 
-        return resource is not null && !amount.IsZero;
+        return resource is not null && amountRead;
+    }
+
+    private static bool IsCollectionMember(string name, Type memberType)
+    {
+        if (memberType == typeof(string)) return false;
+        if (string.Equals(name, "costs", StringComparison.OrdinalIgnoreCase)) return true;
+        return typeof(IEnumerable).IsAssignableFrom(memberType) &&
+               (name.Contains("cost", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("resource", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("list", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool TryReadQuantity(object resource, out BigAmount quantity)

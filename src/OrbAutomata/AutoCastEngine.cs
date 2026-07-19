@@ -614,33 +614,34 @@ internal sealed class AutoCastEngine : IDisposable
     {
         resourceSummary = string.Empty;
         failureKind = AutoCastAdmissionFailureKind.None;
-        if (candidate.IsEmpty)
+        var admission = AutoCastAdmissionAdapter.Capture(candidate);
+        if (!admission.IsAvailable)
         {
-            reason = "empty slot";
+            reason = admission.AvailabilityReason;
             failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
-        if (candidate.IsCasting)
+        if (!AutomationAdmissionPolicy.HasCompleteContract(admission, out reason))
         {
-            reason = candidate.Kind == AutoCastSpellKind.Aura ? "aura already active" : "already casting";
-            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
-            return false;
-        }
-
-        if (!candidate.CanCast(out reason) ||
-            !candidate.TryGetImmediateCosts(out var immediateCosts) ||
-            !candidate.TryGetDrainCosts(out var drainCosts))
-        {
-            if (string.IsNullOrWhiteSpace(reason))
+            if (!string.IsNullOrWhiteSpace(admission.NativeAdmissionReason))
             {
-                reason = "native readiness or costs unavailable";
+                reason = admission.NativeAdmissionReason;
             }
 
+            failureKind = AutoCastAdmissionFailureKind.ContractUnavailable;
+            return false;
+        }
+
+        if (!admission.NativeAdmissionAccepted)
+        {
+            reason = admission.NativeAdmissionReason;
             failureKind = ReadAdmissionFailure(candidate);
             return false;
         }
 
+        var immediateCosts = admission.ImmediateCosts;
+        var drainCosts = admission.DrainCosts;
         resourceSummary = _fullnessPolicy.Describe(
             immediateCosts,
             drainCosts,
@@ -664,12 +665,12 @@ internal sealed class AutoCastEngine : IDisposable
             return false;
         }
 
-        if (!candidate.HasValidTargets(out reason))
+        if (!AutoCastAdmissionAdapter.TryValidateTargets(candidate, out reason, out failureKind))
         {
-            failureKind = ReadAdmissionFailure(candidate);
             return false;
         }
 
+        reason = string.Empty;
         return true;
     }
 

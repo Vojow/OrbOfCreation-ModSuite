@@ -21,10 +21,11 @@ public sealed class AutomataTests
             maxQuantity = new TestValueModifierRecord(new TestBigDouble(5.0, 5)),
             trueAmountMultiplier = 2.0,
         };
-        var result = Assert.Single(ReflectionCostReader.Read(new[]
+        Assert.True(ReflectionCostReader.TryRead(new[]
         {
             new TestCostEntry(resource, new TestBigDouble(1.0, 3)),
-        }));
+        }, out var decoded, out var reason), reason);
+        var result = Assert.Single(decoded);
 
         Assert.Equal("8e5", result.CurrentQuantity.ToString());
         Assert.Equal("1e6", result.Capacity?.ToString());

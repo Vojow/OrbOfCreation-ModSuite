@@ -135,6 +135,14 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatusReporter AutoConcept { get; }
     public AutomataFeatureStatusReporter SpellLevel { get; }
 
+    public void ObserveContractUnavailable(long lifecycleGeneration, string summary)
+    {
+        AutoBuy.ObserveLifecycle(true, FeatureStatusState.ContractUnavailable, FeatureStatusReasonCode.ContractUnavailable, summary, lifecycleGeneration);
+        AutoCast.ObserveLifecycle(true, FeatureStatusState.ContractUnavailable, FeatureStatusReasonCode.ContractUnavailable, summary, lifecycleGeneration);
+        AutoConcept.ObserveLifecycle(true, FeatureStatusState.ContractUnavailable, FeatureStatusReasonCode.ContractUnavailable, summary, lifecycleGeneration);
+        SpellLevel.ObserveLifecycle(true, FeatureStatusState.ContractUnavailable, FeatureStatusReasonCode.ContractUnavailable, summary, lifecycleGeneration);
+    }
+
     public void ObserveLifecycleNotReady(AutomataConfig config, long lifecycleGeneration)
     {
         ObserveLifecycleFeature(

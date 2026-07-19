@@ -1,5 +1,12 @@
 # Changelog
 
+## Fail-closed automation admission adapters — 2026-07-19
+
+- Normalize stable identity, availability, native readiness, immediate cost, drain cost, and queue requirements before shared Auto Buy and Auto Cast policy evaluates an action.
+- Split Structure and Upgrade reflection into exact family adapters while retaining live per-mutation revalidation, native multi-buy restoration, and exact queue-delta postconditions.
+- Reject complete spell cost admission when any bounded entry is malformed or contradictory, and disable all Automata native mutation setup when installed game assemblies do not match the audited hashes.
+- Reserve the shared Harvest and Scroll action families for future explicit adapters, add cross-adapter equivalence and failure-path coverage, and bump Orb Automata to 0.8.7.
+
 ## Action-family ownership isolation — 2026-07-19
 
 - Add atomic, process-local ownership leases for independent native purchase, cast, concept, spell-level, and mastery-XP action families, with synchronous known-conflict revocation and explicit lifecycle/configuration release.
