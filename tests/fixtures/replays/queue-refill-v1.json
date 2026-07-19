@@ -1,0 +1,94 @@
+{
+  "schema": "orb-of-creation/runtime-replay",
+  "schemaVersion": 1,
+  "replayId": "queue-refill-v1",
+  "setup": {
+    "queueCapacity": 6,
+    "primaryResource": {
+      "uuid": "77777777-7777-4777-8777-777777777777",
+      "expectedNativeType": "ResourceSO",
+      "initialQuantity": 1000
+    },
+    "candidates": [
+      {
+        "uuid": "11111111-1111-4111-8111-111111111111",
+        "expectedNativeType": "StructureSO",
+        "baseCost": 1,
+        "costScaling": 1,
+        "available": true,
+        "maximumLevel": 4
+      },
+      {
+        "uuid": "22222222-2222-4222-8222-222222222222",
+        "expectedNativeType": "UpgradeSO",
+        "baseCost": 2,
+        "costScaling": 1,
+        "available": true,
+        "maximumLevel": 4
+      }
+    ]
+  },
+  "events": [
+    {
+      "sequence": 0,
+      "atFrame": 1,
+      "atMicroseconds": 0,
+      "kind": "lifecycle",
+      "transition": "SceneEntered",
+      "sceneName": "Main",
+      "nativeIdentityToken": "main-1"
+    },
+    {
+      "sequence": 1,
+      "atFrame": 2,
+      "atMicroseconds": 0,
+      "kind": "lifecycle",
+      "transition": "SaveLoadStarted",
+      "sceneName": "Main",
+      "nativeIdentityToken": "main-1"
+    },
+    {
+      "sequence": 2,
+      "atFrame": 3,
+      "atMicroseconds": 0,
+      "kind": "lifecycle",
+      "transition": "SaveLoaded",
+      "sceneName": "Main",
+      "nativeIdentityToken": "main-1"
+    },
+    {
+      "sequence": 3,
+      "atFrame": 4,
+      "atMicroseconds": 0,
+      "kind": "lifecycle",
+      "transition": "RegistryRebuilt",
+      "sceneName": "Main",
+      "nativeIdentityToken": "registry-1"
+    },
+    {
+      "sequence": 4,
+      "atFrame": 5,
+      "atMicroseconds": 0,
+      "kind": "lifecycle",
+      "transition": "RuntimeReady",
+      "sceneName": "Main",
+      "nativeIdentityToken": "main-1"
+    },
+    {
+      "sequence": 5,
+      "atFrame": 10,
+      "atMicroseconds": 5000000,
+      "kind": "queue",
+      "manualActions": 0
+    },
+    {
+      "sequence": 6,
+      "atFrame": 11,
+      "atMicroseconds": 6000000,
+      "kind": "completion",
+      "uuid": "11111111-1111-4111-8111-111111111111",
+      "expectedNativeType": "StructureSO",
+      "count": 1
+    }
+  ]
+}

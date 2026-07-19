@@ -313,6 +313,72 @@ internal sealed class SimulatedAutoBuyWorld
         return completed;
     }
 
+    public bool TryPeekExactQueueFront(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int count,
+        out string reason)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            reason = "An exact candidate UUID is required.";
+            return false;
+        }
+
+        if (count < 1 || count > 10000)
+        {
+            reason = "The exact completion count must be between 1 and 10000.";
+            return false;
+        }
+
+        if (_queue.Count < count)
+        {
+            reason = $"The queue contains {_queue.Count} entries, fewer than the requested {count}.";
+            return false;
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            var candidate = _queue[index];
+            if (candidate is null)
+            {
+                reason = $"Queue entry {index} is a manual action.";
+                return false;
+            }
+
+            if (!string.Equals(candidate.Uuid, uuid, StringComparison.Ordinal) || candidate.Kind != kind)
+            {
+                reason = $"Queue entry {index} is {candidate.Kind}:{candidate.Uuid}, not {kind}:{uuid}.";
+                return false;
+            }
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    public bool TryCompleteExact(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int count,
+        out string reason)
+    {
+        if (!TryPeekExactQueueFront(uuid, kind, count, out reason))
+        {
+            return false;
+        }
+
+        var completed = Complete(count);
+        if (completed != count)
+        {
+            throw new InvalidOperationException(
+                $"Exact queue preflight accepted {count} entries but only {completed} completed.");
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
     public NativeCompletionObservation BeginNativeCompletion(int bulkLevels, int echoActions)
     {
         if (_nativeCompletionInProgress)
@@ -404,6 +470,30 @@ internal sealed class SimulatedAutoBuyWorld
 
         _queue.Add(null);
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
+    }
+
+    public bool TryEnqueueManualActions(int count, out string reason)
+    {
+        if (count < 0 || count > 10000)
+        {
+            reason = "The manual action count must be between 0 and 10000.";
+            return false;
+        }
+
+        if (count > RemainingQueueRoom)
+        {
+            reason = $"The queue has room for {RemainingQueueRoom} manual actions, fewer than the requested {count}.";
+            return false;
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            _queue.Add(null);
+        }
+
+        QueueHighWater = Math.Max(QueueHighWater, QueueCount);
+        reason = string.Empty;
+        return true;
     }
 
     public void ClearQueueForReload()
