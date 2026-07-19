@@ -14,7 +14,7 @@ The current beta centers on Orb Automata: queue-aware Auto Buy with progression-
 |---|---|---|
 | **Orb Automata 0.8.7** | Beta | Structured, rejection-aware and completion-responsive queue-filling Auto Buy with fail-closed native-family admission adapters, shared lifecycle generations, bounded failure circuits/invalidation, action-family conflict isolation, coordinated Auto Cast, Concept rotation, spell leveling, and per-feature runtime health. |
 | **Orb Mod Config 0.6.1** | Beta | Mods tab with shared lifecycle tracking and transactional invalidation, typed staged editors, exact-plugin runtime status, Steam Deck keyboard support, and coordinated UI recovery. |
-| **Orb Mentor 0.3.6** | Beta | Progression-gated mastery sharing with bounded domain failure circuits, independent action-family ownership, shared lifecycle/invalidation, verified XP deltas, optional artifact/alchemy support, and equipped-spell sources. |
+| **Orb Mentor 0.3.7** | Beta | Progression-gated mastery sharing with shared remaining-budget enforcement, bounded domain failure circuits, independent action-family ownership, shared lifecycle/invalidation, verified XP deltas, optional artifact/alchemy support, and equipped-spell sources. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton with BepInEx 5, but ModSuite 0.3.0 Beta 1 still requires post-release Proton validation.

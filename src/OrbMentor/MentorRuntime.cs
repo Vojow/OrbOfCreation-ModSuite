@@ -288,6 +288,7 @@ internal sealed class MentorRuntime : IDisposable
     private readonly MentorAlchemyDomainGate _alchemyDomainGate;
     private readonly MentorCoordinatorWork? _coordinatorWork;
     private readonly Func<long> _readTimestamp;
+    private readonly IPerformanceClock _performanceClock;
     private readonly Func<long> _readLifecycleGeneration;
     private readonly Func<MentorDomain, bool> _ownsActionFamily;
     private readonly Func<MentorDomain, bool> _captureActionFamilyMutation;
@@ -330,13 +331,15 @@ internal sealed class MentorRuntime : IDisposable
         FeatureStatusRegistry? featureStatusRegistry = null,
         Func<long>? readLifecycleGeneration = null,
         Func<MentorDomain, bool>? ownsActionFamily = null,
-        Func<MentorDomain, bool>? captureActionFamilyMutation = null)
+        Func<MentorDomain, bool>? captureActionFamilyMutation = null,
+        IPerformanceClock? performanceClock = null)
     {
         _config = config;
         _log = log;
         _alchemyDomainGate = alchemyDomainGate ?? new MentorAlchemyDomainGate();
         _unlockGate = unlockGate ?? new MentorDomainUnlockGate();
         _readTimestamp = readTimestamp ?? Stopwatch.GetTimestamp;
+        _performanceClock = performanceClock ?? StopwatchPerformanceClock.Instance;
         _readLifecycleGeneration = readLifecycleGeneration ??
             (() => GameLifecycleMonitor.Shared.Current.Generation);
         _ownsActionFamily = ownsActionFamily ?? (_ => true);
@@ -965,14 +968,18 @@ internal sealed class MentorRuntime : IDisposable
             TryFindGrantDomain(now, out _, out _));
     }
 
-    private int RunCooperativeSlice()
+    private int RunCooperativeSlice(double remainingSharedSoftBudgetMilliseconds)
     {
-        var started = Stopwatch.GetTimestamp();
-        var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
+        var cpuBudget = EffectiveCooperativeBudgetMilliseconds(
+            _config.CpuBudgetMilliseconds.Value,
+            remainingSharedSoftBudgetMilliseconds);
+        if (cpuBudget <= 0.0) return 0;
+
+        var started = _performanceClock.GetTimestamp();
         var operations = 0;
         var empty = 0;
         while (operations < PlanningOperationsPerFrame &&
-               ElapsedMilliseconds(started) < cpuBudget &&
+               _performanceClock.GetElapsedMilliseconds(started, _performanceClock.GetTimestamp()) < cpuBudget &&
                empty < DomainOrder.Length)
         {
             var domain = DomainOrder[_nextPlanningDomain++ % DomainOrder.Length];
@@ -985,6 +992,16 @@ internal sealed class MentorRuntime : IDisposable
             empty = 0;
         }
         return operations;
+    }
+
+    internal static double EffectiveCooperativeBudgetMilliseconds(
+        double configuredMilliseconds,
+        double remainingSharedSoftBudgetMilliseconds)
+    {
+        var configured = Math.Clamp(configuredMilliseconds, 0.1, 1.0);
+        if (double.IsNaN(remainingSharedSoftBudgetMilliseconds) || remainingSharedSoftBudgetMilliseconds <= 0.0)
+            return 0.0;
+        return Math.Min(configured, remainingSharedSoftBudgetMilliseconds);
     }
 
     private bool HasCooperativeWork(long now)

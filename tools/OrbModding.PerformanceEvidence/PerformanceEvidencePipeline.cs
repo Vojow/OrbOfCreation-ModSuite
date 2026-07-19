@@ -74,6 +74,7 @@ public static class PerformanceEvidencePipeline
             }
 
             EvaluateZeroDelta(results, identity, "measurementFailures", start.MeasurementFailures, end.MeasurementFailures);
+            EvaluateZeroDelta(results, identity, "failedWorkItems", start.FailedWorkItems, end.FailedWorkItems);
             EvaluateZeroDelta(results, identity, "starvationEvents", start.StarvationEvents, end.StarvationEvents);
             EvaluateZeroDelta(results, identity, "abandonedWorkItems", start.AbandonedWorkItems, end.AbandonedWorkItems);
             EvaluateCumulativeMaximum(results, identity, "maximumPendingWaitFrames", start.MaximumPendingWaitFrames, end.MaximumPendingWaitFrames, rule.MaximumPendingWaitFrames);
@@ -118,6 +119,41 @@ public static class PerformanceEvidencePipeline
             evidence.Metadata.SourceCommit,
             evidence.Metadata.Scenario,
             results);
+    }
+
+    public static PerformanceGateStatus EvaluateGate(
+        PerformanceProfile profile,
+        PerformanceEvaluation evaluation)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(evaluation);
+        if (profile.ProfileId != evaluation.ProfileId ||
+            profile.ProfileVersion != evaluation.ProfileVersion ||
+            profile.SourceSha256 != evaluation.ProfileSha256)
+        {
+            throw new InvalidDataException("Performance evaluation does not match the supplied profile.");
+        }
+
+        for (var index = 0; index < evaluation.Results.Count; index++)
+        {
+            var result = evaluation.Results[index];
+            if (result.Classification == "within-target" || result.Classification == "observe-only")
+            {
+                continue;
+            }
+
+            if (result.Classification == "exceeded" ||
+                result.Classification == "insufficient-samples" ||
+                result.Classification == "insufficient-window")
+            {
+                return PerformanceGateStatus.TargetFailed;
+            }
+
+            throw new InvalidDataException(
+                $"Unknown performance classification '{result.Classification}'.");
+        }
+
+        return PerformanceGateStatus.Passed;
     }
 
     public static string WriteEvaluationJson(PerformanceEvaluation evaluation) =>
@@ -760,3 +796,9 @@ public sealed record EvidenceWork(
     long NativeHardBudgetOverruns, long MeasurementFailures, EvidenceTiming WorkItemTiming, EvidenceTiming FrameTiming);
 public sealed record MetricEvaluation(string WorkIdentity, string Metric, string Classification, double Observed, double Target, string? Note);
 public sealed record PerformanceEvaluation(string ProfileId, int ProfileVersion, string ProfileSha256, string CaptureKind, string SourceCommit, string Scenario, List<MetricEvaluation> Results);
+
+public enum PerformanceGateStatus
+{
+    Passed,
+    TargetFailed,
+}

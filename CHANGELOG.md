@@ -1,5 +1,12 @@
 # Changelog
 
+## Enforced shared performance profile — 2026-07-19
+
+- Apply the checked V1 profile's exact starvation thresholds to all twelve supported coordinator identities while retaining the constructor fallback for unknown work and allowing test coordinators to select a tighter threshold.
+- Make post-construction shared CPU budgets tightening-only, expose the allocation-free remaining soft budget, and clamp coordinated Mentor planning to that remaining time without losing pending plans or XP.
+- Promote cooperative timing, combined-frame timing, wait, starvation, abandonment, work-failure, and measurement targets to a CI gate with a distinct target-failure exit; native timing remains observe-only after a complete uncontaminated sample window.
+- Bump Orb Mentor to 0.3.7 and Orb Modding Common to 0.3.6.
+
 ## Fail-closed automation admission adapters — 2026-07-19
 
 - Normalize stable identity, availability, native readiness, immediate cost, drain cost, and queue requirements before shared Auto Buy and Auto Cast policy evaluates an action.

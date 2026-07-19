@@ -60,19 +60,24 @@ window. The checker evaluates counter deltas; it never attributes a lifetime
 maximum that was already present at the start to the current capture.
 
 The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one mutation
-admission per frame, twelve supported work identities, wait/run limits, and a
-minimum of 30 samples. Cooperative p95, p99, and maximum targets are
-observational merge evidence in this beta. Native timing and native hard-budget
-overruns are explicitly `observe-only` until both Windows desktop and Steam Deck
-under Proton captures exist. Target exceedance therefore appears in JSON and
-Markdown but does not make the V1 CLI fail; invalid JSON, incompatible policy,
-profile-hash drift, missing/unknown work, or contradictory facts do fail it.
+admission per frame, twelve supported work identities, exact 10/12/30-frame wait
+limits, and a minimum of 30 samples. Cooperative p95, p99, and maximum targets,
+combined active-frame timing, wait limits, starvation, abandonment, and
+work/measurement failures are enforced merge evidence. Exceeded or insufficient
+required results return CLI exit code 3. Invalid JSON, incompatible policy,
+profile-hash drift, missing/unknown work, or contradictory facts return exit code
+1. Usage errors return exit code 2. Native timing and native hard-budget overruns
+remain literal `observe-only` after a complete uncontaminated sample window until
+both Windows desktop and Steam Deck under Proton captures exist; an insufficient
+or contaminated native window still makes the capture unusable and returns 3.
 The coordinator's combined active-frame distribution is evaluated separately:
 p95 uses the 0.75 ms soft target, while p99 and maximum use the 1.0 ms hard
 target. A per-work pass therefore cannot hide stacked suite work in one frame.
 The twelve identity constants are consumed by the production registration
 sites as well as a checked-profile audit, so renaming or reclassifying runtime
-work without updating the profile fails portable CI.
+work without updating the profile fails portable CI. The same audit compares all
+twelve compiled starvation thresholds with both JSON wait fields, preventing the
+runtime resolver and checked profile from drifting independently.
 
 CI produces a fixed-clock synthetic start/end capture and runs:
 

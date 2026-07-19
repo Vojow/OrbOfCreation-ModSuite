@@ -480,8 +480,11 @@ record for every stable `(subsystem, work name, registration id)` identity. Each
 registration freezes average, maximum, p95, and p99 timing from one low-frequency
 sort, while recording itself remains allocation-free. Admission diagnostics
 separate deferred attempts from distinct deferred frames, retain fixed counters
-for each denial reason, report consecutive deferred-frame runs and pending age, and mark a
-120-frame starvation threshold. A successful admission resets that wait episode;
+for each denial reason, and report consecutive deferred-frame runs and pending age.
+The compiled V1 profile applies exact starvation thresholds of 10 frames to Auto
+Buy mutation, 30 to Mod Config recovery, and 12 to the other ten supported
+identities; unknown work retains the coordinator constructor fallback of 120.
+An explicitly tighter constructor threshold wins. A successful admission resets that wait episode;
 admission, disable, and disposal first close the live wait so its maximum and
 starvation evidence are retained, while re-enable cannot inherit a stale age.
 Wait age and consecutive runs use the supplied Unity frame identity rather than
@@ -495,8 +498,12 @@ an admitted no-op therefore records no attempted call, and one future burst can
 report multiple outcomes under the same lease. Failure and exception paths can
 retain attempted counts without claiming a commit. Hard-budget overruns remain
 attributed to the exact registration as well as its compatible subsystem total.
-Snapshots are diagnostic observations only: they do not change scheduling,
-budgets, queue policy, or mutation admission.
+Snapshots remain diagnostic observations. The supported-profile resolver now
+changes only the starvation reporting threshold for an exact composite identity.
+Coordinator budgets can be tightened atomically after construction but cannot be
+raised, and the allocation-free remaining soft budget reports the full configured
+value before the first frame or the non-negative unspent amount in the current
+frame. Queue policy, fairness, and mutation admission are unchanged.
 
 A separate strict V1 evidence pipeline freezes start and end snapshots for all
 twelve supported-suite work identities. The checked profile is bound by exact
@@ -525,14 +532,24 @@ Distinct deferred frames remain diagnostic because isolated denials across a
 long soak are expected; maximum pending wait, consecutive denial runs, zero
 starvation, zero abandoned work, and zero measurement failures are the gates.
 
-This slice is deliberately observational. It does not tighten coordinator
-budgets, alter admission, schedule lower-priority loops, or implement Auto Buy
-bursting. Cooperative results are classified against the reviewed targets, but
-the V1 CLI exits nonzero only for invalid or incompatible evidence. Native call
-timing and native hard overruns remain `observe-only` until comparable Windows
-desktop and Steam Deck/Proton captures are reviewed. See
+The V1 checker is now an enforced CI gate. Cooperative per-work timing, combined
+active-frame timing, wait limits, zero starvation, zero abandonment, and zero
+work/measurement failures return target-failure exit code 3 when exceeded or when a
+required sample/window is insufficient. Invalid or incompatible input remains a
+separate exit code 1. Qualified native call timing and native hard overruns remain
+literal `observe-only` results until comparable Windows desktop and Steam
+Deck/Proton captures are reviewed; incomplete or contaminated native timing still
+makes the required capture unusable. This does not schedule lower-priority loops,
+change fairness or mutation admission, or implement Auto Buy bursting. See
 [testing](../development/testing.md#suite-coordinator-performance-evidence) for
 the command and evidence-handling rules.
+
+Mentor's coordinated cooperative slice consumes the remaining shared soft budget
+after admission. Its configured 0.1-1.0 ms clamp can reduce that amount but cannot
+raise it, and the 0.1 ms configuration floor is not reapplied after the shared
+clamp. Zero remaining time performs no work; resumable plans, parked recipients,
+and exact pending XP remain authoritative for the next frame. The legacy
+uncoordinated Mentor path is unchanged.
 
 The production Auto Buy, Auto Cast, Auto Concept, and spell-level reflection
 adapters expose the exact latest verifier outcome. Engine metrics read it
@@ -574,9 +591,9 @@ Targets must be validated on desktop and Steam Deck. If a single native call exc
 
 - Add subsystem and exact-registration timing, denial, wait-age, native-outcome,
   and count metrics without changing decisions. **Implemented.**
-- Add the strict start/end profile, sanitized capture seam, and observational
-  evaluator so desktop and Deck results are comparable. **Implemented; runtime
-  captures pending.**
+- Add the strict start/end profile, sanitized capture seam, and enforced evaluator
+  so desktop and Deck results are comparable. **Implemented; runtime captures
+  pending.**
 - Record desktop and Steam Deck baselines for disabled, AutoBuy-only, Mentor-only, and combined operation.
 - Identify native calls that individually exceed the desired budget.
 

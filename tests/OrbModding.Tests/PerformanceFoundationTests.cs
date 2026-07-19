@@ -7,6 +7,128 @@ namespace OrbModding.Tests;
 
 public sealed class PerformanceFoundationTests
 {
+    [Theory]
+    [InlineData(0, 12)]
+    [InlineData(1, 10)]
+    [InlineData(2, 12)]
+    [InlineData(3, 12)]
+    [InlineData(4, 12)]
+    [InlineData(5, 12)]
+    [InlineData(6, 12)]
+    [InlineData(7, 12)]
+    [InlineData(8, 12)]
+    [InlineData(9, 12)]
+    [InlineData(10, 30)]
+    [InlineData(11, 12)]
+    public void SupportedProfileIdentityAppliesExactStarvationThreshold(int identityIndex, int expected)
+    {
+        var identity = SuitePerformanceWorkIdentities.GetSupportedSuiteV1(identityIndex);
+        var coordinator = new SuitePerformanceCoordinator(
+            new ManualPerformanceClock(),
+            starvationThresholdFrames: 120);
+        using var registration = coordinator.Register(
+            identity.Subsystem,
+            identity.WorkName,
+            identity.BudgetClass,
+            identity.ExecutionKind);
+
+        Assert.True(coordinator.TryGetRegistrationSnapshot(registration, out var snapshot));
+        Assert.Equal(expected, identity.MaximumPendingWaitFrames);
+        Assert.Equal(expected, snapshot.StarvationThresholdFrames);
+    }
+
+    [Fact]
+    public void SupportedProfileMatchingIsExactAndConstructorFallbackCanBeTighter()
+    {
+        var expected = SuitePerformanceWorkIdentities.AutoBuyMutation;
+        var fallback = new SuitePerformanceCoordinator(
+            new ManualPerformanceClock(),
+            starvationThresholdFrames: 77);
+        using var wrongName = fallback.Register(
+            expected.Subsystem,
+            expected.WorkName + " ",
+            expected.BudgetClass,
+            expected.ExecutionKind);
+        using var wrongBudget = fallback.Register(
+            expected.Subsystem,
+            expected.WorkName,
+            SuiteBudgetClass.SoftLimited,
+            expected.ExecutionKind);
+        using var wrongSubsystem = fallback.Register(
+            expected.Subsystem + ".Other",
+            expected.WorkName,
+            expected.BudgetClass,
+            expected.ExecutionKind);
+        using var wrongExecution = fallback.Register(
+            expected.Subsystem,
+            expected.WorkName,
+            expected.BudgetClass,
+            SuiteWorkExecutionKind.NonPreemptibleNative);
+        using var unknown = fallback.Register("ThirdParty", "Background work");
+
+        Assert.True(fallback.TryGetRegistrationSnapshot(wrongName, out var wrongNameSnapshot));
+        Assert.True(fallback.TryGetRegistrationSnapshot(wrongBudget, out var wrongBudgetSnapshot));
+        Assert.True(fallback.TryGetRegistrationSnapshot(wrongSubsystem, out var wrongSubsystemSnapshot));
+        Assert.True(fallback.TryGetRegistrationSnapshot(wrongExecution, out var wrongExecutionSnapshot));
+        Assert.True(fallback.TryGetRegistrationSnapshot(unknown, out var unknownSnapshot));
+        Assert.Equal(77, wrongNameSnapshot.StarvationThresholdFrames);
+        Assert.Equal(77, wrongBudgetSnapshot.StarvationThresholdFrames);
+        Assert.Equal(77, wrongSubsystemSnapshot.StarvationThresholdFrames);
+        Assert.Equal(77, wrongExecutionSnapshot.StarvationThresholdFrames);
+        Assert.Equal(77, unknownSnapshot.StarvationThresholdFrames);
+
+        var tighter = new SuitePerformanceCoordinator(
+            new ManualPerformanceClock(),
+            starvationThresholdFrames: 5);
+        using var exact = tighter.Register(
+            expected.Subsystem,
+            expected.WorkName,
+            expected.BudgetClass,
+            expected.ExecutionKind);
+        Assert.True(tighter.TryGetRegistrationSnapshot(exact, out var exactSnapshot));
+        Assert.Equal(5, exactSnapshot.StarvationThresholdFrames);
+    }
+
+    [Fact]
+    public void SetBudgetsAcceptsEqualOrTighterAndRejectsAnyIncreaseAtomically()
+    {
+        var coordinator = new SuitePerformanceCoordinator(new ManualPerformanceClock(), 0.75, 1.0);
+
+        coordinator.SetBudgets(0.75, 1.0);
+        coordinator.SetBudgets(0.5, 0.9);
+        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
+        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
+
+        Assert.Throws<InvalidOperationException>(() => coordinator.SetBudgets(0.6, 0.8));
+        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
+        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
+
+        Assert.Throws<InvalidOperationException>(() => coordinator.SetBudgets(0.4, 1.0));
+        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
+        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
+    }
+
+    [Fact]
+    public void RemainingSoftBudgetIsFullBeforeFrameAndNonnegativeAfterMeasuredWork()
+    {
+        var clock = new ManualPerformanceClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 0.75, 1.0);
+        using var work = coordinator.Register("test", "work");
+
+        Assert.Equal(0.75, coordinator.RemainingSoftBudgetMilliseconds, 12);
+        work.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(work, 1, out var first));
+        clock.Advance(0.6);
+        first.Complete();
+        Assert.Equal(0.15, coordinator.RemainingSoftBudgetMilliseconds, 12);
+
+        work.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(work, 2, out var second));
+        clock.Advance(2.0);
+        second.Complete();
+        Assert.Equal(0.0, coordinator.RemainingSoftBudgetMilliseconds);
+    }
+
     [Fact]
     public void RollingMetricsRetainOnlyBoundedWindowForSummary()
     {
@@ -724,6 +846,22 @@ public sealed class PerformanceFoundationTests
 
         Assert.IsType<InvalidOperationException>(threadFailure);
         Assert.Equal(10, coordinator.CurrentFrameIdentity);
+
+        threadFailure = null;
+        thread = new Thread(() =>
+        {
+            try
+            {
+                _ = coordinator.RemainingSoftBudgetMilliseconds;
+            }
+            catch (Exception exception)
+            {
+                threadFailure = exception;
+            }
+        });
+        thread.Start();
+        thread.Join();
+        Assert.IsType<InvalidOperationException>(threadFailure);
     }
 
     private static void AssertGrantedAndComplete(
