@@ -430,6 +430,17 @@ public sealed class SuitePerformanceCoordinator
             _suiteFrameMetrics.GetSnapshot(percentile));
     }
 
+    /// <summary>
+    /// Freezes the full active-frame distribution for explicit, low-frequency
+    /// diagnostics. This sorts the bounded metrics scratch window and must not
+    /// be called from per-frame scheduling paths.
+    /// </summary>
+    public RollingPerformanceDistributionSnapshot GetFrameDistributionSnapshot()
+    {
+        EnsureOwnerThread();
+        return _suiteFrameMetrics.GetDistributionSnapshot();
+    }
+
     public bool TryGetSubsystemSnapshot(
         string subsystem,
         out SubsystemPerformanceSnapshot snapshot,

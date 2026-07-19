@@ -498,6 +498,42 @@ attributed to the exact registration as well as its compatible subsystem total.
 Snapshots are diagnostic observations only: they do not change scheduling,
 budgets, queue policy, or mutation admission.
 
+A separate strict V1 evidence pipeline freezes start and end snapshots for all
+twelve supported-suite work identities. The checked profile is bound by exact
+SHA-256 and pins the current 0.75/1.0 ms coordinator policy, one native mutation
+admission per frame, cooperative percentile targets, and per-work wait limits.
+Evidence matching omits the ephemeral registration id and instead uses the
+ordinal composite `(subsystem, work name, budget class, execution kind)`.
+Counter evaluation uses end-minus-start deltas. Lifetime maxima that already
+exceeded a target at capture start are reported as contaminated/insufficient,
+not blamed on the new interval. Rolling timing can pass only from an empty start
+window or after at least one complete 300-sample window has been replaced.
+Production coordinator registrations consume the same checked identity catalog
+that portable tests compare with the profile. Start/end capture retains the
+process-local registration id only long enough to reject same-name registration
+churn; it never serializes that id. The combined coordinator active-frame p95 is
+classified against the soft policy and p99/maximum against the hard policy, so
+stacked work cannot disappear behind individually compliant registrations.
+
+The production capture seam allocates and sorts only when explicitly invoked,
+serializes bounded canonical JSON without a runtime JSON dependency, performs no
+file I/O, and exposes no user, host, save, or path metadata. The .NET 10 checker
+owns strict parsing, compatibility validation, classification, and atomic JSON/
+Markdown output. It rejects unknown or duplicate fields, case collisions,
+invalid counts, policy/profile drift, and incomplete full-suite captures.
+Distinct deferred frames remain diagnostic because isolated denials across a
+long soak are expected; maximum pending wait, consecutive denial runs, zero
+starvation, zero abandoned work, and zero measurement failures are the gates.
+
+This slice is deliberately observational. It does not tighten coordinator
+budgets, alter admission, schedule lower-priority loops, or implement Auto Buy
+bursting. Cooperative results are classified against the reviewed targets, but
+the V1 CLI exits nonzero only for invalid or incompatible evidence. Native call
+timing and native hard overruns remain `observe-only` until comparable Windows
+desktop and Steam Deck/Proton captures are reviewed. See
+[testing](../development/testing.md#suite-coordinator-performance-evidence) for
+the command and evidence-handling rules.
+
 The production Auto Buy, Auto Cast, Auto Concept, and spell-level reflection
 adapters expose the exact latest verifier outcome. Engine metrics read it
 immediately after the adapter call, so a preflight rejection records no native
@@ -538,6 +574,9 @@ Targets must be validated on desktop and Steam Deck. If a single native call exc
 
 - Add subsystem and exact-registration timing, denial, wait-age, native-outcome,
   and count metrics without changing decisions. **Implemented.**
+- Add the strict start/end profile, sanitized capture seam, and observational
+  evaluator so desktop and Deck results are comparable. **Implemented; runtime
+  captures pending.**
 - Record desktop and Steam Deck baselines for disabled, AutoBuy-only, Mentor-only, and combined operation.
 - Identify native calls that individually exceed the desired budget.
 

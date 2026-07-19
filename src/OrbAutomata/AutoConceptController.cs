@@ -95,16 +95,18 @@ internal sealed class AutoConceptController : IDisposable
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
         _ownsActionFamily = ownsActionFamily ?? (() => true);
+        var evaluateIdentity = SuitePerformanceWorkIdentities.AutoConceptEvaluate;
         _readWork = coordinator.Register(
-            "OrbAutomata.AutoConcept",
-            "Reconcile and plan concept mastery",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+            evaluateIdentity.Subsystem,
+            evaluateIdentity.WorkName,
+            evaluateIdentity.BudgetClass,
+            evaluateIdentity.ExecutionKind);
+        var mutationIdentity = SuitePerformanceWorkIdentities.AutoConceptMutation;
         _mutationWork = coordinator.Register(
-            "OrbAutomata.AutoConcept",
-            "Change Active Concept quantity",
-            SuiteBudgetClass.HardLimited,
-            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+            mutationIdentity.Subsystem,
+            mutationIdentity.WorkName,
+            mutationIdentity.BudgetClass,
+            mutationIdentity.ExecutionKind);
         _secondsUntilEvaluation = 0.0f;
         _secondsUntilWatchdog = 0.0f;
     }
