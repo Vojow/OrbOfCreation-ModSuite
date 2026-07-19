@@ -302,6 +302,7 @@ internal sealed class MentorRuntime : IDisposable
     private bool _hasFeatureStatusFingerprint;
     private long _statusLifecycleGeneration;
     private bool _guarded;
+    private NativeMutationCallOutcome _activeMutationOutcome;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
     private bool _captureFailureLogged;
@@ -946,12 +947,15 @@ internal sealed class MentorRuntime : IDisposable
         _coordinatorWork.SetState(true, cooperativePending, mutationPending);
         if (mutationPending)
         {
-            _coordinatorWork.TryRunMutation(() =>
-            {
-                _nextGrantDomain = (mutationIndex + 1) % DomainOrder.Length;
-                ProcessGrant(mutationDomain);
-                return 1;
-            });
+            _activeMutationOutcome = default;
+            _coordinatorWork.TryRunMutation(
+                () =>
+                {
+                    _nextGrantDomain = (mutationIndex + 1) % DomainOrder.Length;
+                    ProcessGrant(mutationDomain, out var completion);
+                    return completion;
+                },
+                () => _activeMutationOutcome.ToWorkCompletion());
         }
 
         now = Stopwatch.GetTimestamp();
@@ -1200,8 +1204,11 @@ internal sealed class MentorRuntime : IDisposable
             _log.LogInfo($"Mentor {domain} batch: sources={batch.SourceCount}, events={batch.EventCount}, recipients={recipients.Count}, share={percent:0.##}%");
     }
 
-    private GrantResult ProcessGrant(MentorDomain domain)
+    private GrantResult ProcessGrant(MentorDomain domain) => ProcessGrant(domain, out _);
+
+    private GrantResult ProcessGrant(MentorDomain domain, out SuiteWorkCompletion completion)
     {
+        completion = new SuiteWorkCompletion(1);
         if (!_ownsActionFamily(domain))
         {
             CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
@@ -1309,6 +1316,8 @@ internal sealed class MentorRuntime : IDisposable
                     before.Experience.Add(expectedExperience),
                     after.Experience));
             catalog.LastMutationEvidence = evidence;
+            _activeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
+            completion = _activeMutationOutcome.ToWorkCompletion();
             if (!evidence.IsVerified)
             {
                 BlockDomainTransient(

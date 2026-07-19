@@ -475,6 +475,39 @@ Optimization must be evidence-driven. Add rolling counters for:
 - Queue polls and native mutations.
 - Managed-memory samples and GC collection deltas where the runtime exposes them safely.
 
+The coordinator now keeps both the compatible subsystem aggregate and a bounded
+record for every stable `(subsystem, work name, registration id)` identity. Each
+registration freezes average, maximum, p95, and p99 timing from one low-frequency
+sort, while recording itself remains allocation-free. Admission diagnostics
+separate deferred attempts from distinct deferred frames, retain fixed counters
+for each denial reason, report consecutive deferred-frame runs and pending age, and mark a
+120-frame starvation threshold. A successful admission resets that wait episode;
+admission, disable, and disposal first close the live wait so its maximum and
+starvation evidence are retained, while re-enable cannot inherit a stale age.
+Wait age and consecutive runs use the supplied Unity frame identity rather than
+the coordinator's internal watchdog epoch; sparse identities retain real elapsed
+frames, and a backward/reset identity starts a new safe wait episode.
+
+Native metrics distinguish lease admission from work that actually reached a
+native boundary. Callers complete a mutation lease with explicit counts for
+attempted native calls, mutation attempts, and postcondition-verified commits;
+an admitted no-op therefore records no attempted call, and one future burst can
+report multiple outcomes under the same lease. Failure and exception paths can
+retain attempted counts without claiming a commit. Hard-budget overruns remain
+attributed to the exact registration as well as its compatible subsystem total.
+Snapshots are diagnostic observations only: they do not change scheduling,
+budgets, queue policy, or mutation admission.
+
+The production Auto Buy, Auto Cast, Auto Concept, and spell-level reflection
+adapters expose the exact latest verifier outcome. Engine metrics read it
+immediately after the adapter call, so a preflight rejection records no native
+invocation, an execution throw or failed postcondition records an uncommitted
+attempt, and only verified mutations record a commit. Charge-hold reflection is
+counted as attempted once `MethodInfo.Invoke` is reached but cannot claim a
+commit because the installed contract has no authoritative postcondition.
+Every admitted mutation lease still records one legacy operation, including a
+late no-op or rejection, keeping historical operation totals comparable.
+
 Normal logs should contain startup state, lifecycle resets, warnings, and an optional low-frequency summary. They must not write one line for every normal purchase or XP grant unless detailed diagnostics are explicitly enabled.
 
 ### Initial performance acceptance targets
@@ -503,7 +536,8 @@ Targets must be validated on desktop and Steam Deck. If a single native call exc
 
 ### P0 — Baseline instrumentation
 
-- Add subsystem timing and count metrics without changing decisions.
+- Add subsystem and exact-registration timing, denial, wait-age, native-outcome,
+  and count metrics without changing decisions. **Implemented.**
 - Record desktop and Steam Deck baselines for disabled, AutoBuy-only, Mentor-only, and combined operation.
 - Identify native calls that individually exceed the desired budget.
 

@@ -63,8 +63,12 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMut
 
     internal void BlockMutation(string uuid, string reason) => _mutationBlocks[uuid] = reason;
 
-    internal bool FireSlotAndResolveTargets(int slotIndex, out string reason)
+    internal bool FireSlotAndResolveTargets(
+        int slotIndex,
+        out int nativeCallsAttempted,
+        out string reason)
     {
+        nativeCallsAttempted = 0;
         if (IsTargeting())
         {
             reason = "a target request was already active";
@@ -88,14 +92,35 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMut
         {
             using (AutoCastManualSignal.EnterAutomatedFire())
             {
+                nativeCallsAttempted++;
                 fire.Invoke(manager, new object[] { slotIndex });
             }
 
             for (var request = 0; request < 16 && IsTargeting(); request++)
             {
                 var targetingType = ReflectionUtil.FindLoadedType("TargetingManager");
-                var link = targetingType?.GetMethod("GetTargetingLink", StaticFlags)?.Invoke(null, Array.Empty<object>());
-                var target = link is null ? null : ReflectionUtil.InvokeNoArgs(link, "GetRandom");
+                var getLink = targetingType?.GetMethod("GetTargetingLink", StaticFlags);
+                object? link = null;
+                if (getLink is not null)
+                {
+                    nativeCallsAttempted++;
+                    link = getLink.Invoke(null, Array.Empty<object>());
+                }
+                object? target = null;
+                if (link is not null)
+                {
+                    var getRandom = link.GetType().GetMethod(
+                        "GetRandom",
+                        ReflectionUtil.InstanceFlags,
+                        null,
+                        Type.EmptyTypes,
+                        null);
+                    if (getRandom is not null)
+                    {
+                        nativeCallsAttempted++;
+                        target = getRandom.Invoke(link, Array.Empty<object>());
+                    }
+                }
                 var submit = targetingType?.GetMethods(StaticFlags)
                     .FirstOrDefault(method => method.Name == "SubmitTarget" && method.GetParameters().Length == 1);
                 if (target is null || submit is null)
@@ -104,6 +129,7 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMut
                     return false;
                 }
 
+                nativeCallsAttempted++;
                 submit.Invoke(null, new[] { target });
             }
 
@@ -144,12 +170,14 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMut
 internal sealed class ReflectionAutoCastCandidate :
     IAutoCastCandidate,
     IAutoCastAdmissionFailureEvidence,
-    IAutoCastAdmissionFailureReasonEvidence
+    IAutoCastAdmissionFailureReasonEvidence,
+    INativeMutationOutcomeSource
 {
     private const string AutoCastChargeInput = "OrbAutomata.AutoCast.FullCharge";
     private readonly ReflectionAutoCastCatalog _catalog;
     private readonly object _spell;
     private readonly bool _hasExactNativeType;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public ReflectionAutoCastCandidate(ReflectionAutoCastCatalog catalog, object spell, int slotIndex)
     {
@@ -193,6 +221,8 @@ internal sealed class ReflectionAutoCastCandidate :
     public AutoCastAdmissionFailureKind LastAdmissionFailure { get; private set; }
 
     public string LastAdmissionFailureReason { get; private set; } = string.Empty;
+
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
     public bool CanCast(out string reason)
     {
@@ -308,6 +338,7 @@ internal sealed class ReflectionAutoCastCandidate :
 
     public bool TryFireAndResolveTargets(out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (!TryGetIdentity(out var identity, out reason))
         {
             return false;
@@ -319,6 +350,7 @@ internal sealed class ReflectionAutoCastCandidate :
         }
 
         var nativeReason = string.Empty;
+        var nativeCallsAttempted = 0;
         var evidence = NativeMutationVerifier.Execute(
             "Auto Cast fire",
             identity.Uuid,
@@ -326,12 +358,21 @@ internal sealed class ReflectionAutoCastCandidate :
             () => AutoCastManualSignal.FireEpoch,
             () =>
             {
-                if (!_catalog.FireSlotAndResolveTargets(SlotIndex, out nativeReason))
+                if (!_catalog.FireSlotAndResolveTargets(
+                        SlotIndex,
+                        out nativeCallsAttempted,
+                        out nativeReason))
                 {
                     throw new InvalidOperationException(nativeReason);
                 }
             },
             (before, after) => after == before + 1);
+        _lastNativeMutationOutcome = evidence.MutationWasAttempted && nativeCallsAttempted > 0
+            ? new NativeMutationCallOutcome(
+                nativeCallsAttempted,
+                1,
+                evidence.IsVerified ? 1 : 0)
+            : default;
         if (evidence.IsVerified)
         {
             reason = string.Empty;
@@ -373,6 +414,7 @@ internal sealed class ReflectionAutoCastCandidate :
 
     public bool TrySetChargeHold(bool isHolding, out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (!_hasExactNativeType)
         {
             reason = "native spell is not the exact audited Spell type";
@@ -393,6 +435,7 @@ internal sealed class ReflectionAutoCastCandidate :
 
         try
         {
+            _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
             method.Invoke(_spell, new object[] { AutoCastChargeInput, isHolding });
             reason = isHolding ? "full-charge hold started" : "full-charge hold released";
             return true;

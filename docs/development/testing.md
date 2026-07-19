@@ -135,7 +135,18 @@ The current P0/P1 headless scope covers:
 - Mod Config staged dependencies, atomic apply/rollback, external refresh,
   UI-work scheduling, listener cleanup, and shell repair policy;
 - shared scheduler fairness, mutation admission, failure containment, and
-  deterministic performance budgets.
+  deterministic performance budgets;
+- exact per-registration performance observations for same-subsystem work,
+  same-frame versus distinct-frame deferrals, fixed denial-reason counters,
+  consecutive deferred-frame runs, pending-wait reset and starvation episodes,
+  sparse and backward Unity frame identities, wait closure on admission/disable/
+  disposal, exact overrun attribution,
+  admitted no-ops, multiple native outcomes per lease, attempted versus
+  postcondition-verified mutations, and disable/re-enable/disposal lifecycle;
+- production reflection outcomes proving preflight rejection performs zero
+  native calls, verifier execution/postcondition failures are attempted but
+  uncommitted, unverified charge hold never claims a commit, exception cleanup
+  retains observed outcomes, and legacy per-lease operation totals remain stable;
 - reusable lifecycle state-machine journeys spanning no-save, load, registry
   readiness, unlock, action, completion, reset, stale callbacks, disable and
   re-enable, same-name scene recreation, and mixed Automata/Mentor isolation.

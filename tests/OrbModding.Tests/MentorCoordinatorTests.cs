@@ -316,6 +316,27 @@ public sealed class MentorCoordinatorTests
         Assert.Equal(3, metrics.NativeMutationsStarted);
     }
 
+    [Fact]
+    public void MutationExceptionPreservesObservedOutcomeAndLegacyOperationCount()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
+        mentor.SetState(true, cooperativePending: false, mutationPending: true);
+        var observed = new NativeMutationCallOutcome(1, 1, 0);
+
+        Assert.Throws<InvalidOperationException>(() => mentor.TryRunMutation(
+            () => throw new InvalidOperationException("housekeeping failed after native invocation"),
+            () => observed.ToWorkCompletion()));
+
+        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbMentor", out var metrics));
+        Assert.Equal(1, metrics.FailedWorkItems);
+        Assert.Equal(1, metrics.TotalOperations);
+        Assert.Equal(1, metrics.NativeCallsAttempted);
+        Assert.Equal(1, metrics.NativeMutationAttempts);
+        Assert.Equal(0, metrics.NativeMutationsCommitted);
+    }
+
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
 }
