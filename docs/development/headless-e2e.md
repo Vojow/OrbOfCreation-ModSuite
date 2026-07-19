@@ -40,6 +40,34 @@ currently cover:
 - automatic spell leveling before and after the native level-all upgrade, plus
   cancellation of a pending mutation during lifecycle invalidation.
 
+### Reusable lifecycle scenarios
+
+`tests/OrbModding.Tests/Scenarios/` provides a deterministic, test-only state
+machine for suite journeys that cross several native events. Its
+`LifecycleScenarioKernel` owns a simulated frame and elapsed-time clock while
+driving the production `GameLifecycleMonitor`, `GameplayInvalidationBus`, and
+`SuitePerformanceCoordinator`. Lifecycle-bound delayed callbacks capture the
+generation at scheduling time and are recorded, but not executed, after that
+generation becomes stale. An explicit unfiltered-delivery mode models a late
+native observer so the production invalidation bus, rather than the harness,
+must reject its old-generation event.
+
+Production-facing feature drivers keep the scenario layer honest:
+
+- `ScenarioAutoBuyFeature` runs the real `AutoBuyEngine` against the existing
+  authoritative `SimulatedAutoBuyWorld` and `SimulatedAutoBuyCatalog`;
+- `ScenarioMentorFeature` runs the real `MentorEngine` and
+  `MentorCoordinatorWork` mutation path;
+- `ScenarioOracles` checks lifecycle order, ignored stale callbacks, unique
+  request execution, and the shared one-native-mutation-per-frame invariant.
+
+The focused scenarios cover no-save through load/readiness, progression unlock,
+queue submission and completion, reset, old-generation callback rejection,
+prepared-work cancellation, disable/re-enable, and recreation of a `Main` scene
+with a different native identity. The mixed Automata/Mentor journey also proves
+that disabling or locking one feature does not stop an unrelated supported
+feature. These fixtures never launch Unity or use computer control.
+
 The fixture members are reduced from installed-game documentation and inspected
 assembly contracts. They remain smaller than the game and do not replace the
 installed-game contract suite or UAT.
@@ -69,6 +97,13 @@ Run only headless behavioral journeys:
 ```powershell
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessIntegration"
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessE2E"
+```
+
+Run only the reusable lifecycle state-machine scenarios while iterating on the
+kernel or a feature driver:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
 ```
 
 Run the active deterministic performance baseline:
@@ -168,6 +203,10 @@ gate only between reports with equivalent engine semantics.
 - Model unexpected native results and verify that the engine fails closed.
 - Use several small focused journeys plus bounded stress scenarios. Avoid one enormous test that makes failures hard to diagnose.
 - Reduce every UAT-only defect into a deterministic headless regression when the relevant contract can be represented safely.
+- Schedule native-shaped delayed callbacks through the lifecycle kernel so an
+  old generation is rejected explicitly rather than relying on timing luck.
+- Give every simulated mutation request a stable request identity and run the
+  mutation uniqueness oracle in mixed-feature journeys.
 
 ## UAT handoff
 
