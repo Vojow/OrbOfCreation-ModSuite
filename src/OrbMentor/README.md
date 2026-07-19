@@ -1,6 +1,8 @@
-# Orb Mentor 0.3.5 beta
+# Orb Mentor 0.3.6 beta
 
 Orb Mentor shares configurable percentages of native mastery XP with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and ordinary available alchemy recipes. `EquippedSpells` is the default spell policy: every equipped source can share with discovered spells below that source's own mastery. `HighestDiscovered` preserves the original highest-mastery-only behavior. Artifact and alchemy sharing remain opt-in and keep their existing highest-mastery rule. Scholar concepts are excluded from the Alchemy catalog, cannot become Alchemy mentors or recipients, and their XP callbacks are ignored.
+
+Version `0.3.6` claims spell, artifact, and alchemy mastery-XP mutation families independently. Losing one claim cancels only that domain's captured and pending bonus XP, prevents replay after reacquisition, and leaves healthy siblings operational. Ownership is advisory; unknown unregistered automation remains visible as an explicit uncertainty rather than being controlled.
 
 Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Alt+M`, or use the compact `M ON/OFF/WAIT/BLOCKED` gameplay control. The control occupies the outermost slot of the native Auto Buy-anchored strip, after Automata Auto Buy, Auto Cast, and Auto Concept when present, with 12-pixel gaps. `SharedPool` (default, 10%) bounds each domain's total bonus to the configured percentage. `PerRecipient` grants that percentage to each eligible recipient in the domain and scales with collection size.
 

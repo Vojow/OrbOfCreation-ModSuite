@@ -1036,6 +1036,7 @@ internal enum MentorDropReason
     RecipientIdentityChanged,
     LifecycleReset,
     Disabled,
+    ActionFamilyConflict,
     ContractFailure,
 }
 

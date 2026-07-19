@@ -21,7 +21,7 @@ Run the deterministic suite without a game installation:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
 ```
 
-The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
+The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status/ownership controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
 
 Portable automation has three scopes:
 
@@ -94,11 +94,11 @@ regression below these current floors:
 
 | Scope | Enforced line floor | Current Release line coverage |
 |---|---:|---:|
-| Overall supported production code | 65% | 70.93% |
-| Orb Automata | 70% | 74.50% |
-| Orb Mentor | 64% | 69.85% |
-| Orb Mod Config | 24% | 24.33% |
-| Orb Modding Common | 83% | 86.00% |
+| Overall supported production code | 65% | 71.94% |
+| Orb Automata | 70% | 73.14% |
+| Orb Mentor | 64% | 72.09% |
+| Orb Mod Config | 24% | 26.40% |
+| Orb Modding Common | 83% | 87.76% |
 
 These are regression floors, not completion targets. New or materially changed
 core engines and controllers should aim for at least 80% line and 70% branch
@@ -125,6 +125,7 @@ The current P0/P1 headless scope covers:
 - automatic spell leveling in Locked, Single, and native level-all capability
   states, including lifecycle cancellation;
 - Mentor spell, artifact, and alchemy capture-to-native-grant journeys,
+- atomic action-family claims, exact known conflicts, final mutation gates, lifecycle/configuration release, and independent Mentor-domain cancellation,
   recursion prevention, domain isolation, registry identity, and lifecycle
   cancellation;
 - Mod Config staged dependencies, atomic apply/rollback, external refresh,

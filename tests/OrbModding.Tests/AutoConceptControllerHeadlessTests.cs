@@ -134,6 +134,37 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    public void AutoConceptController_OwnershipLossDiscardsPendingMutation()
+    {
+        var recipe = Concept("ownership-pending-concept");
+        var active = InstallNativeLists(recipe);
+        var config = Config(AutoConceptSlotManagementMode.PreserveManual);
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
+        using var blocker = coordinator.Register(
+            "test", "occupy native mutation", SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        var owned = true;
+        long frame = 1;
+        using var controller = new AutoConceptController(
+            config,
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
+            new ManualLogSource(), coordinator, () => frame,
+            ownsActionFamily: () => owned);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
+        lease.Complete();
+        controller.Tick(0.1f);
+        owned = false;
+        blocker.SetPending(false);
+        frame++;
+        controller.Tick(0.1f);
+
+        Assert.Empty(active.value);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void AutoConceptHealthKeepsMutationFaultUntilLifecycleRecovery()
     {
         var recipe = Concept("faulted-concept");

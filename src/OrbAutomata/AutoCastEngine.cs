@@ -18,6 +18,7 @@ internal sealed class AutoCastEngine : IDisposable
     private readonly SuitePerformanceCoordinator? _coordinator;
     private readonly Func<long>? _readFrameIdentity;
     private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly Func<bool> _ownsActionFamily;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _operationLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -42,7 +43,8 @@ internal sealed class AutoCastEngine : IDisposable
         Func<bool>? isGameplayScene = null,
         SuitePerformanceCoordinator? coordinator = null,
         Func<long>? readFrameIdentity = null,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<bool>? ownsActionFamily = null)
     {
         _config = config;
         _catalog = catalog;
@@ -53,6 +55,7 @@ internal sealed class AutoCastEngine : IDisposable
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
+        _ownsActionFamily = ownsActionFamily ?? (() => true);
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
@@ -74,6 +77,18 @@ internal sealed class AutoCastEngine : IDisposable
 
     public void Tick(float unscaledDeltaTime)
     {
+        if (_config.AutoCastMode.Value == AutoCastOperationMode.Active && !_ownsActionFamily())
+        {
+            ReleaseFullChargeHold("action-family ownership lost");
+            ClearPendingCandidate();
+            SetCoordinatorEnabled(false);
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ActionFamilyConflict,
+                "Another automation owner holds the native spell-cast action family.");
+            return;
+        }
         if (_coordinator is null)
         {
             TickLegacy(unscaledDeltaTime);
@@ -316,6 +331,16 @@ internal sealed class AutoCastEngine : IDisposable
                 return;
             }
 
+            if (!_ownsActionFamily())
+            {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before mutation.");
+                return;
+            }
+
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
@@ -328,6 +353,16 @@ internal sealed class AutoCastEngine : IDisposable
             {
                 _fullChargeCandidate = candidate;
                 chargeHoldAcquired = true;
+            }
+
+            if (!_ownsActionFamily())
+            {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before firing.");
+                return;
             }
 
             if (!candidate.TryFireAndResolveTargets(out reason))
@@ -449,6 +484,14 @@ internal sealed class AutoCastEngine : IDisposable
         _catalog.Dispose();
     }
 
+    internal void CancelPreparedWork()
+    {
+        ReleaseFullChargeHold("automation ownership released");
+        ClearPendingCandidate();
+        SetCoordinatorEnabled(false);
+        _secondsUntilEvaluation = 0.0f;
+    }
+
     public void InvalidateLifecycle()
     {
         ReleaseFullChargeHold("Auto Cast lifecycle invalidated");
@@ -511,6 +554,16 @@ internal sealed class AutoCastEngine : IDisposable
                 continue;
             }
 
+            if (!_ownsActionFamily())
+            {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before mutation.");
+                return;
+            }
+
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
@@ -521,6 +574,17 @@ internal sealed class AutoCastEngine : IDisposable
             if (shouldFullCharge)
             {
                 _fullChargeCandidate = candidate;
+            }
+
+            if (!_ownsActionFamily())
+            {
+                if (shouldFullCharge) ReleaseFullChargeHold("action-family ownership lost before firing");
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before firing.");
+                return;
             }
 
             if (!candidate.TryFireAndResolveTargets(out reason))

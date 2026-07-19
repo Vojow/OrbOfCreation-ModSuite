@@ -141,6 +141,7 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         runtime.ObserveExperienceContainer(source.GetExperienceElement(), new BigDouble(100, 0));
         runtime.EndArtifactTick(nativeSucceeded: true);
         DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+        Drive(runtime, 200);
 
         var grant = Assert.Single(recipient.GetExperienceElement().Grants);
         Assert.Equal(1, grant.mantissa, 12);
@@ -189,6 +190,112 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Assert.Equal(1, runtime.Diagnostics.NativeGrants);
     }
 
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void SpellOwnershipConflictLeavesArtifactDomainOperational()
+    {
+        var spellSource = RegisterSpell(mastery: 5);
+        var spellRecipient = RegisterSpell(mastery: 1);
+        SpellManager.instance!.activeSpells.Add(new Spell(spellSource));
+        var artifactSource = RegisterEquipment(mastery: 6);
+        var artifactRecipient = RegisterEquipment(mastery: 2);
+        var statuses = new FeatureStatusRegistry();
+        using var runtime = CreateRuntime(
+            sharePercent: 10,
+            artifacts: true,
+            featureStatusRegistry: statuses,
+            ownsActionFamily: domain => domain != MentorDomain.Spells);
+
+        Drive(runtime, 300);
+        runtime.Observe(spellSource, new BigDouble(100, 0));
+        runtime.BeginArtifactTick(artifactSource);
+        runtime.ObserveExperienceContainer(artifactSource.GetExperienceElement(), new BigDouble(100, 0));
+        runtime.EndArtifactTick(nativeSucceeded: true);
+        DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+        DriveUntil(runtime, () =>
+            Status(statuses, MentorFeatureStatus.ArtifactsFeatureId).State == FeatureStatusState.Operational);
+
+        Assert.Empty(spellRecipient.GrantedMasteryExperience);
+        Assert.Single(artifactRecipient.GetExperienceElement().Grants);
+        Assert.Equal(FeatureStatusReasonCode.ActionFamilyConflict,
+            Status(statuses, MentorFeatureStatus.SpellsFeatureId).Reason.Code);
+        Assert.Equal(FeatureStatusState.Operational,
+            Status(statuses, MentorFeatureStatus.ArtifactsFeatureId).State);
+        Assert.Equal(FeatureStatusState.Degraded,
+            Status(statuses, MentorFeatureStatus.RootFeatureId).State);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void OwnershipLossCancelsCapturedXpAndReacquisitionAcceptsOnlyFreshEvents()
+    {
+        var source = RegisterSpell(mastery: 5);
+        var recipient = RegisterSpell(mastery: 1);
+        SpellManager.instance!.activeSpells.Add(new Spell(source));
+        var owned = true;
+        using var runtime = CreateRuntime(10, ownsActionFamily: _ => owned);
+
+        Drive(runtime, 200);
+        runtime.Observe(source, new BigDouble(100, 0));
+        owned = false;
+        Drive(runtime, 20);
+
+        Assert.Empty(recipient.GrantedMasteryExperience);
+        Assert.Equal(1, runtime.Diagnostics.DropCount(MentorDropReason.ActionFamilyConflict));
+
+        owned = true;
+        Drive(runtime, 200);
+        runtime.Observe(source, new BigDouble(100, 0));
+        DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+        Assert.Single(recipient.GrantedMasteryExperience);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void ArtifactPermitCompletesTransactionWhenOwnershipIsRevokedByNativeHook()
+    {
+        var source = RegisterEquipment(mastery: 6);
+        var recipient = RegisterEquipment(mastery: 2);
+        var registry = new ActionFamilyOwnershipRegistry();
+        Assert.True(registry.TryClaimSet(
+            new ActionFamilyOwner(new FeatureStatusKey("tests", "mentor-artifact"), "Mentor artifact"),
+            new[] { AutomationActionFamily.ArtifactMasteryExperienceGrant },
+            out var lease,
+            out _));
+        using var ownedLease = lease!;
+        IDisposable? external = null;
+        recipient.GetExperienceElement().AfterGainExperience = () =>
+            external ??= registry.RegisterKnownExternal(
+                new ActionFamilyOwner(new FeatureStatusKey("external", "artifact"), "External artifact"),
+                new[] { AutomationActionFamily.ArtifactMasteryExperienceGrant });
+        using var runtime = CreateRuntime(
+            sharePercent: 10,
+            artifacts: true,
+            ownsActionFamily: domain => domain != MentorDomain.Artifacts || ownedLease.IsHeld,
+            captureActionFamilyMutation: domain =>
+                domain != MentorDomain.Artifacts || ownedLease.TryCaptureMutationPermit());
+
+        try
+        {
+            Drive(runtime, 300);
+            runtime.BeginArtifactTick(source);
+            runtime.ObserveExperienceContainer(source.GetExperienceElement(), new BigDouble(100, 0));
+            runtime.EndArtifactTick(nativeSucceeded: true);
+            DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+            Assert.False(ownedLease.IsHeld);
+            Assert.Single(recipient.GetExperienceElement().Grants);
+            Assert.Equal(1, recipient.masteryXp.mantissa, 12);
+            Assert.Equal(1, recipient.masteryXp.exponent);
+        }
+        finally
+        {
+            external?.Dispose();
+        }
+    }
+
     public void Dispose()
     {
         SpellRecipeSO.All.Clear();
@@ -202,7 +309,9 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         double sharePercent,
         bool artifacts = false,
         bool alchemy = false,
-        FeatureStatusRegistry? featureStatusRegistry = null)
+        FeatureStatusRegistry? featureStatusRegistry = null,
+        Func<MentorDomain, bool>? ownsActionFamily = null,
+        Func<MentorDomain, bool>? captureActionFamilyMutation = null)
     {
         var config = MentorConfig.Bind(new ConfigFile());
         config.Mode.Value = MentorOperationMode.Active;
@@ -217,7 +326,9 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         return new MentorRuntime(
             config,
             new ManualLogSource(),
-            featureStatusRegistry: featureStatusRegistry);
+            featureStatusRegistry: featureStatusRegistry,
+            ownsActionFamily: ownsActionFamily,
+            captureActionFamilyMutation: captureActionFamilyMutation);
     }
 
     private static FeatureStatusSnapshot Status(FeatureStatusRegistry registry, string featureId)

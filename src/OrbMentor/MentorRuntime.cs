@@ -107,6 +107,7 @@ internal sealed class MentorRuntime : IDisposable
             MentorFeatureFailureKind failure,
             string? failureReason,
             AutomationDecisionCode failureCause,
+            bool actionFamilyOwned,
             MentorDomainUnlockSnapshot unlock,
             bool catalogReady)
         {
@@ -114,6 +115,7 @@ internal sealed class MentorRuntime : IDisposable
             Failure = failure;
             FailureReason = failureReason;
             FailureCause = failureCause;
+            ActionFamilyOwned = actionFamilyOwned;
             UnlockState = unlock.State;
             UnlockReasonCode = unlock.StatusReasonCode;
             UnlockReason = unlock.Reason;
@@ -124,6 +126,7 @@ internal sealed class MentorRuntime : IDisposable
         public MentorFeatureFailureKind Failure { get; }
         public string? FailureReason { get; }
         public AutomationDecisionCode FailureCause { get; }
+        public bool ActionFamilyOwned { get; }
         public MentorDomainUnlockState UnlockState { get; }
         public FeatureStatusReasonCode UnlockReasonCode { get; }
         public string UnlockReason { get; }
@@ -136,6 +139,7 @@ internal sealed class MentorRuntime : IDisposable
             Configured == other.Configured &&
             Failure == other.Failure &&
             FailureCause == other.FailureCause &&
+            ActionFamilyOwned == other.ActionFamilyOwned &&
             string.Equals(FailureReason, other.FailureReason, StringComparison.Ordinal) &&
             UnlockState == other.UnlockState &&
             UnlockReasonCode == other.UnlockReasonCode &&
@@ -285,6 +289,9 @@ internal sealed class MentorRuntime : IDisposable
     private readonly MentorCoordinatorWork? _coordinatorWork;
     private readonly Func<long> _readTimestamp;
     private readonly Func<long> _readLifecycleGeneration;
+    private readonly Func<MentorDomain, bool> _ownsActionFamily;
+    private readonly Func<MentorDomain, bool> _captureActionFamilyMutation;
+    private readonly bool[] _previousActionFamilyOwnership = new bool[DomainOrder.Length];
     private readonly FeatureStatusRegistration?[] _domainStatusRegistrations =
         new FeatureStatusRegistration?[DomainOrder.Length];
     private readonly FeatureStatusSnapshot[] _domainFeatureStatuses =
@@ -320,7 +327,9 @@ internal sealed class MentorRuntime : IDisposable
         MentorDomainUnlockGate? unlockGate = null,
         Func<long>? readTimestamp = null,
         FeatureStatusRegistry? featureStatusRegistry = null,
-        Func<long>? readLifecycleGeneration = null)
+        Func<long>? readLifecycleGeneration = null,
+        Func<MentorDomain, bool>? ownsActionFamily = null,
+        Func<MentorDomain, bool>? captureActionFamilyMutation = null)
     {
         _config = config;
         _log = log;
@@ -329,6 +338,8 @@ internal sealed class MentorRuntime : IDisposable
         _readTimestamp = readTimestamp ?? Stopwatch.GetTimestamp;
         _readLifecycleGeneration = readLifecycleGeneration ??
             (() => GameLifecycleMonitor.Shared.Current.Generation);
+        _ownsActionFamily = ownsActionFamily ?? (_ => true);
+        _captureActionFamilyMutation = captureActionFamilyMutation ?? _ownsActionFamily;
         _statusLifecycleGeneration = Math.Max(0, _readLifecycleGeneration());
         if (coordinator is not null)
             _coordinatorWork = new MentorCoordinatorWork(
@@ -343,6 +354,7 @@ internal sealed class MentorRuntime : IDisposable
                 MentorDomainUnlockState.Waiting,
                 "native progression unlock is awaiting lifecycle evaluation",
                 FeatureStatusReasonCode.Initializing);
+            _previousActionFamilyOwnership[(int)domain] = _ownsActionFamily(domain);
         }
         _artifactWasEnabled = config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = config.AlchemyEnabled.Value;
@@ -398,6 +410,7 @@ internal sealed class MentorRuntime : IDisposable
                 domainFingerprint.Failure,
                 domainFingerprint.FailureReason,
                 domainFingerprint.FailureCause,
+                domainFingerprint.ActionFamilyOwned,
                 domainFingerprint.Unlock,
                 domainFingerprint.CatalogReady,
                 fingerprint.LifecycleGeneration);
@@ -433,6 +446,7 @@ internal sealed class MentorRuntime : IDisposable
         FailureKind(_failures.For(domain)),
         _failures.For(domain).Reason,
         _failures.For(domain).Circuit.Cause,
+        _ownsActionFamily(domain),
         DomainUnlock(domain),
         CatalogReady(_catalogs[domain]));
 
@@ -474,6 +488,7 @@ internal sealed class MentorRuntime : IDisposable
     {
         var state = _domains[domain];
         if (!_config.Active || !DomainConfigured(domain)) return state.MentorSummary = "Inactive";
+        if (!_ownsActionFamily(domain)) return state.MentorSummary = "Blocked: action family owned by another automation feature";
         if (DomainBlocked(domain))
             return state.MentorSummary = $"Blocked: {DomainBlockedReason(domain)}";
         var unlock = DomainUnlock(domain);
@@ -757,6 +772,7 @@ internal sealed class MentorRuntime : IDisposable
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();
+        RefreshActionFamilyOwnership();
         foreach (var domain in DomainOrder)
         {
             var index = (int)domain;
@@ -1186,6 +1202,12 @@ internal sealed class MentorRuntime : IDisposable
 
     private GrantResult ProcessGrant(MentorDomain domain)
     {
+        if (!_ownsActionFamily(domain))
+        {
+            CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+            RefreshFeatureStatus();
+            return GrantResult.Dropped;
+        }
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!state.Engine.TryPeek(out MentorGrant grant)) return GrantResult.NoWork;
@@ -1255,6 +1277,18 @@ internal sealed class MentorRuntime : IDisposable
                     BlockAlchemyDomain("final grant validation", classification);
                     return GrantResult.Dropped;
                 }
+            }
+            if (!_ownsActionFamily(domain))
+            {
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+                RefreshFeatureStatus();
+                return GrantResult.Dropped;
+            }
+            if (!_captureActionFamilyMutation(domain))
+            {
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+                RefreshFeatureStatus();
+                return GrantResult.Dropped;
             }
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
@@ -1983,7 +2017,19 @@ internal sealed class MentorRuntime : IDisposable
     private bool DomainUnlocked(MentorDomain domain) => _domainUnlocks[(int)domain].IsUnlocked;
 
     private bool DomainEnabled(MentorDomain domain) =>
-        DomainConfigured(domain) && DomainUnlocked(domain) && !DomainBlocked(domain);
+        DomainConfigured(domain) && _ownsActionFamily(domain) && DomainUnlocked(domain) && !DomainBlocked(domain);
+
+    private void RefreshActionFamilyOwnership()
+    {
+        foreach (var domain in DomainOrder)
+        {
+            var index = (int)domain;
+            var owned = _ownsActionFamily(domain);
+            if (_previousActionFamilyOwnership[index] && !owned && _config.Active && DomainConfigured(domain))
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+            _previousActionFamilyOwnership[index] = owned;
+        }
+    }
 
     private bool EnsureAlchemyDomainReady(long now)
     {
@@ -2023,6 +2069,7 @@ internal sealed class MentorRuntime : IDisposable
     private string DomainStatus(MentorDomain domain, double percent)
     {
         if (!DomainConfigured(domain)) return $"{domain} off";
+        if (!_ownsActionFamily(domain)) return $"{domain} blocked: action family owned by another automation feature";
         if (DomainBlocked(domain)) return $"{domain} blocked: {DomainBlockedReason(domain)}";
         var unlock = DomainUnlock(domain);
         if (!unlock.IsUnlocked) return $"{domain} waiting: {unlock.Reason}";

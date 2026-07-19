@@ -22,7 +22,7 @@ Research is no longer the MVP. The release plugin removes the deprecated researc
 
 ## Current implementation status
 
-The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). Gameplay controls consume the same transition-only snapshots as Mod Config while engine scheduling and native validation remain unchanged.
+The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). The [action-family ownership contract](action-family-ownership.md) now isolates overlapping native mutation families without changing saved configuration or unrelated features.
 
 The first A1 implementation slice now covers both audited native purchase families:
 
@@ -39,7 +39,7 @@ Structure and Upgrade completion hooks now retain the completed native family. S
 
 [AutobuyOrb](https://github.com/IngoHHacks/AutobuyOrb) was a useful behavior and reverse-engineering reference, not a runtime dependency or supported companion. Its implementation buys available `StructureSO.All` entries through native `Purchase()`, ranks by true-spend/current-resource ratio, respects action-queue room, supports excess thresholds, bulk limits, a buy interval, a per-frame time budget, optional native action-multiplier behavior, and a restart-time LeanTween capacity override.
 
-Automata does not patch AutobuyOrb, depend on its types, or implement coexistence behavior. The supported installation has one auto-buy plugin. Running multiple buyers is explicitly unsupported because they can race for resources, queue room, and the global multi-buy value.
+Automata does not patch AutobuyOrb, depend on its types, or change its configuration. If the exact AutobuyOrb BepInEx GUID is loaded, Automata blocks its overlapping Structure and Upgrade families and explains the conflict; Auto Cast, Auto Concept, Spell Leveling, and Mentor remain independent. Unknown unregistered buyers still cannot be proven absent, so a supported installation should use one buyer.
 
 ## Core rule model
 

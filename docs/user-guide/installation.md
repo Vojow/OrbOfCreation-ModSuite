@@ -44,6 +44,8 @@ Orb of Creation/
 
 Keep exactly one copy of each DLL anywhere under `BepInEx/plugins`; duplicate older copies can be loaded instead of the intended build. On startup, `BepInEx/LogOutput.log` should list Orb Automata, Orb Mentor, and Orb Mod Config once each without dependency errors.
 
+The next beta detects the exact AutobuyOrb BepInEx GUID. If AutobuyOrb is installed, Automata disables only its overlapping Structure and Upgrade automation and leaves Auto Cast, Auto Concept, Spell Leveling, and Mentor available. This is best-effort safety, not universal third-party detection: unknown unregistered automation is not disabled and cannot be proven absent, so prefer one plugin per automated native action family.
+
 The supported archive never contains Orb Chronomancer or Orb Achievement Resonance. Do not copy DLLs from the experimental branch into this installation.
 
 Continue with [configuration and safety](configuration.md).

@@ -48,6 +48,7 @@ internal sealed class AutoConceptController : IDisposable
     private readonly SuitePerformanceCoordinator _coordinator;
     private readonly Func<long> _readFrameIdentity;
     private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly Func<bool> _ownsActionFamily;
     private readonly SuiteWorkRegistration _readWork;
     private readonly SuiteWorkRegistration _mutationWork;
     private readonly ConceptOwnershipLedger _ownership = new();
@@ -83,7 +84,8 @@ internal sealed class AutoConceptController : IDisposable
         ManualLogSource log,
         SuitePerformanceCoordinator coordinator,
         Func<long> readFrameIdentity,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<bool>? ownsActionFamily = null)
     {
         _config = config;
         _runtime = runtime;
@@ -91,6 +93,7 @@ internal sealed class AutoConceptController : IDisposable
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
+        _ownsActionFamily = ownsActionFamily ?? (() => true);
         _readWork = coordinator.Register(
             "OrbAutomata.AutoConcept",
             "Reconcile and plan concept mastery",
@@ -111,6 +114,17 @@ internal sealed class AutoConceptController : IDisposable
         _elapsedSeconds += elapsed;
         var active = _config.CanStartAutoConceptActively;
         ObserveConfigurationStatus();
+        if (active && !_ownsActionFamily())
+        {
+            _pending = null;
+            SetEnabled(false);
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ActionFamilyConflict,
+                "Another automation owner holds the native concept-assignment action family.");
+            return;
+        }
         SetEnabled(active);
         if (!active)
         {
@@ -416,7 +430,11 @@ internal sealed class AutoConceptController : IDisposable
     {
         var pending = _pending;
         _pending = null;
-        if (pending is null || !_config.CanStartAutoConceptActively) return;
+        if (pending is null || !_config.CanStartAutoConceptActively || !_ownsActionFamily())
+        {
+            if (pending is not null && !_ownsActionFamily()) ObserveOwnershipConflict();
+            return;
+        }
         var candidates = _runtime.ReadCandidates(_allowed, _blocked, out var reason);
         _cachedCandidates = candidates;
         NativeConceptCandidate? candidate = null;
@@ -442,7 +460,18 @@ internal sealed class AutoConceptController : IDisposable
         if (pending.Value.Kind == MutationKind.RotateOut)
         {
             if (!AutoConceptBalancer.UsesFullRotation(_config.AutoConceptSlotManagement.Value) ||
-                candidate.Quantity != pending.Value.TargetOrDelta ||
+                candidate.Quantity != pending.Value.TargetOrDelta)
+            {
+                _secondsUntilEvaluation = 0.0f;
+                return;
+            }
+            if (!_ownsActionFamily())
+            {
+                ObserveOwnershipConflict();
+                _secondsUntilEvaluation = 0.0f;
+                return;
+            }
+            if (
                 !_runtime.TryRemoveForRotation(candidate, pending.Value.TargetOrDelta, out reason))
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
@@ -468,7 +497,19 @@ internal sealed class AutoConceptController : IDisposable
         {
             if (!_ownership.TryGet(candidate.Uuid, out var ownership) ||
                 ownership.AutomatedDelta < pending.Value.TargetOrDelta ||
-                candidate.Quantity != ownership.ExpectedQuantity ||
+                candidate.Quantity != ownership.ExpectedQuantity)
+            {
+                _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
+                _secondsUntilEvaluation = 0.0f;
+                return;
+            }
+            if (!_ownsActionFamily())
+            {
+                ObserveOwnershipConflict();
+                _secondsUntilEvaluation = 0.0f;
+                return;
+            }
+            if (
                 !_runtime.TryRemoveOwned(candidate, pending.Value.TargetOrDelta, out reason))
             {
                 _ownership.RebaselineIfUnexpected(candidate.Uuid, candidate.Quantity);
@@ -505,7 +546,18 @@ internal sealed class AutoConceptController : IDisposable
             return;
         }
         var delta = safeTarget - candidate.Quantity;
-        if (delta <= 0 || !_runtime.TryAdd(candidate, delta, out reason))
+        if (delta <= 0)
+        {
+            _secondsUntilEvaluation = 0.0f;
+            return;
+        }
+        if (!_ownsActionFamily())
+        {
+            ObserveOwnershipConflict();
+            _secondsUntilEvaluation = 0.0f;
+            return;
+        }
+        if (!_runtime.TryAdd(candidate, delta, out reason))
         {
             LogFailure($"Auto Concept native mutation rejected {candidate.DisplayName}: {reason}");
             ObserveMutationRejection();
@@ -523,6 +575,13 @@ internal sealed class AutoConceptController : IDisposable
         _featureStatus?.ObserveOperational();
         _secondsUntilEvaluation = 0.0f;
     }
+
+    private void ObserveOwnershipConflict() =>
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.TemporarilyBlocked,
+            FeatureStatusReasonCode.ActionFamilyConflict,
+            "Concept-assignment ownership changed before mutation.");
 
     private void BeginTrainingSession(
         NativeConceptCandidate candidate,
@@ -898,5 +957,23 @@ internal sealed class AutoConceptController : IDisposable
         _resourceSafeReplacements.Clear();
         _preferredReplacementUuid = null;
         _preferredReplacementExpiresAtSeconds = 0.0;
+    }
+
+    internal void CancelPreparedWork()
+    {
+        _pending = null;
+        _ownership.Clear();
+        _trainingSessions.Clear();
+        _lastTimedAssignment.Clear();
+        _timedAssignmentSequence = 0;
+        _baselineCaptured = false;
+        _timedSessionsInitialized = false;
+        _cachedCandidates = Array.Empty<NativeConceptCandidate>();
+        _resourceSafeReplacements.Clear();
+        _preferredReplacementUuid = null;
+        _preferredReplacementExpiresAtSeconds = 0.0;
+        _wasActive = false;
+        _secondsUntilEvaluation = 0.0f;
+        SetEnabled(false);
     }
 }

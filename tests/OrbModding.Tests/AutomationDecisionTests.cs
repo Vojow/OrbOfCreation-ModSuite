@@ -19,7 +19,7 @@ public sealed class AutomationDecisionTests
             ("ContractUnresolved", 200), ("RegistryNotReady", 201), ("IdentityUnavailable", 202),
             ("IdentityChanged", 203), ("WrongNativeType", 204), ("NativeStateUnavailable", 205),
             ("NativeAdmissionRejected", 206), ("MutationQuarantined", 207),
-            ("NativeMutationFailed", 208), ("PostconditionFailed", 209),
+            ("NativeMutationFailed", 208), ("PostconditionFailed", 209), ("ActionFamilyConflict", 210),
             ("CostUnavailable", 300), ("InvalidConfiguration", 301), ("InvalidResourceState", 302),
             ("InsufficientResource", 303), ("ReserveFloor", 304), ("AffordabilityThreshold", 305),
             ("DrainUnsafe", 306), ("ResourceStartThreshold", 307),

@@ -134,6 +134,36 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
         Assert.Equal(AutoSpellLevelCapability.Locked, controller.Capability);
     }
 
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void OwnershipLossDiscardsAQueuedSpellMutation()
+    {
+        InstallLevelAllUpgrade(purchaseLevel: 0);
+        var recipe = AddReadySpell("00000000-0000-0000-0000-000000000031", mastery: 3);
+        var config = ActiveConfig();
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
+        using var blocker = coordinator.Register(
+            "test", "occupy native mutation", SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        var owned = true;
+        long frame = 1;
+        using var controller = new AutoSpellLevelController(
+            config, new ReflectionSpellLevelRuntime(), new ManualLogSource(), coordinator,
+            () => frame, ownsActionFamily: () => owned);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
+        lease.Complete();
+        controller.Tick(0.1f);
+        owned = false;
+        blocker.SetPending(false);
+        frame++;
+        controller.Tick(0.1f);
+
+        Assert.Equal(3, recipe.masteryLevel);
+        Assert.Equal(0, recipe.levelCost.PerformCalls);
+    }
+
     public void Dispose()
     {
         IdScriptableObject.RuntimeLookup.Clear();
