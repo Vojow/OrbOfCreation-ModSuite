@@ -60,6 +60,10 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(AutoHarvestOperationMode.Disabled, config.AutoHarvestMode.Value);
+        Assert.True(config.AutoHarvestFruitTrees.Value);
+        Assert.True(config.AutoHarvestTreasureTrees.Value);
+        Assert.Equal(1.0f, config.AutoHarvestEvaluationIntervalSeconds.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
@@ -70,6 +74,7 @@ public sealed class AutomataTests
         Assert.True(config.CanStartAutoBuyActively);
         Assert.False(config.CanStartAutoCastActively);
         Assert.False(config.CanStartAutoConceptActively);
+        Assert.False(config.CanStartAutoHarvestActively);
     }
 
     [Fact]

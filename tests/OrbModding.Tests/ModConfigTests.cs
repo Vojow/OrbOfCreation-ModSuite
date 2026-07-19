@@ -123,7 +123,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "Auto Buy", "Auto Cast", "Auto Concept", "Advanced" },
+            new[] { "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -135,6 +135,9 @@ public sealed class ModConfigTests
         Assert.Equal(
             new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
+            mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
@@ -175,6 +178,10 @@ public sealed class ModConfigTests
                 setting.Key is not ("Mode" or "ShowToggleButton")),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoConcept" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoHarvest" && setting.Key != "Mode"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoHarvest" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
 
         Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
         Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));

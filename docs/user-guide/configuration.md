@@ -10,6 +10,8 @@ Disabled feature modes lock their tuning fields in Orb Mod Config. Mode controls
 
 - `AutoBuy.Mode` and `AutoCast.Mode`: select `Disabled` or `Active`.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts.
+- `AutoHarvest.Mode`: `Disabled` (default) or `Active` for the exact audited fruit-tree and treasure-tree collection actions. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
+- `AutoHarvest.EvaluationIntervalSeconds`: interval between exact readiness checks while enabled; default 1.0, range 0.25 to 10 seconds. There is no gameplay button or shortcut in the first slice.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates compatible concepts only after each has received the complete configured settled-active period; `RotateAll` replaces active concepts to train a compatible strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
 - `AutoConcept.ShowToggleButton`: show the `CN ON/OFF/!` gameplay button in the native Auto Buy-anchored control strip; default true.
 - `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 300, range 10 to 3600. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.
@@ -20,8 +22,8 @@ Disabled feature modes lock their tuning fields in Orb Mod Config. Mode controls
 - `LeaveQueueSlots` preserves queue room for manual actions.
 - Action multipliers are capped to available queue room and revalidated per level.
 - Auto Concept rate, quantity, and drain-ratio floors protect continuous resources; zero-resource replacements are skipped so they cannot starve other safe concepts in the cycle. Current concept quantities remain the rollback ownership baseline even when `RotateAll` permits assignment replacement.
-- `Safety.EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, and spell levels.
+- `Safety.EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, and harvest submissions.
 
-Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast and Auto Concept default to Disabled. When enabled, Auto Cast fully charges charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10% positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by default. Operational automation logging is off by default and should normally be enabled only for troubleshooting.
+Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, and Auto Harvest default to Disabled. Auto Harvest queues quantity one, keeps at most one supported collect active, and leaves one native plot-action slot free for manual collection. When enabled, Auto Cast fully charges charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10% positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by default. Operational automation logging is off by default and should normally be enabled only for troubleshooting.
 
 Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [Orb Automata reference](../../src/OrbAutomata/README.md).

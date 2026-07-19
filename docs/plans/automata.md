@@ -1,6 +1,6 @@
 # Orb Automata plan
 
-> **Lifecycle: Implemented / evolving.** Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. This plan also records later work.
+> **Lifecycle: Implemented / evolving.** Auto Buy, Auto Cast, Auto Concept, progression-aware spell leveling, and disabled-by-default Auto Harvest are in public beta. This plan also records later work.
 
 [Back to roadmap](roadmap.md)
 
@@ -28,6 +28,7 @@ The first A1 implementation slice now covers both audited native purchase famili
 - `UpgradeSO.All`: availability, one-level cost, queued level verification, and `Purchase()` while native multi-buy is temporarily forced to one and restored.
 - Progression-aware spell leveling: exact native discovery, prerequisites, readiness, live cost, single-level purchase, and completed `UnlockLevelAllSpells` capability validation.
 - Disabled/Active release modes, independently configurable spell leveling, independent excess thresholds, optional shared reserves, UUID allowlist/denylist, queue-slot reservation, live action-multiplier handling, resumable bounded scans with an Auto Buy-specific registry cap, ranked multi-candidate batches, and final per-level pre-purchase revalidation.
+- Auto Harvest: disabled-by-default, independently selected fruit-tree and treasure-tree collection through the audited native plot-action path, with exact identity, preservation, duplicate, capacity, and postcondition validation.
 
 Portable behavior tests and installed-assembly contract tests pass. Runtime validation has covered repeated native Structure and Upgrade purchases, the earlier 150-purchase rejection-scheduler stress run, and a `0.8.1` fair-pass run that reached `302/304` visible queue occupancy with 1,797 successful submissions across 166 distinct candidates and zero native failures. The current beta advances through all prepared eligible candidates before repeating a ranked pass, while a lone candidate can still fill the usable queue; Steam Deck profiling and the remaining focused desktop matrix for shared scheduling, timed concept cycling, multi-slot and zero-resource handling, progression-aware spell leveling, and unified configuration behavior still remain.
 
@@ -128,10 +129,11 @@ Exit: validated discovered concepts are balanced through the native concept runt
 
 ### A4 — Auto Harvest
 
-- Discover `HarvestElementSO`, `HarvestTypeSO`, `HarvestActionSO`, live `HarvestActionInstance`, and plot-node relationships.
-- Start with an allowlisted ready harvest action on an existing plot; do not choose seeds, replace plants, or redesign plot layouts.
-- Validate readiness, repeatability, action cost, action-queue room, yield state, and whether an action destroys or preserves the plant.
-- Add replanting and plot strategies only as later explicit policies.
+- The implemented first slice is specified in [the Auto Harvest plan](auto-harvest.md).
+- It operates the exact allowlisted fruit-tree and treasure-tree `PlotNodeSO` / `PlotNodeActionSO` pairs through `PlotNodeActionInstance` and the native `ActivePlotNodeActions` list.
+- It revalidates stable identity, native type, visibility, membership, prerequisites, readiness, phase-cycle preservation, completion reward, duplicate state, lifecycle generation, and two empty native plot-action slots before submitting quantity one.
+- It does not choose seeds, plant, replant, replace plants, force growth, enrich, destroy, or redesign plot layouts.
+- Additional crops, ordinary harvesting, replanting, and plot strategies remain later explicit policies.
 
 Exit: Automata harvests only selected ready targets through the native action path and never destroys a plant when the configured policy requires preservation.
 
@@ -167,7 +169,7 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 ## Original long-term definition of done
 
-This list predates the narrower supported release sequence. Auto Harvest and the A5+ domains remain planned and are not part of the current beta.
+This list predates the narrower supported release sequence. The first Auto Harvest slice is now in beta; the A5+ domains remain planned.
 
 - Auto Buy supports the audited Structure/attribute scope in dry-run and active modes.
 - Auto Cast supports the complete active loadout with round-robin ordering, native target selection, resource admission, and persistent-spell guardrails.

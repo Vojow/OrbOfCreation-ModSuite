@@ -130,7 +130,7 @@ Required checks:
 
 | Mod | Contracts that must be proven |
 |---|---|
-| Automata | `StructureSO`/`UpgradeSO` registries, state, cost, queue, and one-level purchase paths; `ActionManager`; native multi-buy; `ResourceTuple`; `BigDouble` |
+| Automata | `StructureSO`/`UpgradeSO` registries, state, cost, queue, and one-level purchase paths; `ActionManager`; native multi-buy; `ResourceTuple`; `BigDouble`; exact Auto Harvest plots, actions, phases, active-list slots, completion effects, scaling, and reward pools |
 | Mentor | Spell, artifact, and alchemy catalogs; availability and persistence; XP hooks; recipient identity; native grant or audited native-sequence path; recursion suppression; and per-domain failure isolation |
 | Mod Config | Native navigation host, Mods view lifecycle, editor contracts, and queue-adjacent status-control anchor |
 
@@ -164,6 +164,7 @@ Acceptance criteria:
 - Confirm the installed-assembly contract tests still match the native Structure, Upgrade, queue-room, resource-cost, Bulk Development, and action-multiplier members.
 - Confirm a migrated older config removes the deprecated keys and saves valid release defaults.
 - Confirm no other auto-buy plugin is installed during Automata validation.
+- Keep `AutoHarvest.Mode=Disabled`. Confirm fruit and treasure selectors default true behind the disabled master, no gameplay button or shortcut exists, and disabled mode performs no native harvest scans or submissions.
 - Candidate/cost behavior moves to the disposable active gate because the release build intentionally has no mutating-looking DryRun mode.
 
 Acceptance criteria: logged observations match the UI and ILSpy contracts, no save data changes are attributable to the probe, and no unresolved active-path member remains.
@@ -178,6 +179,12 @@ After V3 evidence is approved, use a disposable save and ensure no other auto-bu
 
 For the shared queue-capacity snapshot, repeat with a one-slot queue at `LeaveQueueSlots=1` and `LeaveQueueSlots=0`, then change native queue capacity while a candidate remains prepared. Confirm the immediately following mutation uses refreshed total capacity, occupancy, and remaining room; the manual reservation is applied once; and no purchase occurs for missing or contradictory native values.
 
+#### Auto Harvest
+
+Use a disposable backed-up save with every other plot-action automation mod removed. Keep Auto Buy and Auto Agromancy disabled for the first pass. Enable Auto Harvest with fruit selected and treasure unselected, wait for one ready fruit tree, and confirm exactly one quantity-one native collect entry becomes engaged while at least one plot-action slot remains free. Verify the expected reward, unchanged total fruit-tree quantity, and the ordinary `Idle` to `Resting` to `Growing` to `Idle` cycle. Disable Auto Harvest and confirm no new entry is submitted while the existing native action completes normally.
+
+Repeat with treasure selected and fruit unselected, then with both selected across multiple ready cycles. Confirm only one supported collect is active at a time and successful submissions alternate without starving either pair. Fill native plot-action slots manually until only one is free and confirm Auto Harvest waits; freeing a second slot must allow the next eligible collect without consuming the final manual slot. Exercise `Safety.EmergencyDisable`, title return, save/reload, and plugin removal. Any plot replacement, tree-count loss, unexpected reward, duplicate action, occupied final slot, or submission after disable is a release blocker.
+
 ## Gate V5 — persistence and rollback
 
 For every active test:
@@ -191,7 +198,7 @@ For every active test:
 
 Test Automata, Mentor, and Mod Config together at normal and accelerated game speeds supported by the environment.
 
-Verify independent configs and keybinds, unscaled scheduler cadence, unchanged global multi-buy, acceptable frame time, save/reload, title return, queue-adjacent control ordering, and the ability to disable one plugin without breaking the others.
+Verify independent configs and keybinds, unscaled scheduler cadence, unchanged global multi-buy, acceptable frame time, save/reload, title return, queue-adjacent control ordering, and the ability to disable one plugin without breaking the others. Auto Harvest compatibility is scoped only to the supported suite with no other plot-action automation plugin installed.
 
 ## Gate V7 — release candidate
 

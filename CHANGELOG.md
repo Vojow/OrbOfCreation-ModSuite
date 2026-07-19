@@ -1,5 +1,15 @@
 # Changelog
 
+## Orb Automata 0.9.0 Beta 1 — 2026-07-19
+
+- Add disabled-by-default Auto Harvest for the exact native fruit-tree and treasure-tree collect pairs, independent from Auto Buy and Auto Agromancy.
+- Revalidate stable identity, native type, plot visibility, action membership, prerequisites, readiness, phase-cycle preservation, empty costs, completion reward, lifecycle generation, duplicate state, and native plot-action capacity before every one-unit submission.
+- Keep at most one supported collect action active, alternate eligible fruit and treasure work fairly, and leave one native plot-action slot free for manual collection.
+- Verify the exact new engaged quantity-one action and slot delta after submission; an ambiguous attempted mutation blocks only that pair until lifecycle recovery.
+- Treat non-finite serialized values, reflected field-type drift, and supported action UUIDs on replacement references as lifecycle-blocking contract contradictions.
+- Expose config-only `AutoHarvest` mode, fruit/treasure selectors, and evaluation interval; the master mode defaults to `Disabled` and `EmergencyDisable` stops new submissions.
+- Add eight generated exact identities for the supported plots, actions, active list, scaling weight, and reward pools without relying on display names.
+
 ## Generated supported identities — 2026-07-18
 
 - Replace supported Alchemy, Auto Concept, spell-level, and Mentor unlock UUID literals with 16 generated declarations carrying UUID, expected managed type, and diagnostic name.

@@ -1,6 +1,6 @@
 # Orb Automata
 
-Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.8.4` keeps queue-filling Auto Buy responsive during rapid native completions while multiple affordable Structures and Upgrades share the prepared queue pass, alongside Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, and shared lifecycle generation isolation.
+Orb Automata is a BepInEx 5 automation suite for Orb of Creation. Version `0.9.0` combines queue-filling Auto Buy, Auto Cast, opt-in Auto Concept rotation, progression-aware spell leveling, disabled-by-default audited tree collection, and shared lifecycle generation isolation.
 
 ## Build
 
@@ -19,7 +19,8 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
 - Gameplay controls extend outward from the native Auto Buy queue switch with 12-pixel gaps: native Auto Buy, Automata Auto Buy, Auto Cast, Auto Concept, then Mentor when installed. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
-- All three mode selectors expose only `Disabled` and `Active`.
+- Auto Harvest starts `Disabled`; its fruit-tree and treasure-tree selectors default on behind that master switch, with no gameplay button or shortcut.
+- All four mode selectors expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - When several Structures or Upgrades are eligible, each receives one live-validated level per ranked pass; a lone candidate may fill all usable queue room.
 - Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.
@@ -27,10 +28,20 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Native action-multiplier handling is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Operational decision logging is off; startup, warning, and error records remain enabled.
-- `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, and spell levels.
+- `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, and harvest submissions.
 - Orb Mod Config leaves each mode, toggle shortcut, status-button visibility, emergency control, and diagnostics editable while locking inactive feature tuning. Nested Auto Buy fields also require their applicable include, batch, multiplier, or repeat policy.
 
 The former runtime-probe, per-session purchase-limit, DryRun, expert-override, and Auto Research settings are not part of the release configuration or Mod Config UI. Existing legacy keys are removed when the configuration is loaded and saved.
+
+## Auto Harvest
+
+Auto Harvest is independent from Auto Buy and Auto Agromancy. When `AutoHarvest.Mode=Active`, it considers only the exact audited fruit-tree and treasure-tree collect pairs selected by `CollectFruitTrees` and `CollectTreasureTrees`. It alternates eligible pairs after each successful submission and never queues more than one supported collect action at a time.
+
+Every evaluation resolves the exact plot, action, active-list, scaling-weight, and reward-pool identities through the lifecycle-stamped typed registry. It then verifies native plot visibility, exact action membership, empty prerequisites, positive remaining quantity, native one-instance readiness, the reusable `Idle` to `Resting` phase contract, empty resource drain and persistent effects, and the exact `EarnTreasure` completion graph. Unknown or changed evidence rejects the action.
+
+Submission always requests quantity one through `ActivePlotNodeActions.AddInstance`. Auto Harvest requires at least two empty native plot-action slots before doing so, leaving one for manual collection; this list is separate from Auto Buy's global action queue. It captures the active list before and after mutation and requires exactly one new engaged matching entry with quantity one and the corresponding used/empty slot deltas. If an attempted mutation cannot be verified, that tree pair remains blocked until a scene, save-load, reset, or NG+ lifecycle transition.
+
+`EvaluationIntervalSeconds` defaults to one second and applies only while the feature is enabled. Disabled mode and `EmergencyDisable` perform no Auto Harvest scans or new submissions. Auto Harvest does not plant, replant, replace, enrich, force growth, destroy plots, modify saves, or coexist with another plot-action automation mod. Interactive game validation remains the H3 gate in the [Auto Harvest plan](../../docs/plans/auto-harvest.md).
 
 ## Auto Buy
 
@@ -42,9 +53,9 @@ Resource dependencies are learned from the native current-cost result. Each refe
 
 The installed-game `ResourceCostList` and `ResourceTuple` schema is validated once per native type. Every tuple must decode before any reserve decision uses the vector; adapter failures are quarantined with bounded retry and rate-limited warnings. Empty native cost lists remain valid free actions when native `CanPurchase` accepts them. Manual Structure queue and Upgrade purchase signals invalidate only the matching native candidate and cancel stale planned work. Synchronous signals caused by Automata's own purchase are correlated to that exact native object, so a CPU-sliced Fixed, Bulk Development, or action-multiplier group can finish its initial queue-room-clamped limit. Structure/Upgrade completion hooks remain broad because completed effects may change other candidates.
 
-Every active native mutation now uses a capture, execute, capture, verify boundary. Auto Buy requires an exact queued-level delta, Auto Concept requires the exact queued assignment delta, spell leveling verifies native mastery advancement, and Auto Cast verifies the audited `Spell.Fire` hook even when an instant spell has no durable casting state. A no-op, partial, unexpectedly large, throwing, or unobservable result records structured before/after evidence and blocks that candidate or feature for the current lifecycle. Recovery is deliberately limited to scene, save-load, reset, or NG+ lifecycle invalidation; ordinary evaluation and configuration polling cannot silently retry an ambiguous mutation.
+Every active native mutation now uses a capture, execute, capture, verify boundary. Auto Buy requires an exact queued-level delta, Auto Concept requires the exact queued assignment delta, spell leveling verifies native mastery advancement, Auto Cast verifies the audited `Spell.Fire` hook, and Auto Harvest requires one exact new native plot action. A no-op, partial, unexpectedly large, throwing, or unobservable result records structured before/after evidence and blocks that candidate or feature for the current lifecycle. Recovery is deliberately limited to scene, save-load, reset, or NG+ lifecycle invalidation; ordinary evaluation and configuration polling cannot silently retry an ambiguous mutation.
 
-Automata consumes the shared Common lifecycle monitor. Scene entry/exit, save loading, save completion, gameplay-manager readiness, reset/NG+, and registry-rebuild observations advance one coalesced generation across the suite. Every generation transition cancels prepared Auto Buy, Auto Cast, Auto Concept, and spell-level work before another native mutation can start; equivalent callbacks from multiple installed suite plugins are idempotent within the same frame.
+Automata consumes the shared Common lifecycle monitor. Scene entry/exit, save loading, save completion, gameplay-manager readiness, reset/NG+, and registry-rebuild observations advance one coalesced generation across the suite. Every generation transition cancels prepared Auto Buy, Auto Cast, Auto Concept, spell-level, and Auto Harvest work before another native mutation can start; equivalent callbacks from multiple installed suite plugins are idempotent within the same frame.
 
 `AffordabilityMode` and `UpgradeAffordabilityMode` are independent:
 
@@ -69,7 +80,7 @@ The configured evaluation interval applies only while Auto Buy is idle. Once a s
 
 This work remains on Unity's main thread because the game registries, ScriptableObjects, resources, and action queue are not thread-safe. `CpuBudgetMilliseconds` limits each frame's scan and purchase work without inserting the old full evaluation delay between continuation slices.
 
-Auto Buy and Auto Cast register separate read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every queued level, fired spell, or normal full-charge release requires its own native-mutation lease. The suite admits at most one such mutation per Unity frame. Auto Buy receives a bounded three-turn scheduling weight while it has continuous work, then yields to the next waiting subsystem; this improves queue filling without starving Mentor or Auto Cast. A denied lease retains the pending candidate, repeat count, or owned charge hold, so Fixed, Bulk Development, action-multiplier groups, and charge release continue without restarting or overlapping another suite mutation. Disabled automation clears pending work and stops requesting leases; manual input, scene exit, emergency stop, and unload still release an owned charge hold immediately to avoid trapping player control.
+Auto Buy, Auto Cast, Auto Concept, spell leveling, and Auto Harvest register their read and native-mutation work with the suite performance coordinator. Catalog, lifecycle, cost, and admission reads resume only after a cooperative read lease; every native mutation requires its own non-preemptible lease. The suite admits at most one such mutation per Unity frame. Auto Buy receives a bounded three-turn scheduling weight while it has continuous work, then yields to the next waiting subsystem. A denied lease retains pending work without restarting or overlapping another suite mutation. Disabled automation clears pending work and stops requesting leases; manual input, scene exit, emergency stop, and unload still release an owned charge hold immediately to avoid trapping player control.
 
 Automata is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 

@@ -18,6 +18,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
     private AutoSpellLevelController? _autoSpellLevelController;
+    private AutoHarvestController? _autoHarvestController;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
@@ -86,6 +87,12 @@ public sealed class Plugin : BaseUnityPlugin
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount);
+        _autoHarvestController = new AutoHarvestController(
+            _config,
+            new ReflectionAutoHarvestRuntime(),
+            Log,
+            SuitePerformanceCoordinator.Shared,
+            () => UnityEngine.Time.frameCount);
         _autoConceptToggleControl = new AutoConceptToggleControl(_config);
         AutoBuyLifecycleSignal.Invalidated += OnAutoBuyLifecycleInvalidated;
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
@@ -114,6 +121,9 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
             $"AutoConceptMode={_config.AutoConceptMode.Value}, " +
             $"AutoConceptSlotManagement={_config.AutoConceptSlotManagement.Value}, " +
+            $"AutoHarvestMode={_config.AutoHarvestMode.Value}, " +
+            $"AutoHarvestFruitTrees={_config.AutoHarvestFruitTrees.Value}, " +
+            $"AutoHarvestTreasureTrees={_config.AutoHarvestTreasureTrees.Value}, " +
             $"AutoLevelSpells={_config.AutoLevelSpells.Value}, " +
             $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
             $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
@@ -132,6 +142,7 @@ public sealed class Plugin : BaseUnityPlugin
             _autoCastEngine?.Tick(deltaTime);
             _autoConceptController?.Tick(deltaTime);
             _autoSpellLevelController?.Tick(deltaTime);
+            _autoHarvestController?.Tick(deltaTime);
         }
     }
 
@@ -152,6 +163,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoConceptController = null;
         _autoSpellLevelController?.Dispose();
         _autoSpellLevelController = null;
+        _autoHarvestController?.Dispose();
+        _autoHarvestController = null;
         _autoCastToggleButton?.Dispose();
         _autoCastToggleButton = null;
         _autoCastToggleControl = null;
@@ -184,6 +197,7 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastEngine?.InvalidateLifecycle();
         _autoConceptController?.InvalidateLifecycle();
         _autoSpellLevelController?.InvalidateLifecycle();
+        _autoHarvestController?.InvalidateLifecycle();
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
     }
 

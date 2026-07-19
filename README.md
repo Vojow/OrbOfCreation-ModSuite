@@ -6,13 +6,13 @@
 
 Unofficial BepInEx mods, tests, and reproducible reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current beta centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, and a native-styled configuration screen. Back up your save before using beta automation.
+The current beta centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, disabled-by-default Auto Harvest, and a native-styled configuration screen. Back up your save before using beta automation.
 
 ## Project status
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.8.4** | Beta | Rejection-aware, completion-responsive queue-filling Auto Buy with shared lifecycle generations, coordinated Auto Cast, timed or catch-up Concept rotation, and progression-aware spell leveling. |
+| **Orb Automata 0.9.0** | Beta | Rejection-aware, completion-responsive queue-filling Auto Buy with shared lifecycle generations, coordinated Auto Cast, timed or catch-up Concept rotation, progression-aware spell leveling, and disabled-by-default audited fruit/treasure tree collection with verified native mutation postconditions. |
 | **Orb Mod Config 0.6.1** | Beta | Mods tab available from the start, with shared lifecycle tracking, typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
 | **Orb Mentor 0.3.4** | Beta | Progression-gated spell, artifact, and ordinary-alchemy mastery sharing with shared lifecycle generations, verified XP deltas, independent opt-in domains, and equipped-spell sources. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |

@@ -7,7 +7,8 @@ These documents record design intent, implementation sequencing, or historical d
 | Plan | Status | Notes |
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
-| [Orb Automata](automata.md) | Implemented / evolving | Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. |
+| [Orb Automata](automata.md) | Implemented / evolving | Auto Buy, Auto Cast, Auto Concept, progression-aware spell leveling, and disabled-by-default Auto Harvest are implemented. |
+| [Auto Harvest](auto-harvest.md) | H2 implemented / H3 in progress | Initial installed-build startup and normal combined fruit/treasure operation passed; the controlled queue, lifecycle, disable, rollback, and fairness matrix remains. |
 | [Auto Buy rejection-aware scheduler](autobuy-rejection-index.md) | Structure threshold parking implemented / runtime gate pending | Structure reserve/affordability waits use exact quantity crossings; conservative Upgrade handling, unavailable-resource backoff, and Steam Deck profiling remain. |
 | [Shared queue-capacity snapshots](queue-capacity.md) | Implemented / runtime validation pending | Centralized native capacity, occupancy, automation allocation, and manual reservation arithmetic is adopted by Auto Buy; an interactive capacity-change probe remains. |
 | [Auto Concept mastery balancing](auto-concept.md) | Beta / runtime validation pending | Disabled-by-default catch-up or timed concept rotation is released through native mutation paths; post-release Proton profiling remains. |

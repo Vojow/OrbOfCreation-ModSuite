@@ -54,6 +54,10 @@ internal sealed class AutomataConfig
     {
         new ModConfigDependency("AutoConcept", "Mode", "Active"),
     };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoHarvestActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoHarvest", "Mode", "Active"),
+    };
 
     private AutomataConfig(
         ConfigEntry<bool> enabled,
@@ -93,6 +97,10 @@ internal sealed class AutomataConfig
         ConfigEntry<float> autoConceptMinimumDrainRatio,
         ConfigEntry<string> allowedAutoConceptUuids,
         ConfigEntry<string> blockedAutoConceptUuids,
+        ConfigEntry<AutoHarvestOperationMode> autoHarvestMode,
+        ConfigEntry<bool> autoHarvestFruitTrees,
+        ConfigEntry<bool> autoHarvestTreasureTrees,
+        ConfigEntry<float> autoHarvestEvaluationIntervalSeconds,
         ConfigEntry<bool> emergencyDisable,
         ConfigEntry<float> cpuBudgetMilliseconds,
         ConfigEntry<bool> enableOperationalLogging,
@@ -138,6 +146,10 @@ internal sealed class AutomataConfig
         AutoConceptMinimumDrainRatio = autoConceptMinimumDrainRatio;
         AllowedAutoConceptUuids = allowedAutoConceptUuids;
         BlockedAutoConceptUuids = blockedAutoConceptUuids;
+        AutoHarvestMode = autoHarvestMode;
+        AutoHarvestFruitTrees = autoHarvestFruitTrees;
+        AutoHarvestTreasureTrees = autoHarvestTreasureTrees;
+        AutoHarvestEvaluationIntervalSeconds = autoHarvestEvaluationIntervalSeconds;
         EmergencyDisable = emergencyDisable;
         CpuBudgetMilliseconds = cpuBudgetMilliseconds;
         EnableOperationalLogging = enableOperationalLogging;
@@ -210,6 +222,11 @@ internal sealed class AutomataConfig
     public ConfigEntry<string> AllowedAutoConceptUuids { get; }
     public ConfigEntry<string> BlockedAutoConceptUuids { get; }
 
+    public ConfigEntry<AutoHarvestOperationMode> AutoHarvestMode { get; }
+    public ConfigEntry<bool> AutoHarvestFruitTrees { get; }
+    public ConfigEntry<bool> AutoHarvestTreasureTrees { get; }
+    public ConfigEntry<float> AutoHarvestEvaluationIntervalSeconds { get; }
+
     public ConfigEntry<bool> EmergencyDisable { get; }
 
     public ConfigEntry<float> CpuBudgetMilliseconds { get; }
@@ -238,6 +255,10 @@ internal sealed class AutomataConfig
 
     public bool CanStartAutoConceptActively =>
         AutoConceptMode.Value == AutoConceptOperationMode.Active &&
+        !EmergencyDisable.Value;
+
+    public bool CanStartAutoHarvestActively =>
+        AutoHarvestMode.Value == AutoHarvestOperationMode.Active &&
         !EmergencyDisable.Value;
 
     public static AutomataConfig Bind(ConfigFile config)
@@ -306,7 +327,11 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoConcept", "MinimumDrainRatio", 0.95f, "Native post-settlement drain ratio floor. Falling below it rolls back only Automata-owned quantity.", 17, 50, new AcceptableValueRange<float>(0.0f, 1.0f), AutoConceptActiveDependencies),
                 Bind(config, "AutoConcept", "AllowedUuids", string.Empty, "Optional comma-separated concept allowlist. Empty allows every validated recipe in ConceptRecipes.", 17, 80, dependencies: AutoConceptActiveDependencies),
                 Bind(config, "AutoConcept", "BlockedUuids", string.Empty, "Comma-separated concept UUIDs Auto Concept must never train.", 17, 90, dependencies: AutoConceptActiveDependencies),
-                Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases and casts immediately.", 40, 0),
+                Bind(config, "AutoHarvest", "Mode", AutoHarvestOperationMode.Disabled, "Disabled performs no harvest work. Active queues one audited native fruit-tree or treasure-tree collect action at a time.", 18, 0),
+                Bind(config, "AutoHarvest", "CollectFruitTrees", true, "Collect ready fruit trees through their native plot action.", 18, 10, dependencies: AutoHarvestActiveDependencies),
+                Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
+                Bind(config, "AutoHarvest", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between exact Auto Harvest readiness checks.", 18, 30, new AcceptableValueRange<float>(0.25f, 10.0f), AutoHarvestActiveDependencies),
+                Bind(config, "Safety", "EmergencyDisable", false, "Stops new Automata purchases, casts, concepts, spell levels, and harvest submissions immediately.", 40, 0),
                 Bind(config, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft CPU budget for each scan or purchase slice, capped at 1 ms for frame-time safety.", 30, 0, new AcceptableValueRange<float>(0.1f, 1.0f)),
                 Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal automation decisions to the BepInEx log. Startup, catalog initialization, warnings, and errors are always logged.", 50, 0),
                 Bind(config, "Diagnostics", "MaxLoggedRejections", 12, "Maximum rejected candidates written per verbose evaluation when operational logging is enabled.", 50, 20),
@@ -451,6 +476,7 @@ internal sealed class AutomataConfig
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
             "AutoConcept" when !advancedAutoConcept => "Auto Concept",
+            "AutoHarvest" => "Auto Harvest",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -458,6 +484,10 @@ internal sealed class AutomataConfig
             "Mode" when section == "AutoBuy" => "Auto Buy",
             "Mode" when section == "AutoCast" => "Auto Cast",
             "Mode" when section == "AutoConcept" => "Auto Concept",
+            "Mode" when section == "AutoHarvest" => "Auto Harvest",
+            "CollectFruitTrees" => "Collect fruit trees",
+            "CollectTreasureTrees" => "Collect treasure trees",
+            "EvaluationIntervalSeconds" when section == "AutoHarvest" => "Evaluation interval (seconds)",
             "SlotManagementMode" => "Slot management",
             "TrainingPeriodSeconds" => "Training period (seconds)",
             "AutoLevelSpells" => "Auto-level spells",
@@ -472,7 +502,7 @@ internal sealed class AutomataConfig
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : 20;
+        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName);
@@ -494,6 +524,12 @@ internal enum AutoBuyOperationMode
 }
 
 internal enum AutoCastOperationMode
+{
+    Disabled,
+    Active,
+}
+
+internal enum AutoHarvestOperationMode
 {
     Disabled,
     Active,
