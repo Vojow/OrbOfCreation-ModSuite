@@ -38,6 +38,11 @@ internal interface IAutoCastAdmissionFailureEvidence
     AutoCastAdmissionFailureKind LastAdmissionFailure { get; }
 }
 
+internal interface IAutoCastAdmissionFailureReasonEvidence
+{
+    string LastAdmissionFailureReason { get; }
+}
+
 internal interface IAutoCastCandidate
 {
     int SlotIndex { get; }

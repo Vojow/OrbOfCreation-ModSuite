@@ -425,6 +425,20 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    public void ResourceRejectionDoesNotTraverseTargetGraph()
+    {
+        var blocked = Spell("resource blocked", immediate: Costs(79, 100, 1));
+        using var fixture = Create(blocked);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(0, blocked.TargetValidationCalls);
+        Assert.Equal(0, blocked.FireCalls);
+    }
+
+    [Fact]
     public void VerboseThresholdRejectionLogsCurrentCapacityFullnessAndRequiredPercent()
     {
         var below = Spell("mana hungry", immediate: Costs(79, 100, 1));
@@ -542,10 +556,24 @@ public sealed class AutoCastTests
     public void ReflectionAutoCastCatalog_TranslatesLoadoutCostsKindAndStableIdentity()
     {
         var manager = new SpellManager();
-        var spell = new NativeLoadoutSpell("adapter-spell") { Channeled = true };
+        const string spellUuid = "11111111-1111-1111-1111-111111111111";
+        var spell = new global::Spell(new SpellRecipeSO { uuid = spellUuid })
+        {
+            DisplayName = "Adapter spell",
+            Channeled = true,
+        };
+        spell.Cost.costs.Add(new global::ResourceTuple(
+            new global::ResourceSO
+            {
+                uuid = "adapter-resource",
+                quantity = new BigDouble(10.0, 0),
+                trueQuantity = new BigDouble(10.0, 0),
+            },
+            new BigDouble(2.0, 0)));
         manager.activeSpells.Add(spell);
         SpellManager.instance = manager;
         SpellManager.NativeCanCast = true;
+        global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
         TargetingManager.Targeting = false;
         using var catalog = new ReflectionAutoCastCatalog();
         try
@@ -560,10 +588,11 @@ public sealed class AutoCastTests
             Assert.Equal("adapter-resource", cost.ResourceId);
             Assert.Equal(0, cost.Cost.CompareTo(new BigAmount(2.0, 0)));
             Assert.Equal(0, cost.CurrentQuantity.CompareTo(new BigAmount(10.0, 0)));
+            Assert.Equal(0, spell.Cost.CostPrintReads);
             Assert.True(candidate.TryGetIdentity(out var identity, out var identityReason), identityReason);
-            Assert.Equal("adapter-spell", identity.Uuid);
+            Assert.Equal(spellUuid, identity.Uuid);
             Assert.Same(spell, identity.NativeReference);
-            Assert.Equal(typeof(NativeLoadoutSpell), identity.NativeType);
+            Assert.Equal(typeof(global::Spell), identity.NativeType);
             Assert.True(candidate.TrySetChargeHold(true, out var holdReason), holdReason);
             Assert.True(spell.HoldingCharge);
             Assert.True(candidate.TryFireAndResolveTargets(out var fireReason), fireReason);
@@ -573,6 +602,7 @@ public sealed class AutoCastTests
         {
             SpellManager.instance = null;
             SpellManager.NativeCanCast = true;
+            global::Spell.FireSignal = null;
             TargetingManager.Targeting = false;
         }
     }
@@ -582,9 +612,10 @@ public sealed class AutoCastTests
     public void ReflectionAutoCastCandidate_MissingFireEvidenceBlocksUntilLifecycleRecovery()
     {
         var manager = new SpellManager();
-        var spell = new NativeLoadoutSpell("no-evidence-spell") { EmitFireSignal = false };
+        var spell = new global::Spell(new SpellRecipeSO { uuid = "22222222-2222-2222-2222-222222222222" }) { EmitFireSignal = false };
         manager.activeSpells.Add(spell);
         SpellManager.instance = manager;
+        global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
         TargetingManager.Targeting = false;
         using var catalog = new ReflectionAutoCastCatalog();
         try
@@ -607,6 +638,7 @@ public sealed class AutoCastTests
         finally
         {
             SpellManager.instance = null;
+            global::Spell.FireSignal = null;
             TargetingManager.Targeting = false;
         }
     }
@@ -859,6 +891,8 @@ public sealed class AutoCastTests
 
         public bool TargetsValid { get; set; } = true;
 
+        public int TargetValidationCalls { get; private set; }
+
         public bool CanCastResult { get; set; } = true;
 
         public string CanCastReason { get; set; } = "ready";
@@ -887,6 +921,7 @@ public sealed class AutoCastTests
 
         public bool HasValidTargets(out string reason)
         {
+            TargetValidationCalls++;
             reason = TargetsValid ? "valid" : "no valid target";
             return TargetsValid;
         }

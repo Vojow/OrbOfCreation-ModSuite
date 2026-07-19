@@ -228,6 +228,16 @@ internal interface IAutoBuyMutationCandidate
     void RecoverMutationBlock(long lifecycleGeneration);
 }
 
+internal interface IAutoBuyAdmissionContractEvidence
+{
+    bool HasCompleteNativeContract { get; }
+}
+
+internal interface IAutoBuyAvailabilityEvidence
+{
+    bool TryReadAvailability(out bool available);
+}
+
 internal interface IAutoBuyCircuitCandidate
 {
     AutomationCircuitSnapshot CircuitSnapshot { get; }

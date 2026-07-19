@@ -723,50 +723,40 @@ internal sealed class AutoBuyEngine : IDisposable
                 AutomationRetryTrigger.Configuration);
         }
 
-        var nativeCanPurchase = true;
-        var nativeReason = string.Empty;
-        if (snapshot.Kind == AutoBuyCandidateKind.Upgrade)
+        // The adapter is the only boundary shared policy uses to obtain live
+        // domain facts. It preserves the audited Upgrade ordering (native
+        // CanPurchase before availability) while normalizing both families.
+        var admission = AutoBuyAdmissionAdapter.Capture(candidate);
+        if (!admission.Identity.IsKnown ||
+            !admission.AvailabilityKnown ||
+            !admission.NativeAdmissionKnown ||
+            !admission.DrainCostsKnown ||
+            !admission.QueueRequirementKnown)
         {
-            // The supported native UpgradeSO.CanPurchase contract includes
-            // affordability as well as lifecycle, requirements, and queue
-            // admission. Preserve that native call first, but decode its live
-            // costs before classifying a false result so genuine resource waits
-            // retain structured blockers and resource dependencies.
-            nativeCanPurchase = candidate.CanPurchase(out nativeReason);
-            if (!candidate.IsAvailable())
-            {
-                suppressResourceTracking = true;
-                return AutoBuyDecision.Rejected(
-                    snapshot,
-                    AutomationDecisionCode.Unavailable,
-                    "upgrade is not available",
-                    AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Progression);
-            }
-        }
-        else if (!candidate.IsAvailable())
-        {
+            suppressResourceTracking = true;
             return AutoBuyDecision.Rejected(
                 snapshot,
-                AutomationDecisionCode.Locked,
-                "structure is locked",
-                AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Progression);
+                AutomationDecisionCode.ContractUnresolved,
+                "native identity, availability, admission, drain, or queue contract is unknown",
+                AutomationRetryTrigger.None);
         }
-        else
+
+        if (!admission.IsAvailable)
         {
-            // Preserve native validation before Automata policy, but retain
-            // the result until the decoded resource vector can distinguish a
-            // stable quantity wait from a lifecycle or queue rejection.
-            nativeCanPurchase = candidate.CanPurchase(out nativeReason);
+            suppressResourceTracking = snapshot.Kind == AutoBuyCandidateKind.Upgrade;
+            return AutoBuyDecision.Rejected(
+                snapshot,
+                snapshot.Kind == AutoBuyCandidateKind.Structure
+                    ? AutomationDecisionCode.Locked
+                    : AutomationDecisionCode.Unavailable,
+                admission.AvailabilityReason,
+                AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Progression);
         }
 
         // Structures remain resource-tracked once unlocked so affordability
         // changes wake them promptly. Upgrades reach this point only after the
         // native purchase contract says they can currently be bought.
-        var costs = _incrementalCatalog is not null ? candidate.GetCosts() : null;
-        var costsResolved = candidate is not IAutoBuyDirtyCandidate dirtyCandidate ||
-                            dirtyCandidate.HasResolvedCosts;
-
-        if (!costsResolved)
+        if (!admission.ImmediateCostsKnown)
         {
             if (candidate is IAutoBuyCircuitCandidate circuitCandidate &&
                 circuitCandidate.CircuitSnapshot.IsOpen)
@@ -792,7 +782,18 @@ internal sealed class AutoBuyEngine : IDisposable
                 AutomationRetryTrigger.ResourceQuantity);
         }
 
-        costs ??= candidate.GetCosts();
+        if (!AutomationAdmissionPolicy.HasCompleteContract(admission, out var contractReason))
+        {
+            return AutoBuyDecision.Rejected(
+                snapshot,
+                AutomationDecisionCode.ContractUnresolved,
+                contractReason,
+                AutomationRetryTrigger.Lifecycle | AutomationRetryTrigger.Registry);
+        }
+
+        var nativeCanPurchase = admission.NativeAdmissionAccepted;
+        var nativeReason = admission.NativeAdmissionReason;
+        var costs = admission.ImmediateCosts;
         var reserve = _reservePolicy.Evaluate(costs);
         if (!reserve.Passed)
         {

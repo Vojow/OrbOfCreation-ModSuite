@@ -292,16 +292,27 @@ public class StructureSO
     public bool available = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
+    public bool ApplyPurchaseMutation { get; set; } = true;
+    public int GetPurchaseCostCalls { get; private set; }
+    public bool Available { get => available; set => available = value; }
+    public bool Purchasable { get => purchasable; set => purchasable = value; }
+    public int PurchaseLevel { get => quantity; set => quantity = value; }
+    public int QueuedQuantity { get => queuedQuantity; set => queuedQuantity = value; }
+    public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
     public Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
     public bool CanPurchase() => purchasable;
-    public ResourceCostList GetPurchaseCost() => purchaseCost;
+    public ResourceCostList GetPurchaseCost()
+    {
+        GetPurchaseCostCalls++;
+        return purchaseCost;
+    }
     public int GetPurchaseLevel() => quantity;
     public int GetQueuedQuantity() => queuedQuantity;
     public void Purchase(bool forceOne)
     {
-        if (forceOne && CanPurchase()) queuedQuantity++;
+        if (forceOne && CanPurchase() && ApplyPurchaseMutation) queuedQuantity++;
     }
     public void QueueBuild(int amount) => queuedQuantity += amount;
     public void CompleteAction()
@@ -347,6 +358,13 @@ public class PersistentResetManager
 public class Spell
 {
     private readonly SpellRecipeSO? reference;
+    public static Action? FireSignal { get; set; }
+    public string DisplayName { get; set; } = "Spell";
+    public bool Channeled { get; set; }
+    public bool EmitFireSignal { get; set; } = true;
+    public bool HoldingCharge { get; private set; }
+    public int FireCalls { get; private set; }
+    public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
     {
@@ -359,8 +377,26 @@ public class Spell
 
     public SpellRecipeSO? get_reference() => reference;
 
+    public string GetName() => DisplayName;
+    public bool IsChanneled() => Channeled;
+    public bool IsToggledSpell() => false;
+    public bool IsEmpty() => false;
+    public bool CanCharge() => true;
+    public bool IsCasting() => false;
+    public bool IsReadyingCast() => false;
+    public bool CanCast() => true;
+    public bool IsAttuning() => false;
+    public bool IsChargeAvailable() => true;
+    public bool HasEnoughResources() => true;
+    public ResourceCostList GetCost() => Cost;
+    public ResourceCostList GetDrainCost() => new ResourceCostList();
+    public object GetScalingInfo() => new object();
+    public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
+
     public void Fire()
     {
+        if (EmitFireSignal) FireSignal?.Invoke();
+        FireCalls++;
     }
 }
 
@@ -376,6 +412,15 @@ public class Prerequisites
 public class ResourceCostList
 {
     public List<ResourceTuple> costs = new List<ResourceTuple>();
+    public int CostPrintReads { get; private set; }
+    private string _costPrint
+    {
+        get
+        {
+            CostPrintReads++;
+            return "diagnostic-only";
+        }
+    }
     public bool affordable = true;
     public int PerformCalls { get; private set; }
     public bool HasEnough() => affordable;

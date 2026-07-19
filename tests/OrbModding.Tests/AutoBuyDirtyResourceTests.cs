@@ -95,7 +95,7 @@ public sealed class AutoBuyDirtyResourceTests
             uuid = "resource-circuit",
             Cost = new ResourceCostList(),
         };
-        native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
+        Assert.IsType<ResourceCostList>(native.Cost).costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
         var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _, _, _) => { });
         var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
 
@@ -131,7 +131,7 @@ public sealed class AutoBuyDirtyResourceTests
             uuid = "valid-cost-missing-resource",
             Cost = new ResourceCostList(),
         };
-        native.Cost.costs.Add(new ResourceTuple(missing, new TestBigDouble(1.0, 0)));
+        Assert.IsType<ResourceCostList>(native.Cost).costs.Add(new ResourceTuple(missing, new TestBigDouble(1.0, 0)));
         var reader = new FakeResourceReader();
         var snapshots = new AutoBuyResourceSnapshotCache(reader, (_, _, _, _) => { });
         var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
@@ -1531,7 +1531,7 @@ public sealed class AutoBuyDirtyResourceTests
             uuid = "broken-cost",
             Cost = new ResourceCostList(),
         };
-        native.Cost.costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
+        Assert.IsType<ResourceCostList>(native.Cost).costs.Add(new ResourceTuple(null!, new TestBigDouble(1.0, 0)));
         var snapshots = new AutoBuyResourceSnapshotCache(new FakeResourceReader(), (_, _, _, _) => { });
         var candidate = new ReflectionAutoBuyCandidate(native, AutoBuyCandidateKind.Structure, snapshots);
 
@@ -1596,9 +1596,10 @@ public sealed class AutoBuyDirtyResourceTests
             uuid = "structure",
             PurchaseLevel = 3,
             QueuedQuantity = 2,
+            Cost = new ResourceCostList(),
         };
-        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(2.0, 1)));
-        native.Cost.costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 1)));
+        Assert.IsType<ResourceCostList>(native.Cost).costs.Add(new ResourceTuple(mana, new TestBigDouble(2.0, 1)));
+        Assert.IsType<ResourceCostList>(native.Cost).costs.Add(new ResourceTuple(mana, new TestBigDouble(3.0, 1)));
         var snapshots = new AutoBuyResourceSnapshotCache(
             new ReflectionAutoBuyResourceSnapshotReader(),
             (_, _, _, _) => { });
@@ -2368,9 +2369,9 @@ public sealed class AutoBuyDirtyResourceTests
     }
 }
 
-internal sealed class ResourceCostList
+internal sealed class ResourceCostList : global::ResourceCostList
 {
-    public List<ResourceTuple> costs = new List<ResourceTuple>();
+    public new List<ResourceTuple> costs = new List<ResourceTuple>();
 }
 
 internal struct ResourceTuple
@@ -2446,42 +2447,4 @@ internal readonly struct TestBigDouble
     public readonly double mantissa;
 
     public readonly long exponent;
-}
-
-internal class StructureSO
-{
-    public string uuid = string.Empty;
-
-    public bool Available { get; set; } = true;
-
-    public bool Purchasable { get; set; } = true;
-
-    public bool ApplyPurchaseMutation { get; set; } = true;
-
-    public int PurchaseLevel { get; set; }
-
-    public int QueuedQuantity { get; set; }
-
-    public ResourceCostList Cost { get; set; } = new ResourceCostList();
-
-    public int GetPurchaseCostCalls { get; private set; }
-
-    public bool IsAvailable() => Available;
-
-    public bool CanPurchase() => Purchasable;
-
-    public ResourceCostList GetPurchaseCost()
-    {
-        GetPurchaseCostCalls++;
-        return Cost;
-    }
-
-    public void Purchase(bool forceOne)
-    {
-        if (forceOne && Purchasable && ApplyPurchaseMutation) QueuedQuantity++;
-    }
-
-    public int GetPurchaseLevel() => PurchaseLevel;
-
-    public int GetQueuedQuantity() => QueuedQuantity;
 }

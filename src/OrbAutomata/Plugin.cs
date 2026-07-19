@@ -43,6 +43,7 @@ public sealed class Plugin : BaseUnityPlugin
     private IDisposable? _conceptInventorySubscription;
     private IDisposable? _conceptProgressionSubscription;
     private bool _knownOwnershipWarningLogged;
+    private bool _nativeContractsAvailable = true;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -53,7 +54,16 @@ public sealed class Plugin : BaseUnityPlugin
         _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
         _featureStatuses = new AutomataFeatureStatuses(_config, _lifecycleGeneration);
 
-        LogAssemblyStatus();
+        if (!LogAssemblyStatus())
+        {
+            _nativeContractsAvailable = false;
+            _featureStatuses.ObserveContractUnavailable(
+                _lifecycleGeneration,
+                "Installed game assemblies do not match Automata's audited native contracts.");
+            Log.LogAutomataError(
+                "Automata native mutations are disabled because the installed game assemblies do not match the audited baseline.");
+            return;
+        }
         GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
@@ -166,6 +176,13 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         if (_config is null) return;
+        if (!_nativeContractsAvailable)
+        {
+            _featureStatuses?.ObserveContractUnavailable(
+                _lifecycleGeneration,
+                "Installed game assemblies do not match Automata's audited native contracts.");
+            return;
+        }
         if (!_config.Enabled.Value)
         {
             CancelPreparedAutomationForOwnershipRelease();
@@ -437,16 +454,19 @@ public sealed class Plugin : BaseUnityPlugin
         GameLifecycleMonitor.Shared.Current.IsGameplayReady &&
         GameLifecycleMonitor.Shared.IsCurrent(_lifecycleLease);
 
-    private static void LogAssemblyStatus()
+    internal static bool AssemblyAuditAllowsMutation(AssemblyAuditResult audit) => audit.MatchesExpected;
+
+    private static bool LogAssemblyStatus()
     {
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
-        if (audit.MatchesExpected)
+        if (AssemblyAuditAllowsMutation(audit))
         {
             Log.LogAutomataInfo("Game assemblies match the audited baseline.");
-            return;
+            return true;
         }
 
-        Log.LogAutomataWarning("Game assemblies differ from the audited baseline. Disable Automata until this game build has been validated.");
+        Log.LogAutomataWarning("Game assemblies differ from the audited baseline. Automata native mutations will remain disabled until this game build has been validated.");
+        return false;
     }
 
     private void UpdateAutoCastControls(float unscaledDeltaTime)
