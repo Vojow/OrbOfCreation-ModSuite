@@ -49,6 +49,59 @@ summary, and retains the raw report for 90 days. See
 [headless E2E simulation](headless-e2e.md#historical-reports) for metric
 definitions and the baseline-update policy.
 
+### Suite coordinator performance evidence
+
+The Auto Buy history remains a separate deterministic operation-count report.
+Suite-wide runtime timing uses the strict profile in
+`data/suite-performance-profile-v1.json` and the separate
+`OrbModding.PerformanceEvidence` tool. A capture freezes every exact coordinator
+work identity at both the start and end of an explicitly requested measurement
+window. The checker evaluates counter deltas; it never attributes a lifetime
+maximum that was already present at the start to the current capture.
+
+The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one mutation
+admission per frame, twelve supported work identities, wait/run limits, and a
+minimum of 30 samples. Cooperative p95, p99, and maximum targets are
+observational merge evidence in this beta. Native timing and native hard-budget
+overruns are explicitly `observe-only` until both Windows desktop and Steam Deck
+under Proton captures exist. Target exceedance therefore appears in JSON and
+Markdown but does not make the V1 CLI fail; invalid JSON, incompatible policy,
+profile-hash drift, missing/unknown work, or contradictory facts do fail it.
+The coordinator's combined active-frame distribution is evaluated separately:
+p95 uses the 0.75 ms soft target, while p99 and maximum use the 1.0 ms hard
+target. A per-work pass therefore cannot hide stacked suite work in one frame.
+The twelve identity constants are consumed by the production registration
+sites as well as a checked-profile audit, so renaming or reclassifying runtime
+work without updating the profile fails portable CI.
+
+CI produces a fixed-clock synthetic start/end capture and runs:
+
+```powershell
+dotnet run --project tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj --configuration Release -- --profile data/suite-performance-profile-v1.json --evidence artifacts/performance/suite-performance-evidence.json --json-output artifacts/performance/suite-performance-evaluation.json --markdown-output artifacts/performance/suite-performance-evaluation.md
+```
+
+The retained JSON contains raw coordinator facts only; classifications belong
+to the checker. Rolling percentiles can be `within-target` only when the start
+window was empty or the capture added at least the complete rolling capacity.
+Otherwise the result is `insufficient-window`, preventing pre-capture samples
+from producing a false pass. Recurring isolated deferred frames remain a raw
+diagnostic; maximum pending wait and consecutive deferred-frame runs are the
+bounded wait gates.
+Native observe-only metrics follow the same sample/window qualification and do
+not emit comparable timing facts from a contaminated rolling window. Capture
+also retains registration ids internally across start/end to reject dispose-and-
+recreate churn, while deliberately omitting those process-local ids from JSON.
+Markdown reports render every non-alphanumeric character from captured metadata
+or metric labels as a numeric entity and normalize line breaks, so evidence text
+cannot introduce code spans, links, images, raw HTML, or table cells.
+
+Capture metadata is bounded to capture kind, source commit, suite/game version,
+scenario, duration, and UTC time. The production DTO has no host, OS user, save,
+or path field and performs no file I/O. Capture/export is a low-frequency
+diagnostic action, never a scheduler hot-path call. Real captures are still UAT:
+run the same scenario on desktop and Deck, retain both evidence files, and record
+the exact game/build versions before closing the runtime performance gate.
+
 For a source-level A/B comparison with the last pre-beta `main` engine, run
 `tools/compare-autobuy-performance.ps1`. Its compatibility project compiles the
 same deterministic workload separately against the untouched reference and

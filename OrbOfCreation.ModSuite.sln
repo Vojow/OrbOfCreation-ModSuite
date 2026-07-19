@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -18,6 +18,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.RuntimeReplay", "tests\OrbModding.RuntimeReplay\OrbModding.RuntimeReplay.csproj", "{8A473AF0-97E8-4D37-A9ED-E960B8A50C37}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.ReplayConverter", "tools\OrbModding.ReplayConverter\OrbModding.ReplayConverter.csproj", "{6F8F62F1-5FAE-4FCA-A58D-951C1D3F9E0C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.PerformanceEvidence", "tools\OrbModding.PerformanceEvidence\OrbModding.PerformanceEvidence.csproj", "{A315C0C8-419F-41CB-9C89-E43C8D7479D0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
@@ -141,6 +143,18 @@ Global
 		{6F8F62F1-5FAE-4FCA-A58D-951C1D3F9E0C}.Release|x64.Build.0 = Release|Any CPU
 		{6F8F62F1-5FAE-4FCA-A58D-951C1D3F9E0C}.Release|x86.ActiveCfg = Release|Any CPU
 		{6F8F62F1-5FAE-4FCA-A58D-951C1D3F9E0C}.Release|x86.Build.0 = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x64.Build.0 = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x86.Build.0 = Debug|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x64.ActiveCfg = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x64.Build.0 = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x86.ActiveCfg = Release|Any CPU
+		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

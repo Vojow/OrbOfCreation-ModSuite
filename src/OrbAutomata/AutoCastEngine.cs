@@ -60,16 +60,18 @@ internal sealed class AutoCastEngine : IDisposable
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+            var evaluateIdentity = SuitePerformanceWorkIdentities.AutoCastEvaluate;
             _readWork = coordinator.Register(
-                "OrbAutomata.AutoCast",
-                "Evaluate loadout",
-                SuiteBudgetClass.SoftLimited,
-                SuiteWorkExecutionKind.Cooperative);
+                evaluateIdentity.Subsystem,
+                evaluateIdentity.WorkName,
+                evaluateIdentity.BudgetClass,
+                evaluateIdentity.ExecutionKind);
+            var mutationIdentity = SuitePerformanceWorkIdentities.AutoCastMutation;
             _mutationWork = coordinator.Register(
-                "OrbAutomata.AutoCast",
-                "Fire spell or release charge hold",
-                SuiteBudgetClass.HardLimited,
-                SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+                mutationIdentity.Subsystem,
+                mutationIdentity.WorkName,
+                mutationIdentity.BudgetClass,
+                mutationIdentity.ExecutionKind);
         }
         _secondsUntilEvaluation = ClampInterval(config.AutoCastIntervalSeconds.Value);
         _operationalLoggingWasEnabled = config.IsOperationalLoggingEnabled;

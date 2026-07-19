@@ -288,11 +288,15 @@ public sealed class GameplayInvalidationBus : IDisposable
         _pending = new Dictionary<InvalidationKey, GameplayInvalidation>(capacity);
         _supersededScratch = new List<InvalidationKey>(capacity);
         _supersededSet = new HashSet<InvalidationKey>(capacity);
-        _deliveryWork = coordinator?.Register(
-            "OrbModding.Common",
-            "Deliver gameplay invalidations",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+        if (coordinator is not null)
+        {
+            var identity = SuitePerformanceWorkIdentities.GameplayInvalidationDelivery;
+            _deliveryWork = coordinator.Register(
+                identity.Subsystem,
+                identity.WorkName,
+                identity.BudgetClass,
+                identity.ExecutionKind);
+        }
         _lifecycle.Transitioned += OnLifecycleTransition;
     }
 

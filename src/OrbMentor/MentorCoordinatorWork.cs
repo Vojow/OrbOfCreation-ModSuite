@@ -14,16 +14,18 @@ internal sealed class MentorCoordinatorWork : IDisposable
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+        var evaluateIdentity = SuitePerformanceWorkIdentities.MentorEvaluate;
         _cooperativeWork = coordinator.Register(
-            "OrbMentor",
-            "Reconcile, resolve, and plan XP",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+            evaluateIdentity.Subsystem,
+            evaluateIdentity.WorkName,
+            evaluateIdentity.BudgetClass,
+            evaluateIdentity.ExecutionKind);
+        var mutationIdentity = SuitePerformanceWorkIdentities.MentorMutation;
         _mutationWork = coordinator.Register(
-            "OrbMentor",
-            "Grant one mastery XP mutation",
-            SuiteBudgetClass.HardLimited,
-            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+            mutationIdentity.Subsystem,
+            mutationIdentity.WorkName,
+            mutationIdentity.BudgetClass,
+            mutationIdentity.ExecutionKind);
     }
 
     internal bool CooperativePending => _cooperativeWork.IsPending;

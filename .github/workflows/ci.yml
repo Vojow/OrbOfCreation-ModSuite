@@ -50,6 +50,7 @@ jobs:
       - name: Run deterministic performance simulations
         env:
           OOC_PERFORMANCE_REPORT: ${{ github.workspace }}/artifacts/performance/autobuy-current.json
+          OOC_SUITE_PERFORMANCE_EVIDENCE: ${{ github.workspace }}/artifacts/performance/suite-performance-evidence.json
         run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
 
       - name: Compare deterministic performance history
@@ -59,6 +60,15 @@ jobs:
       - name: Compare pre-beta main and current engine
         shell: pwsh
         run: tools/compare-autobuy-performance.ps1
+
+      - name: Validate and evaluate suite performance evidence
+        run: >-
+          dotnet run --project tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj
+          --configuration Release --
+          --profile data/suite-performance-profile-v1.json
+          --evidence artifacts/performance/suite-performance-evidence.json
+          --json-output artifacts/performance/suite-performance-evaluation.json
+          --markdown-output artifacts/performance/suite-performance-evaluation.md
 
       - name: Retain deterministic performance report
         if: always()

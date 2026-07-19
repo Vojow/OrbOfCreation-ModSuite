@@ -122,17 +122,19 @@ internal sealed class AutoBuyEngine : IDisposable
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+            var evaluateIdentity = SuitePerformanceWorkIdentities.AutoBuyEvaluate;
             _readWork = coordinator.RegisterWeighted(
-                "OrbAutomata.AutoBuy",
-                "Evaluate candidates",
-                SuiteBudgetClass.SoftLimited,
-                SuiteWorkExecutionKind.Cooperative,
+                evaluateIdentity.Subsystem,
+                evaluateIdentity.WorkName,
+                evaluateIdentity.BudgetClass,
+                evaluateIdentity.ExecutionKind,
                 schedulingWeight: 3);
+            var mutationIdentity = SuitePerformanceWorkIdentities.AutoBuyMutation;
             _mutationWork = coordinator.RegisterWeighted(
-                "OrbAutomata.AutoBuy",
-                "Submit one purchase",
-                SuiteBudgetClass.HardLimited,
-                SuiteWorkExecutionKind.NonPreemptibleNativeMutation,
+                mutationIdentity.Subsystem,
+                mutationIdentity.WorkName,
+                mutationIdentity.BudgetClass,
+                mutationIdentity.ExecutionKind,
                 schedulingWeight: 3);
         }
         _secondsUntilEvaluation = ClampInterval(config.AutoBuyIntervalSeconds.Value);

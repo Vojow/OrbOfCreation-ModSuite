@@ -42,16 +42,18 @@ internal sealed class AutoSpellLevelController : IDisposable
         _readFrameIdentity = readFrameIdentity;
         _featureStatus = featureStatus;
         _ownsActionFamily = ownsActionFamily ?? (() => true);
+        var evaluateIdentity = SuitePerformanceWorkIdentities.AutoSpellLevelEvaluate;
         _readWork = coordinator.Register(
-            "OrbAutomata.AutoSpellLevel",
-            "Evaluate native spell leveling",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+            evaluateIdentity.Subsystem,
+            evaluateIdentity.WorkName,
+            evaluateIdentity.BudgetClass,
+            evaluateIdentity.ExecutionKind);
+        var mutationIdentity = SuitePerformanceWorkIdentities.AutoSpellLevelMutation;
         _mutationWork = coordinator.Register(
-            "OrbAutomata.AutoSpellLevel",
-            "Level native spells",
-            SuiteBudgetClass.HardLimited,
-            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+            mutationIdentity.Subsystem,
+            mutationIdentity.WorkName,
+            mutationIdentity.BudgetClass,
+            mutationIdentity.ExecutionKind);
     }
 
     public AutoSpellLevelCapability Capability => _capability;
