@@ -73,6 +73,8 @@ Auto Buy diagnostics now create structured Common decisions without formatting i
 
 Suite feature-health reporting also stops before snapshot construction on a stable condition. Automata compares primitive configured/state/reason/generation fields at its existing engine boundaries; Mentor compares one stack-only fingerprint of cached configuration, failure, unlock, catalog, and lifecycle evidence. Only a changed fingerprint projects DTOs or touches the main-thread registry. Disabled Automata performs no UI, engine, coordinator, or per-frame health work, while lifecycle transitions still advance its registered generation.
 
+Bounded candidate and domain [circuit breakers](automation-circuit-breakers.md) prevent repeated native faults from consuming scheduler turns. They live inside existing bounded indexes/fixed domain arrays, retain capped failure streaks across early event wakes, and distinguish time-retryable reads from lifecycle-only ambiguous mutations and process-lifetime contract failures. Invalidation callbacks only wake exact existing owners; they do not reflect, scan, log, or subscribe per candidate.
+
 ## Candidate lifecycle model
 
 Registry membership and player progression are separate dimensions. The index retains stable identity while the live state moves through the following lifecycle:

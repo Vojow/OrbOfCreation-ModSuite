@@ -1,4 +1,5 @@
 using OrbMentor;
+using OrbModding.Common;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -791,6 +792,30 @@ public sealed class MentorPerformanceTests
         Assert.False(failures.IsDomainBlocked(MentorDomain.Alchemy));
         failures.ResetLifecycle();
         Assert.True(failures.IsDomainBlocked(MentorDomain.Artifacts));
+    }
+
+    [Fact]
+    public void TransientDomainCircuit_RecoversOnlyAtLifecycleAndDoesNotStarveHealthyDomains()
+    {
+        var failures = new MentorFailureRegistry();
+        failures.For(MentorDomain.Artifacts).BlockTransient("native grant was ambiguous");
+
+        Assert.Equal(
+            AutomationCircuitState.RetryAfterLifecycle,
+            failures.For(MentorDomain.Artifacts).Circuit.State);
+        Assert.True(failures.IsDomainBlocked(MentorDomain.Artifacts));
+        Assert.False(failures.IsDomainBlocked(MentorDomain.Spells));
+        Assert.False(failures.IsDomainBlocked(MentorDomain.Alchemy));
+
+        failures.ResetLifecycle();
+
+        Assert.False(failures.IsDomainBlocked(MentorDomain.Artifacts));
+        Assert.Equal(
+            AutomationCircuitState.Healthy,
+            failures.For(MentorDomain.Artifacts).Circuit.State);
+        Assert.Equal(1, failures.For(MentorDomain.Artifacts).Circuit.ConsecutiveFailures);
+        failures.For(MentorDomain.Artifacts).RecordSuccess();
+        Assert.Equal(0, failures.For(MentorDomain.Artifacts).Circuit.ConsecutiveFailures);
     }
 
     private sealed class IdentityBase { }

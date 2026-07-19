@@ -68,6 +68,9 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Assert.Equal(0, runtime.Diagnostics.NativeGrants);
         Assert.Equal(FeatureStatusState.Faulted,
             Status(statusRegistry, MentorFeatureStatus.RootFeatureId).State);
+        Assert.Equal(
+            FeatureStatusReasonCode.PostconditionFailed,
+            Status(statusRegistry, MentorFeatureStatus.SpellsFeatureId).Reason.Code);
         Drive(runtime, 100);
         Assert.Equal(1, recipient.MasteryGrantCalls);
 
@@ -145,6 +148,25 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Assert.Equal(grant.mantissa, recipient.masteryXp.mantissa, 12);
         Assert.Empty(source.GetExperienceElement().Grants);
         Assert.Equal(1, runtime.Diagnostics.QualifiedEvents);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void BlockedOptionalDomain_DoesNotStarveHealthySpellGrant()
+    {
+        var source = RegisterSpell(mastery: 5);
+        var recipient = RegisterSpell(mastery: 1);
+        SpellManager.instance!.activeSpells.Add(new Spell(source));
+        using var runtime = CreateRuntime(sharePercent: 10, artifacts: true);
+
+        Drive(runtime, 200);
+        runtime.QuarantineDomain(MentorDomain.Artifacts, "fixture artifact contract failure");
+        runtime.Observe(source, new BigDouble(100, 0));
+        DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+        Assert.Single(recipient.GrantedMasteryExperience);
+        Assert.StartsWith("Blocked:", runtime.CurrentMentor(MentorDomain.Artifacts));
+        Assert.NotEqual("Blocked", runtime.CurrentMentor(MentorDomain.Spells));
     }
 
     [Fact]

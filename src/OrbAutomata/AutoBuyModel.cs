@@ -225,7 +225,16 @@ internal interface IAutoBuyLifecycleCandidate
 
 internal interface IAutoBuyMutationCandidate
 {
-    void RecoverMutationBlock();
+    void RecoverMutationBlock(long lifecycleGeneration);
+}
+
+internal interface IAutoBuyCircuitCandidate
+{
+    AutomationCircuitSnapshot CircuitSnapshot { get; }
+
+    bool CanEvaluate();
+
+    void WakeCircuit(AutomationRetryTrigger trigger, long lifecycleGeneration);
 }
 
 internal interface IAutoBuyDirtyCandidate
