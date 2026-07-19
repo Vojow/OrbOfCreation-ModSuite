@@ -12,6 +12,7 @@ namespace OrbAutomata;
 public sealed class Plugin : BaseUnityPlugin
 {
     private const float UiRetryIntervalSeconds = 5.0f;
+    private const string AlchemyRecipeTypeName = "AlchemyRecipeSO";
     private Harmony? _harmony;
     private AutomataConfig? _config;
     private AutoBuyEngine? _autoBuyEngine;
@@ -35,6 +36,9 @@ public sealed class Plugin : BaseUnityPlugin
     private string _autoConceptUiFailureReason = string.Empty;
     private long _lifecycleGeneration;
     private GameLifecycleLease _lifecycleLease;
+    private GameplayInvalidationBus? _invalidationBus;
+    private IDisposable? _conceptInventorySubscription;
+    private IDisposable? _conceptProgressionSubscription;
 
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -91,7 +95,21 @@ public sealed class Plugin : BaseUnityPlugin
         AutoBuyLifecycleSignal.StructureQueueChanged += OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged += OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion += OnNativeCompletion;
-        AutoConceptLifecycleSignal.Changed += OnAutoConceptChanged;
+        AutoConceptLifecycleSignal.InventoryChanged += OnAutoConceptInventoryChanged;
+        AutoConceptLifecycleSignal.ProgressionChanged += OnAutoConceptProgressionChanged;
+        _invalidationBus = GameplayInvalidationBus.Shared;
+        _conceptInventorySubscription = _invalidationBus.Subscribe(
+            new GameplayInvalidationFilter(
+                GameplayInvalidationKind.Inventory,
+                GameplayInvalidationDomains.AutomataConcepts),
+            OnAutoConceptInventoryInvalidated,
+            "OrbAutomata.AutoConcept.Inventory");
+        _conceptProgressionSubscription = _invalidationBus.Subscribe(
+            new GameplayInvalidationFilter(
+                GameplayInvalidationKind.Progression,
+                GameplayInvalidationDomains.AutomataConcepts),
+            OnAutoConceptProgressionInvalidated,
+            "OrbAutomata.AutoConcept.Progression");
         GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
@@ -126,6 +144,15 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
+        if (_config is not null &&
+            (_config.CanStartAutoBuyActively ||
+             _config.CanStartAutoCastActively ||
+             _config.CanStartAutoConceptActively))
+        {
+            _invalidationBus?.Pump(
+                UnityEngine.Time.frameCount,
+                GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        }
         if (IsLifecycleReady())
         {
             _autoBuyEngine?.Tick(deltaTime);
@@ -141,7 +168,13 @@ public sealed class Plugin : BaseUnityPlugin
         AutoBuyLifecycleSignal.StructureQueueChanged -= OnStructureQueueChanged;
         AutoBuyLifecycleSignal.UpgradeQueueChanged -= OnUpgradeQueueChanged;
         AutoBuyLifecycleSignal.NativeCompletion -= OnNativeCompletion;
-        AutoConceptLifecycleSignal.Changed -= OnAutoConceptChanged;
+        AutoConceptLifecycleSignal.InventoryChanged -= OnAutoConceptInventoryChanged;
+        AutoConceptLifecycleSignal.ProgressionChanged -= OnAutoConceptProgressionChanged;
+        _conceptInventorySubscription?.Dispose();
+        _conceptInventorySubscription = null;
+        _conceptProgressionSubscription?.Dispose();
+        _conceptProgressionSubscription = null;
+        _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _autoBuyEngine?.Dispose();
@@ -207,6 +240,12 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
+        PublishAutoBuyInvalidation(
+            GameplayInvalidationKind.Queue,
+            nativeIdentity,
+            AutoBuyCandidateKind.Structure,
+            GameplayInvalidationDomains.AutomataStructures,
+            "StructureSO.QueueBuild");
     }
 
     private void OnNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
@@ -214,19 +253,114 @@ public sealed class Plugin : BaseUnityPlugin
         if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyNativeCompletion(nativeIdentity, completedKind);
         _autoSpellLevelController?.NotifyNativeChange();
+        PublishAutoBuyInvalidation(
+            GameplayInvalidationKind.Progression | GameplayInvalidationKind.Queue,
+            nativeIdentity,
+            completedKind,
+            completedKind == AutoBuyCandidateKind.Structure
+                ? GameplayInvalidationDomains.AutomataStructures
+                : GameplayInvalidationDomains.AutomataUpgrades,
+            completedKind == AutoBuyCandidateKind.Structure
+                ? "StructureSO.CompleteAction"
+                : "UpgradeSO.CompleteAction");
     }
 
     private void OnUpgradeQueueChanged(object nativeIdentity)
     {
         if (!IsLifecycleReady()) return;
         _autoBuyEngine?.NotifyUpgradeQueueChanged(nativeIdentity);
+        PublishAutoBuyInvalidation(
+            GameplayInvalidationKind.Queue,
+            nativeIdentity,
+            AutoBuyCandidateKind.Upgrade,
+            GameplayInvalidationDomains.AutomataUpgrades,
+            "UpgradeSO.Purchase");
     }
 
-    private void OnAutoConceptChanged()
+    private void OnAutoConceptInventoryChanged(object? nativeRecipe)
     {
-        if (!IsLifecycleReady()) return;
+        PublishAutoConceptInvalidation(
+            GameplayInvalidationKind.Inventory,
+            nativeRecipe,
+            "AlchemyInstanceListVariable");
+    }
+
+    private void OnAutoConceptProgressionChanged(object nativeRecipe)
+    {
+        PublishAutoConceptInvalidation(
+            GameplayInvalidationKind.Progression,
+            nativeRecipe,
+            "AlchemyRecipeSO.Progression");
+    }
+
+    private void OnAutoConceptInventoryInvalidated(GameplayInvalidation _)
+    {
+        _autoConceptController?.NotifyNativeChange();
+    }
+
+    private void OnAutoConceptProgressionInvalidated(GameplayInvalidation _)
+    {
         _autoConceptController?.NotifyNativeChange();
         _autoSpellLevelController?.NotifyNativeChange();
+    }
+
+    private void PublishAutoBuyInvalidation(
+        GameplayInvalidationKind kind,
+        object nativeIdentity,
+        AutoBuyCandidateKind candidateKind,
+        string domain,
+        string source)
+    {
+        if (_invalidationBus is null) return;
+        if (_autoBuyEngine is not null &&
+            _autoBuyEngine.TryResolveInvalidationTarget(
+                nativeIdentity,
+                candidateKind,
+                out var entityId,
+                out var expectedTypeName))
+        {
+            _invalidationBus.Publish(
+                kind,
+                UnityEngine.Time.frameCount,
+                domain,
+                entityId,
+                expectedTypeName,
+                source);
+            return;
+        }
+
+        _invalidationBus.Publish(
+            kind,
+            UnityEngine.Time.frameCount,
+            domain,
+            source: source);
+    }
+
+    private void PublishAutoConceptInvalidation(
+        GameplayInvalidationKind kind,
+        object? nativeRecipe,
+        string source)
+    {
+        if (_invalidationBus is null) return;
+        if (nativeRecipe is not null &&
+            _autoConceptController is not null &&
+            _autoConceptController.TryResolveInvalidationEntityId(nativeRecipe, out var entityId))
+        {
+            _invalidationBus.Publish(
+                kind,
+                UnityEngine.Time.frameCount,
+                GameplayInvalidationDomains.AutomataConcepts,
+                entityId,
+                AlchemyRecipeTypeName,
+                source);
+            return;
+        }
+
+        _invalidationBus.Publish(
+            kind,
+            UnityEngine.Time.frameCount,
+            GameplayInvalidationDomains.AutomataConcepts,
+            source: source);
     }
 
     private bool IsLifecycleReady() =>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using BepInEx.Logging;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -350,8 +351,12 @@ internal sealed class ModConfigPanel : IDisposable
 
     private void Apply()
     {
-        if (_session.Apply(out var error))
+        if (_session.Apply(out var error, out var appliedSettings))
         {
+            ModConfigInvalidationPublisher.PublishAppliedSettings(
+                GameplayInvalidationBus.Shared,
+                Time.frameCount,
+                appliedSettings);
             _statusText.text = "Applied and saved.";
             RebuildSettings();
         }

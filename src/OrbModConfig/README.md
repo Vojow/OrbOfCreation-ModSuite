@@ -37,4 +37,6 @@ The underlying editor continues to provide:
 
 `0.6.1` consumes the suite's shared lifecycle generation so scene recreation and late plugin initialization use the same idempotent readiness boundary as Automata and Mentor.
 
+A fully successful Apply now publishes exact plugin GUID plus source section/key invalidations through Common's bounded completed-frame bus. Validation, save, or `SettingChanged` rollback publishes nothing. The existing 0.1-second clean-field polling remains the compatibility path for native controls and third-party plugins, and staged edits retain their conflict behavior.
+
 Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

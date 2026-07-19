@@ -531,6 +531,19 @@ internal sealed class MentorRuntime : IDisposable
         catch { }
     }
 
+    public bool TryGetStableProgressionEntityId(MentorDomain domain, object? changedSource, out string entityId)
+    {
+        entityId = string.Empty;
+        if (changedSource is null) return false;
+        var catalog = _catalogs[domain];
+        if (catalog.ByObject.TryGetValue(changedSource, out var entry))
+        {
+            entityId = entry.Uuid;
+            return !string.IsNullOrWhiteSpace(entityId);
+        }
+        return false;
+    }
+
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();

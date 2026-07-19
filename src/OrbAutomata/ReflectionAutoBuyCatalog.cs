@@ -13,6 +13,7 @@ internal sealed class ReflectionAutoBuyCatalog :
     IAutoBuyCatalog,
     IAutoBuyIncrementalCatalog,
     IAutoBuyProgressionCatalog,
+    IAutoBuyInvalidationIdentityCatalog,
     IAutoBuyCompletionRevalidationCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
@@ -207,6 +208,19 @@ internal sealed class ReflectionAutoBuyCatalog :
             ? AutoBuyCandidateKinds.Upgrades
             : AutoBuyCandidateKinds.Structures;
         _completionSettlement.Notify();
+    }
+
+    public bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName)
+    {
+        return _index.TryResolveInvalidationTarget(
+            nativeIdentity,
+            expectedKind,
+            out entityId,
+            out expectedTypeName);
     }
 
     public bool TryRefreshCandidateAfterCompletion(

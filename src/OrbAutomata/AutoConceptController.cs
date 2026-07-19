@@ -176,6 +176,9 @@ internal sealed class AutoConceptController : IDisposable
 
     public void NotifyNativeChange() => _secondsUntilEvaluation = 0.0f;
 
+    public bool TryResolveInvalidationEntityId(object nativeRecipe, out string entityId) =>
+        _runtime.TryResolveInvalidationEntityId(nativeRecipe, out entityId);
+
     private void Evaluate()
     {
         _secondsUntilWatchdog = 1.0f;

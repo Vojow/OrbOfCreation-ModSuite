@@ -144,6 +144,15 @@ internal interface IAutoBuyProgressionCatalog
     void NotifyNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind);
 }
 
+internal interface IAutoBuyInvalidationIdentityCatalog
+{
+    bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName);
+}
+
 internal interface IAutoBuyCompletionRevalidationCatalog
 {
     bool TryRefreshCandidateAfterCompletion(

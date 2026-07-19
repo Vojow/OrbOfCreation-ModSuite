@@ -26,6 +26,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
     private ModConfigCoordinatorWork? _uiWork;
+    private GameplayInvalidationBus? _invalidationBus;
     private long _lifecycleGeneration;
 
     private void Awake()
@@ -46,6 +47,8 @@ public sealed class Plugin : BaseUnityPlugin
                 "Insert the Mods top-bar button and in-game configuration editor.",
                 null,
                 new ModConfigMetadata(10, 0, hidden: true)));
+
+        _invalidationBus = GameplayInvalidationBus.Shared;
 
         if (!_enabled.Value)
         {
@@ -70,6 +73,10 @@ public sealed class Plugin : BaseUnityPlugin
             DeactivateUiWork(disposeShell: true);
             return;
         }
+
+        _invalidationBus?.Pump(
+            Time.frameCount,
+            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
 
         if (SceneManager.GetActiveScene().name != "Main")
         {

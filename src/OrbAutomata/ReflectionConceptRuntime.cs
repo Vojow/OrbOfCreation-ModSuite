@@ -82,6 +82,20 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     public int ScopedRecipeCount => _recipes.Count;
     public int ActiveConceptCount => _activeConceptCount;
 
+    public bool TryResolveInvalidationEntityId(object nativeRecipe, out string entityId)
+    {
+        if (nativeRecipe is not null &&
+            _recipeUuids.TryGetValue(nativeRecipe, out var uuid) &&
+            !string.IsNullOrWhiteSpace(uuid))
+        {
+            entityId = uuid;
+            return true;
+        }
+
+        entityId = string.Empty;
+        return false;
+    }
+
     public ReflectionConceptRuntime(
         AlchemyGameplayDomainClassifier domainClassifier,
         TypedRegistryResolver? registryResolver = null)
