@@ -238,6 +238,8 @@ internal sealed class SimulatedAutoBuyWorld
     private readonly List<SimulatedAutoBuyCandidate?> _queue = new List<SimulatedAutoBuyCandidate?>();
     private readonly List<SimulatedAutoBuyCandidate> _candidates = new List<SimulatedAutoBuyCandidate>();
     private readonly List<string> _submissionOrder = new List<string>();
+    private readonly List<SimulatedSubmissionObservation> _submissionObservations =
+        new List<SimulatedSubmissionObservation>();
     private readonly Dictionary<string, BigAmount> _resources =
         new Dictionary<string, BigAmount>(StringComparer.OrdinalIgnoreCase);
     private bool _nativeCompletionInProgress;
@@ -285,6 +287,9 @@ internal sealed class SimulatedAutoBuyWorld
     public IReadOnlyList<SimulatedAutoBuyCandidate> Candidates => _candidates;
 
     public IReadOnlyList<string> SubmissionOrder => _submissionOrder;
+
+    public IReadOnlyList<SimulatedSubmissionObservation> SubmissionObservations =>
+        _submissionObservations;
 
     public SimulatedAutoBuyCandidate AddCandidate(SimulatedCandidateSpec spec)
     {
@@ -481,6 +486,11 @@ internal sealed class SimulatedAutoBuyWorld
             return false;
         }
 
+        var observation = new SimulatedSubmissionObservation(
+            candidate.Uuid,
+            candidate.Kind,
+            checked(candidate.CurrentLevel + candidate.QueuedLevels + 1));
+
         foreach (var cost in candidate.CurrentCosts)
         {
             _resources[cost.ResourceId] = GetResourceQuantity(cost.ResourceId).Subtract(cost.Cost);
@@ -489,10 +499,33 @@ internal sealed class SimulatedAutoBuyWorld
         candidate.QueueOne();
         _queue.Add(candidate);
         _submissionOrder.Add(candidate.Uuid);
+        _submissionObservations.Add(observation);
         TotalSubmitted++;
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
         return true;
     }
+}
+
+internal readonly struct SimulatedSubmissionObservation
+{
+    public SimulatedSubmissionObservation(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int intendedLevel)
+    {
+        Uuid = uuid;
+        Kind = kind;
+        IntendedLevel = intendedLevel;
+    }
+
+    public string Uuid { get; }
+
+    public AutoBuyCandidateKind Kind { get; }
+
+    public int IntendedLevel { get; }
+
+    public string ExpectedNativeType =>
+        Kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO";
 }
 
 internal readonly struct NativeCompletionObservation

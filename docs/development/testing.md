@@ -132,6 +132,19 @@ The current P0/P1 headless scope covers:
   UI-work scheduling, listener cleanup, and shell repair policy;
 - shared scheduler fairness, mutation admission, failure containment, and
   deterministic performance budgets.
+- reusable lifecycle state-machine journeys spanning no-save, load, registry
+  readiness, unlock, action, completion, reset, stale callbacks, disable and
+  re-enable, same-name scene recreation, and mixed Automata/Mentor isolation.
+
+The reusable lifecycle fixtures live under
+`tests/OrbModding.Tests/Scenarios/`. They use the production lifecycle monitor,
+gameplay invalidation bus, and shared coordinator, then drive real Auto Buy and
+Mentor engine/controller seams through portable native-world simulations. Run
+them independently with:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
+```
 
 P2 remains runtime-focused: actual Unity layout and navigation, real save/cloud
 behavior, a combined-suite soak, real frame-time profiling, and Steam Deck or
