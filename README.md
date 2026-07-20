@@ -12,7 +12,7 @@ The current beta centers on Orb Automata: queue-aware Auto Buy with progression-
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.8.8** | Beta | Structured, rejection-aware and completion-responsive queue-filling Auto Buy with fail-closed native-family admission adapters, versioned configuration migration, shared lifecycle generations, bounded failure circuits/invalidation, action-family conflict isolation, coordinated Auto Cast, Concept rotation, spell leveling, and per-feature runtime health. |
+| **Orb Automata 0.8.9** | Beta | Grouped, continuously repeating and rejection-aware queue-filling Auto Buy with fail-closed native-family admission adapters, versioned configuration migration, shared lifecycle generations, bounded failure circuits/invalidation, action-family conflict isolation, coordinated Auto Cast, Concept rotation, spell leveling, and per-feature runtime health. |
 | **Orb Mod Config 0.6.3** | Beta | Mods tab with readable variable-height descriptions, separate exact-plugin configuration-schema and runtime-status bands, stable same-page scrolling, responsive resize/UI-scale remeasurement, Steam Deck keyboard support, and coordinated UI recovery. |
 | **Orb Mentor 0.3.8** | Beta | Progression-gated mastery sharing with versioned configuration ownership, shared remaining-budget enforcement, bounded domain failure circuits, independent action-family ownership, shared lifecycle/invalidation, verified XP deltas, optional artifact/alchemy support, and equipped-spell sources. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |

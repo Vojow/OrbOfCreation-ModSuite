@@ -26,25 +26,15 @@ internal sealed class AutomataConfig
         new ModConfigDependency("AutoBuy", "Mode", "Active"),
         new ModConfigDependency("AutoBuy", "BatchSizingMode", "Fixed"),
     };
-    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyAffordableRepeatDependencies = new[]
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyPurchaseGroupingDependencies = new[]
     {
         new ModConfigDependency("AutoBuy", "Mode", "Active"),
-        new ModConfigDependency("AutoBuy", "RespectActionMultiplier", "false"),
     };
-    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyStructureRepeatDependencies = new[]
+    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyFixedGroupingDependencies = new[]
     {
         new ModConfigDependency("AutoBuy", "Mode", "Active"),
         new ModConfigDependency("AutoBuy", "IncludeStructures"),
-        new ModConfigDependency("AutoBuy", "RespectActionMultiplier", "false"),
-        new ModConfigDependency("AutoBuy", "RepeatWhileAffordable", "false"),
-    };
-    private static readonly IReadOnlyList<ModConfigDependency> AutoBuyFixedStructureDependencies = new[]
-    {
-        new ModConfigDependency("AutoBuy", "Mode", "Active"),
-        new ModConfigDependency("AutoBuy", "IncludeStructures"),
-        new ModConfigDependency("AutoBuy", "RespectActionMultiplier", "false"),
-        new ModConfigDependency("AutoBuy", "RepeatWhileAffordable", "false"),
-        new ModConfigDependency("AutoBuy", "StructureRepeatMode", "Fixed"),
+        new ModConfigDependency("AutoBuy", "PurchaseGrouping", "Fixed"),
     };
     private static readonly IReadOnlyList<ModConfigDependency> AutoCastActiveDependencies = new[]
     {
@@ -63,15 +53,13 @@ internal sealed class AutomataConfig
         ConfigEntry<bool> autoBuyStructures,
         ConfigEntry<bool> autoBuyUpgrades,
         ConfigEntry<bool> autoLevelSpells,
-        ConfigEntry<bool> respectActionMultiplier,
-        ConfigEntry<bool> repeatWhileAffordable,
+        ConfigEntry<AutoBuyPurchaseGroupingMode> purchaseGrouping,
         ConfigEntry<float> autoBuyIntervalSeconds,
         ConfigEntry<int> leaveQueueSlots,
         ConfigEntry<int> autoBuyMaxCandidatesPerScan,
         ConfigEntry<AutoBuyBatchSizingMode> autoBuyBatchSizingMode,
         ConfigEntry<int> maxPurchasesPerBatch,
-        ConfigEntry<AutoBuyStructureRepeatMode> structureRepeatMode,
-        ConfigEntry<int> fixedStructureLevelsPerCandidate,
+        ConfigEntry<int> fixedGroupSize,
         ConfigEntry<bool> prioritizeCostAndQualityStructures,
         ConfigEntry<string> allowedAutoBuyUuids,
         ConfigEntry<string> blockedAutoBuyUuids,
@@ -108,15 +96,13 @@ internal sealed class AutomataConfig
         AutoBuyStructures = autoBuyStructures;
         AutoBuyUpgrades = autoBuyUpgrades;
         AutoLevelSpells = autoLevelSpells;
-        RespectActionMultiplier = respectActionMultiplier;
-        RepeatWhileAffordable = repeatWhileAffordable;
+        PurchaseGrouping = purchaseGrouping;
         AutoBuyIntervalSeconds = autoBuyIntervalSeconds;
         LeaveQueueSlots = leaveQueueSlots;
         AutoBuyMaxCandidatesPerScan = autoBuyMaxCandidatesPerScan;
         AutoBuyBatchSizing = autoBuyBatchSizingMode;
         MaxPurchasesPerBatch = maxPurchasesPerBatch;
-        StructureRepeatMode = structureRepeatMode;
-        FixedStructureLevelsPerCandidate = fixedStructureLevelsPerCandidate;
+        FixedGroupSize = fixedGroupSize;
         PrioritizeCostAndQualityStructures = prioritizeCostAndQualityStructures;
         AllowedAutoBuyUuids = allowedAutoBuyUuids;
         BlockedAutoBuyUuids = blockedAutoBuyUuids;
@@ -159,9 +145,7 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<bool> AutoBuyUpgrades { get; }
 
-    public ConfigEntry<bool> RespectActionMultiplier { get; }
-
-    public ConfigEntry<bool> RepeatWhileAffordable { get; }
+    public ConfigEntry<AutoBuyPurchaseGroupingMode> PurchaseGrouping { get; }
 
     public ConfigEntry<float> AutoBuyIntervalSeconds { get; }
 
@@ -173,9 +157,7 @@ internal sealed class AutomataConfig
 
     public ConfigEntry<int> MaxPurchasesPerBatch { get; }
 
-    public ConfigEntry<AutoBuyStructureRepeatMode> StructureRepeatMode { get; }
-
-    public ConfigEntry<int> FixedStructureLevelsPerCandidate { get; }
+    public ConfigEntry<int> FixedGroupSize { get; }
 
     public ConfigEntry<bool> PrioritizeCostAndQualityStructures { get; }
 
@@ -308,15 +290,13 @@ internal sealed class AutomataConfig
                 Bind(config, "AutoBuy", "IncludeStructures", true, "Include native StructureSO attributes and levels.", 10, 10, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "IncludeUpgrades", true, "Include native UpgradeSO purchases.", 10, 20, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "AutoLevelSpells", true, "Automatically level ready spells while Auto Buy is active. Capability follows native progression automatically: locked, one spell per action, then the native level-all action after its upgrade completes.", 10, 25, dependencies: AutoBuyActiveDependencies),
-                Bind(config, "AutoBuy", "RespectActionMultiplier", false, "When enabled, repeat the selected purchase up to the current native action multiplier, capped to free queue room. Every level is still submitted and revalidated separately.", 10, 62, dependencies: AutoBuyActiveDependencies),
-                Bind(config, "AutoBuy", "RepeatWhileAffordable", true, "When action-multiplier handling is off, give every ranked Structure or Upgrade one live-validated level per pass. A lone eligible candidate may use all currently available queue slots.", 10, 55, dependencies: AutoBuyAffordableRepeatDependencies),
+                Bind(config, "AutoBuy", "PurchaseGrouping", AutoBuyPurchaseGroupingMode.BulkDevelopment, "Group size for each ranked candidate before Auto Buy advances and later repeats the ranked pass. Single buys one level; Fixed groups Structures by FixedGroupSize; BulkDevelopment follows the live Player value for Structures; ActionMultiplier follows the live native multiplier for either purchase family. Upgrades otherwise remain one level.", 10, 55, dependencies: AutoBuyPurchaseGroupingDependencies),
                 Bind(config, "AutoBuy", "EvaluationIntervalSeconds", 0.5f, "Unscaled seconds between idle scans when no eligible purchase is pending. In-progress scans and active queue feeding continue every frame.", 10, 90, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "LeaveQueueSlots", 1, "Minimum native action-queue slots Automata leaves free for manual actions.", 10, 70, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "MaxCandidatesPerScan", 1024, "Safety cap for the combined StructureSO and UpgradeSO registry. CPU-limited scans resume on the next frame.", 10, 110, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "BatchSizingMode", AutoBuyBatchSizingMode.FillAvailableQueue, "FillAvailableQueue continues through ranked candidates until only LeaveQueueSlots remain. Fixed queues up to MaxPurchasesPerBatch levels.", 10, 40, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum queued levels from one completed scan when BatchSizingMode is Fixed.", 10, 50, dependencies: AutoBuyFixedBatchDependencies),
-                Bind(config, "AutoBuy", "StructureRepeatMode", AutoBuyStructureRepeatMode.BulkDevelopment, "Fallback Structure grouping when RepeatWhileAffordable and RespectActionMultiplier are disabled. BulkDevelopment follows the live Player value; Fixed uses FixedStructureLevelsPerCandidate; Single queues each ranked structure once.", 10, 60, dependencies: AutoBuyStructureRepeatDependencies),
-                Bind(config, "AutoBuy", "FixedStructureLevelsPerCandidate", 2, "Maximum consecutive one-level structure purchases only when StructureRepeatMode is Fixed. Ignored by BulkDevelopment and Single.", 10, 61, new AcceptableValueRange<int>(1, 100), AutoBuyFixedStructureDependencies),
+                Bind(config, "AutoBuy", "FixedGroupSize", 2, "Maximum consecutive one-level Structure purchases when PurchaseGrouping is Fixed. Upgrades remain one level.", 10, 56, new AcceptableValueRange<int>(1, 100), AutoBuyFixedGroupingDependencies),
                 Bind(config, "AutoBuy", "PrioritizeCostAndQualityStructures", false, "When enabled, unlocked and affordable Structures with native effects proven to reduce costs or increase resource quality rank before ordinary candidates. Unknown effects receive no priority.", 10, 65, dependencies: AutoBuyStructuresActiveDependencies),
                 Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "BlockedUuids", string.Empty, "Comma-separated StructureSO or UpgradeSO UUIDs Automata must never buy.", 10, 130, dependencies: AutoBuyActiveDependencies),
@@ -437,11 +417,12 @@ internal enum AutoBuyBatchSizingMode
     FillAvailableQueue,
 }
 
-internal enum AutoBuyStructureRepeatMode
+internal enum AutoBuyPurchaseGroupingMode
 {
     Single,
     Fixed,
     BulkDevelopment,
+    ActionMultiplier,
 }
 
 internal enum AutomataDecisionLogLevel

@@ -1,6 +1,6 @@
 # Versioned configuration schemas
 
-> **Lifecycle: Next beta / runtime validation pending.** Common owns the transactional schema boundary; Automata, Mentor, and Mod Config declare schema version 1 before normal typed binding. Portable coverage is implemented, while interactive UI and installed-game startup validation remain release gates.
+> **Lifecycle: Next beta / runtime validation pending.** Common owns the transactional schema boundary; Automata declares schema version 2 while Mentor and Mod Config remain at version 1 before normal typed binding. Portable coverage is implemented, while interactive UI and installed-game startup validation remain release gates.
 
 [Back to lifecycle index](README.md) · [Configuration and safety](../user-guide/configuration.md)
 
@@ -10,18 +10,18 @@ Give every supported plugin an explicit, monotonic configuration schema without 
 
 ## Shared transaction contract
 
-Each supported plugin owns hidden `[OrbModding] ConfigurationSchemaVersion=1`. Absence means schema zero. A malformed or negative marker fails; a marker greater than the supported version is treated as a future schema and remains read-only.
+Each supported plugin owns a hidden `[OrbModding] ConfigurationSchemaVersion` marker. Absence means schema zero. A malformed or negative marker fails; a marker greater than the plugin's supported version is treated as a future schema and remains read-only.
 
 Migration runs before the plugin's normal typed binds:
 
 1. Snapshot exact original file existence and bytes plus the initially known BepInEx keys.
-2. For an existing file, write and flush a uniquely owned sibling temporary, verify exact length, bytes, and SHA-256, then atomically publish the first free backup name (`.pre-schema-v1.bak`, then `.bak.2`, and so on). A write, flush, or verification failure deletes the owned temporary and aborts migration; a genuine destination race retries the next suffix without touching the winner. A fresh file has no original bytes to back up.
+2. For an existing file, write and flush a uniquely owned sibling temporary, verify exact length, bytes, and SHA-256, then atomically publish the first free backup name (`.pre-schema-vN.bak`, then `.bak.2`, and so on, where `N` is the destination schema). A write, flush, or verification failure deletes the owned temporary and aborts migration; a genuine destination race retries the next suffix without touching the winner. A fresh file has no original bytes to back up.
 3. Disable `SaveOnConfigSet`, consume only the reviewed keys through temporary string binds, and execute every ordered one-version step.
 4. Perform the plugin's normal typed binds, bind and set the hidden marker last, then save once.
 5. On failure, remove entries added during the attempt, restore the original bytes exactly (or delete a file created by the attempt), reload the configuration, publish a failed status, and return no usable configuration.
 6. Restore the caller's original `SaveOnConfigSet` value on every path.
 
-A file already at version 1 performs no migration step, backup, or save. Failure reasons come only from a closed safe-reason set or a generic transaction category; status and logs never include configuration paths or serialized values.
+A file already at its plugin's current version performs no migration step, backup, or save. Failure reasons come only from a closed safe-reason set or a generic transaction category; status and logs never include configuration paths or serialized values.
 
 ## Automata schema zero to one
 
@@ -34,6 +34,18 @@ Automata performs only these proven transformations:
 - The explicit obsolete-key allowlist is discarded with a diagnostic and without speculative remapping.
 
 Mentor and Mod Config use marker-only zero-to-one steps: their existing values retain their normal typed-bind behavior.
+
+## Automata schema one to two
+
+Automata collapses four overlapping Auto Buy settings into one grouping policy:
+
+- an existing valid `PurchaseGrouping` value has destination precedence;
+- otherwise `RespectActionMultiplier=true` maps to `ActionMultiplier`;
+- otherwise legacy `StructureRepeatMode` maps `Single`, `Fixed`, or `BulkDevelopment` directly, with `BulkDevelopment` as the default;
+- `FixedStructureLevelsPerCandidate` becomes `FixedGroupSize` and must remain in the supported 1-100 range;
+- `RepeatWhileAffordable` is removed because active Auto Buy now always advances through ranked groups and repeats while quota, queue room, and live admission permit.
+
+Malformed legacy booleans, grouping modes, or fixed sizes fail closed. The migration does not infer new behavior from unknown values.
 
 ## Status projection
 

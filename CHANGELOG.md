@@ -1,5 +1,14 @@
 # Changelog
 
+## Auto Buy grouped continuation and rejection fairness — 2026-07-20
+
+- Replace the overlapping `RespectActionMultiplier`, `RepeatWhileAffordable`, `StructureRepeatMode`, and `FixedStructureLevelsPerCandidate` controls with `PurchaseGrouping` (`Single`, `Fixed`, `BulkDevelopment`, or `ActionMultiplier`) plus `FixedGroupSize`.
+- Separate group size from continuation: give each ranked Structure its live configured group, give each Upgrade one level except in action-multiplier mode, advance through the prepared ranking, and repeat passes while live queue quota and admission permit. Every individual level still revalidates cost, reserves, completion, ownership, and queue room.
+- Migrate Automata configuration schema 1 to 2 with destination-first precedence, preservation of legacy action-multiplier intent, direct Structure-group mapping, and fail-closed malformed legacy values.
+- Close NF-03 starvation by advancing past definite pre-mutation rejection and retrying it on bounded 0.25-to-5-second exponential delay; attempted or ambiguous mutations retain lifecycle quarantine.
+- Exercise Bulk Development 10/25/100/100 in the synthetic early/mid/late/endgame stages. The endgame model now submits 180,024 purchases in 180,408 frames (3,006.8 simulated seconds), reduces purchasable idle frames from 5,996 to 291, candidate evaluations from 360,072 to 183,645, and observed operations from 1,838,247 to 923,925.
+- Bump Orb Automata to 0.8.9.
+
 ## Runtime validation corrections — 2026-07-20
 
 - Make Mentor Artifact XP postconditions level-aware by predicting the exact native `ExperienceContainer` transition on a clone, then verifying the live equipment mastery, container level, residual XP, and saved XP. Multi-level rollover no longer produces the false lifecycle fault introduced with #36's raw-XP verifier.

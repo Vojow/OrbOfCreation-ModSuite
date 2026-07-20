@@ -97,18 +97,18 @@ public sealed class AutomataCoordinatorTests
     [InlineData(1, false, 0)]
     [InlineData(2, false, 0)]
     [InlineData(0, true, 1)]
-    public void RepeatGroupKeepsInitialQueueClampAcrossMutationFrames(
-        int repeatMode,
-        bool respectActionMultiplier,
+    public void PurchaseGroupKeepsInitialQueueClampAcrossMutationFrames(
+        int groupingMode,
+        bool useActionMultiplier,
         int candidateKind)
     {
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = false;
-        config.StructureRepeatMode.Value = (AutoBuyStructureRepeatMode)repeatMode;
-        config.FixedStructureLevelsPerCandidate.Value = 20;
-        config.RespectActionMultiplier.Value = respectActionMultiplier;
+        config.PurchaseGrouping.Value = useActionMultiplier
+            ? AutoBuyPurchaseGroupingMode.ActionMultiplier
+            : (AutoBuyPurchaseGroupingMode)groupingMode;
+        config.FixedGroupSize.Value = 20;
         var candidate = new BuyCandidate("repeat", (AutoBuyCandidateKind)candidateKind);
         var catalog = new BuyCatalog(4, candidate)
         {
@@ -135,9 +135,8 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = false;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        config.FixedStructureLevelsPerCandidate.Value = 20;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 20;
         config.LeaveQueueSlots.Value = 0;
         var candidate = new BuyCandidate("capacity-growth", AutoBuyCandidateKind.Structure);
         var catalog = new BuyCatalog(2, candidate);
@@ -164,8 +163,7 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = true;
-        config.RespectActionMultiplier.Value = false;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.LeaveQueueSlots.Value = 0;
         var higher = new BuyCandidate("a-higher", AutoBuyCandidateKind.Structure) { Available = false };
         var repeating = new BuyCandidate("b-repeating", AutoBuyCandidateKind.Structure);
@@ -200,8 +198,7 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = true;
-        config.RespectActionMultiplier.Value = false;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.LeaveQueueSlots.Value = 1;
         var candidate = new BuyCandidate("affordable-repeat", (AutoBuyCandidateKind)candidateKind);
         var catalog = new BuyCatalog(6, candidate)
@@ -226,8 +223,7 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = true;
-        config.RespectActionMultiplier.Value = false;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.LeaveQueueSlots.Value = 1;
         var selected = new BuyCandidate("only-candidate", AutoBuyCandidateKind.Structure);
@@ -254,8 +250,7 @@ public sealed class AutomataCoordinatorTests
         var coordinator = Coordinator();
         long frame = 1;
         var config = Config();
-        config.RepeatWhileAffordable.Value = true;
-        config.RespectActionMultiplier.Value = false;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.LeaveQueueSlots.Value = 1;
         var first = new BuyCandidate("a-first", (AutoBuyCandidateKind)candidateKind);
@@ -637,7 +632,6 @@ public sealed class AutomataCoordinatorTests
                 candidates.ToArray(),
                 new IAutoBuyCandidate[] { replayedUpgrade, structure });
             var config = Config();
-            config.RepeatWhileAffordable.Value = false;
             using var engine = BuyEngine(
                 config,
                 catalog,

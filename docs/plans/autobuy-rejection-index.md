@@ -1,6 +1,6 @@
 # Auto Buy rejection-aware scheduler plan
 
-> **Lifecycle: Structure threshold parking implemented / runtime gate pending.** Typed rejection evidence, affordable prepared groups, and exact Structure reserve/affordability threshold wakeups are portable-tested. Game-backed fixed and high-resource queue-filling runs completed without native failures, and policy-excluded candidates remained parked across periodic refreshes. Conservative Upgrade handling, unavailable-resource backoff, broader profiling, and the Steam Deck matrix remain.
+> **Lifecycle: Grouped continuation and definite-rejection backoff implemented / runtime gate pending.** Typed rejection evidence, independent purchase grouping, repeating ranked passes, exact Structure reserve/affordability threshold wakeups, and bounded pre-mutation retry are portable-tested. Game-backed fixed and high-resource queue-filling runs completed without native failures. Conservative Upgrade handling, broader profiling, and the Steam Deck matrix remain.
 
 [Back to plans](README.md) · [Orb Automata plan](automata.md)
 
@@ -58,14 +58,15 @@ The current bounded slice stores exact blocker thresholds on stable Structure de
 
 Portable exit gate: deterministic tests show fewer reevaluations during sub-threshold income ticks, immediate wakeup at threshold crossing, and no missed multi-resource eligibility.
 
-### Throughput slice — affordable prepared groups
+### Throughput slice — grouped continuing passes
 
-- Keep the selected ranked Structure or Upgrade prepared up to the usable queue room captured at group start.
+- Give each ranked Structure its configured `Single`, `Fixed`, `BulkDevelopment`, or `ActionMultiplier` group, while Upgrades remain one level except in `ActionMultiplier` mode.
+- Advance through the prepared ranking and repeat passes while queue quota and live admission permit; group size and continuation are independent policies.
 - Revalidate the native current cost, reserve, and affordability policy before every individual level instead of projecting from a stale first-level cost.
 - End immediately at the first failed admission check, fixed batch cap, emergency stop, manual queue invalidation, or queue-slot reserve.
-- Retain Bulk Development, Fixed, and Single Structure grouping as an opt-out compatibility policy.
+- On a definite rejection before any native call, advance to healthy lower ranks and retry the rejected candidate on bounded exponential delay. Never use this retry for attempted or ambiguous mutation.
 
-Portable exit gate: abundant resources can feed every usable queue slot without Bulk Development-sized rescan rotations, while rising costs and reserves stop the group at the exact safe level.
+Portable exit gate: abundant resources feed every usable queue slot without per-level rescans, all ranked candidates progress, NF-03 cannot starve healthy lower ranks, and rising costs or reserves stop a group at the exact safe level.
 
 ### Phase 3 — Shared affordability projection
 

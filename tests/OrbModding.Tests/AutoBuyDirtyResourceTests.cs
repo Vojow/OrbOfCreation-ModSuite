@@ -681,7 +681,6 @@ public sealed class AutoBuyDirtyResourceTests
         };
         var catalog = new IncrementalCatalog(candidate, new EngineCandidate("other", 2.0));
         var config = ActiveConfig("resource-wait");
-        config.RepeatWhileAffordable.Value = false;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -736,7 +735,6 @@ public sealed class AutoBuyDirtyResourceTests
             new EngineCandidate("other", 2.0, AutoBuyCandidateKind.Structure));
         var config = ActiveConfig("structure-resource-wait");
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-        config.RepeatWhileAffordable.Value = false;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -784,7 +782,6 @@ public sealed class AutoBuyDirtyResourceTests
         };
         var catalog = new IncrementalCatalog(candidate, new EngineCandidate("other", 2.0));
         var config = ActiveConfig("bandwidth-wait");
-        config.RepeatWhileAffordable.Value = false;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -856,7 +853,7 @@ public sealed class AutoBuyDirtyResourceTests
     }
 
     [Fact]
-    public void IncrementalEngine_CompletesConfiguredStructureGroupBeforeReranking()
+    public void IncrementalEngine_CompletesEachRankedStructureGroupBeforeReranking()
     {
         var first = new EngineCandidate("first", 1.0, AutoBuyCandidateKind.Structure);
         var second = new EngineCandidate("second", 2.0, AutoBuyCandidateKind.Structure);
@@ -869,9 +866,8 @@ public sealed class AutoBuyDirtyResourceTests
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 10;
-        config.RepeatWhileAffordable.Value = false;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        config.FixedStructureLevelsPerCandidate.Value = 3;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 3;
         config.LeaveQueueSlots.Value = 0;
         using var engine = new AutoBuyEngine(
             config,
@@ -884,10 +880,6 @@ public sealed class AutoBuyDirtyResourceTests
         engine.Tick(config.AutoBuyIntervalSeconds.Value);
 
         Assert.Equal(3, first.PurchaseCalls);
-        Assert.Equal(0, second.PurchaseCalls);
-
-        engine.Tick(0.0f);
-
         Assert.Equal(3, second.PurchaseCalls);
     }
 
@@ -902,8 +894,7 @@ public sealed class AutoBuyDirtyResourceTests
         };
         var config = ActiveConfig(string.Empty);
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
-        config.RepeatWhileAffordable.Value = false;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Single;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.LeaveQueueSlots.Value = 1;
         using var engine = new AutoBuyEngine(
             config,
@@ -944,7 +935,7 @@ public sealed class AutoBuyDirtyResourceTests
         config.PrioritizeCostAndQualityStructures.Value = enabled;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 1;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Single;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -973,7 +964,7 @@ public sealed class AutoBuyDirtyResourceTests
         config.PrioritizeCostAndQualityStructures.Value = true;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 1;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Single;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -1136,8 +1127,8 @@ public sealed class AutoBuyDirtyResourceTests
         var config = ActiveConfig("structure");
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 10;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        config.FixedStructureLevelsPerCandidate.Value = 10;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 10;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -1163,7 +1154,7 @@ public sealed class AutoBuyDirtyResourceTests
         var config = ActiveConfig("structure");
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 10;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -1184,8 +1175,8 @@ public sealed class AutoBuyDirtyResourceTests
             AutoBuyCandidateKind.Structure,
             config =>
             {
-                config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-                config.FixedStructureLevelsPerCandidate.Value = 25;
+                config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+                config.FixedGroupSize.Value = 25;
             });
     }
 
@@ -1194,7 +1185,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         AssertCpuSlicedSelfSignalingGroupCompletes(
             AutoBuyCandidateKind.Structure,
-            config => config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment);
+            config => config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment);
     }
 
     [Fact]
@@ -1202,7 +1193,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         AssertCpuSlicedSelfSignalingGroupCompletes(
             AutoBuyCandidateKind.Upgrade,
-            config => config.RespectActionMultiplier.Value = true);
+            config => config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.ActionMultiplier);
     }
 
     [Fact]
@@ -1216,8 +1207,8 @@ public sealed class AutoBuyDirtyResourceTests
         var config = ActiveConfig("structure");
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 2;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        config.FixedStructureLevelsPerCandidate.Value = 2;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 2;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -1277,8 +1268,8 @@ public sealed class AutoBuyDirtyResourceTests
         var config = ActiveConfig("structure");
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
         config.MaxPurchasesPerBatch.Value = 10;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        config.FixedStructureLevelsPerCandidate.Value = 10;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 10;
         using var engine = new AutoBuyEngine(
             config,
             catalog,
@@ -1810,7 +1801,6 @@ public sealed class AutoBuyDirtyResourceTests
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.AllowedAutoBuyUuids.Value = allowedUuid;
         config.LeaveQueueSlots.Value = 0;
-        config.RepeatWhileAffordable.Value = false;
         return config;
     }
 

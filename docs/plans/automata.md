@@ -22,7 +22,7 @@ Research is no longer the MVP. The release plugin removes the deprecated researc
 
 ## Current implementation status
 
-The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). The [action-family ownership contract](action-family-ownership.md) now isolates overlapping native mutation families without changing saved configuration or unrelated features. Version `0.8.8` also adopts the [versioned configuration-schema transaction](configuration-schema.md): reviewed schema-zero values migrate before typed binding, while malformed or future data stops Automata before native behavior starts.
+The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). The [action-family ownership contract](action-family-ownership.md) now isolates overlapping native mutation families without changing saved configuration or unrelated features. Version `0.8.9` also adopts schema version 2 of the [versioned configuration-schema transaction](configuration-schema.md): the legacy overlapping Auto Buy grouping controls migrate into `PurchaseGrouping`, while malformed or future data stops Automata before native behavior starts.
 
 The first A1 implementation slice now covers both audited native purchase families:
 

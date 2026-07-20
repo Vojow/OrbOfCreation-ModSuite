@@ -72,6 +72,8 @@ $workloadProperties = @(
     'structureCount',
     'upgradeCount',
     'targetStructureLevels',
+    'purchaseGrouping',
+    'bulkDevelopment',
     'queueCapacity',
     'reservedQueueSlots',
     'frameCount',

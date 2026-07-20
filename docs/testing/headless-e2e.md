@@ -145,12 +145,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
 ```
 
-`AutoBuyDecision` is the fast policy contract. It characterizes the current
-grouping/continuation precedence, ranked-pass fairness, reserve monotonicity,
-unavailable-candidate isolation, and deterministic output. The current
-fallback behavior intentionally reranks after every Structure group and may
-select the cheapest Structure again; affordable-repeat instead gives each
-ranked candidate one level before repeating.
+`AutoBuyDecision` is the fast policy contract. It characterizes independent
+purchase grouping and continuation, ranked-pass fairness, reserve monotonicity,
+unavailable-candidate isolation, legacy-setting migration, and deterministic
+output. Every configured Structure group advances to the remaining prepared
+candidates before the ranked pass repeats; Upgrades remain one level except in
+`ActionMultiplier` mode.
 
 The broader `Reliability` lane combines dirty-resource, native multi-buy,
 runtime replay, and headless cross-boundary journeys. `AutoBuyReliability`

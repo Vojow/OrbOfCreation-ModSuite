@@ -153,10 +153,12 @@ Any attempted but unverified mutation blocks that candidate until a newer
 lifecycle. This is why the simulator separates pre-mutation rejection from
 post-mutation ambiguity.
 
-The current scheduler still has one documented gap: a permanently rejecting
-highest-ranked candidate can be reranked immediately and starve lower-ranked
-candidates. The desired behavior is captured by `NF-03`; its production fix is
-intentionally outside the testing/documentation branch.
+The scheduler distinguishes a definite rejection before any native call from
+an attempted or ambiguous mutation. Definite rejection advances to the next
+ranked candidate and records an exponential 0.25-to-5-second retry; attempted or
+ambiguous mutation remains blocked until lifecycle recovery. `NF-03` enforces
+that a permanently rejecting highest rank cannot starve healthy lower ranks and
+that a transiently rejecting candidate later recovers.
 
 ## What remains unknown
 

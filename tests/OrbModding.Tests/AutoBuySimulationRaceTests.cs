@@ -183,9 +183,8 @@ public sealed class AutoBuySimulationRaceTests
                     maximumLevel: 20),
             });
         simulation.Config.LeaveQueueSlots.Value = 0;
-        simulation.Config.RepeatWhileAffordable.Value = false;
-        simulation.Config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Fixed;
-        simulation.Config.FixedStructureLevelsPerCandidate.Value = 6;
+        simulation.Config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        simulation.Config.FixedGroupSize.Value = 6;
         return simulation;
     }
 }

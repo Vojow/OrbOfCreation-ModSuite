@@ -11,14 +11,14 @@ public sealed class AutoBuyDecisionTests
 {
     [Theory]
     [Trait("Category", "AutoBuyDecision")]
-    [InlineData((int)AutoBuyStructureRepeatMode.Single, 1)]
-    [InlineData((int)AutoBuyStructureRepeatMode.Fixed, 2)]
-    [InlineData((int)AutoBuyStructureRepeatMode.BulkDevelopment, 3)]
-    public void CurrentFallbackContinuation_ReevaluatesAfterEachStructureGroup(
-        int repeatModeValue,
+    [InlineData((int)AutoBuyPurchaseGroupingMode.Single, 1)]
+    [InlineData((int)AutoBuyPurchaseGroupingMode.Fixed, 2)]
+    [InlineData((int)AutoBuyPurchaseGroupingMode.BulkDevelopment, 3)]
+    public void Grouping_AdvancesThroughEveryRankedCandidateBeforeRepeating(
+        int groupingModeValue,
         int structureGroupSize)
     {
-        var repeatMode = (AutoBuyStructureRepeatMode)repeatModeValue;
+        var groupingMode = (AutoBuyPurchaseGroupingMode)groupingModeValue;
         var specs = new[]
         {
             new SimulatedCandidateSpec("structure-a", AutoBuyCandidateKind.Structure, baseCost: 1.0),
@@ -31,12 +31,14 @@ public sealed class AutoBuyDecisionTests
         };
         using var simulation = new AutoBuySimulation(16, specs);
         simulation.Config.LeaveQueueSlots.Value = 0;
-        simulation.Config.RepeatWhileAffordable.Value = false;
-        simulation.Config.StructureRepeatMode.Value = repeatMode;
-        simulation.Config.FixedStructureLevelsPerCandidate.Value = structureGroupSize;
+        simulation.Config.PurchaseGrouping.Value = groupingMode;
+        simulation.Config.FixedGroupSize.Value = structureGroupSize;
         simulation.Catalog.BulkDevelopment = structureGroupSize;
 
-        var expected = Repeat("structure-a", structureGroupSize + 1).ToArray();
+        var expected = Repeat("structure-a", structureGroupSize)
+            .Concat(Repeat("structure-b", structureGroupSize))
+            .Concat(new[] { "upgrade-a", "structure-a" })
+            .ToArray();
 
         Assert.True(simulation.RunUntil(
             world => world.TotalSubmitted >= expected.Length,
@@ -46,7 +48,7 @@ public sealed class AutoBuyDecisionTests
 
     [Fact]
     [Trait("Category", "AutoBuyDecision")]
-    public void CurrentPrecedence_RepeatWhileAffordableUsesOneCandidateLevelPerRankedPass()
+    public void BulkDevelopmentGrouping_GivesEachStructureOneLiveGroupAndEachUpgradeOneLevel()
     {
         var specs = new[]
         {
@@ -60,21 +62,22 @@ public sealed class AutoBuyDecisionTests
         };
         using var simulation = new AutoBuySimulation(16, specs);
         simulation.Config.LeaveQueueSlots.Value = 0;
-        simulation.Config.RepeatWhileAffordable.Value = true;
-        simulation.Config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment;
+        simulation.Config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
         simulation.Catalog.BulkDevelopment = 4;
 
-        Assert.True(simulation.RunUntil(world => world.TotalSubmitted >= 3, maximumFrames: 100));
+        Assert.True(simulation.RunUntil(world => world.TotalSubmitted >= 9, maximumFrames: 100));
 
         Assert.Equal(
-            new[] { "structure-a", "structure-b", "upgrade-a" },
-            simulation.World.SubmissionOrder.Take(3));
-        Assert.Equal(0, simulation.Catalog.BulkDevelopmentReads);
+            Repeat("structure-a", 4)
+                .Concat(Repeat("structure-b", 4))
+                .Concat(new[] { "upgrade-a" }),
+            simulation.World.SubmissionOrder.Take(9));
+        Assert.Equal(2, simulation.Catalog.BulkDevelopmentReads);
     }
 
     [Fact]
     [Trait("Category", "AutoBuyDecision")]
-    public void RepeatWhileAffordable_VisitsEveryRankedCandidateBeforeRepeating()
+    public void SingleGrouping_VisitsEveryRankedCandidateBeforeRepeating()
     {
         var specs = new[]
         {
@@ -94,7 +97,7 @@ public sealed class AutoBuyDecisionTests
         };
         using var simulation = new AutoBuySimulation(16, specs);
         simulation.Config.LeaveQueueSlots.Value = 0;
-        simulation.Config.RepeatWhileAffordable.Value = true;
+        simulation.Config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
 
         Assert.True(simulation.RunUntil(world => world.TotalSubmitted >= specs.Length, maximumFrames: 100));
         Assert.Equal(
@@ -158,8 +161,7 @@ public sealed class AutoBuyDecisionTests
 
         using var simulation = new AutoBuySimulation(8, specs);
         simulation.Config.LeaveQueueSlots.Value = 0;
-        simulation.Config.RepeatWhileAffordable.Value = false;
-        simulation.Config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.Single;
+        simulation.Config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         Assert.True(simulation.RunUntil(world => world.TotalSubmitted >= 2, maximumFrames: 100));
         return simulation.World.SubmissionOrder.Take(2).ToArray();
     }
@@ -178,7 +180,7 @@ public sealed class AutoBuyDecisionTests
             initialResourceQuantity: 100.0);
         simulation.Config.LeaveQueueSlots.Value = 0;
         simulation.Config.AbsoluteReserve.Value = absoluteReserve;
-        simulation.Config.RepeatWhileAffordable.Value = true;
+        simulation.Config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         simulation.RunFrames(100);
         return simulation.World.TotalSubmitted;
     }

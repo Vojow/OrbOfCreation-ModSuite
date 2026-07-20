@@ -231,8 +231,12 @@ internal sealed class AutoBuySimulation : IDisposable
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.AutoBuyMaxCandidatesPerScan.Value = 1024;
         config.LeaveQueueSlots.Value = 1;
+#if LEGACY_MAIN_API
         config.RepeatWhileAffordable.Value = true;
         config.RespectActionMultiplier.Value = false;
+#else
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
+#endif
         config.CpuBudgetMilliseconds.Value = 1.0f;
         config.AllowedAutoBuyUuids.Value = string.Empty;
         config.BlockedAutoBuyUuids.Value = string.Empty;
@@ -691,6 +695,7 @@ internal sealed class SimulatedAutoBuyCandidate :
     IAutoBuyMutationCandidate,
     IAutoBuyAdmissionContractEvidence,
     IAutoBuyAvailabilityEvidence,
+    INativeMutationOutcomeSource,
 #endif
     IAutoBuyDirtyCandidate,
     IAutoBuyPriorityCandidate
@@ -705,6 +710,9 @@ internal sealed class SimulatedAutoBuyCandidate :
     private bool _costDirty = true;
     private bool _mutationBlocked;
     private long _completionRefreshGeneration = -1;
+#if !LEGACY_MAIN_API
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
+#endif
 
     public SimulatedAutoBuyCandidate(SimulatedAutoBuyWorld world, SimulatedCandidateSpec spec)
     {
@@ -773,6 +781,10 @@ internal sealed class SimulatedAutoBuyCandidate :
     public int MutationBlockRecoveries { get; private set; }
 
     public bool MutationBlocked => _mutationBlocked;
+
+#if !LEGACY_MAIN_API
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
+#endif
 
     public double CostMultiplier { get; set; } = 1.0;
 
@@ -860,6 +872,9 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public bool TryPurchaseOne(out string reason)
     {
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = default;
+#endif
         PurchaseCalls++;
         var beforePurchase = BeforeNextPurchaseAttempt;
         BeforeNextPurchaseAttempt = null;
@@ -887,6 +902,10 @@ internal sealed class SimulatedAutoBuyCandidate :
             return false;
         }
 
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
+#endif
+
         if (FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure ||
             FailureMode == SimulatedPurchaseFailureMode.CaughtExceptionAfterMutation)
         {
@@ -897,6 +916,9 @@ internal sealed class SimulatedAutoBuyCandidate :
             return false;
         }
 
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 1);
+#endif
         reason = string.Empty;
         return true;
     }

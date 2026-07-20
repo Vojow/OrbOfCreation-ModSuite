@@ -26,6 +26,8 @@ internal static class AutoBuyPerformanceReporter
         int structureCount,
         int upgradeCount,
         int targetStructureLevels,
+        string purchaseGrouping,
+        int bulkDevelopment,
         int queueCapacity,
         int reservedQueueSlots,
         int frameCount,
@@ -69,6 +71,8 @@ internal static class AutoBuyPerformanceReporter
                 StructureCount = structureCount,
                 UpgradeCount = upgradeCount,
                 TargetStructureLevels = targetStructureLevels,
+                PurchaseGrouping = purchaseGrouping,
+                BulkDevelopment = bulkDevelopment,
                 QueueCapacity = queueCapacity,
                 ReservedQueueSlots = reservedQueueSlots,
                 FrameCount = frameCount,
@@ -205,6 +209,10 @@ internal sealed class PerformanceWorkload
     public int UpgradeCount { get; init; }
 
     public int TargetStructureLevels { get; init; }
+
+    public string PurchaseGrouping { get; init; } = string.Empty;
+
+    public int BulkDevelopment { get; init; }
 
     public int QueueCapacity { get; init; }
 

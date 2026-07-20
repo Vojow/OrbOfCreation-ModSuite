@@ -245,8 +245,7 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.AutoBuyMaxCandidatesPerScan.Value = 1024;
         config.LeaveQueueSlots.Value = 1;
-        config.RepeatWhileAffordable.Value = true;
-        config.RespectActionMultiplier.Value = false;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
         config.CpuBudgetMilliseconds.Value = 1.0f;
         config.AllowedAutoBuyUuids.Value = string.Empty;
         config.BlockedAutoBuyUuids.Value = string.Empty;

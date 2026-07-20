@@ -6,7 +6,7 @@
 
 The supported package is an explicit allowlist:
 
-- **Orb Automata 0.8.8:** rejection-aware, completion-responsive queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed version-zero configuration migration.
+- **Orb Automata 0.8.9:** grouped, continuously repeating and rejection-aware queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed configuration migration.
 - **Orb Mentor 0.3.8:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains, shared remaining-budget enforcement, and versioned configuration ownership.
 - **Orb Mod Config 0.6.3:** optional in-game configuration UI with separate configuration-schema and runtime-health status, variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
 - **Orb Modding Common 0.3.7:** bundled shared dependency with lifecycle, invalidation, configuration-schema, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.
@@ -22,7 +22,7 @@ The supported package is an explicit allowlist:
 3. **Quiet-log acceptance:** run a representative 10-minute Active session with all supported modules enabled. Normal logs should contain lifecycle information plus warnings/errors, not per-action chatter.
 4. **Save and removal safety:** back up a normal save, exercise each supported gameplay plugin, save/reload, then remove the suite and verify the game and save still load normally.
 5. **Desktop and Steam Deck performance:** test new game and NG+, representative game-speed multipliers, large catalogs, populated queues, and concurrent supported modules. Confirm bounded work does not create sustained frame stalls or crashes.
-6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, live Bulk Development changes, action multiplier on/off, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
+6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, all four `PurchaseGrouping` modes, live Bulk Development and action-multiplier changes, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
 7. **Auto Cast matrix:** instant, channelled, toggle, and aura behavior; unavailable or unaffordable spells; native queue pressure; emergency disable; and scene/load transitions.
 8. **Auto Concept matrix:** disabled and timed-cycle modes, catch-up behavior, ten-second minimum, setup time, one and multiple acquired slots, zero-resource concepts, unavailable concepts, and reset/load transitions without assignment churn.
 9. **Mentor matrix:** spell source policies and independent spell, artifact, and alchemy domains; Shared Pool and Per Recipient; disabled-domain silence; native persistence; recursion suppression; and bounded processing.

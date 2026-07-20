@@ -167,9 +167,8 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoBuyCandidateCap={_config.AutoBuyMaxCandidatesPerScan.Value}, " +
             $"AutoBuyBatchSizing={_config.AutoBuyBatchSizing.Value}, " +
             $"AutoBuyBatchSize={_config.MaxPurchasesPerBatch.Value}, " +
-            $"AutoBuyStructureRepeat={_config.StructureRepeatMode.Value}, " +
-            $"AutoBuyRepeatWhileAffordable={_config.RepeatWhileAffordable.Value}, " +
-            $"RespectActionMultiplier={_config.RespectActionMultiplier.Value}, " +
+            $"AutoBuyPurchaseGrouping={_config.PurchaseGrouping.Value}, " +
+            $"AutoBuyFixedGroupSize={_config.FixedGroupSize.Value}, " +
             $"AutoCastMode={_config.AutoCastMode.Value}, " +
             $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
             $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +

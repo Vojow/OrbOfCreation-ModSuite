@@ -54,10 +54,8 @@ public sealed class AutomataTests
         Assert.Equal(1024, config.AutoBuyMaxCandidatesPerScan.Value);
         Assert.Equal(AutoBuyBatchSizingMode.FillAvailableQueue, config.AutoBuyBatchSizing.Value);
         Assert.Equal(8, config.MaxPurchasesPerBatch.Value);
-        Assert.Equal(AutoBuyStructureRepeatMode.BulkDevelopment, config.StructureRepeatMode.Value);
-        Assert.Equal(2, config.FixedStructureLevelsPerCandidate.Value);
-        Assert.False(config.RespectActionMultiplier.Value);
-        Assert.True(config.RepeatWhileAffordable.Value);
+        Assert.Equal(AutoBuyPurchaseGroupingMode.BulkDevelopment, config.PurchaseGrouping.Value);
+        Assert.Equal(2, config.FixedGroupSize.Value);
         Assert.Equal("0", config.AbsoluteReserve.Value);
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
