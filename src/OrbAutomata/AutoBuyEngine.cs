@@ -11,6 +11,7 @@ namespace OrbAutomata;
 internal sealed class AutoBuyEngine : IDisposable
 {
     private const double MaximumCpuBudgetMilliseconds = 1.0;
+    internal const int MaximumNativePurchasesPerFrame = 16;
     private const float QueuePollIntervalSeconds = 0.1f;
     private const double InitialNativeRetryDelaySeconds = 0.25;
     private const double MaximumNativeRetryDelaySeconds = 5.0;
@@ -358,13 +359,15 @@ internal sealed class AutoBuyEngine : IDisposable
                         _secondsUntilQueuePoll = QueuePollIntervalSeconds;
                     }
 
-                    ContinueRankedBatch(singleStep: true);
-                    completion = _activeMutationOutcome.ToWorkCompletion();
+                    ContinueRankedBatch(
+                        MaximumNativePurchasesPerFrame,
+                        beginFreshMutationEvaluation: true);
+                    completion = ActiveMutationWorkCompletion();
                     mutationLease.Complete(completion);
                 }
                 catch
                 {
-                    mutationLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                    mutationLease.Fail(ActiveMutationWorkCompletion());
                     throw;
                 }
                 mutationCompleted = true;
@@ -1002,7 +1005,9 @@ internal sealed class AutoBuyEngine : IDisposable
         }
     }
 
-    private void ContinueRankedBatch(bool singleStep = false)
+    private void ContinueRankedBatch(
+        int maximumNativePurchaseCalls = MaximumNativePurchasesPerFrame,
+        bool beginFreshMutationEvaluation = false)
     {
         var recommendations = _pendingPurchaseRecommendations;
         if (recommendations is null)
@@ -1010,13 +1015,16 @@ internal sealed class AutoBuyEngine : IDisposable
             return;
         }
 
-        if (singleStep)
+        if (beginFreshMutationEvaluation)
         {
             // A shared-coordinator denial can defer this batch for several
             // frames. Start a fresh lazy resource epoch immediately before
             // final reserve and affordability validation.
             _incrementalCatalog?.BeginMutationEvaluation();
         }
+
+        var nativePurchaseCalls = 0;
+        var sliceLifecycleGeneration = _lifecycleGeneration;
 
         var maximumPurchases = _config.AutoBuyBatchSizing.Value == AutoBuyBatchSizingMode.FillAvailableQueue
             ? int.MaxValue
@@ -1029,6 +1037,13 @@ internal sealed class AutoBuyEngine : IDisposable
 
         while (_pendingPurchaseIndex < recommendations.Count && _pendingBatchPurchased < maximumPurchases)
         {
+            if (_config.AutoBuyMode.Value != AutoBuyOperationMode.Active ||
+                !_config.CanStartAutoBuyActively)
+            {
+                ResetPendingPurchaseBatch();
+                return;
+            }
+
             if (!TryCaptureQueueCapacity(RemainingAutomationUsage(maximumPurchases), out var queueCapacity))
             {
                 stoppedByQueue = true;
@@ -1096,12 +1111,6 @@ internal sealed class AutoBuyEngine : IDisposable
 
                 AdvancePurchaseCandidate();
 
-                if (singleStep)
-                {
-                    _pendingBatchCpuSliced = true;
-                    break;
-                }
-
                 if (ReachedPurchaseSliceBudget(stopwatch, cpuBudget))
                 {
                     _pendingBatchCpuSliced = true;
@@ -1163,6 +1172,21 @@ internal sealed class AutoBuyEngine : IDisposable
                 recommendation.Candidate.Source,
                 purchaseSucceeded);
             _activeMutationOutcome = _activeMutationOutcome.Add(mutationOutcome);
+            nativePurchaseCalls += mutationOutcome.NativeCallsAttempted;
+            if (_lifecycleGeneration != sliceLifecycleGeneration)
+            {
+                if (purchaseSucceeded)
+                {
+                    _successfulPurchasesThisSession++;
+                }
+                else
+                {
+                    _nativePurchaseFailures++;
+                }
+
+                return;
+            }
+
             _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
             var upgradeQuarantineActive = SynchronizeUpgradeQuarantine(cancelPendingBatch: false);
             if (upgradeQuarantineActive && recommendation.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
@@ -1241,11 +1265,10 @@ internal sealed class AutoBuyEngine : IDisposable
                 }
             }
 
-            if (singleStep &&
+            if (nativePurchaseCalls >= maximumNativePurchaseCalls &&
                 _pendingPurchaseIndex < recommendations.Count &&
                 _pendingBatchPurchased < maximumPurchases)
             {
-                _pendingBatchCpuSliced = true;
                 break;
             }
 
@@ -1306,6 +1329,10 @@ internal sealed class AutoBuyEngine : IDisposable
         candidate is INativeMutationOutcomeSource source
             ? source.LastNativeMutationOutcome
             : new NativeMutationCallOutcome(1, 1, succeeded ? 1 : 0);
+
+    private SuiteWorkCompletion ActiveMutationWorkCompletion() =>
+        _activeMutationOutcome.ToWorkCompletion(
+            Math.Max(1, _activeMutationOutcome.NativeCallsAttempted));
 
     private bool ReachedPurchaseSliceBudget(Stopwatch stopwatch, double cpuBudget)
     {

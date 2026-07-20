@@ -59,7 +59,7 @@ public sealed class RuntimeReplayTests
             Assert.Equal(observation.DeclaredFrame, observation.ActualFrame);
             Assert.Equal(observation.DeclaredMicroseconds, observation.ActualMicroseconds);
         });
-        ScenarioOracles.OneNativeMutationPerFrame(dispatcher.Kernel);
+        ScenarioOracles.OneMutationOwnerPerFrame(dispatcher.Kernel);
         ScenarioOracles.MutationRequestsAreUnique(dispatcher.Kernel);
         ScenarioOracles.NoLifecycleDispatchFailures(dispatcher.Kernel);
     }

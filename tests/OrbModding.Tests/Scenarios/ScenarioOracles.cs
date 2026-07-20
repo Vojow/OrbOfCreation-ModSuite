@@ -24,16 +24,16 @@ internal static class ScenarioOracles
         Assert.Equal(expected, kernel.LifecycleTrace.Select(transition => transition.Current.State));
     }
 
-    public static void OneNativeMutationPerFrame(LifecycleScenarioKernel kernel)
+    public static void OneMutationOwnerPerFrame(LifecycleScenarioKernel kernel)
     {
         var overlaps = kernel.Mutations
             .GroupBy(mutation => mutation.Frame)
-            .Where(group => group.Count() > 1)
+            .Where(group => group.Select(mutation => mutation.Feature).Distinct(StringComparer.Ordinal).Count() > 1)
             .Select(group => $"frame {group.Key}: {string.Join(", ", group.Select(Describe))}")
             .ToArray();
         Assert.True(
             overlaps.Length == 0,
-            $"More than one native mutation was recorded in a frame:{Environment.NewLine}{string.Join(Environment.NewLine, overlaps)}");
+            $"More than one mutation-owning feature was recorded in a frame:{Environment.NewLine}{string.Join(Environment.NewLine, overlaps)}");
     }
 
     public static void MutationRequestsAreUnique(LifecycleScenarioKernel kernel)

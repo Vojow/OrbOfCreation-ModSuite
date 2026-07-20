@@ -30,6 +30,7 @@ level, completion, and queue admission.
 | Malformed completion observations | [AutoBuySimulationCompletionTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationCompletionTests.cs) |
 | Simulator contract | [AutoBuySimulationContractTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationContractTests.cs) |
 | Seeded mixed-event reliability | [AutoBuySimulationStateMachineTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationStateMachineTests.cs) |
+| Bounded purchase burst safety and throughput | [AutoBuyBurstTests.cs](../../../tests/OrbModding.Tests/AutoBuyBurstTests.cs), [AutomataCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutomataCoordinatorTests.cs) |
 | Stage and adverse throughput | [AutoBuyStagePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyStagePerformanceTests.cs), [AutoBuyAdversePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyAdversePerformanceTests.cs), [AutoBuyRuntimeDerivedSimulationTests.cs](../../../tests/OrbModding.Tests/AutoBuyRuntimeDerivedSimulationTests.cs) |
 | Real native shape | `OrbModding.GameContractTests` Auto Buy contracts |
 
@@ -104,6 +105,11 @@ Current `BulkDevelopment` baseline at 60 simulated frames/second:
 
 These are deterministic simulated durations dominated by each stage's queue
 consumer cadence, not claims about real gameplay time or host wall-clock speed.
+They retain a 1.1 ms modeled native purchase and therefore intentionally remain
+a stable one-call-per-frame history. `AutoBuyBurstTests` is the separate gate for
+cheap calls: it verifies adaptive 1/2/4/8/16-call leases, a hard 16-call cap,
+live mid-burst safety changes, exact accounting, and sustained refill while the
+queue consumes eight entries per frame.
 
 The runtime-derived performance suite complements the stable stage history with
 six perturbations: Bulk Development 1/3/10/100 at endgame catalog scale,
@@ -127,8 +133,8 @@ group/pass fairness, pre-mutation rejection recovery, and emergency disable.
   engines, not only against checked historical JSON.
 - Capture installed-game evidence for definite pre-mutation rejection causes
   and the 0.25-to-5-second retry cadence.
-- Strengthen endgame queue-continuity targets after more runtime profiles use
-  the grouped-continuation policy.
+- Capture native burst-size and queue-continuity distributions on desktop and
+  Steam Deck/Proton before replacing the historical stage cost model.
 - Promote a reviewed sanitized runtime trace into a versioned replay/profile;
   the runtime-derived perturbations are deterministic models, not that evidence.
 - Add controlled allocation evidence and desktop/Steam Deck runtime profiles.

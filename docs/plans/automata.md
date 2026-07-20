@@ -22,7 +22,7 @@ Research is no longer the MVP. The release plugin removes the deprecated researc
 
 ## Current implementation status
 
-The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). The [action-family ownership contract](action-family-ownership.md) now isolates overlapping native mutation families without changing saved configuration or unrelated features. Version `0.8.9` also adopts schema version 2 of the [versioned configuration-schema transaction](configuration-schema.md): the legacy overlapping Auto Buy grouping controls migrate into `PurchaseGrouping`, while malformed or future data stops Automata before native behavior starts.
+The next-beta health pass projects Auto Buy, Auto Cast, Auto Concept, and Spell Leveling independently through the [shared feature-health contract](feature-health-reporting.md). The [action-family ownership contract](action-family-ownership.md) isolates overlapping native mutation families without changing saved configuration or unrelated features. Version `0.8.10` adds [bounded Auto Buy purchase bursts](autobuy-purchase-bursts.md) while retaining `0.8.9`'s schema version 2 migration of the legacy overlapping grouping controls into `PurchaseGrouping`.
 
 The first A1 implementation slice now covers both audited native purchase families:
 
@@ -163,7 +163,7 @@ The cross-plugin target architecture and lifecycle rules are maintained in the [
 
 - Evaluation interval defaults to 0.5 seconds of unscaled time.
 - Maximum actions per evaluation defaults to 1.
-- Auto Buy caps scan and purchase slices at 1 ms, and the implemented shared coordinator bounds combined suite work and admits at most one native suite mutation per frame.
+- Auto Buy caps scan and purchase slices at 1 ms. The shared coordinator admits at most one mutation-owning suite lease per frame; only Auto Buy may perform a bounded series of independently verified purchases inside that lease.
 - Cache static candidate lists and invalidate on relevant observable changes.
 - Never scan and sort every game object every frame.
 

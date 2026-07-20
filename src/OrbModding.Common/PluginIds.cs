@@ -6,7 +6,7 @@ public static class PluginIds
 
     public const string AutomataGuid = "dev.vojow.orbofcreation.automata";
     public const string AutomataName = "Orb Automata";
-    public const string AutomataVersion = "0.8.9";
+    public const string AutomataVersion = "0.8.10";
 
     public const string ModConfigGuid = "dev.vojow.orbofcreation.modconfig";
     public const string ModConfigName = "Orb Mod Config";

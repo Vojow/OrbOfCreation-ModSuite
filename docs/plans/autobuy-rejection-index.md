@@ -68,6 +68,23 @@ Portable exit gate: deterministic tests show fewer reevaluations during sub-thre
 
 Portable exit gate: abundant resources feed every usable queue slot without per-level rescans, all ranked candidates progress, NF-03 cannot starve healthy lower ranks, and rising costs or reserves stop a group at the exact safe level.
 
+### Throughput slice — bounded purchase bursts
+
+- Retain one mutation-owning feature lease per Unity frame while allowing Auto
+  Buy to submit up to 16 sequential exact one-level purchases inside that lease.
+- Revalidate mode, emergency state, ownership, lifecycle, candidate state, live
+  cost, reserves, and authoritative queue room before every native call.
+- Stop at the 1 ms purchase slice, group/pass/batch boundary, live safety change,
+  ambiguous outcome, or hard call ceiling; report each native call as an
+  operation while preserving one lease admission.
+- Keep other mutation owners excluded for the full lease and prove they resume
+  on later frames.
+
+Portable exit gate: modeled native costs yield deterministic 1/2/4/8/16-call
+leases, eight completions per frame do not drain an abundantly supplied queue,
+mid-burst safety changes stop the next call, and Auto Cast progresses without a
+same-frame overlap.
+
 ### Phase 3 — Shared affordability projection
 
 - Expose the same structured admission calculation to the optional configuration/UI surface.

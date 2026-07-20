@@ -92,8 +92,9 @@ work identity at both the start and end of an explicitly requested measurement
 window. The checker evaluates counter deltas; it never attributes a lifetime
 maximum that was already present at the start to the current capture.
 
-The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one mutation
-admission per frame, twelve supported work identities, exact 10/12/30-frame wait
+The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one
+mutation-owning feature admission per frame, twelve supported work identities,
+exact 10/12/30-frame wait
 limits, and a minimum of 30 samples. Cooperative p95, p99, and maximum targets,
 combined active-frame timing, wait limits, starvation, abandonment, and
 work/measurement failures are enforced merge evidence. Exceeded or insufficient

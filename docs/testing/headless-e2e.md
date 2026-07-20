@@ -62,7 +62,8 @@ Production-facing feature drivers keep the scenario layer honest:
 - `ScenarioMentorFeature` runs the real `MentorEngine` and
   `MentorCoordinatorWork` mutation path;
 - `ScenarioOracles` checks lifecycle order, ignored stale callbacks, unique
-  request execution, and the shared one-native-mutation-per-frame invariant.
+  request execution, and the shared one-mutation-owning-feature-per-frame
+  invariant.
 
 The focused scenarios cover no-save through load/readiness, progression unlock,
 queue submission and completion, reset, old-generation callback rejection,
@@ -195,8 +196,8 @@ addition to its historical stress cases:
 | Late | 180 | 100 | 24 | 304 | 1 per 4 frames (15/s) | 71,281 frames / 19:48.017 | 72,493 frames / 20:08.217 |
 | Endgame | 180 | 1,000 | 24 | 304 | 1 per frame (60/s) | 186,109 frames / 51:41.817 | 186,110 frames / 51:41.833 |
 
-The current scheduler comparison against the one-mutation-per-frame theoretical
-minimum is:
+The historical 1.1 ms purchase model compares against a one-native-call-per-frame
+theoretical minimum:
 
 | Stage | Theoretical submission frame | Actual submission frame | Overhead | Efficiency | Evaluation-only idle | Other deferred idle |
 |---|---:|---:|---:|---:|---:|---:|
@@ -218,8 +219,15 @@ so a cheap candidate cannot hide another candidate that failed to progress.
 Every stage must saturate its usable queue before turnover begins, retain
 bounded candidate work, and avoid excessive idle frames while affordable work
 and queue room remain. Early through late must keep at least 90% queue depth.
-Endgame deliberately overloads the one-native-mutation-per-frame ceiling and
-records queue drain while still requiring all 180,000 Structure submissions.
+Endgame deliberately overloads that historical modeled one-call-per-frame
+ceiling and records queue drain while still requiring all 180,000 Structure
+submissions.
+
+The separate bounded-burst gate models native calls from 1.1 ms down to 0.05 ms
+and requires deterministic 1/2/4/8/16-call leases. Its sustained workload
+consumes eight queue entries per frame and requires refill headroom, a maximum of
+16 calls in one lease, progress across every candidate, live queue/reserve
+safety, exact mutation accounting, and no same-frame Auto Cast overlap.
 
 ### Historical reports
 

@@ -26,7 +26,8 @@ internal sealed class AutoBuySimulation : IDisposable
         double initialResourceQuantity = 1_000_000_000.0,
         double readObservationCostMilliseconds = 0.05,
         double purchaseObservationCostMilliseconds = 1.1,
-        Func<int, double>? readObservationCostSchedule = null)
+        Func<int, double>? readObservationCostSchedule = null,
+        Func<AutoBuyCandidateKind, bool>? ownsActionFamily = null)
     {
         World = new SimulatedAutoBuyWorld(queueCapacity, initialResourceQuantity);
         foreach (var spec in candidateSpecs)
@@ -49,7 +50,8 @@ internal sealed class AutoBuySimulation : IDisposable
             _readCost.Observe,
             _purchaseCost.Observe,
             _coordinator,
-            () => _frame);
+            () => _frame,
+            ownsActionFamily: ownsActionFamily);
     }
 
     public AutomataConfig Config { get; }
@@ -779,6 +781,8 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public Action<SimulatedAutoBuyCandidate>? BeforeNextPurchaseAttempt { get; set; }
 
+    public Action<SimulatedAutoBuyCandidate>? AfterSuccessfulPurchase { get; set; }
+
     public int CurrentLevel { get; private set; }
 
     public int QueuedLevels { get; private set; }
@@ -920,6 +924,7 @@ internal sealed class SimulatedAutoBuyCandidate :
 #if !LEGACY_MAIN_API
         _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
 #endif
+        AfterSuccessfulPurchase?.Invoke(this);
 
         if (FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure ||
             FailureMode == SimulatedPurchaseFailureMode.CaughtExceptionAfterMutation)
@@ -1074,6 +1079,7 @@ internal sealed class SimulatedAutoBuyCandidate :
             AvailabilityReadSucceeds = AvailabilityReadSucceeds,
             NativeContractComplete = NativeContractComplete,
             CompletionRefreshSucceeds = CompletionRefreshSucceeds,
+            AfterSuccessfulPurchase = AfterSuccessfulPurchase,
             CurrentLevel = CurrentLevel,
             QueuedLevels = QueuedLevels,
             CostMultiplier = CostMultiplier,
