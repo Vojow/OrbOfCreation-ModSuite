@@ -19,7 +19,6 @@
 - Add four deterministic 240-event Auto Buy state-machine tapes with per-event invariants, replay comparison, bounded diagnostic tails, and first-failing-prefix reduction.
 - Add adverse modeled workloads for scarcity, locked catalogs, live capacity changes, manual bursts, completion bursts, lifecycle replacement, and resource-observation outages; retain the persistent rejecting-leader case as an explicit skipped gate for the unresolved starvation policy.
 - Add an Auto Buy reverse-engineering dossier covering the native purchase transaction, shared queue/completion state model, simulation-to-evidence mapping, and the distinction between observed progression facts and synthetic stress profiles.
-- Enforce repository-local documentation links, documented test-owner class references, strict UTF-8 decoding, and common mojibake rejection through portable architecture tests.
 
 ## Progression-shaped Auto Buy performance simulations — 2026-07-20
 

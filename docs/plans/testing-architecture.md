@@ -114,8 +114,6 @@ Do not create low-value tests solely to increase a percentage.
 
 - Record an initial overall and per-assembly diagnostic branch snapshot.
   **Implemented; rerun before selecting floors.**
-- Enforce repository-local Markdown links, documented test-owner references,
-  valid UTF-8, and common mojibake rejection. **Implemented.**
 - Add branch regression floors where they measure decision and failure paths.
 - Split the largest test fixtures by responsibility while retaining shared,
   bounded scenario builders.
