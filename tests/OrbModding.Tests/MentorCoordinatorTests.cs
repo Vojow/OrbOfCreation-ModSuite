@@ -9,6 +9,100 @@ namespace OrbModding.Tests;
 public sealed class MentorCoordinatorTests
 {
     [Fact]
+    public void CooperativeSliceReceivesOnlyRemainingSharedSoftBudget()
+    {
+        var clock = new ManualClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 0.75, 1.0);
+        long frame = 1;
+        using var earlier = coordinator.Register("test", "earlier");
+        using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
+        earlier.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(earlier, frame, out var lease));
+        clock.Advance(0.6);
+        lease.Complete();
+        earlier.SetPending(false);
+
+        mentor.SetState(true, cooperativePending: true, mutationPending: false);
+        var observed = -1.0;
+        Assert.True(mentor.TryRunCooperative(remaining =>
+        {
+            observed = remaining;
+            return 0;
+        }));
+
+        Assert.Equal(0.15, observed, 12);
+    }
+
+    [Theory]
+    [InlineData(2.0, 0.15, 0.15)]
+    [InlineData(0.1, 0.75, 0.1)]
+    [InlineData(0.01, 0.75, 0.1)]
+    [InlineData(1.0, 0.0, 0.0)]
+    [InlineData(1.0, -1.0, 0.0)]
+    public void CooperativeBudgetClampsConfiguredAndRemainingWithoutReapplyingFloor(
+        double configured,
+        double remaining,
+        double expected)
+    {
+        Assert.Equal(
+            expected,
+            MentorRuntime.EffectiveCooperativeBudgetMilliseconds(configured, remaining),
+            12);
+    }
+
+    [Fact]
+    public void ExhaustedSoftBudgetDoesNotTouchPendingMentorWorkAndNextFrameResumesExactXp()
+    {
+        var clock = new ManualClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 0.75, 1.0);
+        long frame = 1;
+        using var earlier = coordinator.Register("test", "earlier");
+        using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
+        var engine = new MentorEngine();
+        engine.Consolidate(new MentorGrant("first", new MentorAmount(7, 4)));
+        engine.Consolidate(new MentorGrant("second", new MentorAmount(9, 5)));
+
+        earlier.SetPending(true);
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(earlier, frame, out var lease));
+        clock.Advance(0.75);
+        lease.Complete();
+        earlier.SetPending(false);
+        mentor.SetState(true, cooperativePending: true, mutationPending: false);
+        Assert.False(mentor.TryRunCooperative(_ =>
+        {
+            Assert.Fail("No Mentor work may run after the shared soft budget is exhausted.");
+            return 0;
+        }));
+        Assert.True(engine.TryPeek(out var retained));
+        Assert.Equal("first", retained.Uuid);
+        Assert.Equal(new MentorAmount(7, 4), retained.Amount);
+
+        frame++;
+        mentor.SetState(true, cooperativePending: true, mutationPending: false);
+        Assert.True(mentor.TryRunCooperative(_ =>
+        {
+            Assert.True(engine.TryPeek(out var first));
+            Assert.Equal(new MentorAmount(7, 4), first.Amount);
+            Assert.True(engine.Complete(first.Uuid));
+            return 1;
+        }));
+        Assert.True(engine.TryPeek(out var stillPending));
+        Assert.Equal("second", stillPending.Uuid);
+        Assert.Equal(new MentorAmount(9, 5), stillPending.Amount);
+
+        frame++;
+        mentor.SetState(true, cooperativePending: true, mutationPending: false);
+        Assert.True(mentor.TryRunCooperative(_ =>
+        {
+            Assert.True(engine.TryPeek(out var second));
+            Assert.Equal(new MentorAmount(9, 5), second.Amount);
+            Assert.True(engine.Complete(second.Uuid));
+            return 1;
+        }));
+        Assert.False(engine.TryPeek(out _));
+    }
+
+    [Fact]
     public void AutomataMutationAndMentorGrantShareOneFrameThenMentorProgresses()
     {
         var coordinator = Coordinator();
@@ -316,6 +410,37 @@ public sealed class MentorCoordinatorTests
         Assert.Equal(3, metrics.NativeMutationsStarted);
     }
 
+    [Fact]
+    public void MutationExceptionPreservesObservedOutcomeAndLegacyOperationCount()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
+        mentor.SetState(true, cooperativePending: false, mutationPending: true);
+        var observed = new NativeMutationCallOutcome(1, 1, 0);
+
+        Assert.Throws<InvalidOperationException>(() => mentor.TryRunMutation(
+            () => throw new InvalidOperationException("housekeeping failed after native invocation"),
+            () => observed.ToWorkCompletion()));
+
+        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbMentor", out var metrics));
+        Assert.Equal(1, metrics.FailedWorkItems);
+        Assert.Equal(1, metrics.TotalOperations);
+        Assert.Equal(1, metrics.NativeCallsAttempted);
+        Assert.Equal(1, metrics.NativeMutationAttempts);
+        Assert.Equal(0, metrics.NativeMutationsCommitted);
+    }
+
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
+
+    private sealed class ManualClock : IPerformanceClock
+    {
+        private long _microseconds;
+        public long GetTimestamp() => _microseconds;
+        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
+            (endTimestamp - startTimestamp) / 1000.0;
+        public void Advance(double milliseconds) =>
+            _microseconds += (long)(milliseconds * 1000.0);
+    }
 }

@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented / runtime validation pending.** The shared calculation and Auto Buy adoption are portable-tested; the installed field/method contracts are statically tested, while an interactive capacity-change probe remains.
 
-[Back to plans](README.md) · [Orb Automata plan](automata.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plans](README.md) · [Orb Automata plan](automata.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 
@@ -28,6 +28,12 @@ The supported game build exposes total capacity through the exact public field c
 Auto Buy creates a complete snapshot when it probes a waiting queue, before scanning, before selecting a repeat limit, and again after live candidate/cost/reserve validation immediately before each native purchase call. The manual reservation and remaining batch usage allocation are passed into the snapshot once; callers do not repeat queue arithmetic. Invalid, missing, or contradictory reads perform no mutation.
 
 The ranked scheduler remains unchanged: multiple prepared recommendations receive one independently validated level per pass, while a lone recommendation may use the snapshot's full usable room.
+
+A prepared fixed/Bulk Development/action-multiplier group keeps the safe usable-room clamp captured when that group starts. A later capacity decrease is still enforced by the fresh pre-mutation snapshot; a capacity increase is consumed by the immediate rerank after the prepared clamp settles, without waiting for the idle evaluation interval. This avoids silently expanding an already planned mutation group while still using newly available capacity promptly.
+
+Native completion retains the already prepared candidate for the first reopened slot, with full live validation. Broad completion effects then settle before the next repeat pass; a newly unlocked higher-ranked candidate therefore pre-empts further repetitions at that next pass rather than invalidating safe prepared work on every completion callback.
+
+The portable acceptance matrix now covers native capacity above and equal to the automation limit, smaller limits, partial occupancy, reservation exactly once, multiple/one usable slots, mid-batch resource loss, a finite Upgrade reaching native maximum, capacity growth across a prepared clamp, and newly unlocked ranking at the next pass. Interactive capacity changes remain a release-validation gate because headless evidence cannot prove the installed UI queue and native observers.
 
 ## Validation still required
 

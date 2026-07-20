@@ -6,10 +6,10 @@
 
 The supported package is an explicit allowlist:
 
-- **Orb Automata 0.8.2:** rejection-aware, completion-responsive queue-filling Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling.
-- **Orb Mentor 0.3.2:** progression-gated native mastery-XP sharing for spells, with independently enabled artifact and ordinary-alchemy domains.
-- **Orb Mod Config 0.6.1:** optional in-game configuration UI with variable-height descriptions and stable same-page scroll position.
-- **Orb Modding Common 0.3.1:** bundled shared dependency with the audited Alchemy/Scholar gameplay-domain classifier, not a separate gameplay mod.
+- **Orb Automata 0.8.10:** adaptive bounded-burst, grouped, continuously repeating and rejection-aware queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed configuration migration.
+- **Orb Mentor 0.3.8:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains, shared remaining-budget enforcement, and versioned configuration ownership.
+- **Orb Mod Config 0.6.3:** optional in-game configuration UI with separate configuration-schema and runtime-health status, variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
+- **Orb Modding Common 0.3.7:** bundled shared dependency with lifecycle, invalidation, configuration-schema, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.
 
 `OrbChronomancer` and `OrbAchievementResonance` live only on the dedicated experimental branch and must not enter a supported archive. Orb Insights and Orb Toolbox remain plans rather than packaged plugins.
 
@@ -22,14 +22,15 @@ The supported package is an explicit allowlist:
 3. **Quiet-log acceptance:** run a representative 10-minute Active session with all supported modules enabled. Normal logs should contain lifecycle information plus warnings/errors, not per-action chatter.
 4. **Save and removal safety:** back up a normal save, exercise each supported gameplay plugin, save/reload, then remove the suite and verify the game and save still load normally.
 5. **Desktop and Steam Deck performance:** test new game and NG+, representative game-speed multipliers, large catalogs, populated queues, and concurrent supported modules. Confirm bounded work does not create sustained frame stalls or crashes.
-6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, live Bulk Development changes, action multiplier on/off, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
+6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, all four `PurchaseGrouping` modes, live Bulk Development and action-multiplier changes, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
 7. **Auto Cast matrix:** instant, channelled, toggle, and aura behavior; unavailable or unaffordable spells; native queue pressure; emergency disable; and scene/load transitions.
 8. **Auto Concept matrix:** disabled and timed-cycle modes, catch-up behavior, ten-second minimum, setup time, one and multiple acquired slots, zero-resource concepts, unavailable concepts, and reset/load transitions without assignment churn.
 9. **Mentor matrix:** spell source policies and independent spell, artifact, and alchemy domains; Shared Pool and Per Recipient; disabled-domain silence; native persistence; recursion suppression; and bounded processing.
-10. **Mod Config matrix:** at least 1920×1080 and one smaller resolution; Mods available from a new game and last among available tabs; Apply/Revert; scrolling; compound feature locking; and operation without native Auto Queue UI.
-11. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
+10. **Mod Config matrix:** 1280×720, 1280×800 Steam Deck, and 1920×1080; Mods available from a new game and last among available tabs; readable separate configuration-schema and runtime-status bands; variable-height descriptions; same-page scroll retention; live resolution and UI-scale changes; Apply/Revert; compound feature locking; and operation without native Auto Queue UI.
+11. **Configuration-schema matrix:** fresh files, current version, reviewed version-zero migration, malformed markers and known values, verified all-or-nothing first-free backup suffixing, partial-write/flush and reload failure containment, save failure rollback, future-version read-only refusal, worker-thread status handoff, and failed/future status-only tabs. Confirm failure diagnostics contain no configuration paths or serialized values.
+12. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
 
-Interactive behavior must satisfy [runtime validation](runtime-validation.md); a successful build or package rehearsal is not runtime approval.
+Interactive behavior must satisfy [runtime validation](../testing/runtime-validation.md); a successful build or package rehearsal is not runtime approval.
 
 ### P1 — package quality
 

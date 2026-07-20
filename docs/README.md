@@ -15,10 +15,12 @@ Choose the path that matches what you are trying to do.
 ## Contributors and maintainers
 
 - [Development setup](development/setup.md)
-- [Testing and compatibility](development/testing.md)
-- [Headless E2E simulation](development/headless-e2e.md)
-- [Runtime validation protocol](development/runtime-validation.md)
-- [Orb Mentor interactive runtime checklist](development/mentor-runtime-validation.md)
+- [Testing documentation hub](testing/README.md)
+- [Repository test strategy](testing/strategy.md)
+- [Per-module test guides](testing/README.md#module-guides)
+- [Headless E2E simulation](testing/headless-e2e.md)
+- [Runtime validation protocol](testing/runtime-validation.md)
+- [Orb Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
 - [Release process](development/releases.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)

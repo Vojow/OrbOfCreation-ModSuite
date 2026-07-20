@@ -141,10 +141,10 @@ public sealed class ModConfigTests
                        setting.Key.Contains("PurchaseLimitPerSession", StringComparison.Ordinal));
         Assert.Contains(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "RespectActionMultiplier");
-        Assert.Contains(
+            setting => setting.Key == "PurchaseGrouping");
+        Assert.DoesNotContain(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "RepeatWhileAffordable");
+            setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
@@ -195,16 +195,13 @@ public sealed class ModConfigTests
         Assert.True(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
 
         Assert.False(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
         session.Get(settings["AutoBuy.BatchSizingMode"]).Stage("Fixed");
-        session.Get(settings["AutoBuy.RepeatWhileAffordable"]).Stage("false");
-        session.Get(settings["AutoBuy.StructureRepeatMode"]).Stage("Fixed");
+        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("Fixed");
         Assert.True(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
-        session.Get(settings["AutoBuy.RespectActionMultiplier"]).Stage("true");
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.RepeatWhileAffordable"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.StructureRepeatMode"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
+        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("ActionMultiplier");
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
     }
 
     [Fact]
@@ -276,12 +273,12 @@ public sealed class ModConfigTests
     public void AutomataBinding_RemovesDeprecatedReleaseSettings()
     {
         var config = new ConfigFile();
-        config.Bind("AutoBuy", "RuntimeProbeConfirmed", true, "legacy");
-        config.Bind("AutoBuy", "ActivePurchaseLimitPerSession", 1, "legacy");
-        config.Bind("AutoCast", "RuntimeProbeConfirmed", true, "legacy");
-        config.Bind("Safety", "AllowUnvalidatedActiveMode", false, "legacy");
-        config.Bind("Research", "Mode", LegacyResearchAutomationMode.DryRun, "legacy");
-        config.Bind("AutoConcept", "AutoLevelSpells", false, "pre-release location");
+        config.SeedSerialized("AutoBuy", "RuntimeProbeConfirmed", "true");
+        config.SeedSerialized("AutoBuy", "ActivePurchaseLimitPerSession", "1");
+        config.SeedSerialized("AutoCast", "RuntimeProbeConfirmed", "true");
+        config.SeedSerialized("Safety", "AllowUnvalidatedActiveMode", "false");
+        config.SeedSerialized("Research", "Mode", LegacyResearchAutomationMode.DryRun.ToString());
+        config.SeedSerialized("AutoConcept", "AutoLevelSpells", "false");
 
         AutomataConfig.Bind(config);
 
@@ -480,39 +477,5 @@ public sealed class ModConfigTests
         Assert.Equal(2, firstConfig.SaveCalls);
         Assert.Equal(2, secondConfig.SaveCalls);
         Assert.True(session.IsDirty);
-    }
-
-    [Fact]
-    public void PanelLayout_ExpandsRowsForRenderedDescriptionHeight()
-    {
-        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(0f));
-        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(20f));
-        Assert.Equal(129f, ModConfigPanel.CalculateSettingRowHeight(80f));
-        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(float.NaN));
-    }
-
-    [Theory]
-    [InlineData(-10f, 500f, 200f, 0f)]
-    [InlineData(125f, 500f, 200f, 125f)]
-    [InlineData(400f, 500f, 200f, 300f)]
-    [InlineData(50f, 100f, 200f, 0f)]
-    public void PanelLayout_ClampsPreservedAbsoluteScrollOffset(
-        float requestedOffset,
-        float contentHeight,
-        float viewportHeight,
-        float expectedOffset)
-    {
-        Assert.Equal(
-            expectedOffset,
-            ModConfigPanel.ClampScrollOffset(requestedOffset, contentHeight, viewportHeight));
-    }
-
-    [Fact]
-    public void PanelLayout_ConvertsPreservedOffsetToUnityNormalizedPosition()
-    {
-        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(0f, 500f, 200f));
-        Assert.Equal(0.5f, ModConfigPanel.CalculateVerticalNormalizedPosition(150f, 500f, 200f), 3);
-        Assert.Equal(0f, ModConfigPanel.CalculateVerticalNormalizedPosition(300f, 500f, 200f));
-        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(50f, 100f, 200f));
     }
 }

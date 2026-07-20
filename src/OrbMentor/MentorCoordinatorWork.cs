@@ -14,16 +14,18 @@ internal sealed class MentorCoordinatorWork : IDisposable
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+        var evaluateIdentity = SuitePerformanceWorkIdentities.MentorEvaluate;
         _cooperativeWork = coordinator.Register(
-            "OrbMentor",
-            "Reconcile, resolve, and plan XP",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+            evaluateIdentity.Subsystem,
+            evaluateIdentity.WorkName,
+            evaluateIdentity.BudgetClass,
+            evaluateIdentity.ExecutionKind);
+        var mutationIdentity = SuitePerformanceWorkIdentities.MentorMutation;
         _mutationWork = coordinator.Register(
-            "OrbMentor",
-            "Grant one mastery XP mutation",
-            SuiteBudgetClass.HardLimited,
-            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+            mutationIdentity.Subsystem,
+            mutationIdentity.WorkName,
+            mutationIdentity.BudgetClass,
+            mutationIdentity.ExecutionKind);
     }
 
     internal bool CooperativePending => _cooperativeWork.IsPending;
@@ -42,12 +44,19 @@ internal sealed class MentorCoordinatorWork : IDisposable
 
     public bool TryRunCooperative(Func<int> run)
     {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        return TryRunCooperative(_ => run());
+    }
+
+    public bool TryRunCooperative(Func<double, int> run)
+    {
+        if (run is null) throw new ArgumentNullException(nameof(run));
         if (!_cooperativeWork.IsPending ||
             _coordinator.RequestWork(_cooperativeWork, _readFrameIdentity(), out var lease) != SuiteWorkAdmission.Granted)
             return false;
         using (lease)
         {
-            var operations = run();
+            var operations = run(_coordinator.RemainingSoftBudgetMilliseconds);
             lease.Complete(operations);
             return true;
         }
@@ -55,14 +64,34 @@ internal sealed class MentorCoordinatorWork : IDisposable
 
     public bool TryRunMutation(Func<int> run)
     {
+        if (run is null) throw new ArgumentNullException(nameof(run));
+        return TryRunMutation(() => new SuiteWorkCompletion(run()));
+    }
+
+    public bool TryRunMutation(Func<SuiteWorkCompletion> run)
+    {
+        return TryRunMutation(run, readFailureCompletion: null);
+    }
+
+    public bool TryRunMutation(
+        Func<SuiteWorkCompletion> run,
+        Func<SuiteWorkCompletion>? readFailureCompletion)
+    {
         if (!_mutationWork.IsPending ||
             _coordinator.RequestWork(_mutationWork, _readFrameIdentity(), out var lease) != SuiteWorkAdmission.Granted)
             return false;
         using (lease)
         {
-            var operations = run();
-            lease.Complete(operations);
-            return true;
+            try
+            {
+                lease.Complete(run());
+                return true;
+            }
+            catch
+            {
+                lease.Fail(readFailureCompletion?.Invoke() ?? new SuiteWorkCompletion(1));
+                throw;
+            }
         }
     }
 

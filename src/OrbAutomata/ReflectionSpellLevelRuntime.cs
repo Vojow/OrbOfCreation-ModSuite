@@ -2,17 +2,20 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionSpellLevelRuntime : IDisposable
+internal sealed class ReflectionSpellLevelRuntime : IDisposable, INativeMutationOutcomeSource
 {
-    internal const string UnlockLevelAllSpellsUuid = "b5efd19a-9655-4359-ad27-f391bb86c2e4";
+    internal static readonly string UnlockLevelAllSpellsUuid = KnownEntities.UnlockLevelAllSpells.Uuid.ToString("D");
 
+    private readonly TypedRegistryResolver _registryResolver;
     private Type? _recipeType;
     private object? _manager;
     private object? _availableRecipes;
     private object? _levelAllUpgrade;
+    private TypedRegistryResolution? _levelAllResolution;
     private FieldInfo? _recipeValuesField;
     private FieldInfo? _levelingPrerequisitesField;
     private FieldInfo? _masteryLevelField;
@@ -26,9 +29,22 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     private MethodInfo? _getUpgradePurchaseLevel;
     private MethodInfo? _tryLevelAll;
     private string? _blockedReason;
+    private object? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public string? BlockedReason => _blockedReason;
-    public bool IsReady => _manager is not null && _availableRecipes is not null && _blockedReason is null;
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
+    public bool IsReady =>
+        _manager is not null &&
+        _availableRecipes is not null &&
+        _levelAllResolution is not null &&
+        _registryResolver.IsCurrent(_levelAllResolution) &&
+        _blockedReason is null;
+
+    public ReflectionSpellLevelRuntime(TypedRegistryResolver? registryResolver = null)
+    {
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
+    }
 
     public AutoSpellLevelSnapshot ReadSnapshot(out string reason)
     {
@@ -64,8 +80,8 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
 
     public bool TryLevelSingle(NativeSpellLevelCandidate candidate, out string reason)
     {
+        _lastNativeMutationOutcome = default;
         if (!TryInitialize(out reason)) return false;
-        var costAttempted = false;
         try
         {
             if (!ContainsExactRecipe(candidate)) return Reject("spell-level candidate changed before mutation", out reason);
@@ -81,19 +97,24 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
             if (cost is null || _costHasEnough!.Invoke(cost, Array.Empty<object>()) is not true)
                 return Reject("spell-level cost is no longer affordable", out reason);
 
-            var before = ReadMasteryLevel(recipe);
-            costAttempted = true;
-            _costPerform!.Invoke(cost, Array.Empty<object>());
-            _purchaseLevel!.Invoke(recipe, Array.Empty<object>());
-            if (ReadMasteryLevel(recipe) <= before)
-                return Block("native spell level did not advance after its cost was paid", out reason);
-            reason = string.Empty;
-            return true;
+            var nativeCallsAttempted = 0;
+            var evidence = NativeMutationVerifier.Execute(
+                "Auto Spell Level single",
+                candidate.Uuid,
+                "mastery level exact delta +1",
+                () => ReadMasteryLevel(recipe),
+                () =>
+                {
+                    nativeCallsAttempted++;
+                    _costPerform!.Invoke(cost, Array.Empty<object>());
+                    nativeCallsAttempted++;
+                    _purchaseLevel!.Invoke(recipe, Array.Empty<object>());
+                },
+                (before, after) => after == before + 1);
+            return CompleteMutation(evidence, nativeCallsAttempted, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
-            if (costAttempted)
-                return Block($"native spell level failed after its cost was attempted: {ex.GetBaseException().Message}", out reason);
             reason = $"spell-level mutation failed: {ex.GetBaseException().Message}";
             return false;
         }
@@ -101,17 +122,26 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
 
     public bool TryLevelAll(out string reason)
     {
+        _lastNativeMutationOutcome = default;
         var snapshot = ReadSnapshot(out reason);
         if (!string.IsNullOrWhiteSpace(reason) || snapshot.Capability != AutoSpellLevelCapability.All || snapshot.Candidate is null)
             return false;
         try
         {
-            var before = ReadTotalMasteryLevels();
-            _tryLevelAll!.Invoke(_manager, Array.Empty<object>());
-            if (ReadTotalMasteryLevels() <= before)
-                return Reject("native level-all action did not advance a ready affordable spell", out reason);
-            reason = string.Empty;
-            return true;
+            var identity = snapshot.Candidate.Uuid;
+            var nativeCallsAttempted = 0;
+            var evidence = NativeMutationVerifier.Execute(
+                "Auto Spell Level all",
+                identity,
+                "total mastery level positive delta",
+                ReadTotalMasteryLevels,
+                () =>
+                {
+                    nativeCallsAttempted++;
+                    _tryLevelAll!.Invoke(_manager, Array.Empty<object>());
+                },
+                (before, after) => after > before);
+            return CompleteMutation(evidence, nativeCallsAttempted, out reason);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
@@ -125,6 +155,7 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         _manager = null;
         _availableRecipes = null;
         _levelAllUpgrade = null;
+        _levelAllResolution = null;
         _recipeValuesField = null;
         _levelingPrerequisitesField = null;
         _masteryLevelField = null;
@@ -138,9 +169,35 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         _getUpgradePurchaseLevel = null;
         _tryLevelAll = null;
         _blockedReason = null;
+        _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
     }
 
     public void Dispose() => InvalidateLifecycle();
+
+    private bool CompleteMutation<TState>(
+        NativeMutationEvidence<TState> evidence,
+        int nativeCallsAttempted,
+        out string reason)
+    {
+        _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = evidence.MutationWasAttempted && nativeCallsAttempted > 0
+            ? new NativeMutationCallOutcome(
+                nativeCallsAttempted,
+                1,
+                evidence.IsVerified ? 1 : 0)
+            : default;
+        if (evidence.IsVerified)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = evidence.Format();
+        return evidence.MutationWasAttempted
+            ? Block($"native spell-level mutation blocked until the next lifecycle: {reason}", out reason)
+            : false;
+    }
 
     private bool TryInitialize(out string reason)
     {
@@ -156,20 +213,18 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
         }
         try
         {
-            var idType = ReflectionUtil.FindLoadedType("IdScriptableObject");
             var managerType = ReflectionUtil.FindLoadedType("SpellManager");
             _recipeType = ReflectionUtil.FindLoadedType("SpellRecipeSO");
-            var upgradeType = ReflectionUtil.FindLoadedType("UpgradeSO");
-            if (idType is null || managerType is null || _recipeType is null || upgradeType is null)
+            var upgradeType = ReflectionUtil.FindLoadedType(KnownEntities.UnlockLevelAllSpells.ManagedTypeName);
+            if (managerType is null || _recipeType is null || upgradeType is null)
                 return Retry("native spell-level types are not registered yet", out reason);
 
-            var runtimeLookup = FindField(idType, "RuntimeLookup", true)?.GetValue(null) as IDictionary;
-            if (runtimeLookup is null) return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
-            var upgradeId = new Guid(UnlockLevelAllSpellsUuid);
-            if (!runtimeLookup.Contains(upgradeId)) return Retry("level-all upgrade is not registered yet", out reason);
-            _levelAllUpgrade = runtimeLookup[upgradeId];
-            if (_levelAllUpgrade is null || _levelAllUpgrade.GetType() != upgradeType)
-                return Block("UnlockLevelAllSpells UUID/type mismatch", out reason);
+            var upgradeId = KnownEntities.UnlockLevelAllSpells.Uuid;
+            var upgradeResolution = _registryResolver.Resolve(upgradeId, upgradeType);
+            if (!upgradeResolution.IsResolved)
+                return HandleRegistryFailure(KnownEntities.UnlockLevelAllSpells.DiagnosticName, upgradeResolution, out reason);
+            _levelAllUpgrade = upgradeResolution.Value;
+            _levelAllResolution = upgradeResolution;
 
             _manager = FindField(managerType, "instance", true)?.GetValue(null);
             if (_manager is null || _manager.GetType() != managerType)
@@ -276,6 +331,17 @@ internal sealed class ReflectionSpellLevelRuntime : IDisposable
     {
         Block(message, out reason);
         return new AutoSpellLevelSnapshot(AutoSpellLevelCapability.Locked, null);
+    }
+
+    private bool HandleRegistryFailure(
+        string label,
+        TypedRegistryResolution resolution,
+        out string reason)
+    {
+        var message = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable
+            ? Retry(message, out reason)
+            : Block(message, out reason);
     }
 
     private bool Block(string message, out string reason)

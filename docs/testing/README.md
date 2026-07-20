@@ -1,0 +1,80 @@
+# Testing documentation
+
+This directory is the maintained entry point for test strategy, test selection,
+module ownership, installed-game contracts, and runtime validation.
+
+## Start here
+
+- [Repository test strategy](strategy.md) — evidence layers, merge policy,
+  coverage, compatibility, and release gates.
+- [Headless E2E](headless-e2e.md) — deterministic simulation boundaries,
+  scenarios, metrics, and performance reports.
+- [Runtime replay](runtime-replay.md) — sanitized ordering-sensitive fixtures.
+- [Native contracts](native-contracts.md) — manifest and installed-assembly
+  verification.
+- [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
+- [Test architecture plan](../plans/testing-architecture.md) — lifecycle and
+  future improvements; plans are not evidence of completed behavior.
+
+Run the normal local feedback loop with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
+```
+
+Run a focused risk lane with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyDecision
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
+```
+
+## Module guides
+
+| Change area | Test guide | First focused scope |
+|---|---|---|
+| Orb Automata | [Automata test map](automata/README.md) | select the changed feature below |
+| Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `AutoBuyDecision`, then `AutoBuyReliability` |
+| Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
+| Auto Concept | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
+| Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~AutoSpellLevel` |
+| Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
+| Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
+| Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
+| Orb Modding Common | [Common](common.md) | select the changed Common contract |
+| Cross-mod scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~CombinedSuite|FullyQualifiedName~ActionFamilyIntegration` |
+
+The fully qualified name filters are navigation aids, not complete merge gates.
+After the focused scope passes, use the guide’s required portable, contract, and
+runtime gates.
+
+## Evidence boundaries
+
+```text
+policy/component → headless adapter → headless E2E → installed contract → Unity UAT
+```
+
+- Portable success proves only game-independent behavior against stubs and
+  deterministic models.
+- Installed contracts prove exact audited metadata without launching Unity.
+- Runtime UAT proves Harmony wiring, save behavior, controls, native side
+  effects, and visible responsiveness on a disposable save.
+- Deterministic performance uses modeled frames and operation counts. Host
+  wall-clock timing is diagnostic and cannot replace desktop/Deck profiling.
+
+## Maintaining these guides
+
+When a test is added or its ownership changes:
+
+1. Put it in the narrowest module/feature guide that explains its risk.
+2. Add a stable category when the test belongs to a reusable risk lane.
+3. Keep `PerformanceSimulation` and `ExternalProcess` mutually exclusive.
+4. Update the relevant runtime handoff when portable evidence changes what UAT
+   must still prove.
+5. Record results only when they ran on the current tree or exact release
+   artifact.
+
+Do not duplicate large test inventories across pages. Feature pages own detailed
+file maps; this hub owns navigation and shared rules.

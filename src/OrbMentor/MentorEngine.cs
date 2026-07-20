@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using OrbModding.Common;
 
 namespace OrbMentor;
 
@@ -1035,6 +1036,7 @@ internal enum MentorDropReason
     RecipientIdentityChanged,
     LifecycleReset,
     Disabled,
+    ActionFamilyConflict,
     ContractFailure,
 }
 
@@ -1066,13 +1068,42 @@ internal sealed class MentorDiagnostics
 
 internal sealed class MentorFailureState
 {
+    private readonly AutomationCircuitBreaker _circuit = new AutomationCircuitBreaker();
+    private long _lifecycleGeneration;
+
     public string? PermanentReason { get; private set; }
     public string? TransientReason { get; private set; }
     public bool IsBlocked => PermanentReason is not null || TransientReason is not null;
+    public bool IsPermanent => PermanentReason is not null;
+    public bool IsTransient => PermanentReason is null && TransientReason is not null;
     public string? Reason => PermanentReason ?? TransientReason;
-    public void BlockPermanent(string reason) => PermanentReason ??= reason;
-    public void BlockTransient(string reason) => TransientReason = reason;
-    public void ResetLifecycle() => TransientReason = null;
+    public AutomationCircuitSnapshot Circuit => _circuit.Snapshot;
+
+    public void BlockPermanent(string reason)
+    {
+        if (PermanentReason is not null) return;
+        PermanentReason = reason;
+        TransientReason = null;
+        _circuit.FailContract(AutomationDecisionCode.ContractUnresolved, _lifecycleGeneration);
+    }
+
+    public void BlockTransient(
+        string reason,
+        AutomationDecisionCode cause = AutomationDecisionCode.NativeMutationFailed)
+    {
+        if (PermanentReason is not null) return;
+        TransientReason = reason;
+        _circuit.RetryAfterLifecycle(cause, _lifecycleGeneration);
+    }
+
+    public void ResetLifecycle()
+    {
+        _lifecycleGeneration++;
+        if (!_circuit.Wake(AutomationRetryTrigger.Lifecycle, 0, _lifecycleGeneration)) return;
+        TransientReason = null;
+    }
+
+    public void RecordSuccess() => _circuit.RecordSuccess();
 }
 
 internal sealed class MentorFailureRegistry
@@ -1091,6 +1122,12 @@ internal sealed class MentorFailureRegistry
     {
         _global.ResetLifecycle();
         foreach (var domain in _domains) domain.ResetLifecycle();
+    }
+
+    public void RecordSuccess(MentorDomain domain)
+    {
+        For(domain).RecordSuccess();
+        if (domain == MentorDomain.Spells) _global.RecordSuccess();
     }
 }
 

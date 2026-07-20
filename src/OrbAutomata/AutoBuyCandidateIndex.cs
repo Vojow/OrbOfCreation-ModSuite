@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -114,6 +115,8 @@ internal sealed class AutoBuyCandidateIndex
             MarkDirty(entry, AutoBuyDirtyReason.All);
         }
 
+        WakeCircuit(entry, AutomationRetryTrigger.Registry);
+
         return false;
     }
 
@@ -223,6 +226,12 @@ internal sealed class AutoBuyCandidateIndex
                 continue;
             }
 
+            if (entry.Candidate is IAutoBuyCircuitCandidate circuitCandidate &&
+                !circuitCandidate.CanEvaluate())
+            {
+                continue;
+            }
+
             if (_active.Count >= limit)
             {
                 firstExcluded ??= entry.Candidate;
@@ -291,6 +300,7 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             entry.PolicyExcluded = false;
+            WakeCircuit(entry, AutomationRetryTrigger.Configuration);
             MarkDirty(entry, AutoBuyDirtyReason.ResourceDirty | AutoBuyDirtyReason.PriorityDirty);
         }
     }
@@ -335,6 +345,7 @@ internal sealed class AutoBuyCandidateIndex
         }
 
         MarkSettlementPending(entry);
+        WakeCircuit(entry, AutomationRetryTrigger.Queue);
         MarkDirty(
             entry,
             AutoBuyDirtyReason.AvailabilityDirty |
@@ -356,6 +367,7 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             MarkSettlementPending(entry);
+            WakeCircuit(entry, AutomationRetryTrigger.Progression | AutomationRetryTrigger.Queue);
 
             MarkDirty(
                 entry,
@@ -414,6 +426,16 @@ internal sealed class AutoBuyCandidateIndex
                 reasons |= AutoBuyDirtyReason.CostDirty;
             }
 
+            var trigger = AutomationRetryTrigger.ResourceQuantity;
+            if ((change & (AutoBuyResourceChange.Quality |
+                           AutoBuyResourceChange.AttributeCost |
+                           AutoBuyResourceChange.Capacity)) != 0)
+                trigger |= AutomationRetryTrigger.ResourceRate;
+            if ((change & (AutoBuyResourceChange.Identity |
+                           AutoBuyResourceChange.Availability |
+                           AutoBuyResourceChange.Unknown)) != 0)
+                trigger |= AutomationRetryTrigger.Registry;
+            WakeCircuit(entry, trigger);
             MarkDirty(entry, reasons);
         }
     }
@@ -470,6 +492,34 @@ internal sealed class AutoBuyCandidateIndex
 
         candidate = null!;
         return false;
+    }
+
+    public bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName)
+    {
+        entityId = string.Empty;
+        expectedTypeName = string.Empty;
+        var auditedTypeName = expectedKind == AutoBuyCandidateKind.Structure
+            ? "StructureSO"
+            : "UpgradeSO";
+        if (nativeIdentity is null ||
+            !_nativeEntries.TryGetValue(nativeIdentity, out var entry) ||
+            entry.State == AutoBuyCandidateLifecycleState.Invalid ||
+            entry.NeedsEpochValidation ||
+            entry.Definition.Kind != expectedKind ||
+            !ReferenceEquals(GetNativeIdentity(entry.Candidate), nativeIdentity) ||
+            !Guid.TryParseExact(entry.Definition.Uuid, "D", out _) ||
+            !string.Equals(entry.Definition.ReflectedType, auditedTypeName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        entityId = entry.Definition.Uuid;
+        expectedTypeName = entry.Definition.ReflectedType;
+        return true;
     }
 
     public void Clear()
@@ -595,6 +645,7 @@ internal sealed class AutoBuyCandidateIndex
         entry.DirtyReasons &= ~AutoBuyDirtyReason.LifecycleDirty;
         if (levelChanged || queueChanged)
         {
+            WakeCircuit(entry, AutomationRetryTrigger.Progression | AutomationRetryTrigger.Queue);
             // Manual purchases and native action completion can change the
             // next cost without going through Automata's purchase callback.
             MarkDirty(
@@ -623,6 +674,11 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             var refreshed = _activeEntries[_activeRefreshCursor++];
+            if (refreshed.Candidate is IAutoBuyCircuitCandidate circuitCandidate &&
+                !circuitCandidate.CanEvaluate())
+            {
+                continue;
+            }
             MarkDirty(
                 refreshed,
                 AutoBuyDirtyReason.AvailabilityDirty |
@@ -668,7 +724,9 @@ internal sealed class AutoBuyCandidateIndex
             }
 
             var entry = _lifecycleEntries[_slowRefreshCursor++];
-            if (entry.State != AutoBuyCandidateLifecycleState.Invalid)
+            if (entry.State != AutoBuyCandidateLifecycleState.Invalid &&
+                (entry.Candidate is not IAutoBuyCircuitCandidate circuitCandidate ||
+                 circuitCandidate.CanEvaluate()))
             {
                 MarkDirty(entry, AutoBuyDirtyReason.LifecycleDirty);
             }
@@ -688,6 +746,11 @@ internal sealed class AutoBuyCandidateIndex
             if (entry.State == AutoBuyCandidateLifecycleState.Invalid)
             {
                 continue;
+            }
+
+            if (entry.Candidate is IAutoBuyMutationCandidate mutationCandidate)
+            {
+                mutationCandidate.RecoverMutationBlock(_epoch);
             }
 
             entry.BeginEpoch(_epoch);
@@ -722,6 +785,12 @@ internal sealed class AutoBuyCandidateIndex
             entry.LifecycleQueued = true;
             _lifecycleDirty.Enqueue(entry);
         }
+    }
+
+    private void WakeCircuit(Entry entry, AutomationRetryTrigger trigger)
+    {
+        if (entry.Candidate is IAutoBuyCircuitCandidate circuitCandidate)
+            circuitCandidate.WakeCircuit(trigger, _epoch);
     }
 
     private void MarkInvalid(Entry entry, string reason)
@@ -816,26 +885,29 @@ internal sealed class AutoBuyCandidateIndex
         if (entry.Definition.Kind != AutoBuyCandidateKind.Structure ||
             decision is null ||
             decision.Kind != AutoBuyDecisionKind.Rejection ||
-            decision.RejectionReason != AutoBuyRejectionReason.ReserveViolation &&
-            decision.RejectionReason != AutoBuyRejectionReason.AffordabilityThreshold)
+            decision.Code != AutomationDecisionCode.ReserveFloor &&
+            decision.Code != AutomationDecisionCode.AffordabilityThreshold)
         {
             return;
         }
 
-        for (var i = 0; i < decision.ResourceBlockers.Count; i++)
+        var constraints = decision.StructuredDecision.ResourceConstraints;
+        for (var i = 0; i < constraints.Count; i++)
         {
-            var blocker = decision.ResourceBlockers[i];
-            if (string.IsNullOrWhiteSpace(blocker.ResourceId) ||
-                blocker.IsBandwidth ||
-                !entry.ResourceDependencies.Contains(blocker.ResourceId))
+            var constraint = constraints[i];
+            var resourceId = constraint.Resource.StableId;
+            if (string.IsNullOrWhiteSpace(resourceId) ||
+                constraint.IsBandwidth ||
+                !entry.ResourceDependencies.Contains(resourceId))
             {
                 continue;
             }
 
-            if (!entry.ResourceWakeThresholds.TryGetValue(blocker.ResourceId, out var threshold) ||
-                blocker.RequiredQuantity.CompareTo(threshold) > 0)
+            var required = new BigAmount(constraint.Required.Mantissa, constraint.Required.Exponent);
+            if (!entry.ResourceWakeThresholds.TryGetValue(resourceId, out var threshold) ||
+                required.CompareTo(threshold) > 0)
             {
-                entry.ResourceWakeThresholds[blocker.ResourceId] = blocker.RequiredQuantity;
+                entry.ResourceWakeThresholds[resourceId] = required;
             }
         }
     }

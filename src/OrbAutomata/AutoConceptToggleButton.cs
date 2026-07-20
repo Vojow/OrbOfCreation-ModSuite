@@ -125,18 +125,14 @@ internal sealed class AutoConceptToggleButton : IDisposable
         _renderedState = state;
         if (_text is null) return;
         _text.text = FormatLabel(state);
-        _text.color = state switch
-        {
-            AutoCastToggleVisualState.On => new Color(0.4f, 1.0f, 0.55f),
-            AutoCastToggleVisualState.Blocked => new Color(1.0f, 0.35f, 0.3f),
-            _ => new Color(0.7f, 0.7f, 0.7f),
-        };
+        _text.color = state == AutoCastToggleVisualState.On
+            ? new Color(0.4f, 1.0f, 0.55f)
+            : new Color(0.7f, 0.7f, 0.7f);
     }
 
     internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
     {
         AutoCastToggleVisualState.On => "CN ON",
-        AutoCastToggleVisualState.Blocked => "CN !",
         _ => "CN OFF",
     };
 

@@ -17,6 +17,8 @@ internal sealed class AutoCastEngine : IDisposable
     private readonly Func<bool> _isGameplayScene;
     private readonly SuitePerformanceCoordinator? _coordinator;
     private readonly Func<long>? _readFrameIdentity;
+    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly Func<bool> _ownsActionFamily;
     private readonly SuiteWorkRegistration? _readWork;
     private readonly SuiteWorkRegistration? _mutationWork;
     private readonly DecisionLogGate _operationLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -29,6 +31,7 @@ internal sealed class AutoCastEngine : IDisposable
     private bool _operationalLoggingWasEnabled;
     private IAutoCastCandidate? _pendingCandidate;
     private AutoCastCandidateIdentity _pendingIdentity;
+    private NativeMutationCallOutcome _activeMutationOutcome;
     private string _pendingResourceSummary = string.Empty;
     private IAutoCastCandidate? _fullChargeCandidate;
 
@@ -40,7 +43,9 @@ internal sealed class AutoCastEngine : IDisposable
         ManualLogSource log,
         Func<bool>? isGameplayScene = null,
         SuitePerformanceCoordinator? coordinator = null,
-        Func<long>? readFrameIdentity = null)
+        Func<long>? readFrameIdentity = null,
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<bool>? ownsActionFamily = null)
     {
         _config = config;
         _catalog = catalog;
@@ -50,19 +55,23 @@ internal sealed class AutoCastEngine : IDisposable
         _isGameplayScene = isGameplayScene ?? (() => SceneManager.GetActiveScene().name == "Main");
         _coordinator = coordinator;
         _readFrameIdentity = readFrameIdentity;
+        _featureStatus = featureStatus;
+        _ownsActionFamily = ownsActionFamily ?? (() => true);
         if (coordinator is not null)
         {
             _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+            var evaluateIdentity = SuitePerformanceWorkIdentities.AutoCastEvaluate;
             _readWork = coordinator.Register(
-                "OrbAutomata.AutoCast",
-                "Evaluate loadout",
-                SuiteBudgetClass.SoftLimited,
-                SuiteWorkExecutionKind.Cooperative);
+                evaluateIdentity.Subsystem,
+                evaluateIdentity.WorkName,
+                evaluateIdentity.BudgetClass,
+                evaluateIdentity.ExecutionKind);
+            var mutationIdentity = SuitePerformanceWorkIdentities.AutoCastMutation;
             _mutationWork = coordinator.Register(
-                "OrbAutomata.AutoCast",
-                "Fire spell or release charge hold",
-                SuiteBudgetClass.HardLimited,
-                SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+                mutationIdentity.Subsystem,
+                mutationIdentity.WorkName,
+                mutationIdentity.BudgetClass,
+                mutationIdentity.ExecutionKind);
         }
         _secondsUntilEvaluation = ClampInterval(config.AutoCastIntervalSeconds.Value);
         _operationalLoggingWasEnabled = config.IsOperationalLoggingEnabled;
@@ -71,6 +80,18 @@ internal sealed class AutoCastEngine : IDisposable
 
     public void Tick(float unscaledDeltaTime)
     {
+        if (_config.AutoCastMode.Value == AutoCastOperationMode.Active && !_ownsActionFamily())
+        {
+            ReleaseFullChargeHold("action-family ownership lost");
+            ClearPendingCandidate();
+            SetCoordinatorEnabled(false);
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ActionFamilyConflict,
+                "Another automation owner holds the native spell-cast action family.");
+            return;
+        }
         if (_coordinator is null)
         {
             TickLegacy(unscaledDeltaTime);
@@ -85,6 +106,7 @@ internal sealed class AutoCastEngine : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
         _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
+        ObserveTickStatus();
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
         if (!MaintainFullChargeHold())
@@ -112,6 +134,7 @@ internal sealed class AutoCastEngine : IDisposable
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
         _manualPauseRemaining = Math.Max(0.0f, _manualPauseRemaining - elapsed);
+        ObserveTickStatus();
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
         if (_config.AutoCastMode.Value != AutoCastOperationMode.Active ||
@@ -144,8 +167,16 @@ internal sealed class AutoCastEngine : IDisposable
             {
                 using (releaseLease)
                 {
-                    ReleaseFullChargeHold("charge completed");
-                    releaseLease.Complete();
+                    _activeMutationOutcome = default;
+                    try
+                    {
+                        releaseLease.Complete(ReleaseFullChargeHold("charge completed"));
+                    }
+                    catch
+                    {
+                        releaseLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                        throw;
+                    }
                 }
             }
 
@@ -178,8 +209,16 @@ internal sealed class AutoCastEngine : IDisposable
         {
             using (mutationLease)
             {
-                FirePreparedCandidate();
-                mutationLease.Complete();
+                _activeMutationOutcome = default;
+                try
+                {
+                    mutationLease.Complete(FirePreparedCandidate());
+                }
+                catch
+                {
+                    mutationLease.Fail(_activeMutationOutcome.ToWorkCompletion());
+                    throw;
+                }
             }
         }
 
@@ -189,8 +228,13 @@ internal sealed class AutoCastEngine : IDisposable
     private void PrepareCandidate()
     {
         ClearPendingCandidate();
-        if (!_isGameplayScene() || _manualPauseRemaining > 0.0f || _catalog.IsTargeting())
+        if (!_isGameplayScene() || _manualPauseRemaining > 0.0f)
         {
+            return;
+        }
+        if (_catalog.IsTargeting())
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.TargetingInProgress, "Native spell targeting is in progress.");
             return;
         }
 
@@ -201,12 +245,18 @@ internal sealed class AutoCastEngine : IDisposable
         }
         catch (Exception ex)
         {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.Faulted,
+                FeatureStatusReasonCode.RuntimeFailure,
+                "Auto Cast could not read the active loadout.");
             _log.LogAutomataError($"Auto Cast could not read the active loadout: {ex.Message}");
             return;
         }
 
         if (loadout.Count == 0)
         {
+            _featureStatus?.ObserveOperational();
             return;
         }
 
@@ -216,16 +266,19 @@ internal sealed class AutoCastEngine : IDisposable
         UpdateChannelLifecycle(activeChannels);
         if (activeChannels.Length > 0 || _catalog.IsNativeCastBusy())
         {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.NativeBusy, "The native spell system is busy.");
             return;
         }
 
         var start = NormalizeCursor(_nextSlotIndex, loadout.Count);
+        var sawContractFailure = false;
         for (var offset = 0; offset < loadout.Count; offset++)
         {
             var index = (start + offset) % loadout.Count;
             var candidate = loadout[index];
-            if (!TryAdmit(candidate, out var reason, out var resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out var resourceSummary, out var failureKind))
             {
+                sawContractFailure |= failureKind == AutoCastAdmissionFailureKind.ContractUnavailable;
                 LogVerboseRejection(candidate, reason);
                 continue;
             }
@@ -235,14 +288,29 @@ internal sealed class AutoCastEngine : IDisposable
                 _pendingCandidate = candidate;
                 _pendingIdentity = identity;
                 _pendingResourceSummary = resourceSummary;
+                _featureStatus?.ObserveOperational();
                 return;
             }
 
+            sawContractFailure = true;
             LogVerboseRejection(candidate, reason);
+        }
+
+        if (sawContractFailure)
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.Degraded,
+                FeatureStatusReasonCode.PartialCapabilityUnavailable,
+                "One or more equipped spell contracts are unavailable; other slots remain eligible.");
+        }
+        else
+        {
+            _featureStatus?.ObserveOperational();
         }
     }
 
-    private void FirePreparedCandidate()
+    private SuiteWorkCompletion FirePreparedCandidate()
     {
         var candidate = _pendingCandidate;
         var resourceSummary = _pendingResourceSummary;
@@ -250,7 +318,7 @@ internal sealed class AutoCastEngine : IDisposable
         var fireSucceeded = false;
         if (candidate is null)
         {
-            return;
+            return new SuiteWorkCompletion(1);
         }
 
         try
@@ -261,27 +329,59 @@ internal sealed class AutoCastEngine : IDisposable
                 !_config.CanStartAutoCastActively ||
                 _catalog.IsNativeCastBusy())
             {
-                return;
+                goto Complete;
             }
 
             if (!TryResolvePreparedCandidate(out candidate, out var identityReason))
             {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.Degraded,
+                    FeatureStatusReasonCode.IdentityMismatch,
+                    "A prepared spell identity changed before casting.");
                 _secondsUntilEvaluation = 0.0f;
                 LogVerboseRejection(_pendingCandidate!, identityReason);
-                return;
+                goto Complete;
             }
 
-            if (!TryAdmit(candidate, out var reason, out resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out resourceSummary, out _))
             {
                 LogVerboseRejection(candidate, reason);
-                return;
+                goto Complete;
+            }
+
+            if (!_ownsActionFamily())
+            {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before mutation.");
+                goto Complete;
             }
 
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
-            if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
+            if (shouldFullCharge)
             {
-                _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
-                return;
+                bool held;
+                try
+                {
+                    held = candidate.TrySetChargeHold(true, out reason);
+                }
+                catch
+                {
+                    _activeMutationOutcome = _activeMutationOutcome.Add(
+                        ReadMutationOutcome(candidate, succeeded: false));
+                    throw;
+                }
+                _activeMutationOutcome = _activeMutationOutcome.Add(
+                    ReadMutationOutcome(candidate, held));
+                if (!held)
+                {
+                    ObserveMutationFailure("A charged-spell hold could not be established.");
+                    _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
+                    goto Complete;
+                }
             }
 
             if (shouldFullCharge)
@@ -290,13 +390,38 @@ internal sealed class AutoCastEngine : IDisposable
                 chargeHoldAcquired = true;
             }
 
-            if (!candidate.TryFireAndResolveTargets(out reason))
+            if (!_ownsActionFamily())
             {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before firing.");
+                goto Complete;
+            }
+
+            bool fired;
+            try
+            {
+                fired = candidate.TryFireAndResolveTargets(out reason);
+            }
+            catch
+            {
+                _activeMutationOutcome = _activeMutationOutcome.Add(
+                    ReadMutationOutcome(candidate, succeeded: false));
+                throw;
+            }
+            _activeMutationOutcome = _activeMutationOutcome.Add(
+                ReadMutationOutcome(candidate, fired));
+            if (!fired)
+            {
+                ObserveMutationFailure("An equipped spell mutation failed; other slots remain eligible.");
                 _log.LogAutomataWarning($"Auto Cast could not fire slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
-                return;
+                goto Complete;
             }
 
             fireSucceeded = true;
+            _featureStatus?.ObserveOperational();
 
             MarkSlotState(candidate, "active fired");
             LogOperation(
@@ -312,6 +437,9 @@ internal sealed class AutoCastEngine : IDisposable
             }
             ClearPendingCandidate();
         }
+
+Complete:
+        return _activeMutationOutcome.ToWorkCompletion();
     }
 
     private bool TryResolvePreparedCandidate(out IAutoCastCandidate candidate, out string reason)
@@ -407,9 +535,18 @@ internal sealed class AutoCastEngine : IDisposable
         _catalog.Dispose();
     }
 
+    internal void CancelPreparedWork()
+    {
+        ReleaseFullChargeHold("automation ownership released");
+        ClearPendingCandidate();
+        SetCoordinatorEnabled(false);
+        _secondsUntilEvaluation = 0.0f;
+    }
+
     public void InvalidateLifecycle()
     {
         ReleaseFullChargeHold("Auto Cast lifecycle invalidated");
+        (_catalog as IAutoCastMutationRecoveryCatalog)?.RecoverMutationBlocks();
         ClearPendingCandidate();
         SetCoordinatorPending(false, false);
         _secondsUntilEvaluation = 0.0f;
@@ -462,10 +599,20 @@ internal sealed class AutoCastEngine : IDisposable
         {
             var index = (start + offset) % loadout.Count;
             var candidate = loadout[index];
-            if (!TryAdmit(candidate, out var reason, out var resourceSummary))
+            if (!TryAdmit(candidate, out var reason, out var resourceSummary, out _))
             {
                 LogVerboseRejection(candidate, reason);
                 continue;
+            }
+
+            if (!_ownsActionFamily())
+            {
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before mutation.");
+                return;
             }
 
             var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
@@ -478,6 +625,17 @@ internal sealed class AutoCastEngine : IDisposable
             if (shouldFullCharge)
             {
                 _fullChargeCandidate = candidate;
+            }
+
+            if (!_ownsActionFamily())
+            {
+                if (shouldFullCharge) ReleaseFullChargeHold("action-family ownership lost before firing");
+                _featureStatus?.Observe(
+                    true,
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ActionFamilyConflict,
+                    "Spell-cast ownership changed before firing.");
+                return;
             }
 
             if (!candidate.TryFireAndResolveTargets(out reason))
@@ -499,33 +657,42 @@ internal sealed class AutoCastEngine : IDisposable
         }
     }
 
-    private bool TryAdmit(IAutoCastCandidate candidate, out string reason, out string resourceSummary)
+    private bool TryAdmit(
+        IAutoCastCandidate candidate,
+        out string reason,
+        out string resourceSummary,
+        out AutoCastAdmissionFailureKind failureKind)
     {
         resourceSummary = string.Empty;
-        if (candidate.IsEmpty)
+        failureKind = AutoCastAdmissionFailureKind.None;
+        var admission = AutoCastAdmissionAdapter.Capture(candidate);
+        if (!admission.IsAvailable)
         {
-            reason = "empty slot";
+            reason = admission.AvailabilityReason;
+            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
-        if (candidate.IsCasting)
+        if (!AutomationAdmissionPolicy.HasCompleteContract(admission, out reason))
         {
-            reason = candidate.Kind == AutoCastSpellKind.Aura ? "aura already active" : "already casting";
-            return false;
-        }
-
-        if (!candidate.CanCast(out reason) ||
-            !candidate.TryGetImmediateCosts(out var immediateCosts) ||
-            !candidate.TryGetDrainCosts(out var drainCosts))
-        {
-            if (string.IsNullOrWhiteSpace(reason))
+            if (!string.IsNullOrWhiteSpace(admission.NativeAdmissionReason))
             {
-                reason = "native readiness or costs unavailable";
+                reason = admission.NativeAdmissionReason;
             }
 
+            failureKind = AutoCastAdmissionFailureKind.ContractUnavailable;
             return false;
         }
 
+        if (!admission.NativeAdmissionAccepted)
+        {
+            reason = admission.NativeAdmissionReason;
+            failureKind = ReadAdmissionFailure(candidate);
+            return false;
+        }
+
+        var immediateCosts = admission.ImmediateCosts;
+        var drainCosts = admission.DrainCosts;
         resourceSummary = _fullnessPolicy.Describe(
             immediateCosts,
             drainCosts,
@@ -538,25 +705,90 @@ internal sealed class AutoCastEngine : IDisposable
             if (!reserve.Passed)
             {
                 reason = reserve.Reason;
+                failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
                 return false;
             }
         }
 
         if (!_fullnessPolicy.Evaluate(immediateCosts, drainCosts, _config.AutoCastStartResourcePercent.Value, out reason))
         {
+            failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
         }
 
-        return candidate.HasValidTargets(out reason);
+        if (!AutoCastAdmissionAdapter.TryValidateTargets(candidate, out reason, out failureKind))
+        {
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
     }
 
     private void OnManualSpellFired()
     {
         ReleaseFullChargeHold("manual spell input");
         _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, _config.AutoCastManualPauseSeconds.Value));
+        if (_manualPauseRemaining > 0.0f)
+            ObserveTemporaryBlock(FeatureStatusReasonCode.ManualPause, "Auto Cast is paused after manual spell input.");
         ClearPendingCandidate();
         _mutationWork?.SetPending(false);
     }
+
+    private void ObserveTickStatus()
+    {
+        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active)
+        {
+            _featureStatus?.Observe(
+                false,
+                FeatureStatusState.ConfigurationDisabled,
+                FeatureStatusReasonCode.ConfigurationDisabled,
+                "Auto Cast is disabled by configuration.");
+            return;
+        }
+        if (!_config.CanStartAutoCastActively)
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.");
+            return;
+        }
+        if (!_isGameplayScene())
+        {
+            _featureStatus?.Observe(
+                true,
+                FeatureStatusState.NotReady,
+                FeatureStatusReasonCode.GameplayNotReady,
+                "Gameplay lifecycle is not ready.");
+            return;
+        }
+        if (_manualPauseRemaining > 0.0f)
+        {
+            ObserveTemporaryBlock(FeatureStatusReasonCode.ManualPause, "Auto Cast is paused after manual spell input.");
+            return;
+        }
+
+        var currentReason = _featureStatus?.Current.Reason.Code;
+        if (currentReason is FeatureStatusReasonCode.ConfigurationDisabled or
+            FeatureStatusReasonCode.EmergencyDisabled or
+            FeatureStatusReasonCode.GameplayNotReady or
+            FeatureStatusReasonCode.ManualPause)
+            _featureStatus?.ObserveOperational();
+    }
+
+    private void ObserveTemporaryBlock(FeatureStatusReasonCode code, string summary) =>
+        _featureStatus?.Observe(true, FeatureStatusState.TemporarilyBlocked, code, summary);
+
+    private void ObserveMutationFailure(string summary) =>
+        _featureStatus?.Observe(
+            true,
+            FeatureStatusState.Degraded,
+            FeatureStatusReasonCode.NativeMutationFailed,
+            summary);
+
+    private static AutoCastAdmissionFailureKind ReadAdmissionFailure(IAutoCastCandidate candidate) =>
+        candidate is IAutoCastAdmissionFailureEvidence evidence &&
+        evidence.LastAdmissionFailure != AutoCastAdmissionFailureKind.None
+            ? evidence.LastAdmissionFailure
+            : AutoCastAdmissionFailureKind.OrdinaryRejection;
 
     private bool MaintainFullChargeHold()
     {
@@ -577,20 +809,43 @@ internal sealed class AutoCastEngine : IDisposable
         return true;
     }
 
-    private void ReleaseFullChargeHold(string context)
+    private SuiteWorkCompletion ReleaseFullChargeHold(string context)
     {
         var candidate = _fullChargeCandidate;
         _fullChargeCandidate = null;
         if (candidate is null)
         {
-            return;
+            return new SuiteWorkCompletion(1);
         }
 
-        if (!candidate.TrySetChargeHold(false, out var reason))
+        bool succeeded;
+        string reason;
+        try
+        {
+            succeeded = candidate.TrySetChargeHold(false, out reason);
+        }
+        catch
+        {
+            _activeMutationOutcome = _activeMutationOutcome.Add(
+                ReadMutationOutcome(candidate, succeeded: false));
+            throw;
+        }
+        var outcome = ReadMutationOutcome(candidate, succeeded);
+        _activeMutationOutcome = _activeMutationOutcome.Add(outcome);
+        if (!succeeded)
         {
             _log.LogAutomataWarning($"Auto Cast could not release full-charge hold for slot {candidate.SlotIndex + 1}, {candidate.DisplayName} ({context}): {reason}");
         }
+
+        return outcome.ToWorkCompletion();
     }
+
+    private static NativeMutationCallOutcome ReadMutationOutcome(
+        IAutoCastCandidate candidate,
+        bool succeeded) =>
+        candidate is INativeMutationOutcomeSource source
+            ? source.LastNativeMutationOutcome
+            : new NativeMutationCallOutcome(1, 1, succeeded ? 1 : 0);
 
     private void LogOperation(string message)
     {

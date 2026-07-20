@@ -100,7 +100,7 @@ Exit criterion: supported actions change only selected runtime objects, survive 
 - Keep the three domains independently configurable and fail closed per domain.
 - Use native recipient progression, stable UUID ordering, recursion suppression, aggregation, and bounded processing.
 - Maintain `EquippedSpells` and `HighestDiscovered` spell source policies.
-- Keep live Mod Config integration, `Alt+M`, and the independent ON/OFF/BLOCKED control.
+- Keep live Mod Config integration, `Alt+M`, stable ON/OFF configured intent, and independent secondary runtime-health reporting.
 - Keep resource-spending spell leveling in Automata rather than Mentor.
 
 See the [Orb Mentor plan](mentor.md) for spell contracts and [Mentor artifacts and alchemy](mentor-artifacts-alchemy.md) for the released beta extensions and remaining interactive gates.

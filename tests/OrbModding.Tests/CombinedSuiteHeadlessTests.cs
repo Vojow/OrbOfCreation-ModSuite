@@ -9,8 +9,88 @@ namespace OrbModding.Tests;
 public sealed class CombinedSuiteHeadlessTests
 {
     [Fact]
+    [Trait("Category", "PerformanceSimulation")]
+    public void SupportedSuiteProfileThresholdsPreserveBacklogWithoutStarvation()
+    {
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock());
+        var registrations = Enumerable.Range(0, SuitePerformanceWorkIdentities.SupportedSuiteV1Count)
+            .Select(SuitePerformanceWorkIdentities.GetSupportedSuiteV1)
+            .Select(identity => coordinator.Register(
+                identity.Subsystem,
+                identity.WorkName,
+                identity.BudgetClass,
+                identity.ExecutionKind))
+            .ToArray();
+        try
+        {
+            long frameIdentity = 0;
+            foreach (var registration in registrations)
+            {
+                registration.SetPending(true);
+                Assert.Equal(
+                    SuiteWorkAdmission.Granted,
+                    coordinator.RequestWork(registration, ++frameIdentity, out var warmup));
+                warmup.Complete(registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation
+                    ? SuiteWorkCompletion.NativeMutation(1, 1)
+                    : new SuiteWorkCompletion(1));
+                registration.SetPending(false);
+            }
+
+            var mutations = registrations
+                .Where(registration => registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+                .ToArray();
+            foreach (var registration in registrations) registration.SetPending(false);
+            registrations[0].SetPending(true);  // Auto Buy evaluation
+            registrations[9].SetPending(true);  // Mentor planning
+            registrations[10].SetPending(true); // Mod Config repair
+            registrations[11].SetPending(true); // Common invalidation delivery
+            var nextMutation = 0;
+            mutations[nextMutation].SetPending(true);
+
+            var completions = 0;
+            for (var sample = 1L; sample <= 240; sample++)
+            {
+                var frame = ++frameIdentity;
+                for (var offset = 0; offset < registrations.Length; offset++)
+                {
+                    var registration = registrations[(int)((frame + offset) % registrations.Length)];
+                    if (coordinator.RequestWork(registration, frame, out var lease) != SuiteWorkAdmission.Granted)
+                        continue;
+                    lease.Complete(registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation
+                        ? SuiteWorkCompletion.NativeMutation(1, 1)
+                        : new SuiteWorkCompletion(1));
+                    if (registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
+                    {
+                        registration.SetPending(false);
+                        nextMutation++;
+                        if (nextMutation < mutations.Length) mutations[nextMutation].SetPending(true);
+                    }
+                    completions++;
+                }
+            }
+
+            Assert.True(completions >= 240);
+            foreach (var registration in registrations)
+            {
+                Assert.True(coordinator.TryGetRegistrationSnapshot(registration, out var snapshot));
+                Assert.True(snapshot.CompletedWorkItems > 0);
+                Assert.Equal(0, snapshot.FailedWorkItems);
+                Assert.Equal(0, snapshot.AbandonedWorkItems);
+                Assert.True(
+                    snapshot.StarvationEvents == 0,
+                    $"{snapshot.Subsystem}/{snapshot.WorkName} reported {snapshot.StarvationEvents} starvation event(s); max wait {snapshot.MaximumPendingWaitFrames}, threshold {snapshot.StarvationThresholdFrames}.");
+                Assert.True(snapshot.MaximumPendingWaitFrames <= snapshot.StarvationThresholdFrames);
+            }
+        }
+        finally
+        {
+            foreach (var registration in registrations) registration.Dispose();
+        }
+    }
+
+    [Fact]
     [Trait("Category", "HeadlessE2E")]
-    public void CombinedSuite_AllMutationProducersAllowOnlyOneNativeMutationPerFrame()
+    public void CombinedSuite_AllMutationProducersAllowOnlyOneMutationOwnerLeasePerFrame()
     {
         var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 128);
         var producers = CreateMutationProducers(coordinator);
@@ -31,7 +111,7 @@ public sealed class CombinedSuiteHeadlessTests
                     {
                         grantsThisFrame++;
                         producer.Grants++;
-                        lease.Complete(1);
+                        lease.Complete(SuiteWorkCompletion.NativeMutation(1, 1));
                     }
                     else
                     {
@@ -86,7 +166,7 @@ public sealed class CombinedSuiteHeadlessTests
 
                     producer.Grants++;
                     grantOrder.Add(producer.Name);
-                    lease.Complete(1);
+                    lease.Complete(SuiteWorkCompletion.NativeMutation(1, 1));
                 }
             }
 
@@ -101,6 +181,8 @@ public sealed class CombinedSuiteHeadlessTests
             {
                 Assert.True(coordinator.TryGetSubsystemSnapshot(producer.Name, out var snapshot));
                 Assert.Equal(100, snapshot.NativeMutationsStarted);
+                Assert.Equal(100, snapshot.NativeMutationAttempts);
+                Assert.Equal(100, snapshot.NativeMutationsCommitted);
                 Assert.Equal(100, snapshot.CompletedWorkItems);
             });
         }

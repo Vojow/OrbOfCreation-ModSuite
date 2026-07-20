@@ -15,7 +15,6 @@ internal sealed class AutoCastToggleButton : IDisposable
     internal const string ObjectName = "OrbAutomata.AutoCastToggle";
     private static readonly Color OffColor = new Color(0.55f, 0.55f, 0.55f, 1.0f);
     private static readonly Color OnColor = new Color(0.4f, 1.0f, 0.55f, 1.0f);
-    private static readonly Color BlockedColor = new Color(1.0f, 0.35f, 0.3f, 1.0f);
 
     private readonly GameObject _root;
     private readonly Button _button;
@@ -190,12 +189,7 @@ internal sealed class AutoCastToggleButton : IDisposable
         var announce = _renderedState.HasValue && _renderedState.Value != state;
         _renderedState = state;
         var active = state == AutoCastToggleVisualState.On;
-        var color = state switch
-        {
-            AutoCastToggleVisualState.On => OnColor,
-            AutoCastToggleVisualState.Blocked => BlockedColor,
-            _ => OffColor,
-        };
+        var color = state == AutoCastToggleVisualState.On ? OnColor : OffColor;
         if (_rootImage is not null)
         {
             _rootImage.sprite = active && _onSprite is not null ? _onSprite : _offSprite;
@@ -222,7 +216,6 @@ internal sealed class AutoCastToggleButton : IDisposable
     internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
     {
         AutoCastToggleVisualState.On => "AC ON",
-        AutoCastToggleVisualState.Blocked => "AC !",
         _ => "AC OFF",
     };
 
@@ -277,7 +270,6 @@ internal sealed class AutoCastToggleButton : IDisposable
             var message = state switch
             {
                 AutoCastToggleVisualState.On => "Auto Cast: ON",
-                AutoCastToggleVisualState.Blocked => "Auto Cast: BLOCKED",
                 _ => "Auto Cast: OFF",
             };
             var node = color is null ? null : constructor?.Invoke(new[] { (object)message, color });

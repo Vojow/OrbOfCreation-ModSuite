@@ -2,7 +2,7 @@
 
 > **Lifecycle: Beta; extended interactive validation pending.** The scoped catalog, native slot/quantity mutation, catch-up and timed-cycle policies, quality-adjusted prospective drain checks, shared scheduling, and rollback watchdog are released against the supported game assembly. Post-release Proton validation remains required before stable promotion.
 
-[Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Orb Automata plan](automata.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Goal
 
@@ -444,7 +444,7 @@ The full concept catalog is small enough for infrequent work, but every scan mus
 ### General
 
 - `Mode`: `Disabled` or `Active`.
-- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF/!` gameplay control.
+- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF` configured-intent control, with runtime health in its tooltip.
 - `EmergencyDisable`: shared Automata safety switch.
 
 ### Balancing

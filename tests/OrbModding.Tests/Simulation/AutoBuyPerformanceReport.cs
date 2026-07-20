@@ -20,13 +20,22 @@ internal static class AutoBuyPerformanceReporter
 
     public static void Record(
         string name,
+        string gameStage,
         AutoBuySimulation simulation,
         int candidateCount,
+        int structureCount,
+        int upgradeCount,
+        int targetStructureLevels,
+        string purchaseGrouping,
+        int bulkDevelopment,
         int queueCapacity,
         int reservedQueueSlots,
         int frameCount,
         int completionStartFrame,
-        int completionEveryFrames)
+        int completionEveryFrames,
+        int? framesToAllSubmissions,
+        int? framesToAllCompletions,
+        int? theoreticalMinimumSubmissionFrames)
     {
         var reportPath = Environment.GetEnvironmentVariable(ReportPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(reportPath))
@@ -47,18 +56,29 @@ internal static class AutoBuyPerformanceReporter
         var nativeMutationAttempts = world.TotalPurchaseCalls;
         var schedulerCallbacks = catalog.EvaluationBatches + catalog.CompletedCandidateEvaluations;
         var totalObservedOperations = nativeReadOperations + nativeMutationAttempts + schedulerCallbacks;
+        var structureSubmissions = world.Candidates
+            .Where(candidate => candidate.Kind == OrbAutomata.AutoBuyCandidateKind.Structure)
+            .Select(candidate => candidate.CurrentLevel + candidate.QueuedLevels)
+            .ToArray();
 
         var scenario = new PerformanceScenarioReport
         {
             Name = name,
             Workload = new PerformanceWorkload
             {
+                GameStage = gameStage,
                 CandidateCount = candidateCount,
+                StructureCount = structureCount,
+                UpgradeCount = upgradeCount,
+                TargetStructureLevels = targetStructureLevels,
+                PurchaseGrouping = purchaseGrouping,
+                BulkDevelopment = bulkDevelopment,
                 QueueCapacity = queueCapacity,
                 ReservedQueueSlots = reservedQueueSlots,
                 FrameCount = frameCount,
                 CompletionStartFrame = completionStartFrame,
                 CompletionEveryFrames = completionEveryFrames,
+                TheoreticalMinimumSubmissionFrames = theoreticalMinimumSubmissionFrames,
             },
             Metrics = new PerformanceMetrics
             {
@@ -69,9 +89,41 @@ internal static class AutoBuyPerformanceReporter
                     ? null
                     : metrics.MinimumQueueAfterSaturation,
                 FramesToNinetyPercentQueue = metrics.FramesToNinetyPercentQueue,
+                FramesToAllSubmissions = framesToAllSubmissions,
+                SecondsToAllSubmissions = framesToAllSubmissions.HasValue
+                    ? Math.Round(framesToAllSubmissions.Value / 60.0, 3)
+                    : null,
+                FramesToAllCompletions = framesToAllCompletions,
+                SecondsToAllCompletions = framesToAllCompletions.HasValue
+                    ? Math.Round(framesToAllCompletions.Value / 60.0, 3)
+                    : null,
+                SubmissionOverheadFrames =
+                    framesToAllSubmissions.HasValue && theoreticalMinimumSubmissionFrames.HasValue
+                        ? framesToAllSubmissions.Value - theoreticalMinimumSubmissionFrames.Value
+                        : null,
+                SubmissionEfficiencyPercent =
+                    framesToAllSubmissions.HasValue && theoreticalMinimumSubmissionFrames.HasValue
+                        ? Math.Round(
+                            theoreticalMinimumSubmissionFrames.Value * 100.0 /
+                            framesToAllSubmissions.Value,
+                            3)
+                        : null,
                 IdleFramesWithPurchasableWork = metrics.IdleFramesWithPurchasableWork,
+                EvaluationOnlyFramesWithPurchasableWork =
+                    metrics.EvaluationOnlyFramesWithPurchasableWork,
+                DeferredFramesWithPurchasableWork = metrics.DeferredFramesWithPurchasableWork,
                 MaximumEvaluationsInFrame = metrics.MaximumEvaluationsInFrame,
+                MaximumPurchasesInFrame = metrics.MaximumPurchasesInFrame,
                 DistinctCandidatesSubmitted = world.DistinctCandidatesSubmitted,
+                StructuresSubmittedMultipleTimes = structureSubmissions.Count(count => count >= 2),
+                StructuresMeetingTarget = structureSubmissions.Count(
+                    count => count >= targetStructureLevels),
+                MinimumStructureSubmissions = structureSubmissions.Length == 0
+                    ? 0
+                    : structureSubmissions.Min(),
+                MaximumStructureSubmissions = structureSubmissions.Length == 0
+                    ? 0
+                    : structureSubmissions.Max(),
                 TotalCandidateEvaluations = world.TotalCandidateEvaluations,
                 TotalCostReads = world.TotalCostReads,
                 TotalLifecycleReads = world.TotalLifecycleReads,
@@ -149,7 +201,19 @@ internal sealed class PerformanceScenarioReport
 
 internal sealed class PerformanceWorkload
 {
+    public string GameStage { get; init; } = string.Empty;
+
     public int CandidateCount { get; init; }
+
+    public int StructureCount { get; init; }
+
+    public int UpgradeCount { get; init; }
+
+    public int TargetStructureLevels { get; init; }
+
+    public string PurchaseGrouping { get; init; } = string.Empty;
+
+    public int BulkDevelopment { get; init; }
 
     public int QueueCapacity { get; init; }
 
@@ -160,6 +224,8 @@ internal sealed class PerformanceWorkload
     public int CompletionStartFrame { get; init; }
 
     public int CompletionEveryFrames { get; init; }
+
+    public int? TheoreticalMinimumSubmissionFrames { get; init; }
 }
 
 internal sealed class PerformanceMetrics
@@ -174,11 +240,37 @@ internal sealed class PerformanceMetrics
 
     public int? FramesToNinetyPercentQueue { get; init; }
 
+    public int? FramesToAllSubmissions { get; init; }
+
+    public double? SecondsToAllSubmissions { get; init; }
+
+    public int? FramesToAllCompletions { get; init; }
+
+    public double? SecondsToAllCompletions { get; init; }
+
+    public int? SubmissionOverheadFrames { get; init; }
+
+    public double? SubmissionEfficiencyPercent { get; init; }
+
     public int IdleFramesWithPurchasableWork { get; init; }
+
+    public int EvaluationOnlyFramesWithPurchasableWork { get; init; }
+
+    public int DeferredFramesWithPurchasableWork { get; init; }
 
     public int MaximumEvaluationsInFrame { get; init; }
 
+    public int MaximumPurchasesInFrame { get; init; }
+
     public int DistinctCandidatesSubmitted { get; init; }
+
+    public int StructuresSubmittedMultipleTimes { get; init; }
+
+    public int StructuresMeetingTarget { get; init; }
+
+    public int MinimumStructureSubmissions { get; init; }
+
+    public int MaximumStructureSubmissions { get; init; }
 
     public int TotalCandidateEvaluations { get; init; }
 

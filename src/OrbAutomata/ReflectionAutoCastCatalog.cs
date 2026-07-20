@@ -3,12 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using OrbModding.Common;
 
 namespace OrbAutomata;
 
-internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
+internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog, IAutoCastMutationRecoveryCatalog
 {
     private const BindingFlags StaticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+    private readonly Dictionary<string, string> _mutationBlocks = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<IAutoCastCandidate> DiscoverActiveLoadout()
     {
@@ -52,10 +54,21 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
 
     public void Dispose()
     {
+        _mutationBlocks.Clear();
     }
 
-    internal bool FireSlotAndResolveTargets(int slotIndex, out string reason)
+    public void RecoverMutationBlocks() => _mutationBlocks.Clear();
+
+    internal bool TryGetMutationBlock(string uuid, out string reason) => _mutationBlocks.TryGetValue(uuid, out reason!);
+
+    internal void BlockMutation(string uuid, string reason) => _mutationBlocks[uuid] = reason;
+
+    internal bool FireSlotAndResolveTargets(
+        int slotIndex,
+        out int nativeCallsAttempted,
+        out string reason)
     {
+        nativeCallsAttempted = 0;
         if (IsTargeting())
         {
             reason = "a target request was already active";
@@ -79,14 +92,35 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
         {
             using (AutoCastManualSignal.EnterAutomatedFire())
             {
+                nativeCallsAttempted++;
                 fire.Invoke(manager, new object[] { slotIndex });
             }
 
             for (var request = 0; request < 16 && IsTargeting(); request++)
             {
                 var targetingType = ReflectionUtil.FindLoadedType("TargetingManager");
-                var link = targetingType?.GetMethod("GetTargetingLink", StaticFlags)?.Invoke(null, Array.Empty<object>());
-                var target = link is null ? null : ReflectionUtil.InvokeNoArgs(link, "GetRandom");
+                var getLink = targetingType?.GetMethod("GetTargetingLink", StaticFlags);
+                object? link = null;
+                if (getLink is not null)
+                {
+                    nativeCallsAttempted++;
+                    link = getLink.Invoke(null, Array.Empty<object>());
+                }
+                object? target = null;
+                if (link is not null)
+                {
+                    var getRandom = link.GetType().GetMethod(
+                        "GetRandom",
+                        ReflectionUtil.InstanceFlags,
+                        null,
+                        Type.EmptyTypes,
+                        null);
+                    if (getRandom is not null)
+                    {
+                        nativeCallsAttempted++;
+                        target = getRandom.Invoke(link, Array.Empty<object>());
+                    }
+                }
                 var submit = targetingType?.GetMethods(StaticFlags)
                     .FirstOrDefault(method => method.Name == "SubmitTarget" && method.GetParameters().Length == 1);
                 if (target is null || submit is null)
@@ -95,6 +129,7 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
                     return false;
                 }
 
+                nativeCallsAttempted++;
                 submit.Invoke(null, new[] { target });
             }
 
@@ -132,16 +167,26 @@ internal sealed class ReflectionAutoCastCatalog : IAutoCastCatalog
     }
 }
 
-internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
+internal sealed class ReflectionAutoCastCandidate :
+    IAutoCastCandidate,
+    IAutoCastAdmissionFailureEvidence,
+    IAutoCastAdmissionFailureReasonEvidence,
+    INativeMutationOutcomeSource
 {
     private const string AutoCastChargeInput = "OrbAutomata.AutoCast.FullCharge";
     private readonly ReflectionAutoCastCatalog _catalog;
     private readonly object _spell;
+    private readonly bool _hasExactNativeType;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public ReflectionAutoCastCandidate(ReflectionAutoCastCatalog catalog, object spell, int slotIndex)
     {
         _catalog = catalog;
         _spell = spell;
+        var spellType = spell.GetType();
+        _hasExactNativeType =
+            string.Equals(spellType.FullName, "Spell", StringComparison.Ordinal) &&
+            string.Equals(spellType.Assembly.GetName().Name, "Assembly-CSharp", StringComparison.Ordinal);
         SlotIndex = slotIndex;
     }
 
@@ -153,6 +198,7 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
     {
         get
         {
+            if (!_hasExactNativeType) return AutoCastSpellKind.Instant;
             if (ReadBool("IsChanneled", fallback: false))
             {
                 return AutoCastSpellKind.Channel;
@@ -164,31 +210,44 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
         }
     }
 
-    public bool IsEmpty => ReadBool("IsEmpty", fallback: true);
+    public bool IsEmpty => !_hasExactNativeType || ReadBool("IsEmpty", fallback: true);
 
-    public bool IsCharged => ReadBool("CanCharge", fallback: true);
+    public bool IsCharged => _hasExactNativeType && ReadBool("CanCharge", fallback: true);
 
-    public bool IsCasting => ReadBool("IsCasting", fallback: false);
+    public bool IsCasting => _hasExactNativeType && ReadBool("IsCasting", fallback: false);
 
-    public bool IsReadyingCast => ReadBool("IsReadyingCast", fallback: false);
+    public bool IsReadyingCast => _hasExactNativeType && ReadBool("IsReadyingCast", fallback: false);
+
+    public AutoCastAdmissionFailureKind LastAdmissionFailure { get; private set; }
+
+    public string LastAdmissionFailureReason { get; private set; } = string.Empty;
+
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
     public bool CanCast(out string reason)
     {
         if (!ReflectionUtil.TryInvokeBool(_spell, out var canCast, "CanCast"))
         {
             reason = "Spell.CanCast unavailable";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = reason;
             return false;
         }
 
         if (canCast)
         {
             reason = "native readiness passed";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
+            LastAdmissionFailureReason = string.Empty;
             return true;
         }
+
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.OrdinaryRejection;
 
         if (ReadBool("IsAttuning", fallback: false))
         {
             reason = "attuning after a previous cast";
+            LastAdmissionFailureReason = reason;
             return false;
         }
 
@@ -199,16 +258,19 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
             var cooldown = ReflectionUtil.InvokeNoArgs(_spell, "GetCooldownTimeRemaining");
             var cooldownText = BigAmount.TryRead(cooldown, out var remaining) ? remaining.ToString() : "unknown";
             reason = $"recharging: charges={currentCharges}/{maximumCharges}, cooldownRemaining={cooldownText}";
+            LastAdmissionFailureReason = reason;
             return false;
         }
 
         if (ReflectionUtil.TryInvokeBool(_spell, out var enoughResources, "HasEnoughResources") && !enoughResources)
         {
             reason = "native resource availability rejected";
+            LastAdmissionFailureReason = reason;
             return false;
         }
 
         reason = "native CanCast rejected for an unclassified state";
+        LastAdmissionFailureReason = reason;
         return false;
     }
 
@@ -218,11 +280,21 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
     public bool HasValidTargets(out string reason)
     {
+        if (!_hasExactNativeType)
+        {
+            reason = "native spell is not the exact audited Spell type";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = reason;
+            return false;
+        }
+
         var reference = ReflectionUtil.ReadMember(_spell, "reference");
         var scaling = ReflectionUtil.InvokeNoArgs(_spell, "GetScalingInfo");
         if (reference is null || scaling is null)
         {
             reason = "spell recipe or scaling unavailable";
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = reason;
             return false;
         }
 
@@ -234,6 +306,8 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
             if (options is null || method is null)
             {
                 reason = "target preflight contract unavailable";
+                LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+                LastAdmissionFailureReason = reason;
                 return false;
             }
 
@@ -242,24 +316,88 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
                 if (method.Invoke(options, new[] { scaling }) is not true)
                 {
                     reason = "native target selector has no valid target";
+                    LastAdmissionFailure = AutoCastAdmissionFailureKind.OrdinaryRejection;
+                    LastAdmissionFailureReason = reason;
                     return false;
                 }
             }
             catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException)
             {
                 reason = ex.InnerException?.Message ?? ex.Message;
+                LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+                LastAdmissionFailureReason = reason;
                 return false;
             }
         }
 
         reason = "target preflight passed";
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
+        LastAdmissionFailureReason = string.Empty;
         return true;
     }
 
-    public bool TryFireAndResolveTargets(out string reason) => _catalog.FireSlotAndResolveTargets(SlotIndex, out reason);
+    public bool TryFireAndResolveTargets(out string reason)
+    {
+        _lastNativeMutationOutcome = default;
+        if (!TryGetIdentity(out var identity, out reason))
+        {
+            return false;
+        }
+
+        if (_catalog.TryGetMutationBlock(identity.Uuid, out reason))
+        {
+            return false;
+        }
+
+        var nativeReason = string.Empty;
+        var nativeCallsAttempted = 0;
+        var evidence = NativeMutationVerifier.Execute(
+            "Auto Cast fire",
+            identity.Uuid,
+            "Spell.Fire hook epoch exact delta +1",
+            () => AutoCastManualSignal.FireEpoch,
+            () =>
+            {
+                if (!_catalog.FireSlotAndResolveTargets(
+                        SlotIndex,
+                        out nativeCallsAttempted,
+                        out nativeReason))
+                {
+                    throw new InvalidOperationException(nativeReason);
+                }
+            },
+            (before, after) => after == before + 1);
+        _lastNativeMutationOutcome = evidence.MutationWasAttempted && nativeCallsAttempted > 0
+            ? new NativeMutationCallOutcome(
+                nativeCallsAttempted,
+                1,
+                evidence.IsVerified ? 1 : 0)
+            : default;
+        if (evidence.IsVerified)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = evidence.Format();
+        if (evidence.MutationWasAttempted)
+        {
+            reason = $"native cast blocked until the next lifecycle: {reason}";
+            _catalog.BlockMutation(identity.Uuid, reason);
+        }
+
+        return false;
+    }
 
     public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
     {
+        if (!_hasExactNativeType)
+        {
+            identity = default;
+            reason = "native spell is not the exact audited Spell type";
+            return false;
+        }
+
         var reference = ReflectionUtil.ReadMember(_spell, "reference");
         var uuid = reference is null ? null : ReflectionUtil.ReadStableId(reference);
         if (string.IsNullOrWhiteSpace(uuid))
@@ -276,6 +414,13 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
     public bool TrySetChargeHold(bool isHolding, out string reason)
     {
+        _lastNativeMutationOutcome = default;
+        if (!_hasExactNativeType)
+        {
+            reason = "native spell is not the exact audited Spell type";
+            return false;
+        }
+
         var method = _spell.GetType().GetMethod(
             "SetChargeInput",
             ReflectionUtil.InstanceFlags,
@@ -290,6 +435,7 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
         try
         {
+            _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
             method.Invoke(_spell, new object[] { AutoCastChargeInput, isHolding });
             reason = isHolding ? "full-charge hold started" : "full-charge hold released";
             return true;
@@ -303,14 +449,32 @@ internal sealed class ReflectionAutoCastCandidate : IAutoCastCandidate
 
     private bool TryGetCosts(string methodName, out IReadOnlyList<ResourceAdmissionCost> costs)
     {
+        if (!_hasExactNativeType)
+        {
+            costs = Array.Empty<ResourceAdmissionCost>();
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = "native spell is not the exact audited Spell type";
+            return false;
+        }
+
         var container = ReflectionUtil.InvokeNoArgs(_spell, methodName);
         if (container is null)
         {
             costs = Array.Empty<ResourceAdmissionCost>();
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = $"Spell.{methodName} unavailable";
             return false;
         }
 
-        costs = ReflectionCostReader.Read(container);
+        if (!ReflectionCostReader.TryRead(container, out costs, out var reason))
+        {
+            LastAdmissionFailure = AutoCastAdmissionFailureKind.ContractUnavailable;
+            LastAdmissionFailureReason = reason;
+            return false;
+        }
+
+        LastAdmissionFailure = AutoCastAdmissionFailureKind.None;
+        LastAdmissionFailureReason = string.Empty;
         return true;
     }
 

@@ -46,14 +46,17 @@ internal sealed class NativeConceptCandidate
     public bool IsSettled => Quantity == QueuedQuantity;
 }
 
-internal sealed class ReflectionConceptRuntime : IDisposable
+internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOutcomeSource
 {
-    internal const string ActiveConceptsUuid = "9121924d-2692-428b-9599-165224ccd899";
+    internal static readonly string ActiveConceptsUuid = KnownEntities.ActiveConcepts.Uuid.ToString("D");
 
     private readonly AlchemyGameplayDomainClassifier _domainClassifier;
+    private readonly TypedRegistryResolver _registryResolver;
     private readonly List<object> _recipes = new();
     private readonly Dictionary<object, string> _recipeUuids = new(ReferenceEqualityComparer.Instance);
     private object? _activeConcepts;
+    private TypedRegistryResolution? _activeConceptsResolution;
+    private TypedRegistryResolution? _conceptRecipesResolution;
     private Type? _recipeType;
     private Type? _instanceType;
     private FieldInfo? _activeValuesField;
@@ -65,16 +68,42 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     private MethodInfo? _addInstances;
     private MethodInfo? _removeInstances;
     private string? _blockedReason;
+    private NativeMutationEvidence<int>? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
     private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
-    public bool IsReady => _activeConcepts is not null && _blockedReason is null;
+    public bool IsReady =>
+        _activeConcepts is not null &&
+        _activeConceptsResolution is not null &&
+        _conceptRecipesResolution is not null &&
+        _registryResolver.IsCurrent(_activeConceptsResolution) &&
+        _registryResolver.IsCurrent(_conceptRecipesResolution) &&
+        _blockedReason is null;
     public int ScopedRecipeCount => _recipes.Count;
     public int ActiveConceptCount => _activeConceptCount;
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
-    public ReflectionConceptRuntime(AlchemyGameplayDomainClassifier domainClassifier)
+    public bool TryResolveInvalidationEntityId(object nativeRecipe, out string entityId)
+    {
+        if (nativeRecipe is not null &&
+            _recipeUuids.TryGetValue(nativeRecipe, out var uuid) &&
+            !string.IsNullOrWhiteSpace(uuid))
+        {
+            entityId = uuid;
+            return true;
+        }
+
+        entityId = string.Empty;
+        return false;
+    }
+
+    public ReflectionConceptRuntime(
+        AlchemyGameplayDomainClassifier domainClassifier,
+        TypedRegistryResolver? registryResolver = null)
     {
         _domainClassifier = domainClassifier ?? throw new ArgumentNullException(nameof(domainClassifier));
+        _registryResolver = registryResolver ?? TypedRegistryResolver.Shared;
     }
 
     public bool TryInitialize(out string reason)
@@ -98,27 +127,25 @@ internal sealed class ReflectionConceptRuntime : IDisposable
                     : Retry($"Auto Concept domain classifier is not ready: {classifierReason}", out reason);
             }
 
-            var idType = ReflectionUtil.FindLoadedType("IdScriptableObject");
             _recipeType = ReflectionUtil.FindLoadedType("AlchemyRecipeSO");
             _instanceType = ReflectionUtil.FindLoadedType("AlchemyInstance");
-            var activeType = ReflectionUtil.FindLoadedType("AlchemyInstanceListVariable");
-            var recipeListType = ReflectionUtil.FindLoadedType("AlchemyRecipeListVariable");
-            if (idType is null || _recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
+            var activeType = ReflectionUtil.FindLoadedType(KnownEntities.ActiveConcepts.ManagedTypeName);
+            var recipeListType = ReflectionUtil.FindLoadedType(KnownEntities.ConceptRecipes.ManagedTypeName);
+            if (_recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
                 return Retry("native concept types are not registered yet", out reason);
 
-            var lookupField = FindField(idType, "RuntimeLookup", isStatic: true);
-            if (lookupField?.GetValue(null) is not IDictionary lookup)
-                return Retry("IdScriptableObject.RuntimeLookup is not ready", out reason);
-            var activeId = new Guid(ActiveConceptsUuid);
+            var activeId = KnownEntities.ActiveConcepts.Uuid;
             var recipesId = AlchemyGameplayDomainClassifier.ConceptRecipesUuid;
-            if (!lookup.Contains(activeId) || !lookup.Contains(recipesId))
-                return Retry("concept assets are not registered yet", out reason);
-            var active = lookup[activeId];
-            var recipes = lookup[recipesId];
-            if (active is null || active.GetType() != activeType)
-                return Fail("ActiveConcepts UUID/type mismatch", out reason);
-            if (recipes is null || recipes.GetType() != recipeListType)
-                return Fail("ConceptRecipes UUID/type mismatch", out reason);
+            var activeResolution = _registryResolver.Resolve(activeId, activeType);
+            if (!activeResolution.IsResolved)
+                return HandleRegistryFailure(KnownEntities.ActiveConcepts.DiagnosticName, activeResolution, out reason);
+            var recipesResolution = _registryResolver.Resolve(recipesId, recipeListType);
+            if (!recipesResolution.IsResolved)
+                return HandleRegistryFailure(KnownEntities.ConceptRecipes.DiagnosticName, recipesResolution, out reason);
+            var active = activeResolution.Value!;
+            var recipes = recipesResolution.Value!;
+            _activeConceptsResolution = activeResolution;
+            _conceptRecipesResolution = recipesResolution;
 
             _activeValuesField = FindField(activeType, "value", isStatic: false);
             var recipeValuesField = FindField(recipeListType, "value", isStatic: false);
@@ -141,12 +168,15 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             foreach (var recipe in scopedRecipes)
             {
                 var classification = _domainClassifier.ClassifyRecipe(recipe);
-                if (classification.Domain != AlchemyGameplayDomain.ScholarConcept || classification.RecipeUuid is null)
+                if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
+                    !classification.IsMutationGrade ||
+                    classification.RecipeUuid is null)
                 {
                     return Fail(
                         $"ConceptRecipes entry failed shared domain classification. " +
                         $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
-                        $"Evidence={classification.Evidence}, Reason={classification.Reason}",
+                        $"Evidence={classification.Evidence}, Level={classification.Assessment.Level}, " +
+                        $"Sources={classification.Assessment.Sources}, Reason={classification.Reason}",
                         out reason);
                 }
                 var uuid = classification.RecipeUuid.Value.ToString();
@@ -257,6 +287,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     public bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
     {
+        _lastNativeMutationOutcome = default;
+        if (_blockedReason is not null)
+        {
+            reason = _blockedReason;
+            return false;
+        }
+
         if (delta <= 0 || !IsCurrentRecipe(candidate) || !CanAdd(candidate))
         {
             reason = "candidate identity, compatible slot, or quantity changed";
@@ -270,17 +307,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             reason = "native mastery quantity limit changed";
             return false;
         }
-        try
-        {
-            _addInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta });
-            reason = "native concept quantity submitted";
-            return true;
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.GetBaseException().Message;
-            return false;
-        }
+        return ExecuteQuantityMutation(
+            candidate,
+            "Auto Concept add",
+            $"queued quantity exact delta +{delta}",
+            () => _addInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta }),
+            (before, after) => after == before + delta,
+            out reason);
     }
 
     public bool TryRemoveOwned(NativeConceptCandidate candidate, int delta, out string reason)
@@ -300,6 +333,13 @@ internal sealed class ReflectionConceptRuntime : IDisposable
         string quantityDescription,
         out string reason)
     {
+        _lastNativeMutationOutcome = default;
+        if (_blockedReason is not null)
+        {
+            reason = _blockedReason;
+            return false;
+        }
+
         var current = FindActiveInstance(candidate.Recipe);
         if (delta <= 0 || current is null || !IsCurrentRecipe(candidate))
         {
@@ -313,17 +353,50 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             reason = $"native {quantityDescription} changed";
             return false;
         }
-        try
+        return ExecuteQuantityMutation(
+            candidate,
+            "Auto Concept remove",
+            $"queued quantity exact delta -{delta}",
+            () => _removeInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta }),
+            (before, after) => after == before - delta,
+            out reason);
+    }
+
+    private bool ExecuteQuantityMutation(
+        NativeConceptCandidate candidate,
+        string feature,
+        string expectedChange,
+        Action execute,
+        Func<int, int, bool> verify,
+        out string reason)
+    {
+        var evidence = NativeMutationVerifier.Execute(
+            feature,
+            candidate.Uuid,
+            expectedChange,
+            () => CaptureQueuedQuantity(candidate.Recipe),
+            execute,
+            verify);
+        _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
+        if (evidence.IsVerified)
         {
-            _removeInstances!.Invoke(_activeConcepts, new object[] { candidate.Recipe, delta });
-            reason = $"native {quantityDescription} removal submitted";
+            reason = string.Empty;
             return true;
         }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.GetBaseException().Message;
-            return false;
-        }
+
+        reason = evidence.Format();
+        return evidence.MutationWasAttempted
+            ? Fail($"native Concept mutation blocked until the next lifecycle: {reason}", out reason)
+            : false;
+    }
+
+    private int CaptureQueuedQuantity(object recipe)
+    {
+        var instance = FindActiveInstance(recipe);
+        return instance is null
+            ? 0
+            : Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(instance) ?? 0);
     }
 
     public bool IsDrainSafe(NativeConceptCandidate candidate, float minimumDrainRatio)
@@ -358,10 +431,14 @@ internal sealed class ReflectionConceptRuntime : IDisposable
     {
         _domainClassifier.InvalidateLifecycle();
         _activeConcepts = null;
+        _activeConceptsResolution = null;
+        _conceptRecipesResolution = null;
         _recipes.Clear();
         _recipeUuids.Clear();
         _activeConceptCount = 0;
         _blockedReason = null;
+        _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
     }
 
     public void Dispose() => InvalidateLifecycle();
@@ -462,9 +539,11 @@ internal sealed class ReflectionConceptRuntime : IDisposable
 
     private bool IsCurrentRecipe(NativeConceptCandidate candidate)
     {
+        if (!IsReady) return false;
         if (candidate.Recipe.GetType() != _recipeType) return false;
         var classification = _domainClassifier.ClassifyRecipe(candidate.Recipe);
         if (classification.Domain != AlchemyGameplayDomain.ScholarConcept ||
+            !classification.IsMutationGrade ||
             classification.RecipeUuid is null ||
             !string.Equals(classification.RecipeUuid.Value.ToString(), candidate.Uuid, StringComparison.Ordinal) ||
             !_recipeUuids.TryGetValue(candidate.Recipe, out var snapshotUuid) ||
@@ -535,6 +614,17 @@ internal sealed class ReflectionConceptRuntime : IDisposable
             if (method is not null) return method;
         }
         return null;
+    }
+
+    private bool HandleRegistryFailure(
+        string label,
+        TypedRegistryResolution resolution,
+        out string reason)
+    {
+        var message = $"{label} resolution failed. {resolution.Format()}";
+        return resolution.IsRetryable
+            ? Retry(message, out reason)
+            : Fail(message, out reason);
     }
 
     private bool Fail(string reason, out string output)

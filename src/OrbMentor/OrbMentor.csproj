@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>OrbMentor</AssemblyName>
     <RootNamespace>OrbMentor</RootNamespace>
-    <Version>0.3.2</Version>
+    <Version>0.3.8</Version>
     <RequireGameReferences>true</RequireGameReferences>
     <Description>Native spell, artifact, and alchemy mastery catch-up for Orb Of Creation.</Description>
   </PropertyGroup>

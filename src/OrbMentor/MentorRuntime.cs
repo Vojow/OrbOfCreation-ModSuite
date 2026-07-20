@@ -50,6 +50,7 @@ internal sealed class MentorRuntime : IDisposable
         public Type? ExpectedType;
         public FieldInfo? RegistryField;
         public FieldInfo? MasteryField;
+        public FieldInfo? ExperienceField;
         public MethodInfo? AvailabilityMethod;
         public MethodInfo? IdentityMethod;
         public MethodInfo? RegistryLookupMethod;
@@ -66,6 +67,7 @@ internal sealed class MentorRuntime : IDisposable
         public bool Initialized;
         public bool RelationshipDirty = true;
         public bool NeedsReconcile = true;
+        public object? LastMutationEvidence;
         public long ProgressionEpoch;
         public long RelationshipEpoch;
         public long SettledRefreshGeneration;
@@ -75,12 +77,152 @@ internal sealed class MentorRuntime : IDisposable
         public RefreshWork? Refresh;
     }
 
+    private readonly struct GrantMutationState
+    {
+        public GrantMutationState(
+            int masteryLevel,
+            MentorAmount experience,
+            bool hasArtifactState = false,
+            int containerLevel = 0,
+            MentorAmount savedExperience = default)
+        {
+            MasteryLevel = masteryLevel;
+            Experience = experience;
+            HasArtifactState = hasArtifactState;
+            ContainerLevel = containerLevel;
+            SavedExperience = savedExperience;
+        }
+
+        public int MasteryLevel { get; }
+        public MentorAmount Experience { get; }
+        public bool HasArtifactState { get; }
+        public int ContainerLevel { get; }
+        public MentorAmount SavedExperience { get; }
+
+        public override string ToString() =>
+            HasArtifactState
+                ? $"mastery={MasteryLevel},containerLevel={ContainerLevel},xp={Experience.Mantissa:R}e{Experience.Exponent},savedXp={SavedExperience.Mantissa:R}e{SavedExperience.Exponent}"
+                : $"mastery={MasteryLevel},xp={Experience.Mantissa:R}e{Experience.Exponent}";
+    }
+
+    private readonly struct ArtifactGrantExpectation
+    {
+        public ArtifactGrantExpectation(int masteryLevel, MentorAmount residualExperience)
+        {
+            MasteryLevel = masteryLevel;
+            ResidualExperience = residualExperience;
+        }
+
+        public int MasteryLevel { get; }
+        public MentorAmount ResidualExperience { get; }
+    }
+
     private sealed class DomainState : MentorPendingWork
     {
         public readonly HashSet<string> IdentityDeferrals = new(StringComparer.Ordinal);
         public long NextDistributionTimestamp;
         public long NextSummaryTimestamp;
         public string MentorSummary = "None";
+    }
+
+    private readonly struct DomainFeatureStatusFingerprint : IEquatable<DomainFeatureStatusFingerprint>
+    {
+        public DomainFeatureStatusFingerprint(
+            bool configured,
+            MentorFeatureFailureKind failure,
+            string? failureReason,
+            AutomationDecisionCode failureCause,
+            bool actionFamilyOwned,
+            MentorDomainUnlockSnapshot unlock,
+            bool catalogReady)
+        {
+            Configured = configured;
+            Failure = failure;
+            FailureReason = failureReason;
+            FailureCause = failureCause;
+            ActionFamilyOwned = actionFamilyOwned;
+            UnlockState = unlock.State;
+            UnlockReasonCode = unlock.StatusReasonCode;
+            UnlockReason = unlock.Reason;
+            CatalogReady = catalogReady;
+        }
+
+        public bool Configured { get; }
+        public MentorFeatureFailureKind Failure { get; }
+        public string? FailureReason { get; }
+        public AutomationDecisionCode FailureCause { get; }
+        public bool ActionFamilyOwned { get; }
+        public MentorDomainUnlockState UnlockState { get; }
+        public FeatureStatusReasonCode UnlockReasonCode { get; }
+        public string UnlockReason { get; }
+        public bool CatalogReady { get; }
+
+        public MentorDomainUnlockSnapshot Unlock =>
+            new(UnlockState, UnlockReason, UnlockReasonCode);
+
+        public bool Equals(DomainFeatureStatusFingerprint other) =>
+            Configured == other.Configured &&
+            Failure == other.Failure &&
+            FailureCause == other.FailureCause &&
+            ActionFamilyOwned == other.ActionFamilyOwned &&
+            string.Equals(FailureReason, other.FailureReason, StringComparison.Ordinal) &&
+            UnlockState == other.UnlockState &&
+            UnlockReasonCode == other.UnlockReasonCode &&
+            string.Equals(UnlockReason, other.UnlockReason, StringComparison.Ordinal) &&
+            CatalogReady == other.CatalogReady;
+    }
+
+    private readonly struct FeatureStatusFingerprint : IEquatable<FeatureStatusFingerprint>
+    {
+        public FeatureStatusFingerprint(
+            bool parentConfigured,
+            bool emergencyDisabled,
+            MentorFeatureFailureKind globalFailure,
+            string? globalFailureReason,
+            AutomationDecisionCode globalFailureCause,
+            long lifecycleGeneration,
+            DomainFeatureStatusFingerprint spells,
+            DomainFeatureStatusFingerprint artifacts,
+            DomainFeatureStatusFingerprint alchemy)
+        {
+            ParentConfigured = parentConfigured;
+            EmergencyDisabled = emergencyDisabled;
+            GlobalFailure = globalFailure;
+            GlobalFailureReason = globalFailureReason;
+            GlobalFailureCause = globalFailureCause;
+            LifecycleGeneration = lifecycleGeneration;
+            Spells = spells;
+            Artifacts = artifacts;
+            Alchemy = alchemy;
+        }
+
+        public bool ParentConfigured { get; }
+        public bool EmergencyDisabled { get; }
+        public MentorFeatureFailureKind GlobalFailure { get; }
+        public string? GlobalFailureReason { get; }
+        public AutomationDecisionCode GlobalFailureCause { get; }
+        public long LifecycleGeneration { get; }
+        public DomainFeatureStatusFingerprint Spells { get; }
+        public DomainFeatureStatusFingerprint Artifacts { get; }
+        public DomainFeatureStatusFingerprint Alchemy { get; }
+
+        public DomainFeatureStatusFingerprint For(MentorDomain domain) => domain switch
+        {
+            MentorDomain.Spells => Spells,
+            MentorDomain.Artifacts => Artifacts,
+            _ => Alchemy,
+        };
+
+        public bool Equals(FeatureStatusFingerprint other) =>
+            ParentConfigured == other.ParentConfigured &&
+            EmergencyDisabled == other.EmergencyDisabled &&
+            GlobalFailure == other.GlobalFailure &&
+            GlobalFailureCause == other.GlobalFailureCause &&
+            string.Equals(GlobalFailureReason, other.GlobalFailureReason, StringComparison.Ordinal) &&
+            LifecycleGeneration == other.LifecycleGeneration &&
+            Spells.Equals(other.Spells) &&
+            Artifacts.Equals(other.Artifacts) &&
+            Alchemy.Equals(other.Alchemy);
     }
 
     private sealed class ReconcileWork : IDisposable
@@ -171,7 +313,22 @@ internal sealed class MentorRuntime : IDisposable
     private readonly MentorAlchemyDomainGate _alchemyDomainGate;
     private readonly MentorCoordinatorWork? _coordinatorWork;
     private readonly Func<long> _readTimestamp;
+    private readonly IPerformanceClock _performanceClock;
+    private readonly Func<long> _readLifecycleGeneration;
+    private readonly Func<MentorDomain, bool> _ownsActionFamily;
+    private readonly Func<MentorDomain, bool> _captureActionFamilyMutation;
+    private readonly bool[] _previousActionFamilyOwnership = new bool[DomainOrder.Length];
+    private readonly FeatureStatusRegistration?[] _domainStatusRegistrations =
+        new FeatureStatusRegistration?[DomainOrder.Length];
+    private readonly FeatureStatusSnapshot[] _domainFeatureStatuses =
+        new FeatureStatusSnapshot[DomainOrder.Length];
+    private FeatureStatusRegistration? _rootStatusRegistration;
+    private FeatureStatusSnapshot _rootFeatureStatus;
+    private FeatureStatusFingerprint _featureStatusFingerprint;
+    private bool _hasFeatureStatusFingerprint;
+    private long _statusLifecycleGeneration;
     private bool _guarded;
+    private NativeMutationCallOutcome _activeMutationOutcome;
     private bool _artifactWasEnabled;
     private bool _alchemyWasEnabled;
     private bool _captureFailureLogged;
@@ -195,13 +352,24 @@ internal sealed class MentorRuntime : IDisposable
         Func<long>? readFrameIdentity = null,
         MentorAlchemyDomainGate? alchemyDomainGate = null,
         MentorDomainUnlockGate? unlockGate = null,
-        Func<long>? readTimestamp = null)
+        Func<long>? readTimestamp = null,
+        FeatureStatusRegistry? featureStatusRegistry = null,
+        Func<long>? readLifecycleGeneration = null,
+        Func<MentorDomain, bool>? ownsActionFamily = null,
+        Func<MentorDomain, bool>? captureActionFamilyMutation = null,
+        IPerformanceClock? performanceClock = null)
     {
         _config = config;
         _log = log;
         _alchemyDomainGate = alchemyDomainGate ?? new MentorAlchemyDomainGate();
         _unlockGate = unlockGate ?? new MentorDomainUnlockGate();
         _readTimestamp = readTimestamp ?? Stopwatch.GetTimestamp;
+        _performanceClock = performanceClock ?? StopwatchPerformanceClock.Instance;
+        _readLifecycleGeneration = readLifecycleGeneration ??
+            (() => GameLifecycleMonitor.Shared.Current.Generation);
+        _ownsActionFamily = ownsActionFamily ?? (_ => true);
+        _captureActionFamilyMutation = captureActionFamilyMutation ?? _ownsActionFamily;
+        _statusLifecycleGeneration = Math.Max(0, _readLifecycleGeneration());
         if (coordinator is not null)
             _coordinatorWork = new MentorCoordinatorWork(
                 coordinator,
@@ -213,13 +381,17 @@ internal sealed class MentorRuntime : IDisposable
             _catalogs.Add(domain, new DomainCatalog());
             _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
                 MentorDomainUnlockState.Waiting,
-                "native progression unlock is awaiting lifecycle evaluation");
+                "native progression unlock is awaiting lifecycle evaluation",
+                FeatureStatusReasonCode.Initializing);
+            _previousActionFamilyOwnership[(int)domain] = _ownsActionFamily(domain);
         }
         _artifactWasEnabled = config.ArtifactsEnabled.Value;
         _alchemyWasEnabled = config.AlchemyEnabled.Value;
         _spellSourcePolicy = config.SpellSourcePolicy.Value;
         if (BigDoubleMantissa is null || BigDoubleExponent is null)
             BlockPermanent("BigDouble mantissa/exponent contract is unavailable");
+        RefreshFeatureStatus();
+        if (featureStatusRegistry is not null) RegisterFeatureStatuses(featureStatusRegistry);
     }
 
     internal MentorDiagnostics Diagnostics { get; }
@@ -241,12 +413,111 @@ internal sealed class MentorRuntime : IDisposable
         }
     }
 
+    internal FeatureStatusSnapshot RootFeatureStatus => _rootFeatureStatus;
+    internal FeatureStatusSnapshot DomainFeatureStatus(MentorDomain domain) =>
+        _domainFeatureStatuses[(int)domain];
+    internal long FeatureStatusProjectionCount { get; private set; }
+
+    internal void RefreshFeatureStatus()
+    {
+        var fingerprint = CaptureFeatureStatusFingerprint();
+        if (_hasFeatureStatusFingerprint && _featureStatusFingerprint.Equals(fingerprint)) return;
+        _featureStatusFingerprint = fingerprint;
+        _hasFeatureStatusFingerprint = true;
+        FeatureStatusProjectionCount++;
+
+        foreach (var domain in DomainOrder)
+        {
+            var domainFingerprint = fingerprint.For(domain);
+            var input = new MentorDomainFeatureStatusInput(
+                fingerprint.ParentConfigured,
+                domainFingerprint.Configured,
+                fingerprint.EmergencyDisabled,
+                fingerprint.GlobalFailure,
+                fingerprint.GlobalFailureReason,
+                fingerprint.GlobalFailureCause,
+                domainFingerprint.Failure,
+                domainFingerprint.FailureReason,
+                domainFingerprint.FailureCause,
+                domainFingerprint.ActionFamilyOwned,
+                domainFingerprint.Unlock,
+                domainFingerprint.CatalogReady,
+                fingerprint.LifecycleGeneration);
+            var status = MentorFeatureStatus.ProjectDomain(domain, input);
+            _domainFeatureStatuses[(int)domain] = status;
+            _domainStatusRegistrations[(int)domain]?.Update(status);
+        }
+
+        _rootFeatureStatus = MentorFeatureStatus.ProjectRoot(
+            fingerprint.ParentConfigured,
+            fingerprint.EmergencyDisabled,
+            fingerprint.GlobalFailure,
+            fingerprint.GlobalFailureReason,
+            fingerprint.GlobalFailureCause,
+            _domainFeatureStatuses,
+            fingerprint.LifecycleGeneration);
+        _rootStatusRegistration?.Update(_rootFeatureStatus);
+    }
+
+    private FeatureStatusFingerprint CaptureFeatureStatusFingerprint() => new(
+        _config.Enabled.Value && _config.Mode.Value == MentorOperationMode.Active,
+        _config.EmergencyDisable.Value,
+        FailureKind(_failures.Global),
+        _failures.Global.Reason,
+        _failures.Global.Circuit.Cause,
+        _statusLifecycleGeneration,
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Spells),
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Artifacts),
+        CaptureDomainFeatureStatusFingerprint(MentorDomain.Alchemy));
+
+    private DomainFeatureStatusFingerprint CaptureDomainFeatureStatusFingerprint(MentorDomain domain) => new(
+        DomainConfigured(domain),
+        FailureKind(_failures.For(domain)),
+        _failures.For(domain).Reason,
+        _failures.For(domain).Circuit.Cause,
+        _ownsActionFamily(domain),
+        DomainUnlock(domain),
+        CatalogReady(_catalogs[domain]));
+
+    private void RegisterFeatureStatuses(FeatureStatusRegistry registry)
+    {
+        try
+        {
+            foreach (var domain in DomainOrder)
+                _domainStatusRegistrations[(int)domain] =
+                    registry.Register(_domainFeatureStatuses[(int)domain]);
+            _rootStatusRegistration = registry.Register(_rootFeatureStatus);
+        }
+        catch
+        {
+            _rootStatusRegistration?.Dispose();
+            _rootStatusRegistration = null;
+            for (var index = _domainStatusRegistrations.Length - 1; index >= 0; index--)
+            {
+                _domainStatusRegistrations[index]?.Dispose();
+                _domainStatusRegistrations[index] = null;
+            }
+            throw;
+        }
+    }
+
+    private static bool CatalogReady(DomainCatalog catalog) =>
+        catalog.Initialized && catalog.Relationship is not null && !catalog.RelationshipDirty;
+
+    private static MentorFeatureFailureKind FailureKind(MentorFailureState failure) =>
+        failure.IsPermanent
+            ? MentorFeatureFailureKind.Permanent
+            : failure.IsTransient
+                ? MentorFeatureFailureKind.Transient
+                : MentorFeatureFailureKind.None;
+
     internal MentorDomainUnlockSnapshot DomainUnlock(MentorDomain domain) => _domainUnlocks[(int)domain];
 
     public string CurrentMentor(MentorDomain domain)
     {
         var state = _domains[domain];
         if (!_config.Active || !DomainConfigured(domain)) return state.MentorSummary = "Inactive";
+        if (!_ownsActionFamily(domain)) return state.MentorSummary = "Blocked: action family owned by another automation feature";
         if (DomainBlocked(domain))
             return state.MentorSummary = $"Blocked: {DomainBlockedReason(domain)}";
         var unlock = DomainUnlock(domain);
@@ -322,8 +593,8 @@ internal sealed class MentorRuntime : IDisposable
             RequestReconcile(_catalogs[MentorDomain.Alchemy]);
             return;
         }
-        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
-        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return;
+        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
         {
             if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
                 _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
@@ -480,8 +751,8 @@ internal sealed class MentorRuntime : IDisposable
                     RequestReconcile(_catalogs[domain]);
                     return;
                 }
-                if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return;
-                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return;
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                 {
                     if (_alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Ready ||
                         _alchemyDomainGate.Status == AlchemyDomainClassifierStatus.Blocked)
@@ -514,9 +785,23 @@ internal sealed class MentorRuntime : IDisposable
         catch { }
     }
 
+    public bool TryGetStableProgressionEntityId(MentorDomain domain, object? changedSource, out string entityId)
+    {
+        entityId = string.Empty;
+        if (changedSource is null) return false;
+        var catalog = _catalogs[domain];
+        if (catalog.ByObject.TryGetValue(changedSource, out var entry))
+        {
+            entityId = entry.Uuid;
+            return !string.IsNullOrWhiteSpace(entityId);
+        }
+        return false;
+    }
+
     public void LateTick()
     {
         if (_lifecycleReset.TryConsume()) ResetLifecycle();
+        RefreshActionFamilyOwnership();
         foreach (var domain in DomainOrder)
         {
             var index = (int)domain;
@@ -532,6 +817,7 @@ internal sealed class MentorRuntime : IDisposable
         if (!_config.Active || IsBlocked || unlockStateChanged)
         {
             _coordinatorWork?.SetState(false, false, false);
+            RefreshFeatureStatus();
             return;
         }
         if (!_config.ArtifactsEnabled.Value && _artifactWasEnabled)
@@ -543,6 +829,7 @@ internal sealed class MentorRuntime : IDisposable
 
         if (_coordinatorWork is null) LateTickLegacy();
         else LateTickCoordinated();
+        RefreshFeatureStatus();
     }
 
     private bool RefreshDomainUnlocks()
@@ -688,12 +975,15 @@ internal sealed class MentorRuntime : IDisposable
         _coordinatorWork.SetState(true, cooperativePending, mutationPending);
         if (mutationPending)
         {
-            _coordinatorWork.TryRunMutation(() =>
-            {
-                _nextGrantDomain = (mutationIndex + 1) % DomainOrder.Length;
-                ProcessGrant(mutationDomain);
-                return 1;
-            });
+            _activeMutationOutcome = default;
+            _coordinatorWork.TryRunMutation(
+                () =>
+                {
+                    _nextGrantDomain = (mutationIndex + 1) % DomainOrder.Length;
+                    ProcessGrant(mutationDomain, out var completion);
+                    return completion;
+                },
+                () => _activeMutationOutcome.ToWorkCompletion());
         }
 
         now = Stopwatch.GetTimestamp();
@@ -703,14 +993,18 @@ internal sealed class MentorRuntime : IDisposable
             TryFindGrantDomain(now, out _, out _));
     }
 
-    private int RunCooperativeSlice()
+    private int RunCooperativeSlice(double remainingSharedSoftBudgetMilliseconds)
     {
-        var started = Stopwatch.GetTimestamp();
-        var cpuBudget = Math.Clamp(_config.CpuBudgetMilliseconds.Value, 0.1, 1.0);
+        var cpuBudget = EffectiveCooperativeBudgetMilliseconds(
+            _config.CpuBudgetMilliseconds.Value,
+            remainingSharedSoftBudgetMilliseconds);
+        if (cpuBudget <= 0.0) return 0;
+
+        var started = _performanceClock.GetTimestamp();
         var operations = 0;
         var empty = 0;
         while (operations < PlanningOperationsPerFrame &&
-               ElapsedMilliseconds(started) < cpuBudget &&
+               _performanceClock.GetElapsedMilliseconds(started, _performanceClock.GetTimestamp()) < cpuBudget &&
                empty < DomainOrder.Length)
         {
             var domain = DomainOrder[_nextPlanningDomain++ % DomainOrder.Length];
@@ -723,6 +1017,16 @@ internal sealed class MentorRuntime : IDisposable
             empty = 0;
         }
         return operations;
+    }
+
+    internal static double EffectiveCooperativeBudgetMilliseconds(
+        double configuredMilliseconds,
+        double remainingSharedSoftBudgetMilliseconds)
+    {
+        var configured = Math.Clamp(configuredMilliseconds, 0.1, 1.0);
+        if (double.IsNaN(remainingSharedSoftBudgetMilliseconds) || remainingSharedSoftBudgetMilliseconds <= 0.0)
+            return 0.0;
+        return Math.Min(configured, remainingSharedSoftBudgetMilliseconds);
     }
 
     private bool HasCooperativeWork(long now)
@@ -942,8 +1246,17 @@ internal sealed class MentorRuntime : IDisposable
             _log.LogInfo($"Mentor {domain} batch: sources={batch.SourceCount}, events={batch.EventCount}, recipients={recipients.Count}, share={percent:0.##}%");
     }
 
-    private GrantResult ProcessGrant(MentorDomain domain)
+    private GrantResult ProcessGrant(MentorDomain domain) => ProcessGrant(domain, out _);
+
+    private GrantResult ProcessGrant(MentorDomain domain, out SuiteWorkCompletion completion)
     {
+        completion = new SuiteWorkCompletion(1);
+        if (!_ownsActionFamily(domain))
+        {
+            CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+            RefreshFeatureStatus();
+            return GrantResult.Dropped;
+        }
         var state = _domains[domain];
         var catalog = _catalogs[domain];
         if (!state.Engine.TryPeek(out MentorGrant grant)) return GrantResult.NoWork;
@@ -986,7 +1299,10 @@ internal sealed class MentorRuntime : IDisposable
                 if (parkResult == MentorParkResult.Overflow)
                 {
                     Diagnostics.RecordParkedGrantOverflow();
-                    BlockDomainTransient(domain, $"{domain} parked grant capacity exceeded");
+                    BlockDomainTransient(
+                        domain,
+                        $"{domain} parked grant capacity exceeded",
+                        AutomationDecisionCode.CapacityOverflow);
                     return GrantResult.Dropped;
                 }
                 if (!state.Engine.Complete(grant))
@@ -1005,18 +1321,70 @@ internal sealed class MentorRuntime : IDisposable
             if (domain == MentorDomain.Alchemy)
             {
                 var classification = _alchemyDomainGate.ClassifyAndCache(entry.Item);
-                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                 {
                     BlockAlchemyDomain("final grant validation", classification);
                     return GrantResult.Dropped;
                 }
             }
+            if (!_ownsActionFamily(domain))
+            {
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+                RefreshFeatureStatus();
+                return GrantResult.Dropped;
+            }
+            if (!_captureActionFamilyMutation(domain))
+            {
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+                RefreshFeatureStatus();
+                return GrantResult.Dropped;
+            }
             _guarded = true;
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
             var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);
-            if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
-            else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
-            else GrantArtifact(entry.Item, value);
+            var expectedExperience = grantAmount;
+            var artifactExpectation = default(ArtifactGrantExpectation);
+            var hasArtifactExpectation = false;
+            var evidence = NativeMutationVerifier.Execute(
+                $"Mentor {domain} XP grant",
+                grantUuid,
+                domain == MentorDomain.Artifacts
+                    ? $"native level-aware artifact transition for XP +{grantAmount.Mantissa:R}e{grantAmount.Exponent}"
+                    : $"XP exact delta +{grantAmount.Mantissa:R}e{grantAmount.Exponent}",
+                () =>
+                {
+                    var captured = CaptureGrantState(domain, catalog, entry);
+                    if (domain == MentorDomain.Artifacts && !hasArtifactExpectation)
+                    {
+                        artifactExpectation = PredictArtifactGrant(entry, captured, value);
+                        hasArtifactExpectation = true;
+                    }
+                    return captured;
+                },
+                () =>
+                {
+                    if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
+                    else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
+                    else GrantArtifact(entry.Item, value);
+                },
+                (before, after) => VerifyGrantMutation(
+                    domain,
+                    expectedExperience,
+                    hasArtifactExpectation,
+                    artifactExpectation,
+                    before,
+                    after));
+            catalog.LastMutationEvidence = evidence;
+            _activeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
+            completion = _activeMutationOutcome.ToWorkCompletion();
+            if (!evidence.IsVerified)
+            {
+                BlockDomainTransient(
+                    domain,
+                    $"native XP mutation postcondition failed: {evidence.Format(state => state.ToString())}",
+                    AutomationDecisionCode.PostconditionFailed);
+                return GrantResult.Dropped;
+            }
             // The native grant may synchronously trigger a domain-specific
             // progression hook. Even when it does not visibly change mastery
             // or discovery, force the relationship cache to settle before a
@@ -1032,6 +1400,7 @@ internal sealed class MentorRuntime : IDisposable
                 epochAlreadyAdvanced: catalog.ProgressionEpoch != progressionEpochBeforeGrant);
             state.Engine.Complete(grant);
             Diagnostics.RecordGrant();
+            _failures.RecordSuccess(domain);
             if (_config.DetailedLogging.Value)
                 _log.LogInfo($"Mentor {domain} grant: recipient={entry.DisplayName} ({grantUuid}), amount={grantAmount.Mantissa}e{grantAmount.Exponent}");
             return GrantResult.Granted;
@@ -1187,6 +1556,122 @@ internal sealed class MentorRuntime : IDisposable
         savedXp.SetValue(equipment, current);
     }
 
+    private static GrantMutationState CaptureGrantState(
+        MentorDomain domain,
+        DomainCatalog catalog,
+        NativeEntry entry)
+    {
+        var mastery = Convert.ToInt32(catalog.MasteryField!.GetValue(entry.Item) ?? 0);
+        object? nativeExperience;
+        if (domain == MentorDomain.Artifacts)
+        {
+            var container = entry.ArtifactContainer ??
+                catalog.ArtifactContainerMethod!.Invoke(entry.Item, Array.Empty<object>()) ??
+                throw new MissingMemberException("artifact experience container unavailable");
+            entry.ArtifactContainer = container;
+            nativeExperience = InvokeRequired(container, "GetExperience");
+            var containerLevel = Convert.ToInt32(InvokeRequired(container, "GetLevel"));
+            var savedNativeExperience = catalog.ExperienceField!.GetValue(entry.Item);
+            if (!TryReadNonNegativeAmount(nativeExperience, out var artifactExperience) ||
+                !TryReadNonNegativeAmount(savedNativeExperience, out var savedExperience))
+            {
+                throw new InvalidOperationException("native artifact mastery XP state is unavailable or invalid");
+            }
+            return new GrantMutationState(
+                mastery,
+                artifactExperience,
+                hasArtifactState: true,
+                containerLevel: containerLevel,
+                savedExperience: savedExperience);
+        }
+        else
+        {
+            nativeExperience = catalog.ExperienceField!.GetValue(entry.Item);
+        }
+
+        if (!TryReadNonNegativeAmount(nativeExperience, out var experience))
+        {
+            throw new InvalidOperationException("native mastery XP state is unavailable or invalid");
+        }
+
+        return new GrantMutationState(mastery, experience);
+    }
+
+    private static ArtifactGrantExpectation PredictArtifactGrant(
+        NativeEntry entry,
+        in GrantMutationState before,
+        BigDouble grant)
+    {
+        if (!before.HasArtifactState || before.ContainerLevel != before.MasteryLevel)
+            throw new InvalidOperationException("artifact mastery and experience-container levels are inconsistent before mutation");
+        if (!AmountsEquivalent(before.Experience, before.SavedExperience))
+            throw new InvalidOperationException("artifact container XP and saved XP are inconsistent before mutation");
+
+        var container = entry.ArtifactContainer ??
+            throw new MissingMemberException("artifact experience container unavailable");
+        var clone = InvokeRequired(container, "Clone");
+        InvokeRequired(clone, "GainExperience", grant);
+        var gainedLevels = Convert.ToInt32(InvokeRequired(clone, "GetGainedLevels"));
+        if (gainedLevels < 0)
+            throw new InvalidOperationException("artifact experience prediction returned a negative level delta");
+        var expectedLevel = Convert.ToInt32(InvokeRequired(clone, "GetLevel"));
+        if (expectedLevel != checked(before.ContainerLevel + gainedLevels))
+            throw new InvalidOperationException("artifact experience prediction returned contradictory level evidence");
+        var nativeResidual = InvokeRequired(clone, "GetExperience");
+        if (!TryReadNonNegativeAmount(nativeResidual, out var residual))
+            throw new InvalidOperationException("artifact experience prediction returned invalid residual XP");
+        return new ArtifactGrantExpectation(expectedLevel, residual);
+    }
+
+    private static bool VerifyGrantMutation(
+        MentorDomain domain,
+        MentorAmount expectedExperience,
+        bool hasArtifactExpectation,
+        in ArtifactGrantExpectation artifactExpectation,
+        in GrantMutationState before,
+        in GrantMutationState after)
+    {
+        if (domain != MentorDomain.Artifacts)
+            return AmountsEquivalent(before.Experience.Add(expectedExperience), after.Experience);
+        return hasArtifactExpectation && after.HasArtifactState &&
+               after.MasteryLevel == artifactExpectation.MasteryLevel &&
+               after.ContainerLevel == artifactExpectation.MasteryLevel &&
+               AmountsEquivalent(after.Experience, artifactExpectation.ResidualExperience) &&
+               AmountsEquivalent(after.SavedExperience, artifactExpectation.ResidualExperience);
+    }
+
+    private static bool TryReadNonNegativeAmount(object? value, out MentorAmount amount)
+    {
+        if (value is null ||
+            BigDoubleMantissa?.GetValue(value) is not double mantissa ||
+            BigDoubleExponent?.GetValue(value) is not long exponent ||
+            !double.IsFinite(mantissa) ||
+            mantissa < 0.0)
+        {
+            amount = default;
+            return false;
+        }
+
+        amount = mantissa == 0.0 ? default : new MentorAmount(mantissa, exponent);
+        return true;
+    }
+
+    private static bool AmountsEquivalent(MentorAmount expected, MentorAmount actual)
+    {
+        if (!expected.IsValidPositive || !actual.IsValidPositive)
+        {
+            return expected.IsValidPositive == actual.IsValidPositive;
+        }
+
+        if (expected.Exponent != actual.Exponent)
+        {
+            return false;
+        }
+
+        var scale = Math.Max(Math.Abs(expected.Mantissa), Math.Abs(actual.Mantissa));
+        return Math.Abs(expected.Mantissa - actual.Mantissa) <= scale * 1e-12;
+    }
+
     public void Cancel(MentorDropReason reason = MentorDropReason.LifecycleReset)
     {
         foreach (var domain in DomainOrder) CancelDomain(domain, reason, clearCatalog: true);
@@ -1201,6 +1686,9 @@ internal sealed class MentorRuntime : IDisposable
         Cancel(MentorDropReason.LifecycleReset);
         _alchemyDomainGate.Dispose();
         _coordinatorWork?.Dispose();
+        _rootStatusRegistration?.Dispose();
+        _rootStatusRegistration = null;
+        foreach (var registration in _domainStatusRegistrations) registration?.Dispose();
     }
 
     private void CancelDomain(MentorDomain domain, MentorDropReason reason, bool clearCatalog)
@@ -1271,12 +1759,15 @@ internal sealed class MentorRuntime : IDisposable
         Cancel(MentorDropReason.LifecycleReset);
         _failures.ResetLifecycle();
         _captureFailureLogged = false;
+        _statusLifecycleGeneration = Math.Max(0, _readLifecycleGeneration());
         _nextUnlockRefresh = 0;
         foreach (var domain in DomainOrder)
             if (!DomainBlocked(domain))
                 _domainUnlocks[(int)domain] = new MentorDomainUnlockSnapshot(
                     MentorDomainUnlockState.Waiting,
-                    "native progression unlock is awaiting lifecycle evaluation");
+                    "native progression unlock is awaiting lifecycle evaluation",
+                    FeatureStatusReasonCode.LifecycleTransition);
+        RefreshFeatureStatus();
     }
 
     public void RequestLifecycleReset() => _lifecycleReset.Request();
@@ -1292,13 +1783,17 @@ internal sealed class MentorRuntime : IDisposable
         if (_failures.Global.PermanentReason is not null) return;
         _failures.Global.BlockPermanent(reason);
         Cancel(MentorDropReason.ContractFailure);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor permanently blocked: {reason}");
     }
 
-    private void BlockTransient(string reason)
+    private void BlockTransient(
+        string reason,
+        AutomationDecisionCode cause = AutomationDecisionCode.NativeMutationFailed)
     {
-        _failures.Global.BlockTransient(reason);
+        _failures.Global.BlockTransient(reason, cause);
         Cancel(MentorDropReason.ContractFailure);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor blocked for this lifecycle: {reason}");
     }
 
@@ -1313,6 +1808,7 @@ internal sealed class MentorRuntime : IDisposable
         if (failure.PermanentReason is not null) return;
         failure.BlockPermanent(reason);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
     }
 
@@ -1322,18 +1818,23 @@ internal sealed class MentorRuntime : IDisposable
         if (failure.PermanentReason is not null) return;
         failure.BlockPermanent(reason);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing permanently disabled: {reason}");
     }
 
-    private void BlockDomainTransient(MentorDomain domain, string reason)
+    private void BlockDomainTransient(
+        MentorDomain domain,
+        string reason,
+        AutomationDecisionCode cause = AutomationDecisionCode.NativeMutationFailed)
     {
         if (domain == MentorDomain.Spells)
         {
-            BlockTransient(reason);
+            BlockTransient(reason, cause);
             return;
         }
-        _failures.For(domain).BlockTransient(reason);
+        _failures.For(domain).BlockTransient(reason, cause);
         CancelDomain(domain, MentorDropReason.ContractFailure, clearCatalog: true);
+        RefreshFeatureStatus();
         _log.LogError($"Orb Mentor {domain} sharing blocked for this lifecycle: {reason}");
     }
 
@@ -1388,8 +1889,8 @@ internal sealed class MentorRuntime : IDisposable
                     if (domain == MentorDomain.Alchemy)
                     {
                         var classification = _alchemyDomainGate.ClassifyAndCache(value);
-                        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept) return true;
-                        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+                        if (classification.Domain == AlchemyGameplayDomain.ScholarConcept && classification.IsMutationGrade) return true;
+                        if (classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy || !classification.IsMutationGrade)
                         {
                             BlockAlchemyDomain("catalog reconciliation", classification);
                             return false;
@@ -1479,6 +1980,14 @@ internal sealed class MentorRuntime : IDisposable
         catalog.ExpectedType = expected;
         catalog.RegistryField = FindField(expected, "All");
         catalog.MasteryField = FindField(expected, "masteryLevel");
+        var experienceField = domain switch
+        {
+            MentorDomain.Spells => FindField(expected, "masteryExperience"),
+            _ => FindField(expected, "masteryXp"),
+        };
+        catalog.ExperienceField = experienceField?.FieldType == typeof(BigDouble)
+            ? experienceField
+            : null;
         catalog.AvailabilityMethod = FindMethod(expected, AvailabilityMethod(domain), 0);
         foreach (var name in IdentityMethods)
         {
@@ -1498,6 +2007,7 @@ internal sealed class MentorRuntime : IDisposable
         if (domain == MentorDomain.Artifacts) catalog.ArtifactContainerMethod = FindMethod(expected, "GetExperienceElement", 0);
         if (catalog.RegistryField is null || catalog.MasteryField is null || catalog.AvailabilityMethod is null ||
             catalog.IdentityMethod is null || catalog.RegistryLookupMethod is null ||
+            catalog.ExperienceField is null ||
             (domain == MentorDomain.Artifacts && catalog.ArtifactContainerMethod is null))
         {
             FailDomainContract(domain, $"{domain} native catalog/accessor contract is unavailable");
@@ -1630,7 +2140,19 @@ internal sealed class MentorRuntime : IDisposable
     private bool DomainUnlocked(MentorDomain domain) => _domainUnlocks[(int)domain].IsUnlocked;
 
     private bool DomainEnabled(MentorDomain domain) =>
-        DomainConfigured(domain) && DomainUnlocked(domain) && !DomainBlocked(domain);
+        DomainConfigured(domain) && _ownsActionFamily(domain) && DomainUnlocked(domain) && !DomainBlocked(domain);
+
+    private void RefreshActionFamilyOwnership()
+    {
+        foreach (var domain in DomainOrder)
+        {
+            var index = (int)domain;
+            var owned = _ownsActionFamily(domain);
+            if (_previousActionFamilyOwnership[index] && !owned && _config.Active && DomainConfigured(domain))
+                CancelDomain(domain, MentorDropReason.ActionFamilyConflict, clearCatalog: true);
+            _previousActionFamilyOwnership[index] = owned;
+        }
+    }
 
     private bool EnsureAlchemyDomainReady(long now)
     {
@@ -1656,7 +2178,9 @@ internal sealed class MentorRuntime : IDisposable
             MentorDomain.Alchemy,
             $"Alchemy {operation} could not prove an ordinary-alchemy recipe. " +
             $"RecipeUuid={classification.RecipeUuid?.ToString() ?? "unavailable"}, " +
-            $"Evidence={classification.Evidence}, Reason={classification.Reason}");
+            $"Evidence={classification.Evidence}, Level={classification.Assessment.Level}, " +
+            $"Sources={classification.Assessment.Sources}, Contradictory={classification.Assessment.IsContradictory}, " +
+            $"Reason={classification.Reason}");
     }
 
     private void InvalidateAlchemyDomainLifecycle()
@@ -1668,6 +2192,7 @@ internal sealed class MentorRuntime : IDisposable
     private string DomainStatus(MentorDomain domain, double percent)
     {
         if (!DomainConfigured(domain)) return $"{domain} off";
+        if (!_ownsActionFamily(domain)) return $"{domain} blocked: action family owned by another automation feature";
         if (DomainBlocked(domain)) return $"{domain} blocked: {DomainBlockedReason(domain)}";
         var unlock = DomainUnlock(domain);
         if (!unlock.IsUnlocked) return $"{domain} waiting: {unlock.Reason}";

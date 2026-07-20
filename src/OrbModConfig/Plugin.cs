@@ -26,25 +26,21 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
     private ModConfigCoordinatorWork? _uiWork;
+    private GameplayInvalidationBus? _invalidationBus;
+    private long _lifecycleGeneration;
 
     private void Awake()
     {
-        _enabled = Config.Bind(
-            "General",
-            "Enabled",
-            true,
-            new ConfigDescription(
-                "Enable Orb Mod Config.",
-                null,
-                new ModConfigMetadata(0, 0, hidden: true)));
-        _enableUiShell = Config.Bind(
-            "Interface",
-            "EnableButtonShell",
-            true,
-            new ConfigDescription(
-                "Insert the Mods top-bar button and in-game configuration editor.",
-                null,
-                new ModConfigMetadata(10, 0, hidden: true)));
+        var configuration = ModConfigSettings.TryBind(Config);
+        if (!configuration.Success)
+        {
+            Logger.LogError(configuration.Status.Reason);
+            return;
+        }
+        _enabled = configuration.Config!.Enabled;
+        _enableUiShell = configuration.Config.EnableUiShell;
+
+        _invalidationBus = GameplayInvalidationBus.Shared;
 
         if (!_enabled.Value)
         {
@@ -55,7 +51,10 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork = new ModConfigCoordinatorWork(
             SuitePerformanceCoordinator.Shared,
             () => Time.frameCount);
+        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
+        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
         ResetSceneState(SceneManager.GetActiveScene());
     }
 
@@ -66,6 +65,10 @@ public sealed class Plugin : BaseUnityPlugin
             DeactivateUiWork(disposeShell: true);
             return;
         }
+
+        _invalidationBus?.Pump(
+            Time.frameCount,
+            GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
 
         if (SceneManager.GetActiveScene().name != "Main")
         {
@@ -176,14 +179,36 @@ public sealed class Plugin : BaseUnityPlugin
         _uiShell = null;
         _uiWork?.Dispose();
         _uiWork = null;
+        GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
     {
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
+    }
+
+    private void OnLifecycleTransition(GameLifecycleTransition transition)
+    {
+        if (transition.Current.Generation == _lifecycleGeneration) return;
+        _lifecycleGeneration = transition.Current.Generation;
+        if (transition.Current.LastTransition != GameLifecycleTransitionKind.SceneEntered) return;
         _uiShell?.Dispose();
         _uiShell = null;
-        ResetSceneState(next);
+        ResetSceneState(SceneManager.GetActiveScene());
+    }
+
+    private static void ObserveLifecycle(GameLifecycleTransitionKind kind, string sceneName)
+    {
+        GameLifecycleMonitor.Shared.TryObserve(
+            new GameLifecycleObservation(
+                kind,
+                Time.frameCount,
+                sceneName,
+                PluginIds.ModConfigGuid),
+            out _,
+            out _);
     }
 
     private void ResetSceneState(Scene scene)

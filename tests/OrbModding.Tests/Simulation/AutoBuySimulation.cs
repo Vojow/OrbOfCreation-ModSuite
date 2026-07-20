@@ -25,7 +25,9 @@ internal sealed class AutoBuySimulation : IDisposable
         IEnumerable<SimulatedCandidateSpec> candidateSpecs,
         double initialResourceQuantity = 1_000_000_000.0,
         double readObservationCostMilliseconds = 0.05,
-        double purchaseObservationCostMilliseconds = 1.1)
+        double purchaseObservationCostMilliseconds = 1.1,
+        Func<int, double>? readObservationCostSchedule = null,
+        Func<AutoBuyCandidateKind, bool>? ownsActionFamily = null)
     {
         World = new SimulatedAutoBuyWorld(queueCapacity, initialResourceQuantity);
         foreach (var spec in candidateSpecs)
@@ -35,7 +37,9 @@ internal sealed class AutoBuySimulation : IDisposable
 
         Config = CreateConfig();
         Catalog = new SimulatedAutoBuyCatalog(World);
-        _readCost = new DeterministicStopwatchCost(readObservationCostMilliseconds);
+        _readCost = new DeterministicStopwatchCost(
+            readObservationCostMilliseconds,
+            readObservationCostSchedule);
         _purchaseCost = new DeterministicStopwatchCost(purchaseObservationCostMilliseconds);
         _coordinator = new SuitePerformanceCoordinator(_performanceClock, 1.0, 2.0, 64);
         _engine = new AutoBuyEngine(
@@ -46,7 +50,12 @@ internal sealed class AutoBuySimulation : IDisposable
             _readCost.Observe,
             _purchaseCost.Observe,
             _coordinator,
+#if LEGACY_MAIN_API
             () => _frame);
+#else
+            () => _frame,
+            ownsActionFamily: ownsActionFamily);
+#endif
     }
 
     public AutomataConfig Config { get; }
@@ -56,6 +65,10 @@ internal sealed class AutoBuySimulation : IDisposable
     public SimulatedAutoBuyCatalog Catalog { get; }
 
     public SimulationMetrics Metrics { get; } = new SimulationMetrics();
+
+    public long Frame => _frame;
+
+    public long LifecycleGeneration { get; private set; }
 
     public void Step(
         int completionsBeforeTick = 0,
@@ -167,6 +180,31 @@ internal sealed class AutoBuySimulation : IDisposable
         }
 
         _engine.InvalidateLifecycle();
+        LifecycleGeneration++;
+    }
+
+    public void NotifyProgressionChanged()
+    {
+        ThrowIfDisposed();
+        _engine.NotifyNativeCompletion();
+    }
+
+    public IReadOnlyList<SimulatedAutoBuyCandidate> RegisterCandidates(
+        IEnumerable<SimulatedCandidateSpec> candidateSpecs)
+    {
+        ThrowIfDisposed();
+        var registered = candidateSpecs
+            .Select(World.AddCandidate)
+            .ToArray();
+        Catalog.ReconcileWorld();
+        _engine.NotifyNativeCompletion();
+        return registered;
+    }
+
+    public void SetEmergencyDisabled(bool disabled)
+    {
+        ThrowIfDisposed();
+        Config.EmergencyDisable.Value = disabled;
     }
 
     public void NotifyManualQueueChange(SimulatedAutoBuyCandidate candidate)
@@ -214,8 +252,12 @@ internal sealed class AutoBuySimulation : IDisposable
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.AutoBuyMaxCandidatesPerScan.Value = 1024;
         config.LeaveQueueSlots.Value = 1;
+#if LEGACY_MAIN_API
         config.RepeatWhileAffordable.Value = true;
         config.RespectActionMultiplier.Value = false;
+#else
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
+#endif
         config.CpuBudgetMilliseconds.Value = 1.0f;
         config.AllowedAutoBuyUuids.Value = string.Empty;
         config.BlockedAutoBuyUuids.Value = string.Empty;
@@ -238,6 +280,8 @@ internal sealed class SimulatedAutoBuyWorld
     private readonly List<SimulatedAutoBuyCandidate?> _queue = new List<SimulatedAutoBuyCandidate?>();
     private readonly List<SimulatedAutoBuyCandidate> _candidates = new List<SimulatedAutoBuyCandidate>();
     private readonly List<string> _submissionOrder = new List<string>();
+    private readonly List<SimulatedSubmissionObservation> _submissionObservations =
+        new List<SimulatedSubmissionObservation>();
     private readonly Dictionary<string, BigAmount> _resources =
         new Dictionary<string, BigAmount>(StringComparer.OrdinalIgnoreCase);
     private bool _nativeCompletionInProgress;
@@ -253,9 +297,11 @@ internal sealed class SimulatedAutoBuyWorld
         ResourceQuantity = initialResourceQuantity;
     }
 
-    public int QueueCapacity { get; }
+    public int QueueCapacity { get; private set; }
 
     public int QueueCount => _queue.Count;
+
+    public int ManualQueueCount => _queue.Count(candidate => candidate is null);
 
     public int RemainingQueueRoom => Math.Max(0, QueueCapacity - QueueCount);
 
@@ -264,6 +310,10 @@ internal sealed class SimulatedAutoBuyWorld
     public int TotalSubmitted { get; private set; }
 
     public int TotalCompleted { get; private set; }
+
+    public int TotalAutomationCompleted { get; private set; }
+
+    public int TotalManualCompleted { get; private set; }
 
     public int TotalCandidateEvaluations => _candidates.Sum(candidate => candidate.CanPurchaseCalls);
 
@@ -286,6 +336,9 @@ internal sealed class SimulatedAutoBuyWorld
 
     public IReadOnlyList<string> SubmissionOrder => _submissionOrder;
 
+    public IReadOnlyList<SimulatedSubmissionObservation> SubmissionObservations =>
+        _submissionObservations;
+
     public SimulatedAutoBuyCandidate AddCandidate(SimulatedCandidateSpec spec)
     {
         var candidate = new SimulatedAutoBuyCandidate(this, spec);
@@ -302,10 +355,84 @@ internal sealed class SimulatedAutoBuyWorld
             _queue.RemoveAt(0);
             candidate?.CompleteOne();
             TotalCompleted++;
+            if (candidate is null)
+            {
+                TotalManualCompleted++;
+            }
+            else
+            {
+                TotalAutomationCompleted++;
+            }
             completed++;
         }
 
         return completed;
+    }
+
+    public bool TryPeekExactQueueFront(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int count,
+        out string reason)
+    {
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            reason = "An exact candidate UUID is required.";
+            return false;
+        }
+
+        if (count < 1 || count > 10000)
+        {
+            reason = "The exact completion count must be between 1 and 10000.";
+            return false;
+        }
+
+        if (_queue.Count < count)
+        {
+            reason = $"The queue contains {_queue.Count} entries, fewer than the requested {count}.";
+            return false;
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            var candidate = _queue[index];
+            if (candidate is null)
+            {
+                reason = $"Queue entry {index} is a manual action.";
+                return false;
+            }
+
+            if (!string.Equals(candidate.Uuid, uuid, StringComparison.Ordinal) || candidate.Kind != kind)
+            {
+                reason = $"Queue entry {index} is {candidate.Kind}:{candidate.Uuid}, not {kind}:{uuid}.";
+                return false;
+            }
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    public bool TryCompleteExact(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int count,
+        out string reason)
+    {
+        if (!TryPeekExactQueueFront(uuid, kind, count, out reason))
+        {
+            return false;
+        }
+
+        var completed = Complete(count);
+        if (completed != count)
+        {
+            throw new InvalidOperationException(
+                $"Exact queue preflight accepted {count} entries but only {completed} completed.");
+        }
+
+        reason = string.Empty;
+        return true;
     }
 
     public NativeCompletionObservation BeginNativeCompletion(int bulkLevels, int echoActions)
@@ -354,6 +481,7 @@ internal sealed class SimulatedAutoBuyWorld
         completedLevels -= additionalSlotsToRelease;
         candidate.Complete(completedLevels);
         TotalCompleted += completedLevels;
+        TotalAutomationCompleted += completedLevels;
 
         var echoActionsEnqueued = 0;
         for (var index = 0; index < echoActions; index++)
@@ -399,6 +527,40 @@ internal sealed class SimulatedAutoBuyWorld
 
         _queue.Add(null);
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
+    }
+
+    public void SetQueueCapacity(int queueCapacity)
+    {
+        if (queueCapacity < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(queueCapacity));
+        }
+
+        QueueCapacity = queueCapacity;
+    }
+
+    public bool TryEnqueueManualActions(int count, out string reason)
+    {
+        if (count < 0 || count > 10000)
+        {
+            reason = "The manual action count must be between 0 and 10000.";
+            return false;
+        }
+
+        if (count > RemainingQueueRoom)
+        {
+            reason = $"The queue has room for {RemainingQueueRoom} manual actions, fewer than the requested {count}.";
+            return false;
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            _queue.Add(null);
+        }
+
+        QueueHighWater = Math.Max(QueueHighWater, QueueCount);
+        reason = string.Empty;
+        return true;
     }
 
     public void ClearQueueForReload()
@@ -481,6 +643,11 @@ internal sealed class SimulatedAutoBuyWorld
             return false;
         }
 
+        var observation = new SimulatedSubmissionObservation(
+            candidate.Uuid,
+            candidate.Kind,
+            checked(candidate.CurrentLevel + candidate.QueuedLevels + 1));
+
         foreach (var cost in candidate.CurrentCosts)
         {
             _resources[cost.ResourceId] = GetResourceQuantity(cost.ResourceId).Subtract(cost.Cost);
@@ -489,10 +656,33 @@ internal sealed class SimulatedAutoBuyWorld
         candidate.QueueOne();
         _queue.Add(candidate);
         _submissionOrder.Add(candidate.Uuid);
+        _submissionObservations.Add(observation);
         TotalSubmitted++;
         QueueHighWater = Math.Max(QueueHighWater, QueueCount);
         return true;
     }
+}
+
+internal readonly struct SimulatedSubmissionObservation
+{
+    public SimulatedSubmissionObservation(
+        string uuid,
+        AutoBuyCandidateKind kind,
+        int intendedLevel)
+    {
+        Uuid = uuid;
+        Kind = kind;
+        IntendedLevel = intendedLevel;
+    }
+
+    public string Uuid { get; }
+
+    public AutoBuyCandidateKind Kind { get; }
+
+    public int IntendedLevel { get; }
+
+    public string ExpectedNativeType =>
+        Kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO";
 }
 
 internal readonly struct NativeCompletionObservation
@@ -522,6 +712,12 @@ internal sealed class SimulatedAutoBuyCandidate :
     IAutoBuyCandidate,
     IAutoBuyNativeIdentity,
     IAutoBuyLifecycleCandidate,
+#if !LEGACY_MAIN_API
+    IAutoBuyMutationCandidate,
+    IAutoBuyAdmissionContractEvidence,
+    IAutoBuyAvailabilityEvidence,
+    INativeMutationOutcomeSource,
+#endif
     IAutoBuyDirtyCandidate,
     IAutoBuyPriorityCandidate
 {
@@ -533,7 +729,11 @@ internal sealed class SimulatedAutoBuyCandidate :
     private readonly string[] _resourceDependencies;
     private object _nativeIdentity = new object();
     private bool _costDirty = true;
+    private bool _mutationBlocked;
     private long _completionRefreshGeneration = -1;
+#if !LEGACY_MAIN_API
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
+#endif
 
     public SimulatedAutoBuyCandidate(SimulatedAutoBuyWorld world, SimulatedCandidateSpec spec)
     {
@@ -546,6 +746,8 @@ internal sealed class SimulatedAutoBuyCandidate :
         Available = spec.Available;
         MaximumLevel = spec.MaximumLevel;
         FailureMode = spec.FailureMode;
+        CostObservationMode = spec.CostObservationMode;
+        LifecycleObservationMode = spec.LifecycleObservationMode;
         EconomicPriority = spec.EconomicPriority;
         _baseCosts = spec.ResourceCosts.Count == 0
             ? new[] { new SimulatedResourceCost("resource", "Resource", new BigAmount(spec.BaseCost, 0)) }
@@ -571,6 +773,20 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public SimulatedPurchaseFailureMode FailureMode { get; set; }
 
+    public SimulatedCostObservationMode CostObservationMode { get; set; }
+
+    public SimulatedLifecycleObservationMode LifecycleObservationMode { get; set; }
+
+    public bool AvailabilityReadSucceeds { get; set; } = true;
+
+    public bool NativeContractComplete { get; set; } = true;
+
+    public bool CompletionRefreshSucceeds { get; set; } = true;
+
+    public Action<SimulatedAutoBuyCandidate>? BeforeNextPurchaseAttempt { get; set; }
+
+    public Action<SimulatedAutoBuyCandidate>? AfterSuccessfulPurchase { get; set; }
+
     public int CurrentLevel { get; private set; }
 
     public int QueuedLevels { get; private set; }
@@ -584,6 +800,14 @@ internal sealed class SimulatedAutoBuyCandidate :
     public int LifecycleReads { get; private set; }
 
     public int DirtyMarks { get; private set; }
+
+    public int MutationBlockRecoveries { get; private set; }
+
+    public bool MutationBlocked => _mutationBlocked;
+
+#if !LEGACY_MAIN_API
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
+#endif
 
     public double CostMultiplier { get; set; } = 1.0;
 
@@ -605,13 +829,24 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public IReadOnlyList<string> ResourceDependencies => _resourceDependencies;
 
-    public bool HasResolvedCosts => true;
+    public bool HasResolvedCosts =>
+        CostObservationMode != SimulatedCostObservationMode.Unresolved &&
+        CostObservationMode != SimulatedCostObservationMode.MissingResourceIdentity &&
+        CostObservationMode != SimulatedCostObservationMode.DuplicateContradictoryResource;
+
+    public bool HasCompleteNativeContract => NativeContractComplete;
 
     public AutoBuyEconomicPriority EconomicPriority { get; }
 
     public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
     public bool IsAvailable() => Available;
+
+    public bool TryReadAvailability(out bool available)
+    {
+        available = AvailabilityReadSucceeds && Available;
+        return AvailabilityReadSucceeds;
+    }
 
     public bool CanPurchase(out string reason)
     {
@@ -627,15 +862,29 @@ internal sealed class SimulatedAutoBuyCandidate :
         if (_costDirty)
         {
             _observedCosts.Clear();
+            if (!HasResolvedCosts)
+            {
+                _costDirty = false;
+                return _observedCosts;
+            }
+
+            var costIndex = 0;
             foreach (var cost in CurrentCosts)
             {
+                var observedCost = CostObservationMode == SimulatedCostObservationMode.NegativeCost && costIndex == 0
+                    ? new BigAmount(-1.0, 0)
+                    : cost.Cost;
+                var observedQuantity = CostObservationMode == SimulatedCostObservationMode.NegativeQuantity && costIndex == 0
+                    ? new BigAmount(-1.0, 0)
+                    : _world.GetResourceQuantity(cost.ResourceId);
                 _observedCosts.Add(new ResourceAdmissionCost(
                     cost.ResourceId,
                     cost.ResourceName,
-                    cost.Cost,
-                    _world.GetResourceQuantity(cost.ResourceId),
+                    observedCost,
+                    observedQuantity,
                     cost.Capacity,
                     cost.IsBandwidth));
+                costIndex++;
             }
 
             _costDirty = false;
@@ -646,10 +895,26 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public bool TryPurchaseOne(out string reason)
     {
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = default;
+#endif
         PurchaseCalls++;
-        if (FailureMode == SimulatedPurchaseFailureMode.RejectBeforeMutation)
+        var beforePurchase = BeforeNextPurchaseAttempt;
+        BeforeNextPurchaseAttempt = null;
+        beforePurchase?.Invoke(this);
+
+        if (_mutationBlocked)
         {
-            reason = "simulated native rejection";
+            reason = "simulated mutation remains blocked until lifecycle recovery";
+            return false;
+        }
+
+        if (FailureMode == SimulatedPurchaseFailureMode.RejectBeforeMutation ||
+            FailureMode == SimulatedPurchaseFailureMode.CaughtExceptionBeforeMutation)
+        {
+            reason = FailureMode == SimulatedPurchaseFailureMode.RejectBeforeMutation
+                ? "simulated native rejection"
+                : "simulated adapter caught a native exception before mutation";
             return false;
         }
 
@@ -660,12 +925,24 @@ internal sealed class SimulatedAutoBuyCandidate :
             return false;
         }
 
-        if (FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure)
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
+#endif
+        AfterSuccessfulPurchase?.Invoke(this);
+
+        if (FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure ||
+            FailureMode == SimulatedPurchaseFailureMode.CaughtExceptionAfterMutation)
         {
-            reason = "simulated ambiguous post-mutation failure";
+            _mutationBlocked = true;
+            reason = FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure
+                ? "simulated ambiguous post-mutation failure"
+                : "simulated adapter caught a native exception after mutation";
             return false;
         }
 
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 1);
+#endif
         reason = string.Empty;
         return true;
     }
@@ -673,9 +950,47 @@ internal sealed class SimulatedAutoBuyCandidate :
     public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
     {
         LifecycleReads++;
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.Unavailable)
+        {
+            evidence = default;
+            reason = "simulated lifecycle evidence unavailable";
+            return false;
+        }
+
         var finite = MaximumLevel.HasValue;
         var maxLevel = finite && CurrentLevel >= MaximumLevel!.Value;
         var maxQueued = finite && CurrentLevel + QueuedLevels >= MaximumLevel!.Value;
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.NegativeCurrentLevel)
+        {
+            evidence = new AutoBuyLifecycleEvidence(Available, -1, QueuedLevels, finite, maxLevel, maxQueued);
+            reason = string.Empty;
+            return true;
+        }
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.NegativeQueuedLevels)
+        {
+            evidence = new AutoBuyLifecycleEvidence(Available, CurrentLevel, -1, finite, maxLevel, maxQueued);
+            reason = string.Empty;
+            return true;
+        }
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.MaxWithoutFiniteLevels)
+        {
+            evidence = new AutoBuyLifecycleEvidence(Available, CurrentLevel, 0, false, true, true);
+            reason = string.Empty;
+            return true;
+        }
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.MaxLevelWithQueuedLevels)
+        {
+            evidence = new AutoBuyLifecycleEvidence(Available, CurrentLevel, 1, true, true, true);
+            reason = string.Empty;
+            return true;
+        }
+        if (LifecycleObservationMode == SimulatedLifecycleObservationMode.MaxLevelWithoutMaxQueued)
+        {
+            evidence = new AutoBuyLifecycleEvidence(Available, CurrentLevel, 0, true, true, false);
+            reason = string.Empty;
+            return true;
+        }
+
         evidence = new AutoBuyLifecycleEvidence(
             Available,
             CurrentLevel,
@@ -706,6 +1021,12 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     internal bool TryRefreshAfterCompletion(long completionGeneration, out string reason)
     {
+        if (!CompletionRefreshSucceeds)
+        {
+            reason = "simulated completion refresh failure";
+            return false;
+        }
+
         if (_completionRefreshGeneration != completionGeneration)
         {
             _completionRefreshGeneration = completionGeneration;
@@ -718,7 +1039,8 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     internal bool CouldPurchaseNow()
     {
-        return Available &&
+        return !_mutationBlocked &&
+               Available &&
                _world.RemainingQueueRoom > 0 &&
                _world.CanAfford(this) &&
                (!MaximumLevel.HasValue || CurrentLevel + QueuedLevels < MaximumLevel.Value);
@@ -744,12 +1066,24 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     internal void ReplaceNativeIdentity() => _nativeIdentity = new object();
 
+    public void RecoverMutationBlock(long lifecycleGeneration)
+    {
+        _mutationBlocked = false;
+        MutationBlockRecoveries++;
+    }
+
     internal SimulatedAutoBuyCandidate CloneForLifecycle()
     {
         var replacement = new SimulatedAutoBuyCandidate(_world, _spec)
         {
             Available = Available,
             FailureMode = FailureMode,
+            CostObservationMode = CostObservationMode,
+            LifecycleObservationMode = LifecycleObservationMode,
+            AvailabilityReadSucceeds = AvailabilityReadSucceeds,
+            NativeContractComplete = NativeContractComplete,
+            CompletionRefreshSucceeds = CompletionRefreshSucceeds,
+            AfterSuccessfulPurchase = AfterSuccessfulPurchase,
             CurrentLevel = CurrentLevel,
             QueuedLevels = QueuedLevels,
             CostMultiplier = CostMultiplier,
@@ -797,7 +1131,15 @@ internal sealed class SimulatedAutoBuyCatalog :
 
     public int ActionMultiplierReads { get; private set; }
 
+    public int BulkDevelopment { get; set; } = 1;
+
+    public int ActionMultiplier { get; set; } = 1;
+
     public bool QueueReadSucceeds { get; set; } = true;
+
+    public bool BulkDevelopmentReadSucceeds { get; set; } = true;
+
+    public bool ActionMultiplierReadSucceeds { get; set; } = true;
 
     public IEnumerable<IAutoBuyCandidate> Discover() => _world.Candidates;
 
@@ -835,7 +1177,7 @@ internal sealed class SimulatedAutoBuyCatalog :
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
         bool policyExcluded
-#if !LEGACY_MAIN_API
+#if !LEGACY_MAIN_API || INTERMEDIATE_QUEUE_API
         ,
         AutoBuyDecision? decision = null)
 #else
@@ -843,7 +1185,7 @@ internal sealed class SimulatedAutoBuyCatalog :
 #endif
     {
         CompletedCandidateEvaluations++;
-#if LEGACY_MAIN_API
+#if LEGACY_MAIN_API && !INTERMEDIATE_QUEUE_API
         Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
 #else
         Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
@@ -945,7 +1287,14 @@ internal sealed class SimulatedAutoBuyCatalog :
         RebuildIndex();
     }
 
-#if LEGACY_MAIN_API
+    public void ReconcileWorld()
+    {
+        CompleteMutationGroup();
+        FlushDeferredInvalidations();
+        Index.Reconcile(_world.Candidates);
+    }
+
+#if LEGACY_MAIN_API && !INTERMEDIATE_QUEUE_API
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
     {
         QueueCapacityReads++;
@@ -974,15 +1323,15 @@ internal sealed class SimulatedAutoBuyCatalog :
     public bool TryGetBulkDevelopment(out int levels)
     {
         BulkDevelopmentReads++;
-        levels = 1;
-        return true;
+        levels = BulkDevelopment;
+        return BulkDevelopmentReadSucceeds;
     }
 
     public bool TryGetActionMultiplier(out int multiplier)
     {
         ActionMultiplierReads++;
-        multiplier = 1;
-        return true;
+        multiplier = ActionMultiplier;
+        return ActionMultiplierReadSucceeds;
     }
 
     public void Dispose()
@@ -1021,6 +1370,12 @@ internal sealed class SimulationMetrics
 
     public int MaximumEvaluationsInFrame { get; private set; }
 
+    public int MaximumPurchasesInFrame { get; private set; }
+
+    public int EvaluationOnlyFramesWithPurchasableWork { get; private set; }
+
+    public int DeferredFramesWithPurchasableWork { get; private set; }
+
     public int MinimumQueueAfterSaturation { get; private set; } = int.MaxValue;
 
     public int? FramesToNinetyPercentQueue { get; private set; }
@@ -1033,6 +1388,7 @@ internal sealed class SimulationMetrics
     {
         Frames++;
         MaximumEvaluationsInFrame = Math.Max(MaximumEvaluationsInFrame, evaluationsThisFrame);
+        MaximumPurchasesInFrame = Math.Max(MaximumPurchasesInFrame, purchasesThisFrame);
         var usableCapacity = Math.Max(0, world.QueueCapacity - Math.Max(0, reservedQueueSlots));
         var ninetyPercent = (int)Math.Ceiling(usableCapacity * 0.9);
         if (!FramesToNinetyPercentQueue.HasValue && world.QueueCount >= ninetyPercent)
@@ -1041,14 +1397,23 @@ internal sealed class SimulationMetrics
             _saturated = true;
         }
 
-        if (_saturated)
+        var hasPurchasableWork = world.HasPurchasableCandidate(reservedQueueSlots);
+        if (_saturated && hasPurchasableWork)
         {
             MinimumQueueAfterSaturation = Math.Min(MinimumQueueAfterSaturation, world.QueueCount);
         }
 
-        if (purchasesThisFrame == 0 && world.HasPurchasableCandidate(reservedQueueSlots))
+        if (purchasesThisFrame == 0 && hasPurchasableWork)
         {
             IdleFramesWithPurchasableWork++;
+            if (evaluationsThisFrame > 0)
+            {
+                EvaluationOnlyFramesWithPurchasableWork++;
+            }
+            else
+            {
+                DeferredFramesWithPurchasableWork++;
+            }
         }
     }
 }
@@ -1058,21 +1423,40 @@ internal sealed class DeterministicStopwatchCost
     private readonly ConditionalWeakTable<Stopwatch, Counter> _observations =
         new ConditionalWeakTable<Stopwatch, Counter>();
     private readonly double _costPerObservationMilliseconds;
+    private readonly Func<int, double>? _costSchedule;
 
-    public DeterministicStopwatchCost(double costPerObservationMilliseconds)
+    public DeterministicStopwatchCost(
+        double costPerObservationMilliseconds,
+        Func<int, double>? costSchedule = null)
     {
+        if (costPerObservationMilliseconds < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(costPerObservationMilliseconds));
+        }
+
         _costPerObservationMilliseconds = costPerObservationMilliseconds;
+        _costSchedule = costSchedule;
     }
 
     public double Observe(Stopwatch stopwatch)
     {
         var counter = _observations.GetOrCreateValue(stopwatch);
-        counter.Value += _costPerObservationMilliseconds;
+        counter.Observations++;
+        var cost = _costSchedule?.Invoke(counter.Observations) ??
+                   _costPerObservationMilliseconds;
+        if (cost < 0.0)
+        {
+            throw new InvalidOperationException("A deterministic stopwatch cost cannot be negative.");
+        }
+
+        counter.Value += cost;
         return counter.Value;
     }
 
     private sealed class Counter
     {
+        public int Observations { get; set; }
+
         public double Value { get; set; }
     }
 }
@@ -1100,6 +1484,8 @@ internal readonly struct SimulatedCandidateSpec
         bool available = true,
         int? maximumLevel = null,
         SimulatedPurchaseFailureMode failureMode = SimulatedPurchaseFailureMode.None,
+        SimulatedCostObservationMode costObservationMode = SimulatedCostObservationMode.Normal,
+        SimulatedLifecycleObservationMode lifecycleObservationMode = SimulatedLifecycleObservationMode.Normal,
         AutoBuyEconomicPriority economicPriority = AutoBuyEconomicPriority.None,
         IReadOnlyList<SimulatedResourceCost>? resourceCosts = null)
     {
@@ -1110,6 +1496,8 @@ internal readonly struct SimulatedCandidateSpec
         Available = available;
         MaximumLevel = maximumLevel;
         FailureMode = failureMode;
+        CostObservationMode = costObservationMode;
+        LifecycleObservationMode = lifecycleObservationMode;
         EconomicPriority = economicPriority;
         ResourceCosts = resourceCosts ?? Array.Empty<SimulatedResourceCost>();
     }
@@ -1127,6 +1515,10 @@ internal readonly struct SimulatedCandidateSpec
     public int? MaximumLevel { get; }
 
     public SimulatedPurchaseFailureMode FailureMode { get; }
+
+    public SimulatedCostObservationMode CostObservationMode { get; }
+
+    public SimulatedLifecycleObservationMode LifecycleObservationMode { get; }
 
     public AutoBuyEconomicPriority EconomicPriority { get; }
 
@@ -1172,5 +1564,28 @@ internal enum SimulatedPurchaseFailureMode
 {
     None,
     RejectBeforeMutation,
+    CaughtExceptionBeforeMutation,
     MutateThenReportFailure,
+    CaughtExceptionAfterMutation,
+}
+
+internal enum SimulatedCostObservationMode
+{
+    Normal,
+    Unresolved,
+    NegativeCost,
+    NegativeQuantity,
+    MissingResourceIdentity,
+    DuplicateContradictoryResource,
+}
+
+internal enum SimulatedLifecycleObservationMode
+{
+    Normal,
+    Unavailable,
+    NegativeCurrentLevel,
+    NegativeQueuedLevels,
+    MaxWithoutFiniteLevels,
+    MaxLevelWithQueuedLevels,
+    MaxLevelWithoutMaxQueued,
 }

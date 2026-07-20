@@ -17,6 +17,6 @@ Expected external references are documented in the [source layout](../../src/REA
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
 ```
 
-Stub-linked outputs are isolated under `bin-stubs/` and `obj-stubs/`. Never deploy them to BepInEx. For installed-game checks, continue with [testing](testing.md) and the [runtime validation protocol](runtime-validation.md).
+Stub-linked outputs are isolated under `bin-stubs/` and `obj-stubs/`. Never deploy them to BepInEx. For installed-game checks, continue with the [testing hub](../testing/README.md) and the [runtime validation protocol](../testing/runtime-validation.md).
 
 Orb Chronomancer and Orb Achievement Resonance are not tracked on this supported branch. Switch deliberately to `codex/experimental-chronomancer-resonance` for that work; never copy its DLLs into a supported-suite rehearsal.

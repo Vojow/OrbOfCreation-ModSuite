@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
@@ -21,10 +22,11 @@ public sealed class AutomataTests
             maxQuantity = new TestValueModifierRecord(new TestBigDouble(5.0, 5)),
             trueAmountMultiplier = 2.0,
         };
-        var result = Assert.Single(ReflectionCostReader.Read(new[]
+        Assert.True(ReflectionCostReader.TryRead(new[]
         {
             new TestCostEntry(resource, new TestBigDouble(1.0, 3)),
-        }));
+        }, out var decoded, out var reason), reason);
+        var result = Assert.Single(decoded);
 
         Assert.Equal("8e5", result.CurrentQuantity.ToString());
         Assert.Equal("1e6", result.Capacity?.ToString());
@@ -52,10 +54,8 @@ public sealed class AutomataTests
         Assert.Equal(1024, config.AutoBuyMaxCandidatesPerScan.Value);
         Assert.Equal(AutoBuyBatchSizingMode.FillAvailableQueue, config.AutoBuyBatchSizing.Value);
         Assert.Equal(8, config.MaxPurchasesPerBatch.Value);
-        Assert.Equal(AutoBuyStructureRepeatMode.BulkDevelopment, config.StructureRepeatMode.Value);
-        Assert.Equal(2, config.FixedStructureLevelsPerCandidate.Value);
-        Assert.False(config.RespectActionMultiplier.Value);
-        Assert.True(config.RepeatWhileAffordable.Value);
+        Assert.Equal(AutoBuyPurchaseGroupingMode.BulkDevelopment, config.PurchaseGrouping.Value);
+        Assert.Equal(2, config.FixedGroupSize.Value);
         Assert.Equal("0", config.AbsoluteReserve.Value);
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
@@ -76,7 +76,7 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesLegacyBalanceMasteryModeToActive()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "Mode", "BalanceMastery", "Legacy Auto Concept mode.");
+        configFile.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -92,7 +92,10 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesLegacyMinutesToSeconds(float legacyMinutes, int expectedSeconds)
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", legacyMinutes, "Legacy interval.");
+        configFile.SeedSerialized(
+            "AutoConcept",
+            "RebalanceIntervalMinutes",
+            legacyMinutes.ToString(CultureInfo.InvariantCulture));
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -106,7 +109,7 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_MigratesExistingRebalanceSecondsSetting()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Current interval.");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -120,9 +123,9 @@ public sealed class AutomataTests
     public void AutoConceptConfiguration_PreservesNewFallbackSettingOverLegacyValues()
     {
         var configFile = new ConfigFile();
-        configFile.Bind("AutoConcept", "FallbackEvaluationIntervalSeconds", 45, "Current interval.");
-        configFile.Bind("AutoConcept", "RebalanceIntervalSeconds", 10, "Previous interval.");
-        configFile.Bind("AutoConcept", "RebalanceIntervalMinutes", 2.0f, "Legacy interval.");
+        configFile.SeedSerialized("AutoConcept", "FallbackEvaluationIntervalSeconds", "45");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
+        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalMinutes", "2.0");
 
         var config = AutomataConfig.Bind(configFile);
 
@@ -134,7 +137,7 @@ public sealed class AutomataTests
     }
 
     [Fact]
-    public void AutoConceptToggleSwitchesModeAndShowsEmergencyBlock()
+    public void AutoConceptToggleSwitchesModeWithoutReplacingConfiguredIntent()
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         var toggle = new AutoConceptToggleControl(config);
@@ -144,7 +147,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         config.EmergencyDisable.Value = true;
-        Assert.Equal(AutoCastToggleVisualState.Blocked, toggle.State);
+        Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         toggle.Toggle();
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
@@ -153,7 +156,6 @@ public sealed class AutomataTests
     [Theory]
     [InlineData(0, "CN OFF")]
     [InlineData(1, "CN ON")]
-    [InlineData(2, "CN !")]
     public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));
@@ -318,6 +320,7 @@ public sealed class AutomataTests
     public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
     {
         var upgrade = new UpgradeSO();
+        upgrade.uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid;
         IdScriptableObject.RuntimeLookup.Clear();
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
         var recipe = new SpellRecipeSO { discovered = true, readyToLevel = true };

@@ -2,7 +2,7 @@
 
 > **Lifecycle: P0-P3 implemented / runtime validation pending.** Shared scheduling, lifecycle-aware indexing, dirty evaluation, and resource snapshots are implemented. Desktop and Steam Deck runtime profiling, the 30-minute soak, and later P4+ work remain outstanding.
 
-[Back to plan index](README.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 
@@ -56,16 +56,24 @@ The Steam Deck hotfix already establishes the first safety layer:
 - Mod Config retries after slow UI initialization rather than failing permanently.
 - Mentor caches reflected catalogs briefly and uses conservative operation and CPU defaults.
 - Disabled Mentor stops clearing state on every frame.
-- AutoBuy, AutoCast, Mentor, and Mod Config now use one process-wide coordinator and the same Unity frame identity. Cooperative work is round-robin budgeted, while AutoBuy, AutoCast, and Mentor share a one-native-mutation-per-frame gate. Mentor domains with due, active, denied, or follow-up cooperative work cannot request a stale mutation lease. A final-validation miss parks that UUID in a bounded ledger until a later completed authoritative refresh, avoiding hot retry loops and head-of-line blocking.
+- AutoBuy, AutoCast, Mentor, and Mod Config now use one process-wide coordinator and the same Unity frame identity. Cooperative work is round-robin budgeted, while AutoBuy, AutoCast, and Mentor share one mutation-owning feature lease per frame. Auto Buy may use that lease for a bounded sequence of exact, independently revalidated purchases; no other suite feature can overlap the lease. Mentor domains with due, active, denied, or follow-up cooperative work cannot request a stale mutation lease. A final-validation miss parks that UUID in a bounded ledger until a later completed authoritative refresh, avoiding hot retry loops and head-of-line blocking.
 - Mod Config marks cooperative UI work pending only for delayed install/retry, integrity cadence, navigation events, or detected shell repair. Loaded-plugin catalog enumeration and catalog logging occur once inside the first admitted installation lease.
 
 P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate indexing, dirty updates, incremental recommendation maintenance, and resource snapshots. A separately approved, opt-in Structure priority tier classifies proven cost reductions and quality increases once from native effect definitions. P4 bounded future-cost prediction and broader impact planning remain deferred until runtime measurements justify them.
 
-The portable suite also includes a deterministic headless Auto Buy simulation. It drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its active performance baseline checks queue saturation, candidate handoff, operation-count budgets, and idle frames without depending on computer control or machine-speed wall-clock thresholds. Machine-readable reports now compare each run with a reviewed beta reference, publish normalized operations per purchase in the CI summary, and retain the raw run for 90 days. This history exposes slow drift while the scenario assertions continue to own correctness. Real-game computer control remains a UAT tool.
+The next beta also introduces a [shared gameplay invalidation bus](gameplay-invalidation-bus.md). It coalesces completed-frame cache and scheduling signals under one suite-wide operation cap and one measured cooperative coordinator registration while keeping lifecycle cancellation, native queue reactions, Mentor XP capture, and final gameplay validation synchronous. Delivery uses resumable eight-operation leases, so callback work shares the suite soft/hard CPU accounting and disabled plugin owners remain idle.
+
+The portable suite also includes deterministic `AutoBuyDecision` and `AutoBuyPerformance` layers. The fast decision contract characterizes current group precedence, rerank/pass behavior, reserve monotonicity, unavailable-candidate isolation, and repeatable ordering. The performance simulation drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its historical stage baseline models a 1.1 ms purchase, so it still checks queue saturation, candidate handoff, operation-count budgets, idle frames, deterministic frames to every stage purchase target, and overhead relative to a one-native-call-per-frame scheduler without depending on computer control or machine-speed wall-clock thresholds. Early, mid, late, and endgame workloads grow from 8 Structures and 2 finite Upgrades to all 180 mapped Structures and 24 finite Upgrades while increasing queue consumption from one completion per second to one per simulated frame. Their exact per-Structure targets are 10, 40, 100, and 1,000 live-cost levels. Early through late reach the historical theoretical submission floor; endgame currently requires 5,988 additional frames and attributes all 5,996 purchasable-work idle frames to evaluation-only work while requiring all 180,000 Structure submissions. A separate bounded-burst gate models cheaper native calls and verifies adaptive 1/2/4/8/16-call leases, live safety cutoffs, cross-feature exclusion, and sustained refill against eight completions per frame. Machine-readable reports compare each stage run with a reviewed beta reference, publish normalized operations, frames-to-target, scheduler efficiency, and idle attribution in the CI summary, and retain the raw run for 90 days. This history exposes slow drift while the scenario assertions continue to own correctness. Real-game computer control remains a UAT tool.
 
 A source-level compatibility runner also compiles the identical workload against the last pre-beta `main` engine through a narrow legacy native-boundary adapter. This makes queue output, fairness, refill latency, and diagnostic work directly reviewable before merge without altering the reference engine. Cross-version operation counts are not scored when the engines serve different candidate sets; elapsed time, allocations, and Unity behavior remain runtime profiling and UAT responsibilities.
 
 The aggressive completion-storm scenario is an active deterministic gate. Completion signals are generation-coalesced while the current bounded settlement pass finishes, CPU-sliced scan progress is preserved, and an exact completion wakes the prepared queue-feeding path without waiting for the 10 Hz fallback poll. The gate constrains near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
+
+Auto Buy diagnostics now create structured Common decisions without formatting in the candidate path. Resource blockers transfer through one exact immutable array, telemetry deduplicates canonical condition keys, and the Common publisher calls consumers only when the engine's latest condition changes. Subscriber failures are isolated, and publishing an unchanged condition adds no subscriber work. The deterministic operation-count report remains the queue-behavior gate; allocation and real elapsed-time claims still require runtime profiling.
+
+Suite feature-health reporting also stops before snapshot construction on a stable condition. Automata compares primitive configured/state/reason/generation fields at its existing engine boundaries; Mentor compares one stack-only fingerprint of cached configuration, failure, unlock, catalog, and lifecycle evidence. Only a changed fingerprint projects DTOs or touches the main-thread registry. Disabled Automata performs no UI, engine, coordinator, or per-frame health work, while lifecycle transitions still advance its registered generation.
+
+Bounded candidate and domain [circuit breakers](automation-circuit-breakers.md) prevent repeated native faults from consuming scheduler turns. They live inside existing bounded indexes/fixed domain arrays, retain capped failure streaks across early event wakes, and distinguish time-retryable reads from lifecycle-only ambiguous mutations and process-lifetime contract failures. Invalidation callbacks only wake exact existing owners; they do not reflect, scan, log, or subscribe per candidate.
 
 ## Candidate lifecycle model
 
@@ -467,6 +475,93 @@ Optimization must be evidence-driven. Add rolling counters for:
 - Queue polls and native mutations.
 - Managed-memory samples and GC collection deltas where the runtime exposes them safely.
 
+The coordinator now keeps both the compatible subsystem aggregate and a bounded
+record for every stable `(subsystem, work name, registration id)` identity. Each
+registration freezes average, maximum, p95, and p99 timing from one low-frequency
+sort, while recording itself remains allocation-free. Admission diagnostics
+separate deferred attempts from distinct deferred frames, retain fixed counters
+for each denial reason, and report consecutive deferred-frame runs and pending age.
+The compiled V1 profile applies exact starvation thresholds of 10 frames to Auto
+Buy mutation, 30 to Mod Config recovery, and 12 to the other ten supported
+identities; unknown work retains the coordinator constructor fallback of 120.
+An explicitly tighter constructor threshold wins. A successful admission resets that wait episode;
+admission, disable, and disposal first close the live wait so its maximum and
+starvation evidence are retained, while re-enable cannot inherit a stale age.
+Wait age and consecutive runs use the supplied Unity frame identity rather than
+the coordinator's internal watchdog epoch; sparse identities retain real elapsed
+frames, and a backward/reset identity starts a new safe wait episode.
+
+Native metrics distinguish lease admission from work that actually reached a
+native boundary. Callers complete a mutation lease with explicit counts for
+attempted native calls, mutation attempts, and postcondition-verified commits;
+an admitted no-op therefore records no attempted call, and one future burst can
+report multiple outcomes under the same lease. Failure and exception paths can
+retain attempted counts without claiming a commit. Hard-budget overruns remain
+attributed to the exact registration as well as its compatible subsystem total.
+Snapshots remain diagnostic observations. The supported-profile resolver now
+changes only the starvation reporting threshold for an exact composite identity.
+Coordinator budgets can be tightened atomically after construction but cannot be
+raised, and the allocation-free remaining soft budget reports the full configured
+value before the first frame or the non-negative unspent amount in the current
+frame. Queue policy, fairness, and mutation admission are unchanged.
+
+A separate strict V1 evidence pipeline freezes start and end snapshots for all
+twelve supported-suite work identities. The checked profile is bound by exact
+SHA-256 and pins the current 0.75/1.0 ms coordinator policy, one mutation-owning
+feature lease per frame, cooperative percentile targets, and per-work wait limits.
+Evidence matching omits the ephemeral registration id and instead uses the
+ordinal composite `(subsystem, work name, budget class, execution kind)`.
+Counter evaluation uses end-minus-start deltas. Lifetime maxima that already
+exceeded a target at capture start are reported as contaminated/insufficient,
+not blamed on the new interval. Rolling timing can pass only from an empty start
+window or after at least one complete 300-sample window has been replaced.
+Production coordinator registrations consume the same checked identity catalog
+that portable tests compare with the profile. Start/end capture retains the
+process-local registration id only long enough to reject same-name registration
+churn; it never serializes that id. The combined coordinator active-frame p95 is
+classified against the soft policy and p99/maximum against the hard policy, so
+stacked work cannot disappear behind individually compliant registrations.
+
+The production capture seam allocates and sorts only when explicitly invoked,
+serializes bounded canonical JSON without a runtime JSON dependency, performs no
+file I/O, and exposes no user, host, save, or path metadata. The .NET 10 checker
+owns strict parsing, compatibility validation, classification, and atomic JSON/
+Markdown output. It rejects unknown or duplicate fields, case collisions,
+invalid counts, policy/profile drift, and incomplete full-suite captures.
+Distinct deferred frames remain diagnostic because isolated denials across a
+long soak are expected; maximum pending wait, consecutive denial runs, zero
+starvation, zero abandoned work, and zero measurement failures are the gates.
+
+The V1 checker is now an enforced CI gate. Cooperative per-work timing, combined
+active-frame timing, wait limits, zero starvation, zero abandonment, and zero
+work/measurement failures return target-failure exit code 3 when exceeded or when a
+required sample/window is insufficient. Invalid or incompatible input remains a
+separate exit code 1. Qualified native call timing and native hard overruns remain
+literal `observe-only` results until comparable Windows desktop and Steam
+Deck/Proton captures are reviewed; incomplete or contaminated native timing still
+makes the required capture unusable. This evidence path does not schedule
+lower-priority loops or change fairness, mutation admission, or Auto Buy's
+bounded burst policy. See
+[testing](../testing/strategy.md#suite-coordinator-performance-evidence) for
+the command and evidence-handling rules.
+
+Mentor's coordinated cooperative slice consumes the remaining shared soft budget
+after admission. Its configured 0.1-1.0 ms clamp can reduce that amount but cannot
+raise it, and the 0.1 ms configuration floor is not reapplied after the shared
+clamp. Zero remaining time performs no work; resumable plans, parked recipients,
+and exact pending XP remain authoritative for the next frame. The legacy
+uncoordinated Mentor path is unchanged.
+
+The production Auto Buy, Auto Cast, Auto Concept, and spell-level reflection
+adapters expose the exact latest verifier outcome. Engine metrics read it
+immediately after the adapter call, so a preflight rejection records no native
+invocation, an execution throw or failed postcondition records an uncommitted
+attempt, and only verified mutations record a commit. Charge-hold reflection is
+counted as attempted once `MethodInfo.Invoke` is reached but cannot claim a
+commit because the installed contract has no authoritative postcondition.
+Every admitted mutation lease still records one legacy operation, including a
+late no-op or rejection, keeping historical operation totals comparable.
+
 Normal logs should contain startup state, lifecycle resets, warnings, and an optional low-frequency summary. They must not write one line for every normal purchase or XP grant unless detailed diagnostics are explicitly enabled.
 
 ### Initial performance acceptance targets
@@ -495,7 +590,11 @@ Targets must be validated on desktop and Steam Deck. If a single native call exc
 
 ### P0 — Baseline instrumentation
 
-- Add subsystem timing and count metrics without changing decisions.
+- Add subsystem and exact-registration timing, denial, wait-age, native-outcome,
+  and count metrics without changing decisions. **Implemented.**
+- Add the strict start/end profile, sanitized capture seam, and enforced evaluator
+  so desktop and Deck results are comparable. **Implemented; runtime captures
+  pending.**
 - Record desktop and Steam Deck baselines for disabled, AutoBuy-only, Mentor-only, and combined operation.
 - Identify native calls that individually exceed the desired budget.
 
@@ -551,7 +650,7 @@ Exit: the suite backs off under load while safety actions and eventual progress 
 
 ## Automated test matrix
 
-The executable headless journeys and deterministic performance budgets are documented in [headless E2E simulation](../development/headless-e2e.md). They run in the portable suite and precede installed-game contract checks and runtime UAT.
+The executable headless journeys and deterministic performance budgets are documented in [headless E2E simulation](../testing/headless-e2e.md). They run in the portable suite and precede installed-game contract checks and runtime UAT.
 
 ### Lifecycle tests
 

@@ -25,6 +25,9 @@ public sealed class InstalledGameContractTests
 
         AssertMethod(assembly, "Player", "ManagerStart", false, "System.Void");
         AssertMethod(assembly, "Player", "GetAchievementLevel", true, "IntVariable");
+        AssertMethod(assembly, "GameManager", "InitGame", false, "System.Void");
+        AssertMethod(assembly, "GameManager", "ResetGameState", true, "System.Void");
+        AssertMethod(assembly, "PersistentResetManager", "PersistentResetLogic", false, "System.Void");
         AssertMethod(assembly, "SaveStateManager", "CollectJsonData", false, "System.String");
         AssertMethod(assembly, "SaveStateManager", "ImplementLoadedJson", false, "System.Void");
         AssertMethod(
@@ -353,6 +356,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ExperienceContainer", "GetGainedLevels", false, "System.Int32");
         AssertMethod(assembly, "ExperienceContainer", "GetExperience", false, "BigDouble");
         AssertMethod(assembly, "ExperienceContainer", "GetLevel", false, "System.Int32");
+        AssertMethod(assembly, "ExperienceContainer", "Clone", false, "ExperienceContainer");
         Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mLv"));
     }

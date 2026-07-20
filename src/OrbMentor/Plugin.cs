@@ -18,9 +18,13 @@ public sealed class Plugin : BaseUnityPlugin
     private Harmony? _harmony;
     private MentorConfig? _config;
     private MentorRuntime? _runtime;
+    private MentorActionFamilyOwnership? _actionFamilyOwnership;
+    private MentorGameplayInvalidationBridge? _invalidationBridge;
     private MentorToggleButton? _button;
     private float _uiRetry;
     private bool _wasActive;
+    private long _lifecycleGeneration;
+    private GameLifecycleLease _lifecycleLease;
     internal static Plugin? Instance { get; private set; }
     internal static ManualLogSource Log { get; private set; } = null!;
 
@@ -28,12 +32,26 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance = this;
         Log = Logger;
-        _config = MentorConfig.Bind(Config);
+        var configuration = MentorConfig.TryBind(Config);
+        if (!configuration.Success)
+        {
+            Logger.LogError(configuration.Status.Reason);
+            return;
+        }
+        _config = configuration.Config!;
+        _actionFamilyOwnership = new MentorActionFamilyOwnership();
+        Logger.LogWarning(
+            "Mentor action-family ownership is best-effort; unknown unregistered automation cannot be proven absent and is not disabled.");
         _runtime = new MentorRuntime(
             _config,
             Logger,
             SuitePerformanceCoordinator.Shared,
-            () => Time.frameCount);
+            () => Time.frameCount,
+            featureStatusRegistry: FeatureStatusRegistry.Shared,
+            ownsActionFamily: domain => _actionFamilyOwnership?.IsHeld(domain) == true,
+            captureActionFamilyMutation: domain =>
+                _actionFamilyOwnership?.TryCaptureMutationPermit(domain) == true);
+        _invalidationBridge = new MentorGameplayInvalidationBridge(GameplayInvalidationBus.Shared);
         _wasActive = _config.Active;
         var audit = GameAssemblyAudit.Check(Paths.GameRootPath);
         if (!audit.MatchesExpected) Logger.LogWarning("Game assemblies differ from the audited baseline; Mentor will fail closed if its native contract is unavailable.");
@@ -60,22 +78,31 @@ public sealed class Plugin : BaseUnityPlugin
         PatchRequired("SpellRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
         PatchDomainRequired("AlchemyRecipeSO:ResetData", nameof(AfterAlchemyNativeReset), MentorDomain.Alchemy, postfix: true);
         PatchDomainRequired("EquipmentSO:ResetData", nameof(AfterArtifactNativeReset), MentorDomain.Artifacts, postfix: true);
-        PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterLifecycleReset), postfix: true);
-        PatchOptional("Player:ManagerStart", nameof(AfterLifecycleReset), postfix: true);
+        PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(BeforeSaveLoad), postfix: false);
+        PatchOptional("SaveStateManager:ImplementLoadedJson", nameof(AfterSaveLoaded), postfix: true);
+        PatchOptional("GameManager:InitGame", nameof(AfterGameInitialized), postfix: true);
+        PatchOptional("GameManager:ResetGameState", nameof(BeforeRuntimeReset), postfix: false);
+        PatchOptional("PersistentResetManager:PersistentResetLogic", nameof(BeforePersistentReset), postfix: false);
         PatchOptional("SpellManager:AddSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
         PatchOptional("SpellManager:RemoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
         PatchOptional("SpellManager:MoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
+        GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnSceneChanged;
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
+        _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
+        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
         Logger.LogInfo($"Orb Mentor loaded. Mode={_config.Mode.Value}, Sources={_config.SpellSourcePolicy.Value}, Economy={_config.EconomyMode.Value}, Share={_config.SharePercent.Value:0.##}%.");
     }
 
     private void Update()
     {
         if (_config is null || _runtime is null) return;
+        _actionFamilyOwnership?.Refresh(_config, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _config.ToggleShortcut.Value.IsDown())
         {
             _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
             _runtime.Cancel(MentorDropReason.Disabled);
+            _runtime.RefreshFeatureStatus();
             Logger.LogInfo($"Orb Mentor is now {_config.Mode.Value}.");
         }
         var active = _config.Active;
@@ -90,7 +117,9 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void LateUpdate()
     {
-        if (SceneManager.GetActiveScene().name == "Main") _runtime?.LateTick();
+        if (_config?.Active == true && _runtime?.IsBlocked != true)
+            _invalidationBridge?.Pump(Time.frameCount);
+        if (IsGameplayScene()) _runtime?.LateTick();
     }
     private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)
     {
@@ -109,21 +138,64 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (IsGameplayScene()) Instance?._runtime?.ObserveExperienceContainer(__instance, __0);
     }
-    private static void AfterLifecycleReset()
+    private static void BeforeSaveLoad(object __instance) =>
+        ObserveLifecycle(GameLifecycleTransitionKind.SaveLoadStarted, SceneManager.GetActiveScene().name, __instance);
+    private static void AfterSaveLoaded(object __instance) =>
+        ObserveLifecycle(GameLifecycleTransitionKind.SaveLoaded, SceneManager.GetActiveScene().name, __instance);
+    private static void AfterGameInitialized(object __instance)
     {
-        Instance?._runtime?.RequestLifecycleReset();
+        ObserveLifecycle(GameLifecycleTransitionKind.RegistryRebuilt, SceneManager.GetActiveScene().name, __instance);
+        ObserveLifecycle(GameLifecycleTransitionKind.RuntimeReady, SceneManager.GetActiveScene().name, __instance);
     }
-    private static void AfterSpellLoadoutChanged() => Instance?._runtime?.NotifyEquippedLoadoutChanged();
+    private static void BeforePersistentReset(object __instance) =>
+        ObserveLifecycle(GameLifecycleTransitionKind.NewGamePlusStarted, SceneManager.GetActiveScene().name, __instance);
+    private static void BeforeRuntimeReset() =>
+        ObserveLifecycle(GameLifecycleTransitionKind.ResetStarted, SceneManager.GetActiveScene().name);
+    private static void AfterSpellLoadoutChanged()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.NotifyEquippedLoadoutChanged();
+        plugin?._invalidationBridge?.PublishSpellLoadout(Time.frameCount);
+    }
     private static void AfterSpellProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Spells, __instance);
+        PublishProgression(MentorDomain.Spells, __instance);
     private static void AfterAlchemyProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Alchemy, __instance);
+        PublishProgression(MentorDomain.Alchemy, __instance);
     private static void AfterArtifactProgression(object __instance) =>
-        Instance?._runtime?.MarkRelationshipDirty(MentorDomain.Artifacts, __instance);
-    private static void AfterNativeProgressionReset() => Instance?._runtime?.RequestLifecycleReset();
-    private static void AfterAlchemyNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
-    private static void AfterArtifactNativeReset() => Instance?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
-    private static bool IsGameplayScene() => SceneManager.GetActiveScene().name == "Main";
+        PublishProgression(MentorDomain.Artifacts, __instance);
+    private static void AfterNativeProgressionReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestLifecycleReset();
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Spells, Time.frameCount, null);
+    }
+    private static void AfterAlchemyNativeReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestDomainReset(MentorDomain.Alchemy);
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Alchemy, Time.frameCount, null);
+    }
+    private static void AfterArtifactNativeReset()
+    {
+        var plugin = Instance;
+        plugin?._runtime?.RequestDomainReset(MentorDomain.Artifacts);
+        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Artifacts, Time.frameCount, null);
+    }
+
+    private static void PublishProgression(MentorDomain domain, object changedSource)
+    {
+        var plugin = Instance;
+        plugin?._runtime?.MarkRelationshipDirty(domain, changedSource);
+        var entityId = plugin?._runtime?.TryGetStableProgressionEntityId(domain, changedSource, out var stableId) == true
+            ? stableId
+            : null;
+        plugin?._invalidationBridge?.PublishProgression(domain, Time.frameCount, entityId);
+    }
+    private static bool IsGameplayScene() =>
+        Instance is { } plugin &&
+        SceneManager.GetActiveScene().name == "Main" &&
+        GameLifecycleMonitor.Shared.Current.IsGameplayReady &&
+        GameLifecycleMonitor.Shared.IsCurrent(plugin._lifecycleLease);
     private void PatchOptional(string targetName, string patchName, bool postfix)
     {
         var target = AccessTools.Method(targetName);
@@ -177,11 +249,48 @@ public sealed class Plugin : BaseUnityPlugin
             _runtime?.QuarantineDomain(domain, $"required {domain} hook failed: {targetName}: {ex.GetBaseException().Message}");
         }
     }
-    private void OnSceneChanged(Scene previous, Scene next) => _runtime?.ResetLifecycle();
+    private void OnSceneChanged(Scene previous, Scene next)
+    {
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
+        ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
+    }
+
+    private void OnLifecycleTransition(GameLifecycleTransition transition)
+    {
+        if (transition.Current.Generation == _lifecycleGeneration) return;
+        _lifecycleGeneration = transition.Current.Generation;
+        _runtime?.ResetLifecycle();
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
+        _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
+    }
+
+    private static void ObserveLifecycle(
+        GameLifecycleTransitionKind kind,
+        string sceneName,
+        object? nativeIdentity = null)
+    {
+        GameLifecycleMonitor.Shared.TryObserve(
+            new GameLifecycleObservation(
+                kind,
+                Time.frameCount,
+                sceneName,
+                PluginIds.MentorGuid,
+                nativeIdentity),
+            out _,
+            out _);
+    }
+
     private void OnDestroy()
     {
+        GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnSceneChanged;
-        _button?.Dispose(); _button = null; _runtime?.Dispose(); _harmony?.UnpatchSelf(); _harmony = null; _runtime = null; Instance = null;
+        _button?.Dispose(); _button = null; _runtime?.Dispose(); _runtime = null; _actionFamilyOwnership?.Dispose(); _actionFamilyOwnership = null; _harmony?.UnpatchSelf(); _harmony = null; _invalidationBridge = null; Instance = null;
+    }
+
+    private void OnDisable()
+    {
+        _runtime?.Cancel(MentorDropReason.Disabled);
+        _actionFamilyOwnership?.ReleaseLifecycleClaims();
     }
 
     internal static void ShowNotice(string message, RectTransform? anchor)

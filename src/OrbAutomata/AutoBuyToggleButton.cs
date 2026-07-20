@@ -57,8 +57,8 @@ internal sealed class AutoBuyToggleButton : IDisposable
     public void Render()
     {
         var state = _control.State;
-        var label = state == AutoCastToggleVisualState.On ? "ON" : state == AutoCastToggleVisualState.Blocked ? "!" : "OFF";
-        var color = state == AutoCastToggleVisualState.On ? new Color(.4f, 1, .55f) : state == AutoCastToggleVisualState.Blocked ? new Color(1, .35f, .3f) : new Color(.7f, .7f, .7f);
+        var label = state == AutoCastToggleVisualState.On ? "ON" : "OFF";
+        var color = state == AutoCastToggleVisualState.On ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
         if (_text is not null) { _text.text = $"AB {label}"; _text.color = color; }
     }
     private void Toggle() { _control.Toggle(); Render(); }

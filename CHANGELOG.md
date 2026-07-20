@@ -1,9 +1,148 @@
 # Changelog
 
-## Orb Mod Config 0.6.1 Beta 1 — 2026-07-18
+## Auto Buy bounded purchase bursts — 2026-07-20
 
-- Size setting rows from their rendered descriptions so complete help, acceptable-value, and apply/restart text remains readable instead of being truncated by a fixed two-line area.
-- Preserve the current absolute scroll offset when staged boolean/enum/default changes, Apply, Revert, or external configuration refresh rebuilds the same settings page; reset to the top only when switching mod or feature section.
+- Allow one Auto Buy coordinator lease to submit up to 16 exact one-level native purchases when live queue room and the existing 1 ms purchase slice permit, while retaining one mutation-owning feature per suite frame.
+- Revalidate mode, emergency state, ownership, lifecycle generation, candidate admission, live costs, reserves, and queue capacity between every level; stop immediately on any boundary, failure, ambiguous result, or operation cap.
+- Add deterministic 1/2/4/8/16 burst-cost tests, Bulk-3 and finite-Upgrade fairness, per-Upgrade native multi-buy restoration, queue/reserve/capacity containment, lifecycle/ownership/emergency interruption, ambiguous-mutation quarantine, coordinator accounting, Auto Cast fairness, and eight-completion-per-frame throughput coverage.
+- Compare the exact pull-request target and head with stable-cost plus cheap-call burst workloads, retain both raw reports, and update one deterministic performance comment on same-repository pull requests.
+- Keep pull-request performance comparisons buildable across the classic legacy, intermediate queue-snapshot, and current Auto Buy APIs.
+- Bump Orb Automata to 0.8.10.
+
+## Auto Buy grouped continuation and rejection fairness — 2026-07-20
+
+- Replace the overlapping `RespectActionMultiplier`, `RepeatWhileAffordable`, `StructureRepeatMode`, and `FixedStructureLevelsPerCandidate` controls with `PurchaseGrouping` (`Single`, `Fixed`, `BulkDevelopment`, or `ActionMultiplier`) plus `FixedGroupSize`.
+- Separate group size from continuation: give each ranked Structure its live configured group, give each Upgrade one level except in action-multiplier mode, advance through the prepared ranking, and repeat passes while live queue quota and admission permit. Every individual level still revalidates cost, reserves, completion, ownership, and queue room.
+- Migrate Automata configuration schema 1 to 2 with destination-first precedence, preservation of legacy action-multiplier intent, direct Structure-group mapping, and fail-closed malformed legacy values.
+- Close NF-03 starvation by advancing past definite pre-mutation rejection and retrying it on bounded 0.25-to-5-second exponential delay; attempted or ambiguous mutations retain lifecycle quarantine.
+- Exercise Bulk Development 10/25/100/100 in the synthetic early/mid/late/endgame stages. The endgame model now submits 180,024 purchases in 180,408 frames (3,006.8 simulated seconds), reduces purchasable idle frames from 5,996 to 291, candidate evaluations from 360,072 to 183,645, and observed operations from 1,838,247 to 923,925.
+- Add runtime-derived Auto Buy simulations for endgame Bulk Development 1/3/10/100, staggered cost-read outages, Bulk-3 completion storms, exact partial-group reserve boundaries, indivisible heavy-tail reads, and live catalog growth from 28 to 137 candidates.
+- Bump Orb Automata to 0.8.9.
+
+## Runtime validation corrections — 2026-07-20
+
+- Make Mentor Artifact XP postconditions level-aware by predicting the exact native `ExperienceContainer` transition on a clone, then verifying the live equipment mastery, container level, residual XP, and saved XP. Multi-level rollover no longer produces the false lifecycle fault introduced with #36's raw-XP verifier.
+- Complete #28's configured-versus-runtime presentation boundary: gameplay controls keep stable `ON`/`OFF` intent while waiting, blocking, degradation, and faults remain secondary structured health in tooltips, notices, and Orb Mod Config.
+- Format feature health and Auto Buy reserve evidence as bounded line-oriented tooltip rows, including deterministic per-resource required, available, cost, reserved, and shortfall fields. Every visible line owns a native tooltip node so wrapped reasons cannot collide with separators or later fields.
+- Keep the existing component versions unchanged for these unreleased next-beta corrections.
+
+## Selectable test strategy lanes — 2026-07-20
+
+- Centralize the maintained repository strategy, headless/replay/native-contract/runtime protocols, and test-steering entry points under `docs/testing/`, with compatibility redirects from their former development paths.
+- Add owned testing guides for Common, Mentor, Mod Config, suite integration, and an Automata subtree split into Auto Buy, Auto Cast, Auto Concept, spell leveling, and cross-feature integration.
+- Preserve the risk-based unit, headless, installed-contract, and runtime-UAT pyramid while adding explicit fast, Auto Buy decision, Auto Buy reliability, Auto Buy performance, complete performance, replay, and external-process development lanes.
+- Partition portable CI into fast, deterministic-performance, and external-process scopes, retain TRX evidence for portable, contract, performance, and coverage runs, and stop rerunning headless journeys already owned by the fast partition.
+- Establish the first selectable reliability corpus and Auto Buy subset from dirty-resource, native multi-buy, runtime replay, lifecycle, ambiguous-mutation, live-reserve, and live-queue-capacity journeys.
+- Report overall and per-assembly branch coverage diagnostically while retaining the existing reviewed line-coverage floors until branch baselines are reviewed.
+- Add a maintained Auto Buy negative-simulation matrix covering invalid queue, cost, availability, lifecycle, purchase, completion, and simulator-contract paths, with focused failure, race, and completion suites.
+- Add four deterministic 240-event Auto Buy state-machine tapes with per-event invariants, replay comparison, bounded diagnostic tails, and first-failing-prefix reduction.
+- Add adverse modeled workloads for scarcity, locked catalogs, live capacity changes, manual bursts, completion bursts, lifecycle replacement, and resource-observation outages; retain the persistent rejecting-leader case as an explicit skipped gate for the unresolved starvation policy.
+- Add an Auto Buy reverse-engineering dossier covering the native purchase transaction, shared queue/completion state model, simulation-to-evidence mapping, and the distinction between observed progression facts and synthetic stress profiles.
+
+## Progression-shaped Auto Buy performance simulations — 2026-07-20
+
+- Add deterministic early, mid, late, and endgame Auto Buy stress workloads with increasing Structure/Upgrade catalogs and queue-completion rates from one action per second through one action per simulated frame; these names describe modeled workload shapes rather than observed save populations.
+- Exercise exact per-Structure targets of 10 early, 40 midgame, 100 late, and 1,000 endgame levels, all 180 mapped Structures in late/endgame, finite one-level Upgrade purchases, queue saturation and refill depth, bounded candidate work, and idle-room detection.
+- Extend the checked performance report with stage composition, repeated-Structure coverage, and deterministic frames/seconds to every stage target so CI can detect workload drift and scheduler throughput regressions.
+- Add a focused `AutoBuyDecision` policy contract for current group precedence, rerank/pass behavior, reserve monotonicity, unavailable-candidate isolation, fairness, and deterministic output.
+- Compare stage submission time with a one-mutation-per-frame theoretical scheduler and split purchasable-work idle frames into evaluation-only versus other deferred work; the current endgame gap is 5,988 frames at 96.783% submission efficiency.
+
+## Versioned configuration schemas — 2026-07-19
+
+- Add a shared pre-bind configuration transaction with hidden schema markers, exact-byte rollback, verified all-or-nothing first-free sibling backups, ordered reviewed migrations, and fail-closed malformed or future-version handling.
+- Migrate Automata's proven schema-zero Concept mode and fallback-interval values, explicitly discard its reviewed obsolete keys, and leave Mentor and Mod Config value interpretation unchanged through marker-only steps.
+- Publish sanitized exact-plugin schema outcomes through Common and hand them atomically to Orb Mod Config's Unity tick separately from runtime health and Apply results. Failed/future suite plugins remain selectable as read-only status-only tabs even when no settings were bound.
+- Bump Orb Automata to 0.8.8, Orb Mentor to 0.3.8, Orb Mod Config to 0.6.3, and Orb Modding Common to 0.3.7.
+
+## Orb Mod Config 0.6.2 Beta 1 — 2026-07-19
+
+- Size setting rows from their rendered descriptions so complete help, acceptable-value, restart, and saved-versus-runtime text remains readable instead of being ellipsis-clipped in a fixed-height area.
+- Preserve the absolute scroll offset when staged edits, Default, Apply, Revert, external refreshes, or responsive width changes rebuild the same page; reset to the top only when selecting another mod or feature section.
+- Remeasure visible rows when resolution, window width, or UI scale changes while retaining the separate exact-plugin runtime-status band and configuration-only save confirmation.
+
+## Enforced shared performance profile — 2026-07-19
+
+- Apply the checked V1 profile's exact starvation thresholds to all twelve supported coordinator identities while retaining the constructor fallback for unknown work and allowing test coordinators to select a tighter threshold.
+- Make post-construction shared CPU budgets tightening-only, expose the allocation-free remaining soft budget, and clamp coordinated Mentor planning to that remaining time without losing pending plans or XP.
+- Promote cooperative timing, combined-frame timing, wait, starvation, abandonment, work-failure, and measurement targets to a CI gate with a distinct target-failure exit; native timing remains observe-only after a complete uncontaminated sample window.
+- Bump Orb Mentor to 0.3.7 and Orb Modding Common to 0.3.6.
+
+## Fail-closed automation admission adapters — 2026-07-19
+
+- Normalize stable identity, availability, native readiness, immediate cost, drain cost, and queue requirements before shared Auto Buy and Auto Cast policy evaluates an action.
+- Split Structure and Upgrade reflection into exact family adapters while retaining live per-mutation revalidation, native multi-buy restoration, and exact queue-delta postconditions.
+- Reject complete spell cost admission when any bounded entry is malformed or contradictory, and disable all Automata native mutation setup when installed game assemblies do not match the audited hashes.
+- Reserve the shared Harvest and Scroll action families for future explicit adapters, add cross-adapter equivalence and failure-path coverage, and bump Orb Automata to 0.8.7.
+
+## Action-family ownership isolation — 2026-07-19
+
+- Add atomic, process-local ownership leases for independent native purchase, cast, concept, spell-level, and mastery-XP action families, with synchronous known-conflict revocation and explicit lifecycle/configuration release.
+- Detect the exact AutobuyOrb plugin GUID and block only Automata Structure and Upgrade mutations; Auto Cast, Auto Concept, Spell Leveling, and all Mentor domains remain independently available.
+- Gate every supported native mutation again after ordinary live validation, cancel prepared work on ownership loss, expose structured conflict health, and warn honestly that unknown unregistered automation cannot be proven absent or controlled.
+- Bump Orb Automata to 0.8.6, Orb Mentor to 0.3.6, and Orb Modding Common to 0.3.5.
+
+## Bounded automation failure circuits — 2026-07-19
+
+- Add a shared circuit state machine with allocation-free transition/attempt checks, capped exponential backoff, and explicit authoritative-event, lifecycle, configuration, and process-lifetime recovery contracts.
+- Stop retrying contradictory Auto Buy cost schemas, wake transient resource reads from exact changes, and keep attempted-but-unverified purchases blocked until a newer lifecycle while later healthy candidates remain eligible.
+- Isolate Mentor's global and three fixed domain failure circuits so lifecycle recovery clears only transient ambiguity and optional-domain faults do not starve healthy siblings.
+
+## Shared gameplay invalidation foundation — 2026-07-19
+
+- Add one bounded, main-thread Common bus for lifecycle-stamped queue, progression, inventory, registry, resource, and configuration invalidations, with delivery charged through the suite's shared CPU coordinator.
+- Coalesce completed-frame bursts by stable domain/UUID/type, preserve merged change kinds and first-publication order, and conservatively promote overflow instead of dropping cache work.
+- Keep immediate lifecycle, queue, completion, and Mentor XP safety paths direct while Automata, Mentor, and Mod Config mirror or publish bounded cache and scheduling signals.
+
+## Unified feature health reporting — 2026-07-19
+
+- Add a main-thread Common registry for transition-only configured, locked, not-ready, operational, temporarily blocked, contract-unavailable, degraded, and faulted feature status.
+- Project Automata capabilities and Mentor domains from their existing cached lifecycle, unlock, decision, and failure evidence without adding native work or coupling sibling domain failures.
+- Give Orb Mod Config an exact-plugin-GUID runtime-status band separate from saved configuration, and stop claiming that a saved setting necessarily applies immediately.
+
+## Structured Auto Buy decisions — 2026-07-19
+
+- Replace Auto Buy's private rejection enum and text-derived deduplication with Common append-only decision codes, dispositions, retry triggers, canonical identities, resource constraints, queue facts, and native states.
+- Make candidate parking, telemetry, rate-limited logs, and the gameplay tooltip consume the same immutable decision evidence; publish only condition transitions through an exception-isolated Common channel for future Orb Insights consumers.
+- Preserve existing queue output and operation counts while avoiding per-decision formatting and redundant blocker-array allocations in the candidate path.
+
+## Generated supported identities — 2026-07-18
+
+- Replace supported Alchemy, Auto Concept, spell-level, and Mentor unlock UUID literals with 16 generated declarations carrying UUID, expected managed type, and diagnostic name.
+- Verify generated output against the canonical entity mapping before compilation; duplicate or invalid IDs, unexpected mapping drift, and stale checked-in output now fail the build.
+
+## Typed registry resolution foundation — 2026-07-18
+
+- Centralize lifecycle-stamped stable-UUID and exact-native-type resolution in Common with structured retryable, missing, wrong-type, ambiguous, contract, and stale-generation outcomes.
+- Verify scoped registry inclusion or exclusion separately from global lookup and refuse malformed list evidence, same-UUID replacement references, and display-name fallback.
+- Adopt the resolver for the Alchemy classifier, Auto Concept registries, spell-level capability upgrade, and Mentor progression views while invalidating retained results across lifecycle generations.
+
+## Evidence strength foundation — 2026-07-18
+
+- Add shared unresolved, inferred, runtime-observed, serialized-asset-verified, and statically-verified evidence levels with named source masks and contradiction handling.
+- Require mutation-grade identity, native type, registry relationship, serialized mapping, and static contract evidence before Auto Concept or Mentor Alchemy accepts a classification.
+- Expose structured level/source diagnostics and contract tests so game-update evidence changes fail closed and remain reviewable; display names never upgrade evidence.
+
+## Shared lifecycle generation foundation — 2026-07-18
+
+- Add one main-thread-safe Common lifecycle monitor with explicit no-game, initializing, playing, resetting, and scene-exit states plus monotonically increasing generations and bounded structured diagnostics.
+- Coalesce equivalent lifecycle callbacks from independently installed suite plugins, expose generation leases for stale-work rejection, and keep progression-domain locks separate from global readiness.
+- Move Automata 0.8.4, Mentor 0.3.4, and Mod Config 0.6.1 onto the shared scene, save-load, runtime-ready, reset/NG+, and registry-rebuild boundary.
+
+## Orb Automata 0.8.3 Beta 1 — 2026-07-18
+
+- Require authoritative before/after postconditions for Auto Buy queue additions, Auto Concept assignment changes, single/all spell leveling, and Auto Cast fire submission.
+- Preserve structured feature, identity, expectation, before, after, outcome, and failure evidence for ambiguous mutations, then block repeat attempts until a scene, save-load, reset, or NG+ lifecycle recovery.
+- Verify instant and sustained casts through the audited `Spell.Fire` hook instead of relying on transient casting flags.
+
+## Orb Mentor 0.3.3 Beta 1 — 2026-07-18
+
+- Verify every spell, artifact, and ordinary-alchemy native XP grant against authoritative before/after XP with the exact expected numeric delta.
+- Cancel pending bonus work and block the affected domain for the lifecycle when a native grant is a no-op, partial, unexpectedly large, throwing, or unobservable.
+
+## Orb Modding Common 0.3.2 Beta 1 — 2026-07-18
+
+- Add the shared capture → execute → capture → verify contract and structured mutation evidence used by Automata and Mentor.
+- Preserve after-state evidence even when a native invocation throws after partially changing state, and distinguish capture, execution, and postcondition failures.
 
 ## Orb Mentor 0.3.2 Beta 1 — 2026-07-18
 

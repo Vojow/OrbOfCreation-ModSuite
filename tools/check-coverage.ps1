@@ -14,6 +14,9 @@ if (-not (Test-Path -LiteralPath $resolvedCoverage -PathType Leaf)) {
 $overall = [double]::Parse(
     $report.coverage.'line-rate',
     [Globalization.CultureInfo]::InvariantCulture)
+$overallBranch = [double]::Parse(
+    $report.coverage.'branch-rate',
+    [Globalization.CultureInfo]::InvariantCulture)
 $packageMinimums = [ordered]@{
     'OrbAutomata' = 0.70
     'OrbMentor' = 0.64
@@ -37,13 +40,17 @@ foreach ($entry in $packageMinimums.GetEnumerator()) {
     $rate = [double]::Parse(
         $package.'line-rate',
         [Globalization.CultureInfo]::InvariantCulture)
-    Write-Host "$($entry.Key) line coverage: $($rate.ToString('P2')) (minimum $(([double]$entry.Value).ToString('P2')))"
+    $branchRate = [double]::Parse(
+        $package.'branch-rate',
+        [Globalization.CultureInfo]::InvariantCulture)
+    Write-Host "$($entry.Key) line coverage: $($rate.ToString('P2')) (minimum $(([double]$entry.Value).ToString('P2'))); branch coverage: $($branchRate.ToString('P2')) (diagnostic)"
     if ($rate -lt [double]$entry.Value) {
         $failures.Add("$($entry.Key) line rate $($rate.ToString('P2')) is below $(([double]$entry.Value).ToString('P2'))")
     }
 }
 
 Write-Host "Overall production line coverage: $($overall.ToString('P2')) (minimum $($MinimumOverallLineRate.ToString('P2')))"
+Write-Host "Overall production branch coverage: $($overallBranch.ToString('P2')) (diagnostic)"
 if ($failures.Count -gt 0) {
     throw "Coverage regression:`n - $($failures -join "`n - ")"
 }

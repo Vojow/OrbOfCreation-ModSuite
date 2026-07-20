@@ -132,6 +132,82 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         Assert.Empty(active.value);
     }
 
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void AutoConceptController_OwnershipLossDiscardsPendingMutation()
+    {
+        var recipe = Concept("ownership-pending-concept");
+        var active = InstallNativeLists(recipe);
+        var config = Config(AutoConceptSlotManagementMode.PreserveManual);
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
+        using var blocker = coordinator.Register(
+            "test", "occupy native mutation", SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        var owned = true;
+        long frame = 1;
+        using var controller = new AutoConceptController(
+            config,
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
+            new ManualLogSource(), coordinator, () => frame,
+            ownsActionFamily: () => owned);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
+        lease.Complete();
+        controller.Tick(0.1f);
+        owned = false;
+        blocker.SetPending(false);
+        frame++;
+        controller.Tick(0.1f);
+
+        Assert.Empty(active.value);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void AutoConceptHealthKeepsMutationFaultUntilLifecycleRecovery()
+    {
+        var recipe = Concept("faulted-concept");
+        var active = InstallNativeLists(recipe);
+        active.SuppressAddMutation = true;
+        var config = Config(AutoConceptSlotManagementMode.PreserveManual);
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
+        long frame = 0;
+        using var controller = new AutoConceptController(
+            config,
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
+            new ManualLogSource(),
+            coordinator,
+            () => frame,
+            statuses.AutoConcept);
+
+        Tick(controller, ref frame, 0.1f);
+        Assert.Equal(FeatureStatusState.Faulted, statuses.AutoConcept.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.PostconditionFailed, statuses.AutoConcept.Current.Reason.Code);
+
+        config.AutoConceptMode.Value = AutoConceptOperationMode.Disabled;
+        Tick(controller, ref frame, 0.1f);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
+
+        config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
+        controller.NotifyNativeChange();
+        Tick(controller, ref frame, 0.1f);
+        Assert.Equal(FeatureStatusState.Faulted, statuses.AutoConcept.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.PostconditionFailed, statuses.AutoConcept.Current.Reason.Code);
+
+        controller.InvalidateLifecycle();
+        statuses.ObserveLifecycleNotReady(config, 2);
+        active.SuppressAddMutation = false;
+        controller.NotifyNativeChange();
+        Tick(controller, ref frame, 0.1f);
+
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoConcept.Current.State);
+        Assert.Equal(2, statuses.AutoConcept.Current.LifecycleGeneration);
+        Assert.Single(active.value);
+    }
+
     private static AutomataConfig Config(AutoConceptSlotManagementMode mode)
     {
         var config = AutomataConfig.Bind(new ConfigFile());
@@ -162,6 +238,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
     private static AlchemyInstanceListVariable InstallNativeLists(params AlchemyRecipeSO[] recipes)
     {
         var active = new AlchemyInstanceListVariable();
+        active.SetGuid(new Guid(ReflectionConceptRuntime.ActiveConceptsUuid));
         var recipeList = new AlchemyRecipeListVariable { value = recipes.ToList() };
         recipeList.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ActiveConceptsUuid)] = active;

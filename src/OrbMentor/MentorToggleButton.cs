@@ -75,11 +75,13 @@ internal sealed class MentorToggleButton : IDisposable
 
     public void Render()
     {
-        var visualState = _runtime.IsBlocked ? 2 : _runtime.IsWaiting ? 3 : _config.Active ? 1 : 0;
+        var status = _runtime.RootFeatureStatus;
+        var presentation = FeatureStatusPresenter.Present(status);
+        var visualState = (int)presentation.ConfiguredState;
         if (_lastVisualState == visualState) return;
         _lastVisualState = visualState;
-        var state = visualState == 2 ? "BLOCKED" : visualState == 3 ? "WAIT" : visualState == 1 ? "ON" : "OFF";
-        var color = visualState == 2 ? new Color(1, .3f, .25f) : visualState == 3 ? new Color(1, .75f, .25f) : visualState == 1 ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+        var state = StatusLabel(presentation.ConfiguredState);
+        var color = StatusColor(presentation.ConfiguredState);
         if (_text is not null)
         {
             _text.text = $"M {state}";
@@ -88,11 +90,28 @@ internal sealed class MentorToggleButton : IDisposable
     }
     private void Toggle()
     {
-        if (!_runtime.IsBlocked) _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-        _runtime.Cancel(MentorDropReason.Disabled); Render(); Plugin.ShowNotice(_runtime.IsBlocked ? $"Orb Mentor BLOCKED: {_runtime.BlockedReason}" : $"Orb Mentor {_config.Mode.Value}. {_runtime.StatusText()}", _root.transform as RectTransform);
+        _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active
+            ? MentorOperationMode.Disabled
+            : MentorOperationMode.Active;
+        _runtime.Cancel(MentorDropReason.Disabled);
+        _runtime.RefreshFeatureStatus();
+        Render();
+        Plugin.ShowNotice(
+            $"Orb Mentor. {FeatureStatusPresenter.Format(_runtime.RootFeatureStatus)}. {_runtime.StatusText()}",
+            _root.transform as RectTransform);
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
+    internal static string StatusLabel(FeatureConfiguredPresentationState state) => state switch
+    {
+        FeatureConfiguredPresentationState.On => "ON",
+        _ => "OFF",
+    };
+    internal static Color StatusColor(FeatureConfiguredPresentationState state) => state switch
+    {
+        FeatureConfiguredPresentationState.On => new Color(.4f, 1, .55f),
+        _ => new Color(.7f, .7f, .7f),
+    };
     private static void RemoveNativeViewBindings(GameObject root)
     {
         foreach (var component in root.GetComponents<Component>().Where(component => component.GetType().Name == "ManagedView"))

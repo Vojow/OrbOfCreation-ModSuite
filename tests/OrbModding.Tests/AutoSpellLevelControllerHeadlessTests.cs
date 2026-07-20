@@ -72,6 +72,35 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
 
     [Fact]
     [Trait("Category", "HeadlessIntegration")]
+    public void NoOpSingleLevelBlocksFurtherCostsUntilLifecycleRecovery()
+    {
+        InstallLevelAllUpgrade(purchaseLevel: 0);
+        var recipe = AddReadySpell("00000000-0000-0000-0000-000000000013", mastery: 2);
+        recipe.SuppressLevelMutation = true;
+        using var runtime = new ReflectionSpellLevelRuntime();
+        var candidate = runtime.ReadSnapshot(out _).Candidate;
+        Assert.NotNull(candidate);
+
+        Assert.False(runtime.TryLevelSingle(candidate!, out var failedReason));
+        Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(2, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.MutationsCommitted);
+        Assert.Equal(1, recipe.levelCost.PerformCalls);
+        Assert.False(runtime.TryLevelSingle(candidate, out var blockedReason));
+        Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(1, recipe.levelCost.PerformCalls);
+
+        recipe.SuppressLevelMutation = false;
+        runtime.InvalidateLifecycle();
+
+        Assert.True(runtime.TryLevelSingle(candidate, out var recoveredReason), recoveredReason);
+        Assert.Equal(3, recipe.masteryLevel);
+        Assert.Equal(2, recipe.levelCost.PerformCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
     public void LifecycleInvalidation_DiscardsAQueuedSpellMutation()
     {
         InstallLevelAllUpgrade(purchaseLevel: 0);
@@ -108,6 +137,36 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
         Assert.Equal(AutoSpellLevelCapability.Locked, controller.Capability);
     }
 
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void OwnershipLossDiscardsAQueuedSpellMutation()
+    {
+        InstallLevelAllUpgrade(purchaseLevel: 0);
+        var recipe = AddReadySpell("00000000-0000-0000-0000-000000000031", mastery: 3);
+        var config = ActiveConfig();
+        var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
+        using var blocker = coordinator.Register(
+            "test", "occupy native mutation", SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        blocker.SetPending(true);
+        var owned = true;
+        long frame = 1;
+        using var controller = new AutoSpellLevelController(
+            config, new ReflectionSpellLevelRuntime(), new ManualLogSource(), coordinator,
+            () => frame, ownsActionFamily: () => owned);
+
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
+        lease.Complete();
+        controller.Tick(0.1f);
+        owned = false;
+        blocker.SetPending(false);
+        frame++;
+        controller.Tick(0.1f);
+
+        Assert.Equal(3, recipe.masteryLevel);
+        Assert.Equal(0, recipe.levelCost.PerformCalls);
+    }
+
     public void Dispose()
     {
         IdScriptableObject.RuntimeLookup.Clear();
@@ -128,7 +187,11 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
     {
         IdScriptableObject.RuntimeLookup.Add(
             new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid),
-            new UpgradeSO { purchaseLevel = purchaseLevel });
+            new UpgradeSO
+            {
+                uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid,
+                purchaseLevel = purchaseLevel,
+            });
     }
 
     private static SpellRecipeSO AddReadySpell(string uuid, int mastery)

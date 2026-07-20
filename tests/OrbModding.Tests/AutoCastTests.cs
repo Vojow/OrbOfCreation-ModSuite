@@ -4,6 +4,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -40,7 +41,6 @@ public sealed class AutoCastTests
     [Theory]
     [InlineData(0, "AC OFF")]
     [InlineData(1, "AC ON")]
-    [InlineData(2, "AC !")]
     public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
@@ -64,7 +64,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
-    public void EmergencyDisableRendersActiveModeAsBlocked()
+    public void EmergencyDisableKeepsConfiguredIntentVisuallyOn()
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
@@ -72,7 +72,7 @@ public sealed class AutoCastTests
 
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         config.EmergencyDisable.Value = true;
-        Assert.Equal(AutoCastToggleVisualState.Blocked, toggle.State);
+        Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
     }
 
     [Fact]
@@ -85,6 +85,61 @@ public sealed class AutoCastTests
 
         Assert.Equal(AutoCastOperationMode.Disabled, fixture.Config.AutoCastMode.Value);
         Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
+    public void ActiveEmptyLoadoutRemainsOperational()
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var engine = new AutoCastEngine(
+            config,
+            new FakeCatalog(),
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            new ManualLogSource(),
+            () => true,
+            featureStatus: statuses.AutoCast);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoCast.Current.State);
+        Assert.Equal(AutoCastToggleVisualState.On, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoCast.Current));
+    }
+
+    [Fact]
+    public void TypedContractFailureDegradesWithoutParsingDiagnosticText()
+    {
+        var spell = Spell("typed contract failure");
+        spell.CanCastResult = false;
+        spell.CanCastReason = "adapter check 17 failed";
+        spell.AdmissionFailureKind = AutoCastAdmissionFailureKind.ContractUnavailable;
+        using var fixture = CreateWithCoordinator(spell);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Degraded, fixture.FeatureStatuses.AutoCast.Current.State);
+        Assert.Equal(
+            FeatureStatusReasonCode.PartialCapabilityUnavailable,
+            fixture.FeatureStatuses.AutoCast.Current.Reason.Code);
+    }
+
+    [Fact]
+    public void OrdinaryRejectionRemainsOperationalRegardlessOfDiagnosticWording()
+    {
+        var spell = Spell("ordinary wait");
+        spell.CanCastResult = false;
+        spell.CanCastReason = "contractually unavailable until recharge";
+        spell.AdmissionFailureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
+        using var fixture = CreateWithCoordinator(spell);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(FeatureStatusState.Operational, fixture.FeatureStatuses.AutoCast.Current.State);
     }
 
     [Fact]
@@ -368,6 +423,20 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    public void ResourceRejectionDoesNotTraverseTargetGraph()
+    {
+        var blocked = Spell("resource blocked", immediate: Costs(79, 100, 1));
+        using var fixture = Create(blocked);
+        fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
+
+        fixture.Engine.Tick(1.0f);
+
+        Assert.Equal(0, blocked.TargetValidationCalls);
+        Assert.Equal(0, blocked.FireCalls);
+    }
+
+    [Fact]
     public void VerboseThresholdRejectionLogsCurrentCapacityFullnessAndRequiredPercent()
     {
         var below = Spell("mana hungry", immediate: Costs(79, 100, 1));
@@ -485,10 +554,24 @@ public sealed class AutoCastTests
     public void ReflectionAutoCastCatalog_TranslatesLoadoutCostsKindAndStableIdentity()
     {
         var manager = new SpellManager();
-        var spell = new NativeLoadoutSpell("adapter-spell") { Channeled = true };
+        const string spellUuid = "11111111-1111-1111-1111-111111111111";
+        var spell = new global::Spell(new SpellRecipeSO { uuid = spellUuid })
+        {
+            DisplayName = "Adapter spell",
+            Channeled = true,
+        };
+        spell.Cost.costs.Add(new global::ResourceTuple(
+            new global::ResourceSO
+            {
+                uuid = "adapter-resource",
+                quantity = new BigDouble(10.0, 0),
+                trueQuantity = new BigDouble(10.0, 0),
+            },
+            new BigDouble(2.0, 0)));
         manager.activeSpells.Add(spell);
         SpellManager.instance = manager;
         SpellManager.NativeCanCast = true;
+        global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
         TargetingManager.Targeting = false;
         using var catalog = new ReflectionAutoCastCatalog();
         try
@@ -503,19 +586,96 @@ public sealed class AutoCastTests
             Assert.Equal("adapter-resource", cost.ResourceId);
             Assert.Equal(0, cost.Cost.CompareTo(new BigAmount(2.0, 0)));
             Assert.Equal(0, cost.CurrentQuantity.CompareTo(new BigAmount(10.0, 0)));
+            Assert.Equal(0, spell.Cost.CostPrintReads);
             Assert.True(candidate.TryGetIdentity(out var identity, out var identityReason), identityReason);
-            Assert.Equal("adapter-spell", identity.Uuid);
+            Assert.Equal(spellUuid, identity.Uuid);
             Assert.Same(spell, identity.NativeReference);
-            Assert.Equal(typeof(NativeLoadoutSpell), identity.NativeType);
+            Assert.Equal(typeof(global::Spell), identity.NativeType);
             Assert.True(candidate.TrySetChargeHold(true, out var holdReason), holdReason);
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
             Assert.True(spell.HoldingCharge);
             Assert.True(candidate.TryFireAndResolveTargets(out var fireReason), fireReason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
             Assert.Equal(1, spell.FireCalls);
         }
         finally
         {
             SpellManager.instance = null;
             SpellManager.NativeCanCast = true;
+            global::Spell.FireSignal = null;
+            TargetingManager.Targeting = false;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionAutoCastCandidate_MissingFireEvidenceBlocksUntilLifecycleRecovery()
+    {
+        var manager = new SpellManager();
+        var spell = new global::Spell(new SpellRecipeSO { uuid = "22222222-2222-2222-2222-222222222222" }) { EmitFireSignal = false };
+        manager.activeSpells.Add(spell);
+        SpellManager.instance = manager;
+        global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
+        TargetingManager.Targeting = false;
+        using var catalog = new ReflectionAutoCastCatalog();
+        try
+        {
+            var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
+
+            Assert.False(candidate.TryFireAndResolveTargets(out var failedReason));
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
+            Assert.Contains("PostconditionFailed", failedReason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
+            Assert.Equal(1, spell.FireCalls);
+            Assert.False(candidate.TryFireAndResolveTargets(out var blockedReason));
+            Assert.Contains("blocked until the next lifecycle", blockedReason);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(1, spell.FireCalls);
+
+            spell.EmitFireSignal = true;
+            catalog.RecoverMutationBlocks();
+
+            Assert.True(candidate.TryFireAndResolveTargets(out var recoveredReason), recoveredReason);
+            Assert.Equal(2, spell.FireCalls);
+        }
+        finally
+        {
+            SpellManager.instance = null;
+            global::Spell.FireSignal = null;
+            TargetingManager.Targeting = false;
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionAutoCastCandidate_NativeExecutionThrowIsAttemptedButUncommitted()
+    {
+        var manager = new SpellManager();
+        var spell = new global::Spell(new SpellRecipeSO { uuid = "33333333-3333-3333-3333-333333333333" });
+        manager.activeSpells.Add(spell);
+        SpellManager.instance = manager;
+        global::Spell.FireSignal = () => throw new InvalidOperationException("simulated native fire failure");
+        TargetingManager.Targeting = false;
+        using var catalog = new ReflectionAutoCastCatalog();
+        try
+        {
+            var candidate = Assert.Single(catalog.DiscoverActiveLoadout());
+            var mutationOutcome = Assert.IsAssignableFrom<INativeMutationOutcomeSource>(candidate);
+
+            Assert.False(candidate.TryFireAndResolveTargets(out var reason));
+            Assert.Contains("ExecutionThrew", reason);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.NativeCallsAttempted);
+            Assert.Equal(1, mutationOutcome.LastNativeMutationOutcome.MutationAttempts);
+            Assert.Equal(0, mutationOutcome.LastNativeMutationOutcome.MutationsCommitted);
+        }
+        finally
+        {
+            SpellManager.instance = null;
+            global::Spell.FireSignal = null;
             TargetingManager.Targeting = false;
         }
     }
@@ -621,23 +781,57 @@ public sealed class AutoCastTests
 
     private static Fixture Create(params FakeSpell[] spells) => Create(new FakeCatalog(spells));
 
+    private static Fixture CreateWithCoordinator(params FakeSpell[] spells)
+    {
+        var config = AutomataConfig.Bind(new ConfigFile());
+        config.AbsoluteReserve.Value = "0";
+        config.RelativeReserveMultiplier.Value = 0.0f;
+        var log = new ManualLogSource();
+        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var coordinator = new SuitePerformanceCoordinator(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
+        var engine = new AutoCastEngine(
+            config,
+            new FakeCatalog(spells),
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            log,
+            () => true,
+            coordinator,
+            () => 1,
+            statuses.AutoCast);
+        return new Fixture(config, log, engine, statuses);
+    }
+
     private static Fixture Create(FakeCatalog catalog)
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         var log = new ManualLogSource();
-        var engine = new AutoCastEngine(config, catalog, new ReservePolicy(config), new ResourceFullnessPolicy(), log, () => true);
-        return new Fixture(config, log, engine);
+        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var engine = new AutoCastEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ResourceFullnessPolicy(),
+            log,
+            () => true,
+            featureStatus: statuses.AutoCast);
+        return new Fixture(config, log, engine, statuses);
     }
 
     private sealed class Fixture : IDisposable
     {
-        public Fixture(AutomataConfig config, ManualLogSource log, AutoCastEngine engine)
+        public Fixture(
+            AutomataConfig config,
+            ManualLogSource log,
+            AutoCastEngine engine,
+            AutomataFeatureStatuses featureStatuses)
         {
             Config = config;
             Log = log;
             Engine = engine;
+            FeatureStatuses = featureStatuses;
         }
 
         public AutomataConfig Config { get; }
@@ -646,7 +840,13 @@ public sealed class AutoCastTests
 
         public AutoCastEngine Engine { get; }
 
-        public void Dispose() => Engine.Dispose();
+        public AutomataFeatureStatuses FeatureStatuses { get; }
+
+        public void Dispose()
+        {
+            Engine.Dispose();
+            FeatureStatuses.Dispose();
+        }
     }
 
     private sealed class FakeCatalog : IAutoCastCatalog
@@ -678,7 +878,7 @@ public sealed class AutoCastTests
         }
     }
 
-    private sealed class FakeSpell : IAutoCastCandidate
+    private sealed class FakeSpell : IAutoCastCandidate, IAutoCastAdmissionFailureEvidence
     {
         private readonly IReadOnlyList<ResourceAdmissionCost> _immediate;
         private readonly IReadOnlyList<ResourceAdmissionCost> _drain;
@@ -728,9 +928,15 @@ public sealed class AutoCastTests
 
         public bool TargetsValid { get; set; } = true;
 
+        public int TargetValidationCalls { get; private set; }
+
         public bool CanCastResult { get; set; } = true;
 
         public string CanCastReason { get; set; } = "ready";
+
+        public AutoCastAdmissionFailureKind AdmissionFailureKind { get; set; }
+
+        public AutoCastAdmissionFailureKind LastAdmissionFailure => AdmissionFailureKind;
 
         public bool CanCast(out string reason)
         {
@@ -752,6 +958,7 @@ public sealed class AutoCastTests
 
         public bool HasValidTargets(out string reason)
         {
+            TargetValidationCalls++;
             reason = TargetsValid ? "valid" : "no valid target";
             return TargetsValid;
         }
@@ -824,6 +1031,7 @@ public sealed class AutoCastTests
 
         public NativeLoadoutRecipe reference;
         public bool Channeled { get; set; }
+        public bool EmitFireSignal { get; set; } = true;
         public bool HoldingCharge { get; private set; }
         public int FireCalls { get; private set; }
 
@@ -842,7 +1050,11 @@ public sealed class AutoCastTests
         public NativeLoadoutCostList GetDrainCost() => new();
         public object GetScalingInfo() => new object();
         public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
-        public void Fire() => FireCalls++;
+        public void Fire()
+        {
+            if (EmitFireSignal) AutoCastManualSignal.NotifySpellFire();
+            FireCalls++;
+        }
     }
 
     private sealed class NativeLoadoutRecipe

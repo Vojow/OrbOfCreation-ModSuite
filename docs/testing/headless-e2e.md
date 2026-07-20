@@ -1,0 +1,334 @@
+# Headless end-to-end simulation
+
+[Back to testing hub](README.md) · [Repository strategy](strategy.md) · [Runtime UAT protocol](runtime-validation.md) · [Performance architecture](../plans/performance-suite.md)
+
+See also [sanitized runtime replay fixtures](runtime-replay.md) for the strict,
+versioned event format used to reproduce selected ordering-sensitive journeys.
+
+## Purpose
+
+Headless E2E tests run the real mod engine, scheduler, candidate index, reserve policy, and queue-planning behavior against a deterministic simulation of the native game boundary. They require neither Unity nor computer control and are suitable for local development and CI.
+
+The simulation is intentionally smaller than Orb of Creation. It models only contracts the mod consumes:
+
+- shared native action-queue capacity, admission, completion, and manual occupancy;
+- Structures and Upgrades with stable UUID/type identity and replaceable native object identity;
+- authoritative availability, costs, resources, finite levels, and queued levels;
+- save/load-style lifecycle invalidation;
+- native rejection and ambiguous post-mutation failure;
+- deterministic CPU-work observations and operation counters.
+
+Native-shaped completion scenarios distinguish one native `CompleteAction`
+invocation from the number of queue slots it releases. A Structure completion
+may settle several Bulk Development levels and enqueue echo work while producing
+one completion callback. The callback is modeled before the outer action queue
+entry is removed; the engine still acts later from authoritative live queue room.
+
+Resource scenarios may use several independent resources and normalized
+`BigAmount` values. The simulated world remains authoritative for every balance
+and applies a mutation only when all resource costs and queue constraints pass.
+
+Production code remains responsible for all scheduling and purchase decisions. The simulation does not copy `AutoBuyEngine` logic or predict an independent economy.
+
+Focused native-shaped journeys complement the queue simulation. The game-stub
+assembly deliberately identifies itself as `Assembly-CSharp`, so production
+assembly-qualified lookups are exercised rather than bypassed. These fixtures
+currently cover:
+
+- Mentor spell, artifact, and alchemy registry reconciliation, capture, native
+  XP grants, recursion prevention, domain isolation, and lifecycle cancellation;
+- Auto Buy registry reconciliation, recreated native identity, resource
+  snapshots, native cost decoding, lifecycle evidence, and verified one-level
+  queue mutations;
+- automatic spell leveling before and after the native level-all upgrade, plus
+  cancellation of a pending mutation during lifecycle invalidation.
+
+### Reusable lifecycle scenarios
+
+`tests/OrbModding.Tests/Scenarios/` provides a deterministic, test-only state
+machine for suite journeys that cross several native events. Its
+`LifecycleScenarioKernel` owns a simulated frame and elapsed-time clock while
+driving the production `GameLifecycleMonitor`, `GameplayInvalidationBus`, and
+`SuitePerformanceCoordinator`. Lifecycle-bound delayed callbacks capture the
+generation at scheduling time and are recorded, but not executed, after that
+generation becomes stale. An explicit unfiltered-delivery mode models a late
+native observer so the production invalidation bus, rather than the harness,
+must reject its old-generation event.
+
+Production-facing feature drivers keep the scenario layer honest:
+
+- `ScenarioAutoBuyFeature` runs the real `AutoBuyEngine` against the existing
+  authoritative `SimulatedAutoBuyWorld` and `SimulatedAutoBuyCatalog`;
+- `ScenarioMentorFeature` runs the real `MentorEngine` and
+  `MentorCoordinatorWork` mutation path;
+- `ScenarioOracles` checks lifecycle order, ignored stale callbacks, unique
+  request execution, and the shared one-mutation-owning-feature-per-frame
+  invariant.
+
+The focused scenarios cover no-save through load/readiness, progression unlock,
+queue submission and completion, reset, old-generation callback rejection,
+prepared-work cancellation, disable/re-enable, and recreation of a `Main` scene
+with a different native identity. The mixed Automata/Mentor journey also proves
+that disabling or locking one feature does not stop an unrelated supported
+feature. These fixtures never launch Unity or use computer control.
+
+The fixture members are reduced from installed-game documentation and inspected
+assembly contracts. They remain smaller than the game and do not replace the
+installed-game contract suite or UAT.
+
+### Structured runtime replay
+
+`tests/OrbModding.RuntimeReplay/` defines a dependency-free V1 model and strict
+canonical JSON codec for lifecycle, resource, queue, progression, inventory,
+configuration, and completion observations. The scenario dispatcher reuses
+`LifecycleScenarioKernel` and `ScenarioAutoBuyFeature`; it does not duplicate
+their lifecycle clock, scheduler, invalidation bus, or engine simulation.
+
+The two checked-in replay fixtures cover completion-driven queue refill and
+chained progression invalidation. Repeated runs assert identical frames,
+integer-microsecond timestamps, lifecycle generations, mutation requests, and
+queue outcomes. Old-generation invalidation is rejected by the production bus.
+The separate converter accepts only a reviewed typed setup plus sanitized JSONL
+events and publishes atomically after complete validation. See the
+[schema and conversion workflow](runtime-replay.md).
+
+## Test layers and ownership
+
+| Layer | Runs | Proves | Does not prove |
+|---|---|---|---|
+| Unit/component | Portable test doubles and fixtures | Individual policies, reflection ambiguity handling, lifecycle transitions, and scheduler rules | A complete automation session |
+| Headless integration | Production native adapters against focused game API stubs | Assembly-qualified discovery and adapter translation, including Mentor, resources, spell leveling, and shared queue versus native Auto Buy queue | Installed assembly compatibility or Unity behavior |
+| Headless E2E | Real mod engine through a simulated native boundary | Queue filling, candidate handoff, resource depletion, lifecycle recovery, failure containment, and deterministic performance budgets | Unity wiring, installed assembly compatibility, visual behavior, or the real save format |
+| Installed-game contracts | PE metadata from the installed game | Audited type/member signatures and assembly hashes | Runtime behavior inside Unity |
+| UAT | Real game, disposable saves, observation, and optional computer control | Harmony/reflection wiring, visible queue behavior, save/load, UI, player control, and subjective responsiveness | Broad deterministic regression coverage |
+
+Computer control belongs only to UAT. No automated E2E or performance-simulation gate may depend on it.
+
+## Commands
+
+Run the complete portable suite:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
+```
+
+Run only headless behavioral journeys:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessIntegration"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessE2E"
+```
+
+Run only the reusable lifecycle state-machine scenarios while iterating on the
+kernel or a feature driver:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
+```
+
+Run the structured runtime replay fixtures and codec/converter contracts:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
+```
+
+Run the active deterministic performance baseline:
+
+```powershell
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+```
+
+Run the focused Auto Buy decision and stage-performance layers while iterating:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyDecision
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
+```
+
+`AutoBuyDecision` is the fast policy contract. It characterizes independent
+purchase grouping and continuation, ranked-pass fairness, reserve monotonicity,
+unavailable-candidate isolation, legacy-setting migration, and deterministic
+output. Every configured Structure group advances to the remaining prepared
+candidates before the ranked pass repeats; Upgrades remain one level except in
+`ActionMultiplier` mode.
+
+The broader `Reliability` lane combines dirty-resource, native multi-buy,
+runtime replay, and headless cross-boundary journeys. `AutoBuyReliability`
+selects its Auto Buy-specific subset. It owns live queue-capacity changes,
+reserve changes, ambiguous native outcomes, lifecycle replacement, and healthy
+sibling progress independently from throughput budgets.
+
+Capture a machine-readable report and compare it with the checked-in beta
+history:
+
+```powershell
+$env:OOC_PERFORMANCE_REPORT = Join-Path $PWD 'artifacts/performance/autobuy-current.json'
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+tools/check-performance-report.ps1 -ReportPath artifacts/performance/autobuy-current.json
+```
+
+The environment variable is optional. Without it, the tests enforce their hard
+budgets but do not create an artifact. Use an absolute path when setting it
+because the test host runs from its build-output directory.
+
+Performance targets remain skipped only while they document engineering backlog rather than released behavior. Promote a target to `PerformanceSimulation` only when the production engine meets its assertions without weakening the workload or budgets.
+
+## Determinism and performance budgets
+
+Performance simulations assert deterministic work rather than wall-clock duration. Useful metrics include:
+
+- candidate evaluations and maximum evaluations in one simulated frame;
+- queue high-water mark and depth after saturation;
+- frames with usable queue room but no purchase despite affordable work;
+- frames required to reach 90% of usable queue capacity;
+- purchase count and distinct-candidate handoff order.
+
+The harness injects observation costs into production CPU-slicing seams. This makes the same run reproducible on a desktop, Steam Deck, and CI runner. Real elapsed time may still be reported diagnostically, but it must not be the sole pass/fail criterion.
+
+The Auto Buy performance gate includes four progression-shaped workloads in
+addition to its historical stress cases:
+
+| Stage | Structures | Levels per Structure | Finite upgrades | Queue | Completion cadence at 60 Hz | All submitted | All completed |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Early | 8 | 10 | 2 | 24 | 1 per 60 frames (1/s) | 3,601 frames / 1:00.017 | 4,981 frames / 1:23.017 |
+| Mid | 64 | 40 | 12 | 128 | 1 per 15 frames (4/s) | 36,901 frames / 10:15.017 | 38,806 frames / 10:46.767 |
+| Late | 180 | 100 | 24 | 304 | 1 per 4 frames (15/s) | 71,281 frames / 19:48.017 | 72,493 frames / 20:08.217 |
+| Endgame | 180 | 1,000 | 24 | 304 | 1 per frame (60/s) | 186,109 frames / 51:41.817 | 186,110 frames / 51:41.833 |
+
+The historical 1.1 ms purchase model compares against a one-native-call-per-frame
+theoretical minimum:
+
+| Stage | Theoretical submission frame | Actual submission frame | Overhead | Efficiency | Evaluation-only idle | Other deferred idle |
+|---|---:|---:|---:|---:|---:|---:|
+| Early | 3,601 | 3,601 | 0 | 100% | 0 | 0 |
+| Mid | 36,901 | 36,901 | 0 | 100% | 2 | 0 |
+| Late | 71,281 | 71,281 | 0 | 100% | 302 | 0 |
+| Endgame | 180,121 | 186,109 | 5,988 | 96.783% | 5,996 | 0 |
+
+The idle attribution is measured only on frames that still have purchasable
+work and usable queue room. `Evaluation-only` means the frame performed
+candidate work but submitted no mutation; `other deferred` means neither a
+candidate evaluation nor a mutation occurred and therefore warrants deeper
+scheduler attribution if it becomes nonzero.
+
+The 180-Structure late/endgame catalog matches the reviewed `StructureSO`
+count in `data/entity-mappings.tsv`. Upgrades are finite one-level purchases;
+Structures use increasing live costs and are finite at the exact stage target
+so a cheap candidate cannot hide another candidate that failed to progress.
+Every stage must saturate its usable queue before turnover begins, retain
+bounded candidate work, and avoid excessive idle frames while affordable work
+and queue room remain. Early through late must keep at least 90% queue depth.
+Endgame deliberately overloads that historical modeled one-call-per-frame
+ceiling and records queue drain while still requiring all 180,000 Structure
+submissions.
+
+The separate bounded-burst gate models native calls from 1.1 ms down to 0.05 ms
+and requires deterministic 1/2/4/8/16-call leases. Its sustained workload
+consumes eight queue entries per frame and requires refill headroom, a maximum of
+16 calls in one lease, progress across every candidate, live queue/reserve
+safety, exact mutation accounting, and no same-frame Auto Cast overlap.
+
+### Historical reports
+
+[`data/autobuy-performance-baseline.json`](../../data/autobuy-performance-baseline.json)
+is the reviewed beta reference. Each report records the exact stage,
+Structure/Upgrade mix, workload, source commit, queue output,
+repeated-Structure coverage, refill latency, candidate and catalog reads,
+mutation attempts, scheduler callbacks, and normalized evaluations and total
+observed operations per successful submission. The operation total is
+diagnostic: it is the sum of modeled native reads, native mutation attempts,
+and scheduler callbacks. It is not a claim about instructions, allocations, or
+real elapsed CPU time.
+
+Each progression stage records deterministic frames and simulated seconds both
+when every finite Upgrade and per-Structure level target has been submitted and
+when the native queue has completed them all. CI treats an increase in either
+frame count as a performance regression; seconds are derived at the
+simulation's fixed 60 Hz rate for human comparison rather than wall-clock
+benchmarking.
+
+`tools/check-performance-report.ps1` rejects a changed workload or scenario set
+and allows at most a 10% regression by default. Queue depth, submissions, and
+candidate diversity are higher-is-better; reads, callbacks, refill latency,
+idle frames, and normalized operation density are lower-is-better. Existing
+scenario assertions remain the stricter correctness and safety gates.
+
+CI prints the comparison table in the job summary and retains the raw current
+report for 90 days. The checked-in reference supplies the long-lived anchor;
+retained artifacts provide per-run evidence for investigations. Update the
+reference only in the same reviewed change that intentionally changes the
+workload or improves/accepts the engine result. Run the full portable suite
+first, record the previous and new values in the PR, and never refresh the file
+merely to make a regression check pass.
+
+### Main versus beta compatibility run
+
+Run the same simulation against the last pre-beta `main` engine and the current
+working tree with:
+
+```powershell
+tools/compare-autobuy-performance.ps1
+```
+
+The script checks out commit `7f61f21` into a disposable temporary worktree,
+compiles a legacy catalog adapter against that unmodified production source,
+then compiles the current adapter against the current production source. Both
+execute the same 166-candidate, 304-slot, 900-frame periodic-completion,
+completion-storm, and cheap-call burst-refill workloads. The first two retain a
+1.1 ms modeled purchase; the burst workload models 0.05 ms purchases while
+consuming eight queue entries per frame. It writes `reference.json`,
+`current.json`, and `comparison.md` under
+`artifacts/performance/ab` and removes only the temporary worktree it created.
+
+The compatibility adapter accounts only for intentional API differences: the
+change from remaining queue room to the full queue-capacity snapshot, candidate
+evaluation evidence, and completion settlement/revalidation. It does not
+backport beta engine behavior into the reference build. Use
+`-ReferenceRef <commit>` to compare another commit; `-ReferenceApi Auto`
+selects the classic legacy, intermediate queue-snapshot, or current adapter
+from that source. `-ReferenceApi Intermediate` is available for an explicit
+comparison with the pre-ownership API used by the `0.3.2` suite baseline.
+
+Output and responsiveness metrics are interpreted directly: submissions,
+queue depth, distinct candidates, saturation time, and idle purchasable frames.
+Raw reads and modeled operations remain diagnostic in this cross-version view.
+An older engine can appear to perform less work simply because it does not
+revalidate or serve as many candidates, so operation density is a regression
+gate only between reports with equivalent engine semantics.
+
+### Pull-request target comparison comment
+
+For same-repository pull requests, the deterministic-performance job also runs
+the comparison against the exact `pull_request.base.sha`. It checks out the
+exact head SHA, writes the target/current reports under
+`artifacts/performance/pr`, and creates or updates one bot comment identified by
+`<!-- autobuy-performance-comparison -->`. Subsequent pushes update that comment
+instead of adding another one.
+
+The comment includes stable 1.1 ms regression scenarios and the cheap-call
+eight-completion burst scenario, with queue output, saturation, fairness,
+maximum purchases per frame, and normalized diagnostic work. It links the
+workflow run, while the raw reports remain in the retained artifact. Comment
+publication is best-effort and skipped for fork pull requests because their
+tokens are read-only; the deterministic gate and artifact remain authoritative.
+
+## Scenario design rules
+
+- Exercise the production engine through public or existing internal seams; do not duplicate its decision algorithm in the simulator.
+- Keep the simulated native world authoritative for availability, resource quantity, cost, queue room, and mutation acceptance.
+- Recreate native object identities on lifecycle reload while retaining stable UUID and expected type.
+- Include manual queue entries when testing shared-capacity behavior.
+- Model unexpected native results and verify that the engine fails closed.
+- Use several small focused journeys plus bounded stress scenarios. Avoid one enormous test that makes failures hard to diagnose.
+- Reduce every UAT-only defect into a deterministic headless regression when the relevant contract can be represented safely.
+- Schedule native-shaped delayed callbacks through the lifecycle kernel so an
+  old generation is rejected explicitly rather than relying on timing luck.
+- Give every simulated mutation request a stable request identity and run the
+  mutation uniqueness oracle in mixed-feature journeys.
+- Keep replay observations inside the strict versioned schema. Do not add opaque
+  payload dictionaries, private save fields, or free-text log ingestion.
+
+## UAT handoff
+
+Headless E2E passing is required before real-game UAT, but it does not replace UAT. Use the [runtime validation protocol](runtime-validation.md) for the installed DLL, disposable-save, queue, UI, rollback, and player-control gates. Computer control may accelerate those observations, but the result remains UAT evidence and should record the game build, mod build, save, settings, and visible outcome.

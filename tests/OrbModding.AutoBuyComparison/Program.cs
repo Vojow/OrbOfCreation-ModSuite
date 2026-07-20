@@ -19,6 +19,12 @@ internal static class Program
 
             RunScenario("periodic-completions", completionEveryFrames: 20);
             RunScenario("completion-storm", completionEveryFrames: 4);
+            RunScenario(
+                "cheap-call-burst-refill",
+                completionEveryFrames: 1,
+                completionsPerEvent: 8,
+                purchaseObservationCostMilliseconds: 0.05,
+                bulkDevelopment: 3);
 
             Console.WriteLine($"Wrote deterministic Auto Buy report for {source} to {Path.GetFullPath(reportPath)}.");
             return 0;
@@ -30,7 +36,12 @@ internal static class Program
         }
     }
 
-    private static void RunScenario(string name, int completionEveryFrames)
+    private static void RunScenario(
+        string name,
+        int completionEveryFrames,
+        int completionsPerEvent = 1,
+        double purchaseObservationCostMilliseconds = 1.1,
+        int? bulkDevelopment = null)
     {
         const int candidateCount = 166;
         const int queueCapacity = 304;
@@ -48,26 +59,41 @@ internal static class Program
             candidates,
             initialResourceQuantity: 1_000_000_000.0,
             readObservationCostMilliseconds: 0.02,
-            purchaseObservationCostMilliseconds: 1.1);
+            purchaseObservationCostMilliseconds: purchaseObservationCostMilliseconds);
+        if (bulkDevelopment.HasValue)
+        {
+            simulation.Catalog.BulkDevelopment = bulkDevelopment.Value;
+        }
 
         for (var frame = 0; frame < frameCount; frame++)
         {
             var completions = frame >= completionStartFrame &&
                               (frame - completionStartFrame) % completionEveryFrames == 0
-                ? 1
+                ? completionsPerEvent
                 : 0;
             simulation.Step(completions);
         }
 
         AutoBuyPerformanceReporter.Record(
             name,
+            "stress",
             simulation,
             candidateCount,
+            structureCount: 83,
+            upgradeCount: 83,
+            targetStructureLevels: 1,
+            purchaseGrouping: bulkDevelopment.HasValue
+                ? $"bulk-{bulkDevelopment.Value};purchase-ms-{purchaseObservationCostMilliseconds:0.###};completions-{completionsPerEvent}"
+                : "reviewed-default",
+            bulkDevelopment: simulation.Catalog.BulkDevelopment,
             queueCapacity,
             simulation.Config.LeaveQueueSlots.Value,
             frameCount,
             completionStartFrame,
-            completionEveryFrames);
+            completionEveryFrames,
+            framesToAllSubmissions: null,
+            framesToAllCompletions: null,
+            theoreticalMinimumSubmissionFrames: null);
 
         if (simulation.World.QueueCount < 0 || simulation.World.QueueCount > queueCapacity)
         {

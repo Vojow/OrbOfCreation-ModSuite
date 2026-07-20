@@ -70,30 +70,44 @@ public static class AutoBuyManager
     public static int GetRemainingRoom() => RemainingRoom;
 }
 
-public class SpellRecipeSO
+public class SpellRecipeSO : IdScriptableObject
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
-    public string uuid = Guid.NewGuid().ToString();
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
     public bool readyToLevel;
+    public bool SuppressMasteryGain { get; set; }
+    public bool SuppressLevelMutation { get; set; }
+    public int MasteryGrantCalls { get; private set; }
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
     public void GainMasteryExp(BigDouble exp)
     {
+        MasteryGrantCalls++;
+        if (SuppressMasteryGain) return;
         GrantedMasteryExperience.Add(exp);
         masteryExperience = Add(masteryExperience, exp);
     }
-    public Guid GetGuid() => Guid.Parse(uuid);
-    public Guid GetId() => GetGuid();
+    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetId() => GetGuid();
     public bool IsDiscovered() => discovered;
     public bool IsReadyToLevelMastery() => readyToLevel;
     public ResourceCostList GetLevelCost() => levelCost;
     public void PurchaseLevel()
     {
-        if (!readyToLevel) return;
+        if (!readyToLevel || SuppressLevelMutation) return;
         masteryLevel++;
         readyToLevel = false;
     }
@@ -112,9 +126,9 @@ public class SpellRecipeSO
 
 public class IdScriptableObject : UnityEngine.ScriptableObject
 {
-    public static IDictionary RuntimeLookup = new Dictionary<Guid, object>();
+    public static Dictionary<Guid, IdScriptableObject> RuntimeLookup = new();
     public Guid uuid = Guid.NewGuid();
-    public static object? GetInstance(Guid guid) => RuntimeLookup.Contains(guid) ? RuntimeLookup[guid] : null;
+    public static object? GetInstance(Guid guid) => RuntimeLookup.TryGetValue(guid, out var value) ? value : null;
     public Guid GetGuid() => uuid;
     public Guid GetId() => uuid;
     public void SetGuid(Guid guid) => uuid = guid;
@@ -203,7 +217,18 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public void GainMasteryXp(BigDouble amount)
     {
         GrantedMasteryExperience.Add(amount);
-        masteryXp = amount;
+        masteryXp = Add(masteryXp, amount);
+    }
+
+    private static BigDouble Add(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right;
+        if (right.mantissa == 0) return left;
+        var exponent = Math.Max(left.exponent, right.exponent);
+        return new BigDouble(
+            left.mantissa * Math.Pow(10, left.exponent - exponent) +
+            right.mantissa * Math.Pow(10, right.exponent - exponent),
+            exponent);
     }
 }
 
@@ -216,10 +241,19 @@ public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyReci
 {
 }
 
-public class UpgradeSO
+public class UpgradeSO : IdScriptableObject
 {
     public static List<UpgradeSO> All = new List<UpgradeSO>();
-    public string uuid = Guid.NewGuid().ToString();
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
     public int purchaseLevel;
     public int queuedPurchaseLevel;
     public bool available = true;
@@ -227,7 +261,7 @@ public class UpgradeSO
     public bool finite;
     public int maxLevel = int.MaxValue;
     public ResourceCostList purchaseCost = new ResourceCostList();
-    public Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Upgrade";
     public bool IsAvailable() => available;
     public bool CanPurchase() => purchasable && !IsMaxQueuedLevel();
@@ -258,16 +292,27 @@ public class StructureSO
     public bool available = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
+    public bool ApplyPurchaseMutation { get; set; } = true;
+    public int GetPurchaseCostCalls { get; private set; }
+    public bool Available { get => available; set => available = value; }
+    public bool Purchasable { get => purchasable; set => purchasable = value; }
+    public int PurchaseLevel { get => quantity; set => quantity = value; }
+    public int QueuedQuantity { get => queuedQuantity; set => queuedQuantity = value; }
+    public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
     public Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
     public bool CanPurchase() => purchasable;
-    public ResourceCostList GetPurchaseCost() => purchaseCost;
+    public ResourceCostList GetPurchaseCost()
+    {
+        GetPurchaseCostCalls++;
+        return purchaseCost;
+    }
     public int GetPurchaseLevel() => quantity;
     public int GetQueuedQuantity() => queuedQuantity;
     public void Purchase(bool forceOne)
     {
-        if (forceOne && CanPurchase()) queuedQuantity++;
+        if (forceOne && CanPurchase() && ApplyPurchaseMutation) queuedQuantity++;
     }
     public void QueueBuild(int amount) => queuedQuantity += amount;
     public void CompleteAction()
@@ -292,9 +337,34 @@ public class SaveStateManager
     }
 }
 
+public class GameManager
+{
+    public static void ResetGameState()
+    {
+    }
+
+    public void InitGame()
+    {
+    }
+}
+
+public class PersistentResetManager
+{
+    private void PersistentResetLogic()
+    {
+    }
+}
+
 public class Spell
 {
     private readonly SpellRecipeSO? reference;
+    public static Action? FireSignal { get; set; }
+    public string DisplayName { get; set; } = "Spell";
+    public bool Channeled { get; set; }
+    public bool EmitFireSignal { get; set; } = true;
+    public bool HoldingCharge { get; private set; }
+    public int FireCalls { get; private set; }
+    public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
     {
@@ -307,8 +377,26 @@ public class Spell
 
     public SpellRecipeSO? get_reference() => reference;
 
+    public string GetName() => DisplayName;
+    public bool IsChanneled() => Channeled;
+    public bool IsToggledSpell() => false;
+    public bool IsEmpty() => false;
+    public bool CanCharge() => true;
+    public bool IsCasting() => false;
+    public bool IsReadyingCast() => false;
+    public bool CanCast() => true;
+    public bool IsAttuning() => false;
+    public bool IsChargeAvailable() => true;
+    public bool HasEnoughResources() => true;
+    public ResourceCostList GetCost() => Cost;
+    public ResourceCostList GetDrainCost() => new ResourceCostList();
+    public object GetScalingInfo() => new object();
+    public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
+
     public void Fire()
     {
+        if (EmitFireSignal) FireSignal?.Invoke();
+        FireCalls++;
     }
 }
 
@@ -324,6 +412,15 @@ public class Prerequisites
 public class ResourceCostList
 {
     public List<ResourceTuple> costs = new List<ResourceTuple>();
+    public int CostPrintReads { get; private set; }
+    private string _costPrint
+    {
+        get
+        {
+            CostPrintReads++;
+            return "diagnostic-only";
+        }
+    }
     public bool affordable = true;
     public int PerformCalls { get; private set; }
     public bool HasEnough() => affordable;
@@ -428,38 +525,83 @@ public sealed class SpellListVariable : IEnumerable
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }
 
-public sealed class EquipmentSO
+public sealed class EquipmentSO : IdScriptableObject
 {
     public static List<EquipmentSO> All = new List<EquipmentSO>();
     private readonly ExperienceElement experienceContainer = new ExperienceElement();
-    public string uuid = Guid.NewGuid().ToString();
-    public string name = "Equipment";
+    private string stableUuid = Guid.NewGuid().ToString();
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
+    public new string name = "Equipment";
     public int masteryLevel;
     public BigDouble masteryXp;
     public bool isCreated = true;
-    public Guid GetGuid() => Guid.Parse(uuid);
-    public Guid GetId() => GetGuid();
+    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
     public ExperienceElement GetExperienceElement() => experienceContainer;
+    public void SetMasteryState(int level, BigDouble experience, BigDouble experiencePerLevel)
+    {
+        masteryLevel = level;
+        masteryXp = experience;
+        experienceContainer.SetState(level, experience, experiencePerLevel);
+    }
     private void GainMasteryLevels(int levels) => masteryLevel += levels;
 }
 
 public sealed class ExperienceElement
 {
     private BigDouble experience;
-    public int GainedLevels { get; set; }
+    private int currentLevel;
+    private BigDouble experiencePerLevel = new BigDouble(1, 100);
     public List<BigDouble> Grants { get; } = new List<BigDouble>();
+    public Action? AfterGainExperience { get; set; }
+    public bool SuppressGain { get; set; }
+
+    public void SetState(int level, BigDouble currentExperience, BigDouble requiredPerLevel)
+    {
+        currentLevel = level;
+        experience = currentExperience;
+        experiencePerLevel = requiredPerLevel;
+    }
 
     public void GainExperience(BigDouble amount)
     {
         Grants.Add(amount);
-        experience = Add(experience, amount);
+        if (!SuppressGain) experience = Add(experience, amount);
+        AfterGainExperience?.Invoke();
     }
 
-    public int GetGainedLevels() => GainedLevels;
+    public int GetGainedLevels()
+    {
+        var gained = 0;
+        while (Compare(experience, experiencePerLevel) >= 0 && gained < 10000)
+        {
+            experience = Subtract(experience, experiencePerLevel);
+            currentLevel++;
+            gained++;
+        }
+        return gained;
+    }
 
     public BigDouble GetExperience() => experience;
+
+    public int GetLevel() => currentLevel;
+
+    public ExperienceElement Clone()
+    {
+        var clone = new ExperienceElement();
+        clone.SetState(currentLevel, experience, experiencePerLevel);
+        return clone;
+    }
 
     private static BigDouble Add(BigDouble left, BigDouble right)
     {
@@ -470,6 +612,22 @@ public sealed class ExperienceElement
             left.mantissa * Math.Pow(10, left.exponent - exponent) +
             right.mantissa * Math.Pow(10, right.exponent - exponent),
             exponent);
+    }
+
+    private static BigDouble Subtract(BigDouble left, BigDouble right)
+    {
+        var exponent = Math.Max(left.exponent, right.exponent);
+        var mantissa = left.mantissa * Math.Pow(10, left.exponent - exponent) -
+                       right.mantissa * Math.Pow(10, right.exponent - exponent);
+        return mantissa <= 0 ? default : new BigDouble(mantissa, exponent);
+    }
+
+    private static int Compare(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right.mantissa == 0 ? 0 : -1;
+        if (right.mantissa == 0) return 1;
+        if (left.exponent != right.exponent) return left.exponent.CompareTo(right.exponent);
+        return left.mantissa.CompareTo(right.mantissa);
     }
 }
 
@@ -488,9 +646,11 @@ public sealed class AlchemyInstance
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
-public sealed class AlchemyInstanceListVariable
+public sealed class AlchemyInstanceListVariable : IdScriptableObject
 {
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
+    public bool SuppressAddMutation { get; set; }
+    public bool SuppressRemoveMutation { get; set; }
 
     public bool CanAddInstance(AlchemyRecipeSO recipe)
     {
@@ -504,6 +664,7 @@ public sealed class AlchemyInstanceListVariable
 
     public void AddAlchemyInstances(AlchemyRecipeSO recipe, int delta)
     {
+        if (SuppressAddMutation) return;
         var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
         if (instance is null)
         {
@@ -515,6 +676,7 @@ public sealed class AlchemyInstanceListVariable
 
     public void RemoveAlchemyInstances(AlchemyRecipeSO recipe, int delta)
     {
+        if (SuppressRemoveMutation) return;
         value.Single(item => ReferenceEquals(item.reference, recipe)).queuedQuantity -= delta;
     }
 
@@ -632,8 +794,10 @@ public class TooltipableObject : UnityEngine.ScriptableObject { }
 
 public class TooltipNode
 {
-    public TooltipNode(string text) { }
-    public TooltipNode(string text, UnityEngine.Color color) { }
+    public TooltipNode(string text) { Text = text; }
+    public TooltipNode(string text, UnityEngine.Color color) { Text = text; Color = color; }
+    public string Text { get; }
+    public UnityEngine.Color? Color { get; }
 }
 
 public class HoverTooltip : UnityEngine.MonoBehaviour
@@ -695,12 +859,29 @@ namespace BepInEx.Configuration
     public sealed class ConfigFile : IEnumerable<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
     {
         private readonly Dictionary<ConfigDefinition, ConfigEntryBase> _entries = new Dictionary<ConfigDefinition, ConfigEntryBase>();
+        private readonly Dictionary<ConfigDefinition, string> _orphanedEntries = new Dictionary<ConfigDefinition, string>();
+        private readonly Dictionary<ConfigDefinition, string> _persistedEntries = new Dictionary<ConfigDefinition, string>();
+
+        public ConfigFile(string configFilePath = "")
+        {
+            ConfigFilePath = configFilePath;
+        }
 
         public bool SaveOnConfigSet { get; set; } = true;
 
+        public string ConfigFilePath { get; }
+
         public int SaveCalls { get; private set; }
 
+        public int ReloadCalls { get; private set; }
+
         public int? ThrowOnSaveCall { get; set; }
+
+        public int? ThrowOnReloadCall { get; set; }
+
+        public bool ThrowOnEveryReload { get; set; }
+
+        public ConfigDefinition? ThrowOnBindDefinition { get; set; }
 
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, string description)
         {
@@ -710,12 +891,17 @@ namespace BepInEx.Configuration
         public ConfigEntry<T> Bind<T>(string section, string key, T defaultValue, ConfigDescription description)
         {
             var definition = new ConfigDefinition(section, key);
+            if (definition.Equals(ThrowOnBindDefinition))
+            {
+                throw new InvalidOperationException($"simulated config bind failure for [{section}] {key}");
+            }
             if (_entries.TryGetValue(definition, out var existing))
             {
                 return (ConfigEntry<T>)existing;
             }
 
             var entry = new ConfigEntry<T>(this, definition, defaultValue, description);
+            if (_orphanedEntries.Remove(definition, out var serialized)) entry.SetSerializedValue(serialized);
             _entries.Add(definition, entry);
             return entry;
         }
@@ -727,7 +913,37 @@ namespace BepInEx.Configuration
             {
                 throw new InvalidOperationException($"simulated config save failure on call {SaveCalls}");
             }
+
+            _persistedEntries.Clear();
+            foreach (var pair in _orphanedEntries) _persistedEntries[pair.Key] = pair.Value;
+            foreach (var pair in _entries) _persistedEntries[pair.Key] = pair.Value.GetSerializedValue();
         }
+
+        public void Reload()
+        {
+            ReloadCalls++;
+            if (ThrowOnEveryReload || ThrowOnReloadCall == ReloadCalls)
+            {
+                throw new InvalidOperationException($"simulated config reload failure on call {ReloadCalls}");
+            }
+
+            _orphanedEntries.Clear();
+            foreach (var pair in _persistedEntries)
+            {
+                if (_entries.TryGetValue(pair.Key, out var entry)) entry.SetSerializedValue(pair.Value);
+                else _orphanedEntries[pair.Key] = pair.Value;
+            }
+        }
+
+        public void SeedSerialized(string section, string key, string value)
+        {
+            var definition = new ConfigDefinition(section, key);
+            _orphanedEntries[definition] = value;
+            _persistedEntries[definition] = value;
+        }
+
+        public bool TryGetPersisted(string section, string key, out string value) =>
+            _persistedEntries.TryGetValue(new ConfigDefinition(section, key), out value!);
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
 

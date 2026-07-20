@@ -68,8 +68,51 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
             out var projectionReason), projectionReason);
         Assert.Equal(2, safeTarget);
         Assert.False(runtime.TryAdd(candidate, 3, out _));
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
         Assert.True(runtime.TryAdd(candidate, 2, out var addReason), addReason);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.MutationsCommitted);
         Assert.Equal(2, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void ReflectionConceptRuntime_NoOpAssignmentBlocksUntilLifecycleRecovery()
+    {
+        var recipe = new AlchemyRecipeSO(
+            "no-op-concept",
+            "No-op concept",
+            new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
+        {
+            maxUsageSlots = 2,
+        };
+        var active = InstallNativeLists(recipe);
+        active.SuppressAddMutation = true;
+        using var runtime = new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier());
+        var candidate = Assert.Single(runtime.ReadCandidates(
+            new HashSet<string>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal),
+            out _));
+
+        Assert.False(runtime.TryAdd(candidate, 1, out var failedReason));
+        Assert.Contains("PostconditionFailed", failedReason);
+        Assert.Equal(1, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.MutationsCommitted);
+        Assert.NotNull(runtime.BlockedReason);
+        Assert.False(runtime.TryAdd(candidate, 1, out var blockedReason));
+        Assert.Contains("blocked until the next lifecycle", blockedReason);
+        Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
+
+        active.SuppressAddMutation = false;
+        runtime.InvalidateLifecycle();
+        var recoveredCandidate = Assert.Single(runtime.ReadCandidates(
+            new HashSet<string>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal),
+            out var readReason));
+
+        Assert.Equal(string.Empty, readReason);
+        Assert.True(runtime.TryAdd(recoveredCandidate, 1, out var recoveredReason), recoveredReason);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
     }
 
     [Fact]
@@ -106,6 +149,7 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
     private static AlchemyInstanceListVariable InstallNativeLists(params AlchemyRecipeSO[] recipes)
     {
         var active = new AlchemyInstanceListVariable();
+        active.SetGuid(new Guid(ReflectionConceptRuntime.ActiveConceptsUuid));
         var recipeList = new AlchemyRecipeListVariable { value = recipes.ToList() };
         recipeList.SetGuid(AlchemyGameplayDomainClassifier.ConceptRecipesUuid);
         IdScriptableObject.RuntimeLookup[new Guid(ReflectionConceptRuntime.ActiveConceptsUuid)] = active;

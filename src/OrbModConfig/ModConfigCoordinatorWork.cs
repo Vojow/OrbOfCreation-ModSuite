@@ -13,11 +13,12 @@ internal sealed class ModConfigCoordinatorWork : IDisposable
     {
         _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
         _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+        var identity = SuitePerformanceWorkIdentities.ModConfigWork;
         _work = coordinator.Register(
-            "OrbModConfig",
-            "Install or repair UI",
-            SuiteBudgetClass.SoftLimited,
-            SuiteWorkExecutionKind.Cooperative);
+            identity.Subsystem,
+            identity.WorkName,
+            identity.BudgetClass,
+            identity.ExecutionKind);
     }
 
     internal bool IsPending => _work.IsPending;

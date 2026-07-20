@@ -77,8 +77,9 @@ internal sealed class ConfigSectionDescriptor
 
 internal sealed class ConfigSettingDescriptor
 {
-    public ConfigSettingDescriptor(ConfigEntryBase source)
+    public ConfigSettingDescriptor(string pluginGuid, ConfigEntryBase source)
     {
+        PluginGuid = pluginGuid ?? throw new ArgumentNullException(nameof(pluginGuid));
         Source = source;
         SourceSection = source.Definition.Section;
         Key = source.Definition.Key;
@@ -101,6 +102,7 @@ internal sealed class ConfigSettingDescriptor
         Dependencies = metadata?.Dependencies ?? Array.Empty<ModConfigDependency>();
     }
 
+    public string PluginGuid { get; }
     public ConfigEntryBase Source { get; }
     public string SourceSection { get; }
     public string Section { get; }
@@ -152,20 +154,25 @@ internal static class ConfigCatalog
                 plugin.Metadata.Version.ToString(),
                 plugin.Instance!.Config));
 
-        return Build(sources);
+        return Build(sources, ConfigurationSchemaStatusRegistry.Shared);
     }
 
-    public static ConfigCatalogSnapshot Build(IEnumerable<ConfigPluginSource> sources)
+    public static ConfigCatalogSnapshot Build(
+        IEnumerable<ConfigPluginSource> sources,
+        IConfigurationSchemaStatusSource? schemaStatuses = null)
     {
         var mods = sources
             .Select(BuildMod)
-            .Where(mod => mod.Sections.Count > 0)
+            .Where(mod => mod.Sections.Count > 0 || HasSchemaStatus(schemaStatuses, mod.Guid))
             .OrderBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(mod => mod.Guid, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         return new ConfigCatalogSnapshot(mods);
     }
+
+    private static bool HasSchemaStatus(IConfigurationSchemaStatusSource? statuses, string pluginGuid) =>
+        statuses is not null && statuses.TryGet(pluginGuid, out _);
 
     internal static ConfigEditorKind Classify(ConfigEntryBase entry)
     {
@@ -218,7 +225,7 @@ internal static class ConfigCatalog
     private static ModConfigDescriptor BuildMod(ConfigPluginSource source)
     {
         var settings = source.Config
-            .Select(pair => new ConfigSettingDescriptor(pair.Value))
+            .Select(pair => new ConfigSettingDescriptor(source.Guid, pair.Value))
             .Where(setting => !setting.Hidden);
 
         var sections = settings

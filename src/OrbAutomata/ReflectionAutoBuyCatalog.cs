@@ -13,6 +13,7 @@ internal sealed class ReflectionAutoBuyCatalog :
     IAutoBuyCatalog,
     IAutoBuyIncrementalCatalog,
     IAutoBuyProgressionCatalog,
+    IAutoBuyInvalidationIdentityCatalog,
     IAutoBuyCompletionRevalidationCatalog
 {
     private static readonly TimeSpan RegistryReconciliationInterval = TimeSpan.FromSeconds(10);
@@ -123,7 +124,9 @@ internal sealed class ReflectionAutoBuyCatalog :
         {
             for (var i = 0; i < dirtyCandidate.ResourceDependencies.Count; i++)
             {
-                _deferredPurchaseResourceInvalidations.Add(dirtyCandidate.ResourceDependencies[i]);
+                var resourceId = dirtyCandidate.ResourceDependencies[i];
+                _resourceSnapshots.NotifyAuthoritativeChange(resourceId);
+                _deferredPurchaseResourceInvalidations.Add(resourceId);
             }
 
             // The selected candidate must refresh its own live cost and level
@@ -207,6 +210,19 @@ internal sealed class ReflectionAutoBuyCatalog :
             ? AutoBuyCandidateKinds.Upgrades
             : AutoBuyCandidateKinds.Structures;
         _completionSettlement.Notify();
+    }
+
+    public bool TryResolveInvalidationTarget(
+        object nativeIdentity,
+        AutoBuyCandidateKind expectedKind,
+        out string entityId,
+        out string expectedTypeName)
+    {
+        return _index.TryResolveInvalidationTarget(
+            nativeIdentity,
+            expectedKind,
+            out entityId,
+            out expectedTypeName);
     }
 
     public bool TryRefreshCandidateAfterCompletion(
@@ -590,26 +606,252 @@ internal sealed class ReflectionAutoBuyCatalog :
     }
 }
 
+internal interface IReflectionAutoBuyNativeActionAdapter
+{
+    string ExpectedNativeType { get; }
+
+    bool HasExpectedNativeType { get; }
+
+    bool HasCompleteContract { get; }
+
+    bool TryReadAvailability(out bool available);
+
+    bool TryReadNativeAdmission(out bool accepted);
+
+    bool TryReadLifecycle(out AutoBuyLifecycleEvidence evidence);
+
+    int CaptureQueuedState();
+
+    void InvokePurchase();
+}
+
+internal abstract class ReflectionAutoBuyNativeActionAdapter : IReflectionAutoBuyNativeActionAdapter
+{
+    private readonly object _source;
+    private readonly MethodInfo? _isAvailable;
+    private readonly MethodInfo? _canPurchase;
+    private readonly MethodInfo? _getPurchaseLevel;
+
+    protected ReflectionAutoBuyNativeActionAdapter(object source, string expectedNativeType)
+    {
+        _source = source;
+        ExpectedNativeType = expectedNativeType;
+        SourceType = source.GetType();
+        HasExpectedNativeType = IsExactAuditedType(SourceType, expectedNativeType);
+        _isAvailable = FindNoArgMethod("IsAvailable", typeof(bool));
+        _canPurchase = FindNoArgMethod("CanPurchase", typeof(bool));
+        _getPurchaseLevel = FindNoArgMethod("GetPurchaseLevel", typeof(int));
+    }
+
+    public string ExpectedNativeType { get; }
+
+    public bool HasExpectedNativeType { get; }
+
+    protected bool HasCoreContract =>
+        HasExpectedNativeType &&
+        _isAvailable is not null &&
+        _canPurchase is not null &&
+        _getPurchaseLevel is not null;
+
+    public abstract bool HasCompleteContract { get; }
+
+    protected object Source => _source;
+
+    protected Type SourceType { get; }
+
+    public bool TryReadAvailability(out bool available) => TryInvoke(_isAvailable, out available);
+
+    public bool TryReadNativeAdmission(out bool accepted) => TryInvoke(_canPurchase, out accepted);
+
+    public bool TryReadLifecycle(out AutoBuyLifecycleEvidence evidence)
+    {
+        evidence = default;
+        if (!TryReadAvailability(out var available) ||
+            !TryInvoke(_getPurchaseLevel, out int currentLevel) ||
+            !TryReadQueuedValue(out var queuedValue))
+        {
+            return false;
+        }
+
+        return TryCreateLifecycleEvidence(available, currentLevel, queuedValue, out evidence);
+    }
+
+    public int CaptureQueuedState()
+    {
+        if (!TryReadQueuedValue(out var queued))
+        {
+            throw new InvalidOperationException("native queued state is unavailable");
+        }
+
+        return queued;
+    }
+
+    public abstract void InvokePurchase();
+
+    protected abstract bool TryReadQueuedValue(out int queuedValue);
+
+    protected abstract bool TryCreateLifecycleEvidence(
+        bool available,
+        int currentLevel,
+        int queuedValue,
+        out AutoBuyLifecycleEvidence evidence);
+
+    protected MethodInfo? FindNoArgMethod(string name, Type? returnType)
+    {
+        var method = SourceType.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+        return method is not null &&
+               method.DeclaringType == SourceType &&
+               (returnType is null || method.ReturnType == returnType)
+            ? method
+            : null;
+    }
+
+    protected bool TryInvoke<T>(MethodInfo? method, out T value)
+    {
+        try
+        {
+            var result = method?.Invoke(Source, Array.Empty<object>());
+            if (result is T typed)
+            {
+                value = typed;
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
+        {
+        }
+
+        value = default!;
+        return false;
+    }
+
+    private static bool IsExactAuditedType(Type type, string expected) =>
+        string.Equals(type.FullName, expected, StringComparison.Ordinal) &&
+        string.Equals(type.Assembly.GetName().Name, "Assembly-CSharp", StringComparison.Ordinal);
+}
+
+internal sealed class ReflectionStructurePurchaseAdapter : ReflectionAutoBuyNativeActionAdapter
+{
+    private readonly MethodInfo? _getQueuedQuantity;
+    private readonly MethodInfo? _purchase;
+
+    public ReflectionStructurePurchaseAdapter(object source) : base(source, "StructureSO")
+    {
+        _getQueuedQuantity = FindNoArgMethod("GetQueuedQuantity", typeof(int));
+        var purchase = SourceType.GetMethod(
+            "Purchase",
+            ReflectionUtil.InstanceFlags,
+            null,
+            new[] { typeof(bool) },
+            null);
+        _purchase = purchase?.DeclaringType == SourceType && purchase.ReturnType == typeof(void) ? purchase : null;
+    }
+
+    public override bool HasCompleteContract =>
+        HasCoreContract && _getQueuedQuantity is not null && _purchase is not null;
+
+    public override void InvokePurchase()
+    {
+        if (_purchase is null) throw new MissingMethodException(SourceType.FullName, "Purchase(bool)");
+        _purchase.Invoke(Source, new object[] { true });
+    }
+
+    protected override bool TryReadQueuedValue(out int queuedValue) =>
+        TryInvoke(_getQueuedQuantity, out queuedValue);
+
+    protected override bool TryCreateLifecycleEvidence(
+        bool available,
+        int currentLevel,
+        int queuedValue,
+        out AutoBuyLifecycleEvidence evidence)
+    {
+        evidence = new AutoBuyLifecycleEvidence(
+            available,
+            currentLevel,
+            queuedValue,
+            hasFiniteLevels: false,
+            isMaxLevel: false,
+            isMaxQueuedLevel: false);
+        return true;
+    }
+}
+
+internal sealed class ReflectionUpgradePurchaseAdapter : ReflectionAutoBuyNativeActionAdapter
+{
+    private readonly MethodInfo? _getQueuedPurchaseLevel;
+    private readonly MethodInfo? _hasFiniteLevels;
+    private readonly MethodInfo? _isMaxLevel;
+    private readonly MethodInfo? _isMaxQueuedLevel;
+    private readonly MethodInfo? _purchase;
+
+    public ReflectionUpgradePurchaseAdapter(object source) : base(source, "UpgradeSO")
+    {
+        _getQueuedPurchaseLevel = FindNoArgMethod("GetQueuedPurchaseLevel", typeof(int));
+        _hasFiniteLevels = FindNoArgMethod("HasFiniteLevels", typeof(bool));
+        _isMaxLevel = FindNoArgMethod("IsMaxLevel", typeof(bool));
+        _isMaxQueuedLevel = FindNoArgMethod("IsMaxQueuedLevel", typeof(bool));
+        _purchase = FindNoArgMethod("Purchase", typeof(void));
+    }
+
+    public override bool HasCompleteContract =>
+        HasCoreContract &&
+        _getQueuedPurchaseLevel is not null &&
+        _hasFiniteLevels is not null &&
+        _isMaxLevel is not null &&
+        _isMaxQueuedLevel is not null &&
+        _purchase is not null;
+
+    public override void InvokePurchase()
+    {
+        if (_purchase is null) throw new MissingMethodException(SourceType.FullName, "Purchase()");
+        _purchase.Invoke(Source, Array.Empty<object>());
+    }
+
+    protected override bool TryReadQueuedValue(out int queuedValue) =>
+        TryInvoke(_getQueuedPurchaseLevel, out queuedValue);
+
+    protected override bool TryCreateLifecycleEvidence(
+        bool available,
+        int currentLevel,
+        int queuedValue,
+        out AutoBuyLifecycleEvidence evidence)
+    {
+        evidence = default;
+        if (!TryInvoke(_hasFiniteLevels, out bool finite) ||
+            !TryInvoke(_isMaxLevel, out bool maxLevel) ||
+            !TryInvoke(_isMaxQueuedLevel, out bool maxQueued))
+        {
+            return false;
+        }
+
+        evidence = new AutoBuyLifecycleEvidence(
+            available,
+            currentLevel,
+            queuedValue - currentLevel,
+            finite,
+            maxLevel,
+            maxQueued);
+        return true;
+    }
+}
+
 internal sealed class ReflectionAutoBuyCandidate :
     IAutoBuyCandidate,
     IAutoBuyLifecycleCandidate,
     IAutoBuyNativeIdentity,
     IAutoBuyDirtyCandidate,
-    IAutoBuyPriorityCandidate
+    IAutoBuyPriorityCandidate,
+    IAutoBuyMutationCandidate,
+    IAutoBuyCircuitCandidate,
+    IAutoBuyAdmissionContractEvidence,
+    IAutoBuyAvailabilityEvidence,
+    INativeMutationOutcomeSource
 {
     private readonly object _source;
     private readonly AutoBuyCandidateKind _kind;
     private readonly Type _sourceType;
-    private readonly MethodInfo? _isAvailable;
-    private readonly MethodInfo? _canPurchase;
     private readonly MethodInfo? _getPurchaseCost;
-    private readonly MethodInfo? _purchase;
-    private readonly MethodInfo? _getPurchaseLevel;
-    private readonly MethodInfo? _getQueuedState;
-    private readonly MethodInfo? _hasFiniteLevels;
-    private readonly MethodInfo? _isMaxLevel;
-    private readonly MethodInfo? _isMaxQueuedLevel;
-    private readonly bool _expectedNativeType;
+    private readonly IReflectionAutoBuyNativeActionAdapter _nativeAction;
     private readonly AutoBuyResourceSnapshotCache _resourceSnapshots;
     private AutoBuyEconomicPriority _economicPriority;
     private bool _economicPriorityClassified;
@@ -621,12 +863,16 @@ internal sealed class ReflectionAutoBuyCandidate :
     private AutoBuyCandidateSnapshot? _snapshot;
     private bool _costDirty = true;
     private bool _hasResolvedCosts;
-    private int _adapterFailureCount;
-    private long _nextAdapterRetryEpoch;
+    private readonly AutomationCircuitBreaker _readCircuit = new AutomationCircuitBreaker(1, 64);
+    private readonly AutomationCircuitBreaker _mutationCircuit = new AutomationCircuitBreaker(1, 64);
+    private long _lifecycleGeneration;
     private long _lastAdapterWarningEpoch = long.MinValue;
     private bool _hasCachedAvailability;
     private bool _cachedAvailability;
     private long _completionRefreshGeneration = -1;
+    private string? _mutationBlockedReason;
+    private NativeMutationEvidence<int>? _lastMutationEvidence;
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
 
     public ReflectionAutoBuyCandidate(
         object source,
@@ -637,23 +883,15 @@ internal sealed class ReflectionAutoBuyCandidate :
         _kind = kind;
         _resourceSnapshots = resourceSnapshots;
         _sourceType = source.GetType();
-        _expectedNativeType = HasExpectedNativeType(_sourceType, kind);
-        _isAvailable = FindNoArgMethod("IsAvailable", typeof(bool));
-        _canPurchase = FindNoArgMethod("CanPurchase", typeof(bool));
-        _getPurchaseCost = FindNoArgMethod("GetPurchaseCost", null);
-        _purchase = kind == AutoBuyCandidateKind.Structure
-            ? _sourceType.GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, new[] { typeof(bool) }, null)
-            : _sourceType.GetMethod("Purchase", ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
-        _getPurchaseLevel = FindNoArgMethod("GetPurchaseLevel", typeof(int));
-        _getQueuedState = FindNoArgMethod(
-            kind == AutoBuyCandidateKind.Structure ? "GetQueuedQuantity" : "GetQueuedPurchaseLevel",
-            typeof(int));
-        if (kind == AutoBuyCandidateKind.Upgrade)
-        {
-            _hasFiniteLevels = FindNoArgMethod("HasFiniteLevels", typeof(bool));
-            _isMaxLevel = FindNoArgMethod("IsMaxLevel", typeof(bool));
-            _isMaxQueuedLevel = FindNoArgMethod("IsMaxQueuedLevel", typeof(bool));
-        }
+        _nativeAction = kind == AutoBuyCandidateKind.Structure
+            ? new ReflectionStructurePurchaseAdapter(source)
+            : new ReflectionUpgradePurchaseAdapter(source);
+        var getPurchaseCost = FindNoArgMethod("GetPurchaseCost", null);
+        _getPurchaseCost = getPurchaseCost is not null &&
+                           string.Equals(getPurchaseCost.ReturnType.FullName, "ResourceCostList", StringComparison.Ordinal) &&
+                           string.Equals(getPurchaseCost.ReturnType.Assembly.GetName().Name, "Assembly-CSharp", StringComparison.Ordinal)
+            ? getPurchaseCost
+            : null;
     }
 
     public object NativeIdentity => _source;
@@ -664,7 +902,7 @@ internal sealed class ReflectionAutoBuyCandidate :
         {
             if (!_economicPriorityClassified)
             {
-                _economicPriority = _kind == AutoBuyCandidateKind.Structure && _expectedNativeType
+                _economicPriority = _kind == AutoBuyCandidateKind.Structure && _nativeAction.HasExpectedNativeType
                     ? NativeStructurePriorityClassifier.Classify(_source)
                     : AutoBuyEconomicPriority.None;
                 _economicPriorityClassified = true;
@@ -678,6 +916,26 @@ internal sealed class ReflectionAutoBuyCandidate :
 
     public bool HasResolvedCosts => !_costDirty && _hasResolvedCosts;
 
+    public AutomationCircuitSnapshot CircuitSnapshot => Stronger(
+        _readCircuit.Snapshot,
+        _mutationCircuit.Snapshot);
+
+    public bool HasCompleteNativeContract =>
+        _nativeAction.HasCompleteContract && _getPurchaseCost is not null;
+
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
+
+    public bool CanEvaluate() =>
+        _readCircuit.CanAttemptAt(_resourceSnapshots.Epoch) &&
+        _mutationCircuit.CanAttemptAt(_resourceSnapshots.Epoch);
+
+    public void WakeCircuit(AutomationRetryTrigger trigger, long lifecycleGeneration)
+    {
+        _lifecycleGeneration = Math.Max(_lifecycleGeneration, lifecycleGeneration);
+        _readCircuit.Wake(trigger, _resourceSnapshots.Epoch, lifecycleGeneration);
+        _mutationCircuit.Wake(trigger, _resourceSnapshots.Epoch, lifecycleGeneration);
+    }
+
     public AutoBuyCandidateSnapshot Snapshot()
     {
         return _snapshot ??= new AutoBuyCandidateSnapshot(
@@ -685,19 +943,34 @@ internal sealed class ReflectionAutoBuyCandidate :
             ReflectionUtil.ReadStableId(_source) ?? string.Empty,
             ReflectionUtil.ReadDisplayName(_source) ?? _sourceType.Name,
             _kind,
-            _sourceType.FullName ?? _sourceType.Name);
+            _nativeAction.ExpectedNativeType);
     }
 
     public bool IsAvailable()
     {
-        return _hasCachedAvailability
-            ? _cachedAvailability
-            : TryInvoke(_isAvailable, out bool available) && available;
+        return TryReadAvailability(out var available) && available;
+    }
+
+    public bool TryReadAvailability(out bool available)
+    {
+        if (_hasCachedAvailability)
+        {
+            available = _cachedAvailability;
+            return true;
+        }
+
+        return _nativeAction.TryReadAvailability(out available);
     }
 
     public bool CanPurchase(out string reason)
     {
-        if (!TryInvoke(_canPurchase, out bool canPurchase))
+        if (_mutationBlockedReason is not null)
+        {
+            reason = _mutationBlockedReason;
+            return false;
+        }
+
+        if (!_nativeAction.TryReadNativeAdmission(out var canPurchase))
         {
             reason = "CanPurchase unavailable";
             return false;
@@ -712,8 +985,15 @@ internal sealed class ReflectionAutoBuyCandidate :
         if (_costDirty)
         {
             _hasResolvedCosts = false;
-            if (_resourceSnapshots.Epoch < _nextAdapterRetryEpoch)
+            if (!_readCircuit.CanAttemptAt(_resourceSnapshots.Epoch))
             {
+                _admissionCosts.Clear();
+                return _admissionCosts;
+            }
+
+            if (_getPurchaseCost is null)
+            {
+                RecordAdapterFailure("native GetPurchaseCost contract is unavailable", contractFailure: true);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
@@ -730,21 +1010,22 @@ internal sealed class ReflectionAutoBuyCandidate :
                     costContainer,
                     _decodedCosts,
                     out _,
-                    out var adapterReason) ||
+                    out var adapterReason,
+                    out var adapterFailureKind) ||
                 !ApplyDecodedCosts())
             {
                 RecordAdapterFailure(
                     string.IsNullOrWhiteSpace(adapterReason)
                         ? "native ResourceCostList contained contradictory duplicate resources"
-                        : adapterReason);
+                        : adapterReason,
+                    contractFailure: !string.IsNullOrWhiteSpace(adapterReason) &&
+                                     adapterFailureKind == NativeResourceCostReadFailureKind.Contract);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
 
             _costDirty = false;
             _hasResolvedCosts = true;
-            _adapterFailureCount = 0;
-            _nextAdapterRetryEpoch = 0;
         }
 
         _admissionCosts.Clear();
@@ -754,6 +1035,14 @@ internal sealed class ReflectionAutoBuyCandidate :
             if (!_resourceSnapshots.TryResolve(definition, out var resource))
             {
                 _hasResolvedCosts = false;
+                _readCircuit.RetryAfterTime(
+                    AutomationDecisionCode.NativeStateUnavailable,
+                    AutomationRetryTrigger.ResourceQuantity |
+                    AutomationRetryTrigger.ResourceRate |
+                    AutomationRetryTrigger.Registry |
+                    AutomationRetryTrigger.Lifecycle,
+                    _resourceSnapshots.Epoch,
+                    _lifecycleGeneration);
                 _admissionCosts.Clear();
                 return _admissionCosts;
             }
@@ -766,6 +1055,8 @@ internal sealed class ReflectionAutoBuyCandidate :
                 resource.Capacity,
                 resource.IsBandwidth));
         }
+
+        _readCircuit.RecordSuccess();
 
         return _admissionCosts;
     }
@@ -844,18 +1135,34 @@ internal sealed class ReflectionAutoBuyCandidate :
         return true;
     }
 
-    private void RecordAdapterFailure(string reason)
+    private void RecordAdapterFailure(string reason, bool contractFailure = false)
     {
-        _adapterFailureCount = Math.Min(16, _adapterFailureCount + 1);
-        var backoff = 1L << Math.Min(6, _adapterFailureCount - 1);
-        _nextAdapterRetryEpoch = _resourceSnapshots.Epoch + backoff;
-        if (_adapterFailureCount == 1 ||
+        if (contractFailure)
+        {
+            _readCircuit.FailContract(
+                AutomationDecisionCode.ContractUnresolved,
+                _lifecycleGeneration);
+        }
+        else
+        {
+            _readCircuit.RetryAfterTime(
+                AutomationDecisionCode.CostUnavailable,
+                AutomationRetryTrigger.Registry |
+                AutomationRetryTrigger.Progression |
+                AutomationRetryTrigger.ResourceQuantity |
+                AutomationRetryTrigger.ResourceRate |
+                AutomationRetryTrigger.Lifecycle,
+                _resourceSnapshots.Epoch,
+                _lifecycleGeneration);
+        }
+        if (_readCircuit.Snapshot.ConsecutiveFailures == 1 ||
             _resourceSnapshots.Epoch - _lastAdapterWarningEpoch >= 64)
         {
             _lastAdapterWarningEpoch = _resourceSnapshots.Epoch;
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Buy quarantined cost evaluation for {Snapshot().Uuid}; " +
-                $"retryEpoch={_nextAdapterRetryEpoch}; reason={reason}");
+                $"state={_readCircuit.State}; " +
+                $"retryEpoch={_readCircuit.Snapshot.RetryAtTimestamp}; reason={reason}");
         }
     }
 
@@ -897,9 +1204,9 @@ internal sealed class ReflectionAutoBuyCandidate :
     public bool TryGetLifecycleEvidence(out AutoBuyLifecycleEvidence evidence, out string reason)
     {
         evidence = default;
-        if (!_expectedNativeType)
+        if (!_nativeAction.HasExpectedNativeType)
         {
-            reason = $"native object is not an audited {_kind} type";
+            reason = $"native object is not an audited {_nativeAction.ExpectedNativeType} type";
             return false;
         }
 
@@ -909,55 +1216,45 @@ internal sealed class ReflectionAutoBuyCandidate :
             return false;
         }
 
-        if (!TryInvoke(_isAvailable, out bool available) ||
-            !TryInvoke(_getPurchaseLevel, out int currentLevel) ||
-            !TryInvoke(_getQueuedState, out int queuedValue))
+        if (!_nativeAction.TryReadLifecycle(out evidence))
         {
             reason = "required native lifecycle method was unavailable";
             return false;
         }
 
-        _cachedAvailability = available;
+        _cachedAvailability = evidence.IsAvailable;
         _hasCachedAvailability = true;
-
-        if (_kind == AutoBuyCandidateKind.Structure)
-        {
-            evidence = new AutoBuyLifecycleEvidence(
-                available,
-                currentLevel,
-                queuedValue,
-                hasFiniteLevels: false,
-                isMaxLevel: false,
-                isMaxQueuedLevel: false);
-            reason = string.Empty;
-            return true;
-        }
-
-        if (!TryInvoke(_hasFiniteLevels, out bool finite) ||
-            !TryInvoke(_isMaxLevel, out bool maxLevel) ||
-            !TryInvoke(_isMaxQueuedLevel, out bool maxQueued))
-        {
-            reason = "required finite Upgrade lifecycle method was unavailable";
-            return false;
-        }
-
-        var queuedLevels = queuedValue - currentLevel;
-        evidence = new AutoBuyLifecycleEvidence(
-            available,
-            currentLevel,
-            queuedLevels,
-            finite,
-            maxLevel,
-            maxQueued);
         reason = string.Empty;
         return true;
     }
 
     public bool TryPurchaseOne(out string reason)
     {
+        _lastNativeMutationOutcome = default;
         reason = string.Empty;
+        if (_mutationBlockedReason is not null)
+        {
+            reason = _mutationBlockedReason;
+            return false;
+        }
+
+        if (!_nativeAction.HasCompleteContract ||
+            !_nativeAction.TryReadAvailability(out var available) ||
+            !available)
+        {
+            reason = "native identity, availability, queue, or purchase contract changed before mutation";
+            return false;
+        }
+
         if (!CanPurchase(out reason))
         {
+            return false;
+        }
+
+        GetCosts();
+        if (!HasResolvedCosts)
+        {
+            reason = "native cost or resource snapshot changed before mutation";
             return false;
         }
 
@@ -969,23 +1266,21 @@ internal sealed class ReflectionAutoBuyCandidate :
     private bool TryPurchaseStructure(out string reason)
     {
         reason = string.Empty;
-        var method = _purchase;
-        if (method is null)
+        if (_nativeAction is not ReflectionStructurePurchaseAdapter)
         {
-            reason = "Purchase(bool forceOne) unavailable";
+            reason = "Structure purchase adapter unavailable";
             return false;
         }
 
-        return InvokeAndVerify(method, new object[] { true }, "GetQueuedQuantity", out reason);
+        return InvokeAndVerify("GetQueuedQuantity", out reason);
     }
 
     private bool TryPurchaseUpgrade(out string reason)
     {
         reason = string.Empty;
-        var method = _purchase;
-        if (method is null)
+        if (_nativeAction is not ReflectionUpgradePurchaseAdapter)
         {
-            reason = "Purchase() unavailable";
+            reason = "Upgrade purchase adapter unavailable";
             return false;
         }
 
@@ -996,47 +1291,88 @@ internal sealed class ReflectionAutoBuyCandidate :
 
         using (scope)
         {
-            return InvokeAndVerify(method, Array.Empty<object>(), "GetQueuedPurchaseLevel", out reason);
+            return InvokeAndVerify("GetQueuedPurchaseLevel", out reason);
         }
     }
 
-    private bool InvokeAndVerify(MethodInfo method, object[] arguments, string levelMethod, out string reason)
+    private bool InvokeAndVerify(string levelMethod, out string reason)
     {
-        reason = string.Empty;
-        if (!TryInvoke(_getQueuedState, out int before))
+        var evidence = NativeMutationVerifier.Execute(
+            $"Auto Buy {_kind}",
+            Snapshot().Uuid,
+            $"{levelMethod} exact delta +1",
+            CaptureQueuedState,
+            _nativeAction.InvokePurchase,
+            (before, after) => after == before + 1);
+        _lastMutationEvidence = evidence;
+        _lastNativeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
+        if (evidence.IsVerified)
         {
-            reason = $"native {levelMethod} was unavailable before purchase";
-            return false;
+            _mutationCircuit.RecordSuccess();
+            reason = string.Empty;
+            return true;
         }
 
-        try
+        reason = evidence.Format();
+        if (evidence.MutationWasAttempted)
         {
-            method.Invoke(_source, arguments);
-        }
-        catch (TargetInvocationException ex)
-        {
-            reason = ex.InnerException?.Message ?? ex.Message;
-            return false;
-        }
-        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
-        {
-            reason = ex.Message;
-            return false;
+            _mutationCircuit.RetryAfterLifecycle(
+                AutomationDecisionCode.PostconditionFailed,
+                _lifecycleGeneration);
+            _mutationBlockedReason = $"native mutation blocked until the next lifecycle: {reason}";
+            Plugin.Log?.LogAutomataWarning(_mutationBlockedReason);
         }
 
-        if (!TryInvoke(_getQueuedState, out int after) || after <= before)
+        return false;
+    }
+
+    public void RecoverMutationBlock(long lifecycleGeneration)
+    {
+        var hadMutationBlock = _mutationBlockedReason is not null;
+        _lifecycleGeneration = lifecycleGeneration;
+        var woke = _mutationCircuit.Wake(
+                AutomationRetryTrigger.Lifecycle,
+                _resourceSnapshots.Epoch,
+                lifecycleGeneration);
+        if (hadMutationBlock && !woke)
         {
-            reason = $"native purchase did not increase {levelMethod}";
-            return false;
+            return;
         }
 
-        return true;
+        _mutationBlockedReason = null;
+        _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
+    }
+
+    private static AutomationCircuitSnapshot Stronger(
+        AutomationCircuitSnapshot left,
+        AutomationCircuitSnapshot right)
+    {
+        return CircuitStrength(right.State) > CircuitStrength(left.State) ? right : left;
+    }
+
+    private static int CircuitStrength(AutomationCircuitState state) => state switch
+    {
+        AutomationCircuitState.ContractFailed => 4,
+        AutomationCircuitState.RetryAfterLifecycle => 3,
+        AutomationCircuitState.QuarantinedUntilConfigChange => 2,
+        AutomationCircuitState.RetryAfterTime => 1,
+        _ => 0,
+    };
+
+    private int CaptureQueuedState()
+    {
+        return _nativeAction.CaptureQueuedState();
     }
 
     private MethodInfo? FindNoArgMethod(string name, Type? returnType)
     {
         var method = _sourceType.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
-        return method is not null && (returnType is null || method.ReturnType == returnType) ? method : null;
+        return method is not null &&
+               method.DeclaringType == _sourceType &&
+               (returnType is null || method.ReturnType == returnType)
+            ? method
+            : null;
     }
 
     private object? Invoke(MethodInfo? method)
@@ -1051,32 +1387,6 @@ internal sealed class ReflectionAutoBuyCandidate :
         }
     }
 
-    private bool TryInvoke<T>(MethodInfo? method, out T value)
-    {
-        var result = Invoke(method);
-        if (result is T typed)
-        {
-            value = typed;
-            return true;
-        }
-
-        value = default!;
-        return false;
-    }
-
-    private static bool HasExpectedNativeType(Type type, AutoBuyCandidateKind kind)
-    {
-        var expected = kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO";
-        for (var current = type; current is not null; current = current.BaseType)
-        {
-            if (string.Equals(current.Name, expected, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
 
 internal sealed class NativeIntVariableContract

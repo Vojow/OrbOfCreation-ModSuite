@@ -67,12 +67,19 @@ if ($report.suite -ne $baseline.suite) {
 }
 
 $workloadProperties = @(
+    'gameStage',
     'candidateCount',
+    'structureCount',
+    'upgradeCount',
+    'targetStructureLevels',
+    'purchaseGrouping',
+    'bulkDevelopment',
     'queueCapacity',
     'reservedQueueSlots',
     'frameCount',
     'completionStartFrame',
-    'completionEveryFrames'
+    'completionEveryFrames',
+    'theoreticalMinimumSubmissionFrames'
 )
 
 $metricRules = @(
@@ -81,9 +88,19 @@ $metricRules = @(
     [pscustomobject]@{ Name = 'finalQueueDepth'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'minimumQueueAfterSaturation'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'framesToNinetyPercentQueue'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'framesToAllSubmissions'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'framesToAllCompletions'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'submissionOverheadFrames'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'submissionEfficiencyPercent'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'idleFramesWithPurchasableWork'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'evaluationOnlyFramesWithPurchasableWork'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'deferredFramesWithPurchasableWork'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'maximumEvaluationsInFrame'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'distinctCandidatesSubmitted'; Direction = 'higher' },
+    [pscustomobject]@{ Name = 'structuresSubmittedMultipleTimes'; Direction = 'higher' },
+    [pscustomobject]@{ Name = 'structuresMeetingTarget'; Direction = 'higher' },
+    [pscustomobject]@{ Name = 'minimumStructureSubmissions'; Direction = 'higher' },
+    [pscustomobject]@{ Name = 'maximumStructureSubmissions'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'totalCandidateEvaluations'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'totalCostReads'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'totalLifecycleReads'; Direction = 'lower' },
@@ -134,8 +151,18 @@ foreach ($scenarioName in $baselineNames) {
     }
 
     foreach ($rule in $metricRules) {
-        $baselineValue = [double](Get-RequiredProperty -Object $baselineScenario.metrics -Name $rule.Name -Context "Baseline metrics '$scenarioName'")
-        $currentValue = [double](Get-RequiredProperty -Object $currentScenario.metrics -Name $rule.Name -Context "Current metrics '$scenarioName'")
+        $baselineProperty = Get-RequiredProperty -Object $baselineScenario.metrics -Name $rule.Name -Context "Baseline metrics '$scenarioName'"
+        $currentProperty = Get-RequiredProperty -Object $currentScenario.metrics -Name $rule.Name -Context "Current metrics '$scenarioName'"
+        if ($null -eq $baselineProperty -or $null -eq $currentProperty) {
+            if ($null -ne $baselineProperty -or $null -ne $currentProperty) {
+                throw "Metric '$scenarioName.$($rule.Name)' changed between measured and unmeasured."
+            }
+
+            continue
+        }
+
+        $baselineValue = [double]$baselineProperty
+        $currentValue = [double]$currentProperty
         $absoluteAllowance = if ($rule.Direction -eq 'lower' -and $baselineValue -eq 0.0) {
             1.0
         }

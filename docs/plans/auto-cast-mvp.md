@@ -10,7 +10,7 @@ Auto Cast operates on every non-empty spell in the current native loadout. Loado
 
 The module runs throughout the `Main` gameplay scene, independently of the open tab. It performs at most one new cast per evaluation and uses the native `SpellManager.FireSpellIndex(int)` path.
 
-The configured mode can be toggled from the default `Left Alt + X` shortcut or a native-styled state button placed immediately left of the game's Auto Buy queue switch. The indicator states are `AC OFF`, `AC ON`, and `AC !` when emergency disable blocks an active configuration.
+The configured mode can be toggled from the default `Left Alt + X` shortcut or a native-styled state button placed immediately left of the game's Auto Buy queue switch. The primary indicator remains `AC OFF` or `AC ON` according to configured intent; emergency blocking and other runtime health appear as secondary structured tooltip status.
 
 ## Agreed behavior
 

@@ -9,12 +9,12 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
 {
     public AlchemyGameplayDomainClassifierTests()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
     }
 
     public void Dispose()
     {
-        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, object>();
+        IdScriptableObject.RuntimeLookup = new Dictionary<Guid, IdScriptableObject>();
     }
 
     [Fact]
@@ -33,6 +33,16 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
         Assert.Contains(conceptType.GetGuid(), result.AlchemyTypeUuids);
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.ConceptRegistryMember));
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.KnownScholarConceptType));
+        Assert.Equal(EvidenceLevel.SerializedAssetVerified, result.Assessment.Level);
+        Assert.Equal(
+            EvidenceSource.StaticContract |
+            EvidenceSource.SerializedAsset |
+            EvidenceSource.RuntimeNativeType |
+            EvidenceSource.StableIdentity |
+            EvidenceSource.RuntimeRegistry |
+            EvidenceSource.NativeRelationship,
+            result.Assessment.Sources);
+        Assert.True(result.IsMutationGrade);
     }
 
     [Fact]
@@ -49,6 +59,7 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
         Assert.Equal(AlchemyGameplayDomain.OrdinaryAlchemy, result.Domain);
         Assert.False(result.Evidence.HasFlag(AlchemyDomainEvidence.ConceptRegistryMember));
         Assert.True(result.Evidence.HasFlag(AlchemyDomainEvidence.KnownOrdinaryAlchemyType));
+        Assert.True(result.IsMutationGrade);
     }
 
     [Fact]
@@ -63,6 +74,8 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
 
         Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
         Assert.Contains("absent from the ConceptRecipes", result.Reason, StringComparison.Ordinal);
+        Assert.True(result.Assessment.IsContradictory);
+        Assert.False(result.IsMutationGrade);
     }
 
     [Fact]
@@ -132,14 +145,40 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
         RegisterConceptRecipes(concept);
         using var classifier = new AlchemyGameplayDomainClassifier();
         Assert.True(classifier.TryInitialize(out var reason), reason);
-        var generation = classifier.LifecycleGeneration;
+        var generation = classifier.ClassifierGeneration;
         Assert.Equal(AlchemyGameplayDomain.ScholarConcept, classifier.ClassifyRecipe(concept).Domain);
 
         classifier.InvalidateLifecycle();
 
-        Assert.True(classifier.LifecycleGeneration > generation);
+        Assert.True(classifier.ClassifierGeneration > generation);
         Assert.Equal(0, classifier.CachedRecipeCount);
         Assert.Equal(AlchemyGameplayDomain.Unknown, classifier.ClassifyRecipe(concept).Domain);
+    }
+
+    [Fact]
+    public void SharedResolverGenerationInvalidatesReadyClassifierAndReplacementEvidence()
+    {
+        var concept = Recipe(Guid.NewGuid(), Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid));
+        RegisterConceptRecipes(concept);
+        var generation = 4L;
+        var resolver = new TypedRegistryResolver(
+            () => generation,
+            () => TypedRegistrySourceSnapshot.Ready(IdScriptableObject.RuntimeLookup),
+            value => ((IdScriptableObject)value).GetGuid());
+        using var classifier = new AlchemyGameplayDomainClassifier(resolver);
+        Assert.True(classifier.TryInitialize(out var reason), reason);
+        Assert.Equal(4, classifier.LifecycleGeneration);
+        Assert.Equal(AlchemyGameplayDomain.ScholarConcept, classifier.ClassifyRecipe(concept).Domain);
+
+        generation = 5;
+        var replacement = Recipe(concept.GetGuid(), Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid));
+        RegisterConceptRecipes(replacement);
+
+        Assert.Equal(AlchemyGameplayDomain.Unknown, classifier.ClassifyRecipe(concept).Domain);
+        Assert.Equal(AlchemyDomainClassifierStatus.Uninitialized, classifier.Status);
+        Assert.True(classifier.TryInitialize(out reason), reason);
+        Assert.Equal(5, classifier.LifecycleGeneration);
+        Assert.Equal(AlchemyGameplayDomain.ScholarConcept, classifier.ClassifyRecipe(replacement).Domain);
     }
 
     [Fact]
@@ -157,6 +196,24 @@ public sealed class AlchemyGameplayDomainClassifierTests : IDisposable
 
         Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
         Assert.Contains("different lifecycle-scoped native reference", result.Reason, StringComparison.Ordinal);
+        Assert.True(result.Assessment.IsContradictory);
+    }
+
+    [Fact]
+    public void DisplayNameNeverUpgradesUnknownIdentityEvidence()
+    {
+        RegisterConceptRecipes(Recipe(Guid.NewGuid(), Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid)));
+        var recipe = Recipe(Guid.NewGuid(), Type(Guid.NewGuid()));
+        recipe.name = "Alchemy";
+        using var classifier = new AlchemyGameplayDomainClassifier();
+        Assert.True(classifier.TryInitialize(out var reason), reason);
+
+        var result = classifier.ClassifyRecipe(recipe);
+
+        Assert.Equal(AlchemyGameplayDomain.Unknown, result.Domain);
+        Assert.Equal(EvidenceLevel.RuntimeObserved, result.Assessment.Level);
+        Assert.False(result.Assessment.Sources.HasFlag(EvidenceSource.SerializedAsset));
+        Assert.False(result.IsMutationGrade);
     }
 
     private static AlchemyTypeSO Type(Guid uuid)

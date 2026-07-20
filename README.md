@@ -12,21 +12,25 @@ The current beta centers on Orb Automata: queue-aware Auto Buy with progression-
 
 | Component | Status | Description |
 |---|---|---|
-| **Orb Automata 0.8.2** | Beta | Rejection-aware, completion-responsive queue-filling Auto Buy; coordinated Auto Cast; timed or catch-up Concept rotation; and progression-aware spell leveling with bounded shared scheduling. |
-| **Orb Mod Config 0.6.1** | Beta | Mods tab with readable variable-height descriptions, stable scroll position while editing, typed editors, staged multi-condition feature locking, Steam Deck keyboard support, and coordinated UI recovery. |
-| **Orb Mentor 0.3.2** | Beta | Progression-gated spell, artifact, and ordinary-alchemy mastery sharing with independent opt-in domains, equipped-spell sources, and a selectable highest-only spell policy. |
+| **Orb Automata 0.8.10** | Beta | Adaptive bounded-burst, grouped, continuously repeating and rejection-aware Auto Buy with fail-closed native-family admission, shared lifecycle generations, bounded invalidation, action-family conflict isolation, coordinated Auto Cast, Concept rotation, spell leveling, and per-feature runtime health. |
+| **Orb Mod Config 0.6.3** | Beta | Mods tab with readable variable-height descriptions, separate exact-plugin configuration-schema and runtime-status bands, stable same-page scrolling, responsive resize/UI-scale remeasurement, Steam Deck keyboard support, and coordinated UI recovery. |
+| **Orb Mentor 0.3.8** | Beta | Progression-gated mastery sharing with versioned configuration ownership, shared remaining-budget enforcement, bounded domain failure circuits, independent action-family ownership, shared lifecycle/invalidation, verified XP deltas, optional artifact/alchemy support, and equipped-spell sources. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton with BepInEx 5, but ModSuite 0.3.0 Beta 1 still requires post-release Proton validation.
 
 Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on the `codex/experimental-chronomancer-resonance` branch and is not part of supported `main` builds or packages.
 
+The next beta's Auto Buy diagnostics use stable Common decision codes and immutable evidence across telemetry, logs, and the gameplay tooltip. Future Orb Insights consumers can observe condition transitions without referencing Automata internals; broader module adoption remains planned rather than implied as released behavior.
+
+The same next-beta line reports saved-off, locked, initializing, operational, temporarily blocked, unavailable-contract, degraded, and faulted feature health through one Common contract. Gameplay controls and Orb Mod Config consume those transition-only snapshots without turning an optional-domain failure into a suite-wide failure.
+
 ## Get started
 
 - Players: [install the supported suite](docs/user-guide/installation.md), then review [configuration and safety](docs/user-guide/configuration.md).
 - Contributors: read the [development setup](docs/development/setup.md) and [contributing guidelines](CONTRIBUTING.md).
 - Researchers: start with the [reverse-engineering knowledge map](docs/reverse-engineering/README.md).
-- Maintainers: use the [testing](docs/development/testing.md), [runtime validation](docs/development/runtime-validation.md), and [release](docs/development/releases.md) guides.
+- Maintainers: use the [testing hub](docs/testing/README.md), [runtime validation](docs/testing/runtime-validation.md), and [release](docs/development/releases.md) guides.
 
 The [documentation hub](docs/README.md) indexes all player, contributor, research, and planning material.
 

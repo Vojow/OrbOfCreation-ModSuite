@@ -1,6 +1,15 @@
 param(
     [string]$ReferenceRef = '7f61f21d27c4b1a4996ba9888a303c42bb74e81c',
 
+    [ValidateSet('Auto', 'Legacy', 'Intermediate', 'Current')]
+    [string]$ReferenceApi = 'Auto',
+
+    [string]$ReferenceLabel = 'main reference',
+
+    [string]$CurrentLabel = 'beta',
+
+    [string]$Heading = 'Auto Buy main/beta deterministic comparison',
+
     [string]$OutputDirectory = 'artifacts/performance/ab'
 )
 
@@ -20,8 +29,8 @@ if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
 }
 
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
-$referenceReportPath = Join-Path $outputPath 'main-reference.json'
-$betaReportPath = Join-Path $outputPath 'beta-current.json'
+$referenceReportPath = Join-Path $outputPath 'reference.json'
+$betaReportPath = Join-Path $outputPath 'current.json'
 $comparisonPath = Join-Path $outputPath 'comparison.md'
 
 function Invoke-Git {
@@ -57,7 +66,8 @@ function Invoke-ComparisonRunner {
         [Parameter(Mandatory = $true)][string]$SourceRoot,
         [Parameter(Mandatory = $true)][string]$ReportPath,
         [Parameter(Mandatory = $true)][string]$SourceLabel,
-        [Parameter(Mandatory = $true)][bool]$LegacyApi
+        [Parameter(Mandatory = $true)][bool]$LegacyApi,
+        [Parameter(Mandatory = $true)][bool]$IntermediateQueueApi
     )
 
     $arguments = @(
@@ -71,11 +81,45 @@ function Invoke-ComparisonRunner {
     if ($LegacyApi) {
         $arguments += '-p:LegacyMainApi=true'
     }
+    if ($IntermediateQueueApi) {
+        $arguments += '-p:IntermediateQueueApi=true'
+    }
 
     $arguments += @('--', '--report', $ReportPath, '--source', $SourceLabel)
     & dotnet @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "The $SourceLabel Auto Buy comparison run failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Get-ReferenceApiProfile {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRoot,
+        [Parameter(Mandatory = $true)][string]$Mode
+    )
+
+    if ($Mode -eq 'Legacy') {
+        return [pscustomobject]@{ Legacy = $true; IntermediateQueue = $false }
+    }
+    if ($Mode -eq 'Intermediate') {
+        return [pscustomobject]@{ Legacy = $true; IntermediateQueue = $true }
+    }
+    if ($Mode -eq 'Current') {
+        return [pscustomobject]@{ Legacy = $false; IntermediateQueue = $false }
+    }
+
+    $enginePath = Join-Path $SourceRoot 'src\OrbAutomata\AutoBuyEngine.cs'
+    if (-not (Test-Path -LiteralPath $enginePath -PathType Leaf)) {
+        throw "Cannot determine the reference API because AutoBuyEngine.cs is missing: $enginePath"
+    }
+
+    $engineSource = Get-Content -LiteralPath $enginePath -Raw
+    $legacy = $engineSource.IndexOf('ownsActionFamily', [StringComparison]::Ordinal) -lt 0
+    $intermediateQueue = $legacy -and
+        $engineSource.IndexOf('TryCaptureQueueCapacity', [StringComparison]::Ordinal) -ge 0
+    return [pscustomobject]@{
+        Legacy = $legacy
+        IntermediateQueue = $intermediateQueue
     }
 }
 
@@ -96,25 +140,28 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $betaDirty = -not [string]::IsNullOrWhiteSpace((& git status --porcelain --untracked-files=no | Out-String))
-$betaSourceLabel = "beta@$betaCommit" + $(if ($betaDirty) { '+working-tree' } else { '' })
-$referenceSourceLabel = "main-reference@$referenceCommit"
+$betaSourceLabel = "$CurrentLabel@$betaCommit" + $(if ($betaDirty) { '+working-tree' } else { '' })
+$referenceSourceLabel = "$ReferenceLabel@$referenceCommit"
 $worktreePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ooc-autobuy-ab-' + [guid]::NewGuid().ToString('N'))
 $worktreeAdded = $false
 
 try {
     Invoke-Git worktree add --detach $worktreePath $referenceCommit
     $worktreeAdded = $true
+    $referenceApiProfile = Get-ReferenceApiProfile -SourceRoot $worktreePath -Mode $ReferenceApi
 
     Invoke-ComparisonRunner `
         -SourceRoot $worktreePath `
         -ReportPath $referenceReportPath `
         -SourceLabel $referenceSourceLabel `
-        -LegacyApi $true
+        -LegacyApi $referenceApiProfile.Legacy `
+        -IntermediateQueueApi $referenceApiProfile.IntermediateQueue
     Invoke-ComparisonRunner `
         -SourceRoot $repositoryRoot `
         -ReportPath $betaReportPath `
         -SourceLabel $betaSourceLabel `
-        -LegacyApi $false
+        -LegacyApi $false `
+        -IntermediateQueueApi $false
 }
 finally {
     if ($worktreeAdded) {
@@ -138,10 +185,12 @@ $metricDefinitions = @(
     [pscustomobject]@{ Name = 'totalSubmitted'; Label = 'Submitted purchases'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'queueHighWater'; Label = 'Queue high-water'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'finalQueueDepth'; Label = 'Final queue depth'; Direction = 'higher' },
+    [pscustomobject]@{ Name = 'minimumQueueAfterSaturation'; Label = 'Minimum queue after saturation'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'distinctCandidatesSubmitted'; Label = 'Distinct candidates'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'idleFramesWithPurchasableWork'; Label = 'Idle purchasable frames'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'framesToNinetyPercentQueue'; Label = 'Frames to 90% queue'; Direction = 'lower' },
     [pscustomobject]@{ Name = 'maximumEvaluationsInFrame'; Label = 'Maximum evaluations/frame'; Direction = 'lower' },
+    [pscustomobject]@{ Name = 'maximumPurchasesInFrame'; Label = 'Maximum purchases/frame'; Direction = 'higher' },
     [pscustomobject]@{ Name = 'totalCandidateEvaluations'; Label = 'Candidate evaluations'; Direction = 'diagnostic' },
     [pscustomobject]@{ Name = 'totalLifecycleReads'; Label = 'Lifecycle reads'; Direction = 'diagnostic' },
     [pscustomobject]@{ Name = 'queueCapacityReads'; Label = 'Queue-capacity reads'; Direction = 'diagnostic' },
@@ -165,14 +214,14 @@ if (($referenceNames -join "`n") -ne ($betaNames -join "`n")) {
 }
 
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add('# Auto Buy main/beta deterministic comparison')
+$lines.Add("# $Heading")
 $lines.Add('')
-$lines.Add("- Reference: ``$($reference.sourceCommit)``")
-$lines.Add("- Beta: ``$($beta.sourceCommit)``")
-$lines.Add('- Workload: 166 mixed candidates, 304 native queue slots, 900 deterministic frames')
+$lines.Add("- $($ReferenceLabel): ``$($reference.sourceCommit)``")
+$lines.Add("- $($CurrentLabel): ``$($beta.sourceCommit)``")
+$lines.Add('- Workload: 166 mixed candidates, 304 native queue slots, 900 deterministic frames; stable 1.1 ms scenarios plus a 0.05 ms/eight-completion burst scenario')
 $lines.Add('- Diagnostic operation counts are not scored because an engine can appear cheaper by evaluating or serving fewer candidates.')
 $lines.Add('')
-$lines.Add('| Scenario | Metric | Main reference | Beta | Delta | Reading |')
+$lines.Add("| Scenario | Metric | $ReferenceLabel | $CurrentLabel | Delta | Reading |")
 $lines.Add('|---|---|---:|---:|---:|---|')
 
 foreach ($scenarioName in $referenceNames) {
@@ -204,10 +253,10 @@ foreach ($scenarioName in $referenceNames) {
         }
         elseif (($definition.Direction -eq 'higher' -and $betaValue -gt $referenceValue) -or
                 ($definition.Direction -eq 'lower' -and $betaValue -lt $referenceValue)) {
-            'beta better'
+            "$CurrentLabel better"
         }
         else {
-            'main better'
+            "$ReferenceLabel better"
         }
 
         $lines.Add(
@@ -216,7 +265,7 @@ foreach ($scenarioName in $referenceNames) {
 }
 
 $lines.Add('')
-$lines.Add('Interpret queue output, candidate diversity, and idle purchasable frames before diagnostic operation density. Native elapsed-time and allocation profiling remain separate UAT evidence.')
+$lines.Add('Interpret idle purchasable frames together with minimum queue depth: a batched refill can produce more no-purchase frames while keeping substantially more work queued. Native elapsed-time and allocation profiling remain separate UAT evidence.')
 
 Set-Content -LiteralPath $comparisonPath -Value $lines -Encoding utf8
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {

@@ -19,6 +19,16 @@ public sealed class QueueCapacitySnapshotTests
     }
 
     [Fact]
+    public void EqualNativeAndAutomationCapacity_PreservesAllUnreservedRoom()
+    {
+        Assert.True(QueueCapacitySnapshot.TryCreate(8, 6, 8, 0, out var snapshot, out var reason));
+
+        Assert.Equal(QueueCapacityInvalidReason.None, reason);
+        Assert.Equal(2, snapshot.LiveOccupancy);
+        Assert.Equal(6, snapshot.UsableAutomationRoom);
+    }
+
+    [Fact]
     public void PartialOccupancyAndReservation_AppliesReservationExactlyOnce()
     {
         Assert.True(QueueCapacitySnapshot.TryCreate(12, 7, 20, 2, out var snapshot, out _));
