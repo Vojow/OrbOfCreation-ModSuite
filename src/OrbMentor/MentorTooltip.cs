@@ -10,9 +10,9 @@ internal sealed class MentorTooltip : ITooltipable
 
     public MentorTooltip(MentorConfig config, MentorRuntime runtime) { _config = config; _runtime = runtime; }
     public string GetName() => "Orb Mentor";
-    public string GetDisplayType() => _runtime.IsBlocked ? "BLOCKED" : _config.Active ? "ON" : "OFF";
+    public string GetDisplayType() => _runtime.IsBlocked ? "BLOCKED" : _runtime.IsWaiting ? "WAITING" : _config.Active ? "ON" : "OFF";
     public Sprite GetIcon() => null!;
-    public Color GetColor() => _runtime.IsBlocked ? new Color(1, .3f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+    public Color GetColor() => _runtime.IsBlocked ? new Color(1, .3f, .25f) : _runtime.IsWaiting ? new Color(1, .75f, .25f) : _config.Active ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() => "Equipped spells (or highest discovered spells), equipped artifacts, and active alchemy recipes can mentor lower-mastery discoveries in their own domain.";

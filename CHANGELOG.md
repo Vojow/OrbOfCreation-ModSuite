@@ -1,5 +1,50 @@
 # Changelog
 
+## Orb Mod Config 0.6.1 Beta 1 — 2026-07-18
+
+- Size setting rows from their rendered descriptions so complete help, acceptable-value, and apply/restart text remains readable instead of being truncated by a fixed two-line area.
+- Preserve the current absolute scroll offset when staged boolean/enum/default changes, Apply, Revert, or external configuration refresh rebuilds the same settings page; reset to the top only when switching mod or feature section.
+
+## Orb Mentor 0.3.2 Beta 1 — 2026-07-18
+
+- Exclude Scholar Concepts from Mentor's Alchemy catalog, mentor ranking, recipient relationships, XP capture, and final native grant path through the shared audited gameplay-domain classifier.
+- Keep Harmony XP and progression callbacks cache-only; uncached recipes request bounded cooperative reconciliation without reflecting, allocating classification evidence, or guessing inside the hook.
+- Invalidate classifier evidence on scene, save-load, reset, and NG+ transitions, and fail only Alchemy closed when ordinary-domain evidence is unknown or contradictory.
+
+## Orb Mentor 0.3.1 Beta 1 — 2026-07-18
+
+- Gate spell, artifact, and alchemy Mentor work independently on the exact native mastery and domain progression views while preserving the user's configured switches and percentages.
+- Report locked progression as a non-error `M WAIT` state, activate within the bounded polling interval after unlock, and cancel stale catalog, relationship, plan, capture, and grant work across lifecycle transitions.
+- Keep locked domains out of catalog discovery, mastery ranking, recipient planning, XP capture, equipped-spell inspection, and native grants; isolate a broken unlock contract to the affected domain.
+
+## Orb Modding Common 0.3.1 Beta 1 — 2026-07-18
+
+- Add one fail-closed, lifecycle-scoped classifier for ordinary Alchemy and Scholar Concepts using exact native types, stable UUIDs, the authoritative `ConceptRecipes` snapshot, and audited type identities.
+- Make Auto Concept consume the shared classifier for catalog admission and final add/remove identity validation, removing its duplicated Scholar-type boundary.
+
+## Orb Automata 0.8.2 Beta 1 — 2026-07-18
+
+- Keep queue feeding responsive during rapid native completions: finish the current bounded completion-settlement generation, coalesce intervening signals into one follow-up, preserve CPU-sliced scan progress, and wake a prepared candidate immediately when a completion reopens a slot.
+- Retain the 10 Hz full-queue poll only as a fallback when no completion signal arrives; every resumed candidate still refreshes native availability, costs, resources, reserves, limits, and queue room before mutation.
+- Promote the deterministic four-frame completion storm to an active performance regression gate covering near-full queue depth, purchase count, candidate-evaluation amplification, and idle refill frames.
+- Record deterministic queue output, refill latency, modeled reads, scheduler callbacks, and normalized operations per purchase; compare CI runs with the reviewed beta baseline and retain each raw report for 90 days.
+- Add a source-level A/B compatibility runner that executes the same queue workload against untouched pre-beta `main` and current beta engines, reporting fairness and refill improvements separately from diagnostic validation work.
+
+## Orb Automata 0.8.1 Beta 1 — 2026-07-18
+
+- Treat completed Structures and Upgrades as typed progression signals: Structure completion immediately schedules a bounded Upgrade-registry refresh, Upgrade completion schedules the corresponding Structure refresh, and bursts coalesce without discarding conservative cross-candidate settlement.
+- Add a deterministic headless E2E harness that drives the production Auto Buy engine through simulated native queue, economy, failure, and save/load boundaries; computer-controlled real-game checks remain UAT.
+- Add operation-count performance simulations for large candidate sets and shared-queue saturation, plus a documented completion-storm target for the remaining scan-restart regression.
+- Prevent one cheap Structure or Upgrade from monopolizing a large shared action queue: when several candidates are ready, queue one independently validated level from each ranked candidate before repeating the pass.
+- Continue directly through the prepared ranking on consecutive frames instead of forcing a catalog rescan between candidates; a full queue retains the next candidate and feeds it into the first reopened slot.
+- Let a lone eligible candidate still consume all usable queue room, with native availability, current cost, reserves, maximum level, and final purchase validation before every queued level.
+- Centralize queue allocation in `OrbModding.Common.QueueCapacitySnapshot`, keeping authoritative native capacity/occupancy, live remaining room, Auto Buy's usage limit, and the manual reservation distinct and provenance-tagged.
+- Refresh the complete queue-capacity snapshot after live cost/reserve validation immediately before every Auto Buy mutation; contradictory or missing native values now fail closed.
+- Add portable regressions for a 200-level lone-candidate fill and fair Structure/Upgrade handoff across multiple ranked candidates without the idle evaluation interval.
+- Validate the `0.8.1` build on a disposable high-resource Slot 3: the visible shared queue rose from `14/304` to `174/304` after five seconds and `302/304` after ten, while 1,797 successful purchases covered 166 distinct candidates with zero native failures.
+- Park stable Structure reserve and affordability rejections below their exact ordinary-resource thresholds, ignore quantity-only ticks on already-satisfied dependencies, then wake immediately when a blocker crosses or conservatively when bandwidth, capacity, quality, effective cost, identity, availability, lifecycle, policy, queue, or completion state changes.
+- Keep native-first Upgrade rejection handling conservative, suppress identical verbose rejection examples until their blocking signature changes, and describe a zero-reserve shortfall as insufficient cost coverage rather than a reserve violation.
+
 ## Orb Automata 0.8.0 Beta 1 — 2026-07-17
 
 - Prepare Orb Automata 0.8.0 with typed Auto Buy rejection telemetry, structured multi-resource blockers, and separate scan-cap, rejection-transition, and native-mutation failure accounting.

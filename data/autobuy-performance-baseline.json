@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "suite": "OrbAutomata.AutoBuy",
+  "generatedAtUtc": "2026-07-18T16:35:07.5346130Z",
+  "sourceCommit": "ca5275f98dd1eb17d3e4828b80b18ca288464282",
+  "scenarios": [
+    {
+      "name": "completion-storm",
+      "workload": {
+        "candidateCount": 166,
+        "queueCapacity": 304,
+        "reservedQueueSlots": 1,
+        "frameCount": 900,
+        "completionStartFrame": 400,
+        "completionEveryFrames": 4
+      },
+      "metrics": {
+        "totalSubmitted": 428,
+        "queueHighWater": 303,
+        "finalQueueDepth": 303,
+        "minimumQueueAfterSaturation": 273,
+        "framesToNinetyPercentQueue": 279,
+        "idleFramesWithPurchasableWork": 8,
+        "maximumEvaluationsInFrame": 50,
+        "distinctCandidatesSubmitted": 166,
+        "totalCandidateEvaluations": 926,
+        "totalCostReads": 926,
+        "totalLifecycleReads": 364,
+        "totalPurchaseCalls": 428,
+        "queueCapacityReads": 1427,
+        "bulkDevelopmentReads": 0,
+        "actionMultiplierReads": 0,
+        "evaluationBatches": 8,
+        "completedCandidateEvaluations": 498,
+        "completionSignals": 125,
+        "nativeReadOperations": 3643,
+        "nativeMutationAttempts": 428,
+        "schedulerCallbacks": 506,
+        "totalObservedOperations": 4577,
+        "candidateEvaluationsPerPurchase": 2.163551,
+        "observedOperationsPerPurchase": 10.693925
+      }
+    },
+    {
+      "name": "periodic-completions",
+      "workload": {
+        "candidateCount": 166,
+        "queueCapacity": 304,
+        "reservedQueueSlots": 1,
+        "frameCount": 900,
+        "completionStartFrame": 400,
+        "completionEveryFrames": 20
+      },
+      "metrics": {
+        "totalSubmitted": 328,
+        "queueHighWater": 303,
+        "finalQueueDepth": 303,
+        "minimumQueueAfterSaturation": 273,
+        "framesToNinetyPercentQueue": 279,
+        "idleFramesWithPurchasableWork": 6,
+        "maximumEvaluationsInFrame": 50,
+        "distinctCandidatesSubmitted": 166,
+        "totalCandidateEvaluations": 660,
+        "totalCostReads": 660,
+        "totalLifecycleReads": 198,
+        "totalPurchaseCalls": 328,
+        "queueCapacityReads": 1073,
+        "bulkDevelopmentReads": 0,
+        "actionMultiplierReads": 0,
+        "evaluationBatches": 2,
+        "completedCandidateEvaluations": 332,
+        "completionSignals": 25,
+        "nativeReadOperations": 2591,
+        "nativeMutationAttempts": 328,
+        "schedulerCallbacks": 334,
+        "totalObservedOperations": 3253,
+        "candidateEvaluationsPerPurchase": 2.012195,
+        "observedOperationsPerPurchase": 9.917683
+      }
+    }
+  ]
+}

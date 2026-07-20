@@ -74,7 +74,7 @@ public sealed class Plugin : BaseUnityPlugin
             readFrameIdentity: () => UnityEngine.Time.frameCount);
         _autoConceptController = new AutoConceptController(
             _config,
-            new ReflectionConceptRuntime(),
+            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
             Log,
             SuitePerformanceCoordinator.Shared,
             () => UnityEngine.Time.frameCount);
@@ -179,9 +179,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyEngine?.NotifyStructureQueueChanged(nativeIdentity);
     }
 
-    private void OnNativeCompletion()
+    private void OnNativeCompletion(object nativeIdentity, AutoBuyCandidateKind completedKind)
     {
-        _autoBuyEngine?.NotifyNativeCompletion();
+        _autoBuyEngine?.NotifyNativeCompletion(nativeIdentity, completedKind);
         _autoSpellLevelController?.NotifyNativeChange();
     }
 

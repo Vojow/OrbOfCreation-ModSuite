@@ -9,6 +9,7 @@ namespace OrbModding.Tests;
 public sealed class ModConfigPerformanceTests
 {
     [Fact]
+    [Trait("Category", "PerformanceSimulation")]
     public void UiBudgetDenialRetainsDueRepairAndInstallsListenersExactlyOnce()
     {
         var coordinator = new SuitePerformanceCoordinator(
@@ -95,6 +96,7 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
+    [Trait("Category", "PerformanceSimulation")]
     public void NavigationIntegrityCadenceDoesNotRunEveryFrame()
     {
         var remaining = 5.0f;

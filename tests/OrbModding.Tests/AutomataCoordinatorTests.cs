@@ -158,6 +158,71 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    public void LoneAffordableCandidateStillFillsTwoHundredSlots()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.RepeatWhileAffordable.Value = true;
+        config.RespectActionMultiplier.Value = false;
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
+        config.LeaveQueueSlots.Value = 1;
+        var selected = new BuyCandidate("only-candidate", AutoBuyCandidateKind.Structure);
+        var catalog = new BuyCatalog(201, selected);
+        selected.OnPurchase = () => catalog.RemainingRoom--;
+        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+
+        for (var expectedPurchases = 1; expectedPurchases <= 200; expectedPurchases++)
+        {
+            engine.Tick(expectedPurchases == 1 ? 1.0f : 0.0f);
+            Assert.Equal(expectedPurchases, selected.PurchaseCalls);
+            frame++;
+        }
+
+        Assert.Equal(200, selected.PurchaseCalls);
+        Assert.Equal(1, catalog.DiscoverCalls);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void AffordableRepeatPassVisitsEveryRankedCandidateBeforeRepeating(int candidateKind)
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.RepeatWhileAffordable.Value = true;
+        config.RespectActionMultiplier.Value = false;
+        config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
+        config.LeaveQueueSlots.Value = 1;
+        var first = new BuyCandidate("a-first", (AutoBuyCandidateKind)candidateKind);
+        var second = new BuyCandidate("b-second", (AutoBuyCandidateKind)candidateKind);
+        var third = new BuyCandidate("c-third", (AutoBuyCandidateKind)candidateKind);
+        var catalog = new BuyCatalog(201, first, second, third);
+        first.OnPurchase = () => catalog.RemainingRoom--;
+        second.OnPurchase = () => catalog.RemainingRoom--;
+        third.OnPurchase = () => catalog.RemainingRoom--;
+        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+
+        engine.Tick(1.0f);
+        Assert.Equal((1, 0, 0), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal((1, 1, 0), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
+
+        frame++;
+        engine.Tick(0.0f);
+        Assert.Equal((1, 1, 1), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
+
+        frame++;
+        engine.Tick(0.0f);
+
+        Assert.Equal((2, 1, 1), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
+        Assert.Equal(2, catalog.DiscoverCalls);
+    }
+
+    [Fact]
     public void MutationExceptionReleasesLeaseAndAutomatedFireScope()
     {
         var coordinator = Coordinator();
@@ -264,6 +329,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void DeferredCastCancelsWhenCurrentSlotIdentityChanges()
     {
         var coordinator = Coordinator();
@@ -302,6 +368,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void LifecycleInvalidationDiscardsDeferredCastAndReplansCurrentSlot()
     {
         var coordinator = Coordinator();
@@ -547,14 +614,15 @@ public sealed class AutomataCoordinatorTests
 
     private sealed class BuyCatalog : IAutoBuyCatalog
     {
-        private readonly int _queueRoom;
         private readonly IAutoBuyCandidate[] _candidates;
 
         public BuyCatalog(int queueRoom, params IAutoBuyCandidate[] candidates)
         {
-            _queueRoom = queueRoom;
+            RemainingRoom = queueRoom;
             _candidates = candidates;
         }
+
+        public int RemainingRoom { get; set; }
 
         public int BulkDevelopment { get; set; } = 1;
 
@@ -570,10 +638,19 @@ public sealed class AutomataCoordinatorTests
             return _candidates;
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : _queueRoom;
-            return true;
+            var remainingRoom = QueueRooms is { Count: > 0 } ? QueueRooms.Dequeue() : RemainingRoom;
+            return QueueCapacitySnapshot.TryCreate(
+                1024,
+                remainingRoom,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)
@@ -604,6 +681,8 @@ public sealed class AutomataCoordinatorTests
 
         public int PurchaseCalls { get; private set; }
 
+        public Action? OnPurchase { get; set; }
+
         public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
 
         public bool IsAvailable() => true;
@@ -619,6 +698,7 @@ public sealed class AutomataCoordinatorTests
         public bool TryPurchaseOne(out string reason)
         {
             PurchaseCalls++;
+            OnPurchase?.Invoke();
             reason = string.Empty;
             return true;
         }
@@ -733,7 +813,8 @@ public sealed class AutomataCoordinatorTests
         public void CompleteCandidateEvaluation(
             IAutoBuyCandidate candidate,
             bool suppressResourceTracking,
-            bool policyExcluded)
+            bool policyExcluded,
+            AutoBuyDecision? decision = null)
         {
         }
 
@@ -769,10 +850,18 @@ public sealed class AutomataCoordinatorTests
         {
         }
 
-        public bool TryGetRemainingQueueRoom(out int remainingRoom)
+        public bool TryCaptureQueueCapacity(
+            int automationUsageLimit,
+            int manualReservation,
+            out QueueCapacitySnapshot snapshot)
         {
-            remainingRoom = 4;
-            return true;
+            return QueueCapacitySnapshot.TryCreate(
+                4,
+                4,
+                automationUsageLimit,
+                manualReservation,
+                out snapshot,
+                out _);
         }
 
         public bool TryGetBulkDevelopment(out int levels)

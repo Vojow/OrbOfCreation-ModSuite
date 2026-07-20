@@ -400,4 +400,119 @@ public sealed class ModConfigTests
         Assert.False(session.IsValid);
         Assert.Contains("Range", session.Get(settings["Count"]).Error);
     }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void EditSession_ApplyFailureRollsBackEveryWrittenEntryAndResavesOwner()
+    {
+        var config = new ConfigFile { ThrowOnSaveCall = 1 };
+        var enabled = config.Bind("General", "Enabled", true, "Enabled");
+        var count = config.Bind("General", "Count", 4, "Count");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        var settings = catalog.Mods.Single().Sections.Single().Settings.ToDictionary(setting => setting.Key);
+        session.Get(settings["Enabled"]).Stage("false");
+        session.Get(settings["Count"]).Stage("8");
+
+        var applied = session.Apply(out var error);
+
+        Assert.False(applied);
+        Assert.Contains("simulated config save failure", error);
+        Assert.True(enabled.Value);
+        Assert.Equal(4, count.Value);
+        Assert.Equal(2, config.SaveCalls);
+        Assert.True(session.IsDirty);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void EditSession_ThrowingSettingChangedSubscriberLeavesNoPartialCommit()
+    {
+        var config = new ConfigFile();
+        var first = config.Bind("General", "First", 1, "First");
+        var second = config.Bind("General", "Second", 2, "Second");
+        second.SettingChanged += (_, _) => throw new InvalidOperationException("simulated subscriber failure");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        var settings = catalog.Mods.Single().Sections.Single().Settings.ToDictionary(setting => setting.Key);
+        session.Get(settings["First"]).Stage("10");
+        session.Get(settings["Second"]).Stage("20");
+
+        var applied = session.Apply(out var error);
+
+        Assert.False(applied);
+        Assert.Equal("simulated subscriber failure", error);
+        Assert.Equal(1, first.Value);
+        Assert.Equal(2, second.Value);
+        Assert.Equal(1, config.SaveCalls);
+        Assert.True(session.IsDirty);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void EditSession_MultipleConfigFilesRollbackAndResaveEveryOwner()
+    {
+        var firstConfig = new ConfigFile();
+        var secondConfig = new ConfigFile { ThrowOnSaveCall = 1 };
+        var first = firstConfig.Bind("General", "Value", 1, "Value");
+        var second = secondConfig.Bind("General", "Value", 2, "Value");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("first", "First", "1.0.0", firstConfig),
+            new ConfigPluginSource("second", "Second", "1.0.0", secondConfig),
+        });
+        var session = new ConfigEditSession(catalog);
+        session.Values.Single(value => ReferenceEquals(value.Setting.Source.ConfigFile, firstConfig)).Stage("10");
+        session.Values.Single(value => ReferenceEquals(value.Setting.Source.ConfigFile, secondConfig)).Stage("20");
+
+        var applied = session.Apply(out var error);
+
+        Assert.False(applied);
+        Assert.Contains("simulated config save failure", error);
+        Assert.Equal(1, first.Value);
+        Assert.Equal(2, second.Value);
+        Assert.Equal(2, firstConfig.SaveCalls);
+        Assert.Equal(2, secondConfig.SaveCalls);
+        Assert.True(session.IsDirty);
+    }
+
+    [Fact]
+    public void PanelLayout_ExpandsRowsForRenderedDescriptionHeight()
+    {
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(0f));
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(20f));
+        Assert.Equal(129f, ModConfigPanel.CalculateSettingRowHeight(80f));
+        Assert.Equal(86f, ModConfigPanel.CalculateSettingRowHeight(float.NaN));
+    }
+
+    [Theory]
+    [InlineData(-10f, 500f, 200f, 0f)]
+    [InlineData(125f, 500f, 200f, 125f)]
+    [InlineData(400f, 500f, 200f, 300f)]
+    [InlineData(50f, 100f, 200f, 0f)]
+    public void PanelLayout_ClampsPreservedAbsoluteScrollOffset(
+        float requestedOffset,
+        float contentHeight,
+        float viewportHeight,
+        float expectedOffset)
+    {
+        Assert.Equal(
+            expectedOffset,
+            ModConfigPanel.ClampScrollOffset(requestedOffset, contentHeight, viewportHeight));
+    }
+
+    [Fact]
+    public void PanelLayout_ConvertsPreservedOffsetToUnityNormalizedPosition()
+    {
+        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(0f, 500f, 200f));
+        Assert.Equal(0.5f, ModConfigPanel.CalculateVerticalNormalizedPosition(150f, 500f, 200f), 3);
+        Assert.Equal(0f, ModConfigPanel.CalculateVerticalNormalizedPosition(300f, 500f, 200f));
+        Assert.Equal(1f, ModConfigPanel.CalculateVerticalNormalizedPosition(50f, 100f, 200f));
+    }
 }
