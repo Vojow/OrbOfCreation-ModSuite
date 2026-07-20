@@ -7,6 +7,7 @@
 - Migrate Automata configuration schema 1 to 2 with destination-first precedence, preservation of legacy action-multiplier intent, direct Structure-group mapping, and fail-closed malformed legacy values.
 - Close NF-03 starvation by advancing past definite pre-mutation rejection and retrying it on bounded 0.25-to-5-second exponential delay; attempted or ambiguous mutations retain lifecycle quarantine.
 - Exercise Bulk Development 10/25/100/100 in the synthetic early/mid/late/endgame stages. The endgame model now submits 180,024 purchases in 180,408 frames (3,006.8 simulated seconds), reduces purchasable idle frames from 5,996 to 291, candidate evaluations from 360,072 to 183,645, and observed operations from 1,838,247 to 923,925.
+- Add runtime-derived Auto Buy simulations for endgame Bulk Development 1/3/10/100, staggered cost-read outages, Bulk-3 completion storms, exact partial-group reserve boundaries, indivisible heavy-tail reads, and live catalog growth from 28 to 137 candidates.
 - Bump Orb Automata to 0.8.9.
 
 ## Runtime validation corrections — 2026-07-20

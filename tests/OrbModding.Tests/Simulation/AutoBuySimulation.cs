@@ -25,7 +25,8 @@ internal sealed class AutoBuySimulation : IDisposable
         IEnumerable<SimulatedCandidateSpec> candidateSpecs,
         double initialResourceQuantity = 1_000_000_000.0,
         double readObservationCostMilliseconds = 0.05,
-        double purchaseObservationCostMilliseconds = 1.1)
+        double purchaseObservationCostMilliseconds = 1.1,
+        Func<int, double>? readObservationCostSchedule = null)
     {
         World = new SimulatedAutoBuyWorld(queueCapacity, initialResourceQuantity);
         foreach (var spec in candidateSpecs)
@@ -35,7 +36,9 @@ internal sealed class AutoBuySimulation : IDisposable
 
         Config = CreateConfig();
         Catalog = new SimulatedAutoBuyCatalog(World);
-        _readCost = new DeterministicStopwatchCost(readObservationCostMilliseconds);
+        _readCost = new DeterministicStopwatchCost(
+            readObservationCostMilliseconds,
+            readObservationCostSchedule);
         _purchaseCost = new DeterministicStopwatchCost(purchaseObservationCostMilliseconds);
         _coordinator = new SuitePerformanceCoordinator(_performanceClock, 1.0, 2.0, 64);
         _engine = new AutoBuyEngine(
@@ -178,6 +181,18 @@ internal sealed class AutoBuySimulation : IDisposable
     {
         ThrowIfDisposed();
         _engine.NotifyNativeCompletion();
+    }
+
+    public IReadOnlyList<SimulatedAutoBuyCandidate> RegisterCandidates(
+        IEnumerable<SimulatedCandidateSpec> candidateSpecs)
+    {
+        ThrowIfDisposed();
+        var registered = candidateSpecs
+            .Select(World.AddCandidate)
+            .ToArray();
+        Catalog.ReconcileWorld();
+        _engine.NotifyNativeCompletion();
+        return registered;
     }
 
     public void SetEmergencyDisabled(bool disabled)
@@ -1262,6 +1277,13 @@ internal sealed class SimulatedAutoBuyCatalog :
         RebuildIndex();
     }
 
+    public void ReconcileWorld()
+    {
+        CompleteMutationGroup();
+        FlushDeferredInvalidations();
+        Index.Reconcile(_world.Candidates);
+    }
+
 #if LEGACY_MAIN_API
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
     {
@@ -1391,21 +1413,40 @@ internal sealed class DeterministicStopwatchCost
     private readonly ConditionalWeakTable<Stopwatch, Counter> _observations =
         new ConditionalWeakTable<Stopwatch, Counter>();
     private readonly double _costPerObservationMilliseconds;
+    private readonly Func<int, double>? _costSchedule;
 
-    public DeterministicStopwatchCost(double costPerObservationMilliseconds)
+    public DeterministicStopwatchCost(
+        double costPerObservationMilliseconds,
+        Func<int, double>? costSchedule = null)
     {
+        if (costPerObservationMilliseconds < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(costPerObservationMilliseconds));
+        }
+
         _costPerObservationMilliseconds = costPerObservationMilliseconds;
+        _costSchedule = costSchedule;
     }
 
     public double Observe(Stopwatch stopwatch)
     {
         var counter = _observations.GetOrCreateValue(stopwatch);
-        counter.Value += _costPerObservationMilliseconds;
+        counter.Observations++;
+        var cost = _costSchedule?.Invoke(counter.Observations) ??
+                   _costPerObservationMilliseconds;
+        if (cost < 0.0)
+        {
+            throw new InvalidOperationException("A deterministic stopwatch cost cannot be negative.");
+        }
+
+        counter.Value += cost;
         return counter.Value;
     }
 
     private sealed class Counter
     {
+        public int Observations { get; set; }
+
         public double Value { get; set; }
     }
 }

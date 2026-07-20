@@ -51,6 +51,7 @@ regression coverage.
 | 304 queue capacity | prior runtime observation plus live-capacity adapter | one observed save/build and correct live-read path | universal capacity at every progression point |
 | Early/mid/late/endgame candidate subsets | synthetic stress profiles | comparative scaling and regression detection | exact player progression populations |
 | Completion cadences | synthetic stress profiles | queue-consumer pressure from 1/60 to 1/frame | actual action-duration distribution |
+| Runtime-derived perturbations | bounded synthetic Bulk-3 storms, transient cost outages, 35 ms heavy-tail reads, and 28-to-137 catalog growth | recovery, coalescing, resumability, and operation-count regressions under shapes seen in diagnostics | attribution to an exact save, game build, or Unity wall-clock cost |
 
 ## Promotion rule
 

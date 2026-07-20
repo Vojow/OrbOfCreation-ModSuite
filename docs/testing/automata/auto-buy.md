@@ -30,7 +30,7 @@ level, completion, and queue admission.
 | Malformed completion observations | [AutoBuySimulationCompletionTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationCompletionTests.cs) |
 | Simulator contract | [AutoBuySimulationContractTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationContractTests.cs) |
 | Seeded mixed-event reliability | [AutoBuySimulationStateMachineTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationStateMachineTests.cs) |
-| Stage and adverse throughput | [AutoBuyStagePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyStagePerformanceTests.cs), [AutoBuyAdversePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyAdversePerformanceTests.cs) |
+| Stage and adverse throughput | [AutoBuyStagePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyStagePerformanceTests.cs), [AutoBuyAdversePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyAdversePerformanceTests.cs), [AutoBuyRuntimeDerivedSimulationTests.cs](../../../tests/OrbModding.Tests/AutoBuyRuntimeDerivedSimulationTests.cs) |
 | Real native shape | `OrbModding.GameContractTests` Auto Buy contracts |
 
 ## Commands
@@ -105,6 +105,14 @@ Current `BulkDevelopment` baseline at 60 simulated frames/second:
 These are deterministic simulated durations dominated by each stage's queue
 consumer cadence, not claims about real gameplay time or host wall-clock speed.
 
+The runtime-derived performance suite complements the stable stage history with
+six perturbations: Bulk Development 1/3/10/100 at endgame catalog scale,
+staggered cost-read outages, a Bulk-3 completion-invalidation storm, partial
+groups at exact reserve thresholds, a 35 ms heavy-tail read inside a 1 ms
+slice, and catalog growth from 28 to 137 candidates under load. These cases
+gate operation counts, progress, fairness, queue safety, recovery, and maximum
+per-frame work. They deliberately do not use host wall-clock assertions.
+
 ## Runtime handoff
 
 Portable tests cannot prove Harmony callbacks, actual native cost deduction,
@@ -121,4 +129,6 @@ group/pass fairness, pre-mutation rejection recovery, and emergency disable.
   and the 0.25-to-5-second retry cadence.
 - Strengthen endgame queue-continuity targets after more runtime profiles use
   the grouped-continuation policy.
+- Promote a reviewed sanitized runtime trace into a versioned replay/profile;
+  the runtime-derived perturbations are deterministic models, not that evidence.
 - Add controlled allocation evidence and desktop/Steam Deck runtime profiles.

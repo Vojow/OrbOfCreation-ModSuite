@@ -48,6 +48,17 @@ These definitions must remain stable for A/B scheduler comparisons. An observed
 profile may inspire a new stress profile, but must not silently rewrite checked
 history.
 
+## Runtime-derived perturbations
+
+`AutoBuyRuntimeDerivedSimulationTests` keeps diagnostic-inspired disturbances
+separate from the four stable stage profiles. It varies low Bulk Development
+sizes, transient unresolved costs, completion storms, exact affordability
+boundaries, one indivisible 35 ms modeled read, and registry growth from 28 to
+137 candidates. The inputs intentionally exaggerate or isolate one behavior at
+a time. They are useful for detecting scheduler and recovery regressions, but
+they are not evidence-backed progression populations and do not change the
+checked early/mid/late/endgame workload definitions.
+
 ## Observed-profile capture schema
 
 Future sanitized profiles should record:
