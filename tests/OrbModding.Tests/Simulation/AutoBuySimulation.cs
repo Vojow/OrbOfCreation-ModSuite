@@ -687,9 +687,11 @@ internal sealed class SimulatedAutoBuyCandidate :
     IAutoBuyCandidate,
     IAutoBuyNativeIdentity,
     IAutoBuyLifecycleCandidate,
+#if !LEGACY_MAIN_API
     IAutoBuyMutationCandidate,
     IAutoBuyAdmissionContractEvidence,
     IAutoBuyAvailabilityEvidence,
+#endif
     IAutoBuyDirtyCandidate,
     IAutoBuyPriorityCandidate
 {
