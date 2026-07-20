@@ -12,6 +12,8 @@ internal sealed class AutoBuyEngine : IDisposable
 {
     private const double MaximumCpuBudgetMilliseconds = 1.0;
     private const float QueuePollIntervalSeconds = 0.1f;
+    private const double InitialNativeRetryDelaySeconds = 0.25;
+    private const double MaximumNativeRetryDelaySeconds = 5.0;
     private readonly AutomataConfig _config;
     private readonly IAutoBuyCatalog _catalog;
     private readonly IAutoBuyIncrementalCatalog? _incrementalCatalog;
@@ -33,6 +35,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private readonly DecisionLogGate _queueWaitLogGate = new DecisionLogGate(TimeSpan.FromSeconds(30));
     private readonly Dictionary<string, TimeSpan> _nativeFailureLogTimes =
         new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, NativePurchaseRetryState> _nativePurchaseRetries =
+        new Dictionary<string, NativePurchaseRetryState>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _changedVerboseRejections =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly Stopwatch _lifetime = Stopwatch.StartNew();
@@ -56,8 +60,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private int _pendingIndex;
     private IReadOnlyList<AutoBuyDecision>? _pendingPurchaseRecommendations;
     private int _pendingPurchaseIndex;
-    private int _pendingCandidateRepeats;
-    private int _pendingCandidateRepeatLimit;
+    private int _pendingCandidateGroupPurchases;
+    private int _pendingCandidateGroupSize;
     private int _pendingBatchPurchased;
     private int _pendingBatchAttempted;
     private double _pendingBatchElapsedMilliseconds;
@@ -87,6 +91,7 @@ internal sealed class AutoBuyEngine : IDisposable
     private double _diagnosticBatchElapsedMilliseconds;
     private AutomationDecisionConditionKey? _lastPublishedDecision;
     private int _lastOwnershipMask = -1;
+    private double _runtimeSeconds;
 
     internal int UpgradeQuarantinePurgePasses { get; private set; }
 
@@ -142,6 +147,7 @@ internal sealed class AutoBuyEngine : IDisposable
 
     public void Tick(float unscaledDeltaTime)
     {
+        _runtimeSeconds += Math.Max(0.0f, unscaledDeltaTime);
         ObserveConfigurationStatus();
         RefreshOwnershipStateIfNeeded();
         if (_config.AutoBuyMode.Value == AutoBuyOperationMode.Active &&
@@ -196,6 +202,7 @@ internal sealed class AutoBuyEngine : IDisposable
                 _lastPolicy = policy;
                 _cachedDecisions.Clear();
                 _rankedRecommendations.Clear();
+                _nativePurchaseRetries.Clear();
                 _rejectionTelemetry.ClearCurrentStates();
                 _changedVerboseRejections.Clear();
                 PopulateUuidSet(_allowedUuids, _config.AllowedAutoBuyUuids.Value);
@@ -403,6 +410,7 @@ internal sealed class AutoBuyEngine : IDisposable
         _lastPolicy = policy;
         _cachedDecisions.Clear();
         _rankedRecommendations.Clear();
+        _nativePurchaseRetries.Clear();
         _rejectionTelemetry.ClearCurrentStates();
         _changedVerboseRejections.Clear();
         PopulateUuidSet(_allowedUuids, _config.AllowedAutoBuyUuids.Value);
@@ -485,6 +493,7 @@ internal sealed class AutoBuyEngine : IDisposable
         ResetAllPendingWork();
         _cachedDecisions.Clear();
         _rankedRecommendations.Clear();
+        _nativePurchaseRetries.Clear();
         _rejectionTelemetry.ClearCurrentStates();
         _changedVerboseRejections.Clear();
         _lastPolicy = null;
@@ -1033,6 +1042,12 @@ internal sealed class AutoBuyEngine : IDisposable
             }
 
             var recommendation = recommendations[_pendingPurchaseIndex];
+            if (ShouldDeferNativePurchaseRetry(recommendation.Candidate.Uuid))
+            {
+                AdvancePurchaseCandidate();
+                continue;
+            }
+
             if (_nativeCompletionGeneration > 0 &&
                 _catalog is IAutoBuyCompletionRevalidationCatalog completionCatalog &&
                 !completionCatalog.TryRefreshCandidateAfterCompletion(
@@ -1080,14 +1095,6 @@ internal sealed class AutoBuyEngine : IDisposable
                 }
 
                 AdvancePurchaseCandidate();
-                if (IsAffordableRepeatGroup && recommendations.Count == 1)
-                {
-                    // The prepared group ends at its first failed live
-                    // admission. Do not consider a lower cached rank until
-                    // dirty resource and lifecycle state has settled.
-                    _pendingPurchaseIndex = recommendations.Count;
-                    _secondsUntilEvaluation = 0.0f;
-                }
 
                 if (singleStep)
                 {
@@ -1119,9 +1126,9 @@ internal sealed class AutoBuyEngine : IDisposable
                 break;
             }
 
-            if (_pendingCandidateRepeatLimit <= 0)
+            if (_pendingCandidateGroupSize <= 0)
             {
-                _pendingCandidateRepeatLimit = GetCandidateRepeatLimit(
+                _pendingCandidateGroupSize = GetCandidateGroupSize(
                     recommendation,
                     queueCapacity.UsableAutomationRoom,
                     recommendations.Count);
@@ -1152,8 +1159,10 @@ internal sealed class AutoBuyEngine : IDisposable
                     ReadMutationOutcome(recommendation.Candidate.Source, succeeded: false));
                 throw;
             }
-            _activeMutationOutcome = _activeMutationOutcome.Add(
-                ReadMutationOutcome(recommendation.Candidate.Source, purchaseSucceeded));
+            var mutationOutcome = ReadMutationOutcome(
+                recommendation.Candidate.Source,
+                purchaseSucceeded);
+            _activeMutationOutcome = _activeMutationOutcome.Add(mutationOutcome);
             _incrementalCatalog?.NotifyPurchaseAttempted(recommendation.Candidate.Source);
             var upgradeQuarantineActive = SynchronizeUpgradeQuarantine(cancelPendingBatch: false);
             if (upgradeQuarantineActive && recommendation.Candidate.Kind == AutoBuyCandidateKind.Upgrade)
@@ -1166,9 +1175,10 @@ internal sealed class AutoBuyEngine : IDisposable
 
             if (purchaseSucceeded)
             {
+                _nativePurchaseRetries.Remove(recommendation.Candidate.Uuid);
                 _pendingBatchPurchased++;
                 _successfulPurchasesThisSession++;
-                _pendingCandidateRepeats++;
+                _pendingCandidateGroupPurchases++;
                 if (_config.IsOperationalLoggingEnabled &&
                     _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose)
                 {
@@ -1179,7 +1189,7 @@ internal sealed class AutoBuyEngine : IDisposable
                         $"SessionPurchases={_successfulPurchasesThisSession}.");
                 }
 
-                if (_pendingCandidateRepeats >= _pendingCandidateRepeatLimit)
+                if (_pendingCandidateGroupPurchases >= _pendingCandidateGroupSize)
                 {
                     AdvancePurchaseCandidate();
                     if (_incrementalCatalog is not null &&
@@ -1203,12 +1213,6 @@ internal sealed class AutoBuyEngine : IDisposable
                             break;
                         }
 
-                        if (!IsAffordableRepeatGroup)
-                        {
-                            // Fixed, Bulk Development, and action-multiplier
-                            // groups retain their settle-and-rerank boundary.
-                            _pendingPurchaseIndex = recommendations.Count;
-                        }
                     }
                 }
             }
@@ -1222,7 +1226,12 @@ internal sealed class AutoBuyEngine : IDisposable
                         $"({recommendation.Candidate.Uuid}): {reason}");
                 }
                 AdvancePurchaseCandidate();
-                if (_incrementalCatalog is not null || IsAffordableRepeatGroup)
+                if (mutationOutcome.MutationAttempts == 0 &&
+                    mutationOutcome.NativeCallsAttempted == 0)
+                {
+                    RecordNativePurchaseRetry(recommendation.Candidate.Uuid);
+                }
+                else if (_incrementalCatalog is not null)
                 {
                     // A native call may have spent resources or changed queue
                     // state even when post-call verification failed. Settle
@@ -1353,44 +1362,53 @@ internal sealed class AutoBuyEngine : IDisposable
         _diagnosticBatchElapsedMilliseconds = 0.0;
     }
 
-    private int GetCandidateRepeatLimit(
+    private int GetCandidateGroupSize(
         AutoBuyDecision recommendation,
         int availableQueueSlots,
         int recommendationCount)
     {
-        if (_config.RespectActionMultiplier.Value &&
+        if (_config.PurchaseGrouping.Value == AutoBuyPurchaseGroupingMode.ActionMultiplier &&
             _catalog.TryGetActionMultiplier(out var multiplier))
         {
             return Math.Max(1, Math.Min(availableQueueSlots, multiplier));
         }
 
-        if (_config.RepeatWhileAffordable.Value)
-        {
-            // A lone candidate may consume all usable room. When several are
-            // ready, give each one independently revalidated level before the
-            // next scan so one cheap candidate cannot monopolize the queue.
-            return recommendationCount > 1
-                ? 1
-                : Math.Max(1, availableQueueSlots);
-        }
-
         if (recommendation.Candidate.Kind != AutoBuyCandidateKind.Structure)
         {
-            return 1;
+            return _config.PurchaseGrouping.Value == AutoBuyPurchaseGroupingMode.Single &&
+                   recommendationCount == 1
+                ? Math.Max(1, availableQueueSlots)
+                : 1;
         }
 
-        return _config.StructureRepeatMode.Value switch
+        return _config.PurchaseGrouping.Value switch
         {
-            AutoBuyStructureRepeatMode.Fixed =>
-                Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, _config.FixedStructureLevelsPerCandidate.Value))),
-            AutoBuyStructureRepeatMode.BulkDevelopment when _catalog.TryGetBulkDevelopment(out var levels) =>
+            AutoBuyPurchaseGroupingMode.Single when recommendationCount == 1 =>
+                Math.Max(1, availableQueueSlots),
+            AutoBuyPurchaseGroupingMode.Fixed =>
+                Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, _config.FixedGroupSize.Value))),
+            AutoBuyPurchaseGroupingMode.BulkDevelopment when _catalog.TryGetBulkDevelopment(out var levels) =>
                 Math.Max(1, Math.Min(availableQueueSlots, Math.Min(100, levels))),
             _ => 1,
         };
     }
 
-    private bool IsAffordableRepeatGroup =>
-        !_config.RespectActionMultiplier.Value && _config.RepeatWhileAffordable.Value;
+    private bool ShouldDeferNativePurchaseRetry(string uuid) =>
+        _nativePurchaseRetries.TryGetValue(uuid, out var retry) &&
+        _runtimeSeconds < retry.NextRetrySeconds;
+
+    private void RecordNativePurchaseRetry(string uuid)
+    {
+        var failures = _nativePurchaseRetries.TryGetValue(uuid, out var previous)
+            ? Math.Min(16, previous.ConsecutiveFailures + 1)
+            : 1;
+        var delay = Math.Min(
+            MaximumNativeRetryDelaySeconds,
+            InitialNativeRetryDelaySeconds * Math.Pow(2.0, failures - 1));
+        _nativePurchaseRetries[uuid] = new NativePurchaseRetryState(
+            failures,
+            _runtimeSeconds + delay);
+    }
 
     private bool TryCaptureQueueCapacity(out QueueCapacitySnapshot snapshot)
     {
@@ -1448,8 +1466,8 @@ internal sealed class AutoBuyEngine : IDisposable
     private void AdvancePurchaseCandidate()
     {
         _pendingPurchaseIndex++;
-        _pendingCandidateRepeats = 0;
-        _pendingCandidateRepeatLimit = 0;
+        _pendingCandidateGroupPurchases = 0;
+        _pendingCandidateGroupSize = 0;
     }
 
     private static object GetNativeIdentity(IAutoBuyCandidate candidate)
@@ -1886,8 +1904,8 @@ internal sealed class AutoBuyEngine : IDisposable
         _incrementalCatalog?.CompleteMutationGroup();
         _pendingPurchaseRecommendations = null;
         _pendingPurchaseIndex = 0;
-        _pendingCandidateRepeats = 0;
-        _pendingCandidateRepeatLimit = 0;
+        _pendingCandidateGroupPurchases = 0;
+        _pendingCandidateGroupSize = 0;
         _pendingBatchPurchased = 0;
         _pendingBatchAttempted = 0;
         _pendingBatchElapsedMilliseconds = 0.0;
@@ -2015,12 +2033,10 @@ internal sealed class AutoBuyEngine : IDisposable
             float relativeReserve,
             string allowedUuids,
             string blockedUuids,
-            bool respectActionMultiplier,
-            bool repeatWhileAffordable,
+            AutoBuyPurchaseGroupingMode purchaseGrouping,
             AutoBuyBatchSizingMode batchSizing,
             int batchSize,
-            AutoBuyStructureRepeatMode repeatMode,
-            int fixedRepeats,
+            int fixedGroupSize,
             bool prioritizeCostAndQualityStructures,
             int leaveQueueSlots)
         {
@@ -2032,12 +2048,10 @@ internal sealed class AutoBuyEngine : IDisposable
             RelativeReserve = relativeReserve;
             AllowedUuids = allowedUuids;
             BlockedUuids = blockedUuids;
-            RespectActionMultiplier = respectActionMultiplier;
-            RepeatWhileAffordable = repeatWhileAffordable;
+            PurchaseGrouping = purchaseGrouping;
             BatchSizing = batchSizing;
             BatchSize = batchSize;
-            RepeatMode = repeatMode;
-            FixedRepeats = fixedRepeats;
+            FixedGroupSize = fixedGroupSize;
             PrioritizeCostAndQualityStructures = prioritizeCostAndQualityStructures;
             LeaveQueueSlots = leaveQueueSlots;
         }
@@ -2050,12 +2064,10 @@ internal sealed class AutoBuyEngine : IDisposable
         private float RelativeReserve { get; }
         private string AllowedUuids { get; }
         private string BlockedUuids { get; }
-        private bool RespectActionMultiplier { get; }
-        private bool RepeatWhileAffordable { get; }
+        private AutoBuyPurchaseGroupingMode PurchaseGrouping { get; }
         private AutoBuyBatchSizingMode BatchSizing { get; }
         private int BatchSize { get; }
-        private AutoBuyStructureRepeatMode RepeatMode { get; }
-        private int FixedRepeats { get; }
+        private int FixedGroupSize { get; }
         private bool PrioritizeCostAndQualityStructures { get; }
         private int LeaveQueueSlots { get; }
 
@@ -2070,12 +2082,10 @@ internal sealed class AutoBuyEngine : IDisposable
                 config.RelativeReserveMultiplier.Value,
                 config.AllowedAutoBuyUuids.Value,
                 config.BlockedAutoBuyUuids.Value,
-                config.RespectActionMultiplier.Value,
-                config.RepeatWhileAffordable.Value,
+                config.PurchaseGrouping.Value,
                 config.AutoBuyBatchSizing.Value,
                 config.MaxPurchasesPerBatch.Value,
-                config.StructureRepeatMode.Value,
-                config.FixedStructureLevelsPerCandidate.Value,
+                config.FixedGroupSize.Value,
                 config.PrioritizeCostAndQualityStructures.Value,
                 config.LeaveQueueSlots.Value);
         }
@@ -2090,15 +2100,26 @@ internal sealed class AutoBuyEngine : IDisposable
                    RelativeReserve.Equals(other.RelativeReserve) &&
                    string.Equals(AllowedUuids, other.AllowedUuids, StringComparison.Ordinal) &&
                    string.Equals(BlockedUuids, other.BlockedUuids, StringComparison.Ordinal) &&
-                   RespectActionMultiplier == other.RespectActionMultiplier &&
-                   RepeatWhileAffordable == other.RepeatWhileAffordable &&
+                   PurchaseGrouping == other.PurchaseGrouping &&
                    BatchSizing == other.BatchSizing &&
                    BatchSize == other.BatchSize &&
-                   RepeatMode == other.RepeatMode &&
-                   FixedRepeats == other.FixedRepeats &&
+                   FixedGroupSize == other.FixedGroupSize &&
                    PrioritizeCostAndQualityStructures == other.PrioritizeCostAndQualityStructures &&
                    LeaveQueueSlots == other.LeaveQueueSlots;
         }
+    }
+
+    private readonly struct NativePurchaseRetryState
+    {
+        public NativePurchaseRetryState(int consecutiveFailures, double nextRetrySeconds)
+        {
+            ConsecutiveFailures = consecutiveFailures;
+            NextRetrySeconds = nextRetrySeconds;
+        }
+
+        public int ConsecutiveFailures { get; }
+
+        public double NextRetrySeconds { get; }
     }
 
     private sealed class AutoBuyDecisionComparer : IComparer<AutoBuyDecision>

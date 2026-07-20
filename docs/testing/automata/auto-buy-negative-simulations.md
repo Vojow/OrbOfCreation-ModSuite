@@ -105,12 +105,23 @@ wall-clock time and do not alter the clean early/mid/late/endgame history.
 |---|---|---|---|
 | NF-01 | Scarce economy | repeated reserve-threshold crossings | bounded evaluations; exact wakeup; no reserve breach |
 | NF-02 | Locked catalog | 10–25% unavailable candidates | bounded lifecycle/cost reads; available candidates progress |
-| NF-03 | Failing leaders | cheapest 5% reject | desired gate is implemented but skipped: current immediate reranking can starve lower ranks; enable after retry/quarantine policy is implemented |
+| NF-03 | Failing leaders | cheapest 5% reject before any native call | healthy lower ranks progress; rejecting leaders retry on bounded exponential delays and can recover |
 | NF-04 | Capacity oscillation | alternate 64/128/304 valid capacities | no overfill; renewed room consumed promptly |
 | NF-05 | Manual bursts | deterministic manual actions take reopened slots | manual ownership preserved; automation recovers |
 | NF-06 | Completion bursts and gaps | clustered completions followed by quiet frames | settlement/evaluation work remains bounded |
 | NF-07 | Lifecycle interruption | reload halfway through sustained workload | stale work discarded; target progress resumes |
 | NF-08 | Resource-read outage | unresolved costs for a bounded interval | zero unsafe mutation; bounded recovery work |
+| NF-09 | Low-Bulk endgame matrix | 180 Structures at a 1,000-level ceiling plus 24 finite Upgrades; live Bulk Development 1/3/10/100 | every candidate progresses fairly; one-mutation-per-frame and evaluation-per-purchase budgets hold |
+| NF-10 | Mixed transient cost outages | three disjoint cohorts become unresolved and recover while healthy work continues | each failed cohort stays unchanged during its outage and resumes on authoritative invalidation |
+| NF-11 | Bulk-3 completion invalidation storm | up to eight native completions before each tick against 130 Structures | callbacks coalesce into fewer evaluation batches; groups never exceed three; all candidates progress |
+| NF-12 | Near-threshold partial groups | exponentially rising live costs sit one unit below and then exactly at reserve boundaries | a Bulk-10 group stops at the first invalid level and resumes exactly at the next valid crossing |
+| NF-13 | Heavy-tail candidate read | one modeled read in each slice costs 35 ms while ordinary reads cost 0.02 ms | the indivisible over-budget read completes, later work resumes, and no frame mutates more than once |
+| NF-14 | Catalog ramp under load | register candidates in four batches while purchases and completions continue, growing 28 to 137 | old and newly registered candidates progress without queue overfill or unbounded evaluation work |
+
+NF-09 through NF-14 are runtime-informed perturbations, not sanitized runtime
+replays or observed progression profiles. Their deterministic operation budgets
+are intended for scheduler comparisons; host wall-clock duration remains
+diagnostic only.
 
 ## Seeded state-machine simulation
 
@@ -163,20 +174,22 @@ Harness-contract passes cannot be cited as engine reliability evidence.
 6. Run `AutoBuyReliability`, `AutoBuyPerformance`, `PerformanceAll`, and `All`;
    update this lifecycle and the Auto Buy guide with exact evidence.
 
-Steps 1–5 are implemented. NF-03 remains a deliberately skipped desired-behavior
-gate because changing production retry/quarantine policy is outside this
-test-focused change. It is the only portable scenario in this matrix that is
-not currently enforced.
+Steps 1–5 and NF-09–14 are implemented. NF-03 is now enforced against the production
+scheduler. A definite rejection before any native call advances to the next
+ranked candidate and records a 0.25-to-5-second exponential retry. Attempted or
+ambiguous mutations retain lifecycle quarantine and are never placed on this
+ordinary retry path.
 
-Current-tree portable evidence from 2026-07-20 (`Debug`, game stubs):
+Current-tree focused evidence from 2026-07-20 (`Release`, game stubs):
 
-- `AutoBuyReliability`: 137 passed, 1 skipped;
-- `AutoBuyPerformance`: 11 passed, 1 skipped;
-- `PerformanceAll`: 20 passed, 1 skipped;
-- `All`: 831 passed, 1 skipped.
+- `AutoBuyDecision`: 8 passed, 0 skipped;
+- `AutoBuyReliability`: 143 passed, 0 skipped;
+- `AutoBuyPerformance`: 22 passed, 0 skipped;
+- `PerformanceAll`: 31 passed, 0 skipped;
+- `All`: 852 passed, 0 skipped.
 
-The single skip in every applicable lane is NF-03; there are no other skipped
-or failing cases in this matrix.
+NF-03 has no `Skip` marker; no case in this matrix is intentionally
+quarantined.
 
 ## Implemented suites
 
@@ -189,8 +202,11 @@ or failing cases in this matrix.
 - `AutoBuySimulationStateMachineTests` runs four 240-event deterministic tapes
   with per-event invariants, deterministic replay comparison, bounded event-tail
   diagnostics, and first-failing-prefix reduction.
-- `AutoBuyAdversePerformanceTests` enforces NF-01/02 and NF-04–08 with modeled
-  operation budgets; NF-03 is present as the quarantined gate described above.
+- `AutoBuyAdversePerformanceTests` enforces NF-01–08 with modeled operation
+  budgets, including permanent rejecting-leader isolation and timed recovery.
+- `AutoBuyRuntimeDerivedSimulationTests` enforces NF-09–14, including the
+  four-value low-Bulk matrix, staggered recovery, completion coalescing,
+  exact reserve boundaries, heavy-tail slicing, and incremental catalog growth.
 
 ## Runtime handoff
 

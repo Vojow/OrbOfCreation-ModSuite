@@ -25,7 +25,8 @@ internal sealed class AutoBuySimulation : IDisposable
         IEnumerable<SimulatedCandidateSpec> candidateSpecs,
         double initialResourceQuantity = 1_000_000_000.0,
         double readObservationCostMilliseconds = 0.05,
-        double purchaseObservationCostMilliseconds = 1.1)
+        double purchaseObservationCostMilliseconds = 1.1,
+        Func<int, double>? readObservationCostSchedule = null)
     {
         World = new SimulatedAutoBuyWorld(queueCapacity, initialResourceQuantity);
         foreach (var spec in candidateSpecs)
@@ -35,7 +36,9 @@ internal sealed class AutoBuySimulation : IDisposable
 
         Config = CreateConfig();
         Catalog = new SimulatedAutoBuyCatalog(World);
-        _readCost = new DeterministicStopwatchCost(readObservationCostMilliseconds);
+        _readCost = new DeterministicStopwatchCost(
+            readObservationCostMilliseconds,
+            readObservationCostSchedule);
         _purchaseCost = new DeterministicStopwatchCost(purchaseObservationCostMilliseconds);
         _coordinator = new SuitePerformanceCoordinator(_performanceClock, 1.0, 2.0, 64);
         _engine = new AutoBuyEngine(
@@ -180,6 +183,18 @@ internal sealed class AutoBuySimulation : IDisposable
         _engine.NotifyNativeCompletion();
     }
 
+    public IReadOnlyList<SimulatedAutoBuyCandidate> RegisterCandidates(
+        IEnumerable<SimulatedCandidateSpec> candidateSpecs)
+    {
+        ThrowIfDisposed();
+        var registered = candidateSpecs
+            .Select(World.AddCandidate)
+            .ToArray();
+        Catalog.ReconcileWorld();
+        _engine.NotifyNativeCompletion();
+        return registered;
+    }
+
     public void SetEmergencyDisabled(bool disabled)
     {
         ThrowIfDisposed();
@@ -231,8 +246,12 @@ internal sealed class AutoBuySimulation : IDisposable
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         config.AutoBuyMaxCandidatesPerScan.Value = 1024;
         config.LeaveQueueSlots.Value = 1;
+#if LEGACY_MAIN_API
         config.RepeatWhileAffordable.Value = true;
         config.RespectActionMultiplier.Value = false;
+#else
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
+#endif
         config.CpuBudgetMilliseconds.Value = 1.0f;
         config.AllowedAutoBuyUuids.Value = string.Empty;
         config.BlockedAutoBuyUuids.Value = string.Empty;
@@ -691,6 +710,7 @@ internal sealed class SimulatedAutoBuyCandidate :
     IAutoBuyMutationCandidate,
     IAutoBuyAdmissionContractEvidence,
     IAutoBuyAvailabilityEvidence,
+    INativeMutationOutcomeSource,
 #endif
     IAutoBuyDirtyCandidate,
     IAutoBuyPriorityCandidate
@@ -705,6 +725,9 @@ internal sealed class SimulatedAutoBuyCandidate :
     private bool _costDirty = true;
     private bool _mutationBlocked;
     private long _completionRefreshGeneration = -1;
+#if !LEGACY_MAIN_API
+    private NativeMutationCallOutcome _lastNativeMutationOutcome;
+#endif
 
     public SimulatedAutoBuyCandidate(SimulatedAutoBuyWorld world, SimulatedCandidateSpec spec)
     {
@@ -773,6 +796,10 @@ internal sealed class SimulatedAutoBuyCandidate :
     public int MutationBlockRecoveries { get; private set; }
 
     public bool MutationBlocked => _mutationBlocked;
+
+#if !LEGACY_MAIN_API
+    public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
+#endif
 
     public double CostMultiplier { get; set; } = 1.0;
 
@@ -860,6 +887,9 @@ internal sealed class SimulatedAutoBuyCandidate :
 
     public bool TryPurchaseOne(out string reason)
     {
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = default;
+#endif
         PurchaseCalls++;
         var beforePurchase = BeforeNextPurchaseAttempt;
         BeforeNextPurchaseAttempt = null;
@@ -887,6 +917,10 @@ internal sealed class SimulatedAutoBuyCandidate :
             return false;
         }
 
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 0);
+#endif
+
         if (FailureMode == SimulatedPurchaseFailureMode.MutateThenReportFailure ||
             FailureMode == SimulatedPurchaseFailureMode.CaughtExceptionAfterMutation)
         {
@@ -897,6 +931,9 @@ internal sealed class SimulatedAutoBuyCandidate :
             return false;
         }
 
+#if !LEGACY_MAIN_API
+        _lastNativeMutationOutcome = new NativeMutationCallOutcome(1, 1, 1);
+#endif
         reason = string.Empty;
         return true;
     }
@@ -1240,6 +1277,13 @@ internal sealed class SimulatedAutoBuyCatalog :
         RebuildIndex();
     }
 
+    public void ReconcileWorld()
+    {
+        CompleteMutationGroup();
+        FlushDeferredInvalidations();
+        Index.Reconcile(_world.Candidates);
+    }
+
 #if LEGACY_MAIN_API
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
     {
@@ -1369,21 +1413,40 @@ internal sealed class DeterministicStopwatchCost
     private readonly ConditionalWeakTable<Stopwatch, Counter> _observations =
         new ConditionalWeakTable<Stopwatch, Counter>();
     private readonly double _costPerObservationMilliseconds;
+    private readonly Func<int, double>? _costSchedule;
 
-    public DeterministicStopwatchCost(double costPerObservationMilliseconds)
+    public DeterministicStopwatchCost(
+        double costPerObservationMilliseconds,
+        Func<int, double>? costSchedule = null)
     {
+        if (costPerObservationMilliseconds < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(costPerObservationMilliseconds));
+        }
+
         _costPerObservationMilliseconds = costPerObservationMilliseconds;
+        _costSchedule = costSchedule;
     }
 
     public double Observe(Stopwatch stopwatch)
     {
         var counter = _observations.GetOrCreateValue(stopwatch);
-        counter.Value += _costPerObservationMilliseconds;
+        counter.Observations++;
+        var cost = _costSchedule?.Invoke(counter.Observations) ??
+                   _costPerObservationMilliseconds;
+        if (cost < 0.0)
+        {
+            throw new InvalidOperationException("A deterministic stopwatch cost cannot be negative.");
+        }
+
+        counter.Value += cost;
         return counter.Value;
     }
 
     private sealed class Counter
     {
+        public int Observations { get; set; }
+
         public double Value { get; set; }
     }
 }

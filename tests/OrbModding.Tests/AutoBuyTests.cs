@@ -83,7 +83,6 @@ public sealed class AutoBuyTests
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.EnableOperationalLogging.Value = false;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(
             config,
@@ -190,8 +189,7 @@ public sealed class AutoBuyTests
         {
             config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = false;
-            config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
             config.MaxPurchasesPerBatch.Value = 8;
         }, catalog);
 
@@ -211,8 +209,7 @@ public sealed class AutoBuyTests
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-        config.RepeatWhileAffordable.Value = false;
-        config.StructureRepeatMode.Value = AutoBuyStructureRepeatMode.BulkDevelopment;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.BulkDevelopment;
         config.MaxPurchasesPerBatch.Value = 8;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(
@@ -236,7 +233,7 @@ public sealed class AutoBuyTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void RepeatWhileAffordable_FillsUsableQueueBeyondLegacyGroupLimits(bool isUpgrade)
+    public void SingleGrouping_FillsUsableQueueAcrossRepeatedRankedPasses(bool isUpgrade)
     {
         var kind = isUpgrade ? AutoBuyCandidateKind.Upgrade : AutoBuyCandidateKind.Structure;
         var candidate = Candidate("abundant", kind, 1, 10_000);
@@ -250,8 +247,7 @@ public sealed class AutoBuyTests
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
             config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = true;
-            config.RespectActionMultiplier.Value = false;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
             config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
             config.LeaveQueueSlots.Value = 2;
         }, catalog);
@@ -261,14 +257,14 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RepeatWhileAffordable_StopsAtTheExactLiveResourceBoundary()
+    public void RepeatedRankedPasses_StopAtTheExactLiveResourceBoundary()
     {
         var candidate = Candidate("bounded", AutoBuyCandidateKind.Structure, 10, 35);
 
         Run(config =>
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = true;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
             config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
             config.LeaveQueueSlots.Value = 0;
         }, new FakeCatalog(10, candidate));
@@ -277,7 +273,7 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RepeatWhileAffordable_VisitsLowerRankedCandidateBeforeRepeating()
+    public void SingleGrouping_VisitsLowerRankedCandidateBeforeRepeating()
     {
         var selected = Candidate("selected", AutoBuyCandidateKind.Structure, 10, 25);
         var lowerRanked = Candidate("lower-ranked", AutoBuyCandidateKind.Structure, 500, 1_000);
@@ -285,7 +281,7 @@ public sealed class AutoBuyTests
         Run(config =>
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = true;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
             config.LeaveQueueSlots.Value = 0;
         }, new FakeCatalog(5, selected, lowerRanked));
 
@@ -294,7 +290,7 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RepeatWhileAffordable_RechecksIncreasingLevelCostBeforeEveryPurchase()
+    public void RepeatedRankedPasses_RecheckIncreasingLevelCostBeforeEveryPurchase()
     {
         var candidate = Candidate(
             "scaling-cost",
@@ -306,7 +302,7 @@ public sealed class AutoBuyTests
         Run(config =>
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = true;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
             config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
             config.LeaveQueueSlots.Value = 0;
         }, new FakeCatalog(10, candidate));
@@ -315,14 +311,14 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RepeatWhileAffordable_StillHonorsTheFixedBatchCap()
+    public void RepeatedRankedPasses_StillHonorTheFixedBatchCap()
     {
         var candidate = Candidate("fixed-cap", AutoBuyCandidateKind.Upgrade, 1, 10_000);
 
         Run(config =>
         {
             config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RepeatWhileAffordable.Value = true;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Single;
             config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.Fixed;
             config.MaxPurchasesPerBatch.Value = 4;
             config.LeaveQueueSlots.Value = 0;
@@ -358,7 +354,6 @@ public sealed class AutoBuyTests
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
 
@@ -386,7 +381,6 @@ public sealed class AutoBuyTests
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.MaxPurchasesPerBatch.Value = 3;
         config.EnableOperationalLogging.Value = true;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(
             config,
@@ -424,7 +418,6 @@ public sealed class AutoBuyTests
         config.MaxPurchasesPerBatch.Value = 1;
         config.EnableOperationalLogging.Value = true;
         config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Off;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
 
@@ -446,7 +439,6 @@ public sealed class AutoBuyTests
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.MaxPurchasesPerBatch.Value = 2;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
 
@@ -564,7 +556,6 @@ public sealed class AutoBuyTests
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.AutoBuyIntervalSeconds.Value = 0.1f;
         config.EnableOperationalLogging.Value = true;
-        config.RepeatWhileAffordable.Value = false;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log);
 
@@ -578,7 +569,7 @@ public sealed class AutoBuyTests
     }
 
     [Fact]
-    public void RespectActionMultiplier_RepeatsUpgradeUpToCurrentMultiplier()
+    public void ActionMultiplierGrouping_RepeatsUpgradeUpToCurrentMultiplier()
     {
         var candidate = Candidate("multiplied", AutoBuyCandidateKind.Upgrade, 1, 1_000);
         var catalog = new FakeCatalog(10, candidate) { ActionMultiplier = 5 };
@@ -586,7 +577,7 @@ public sealed class AutoBuyTests
         Run(config =>
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RespectActionMultiplier.Value = true;
+            config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.ActionMultiplier;
             config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         }, catalog);
 
@@ -602,7 +593,6 @@ public sealed class AutoBuyTests
         Run(config =>
         {
             config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-            config.RespectActionMultiplier.Value = false;
             config.MaxPurchasesPerBatch.Value = 1;
         }, catalog);
 
@@ -619,7 +609,7 @@ public sealed class AutoBuyTests
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
-        config.RespectActionMultiplier.Value = true;
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.ActionMultiplier;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), new ManualLogSource());
 
@@ -653,7 +643,6 @@ public sealed class AutoBuyTests
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.EnableOperationalLogging.Value = true;
-        config.RepeatWhileAffordable.Value = false;
         configure(config);
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(

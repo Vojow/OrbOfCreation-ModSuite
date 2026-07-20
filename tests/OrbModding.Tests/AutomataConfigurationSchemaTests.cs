@@ -31,7 +31,7 @@ public sealed class AutomataConfigurationSchemaTests
         Assert.Contains("mode", result.Status.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(path, result.Status.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(original, files.ReadAllBytes(path));
-        Assert.Equal(original, files.ReadAllBytes(ConfigurationSchemaTransaction.GetBackupPath(path, 1)));
+        Assert.Equal(original, files.ReadAllBytes(ConfigurationSchemaTransaction.GetBackupPath(path, 2)));
         Assert.Empty(config);
         Assert.True(config.ReloadCalls >= 1);
     }
@@ -177,6 +177,115 @@ public sealed class AutomataConfigurationSchemaTests
         Assert.Equal(AutoConceptOperationMode.Active, result.Config!.AutoConceptMode.Value);
         Assert.Equal(300, result.Config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
+    }
+
+    [Theory]
+    [InlineData("false", "Single", "7", 0)]
+    [InlineData("false", "Fixed", "7", 1)]
+    [InlineData("false", "BulkDevelopment", "7", 2)]
+    [InlineData("true", "Single", "7", 3)]
+    public void VersionOnePurchaseSettingsCollapseIntoOneGroupingMode(
+        string respectActionMultiplier,
+        string structureRepeatMode,
+        string fixedGroupSize,
+        int expectedGrouping)
+    {
+        var config = new ConfigFile();
+        config.SeedSerialized(
+            ConfigurationSchemaTransaction.MarkerSection,
+            ConfigurationSchemaTransaction.MarkerKey,
+            "1");
+        config.SeedSerialized("AutoBuy", "RespectActionMultiplier", respectActionMultiplier);
+        config.SeedSerialized("AutoBuy", "RepeatWhileAffordable", "true");
+        config.SeedSerialized("AutoBuy", "StructureRepeatMode", structureRepeatMode);
+        config.SeedSerialized("AutoBuy", "FixedStructureLevelsPerCandidate", fixedGroupSize);
+
+        var result = AutomataConfig.TryBind(
+            config,
+            new FakeFileOperations(),
+            new ConfigurationSchemaStatusRegistry());
+
+        Assert.True(result.Success);
+        Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
+        Assert.Equal((AutoBuyPurchaseGroupingMode)expectedGrouping, result.Config!.PurchaseGrouping.Value);
+        Assert.Equal(7, result.Config.FixedGroupSize.Value);
+        Assert.Contains(result.Diagnostics, item =>
+            item.Kind == ConfigurationMigrationDiagnosticKind.DiscardedObsolete &&
+            item.Source == AutomataConfigurationSchema.LegacyRepeatWhileAffordable);
+    }
+
+    [Fact]
+    public void ExistingPurchaseGroupingHasPrecedenceOverLegacySettings()
+    {
+        var config = new ConfigFile();
+        config.SeedSerialized(
+            ConfigurationSchemaTransaction.MarkerSection,
+            ConfigurationSchemaTransaction.MarkerKey,
+            "1");
+        config.SeedSerialized("AutoBuy", "PurchaseGrouping", "Fixed");
+        config.SeedSerialized("AutoBuy", "FixedGroupSize", "9");
+        config.SeedSerialized("AutoBuy", "RespectActionMultiplier", "true");
+        config.SeedSerialized("AutoBuy", "StructureRepeatMode", "BulkDevelopment");
+        config.SeedSerialized("AutoBuy", "FixedStructureLevelsPerCandidate", "3");
+
+        var result = AutomataConfig.TryBind(
+            config,
+            new FakeFileOperations(),
+            new ConfigurationSchemaStatusRegistry());
+
+        Assert.True(result.Success);
+        Assert.Equal(AutoBuyPurchaseGroupingMode.Fixed, result.Config!.PurchaseGrouping.Value);
+        Assert.Equal(9, result.Config.FixedGroupSize.Value);
+    }
+
+    [Fact]
+    public void SchemaZeroPurchaseSettingsRunThroughBothMigrationSteps()
+    {
+        var config = new ConfigFile();
+        config.SeedSerialized("AutoBuy", "RespectActionMultiplier", "false");
+        config.SeedSerialized("AutoBuy", "RepeatWhileAffordable", "true");
+        config.SeedSerialized("AutoBuy", "StructureRepeatMode", "Fixed");
+        config.SeedSerialized("AutoBuy", "FixedStructureLevelsPerCandidate", "6");
+
+        var result = AutomataConfig.TryBind(
+            config,
+            new FakeFileOperations(),
+            new ConfigurationSchemaStatusRegistry());
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.Status.FromVersion);
+        Assert.Equal(2, result.Status.ToVersion);
+        Assert.Equal(AutoBuyPurchaseGroupingMode.Fixed, result.Config!.PurchaseGrouping.Value);
+        Assert.Equal(6, result.Config.FixedGroupSize.Value);
+    }
+
+    [Theory]
+    [InlineData("not-a-bool", "Single", "2")]
+    [InlineData("false", "Unknown", "2")]
+    [InlineData("false", "Fixed", "0")]
+    [InlineData("false", "Fixed", "101")]
+    public void MalformedVersionOnePurchaseSettingsFailClosed(
+        string respectActionMultiplier,
+        string structureRepeatMode,
+        string fixedGroupSize)
+    {
+        var config = new ConfigFile();
+        config.SeedSerialized(
+            ConfigurationSchemaTransaction.MarkerSection,
+            ConfigurationSchemaTransaction.MarkerKey,
+            "1");
+        config.SeedSerialized("AutoBuy", "RespectActionMultiplier", respectActionMultiplier);
+        config.SeedSerialized("AutoBuy", "StructureRepeatMode", structureRepeatMode);
+        config.SeedSerialized("AutoBuy", "FixedStructureLevelsPerCandidate", fixedGroupSize);
+
+        var result = AutomataConfig.TryBind(
+            config,
+            new FakeFileOperations(),
+            new ConfigurationSchemaStatusRegistry());
+
+        Assert.False(result.Success);
+        Assert.Null(result.Config);
+        Assert.Equal(ConfigurationSchemaState.Failed, result.Status.State);
     }
 
     private sealed class FakeFileOperations : IConfigurationFileOperations

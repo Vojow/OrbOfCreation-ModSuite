@@ -25,7 +25,7 @@ regression coverage.
 | Native admission unknown | `CanPurchase()` contracts | complete-contract evidence | `AutoBuySimulationFailureTests` | native rejection reasons are not typed by the game API |
 | Cost unresolved/malformed | `GetPurchaseCost()`, resource and `BigDouble` contracts | full-vector decoder and resource snapshot cache | `AutoBuyDirtyResourceTests`, `AutoBuySimulationFailureTests` | malformed native collection behavior in a real update |
 | Cost/resource changes before submit | live resource/cost contracts | per-level reevaluation and final native submit | `AutoBuySimulationRaceTests` | real callback capable of changing cost inside the same frame |
-| Pre-mutation rejection | adapter preflight | `LastNativeMutationOutcome` remains zero | `AutoBuySimulationFailureTests`; desired persistent case is `NF-03` | frequency and native causes in ordinary play |
+| Pre-mutation rejection | adapter preflight | `LastNativeMutationOutcome` remains zero; scheduler applies bounded timed retry | `AutoBuySimulationFailureTests`, `AutoBuyAdversePerformanceTests` NF-03 | frequency and native causes in ordinary play |
 | Attempted ambiguous mutation | queued-state capture + native purchase contract | `NativeMutationVerifier` and lifecycle block | `AutoBuySimulationFailureTests`, `AutoBuyDirtyResourceTests` | controlled disposable runtime fault only |
 | Upgrade multi-buy isolation | `GetMultiBuy`, `AsInt`, `SetValue` contracts | `NativeMultiBuyScope` verified enter/restore/quarantine | `NativeMultiBuyScopeTests`, headless purchase tests | modifier-key changes during active mutation |
 | Exact one-level result | queued-state methods | before/after exact `+1` postcondition | headless adapter tests, simulation E2E | visible queue/resource confirmation for current beta |
@@ -51,6 +51,7 @@ regression coverage.
 | 304 queue capacity | prior runtime observation plus live-capacity adapter | one observed save/build and correct live-read path | universal capacity at every progression point |
 | Early/mid/late/endgame candidate subsets | synthetic stress profiles | comparative scaling and regression detection | exact player progression populations |
 | Completion cadences | synthetic stress profiles | queue-consumer pressure from 1/60 to 1/frame | actual action-duration distribution |
+| Runtime-derived perturbations | bounded synthetic Bulk-3 storms, transient cost outages, 35 ms heavy-tail reads, and 28-to-137 catalog growth | recovery, coalescing, resumability, and operation-count regressions under shapes seen in diagnostics | attribution to an exact save, game build, or Unity wall-clock cost |
 
 ## Promotion rule
 

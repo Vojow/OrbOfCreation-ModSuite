@@ -52,7 +52,7 @@ public sealed class AutoBuyAdversePerformanceTests
         AssertBounded(simulation, evaluationBudget: 12_000);
     }
 
-    [Fact(Skip = "Known baseline gap: a permanently rejecting cheapest candidate is immediately reranked and can starve healthy lower ranks; retain this gate for the retry/quarantine change.")]
+    [Fact]
     public void PermanentlyFailingLeaders_DoNotStarveHealthyLowerRanks()
     {
         using var simulation = CreateSimulation(candidateCount: 40, queueCapacity: 64);
@@ -67,6 +67,29 @@ public sealed class AutoBuyAdversePerformanceTests
         Assert.All(simulation.World.Candidates.Take(2), candidate =>
             Assert.True(candidate.PurchaseCalls <= 40));
         AssertBounded(simulation, evaluationBudget: 12_000);
+    }
+
+    [Fact]
+    public void PreMutationRejectionBackoff_RetriesAndRecoversWithoutBlockingLowerRanks()
+    {
+        using var simulation = CreateSimulation(candidateCount: 2, queueCapacity: 8);
+        var rejectedLeader = simulation.World.Candidates[0];
+        var healthyFollower = simulation.World.Candidates[1];
+        rejectedLeader.FailureMode = SimulatedPurchaseFailureMode.RejectBeforeMutation;
+
+        Assert.True(simulation.RunUntil(
+            world => world.SubmissionOrder.Contains(healthyFollower.Uuid, StringComparer.Ordinal),
+            maximumFrames: 20,
+            completionsPerFrame: 1));
+        var callsBeforeRecovery = rejectedLeader.PurchaseCalls;
+        rejectedLeader.FailureMode = SimulatedPurchaseFailureMode.None;
+
+        Assert.True(simulation.RunUntil(
+            world => world.SubmissionOrder.Contains(rejectedLeader.Uuid, StringComparer.Ordinal),
+            maximumFrames: 120,
+            completionsPerFrame: 1));
+        Assert.True(rejectedLeader.PurchaseCalls > callsBeforeRecovery);
+        Assert.True(rejectedLeader.PurchaseCalls <= 4);
     }
 
     [Fact]

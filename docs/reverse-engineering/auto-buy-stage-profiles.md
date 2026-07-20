@@ -32,20 +32,32 @@ profile.
 
 ## Current synthetic stress profiles
 
-| Stress name | Structures | Upgrades | Structure target | Queue | Completion cadence | Modeling purpose |
-|---|---:|---:|---:|---:|---:|---|
-| Early | 8 | 2 | 10 each | 24 | 1 per 60 frames | small catalog, slow consumer |
-| Mid | 64 | 12 | 40 each | 128 | 1 per 15 frames | catalog growth and moderate turnover |
-| Late | 180 | 24 | 100 each | 304 | 1 per 4 frames | full mapped Structure set and fast consumer |
-| Endgame | 180 | 24 | 1,000 each | 304 | 1 per frame | same catalog under maximum modeled turnover |
+| Stress name | Structures | Upgrades | Structure target | Bulk Development | Queue | Completion cadence | Modeling purpose |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Early | 8 | 2 | 10 each | 10 | 24 | 1 per 60 frames | small catalog, slow consumer |
+| Mid | 64 | 12 | 40 each | 25 | 128 | 1 per 15 frames | catalog growth and moderate turnover |
+| Late | 180 | 24 | 100 each | 100 | 304 | 1 per 4 frames | full mapped Structure set and fast consumer |
+| Endgame | 180 | 24 | 1,000 each | 100 | 304 | 1 per frame | same catalog under maximum modeled turnover |
 
 Only the late/endgame Structure count is tied to the reviewed mapping. Upgrade
-subsets, targets, early/mid counts, queue sizes below 304, cost curves, resource
-wealth, and completion cadences are deliberate test inputs.
+subsets, targets, early/mid counts, Bulk Development values, queue sizes below
+304, cost curves, resource wealth, and completion cadences are deliberate test
+inputs.
 
 These definitions must remain stable for A/B scheduler comparisons. An observed
 profile may inspire a new stress profile, but must not silently rewrite checked
 history.
+
+## Runtime-derived perturbations
+
+`AutoBuyRuntimeDerivedSimulationTests` keeps diagnostic-inspired disturbances
+separate from the four stable stage profiles. It varies low Bulk Development
+sizes, transient unresolved costs, completion storms, exact affordability
+boundaries, one indivisible 35 ms modeled read, and registry growth from 28 to
+137 candidates. The inputs intentionally exaggerate or isolate one behavior at
+a time. They are useful for detecting scheduler and recovery regressions, but
+they are not evidence-backed progression populations and do not change the
+checked early/mid/late/endgame workload definitions.
 
 ## Observed-profile capture schema
 

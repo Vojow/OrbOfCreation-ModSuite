@@ -34,7 +34,7 @@ internal sealed class AutoBuyTooltip : ITooltipable
         {
             new TooltipNode($"Queue slots reserved: {Config.LeaveQueueSlots.Value}"),
             new TooltipNode($"Batch sizing: {Config.AutoBuyBatchSizing.Value}"),
-            new TooltipNode($"Repeat policy: {(Config.RespectActionMultiplier.Value ? "Action multiplier" : Config.RepeatWhileAffordable.Value ? "While affordable" : Config.StructureRepeatMode.Value.ToString())}"),
+            new TooltipNode($"Purchase grouping: {Config.PurchaseGrouping.Value}"),
             new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         });
         var latestDecision = _control.LatestDecision;

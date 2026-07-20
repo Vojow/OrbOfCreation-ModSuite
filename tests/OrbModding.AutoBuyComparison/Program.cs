@@ -67,6 +67,8 @@ internal static class Program
             structureCount: 83,
             upgradeCount: 83,
             targetStructureLevels: 1,
+            purchaseGrouping: "reviewed-default",
+            bulkDevelopment: simulation.Catalog.BulkDevelopment,
             queueCapacity,
             simulation.Config.LeaveQueueSlots.Value,
             frameCount,

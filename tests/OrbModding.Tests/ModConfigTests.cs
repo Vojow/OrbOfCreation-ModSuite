@@ -141,10 +141,10 @@ public sealed class ModConfigTests
                        setting.Key.Contains("PurchaseLimitPerSession", StringComparison.Ordinal));
         Assert.Contains(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "RespectActionMultiplier");
-        Assert.Contains(
+            setting => setting.Key == "PurchaseGrouping");
+        Assert.DoesNotContain(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "RepeatWhileAffordable");
+            setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
@@ -195,16 +195,13 @@ public sealed class ModConfigTests
         Assert.True(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
 
         Assert.False(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
         session.Get(settings["AutoBuy.BatchSizingMode"]).Stage("Fixed");
-        session.Get(settings["AutoBuy.RepeatWhileAffordable"]).Stage("false");
-        session.Get(settings["AutoBuy.StructureRepeatMode"]).Stage("Fixed");
+        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("Fixed");
         Assert.True(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
-        session.Get(settings["AutoBuy.RespectActionMultiplier"]).Stage("true");
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.RepeatWhileAffordable"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.StructureRepeatMode"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedStructureLevelsPerCandidate"]));
+        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
+        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("ActionMultiplier");
+        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
     }
 
     [Fact]

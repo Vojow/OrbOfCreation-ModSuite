@@ -11,6 +11,12 @@ internal static class AutomataConfigurationSchema
     internal static readonly ConfigurationKey FallbackInterval = new("AutoConcept", "FallbackEvaluationIntervalSeconds");
     internal static readonly ConfigurationKey PreviousIntervalSeconds = new("AutoConcept", "RebalanceIntervalSeconds");
     internal static readonly ConfigurationKey LegacyIntervalMinutes = new("AutoConcept", "RebalanceIntervalMinutes");
+    internal static readonly ConfigurationKey PurchaseGrouping = new("AutoBuy", "PurchaseGrouping");
+    internal static readonly ConfigurationKey FixedGroupSize = new("AutoBuy", "FixedGroupSize");
+    internal static readonly ConfigurationKey LegacyRespectActionMultiplier = new("AutoBuy", "RespectActionMultiplier");
+    internal static readonly ConfigurationKey LegacyRepeatWhileAffordable = new("AutoBuy", "RepeatWhileAffordable");
+    internal static readonly ConfigurationKey LegacyStructureRepeatMode = new("AutoBuy", "StructureRepeatMode");
+    internal static readonly ConfigurationKey LegacyFixedStructureLevels = new("AutoBuy", "FixedStructureLevelsPerCandidate");
 
     internal static readonly IReadOnlyList<ConfigurationKey> DiscardedObsoleteKeys = new[]
     {
@@ -44,10 +50,112 @@ internal static class AutomataConfigurationSchema
             LegacyIntervalMinutes,
         };
         knownKeys.AddRange(DiscardedObsoleteKeys);
-        return new ConfigurationSchemaPlan(1, new[]
+        return new ConfigurationSchemaPlan(2, new[]
         {
             new ConfigurationMigrationStep(0, 1, knownKeys, MigrateVersionZero),
+            new ConfigurationMigrationStep(
+                1,
+                2,
+                new[]
+                {
+                    PurchaseGrouping,
+                    FixedGroupSize,
+                    LegacyRespectActionMultiplier,
+                    LegacyRepeatWhileAffordable,
+                    LegacyStructureRepeatMode,
+                    LegacyFixedStructureLevels,
+                },
+                MigratePurchaseGrouping),
         });
+    }
+
+    private static void MigratePurchaseGrouping(ConfigurationMigrationContext context)
+    {
+        var grouping = AutoBuyPurchaseGroupingMode.BulkDevelopment;
+        var groupingSource = PurchaseGrouping;
+        if (context.TryGet(PurchaseGrouping, out var currentGrouping))
+        {
+            grouping = ParseGrouping(currentGrouping, allowActionMultiplier: true);
+            groupingSource = PurchaseGrouping;
+        }
+        else if (context.TryGet(LegacyRespectActionMultiplier, out var respectMultiplier))
+        {
+            if (!bool.TryParse(respectMultiplier, out var enabled))
+                throw new ConfigurationMigrationException(ConfigurationMigrationFailureCode.InvalidKnownMode);
+            if (enabled)
+            {
+                grouping = AutoBuyPurchaseGroupingMode.ActionMultiplier;
+                groupingSource = LegacyRespectActionMultiplier;
+            }
+            else if (context.TryGet(LegacyStructureRepeatMode, out var legacyGrouping))
+            {
+                grouping = ParseGrouping(legacyGrouping, allowActionMultiplier: false);
+                groupingSource = LegacyStructureRepeatMode;
+            }
+        }
+        else if (context.TryGet(LegacyStructureRepeatMode, out var legacyGrouping))
+        {
+            grouping = ParseGrouping(legacyGrouping, allowActionMultiplier: false);
+            groupingSource = LegacyStructureRepeatMode;
+        }
+
+        context.Map(
+            groupingSource,
+            PurchaseGrouping,
+            grouping.ToString(),
+            "Collapsed legacy repeat precedence into one purchase-grouping mode.");
+
+        if (context.TryGet(FixedGroupSize, out var currentFixedSize))
+        {
+            context.Preserve(FixedGroupSize, ParseFixedGroupSize(currentFixedSize));
+        }
+        else if (context.TryGet(LegacyFixedStructureLevels, out var legacyFixedSize))
+        {
+            context.Map(
+                LegacyFixedStructureLevels,
+                FixedGroupSize,
+                ParseFixedGroupSize(legacyFixedSize),
+                "Renamed the fixed Structure group-size setting.");
+        }
+
+        context.DiscardObsolete(
+            LegacyRespectActionMultiplier,
+            "Replaced by PurchaseGrouping=ActionMultiplier.");
+        context.DiscardObsolete(
+            LegacyRepeatWhileAffordable,
+            "Auto Buy now always advances through ranked groups while its queue quota has room.");
+        context.DiscardObsolete(
+            LegacyStructureRepeatMode,
+            "Replaced by PurchaseGrouping.");
+        context.DiscardObsolete(
+            LegacyFixedStructureLevels,
+            "Replaced by FixedGroupSize.");
+    }
+
+    private static AutoBuyPurchaseGroupingMode ParseGrouping(
+        string serialized,
+        bool allowActionMultiplier)
+    {
+        if (!Enum.TryParse<AutoBuyPurchaseGroupingMode>(serialized, true, out var grouping) ||
+            !Enum.IsDefined(typeof(AutoBuyPurchaseGroupingMode), grouping) ||
+            (!allowActionMultiplier && grouping == AutoBuyPurchaseGroupingMode.ActionMultiplier))
+        {
+            throw new ConfigurationMigrationException(ConfigurationMigrationFailureCode.InvalidKnownMode);
+        }
+
+        return grouping;
+    }
+
+    private static string ParseFixedGroupSize(string serialized)
+    {
+        if (!int.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size) ||
+            size < 1 ||
+            size > 100)
+        {
+            throw new ConfigurationMigrationException(ConfigurationMigrationFailureCode.InvalidKnownMode);
+        }
+
+        return size.ToString(CultureInfo.InvariantCulture);
     }
 
     private static void MigrateVersionZero(ConfigurationMigrationContext context)

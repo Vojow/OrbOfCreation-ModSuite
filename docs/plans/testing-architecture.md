@@ -133,6 +133,10 @@ Do not create low-value tests solely to increase a percentage.
 
 ### T3 — Comparative performance
 
+- Keep runtime-derived scheduler perturbations beside the stable progression
+  workloads, with deterministic safety/progress/operation gates. **Implemented
+  for Auto Buy low-Bulk, mixed-outage, completion-storm, threshold, heavy-tail,
+  and catalog-ramp cases.**
 - Run the four progression workloads through an identical harness on the
   pre-change and candidate engines.
 - Add allocation evidence in a controlled benchmark process; keep it separate

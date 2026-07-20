@@ -25,6 +25,7 @@ public sealed class AutoBuyStagePerformanceTests
             structureCount: 8,
             upgradeCount: 2,
             targetStructureLevels: 10,
+            bulkDevelopment: 10,
             queueCapacity: 24,
             frameCount: 5100,
             completionStartFrame: 120,
@@ -42,6 +43,7 @@ public sealed class AutoBuyStagePerformanceTests
             structureCount: 64,
             upgradeCount: 12,
             targetStructureLevels: 40,
+            bulkDevelopment: 25,
             queueCapacity: 128,
             frameCount: 39000,
             completionStartFrame: 240,
@@ -61,6 +63,7 @@ public sealed class AutoBuyStagePerformanceTests
             structureCount: AllKnownStructureCount,
             upgradeCount: 24,
             targetStructureLevels: 100,
+            bulkDevelopment: 100,
             queueCapacity: 304,
             frameCount: 73000,
             completionStartFrame: 400,
@@ -81,6 +84,7 @@ public sealed class AutoBuyStagePerformanceTests
             structureCount: AllKnownStructureCount,
             upgradeCount: 24,
             targetStructureLevels: 1000,
+            bulkDevelopment: 100,
             queueCapacity: 304,
             frameCount: 200000,
             completionStartFrame: 400,
@@ -98,6 +102,7 @@ public sealed class AutoBuyStagePerformanceTests
             initialResourceQuantity: 1_000_000_000_000.0,
             readObservationCostMilliseconds: 0.02,
             purchaseObservationCostMilliseconds: 1.1);
+        simulation.Catalog.BulkDevelopment = stage.BulkDevelopment;
 
         var requiredSubmissions = checked(
             (stage.StructureCount * stage.TargetStructureLevels) + stage.UpgradeCount);
@@ -135,6 +140,8 @@ public sealed class AutoBuyStagePerformanceTests
             stage.StructureCount,
             stage.UpgradeCount,
             stage.TargetStructureLevels,
+            simulation.Config.PurchaseGrouping.Value.ToString(),
+            stage.BulkDevelopment,
             stage.QueueCapacity,
             simulation.Config.LeaveQueueSlots.Value,
             stage.FrameCount,
@@ -271,6 +278,7 @@ public sealed class AutoBuyStagePerformanceTests
             int structureCount,
             int upgradeCount,
             int targetStructureLevels,
+            int bulkDevelopment,
             int queueCapacity,
             int frameCount,
             int completionStartFrame,
@@ -283,6 +291,7 @@ public sealed class AutoBuyStagePerformanceTests
             StructureCount = structureCount;
             UpgradeCount = upgradeCount;
             TargetStructureLevels = targetStructureLevels;
+            BulkDevelopment = bulkDevelopment;
             QueueCapacity = queueCapacity;
             FrameCount = frameCount;
             CompletionStartFrame = completionStartFrame;
@@ -300,6 +309,8 @@ public sealed class AutoBuyStagePerformanceTests
         public int UpgradeCount { get; }
 
         public int TargetStructureLevels { get; }
+
+        public int BulkDevelopment { get; }
 
         public int QueueCapacity { get; }
 
