@@ -42,10 +42,14 @@ internal sealed class ModRuntimeStatusProjection
         for (var index = 0; index < Features.Count; index++)
         {
             var status = Features[index];
-            parts[index] = status.DisplayName + ": " + FeatureStatusPresenter.Label(status.State) +
-                (status.Reason.IsEmpty ? string.Empty : " - " + status.Reason.Summary);
+            var presentation = FeatureStatusPresenter.Present(status);
+            parts[index] = status.DisplayName + ": " + presentation.ConfiguredLabel +
+                " | " + presentation.RuntimeLabel +
+                (status.Reason.IsEmpty
+                    ? string.Empty
+                    : " | " + FeatureStatusPresenter.BoundAndWrap(status.Reason.Summary, 160, 64));
         }
-        return "Runtime status: " + string.Join(" | ", parts);
+        return "Runtime status:\n" + string.Join("\n", parts);
     }
 
     private sealed class FeatureComparer : IComparer<FeatureStatusSnapshot>

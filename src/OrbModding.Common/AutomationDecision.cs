@@ -905,6 +905,87 @@ public static class AutomationDecisionPresenter
         return builder.ToString();
     }
 
+    public static string FormatExpanded(in AutomationDecision decision, int maximumResourceGroups = 4)
+    {
+        if (maximumResourceGroups < 1 || maximumResourceGroups > 8)
+            throw new ArgumentOutOfRangeException(nameof(maximumResourceGroups));
+
+        var builder = new StringBuilder(Label(decision.Code));
+        if (!decision.Subject.IsEmpty)
+        {
+            var subject = !string.IsNullOrEmpty(decision.Subject.DisplayName)
+                ? decision.Subject.DisplayName
+                : decision.Subject.StableId;
+            if (!string.IsNullOrEmpty(subject))
+            {
+                builder.Append("\nTarget: ");
+                builder.Append(FeatureStatusPresenter.BoundAndWrap(subject, 96, 48));
+            }
+        }
+
+        var displayed = Math.Min(decision.ResourceConstraints.Count, maximumResourceGroups);
+        for (var index = 0; index < displayed; index++)
+        {
+            var constraint = decision.ResourceConstraints[index];
+            var resource = !string.IsNullOrEmpty(constraint.Resource.DisplayName)
+                ? constraint.Resource.DisplayName
+                : constraint.Resource.StableId;
+            builder.Append("\n\n");
+            builder.Append(FeatureStatusPresenter.BoundAndWrap(resource, 96, 48));
+            builder.Append("\nRequired: ");
+            builder.Append(constraint.Required);
+            builder.Append("\nAvailable: ");
+            builder.Append(constraint.Observed);
+            builder.Append("\nCost: ");
+            builder.Append(constraint.Cost);
+            if (constraint.Kind == AutomationResourceConstraintKind.ReserveFloor)
+            {
+                builder.Append("\nReserved: ");
+                builder.Append(SubtractNonNegative(constraint.Required, constraint.Cost));
+            }
+            builder.Append("\nShortfall: ");
+            builder.Append(SubtractNonNegative(constraint.Required, constraint.Observed));
+        }
+        if (decision.ResourceConstraints.Count > displayed)
+        {
+            builder.Append("\n\n+");
+            builder.Append(decision.ResourceConstraints.Count - displayed);
+            builder.Append(" more resource constraint(s)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(decision.TechnicalDetail))
+        {
+            builder.Append("\n\nDetail: ");
+            builder.Append(FeatureStatusPresenter.BoundAndWrap(decision.TechnicalDetail, 240, 64));
+        }
+        return builder.ToString();
+    }
+
+    public static IReadOnlyList<string> FormatExpandedLines(
+        in AutomationDecision decision,
+        int maximumResourceGroups = 4)
+    {
+        var expanded = FormatExpanded(decision, maximumResourceGroups);
+        return expanded.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static AutomationScientificValue SubtractNonNegative(
+        AutomationScientificValue left,
+        AutomationScientificValue right)
+    {
+        if (left.CompareTo(right) <= 0) return default;
+        if (right.IsZero) return left;
+        var exponent = Math.Max(left.Exponent, right.Exponent);
+        var leftScale = exponent - left.Exponent > 324
+            ? 0.0
+            : Math.Pow(10.0, left.Exponent - exponent);
+        var rightScale = exponent - right.Exponent > 324
+            ? 0.0
+            : Math.Pow(10.0, right.Exponent - exponent);
+        var difference = left.Mantissa * leftScale - right.Mantissa * rightScale;
+        return difference <= 0.0 ? default : new AutomationScientificValue(difference, exponent);
+    }
+
     public static string Label(AutomationDecisionCode code) => code switch
     {
         AutomationDecisionCode.Eligible => "Eligible",

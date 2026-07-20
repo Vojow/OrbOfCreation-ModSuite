@@ -23,8 +23,9 @@ public sealed class ModRuntimeStatusProjectionTests
 
         Assert.Equal(new[] { "alpha", "zeta" }, projection.Features.Select(status => status.Key.FeatureId));
         Assert.DoesNotContain("Wrong case", projection.FormatCompact());
-        Assert.Contains("Alpha: Temporarily blocked - native queue busy", projection.FormatCompact());
-        Assert.Contains("Zeta: Operational", projection.FormatCompact());
+        Assert.Contains("Alpha: ON | Waiting | native queue busy", projection.FormatCompact());
+        Assert.Contains("Zeta: ON | Operational", projection.FormatCompact());
+        Assert.Contains("\n", projection.FormatCompact());
     }
 
     [Fact]
@@ -52,7 +53,7 @@ public sealed class ModRuntimeStatusProjectionTests
 
         Assert.False(projection.Features[0].ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, projection.Features[0].State);
-        Assert.Contains("Feature: Off - disabled in saved configuration", projection.FormatCompact());
+        Assert.Contains("Feature: OFF | Off | disabled in saved configuration", projection.FormatCompact());
     }
 
     private static FeatureStatusSnapshot Operational(string pluginId, string featureId, string displayName) => new(

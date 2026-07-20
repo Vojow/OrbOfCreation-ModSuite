@@ -444,7 +444,7 @@ The full concept catalog is small enough for infrequent work, but every scan mus
 ### General
 
 - `Mode`: `Disabled` or `Active`.
-- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF/!` gameplay control.
+- `ShowToggleButton`: default true; exposes the ordered `CN ON/OFF` configured-intent control, with runtime health in its tooltip.
 - `EmergencyDisable`: shared Automata safety switch.
 
 ### Balancing

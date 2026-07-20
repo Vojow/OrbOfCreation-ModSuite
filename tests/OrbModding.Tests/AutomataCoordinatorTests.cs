@@ -532,7 +532,7 @@ public sealed class AutomataCoordinatorTests
 
         Assert.Equal(FeatureStatusState.TemporarilyBlocked, statuses.AutoBuy.Current.State);
         Assert.Equal(FeatureStatusReasonCode.QueueFull, statuses.AutoBuy.Current.Reason.Code);
-        Assert.Equal(AutoCastToggleVisualState.Waiting, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoBuy.Current));
+        Assert.Equal(AutoCastToggleVisualState.On, AutomataFeatureStatusVisuals.ToVisualState(statuses.AutoBuy.Current));
     }
 
     [Fact]

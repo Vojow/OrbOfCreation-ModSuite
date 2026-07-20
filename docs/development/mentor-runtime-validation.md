@@ -6,10 +6,11 @@ Use only on a backed-up save and a manually installed test copy of the built DLL
 
 - Confirm the supported assembly hash and a quiet startup with `Mode=Disabled`.
 - Confirm the compact control appears beside the queue controls, reads `M OFF`, and its status notice lists economy, percentage, tied mentors, and recipient count.
-- On progression states before mastery or a domain screen unlocks, activate Mentor and confirm `M WAIT` names the native lock without errors, catalog/log churn, tooltip scans, XP capture, or configuration changes.
+- On progression states before mastery or a domain screen unlocks, activate Mentor and confirm the primary control remains `M ON` while the tooltip names the native waiting reason without errors, catalog/log churn, tooltip scans, XP capture, or configuration changes.
 - Unlock spell mastery, the artifact workshop, and alchemy independently; confirm only the newly eligible domain starts catalog and relationship work promptly, without a scene restart.
-- Load or reset to a progression state where one or more domains are locked again; confirm pending captures/plans/grants are cancelled and the affected domains return to `WAIT` before any stale mutation.
-- Toggle with the button and `Alt+M`; verify `ON`, `OFF`, and forced `BLOCKED` presentation and immediate pending-work cancellation.
+- Load or reset to a progression state where one or more domains are locked again; confirm pending captures/plans/grants are cancelled and the affected domains report secondary runtime `Waiting` before any stale mutation.
+- Toggle with the button and `Alt+M`; verify the primary label changes only between `ON` and `OFF`, while forced blocks remain secondary tooltip/runtime-band status and still cancel pending work immediately.
+- Exercise an Artifact grant large enough to cross at least three mastery thresholds. Confirm the live equipment mastery, experience-container level, residual XP, and saved XP agree; no `PostconditionFailed` lifecycle block may be emitted for the rollover.
 - At 1× speed, compare native XP and detailed logs for instant, channelled, aura/toggled, rapid, and large-batch spell events.
 - Test one mentor, tied mentors, a changing highest tier, lower/equal/higher mastery recipes, locked recipes, active recipients, and ready-to-confirm recipients with banked XP.
 - Verify Shared Pool at 0%, 10%, and 100% conserves the configured bonus pool; verify Per Recipient at the same values scales exactly with eligible count.

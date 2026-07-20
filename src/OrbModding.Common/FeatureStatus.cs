@@ -347,15 +347,126 @@ public sealed class FeatureStatusRegistration : IDisposable
     }
 }
 
+public enum FeatureConfiguredPresentationState
+{
+    Off = 0,
+    On = 1,
+}
+
+public enum FeatureRuntimePresentationState
+{
+    Off = 0,
+    Operational = 1,
+    Waiting = 2,
+    Blocked = 3,
+    Degraded = 4,
+    Unavailable = 5,
+    Faulted = 6,
+}
+
+public readonly struct FeatureStatusPresentation : IEquatable<FeatureStatusPresentation>
+{
+    internal FeatureStatusPresentation(
+        FeatureConfiguredPresentationState configuredState,
+        FeatureRuntimePresentationState runtimeState,
+        FeatureStatusReason reason)
+    {
+        ConfiguredState = configuredState;
+        RuntimeState = runtimeState;
+        Reason = reason;
+    }
+
+    public FeatureConfiguredPresentationState ConfiguredState { get; }
+    public FeatureRuntimePresentationState RuntimeState { get; }
+    public FeatureStatusReason Reason { get; }
+    public bool IsConfiguredOn => ConfiguredState == FeatureConfiguredPresentationState.On;
+    public string ConfiguredLabel => IsConfiguredOn ? "ON" : "OFF";
+    public string RuntimeLabel => FeatureStatusPresenter.RuntimeLabel(RuntimeState);
+
+    public bool Equals(FeatureStatusPresentation other) =>
+        ConfiguredState == other.ConfiguredState &&
+        RuntimeState == other.RuntimeState &&
+        Reason.Equals(other.Reason);
+    public override bool Equals(object? obj) => obj is FeatureStatusPresentation other && Equals(other);
+    public override int GetHashCode() => unchecked(
+        (((int)ConfiguredState * 397) ^ (int)RuntimeState) * 397 ^ Reason.GetHashCode());
+}
+
 public static class FeatureStatusPresenter
 {
+    public static FeatureStatusPresentation Present(in FeatureStatusSnapshot status) => new(
+        status.ConfiguredEnabled
+            ? FeatureConfiguredPresentationState.On
+            : FeatureConfiguredPresentationState.Off,
+        RuntimeState(status),
+        status.Reason);
+
     public static string Format(in FeatureStatusSnapshot status)
+        => string.Join("\n", FormatLines(status));
+
+    public static IReadOnlyList<string> FormatLines(
+        in FeatureStatusSnapshot status,
+        int lineWidth = 80)
     {
-        var configured = status.ConfiguredEnabled ? "Enabled" : "Disabled";
-        return status.Reason.IsEmpty
-            ? $"Configured: {configured}; Runtime: {Label(status.State)}"
-            : $"Configured: {configured}; Runtime: {Label(status.State)} - {status.Reason.Summary}";
+        if (lineWidth < 24) throw new ArgumentOutOfRangeException(nameof(lineWidth));
+        var presentation = Present(status);
+        var configured = presentation.IsConfiguredOn ? "Enabled" : "Disabled";
+        var lines = new List<string>(status.Reason.IsEmpty ? 2 : 4)
+        {
+            $"Configured: {configured}",
+            $"Runtime: {presentation.RuntimeLabel}",
+        };
+        if (!status.Reason.IsEmpty)
+            AppendWrappedLines(lines, "Reason: ", status.Reason.Summary, lineWidth, 320);
+        return lines;
     }
+
+    public static IReadOnlyList<string> FormatCompactLines(
+        string label,
+        in FeatureStatusSnapshot status,
+        int lineWidth = 80)
+    {
+        if (string.IsNullOrWhiteSpace(label)) throw new ArgumentException("A feature label is required.", nameof(label));
+        if (lineWidth < 24) throw new ArgumentOutOfRangeException(nameof(lineWidth));
+        var presentation = Present(status);
+        var configured = presentation.IsConfiguredOn ? "Enabled" : "Disabled";
+        var lines = new List<string>(status.Reason.IsEmpty ? 1 : 3)
+        {
+            $"{label}: {configured} | {presentation.RuntimeLabel}",
+        };
+        if (!status.Reason.IsEmpty)
+            AppendWrappedLines(lines, $"{label} reason: ", status.Reason.Summary, lineWidth, 320);
+        return lines;
+    }
+
+    public static FeatureRuntimePresentationState RuntimeState(in FeatureStatusSnapshot status) => status.State switch
+    {
+        FeatureStatusState.ConfigurationDisabled => FeatureRuntimePresentationState.Off,
+        FeatureStatusState.Operational => FeatureRuntimePresentationState.Operational,
+        FeatureStatusState.Locked or FeatureStatusState.NotReady => FeatureRuntimePresentationState.Waiting,
+        FeatureStatusState.TemporarilyBlocked when status.Reason.Code is
+            FeatureStatusReasonCode.QueueFull or
+            FeatureStatusReasonCode.NativeBusy or
+            FeatureStatusReasonCode.ManualPause or
+            FeatureStatusReasonCode.TargetingInProgress => FeatureRuntimePresentationState.Waiting,
+        FeatureStatusState.TemporarilyBlocked => FeatureRuntimePresentationState.Blocked,
+        FeatureStatusState.ContractUnavailable => FeatureRuntimePresentationState.Unavailable,
+        FeatureStatusState.Degraded => FeatureRuntimePresentationState.Degraded,
+        FeatureStatusState.Faulted => FeatureRuntimePresentationState.Faulted,
+        _ => FeatureRuntimePresentationState.Unavailable,
+    };
+
+    public static string RuntimeLabel(FeatureRuntimePresentationState state) => state switch
+    {
+        FeatureRuntimePresentationState.Off => "Off",
+        FeatureRuntimePresentationState.Operational => "Operational",
+        FeatureRuntimePresentationState.Waiting => "Waiting",
+        FeatureRuntimePresentationState.Blocked => "Blocked",
+        FeatureRuntimePresentationState.Degraded => "Degraded",
+        FeatureRuntimePresentationState.Unavailable => "Unavailable",
+        FeatureRuntimePresentationState.Faulted => "Faulted",
+        _ => "Unavailable",
+    };
 
     public static string Label(FeatureStatusState state) => state switch
     {
@@ -369,4 +480,61 @@ public static class FeatureStatusPresenter
         FeatureStatusState.Faulted => "Faulted",
         _ => "Unknown",
     };
+
+    public static string BoundAndWrap(string? text, int maximumCharacters = 320, int lineWidth = 72)
+    {
+        if (maximumCharacters < 16) throw new ArgumentOutOfRangeException(nameof(maximumCharacters));
+        if (lineWidth < 16) throw new ArgumentOutOfRangeException(nameof(lineWidth));
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var builder = new System.Text.StringBuilder(Math.Min(maximumCharacters, text.Length));
+        var lineLength = 0;
+        for (var index = 0; index < words.Length; index++)
+        {
+            var word = words[index];
+            var separatorLength = builder.Length == 0 ? 0 : 1;
+            if (builder.Length + separatorLength + word.Length > maximumCharacters)
+            {
+                if (builder.Length == 0)
+                {
+                    builder.Append(word, 0, maximumCharacters - 3);
+                    builder.Append("...");
+                    break;
+                }
+                if (builder.Length + 3 <= maximumCharacters) builder.Append("...");
+                break;
+            }
+
+            if (lineLength > 0 && lineLength + 1 + word.Length > lineWidth)
+            {
+                builder.Append('\n');
+                lineLength = 0;
+            }
+            else if (builder.Length > 0)
+            {
+                builder.Append(' ');
+                lineLength++;
+            }
+
+            builder.Append(word);
+            lineLength += word.Length;
+        }
+        return builder.ToString();
+    }
+
+    private static void AppendWrappedLines(
+        List<string> lines,
+        string prefix,
+        string? text,
+        int lineWidth,
+        int maximumCharacters)
+    {
+        var contentWidth = Math.Max(16, lineWidth - prefix.Length);
+        var wrapped = BoundAndWrap(text, maximumCharacters, contentWidth);
+        if (wrapped.Length == 0) return;
+        var segments = wrapped.Split('\n');
+        for (var index = 0; index < segments.Length; index++)
+            lines.Add((index == 0 ? prefix : new string(' ', prefix.Length)) + segments[index]);
+    }
 }

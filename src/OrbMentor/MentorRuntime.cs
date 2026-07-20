@@ -79,17 +79,42 @@ internal sealed class MentorRuntime : IDisposable
 
     private readonly struct GrantMutationState
     {
-        public GrantMutationState(int masteryLevel, MentorAmount experience)
+        public GrantMutationState(
+            int masteryLevel,
+            MentorAmount experience,
+            bool hasArtifactState = false,
+            int containerLevel = 0,
+            MentorAmount savedExperience = default)
         {
             MasteryLevel = masteryLevel;
             Experience = experience;
+            HasArtifactState = hasArtifactState;
+            ContainerLevel = containerLevel;
+            SavedExperience = savedExperience;
         }
 
         public int MasteryLevel { get; }
         public MentorAmount Experience { get; }
+        public bool HasArtifactState { get; }
+        public int ContainerLevel { get; }
+        public MentorAmount SavedExperience { get; }
 
         public override string ToString() =>
-            $"mastery={MasteryLevel},xp={Experience.Mantissa:R}e{Experience.Exponent}";
+            HasArtifactState
+                ? $"mastery={MasteryLevel},containerLevel={ContainerLevel},xp={Experience.Mantissa:R}e{Experience.Exponent},savedXp={SavedExperience.Mantissa:R}e{SavedExperience.Exponent}"
+                : $"mastery={MasteryLevel},xp={Experience.Mantissa:R}e{Experience.Exponent}";
+    }
+
+    private readonly struct ArtifactGrantExpectation
+    {
+        public ArtifactGrantExpectation(int masteryLevel, MentorAmount residualExperience)
+        {
+            MasteryLevel = masteryLevel;
+            ResidualExperience = residualExperience;
+        }
+
+        public int MasteryLevel { get; }
+        public MentorAmount ResidualExperience { get; }
     }
 
     private sealed class DomainState : MentorPendingWork
@@ -1318,20 +1343,37 @@ internal sealed class MentorRuntime : IDisposable
             var progressionEpochBeforeGrant = catalog.ProgressionEpoch;
             var value = new BigDouble(grantAmount.Mantissa, grantAmount.Exponent);
             var expectedExperience = grantAmount;
+            var artifactExpectation = default(ArtifactGrantExpectation);
+            var hasArtifactExpectation = false;
             var evidence = NativeMutationVerifier.Execute(
                 $"Mentor {domain} XP grant",
                 grantUuid,
-                $"XP exact delta +{grantAmount.Mantissa:R}e{grantAmount.Exponent}",
-                () => CaptureGrantState(domain, catalog, entry),
+                domain == MentorDomain.Artifacts
+                    ? $"native level-aware artifact transition for XP +{grantAmount.Mantissa:R}e{grantAmount.Exponent}"
+                    : $"XP exact delta +{grantAmount.Mantissa:R}e{grantAmount.Exponent}",
+                () =>
+                {
+                    var captured = CaptureGrantState(domain, catalog, entry);
+                    if (domain == MentorDomain.Artifacts && !hasArtifactExpectation)
+                    {
+                        artifactExpectation = PredictArtifactGrant(entry, captured, value);
+                        hasArtifactExpectation = true;
+                    }
+                    return captured;
+                },
                 () =>
                 {
                     if (domain == MentorDomain.Spells) ((SpellRecipeSO)entry.Item).GainMasteryExp(value);
                     else if (domain == MentorDomain.Alchemy) InvokeRequired(entry.Item, "GainMasteryXp", value);
                     else GrantArtifact(entry.Item, value);
                 },
-                (before, after) => AmountsEquivalent(
-                    before.Experience.Add(expectedExperience),
-                    after.Experience));
+                (before, after) => VerifyGrantMutation(
+                    domain,
+                    expectedExperience,
+                    hasArtifactExpectation,
+                    artifactExpectation,
+                    before,
+                    after));
             catalog.LastMutationEvidence = evidence;
             _activeMutationOutcome = NativeMutationCallOutcome.FromEvidence(evidence);
             completion = _activeMutationOutcome.ToWorkCompletion();
@@ -1528,6 +1570,19 @@ internal sealed class MentorRuntime : IDisposable
                 throw new MissingMemberException("artifact experience container unavailable");
             entry.ArtifactContainer = container;
             nativeExperience = InvokeRequired(container, "GetExperience");
+            var containerLevel = Convert.ToInt32(InvokeRequired(container, "GetLevel"));
+            var savedNativeExperience = catalog.ExperienceField!.GetValue(entry.Item);
+            if (!TryReadNonNegativeAmount(nativeExperience, out var artifactExperience) ||
+                !TryReadNonNegativeAmount(savedNativeExperience, out var savedExperience))
+            {
+                throw new InvalidOperationException("native artifact mastery XP state is unavailable or invalid");
+            }
+            return new GrantMutationState(
+                mastery,
+                artifactExperience,
+                hasArtifactState: true,
+                containerLevel: containerLevel,
+                savedExperience: savedExperience);
         }
         else
         {
@@ -1540,6 +1595,49 @@ internal sealed class MentorRuntime : IDisposable
         }
 
         return new GrantMutationState(mastery, experience);
+    }
+
+    private static ArtifactGrantExpectation PredictArtifactGrant(
+        NativeEntry entry,
+        in GrantMutationState before,
+        BigDouble grant)
+    {
+        if (!before.HasArtifactState || before.ContainerLevel != before.MasteryLevel)
+            throw new InvalidOperationException("artifact mastery and experience-container levels are inconsistent before mutation");
+        if (!AmountsEquivalent(before.Experience, before.SavedExperience))
+            throw new InvalidOperationException("artifact container XP and saved XP are inconsistent before mutation");
+
+        var container = entry.ArtifactContainer ??
+            throw new MissingMemberException("artifact experience container unavailable");
+        var clone = InvokeRequired(container, "Clone");
+        InvokeRequired(clone, "GainExperience", grant);
+        var gainedLevels = Convert.ToInt32(InvokeRequired(clone, "GetGainedLevels"));
+        if (gainedLevels < 0)
+            throw new InvalidOperationException("artifact experience prediction returned a negative level delta");
+        var expectedLevel = Convert.ToInt32(InvokeRequired(clone, "GetLevel"));
+        if (expectedLevel != checked(before.ContainerLevel + gainedLevels))
+            throw new InvalidOperationException("artifact experience prediction returned contradictory level evidence");
+        var nativeResidual = InvokeRequired(clone, "GetExperience");
+        if (!TryReadNonNegativeAmount(nativeResidual, out var residual))
+            throw new InvalidOperationException("artifact experience prediction returned invalid residual XP");
+        return new ArtifactGrantExpectation(expectedLevel, residual);
+    }
+
+    private static bool VerifyGrantMutation(
+        MentorDomain domain,
+        MentorAmount expectedExperience,
+        bool hasArtifactExpectation,
+        in ArtifactGrantExpectation artifactExpectation,
+        in GrantMutationState before,
+        in GrantMutationState after)
+    {
+        if (domain != MentorDomain.Artifacts)
+            return AmountsEquivalent(before.Experience.Add(expectedExperience), after.Experience);
+        return hasArtifactExpectation && after.HasArtifactState &&
+               after.MasteryLevel == artifactExpectation.MasteryLevel &&
+               after.ContainerLevel == artifactExpectation.MasteryLevel &&
+               AmountsEquivalent(after.Experience, artifactExpectation.ResidualExperience) &&
+               AmountsEquivalent(after.SavedExperience, artifactExpectation.ResidualExperience);
     }
 
     private static bool TryReadNonNegativeAmount(object? value, out MentorAmount amount)
@@ -1885,8 +1983,7 @@ internal sealed class MentorRuntime : IDisposable
         var experienceField = domain switch
         {
             MentorDomain.Spells => FindField(expected, "masteryExperience"),
-            MentorDomain.Alchemy => FindField(expected, "masteryXp"),
-            _ => null,
+            _ => FindField(expected, "masteryXp"),
         };
         catalog.ExperienceField = experienceField?.FieldType == typeof(BigDouble)
             ? experienceField
@@ -1910,7 +2007,7 @@ internal sealed class MentorRuntime : IDisposable
         if (domain == MentorDomain.Artifacts) catalog.ArtifactContainerMethod = FindMethod(expected, "GetExperienceElement", 0);
         if (catalog.RegistryField is null || catalog.MasteryField is null || catalog.AvailabilityMethod is null ||
             catalog.IdentityMethod is null || catalog.RegistryLookupMethod is null ||
-            (domain != MentorDomain.Artifacts && catalog.ExperienceField is null) ||
+            catalog.ExperienceField is null ||
             (domain == MentorDomain.Artifacts && catalog.ArtifactContainerMethod is null))
         {
             FailDomainContract(domain, $"{domain} native catalog/accessor contract is unavailable");

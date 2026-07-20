@@ -25,7 +25,7 @@ Native methods returning without an exception are not sufficient evidence that t
 | Auto Cast | Stable spell UUID, native object, type, and slot | Audited `Spell.Fire` hook epoch | Exact `+1`; transient `IsCasting` is not universal evidence |
 | Mentor spell XP | Stable spell UUID and exact recipe | `SpellRecipeSO.masteryExperience` | Expected numeric XP delta |
 | Mentor alchemy XP | Stable recipe UUID, exact type, and ordinary-domain proof | `AlchemyRecipeSO.masteryXp` | Expected numeric XP delta |
-| Mentor artifact XP | Stable equipment UUID and exact type | Native experience-container value | Expected numeric XP delta |
+| Mentor artifact XP | Stable equipment UUID and exact type | Equipment mastery, native container level/residual XP, and saved `masteryXp` | Exact transition predicted on a clone of the initialized native container, including zero, one, or multiple level rollovers |
 
 ## Failure and recovery policy
 

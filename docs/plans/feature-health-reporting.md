@@ -52,9 +52,10 @@ Transitions are emitted only when canonical condition evidence changes. Subscrib
 
 ## User interface
 
-- Gameplay buttons keep saved configuration and runtime state distinct. Normal locking or initialization uses a waiting presentation; emergency, contract, degradation, and fault evidence uses an attention presentation.
-- Tooltips use the shared presenter and structured reason evidence rather than private string parsing.
-- Orb Mod Config joins statuses by the exact catalog plugin GUID and displays them in a dedicated runtime band, separate from staged/saved setting feedback.
+- Gameplay buttons use the shared presentation projection and keep their primary `ON`/`OFF` label and styling tied only to configured user intent. Locking, initialization, emergency blocks, contract failures, degradation, and faults never replace that primary state.
+- Tooltips use the same projection and show runtime health plus bounded structured reason evidence rather than private string parsing. Each visible line occupies its own native tooltip node; no node relies on embedded or automatic multiline layout that can overlap later rows.
+- Orb Mod Config joins statuses by the exact catalog plugin GUID and displays configured intent and runtime health on separate line-oriented fields in a dedicated runtime band, separate from staged/saved setting feedback.
+- Auto Buy formats structured reserve constraints as deterministic per-resource groups with required, available, cost, reserved, and shortfall fields; long resource names and technical detail are bounded and wrapped.
 - Saving configuration reports only that configuration was saved. It does not claim that the runtime has already applied the value.
 - A plugin that does not publish the contract is shown as not reporting runtime status; Mod Config does not invent one.
 
@@ -75,7 +76,9 @@ Portable tests cover:
 - transition suppression when only wording changes and transition emission when identity or lifecycle generation changes;
 - configuration-disabled, unlock, initialization, temporary block, contract failure, domain degradation, fault, recovery, and lifecycle-reset projections;
 - exact-GUID Mod Config joins, deterministic feature ordering, and unpublished-plugin behavior;
-- controls and tooltip output consuming the same projected state without changing engine scheduling.
+- controls, tooltips, notices, and Mod Config consuming the same projected state without changing engine scheduling;
+- stable primary `ON` intent across rapid operational, waiting, blocked, degraded, unavailable, and fault transitions;
+- bounded line-oriented reserve presentation, deterministic resource ordering, large scientific values, long names, and the one-native-node-per-visible-line layout invariant.
 
 Installed-game verification still checks real references and package composition. Runtime UAT must confirm compact labels, tooltip readability, Mod Config layout at supported resolutions, transition recovery after load/reset, and isolation of one deliberately unavailable optional domain.
 

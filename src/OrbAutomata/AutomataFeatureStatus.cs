@@ -289,17 +289,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
 
 internal static class AutomataFeatureStatusVisuals
 {
-    public static AutoCastToggleVisualState ToVisualState(in FeatureStatusSnapshot status) => status.State switch
-    {
-        FeatureStatusState.ConfigurationDisabled => AutoCastToggleVisualState.Off,
-        FeatureStatusState.Operational => AutoCastToggleVisualState.On,
-        FeatureStatusState.Locked or FeatureStatusState.NotReady => AutoCastToggleVisualState.Waiting,
-        FeatureStatusState.TemporarilyBlocked when status.Reason.Code is
-            FeatureStatusReasonCode.QueueFull or
-            FeatureStatusReasonCode.NativeBusy or
-            FeatureStatusReasonCode.ManualPause or
-            FeatureStatusReasonCode.TargetingInProgress or
-            FeatureStatusReasonCode.CapacityExceeded => AutoCastToggleVisualState.Waiting,
-        _ => AutoCastToggleVisualState.Blocked,
-    };
+    public static AutoCastToggleVisualState ToVisualState(in FeatureStatusSnapshot status) =>
+        FeatureStatusPresenter.Present(status).ConfiguredState == FeatureConfiguredPresentationState.On
+            ? AutoCastToggleVisualState.On
+            : AutoCastToggleVisualState.Off;
 }

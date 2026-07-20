@@ -159,7 +159,7 @@ Orb Mentor has a compact queue/status-area button beside the existing Auto Cast 
 
 - Click toggles Active/Disabled.
 - `Alt+M` performs the same action.
-- Visual states: `ON`, `OFF`, `WAITING`, and `BLOCKED`.
+- Primary visual states: `ON` and `OFF`, driven only by configured intent. `WAITING`, `BLOCKED`, `DEGRADED`, unavailable, and faulted remain secondary structured runtime status.
 - Tooltip: economy mode, percentage, current tied mentor names/count, eligible-recipient count, and the reason for a blocked state.
 - The compact surface uses an appropriate native spell/mastery icon; detailed text stays in the tooltip.
 
@@ -176,8 +176,8 @@ Changing mode, percentage, shortcut, or enable state through Orb Mod Config appl
 - Reject negative, NaN, infinite, overflowing, or otherwise invalid values.
 - Preserve native mastery-ready sounds, popups, and logs in the MVP, even when several recipients cross thresholds together.
 - Revalidate recipients immediately before a delayed grant.
-- Fail closed and show `BLOCKED` when the hook, catalog, lifecycle, or numeric contract is unavailable.
-- Show `WAITING` without catalog or loadout discovery while the native mastery or domain view remains locked; unlock promptly when both audited views become available.
+- Fail closed and report secondary `BLOCKED` runtime health when the hook, catalog, lifecycle, or numeric contract is unavailable without replacing an enabled primary `ON` label.
+- Report secondary `WAITING` without catalog or loadout discovery while the native mastery or domain view remains locked; unlock promptly when both audited views become available.
 - Do not store progression state outside native objects. Plugin removal leaves an ordinary game save containing only XP the game already knows how to serialize.
 
 ## Implementation iterations
@@ -211,7 +211,7 @@ Exit gate: recipients gain exactly the planned XP, source XP is unchanged, no re
 ### I3 — Scheduling and controls
 
 - Add per-frame aggregation, per-recipient consolidation, budgeted cross-frame processing, `Alt+M`, and pending-work cancellation.
-- Add the queue/status-area button with ON/OFF/BLOCKED states and diagnostic tooltip.
+- Add the queue/status-area button with stable ON/OFF intent and a diagnostic tooltip for runtime health.
 - Integrate the typed settings into Orb Mod Config with Shared Pool first and a clear Per Recipient warning.
 
 Exit gate: large recipient sets and channelled spells remain smooth; toggling off discards pending bonus work immediately; UI survives native tab and scene transitions.

@@ -110,6 +110,106 @@ public sealed class FeatureStatusTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new FeatureStatusReason((FeatureStatusReasonCode)699, "unknown"));
     }
 
+    [Theory]
+    [InlineData(FeatureStatusState.ConfigurationDisabled, false, FeatureRuntimePresentationState.Off)]
+    [InlineData(FeatureStatusState.Locked, true, FeatureRuntimePresentationState.Waiting)]
+    [InlineData(FeatureStatusState.NotReady, true, FeatureRuntimePresentationState.Waiting)]
+    [InlineData(FeatureStatusState.Operational, true, FeatureRuntimePresentationState.Operational)]
+    [InlineData(FeatureStatusState.TemporarilyBlocked, true, FeatureRuntimePresentationState.Blocked)]
+    [InlineData(FeatureStatusState.ContractUnavailable, true, FeatureRuntimePresentationState.Unavailable)]
+    [InlineData(FeatureStatusState.Degraded, true, FeatureRuntimePresentationState.Degraded)]
+    [InlineData(FeatureStatusState.Faulted, true, FeatureRuntimePresentationState.Faulted)]
+    public void Presentation_KeepsConfiguredIntentSeparateFromRuntimeHealth(
+        FeatureStatusState state,
+        bool configuredEnabled,
+        FeatureRuntimePresentationState expectedRuntime)
+    {
+        var reason = state == FeatureStatusState.Operational
+            ? default
+            : new FeatureStatusReason(
+                state == FeatureStatusState.ConfigurationDisabled
+                    ? FeatureStatusReasonCode.ConfigurationDisabled
+                    : FeatureStatusReasonCode.RuntimeFailure,
+                "runtime evidence");
+        var status = new FeatureStatusSnapshot(Key, "Feature", configuredEnabled, state, reason);
+
+        var presentation = FeatureStatusPresenter.Present(status);
+
+        Assert.Equal(
+            configuredEnabled ? FeatureConfiguredPresentationState.On : FeatureConfiguredPresentationState.Off,
+            presentation.ConfiguredState);
+        Assert.Equal(configuredEnabled ? "ON" : "OFF", presentation.ConfiguredLabel);
+        Assert.Equal(expectedRuntime, presentation.RuntimeState);
+    }
+
+    [Fact]
+    public void Presentation_MapsOrdinaryTransientWaitReasonsWithoutChangingIntent()
+    {
+        var status = new FeatureStatusSnapshot(
+            Key,
+            "Feature",
+            true,
+            FeatureStatusState.TemporarilyBlocked,
+            new FeatureStatusReason(FeatureStatusReasonCode.QueueFull, "queue is full"));
+
+        var presentation = FeatureStatusPresenter.Present(status);
+
+        Assert.Equal(FeatureConfiguredPresentationState.On, presentation.ConfiguredState);
+        Assert.Equal(FeatureRuntimePresentationState.Waiting, presentation.RuntimeState);
+    }
+
+    [Fact]
+    public void Presentation_BoundsAndWrapsLongDiagnosticText()
+    {
+        var formatted = FeatureStatusPresenter.BoundAndWrap(
+            "one two three four five six seven eight nine ten " + new string('X', 200),
+            maximumCharacters: 80,
+            lineWidth: 24);
+
+        Assert.Contains('\n', formatted);
+        Assert.EndsWith("...", formatted, StringComparison.Ordinal);
+        Assert.True(formatted.Length <= 80);
+    }
+
+    [Fact]
+    public void TooltipPresentation_UsesOneNativeNodePerPhysicalLine()
+    {
+        var status = new FeatureStatusSnapshot(
+            Key,
+            "Feature",
+            true,
+            FeatureStatusState.TemporarilyBlocked,
+            new FeatureStatusReason(
+                FeatureStatusReasonCode.NativeBusy,
+                "The native spell system is busy and will be checked again after its current work settles."));
+        var nodes = new List<TooltipNode>();
+
+        TooltipNodeLayout.AddFeatureStatus(nodes, status, new UnityEngine.Color(.4f, 1f, .55f), lineWidth: 42);
+
+        Assert.Equal("Configured: Enabled", nodes[0].Text);
+        Assert.Equal("Runtime: Waiting", nodes[1].Text);
+        Assert.StartsWith("Reason: ", nodes[2].Text, StringComparison.Ordinal);
+        Assert.All(nodes, node =>
+        {
+            Assert.DoesNotContain('\n', node.Text);
+            Assert.DoesNotContain('\r', node.Text);
+            Assert.True(node.Text.Length <= 42, $"Tooltip line exceeded its declared width: {node.Text}");
+        });
+    }
+
+    [Fact]
+    public void CompactTooltipPresentation_KeepsDomainStatusOnASeparateLine()
+    {
+        var status = new FeatureStatusSnapshot(Key, "Artifacts", true, FeatureStatusState.Operational);
+        var nodes = new List<TooltipNode>();
+
+        TooltipNodeLayout.AddCompactFeatureStatus(nodes, "Artifacts", status, lineWidth: 72);
+
+        var node = Assert.Single(nodes);
+        Assert.Equal("Artifacts: Enabled | Operational", node.Text);
+        Assert.DoesNotContain('\n', node.Text);
+    }
+
     [Fact]
     public void Registry_PublishesOnlyCanonicalConditionTransitions()
     {

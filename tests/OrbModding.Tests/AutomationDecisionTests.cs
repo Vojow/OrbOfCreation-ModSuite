@@ -264,6 +264,12 @@ public sealed class AutomationDecisionTests
         var presentation = AutomationDecisionPresenter.Format(decision);
         Assert.Contains("resources=Mana", presentation, StringComparison.Ordinal);
         Assert.Contains("technical evidence", presentation, StringComparison.Ordinal);
+        var expanded = AutomationDecisionPresenter.FormatExpanded(decision);
+        Assert.Contains("\nRequired: 2e1", expanded, StringComparison.Ordinal);
+        Assert.Contains("\nAvailable: 5e0", expanded, StringComparison.Ordinal);
+        Assert.Contains("\nCost: 1e1", expanded, StringComparison.Ordinal);
+        Assert.Contains("\nReserved: 1e1", expanded, StringComparison.Ordinal);
+        Assert.Contains("\nShortfall: 1.5e1", expanded, StringComparison.Ordinal);
         Assert.Equal("Unknown automation decision", AutomationDecisionPresenter.Label((AutomationDecisionCode)999));
     }
 
@@ -284,6 +290,41 @@ public sealed class AutomationDecisionTests
             AutomationDecisionPresenter.Format(decision),
             AutomationDecisionPresenter.Format(captured));
         Assert.StartsWith("Locked", AutomationDecisionPresenter.Format(decision), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExpandedPresenterBoundsLongNamesDetailsAndResourceGroups()
+    {
+        var longName = new string('R', 200);
+        var constraints = Enumerable.Range(0, 6)
+            .Select(index => new AutomationResourceConstraint(
+                AutomationResourceConstraintKind.ReserveFloor,
+                new AutomationEntityIdentity("resources", $"resource-{index}", displayName: longName + index),
+                new AutomationScientificValue(1, 150),
+                new AutomationScientificValue(1, 149),
+                new AutomationScientificValue(2, 150)))
+            .ToArray();
+        var decision = new AutomationDecision(
+            "automata.auto-buy",
+            "evaluate",
+            AutomationDecisionDisposition.Rejected,
+            AutomationDecisionCode.ReserveFloor,
+            new AutomationEntityIdentity("structures", "candidate", displayName: longName),
+            resourceConstraints: constraints,
+            technicalDetail: new string('D', 500));
+
+        var expanded = AutomationDecisionPresenter.FormatExpanded(decision, maximumResourceGroups: 2);
+        var lines = AutomationDecisionPresenter.FormatExpandedLines(decision, maximumResourceGroups: 2);
+
+        Assert.Contains("...", expanded, StringComparison.Ordinal);
+        Assert.Contains("+4 more resource constraint(s)", expanded, StringComparison.Ordinal);
+        Assert.Equal(2, expanded.Split("\nRequired:").Length - 1);
+        Assert.True(expanded.Length < 1000);
+        Assert.All(lines, line =>
+        {
+            Assert.DoesNotContain('\n', line);
+            Assert.DoesNotContain('\r', line);
+        });
     }
 
     [Fact]

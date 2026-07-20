@@ -76,11 +76,12 @@ internal sealed class MentorToggleButton : IDisposable
     public void Render()
     {
         var status = _runtime.RootFeatureStatus;
-        var visualState = (int)status.State;
+        var presentation = FeatureStatusPresenter.Present(status);
+        var visualState = (int)presentation.ConfiguredState;
         if (_lastVisualState == visualState) return;
         _lastVisualState = visualState;
-        var state = StatusLabel(status.State);
-        var color = StatusColor(status.State);
+        var state = StatusLabel(presentation.ConfiguredState);
+        var color = StatusColor(presentation.ConfiguredState);
         if (_text is not null)
         {
             _text.text = $"M {state}";
@@ -101,22 +102,15 @@ internal sealed class MentorToggleButton : IDisposable
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }
     private static object? Read(object? instance, string name) => instance?.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(instance);
-    internal static string StatusLabel(FeatureStatusState state) => state switch
+    internal static string StatusLabel(FeatureConfiguredPresentationState state) => state switch
     {
-        FeatureStatusState.ConfigurationDisabled => "OFF",
-        FeatureStatusState.Locked => "LOCKED",
-        FeatureStatusState.NotReady => "WAIT",
-        FeatureStatusState.Operational => "ON",
-        FeatureStatusState.Degraded => "DEGRADED",
-        _ => "BLOCKED",
+        FeatureConfiguredPresentationState.On => "ON",
+        _ => "OFF",
     };
-    internal static Color StatusColor(FeatureStatusState state) => state switch
+    internal static Color StatusColor(FeatureConfiguredPresentationState state) => state switch
     {
-        FeatureStatusState.ConfigurationDisabled => new Color(.7f, .7f, .7f),
-        FeatureStatusState.Operational => new Color(.4f, 1, .55f),
-        FeatureStatusState.Locked or FeatureStatusState.NotReady => new Color(1, .75f, .25f),
-        FeatureStatusState.Degraded => new Color(1, .55f, .2f),
-        _ => new Color(1, .3f, .25f),
+        FeatureConfiguredPresentationState.On => new Color(.4f, 1, .55f),
+        _ => new Color(.7f, .7f, .7f),
     };
     private static void RemoveNativeViewBindings(GameObject root)
     {

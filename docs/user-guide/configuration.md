@@ -15,7 +15,7 @@ Disabled feature modes lock their tuning fields in Orb Mod Config. Mode controls
 - `AutoBuy.Mode` and `AutoCast.Mode`: select `Disabled` or `Active`.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates compatible concepts only after each has received the complete configured settled-active period; `RotateAll` replaces active concepts to train a compatible strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
-- `AutoConcept.ShowToggleButton`: show the `CN ON/OFF/!` gameplay button in the native Auto Buy-anchored control strip; default true.
+- `AutoConcept.ShowToggleButton`: show the `CN ON/OFF` configured-intent button in the native Auto Buy-anchored control strip; runtime waiting or blocking remains in its tooltip; default true.
 - `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 300, range 10 to 3600. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.
 - `AutoBuy.AutoLevelSpells`: enabled by default while Auto Buy is active. It detects native progression automatically: Locked, Single, then All after the completed level-all Upgrade. It spends the game's live spell-level costs and can be disabled separately.
 - `AutoConcept.FallbackEvaluationIntervalSeconds`: Advanced-only maximum idle delay between full plan calculations; default 300, range 10 to 1800. Native signals can evaluate earlier. Previous seconds and legacy minutes values migrate automatically.

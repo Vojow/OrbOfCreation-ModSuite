@@ -41,8 +41,6 @@ public sealed class AutoCastTests
     [Theory]
     [InlineData(0, "AC OFF")]
     [InlineData(1, "AC ON")]
-    [InlineData(2, "AC !")]
-    [InlineData(3, "AC ~")]
     public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
@@ -66,7 +64,7 @@ public sealed class AutoCastTests
     }
 
     [Fact]
-    public void EmergencyDisableRendersActiveModeAsBlocked()
+    public void EmergencyDisableKeepsConfiguredIntentVisuallyOn()
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
@@ -74,7 +72,7 @@ public sealed class AutoCastTests
 
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         config.EmergencyDisable.Value = true;
-        Assert.Equal(AutoCastToggleVisualState.Blocked, toggle.State);
+        Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
     }
 
     [Fact]

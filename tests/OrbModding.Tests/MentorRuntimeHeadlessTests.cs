@@ -153,6 +153,56 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    public void ArtifactGrantVerification_AcceptsMultipleNativeLevelRollovers()
+    {
+        var source = RegisterEquipment(mastery: 100);
+        var recipient = RegisterEquipment(mastery: 80);
+        recipient.SetMasteryState(
+            level: 80,
+            experience: new BigDouble(2, 1),
+            experiencePerLevel: new BigDouble(1, 2));
+        using var runtime = CreateRuntime(sharePercent: 10, artifacts: true);
+
+        Drive(runtime, 300);
+        runtime.BeginArtifactTick(source);
+        runtime.ObserveExperienceContainer(source.GetExperienceElement(), new BigDouble(3, 3));
+        runtime.EndArtifactTick(nativeSucceeded: true);
+        DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
+
+        Assert.Equal(83, recipient.masteryLevel);
+        Assert.Equal(83, recipient.GetExperienceElement().GetLevel());
+        var residual = recipient.GetExperienceElement().GetExperience();
+        Assert.Equal(20, residual.mantissa * Math.Pow(10, residual.exponent), 9);
+        Assert.Equal(20, recipient.masteryXp.mantissa * Math.Pow(10, recipient.masteryXp.exponent), 9);
+        Assert.False(runtime.IsBlocked);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void ArtifactGrantVerification_StillBlocksANativeNoOp()
+    {
+        var source = RegisterEquipment(mastery: 6);
+        var recipient = RegisterEquipment(mastery: 2);
+        recipient.GetExperienceElement().SuppressGain = true;
+        using var runtime = CreateRuntime(sharePercent: 10, artifacts: true);
+
+        Drive(runtime, 300);
+        runtime.BeginArtifactTick(source);
+        runtime.ObserveExperienceContainer(source.GetExperienceElement(), new BigDouble(100, 0));
+        runtime.EndArtifactTick(nativeSucceeded: true);
+        DriveUntil(runtime, () =>
+            runtime.CurrentMentor(MentorDomain.Artifacts).StartsWith("Blocked:", StringComparison.Ordinal));
+
+        Assert.Equal(2, recipient.masteryLevel);
+        Assert.Equal(0, runtime.Diagnostics.NativeGrants);
+        Assert.Single(recipient.GetExperienceElement().Grants);
+        Assert.Equal(
+            FeatureStatusReasonCode.PostconditionFailed,
+            runtime.DomainFeatureStatus(MentorDomain.Artifacts).Reason.Code);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
     public void BlockedOptionalDomain_DoesNotStarveHealthySpellGrant()
     {
         var source = RegisterSpell(mastery: 5);
@@ -365,9 +415,9 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         var equipment = new EquipmentSO
         {
             uuid = Guid.NewGuid().ToString(),
-            masteryLevel = mastery,
             isCreated = true,
         };
+        equipment.SetMasteryState(mastery, default, new BigDouble(1, 100));
         EquipmentSO.All.Add(equipment);
         IdScriptableObject.RuntimeLookup.Add(equipment.GetGuid(), equipment);
         return equipment;

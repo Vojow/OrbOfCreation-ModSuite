@@ -139,7 +139,7 @@ public sealed class AutomataTests
     }
 
     [Fact]
-    public void AutoConceptToggleSwitchesModeAndShowsEmergencyBlock()
+    public void AutoConceptToggleSwitchesModeWithoutReplacingConfiguredIntent()
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         var toggle = new AutoConceptToggleControl(config);
@@ -149,7 +149,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         config.EmergencyDisable.Value = true;
-        Assert.Equal(AutoCastToggleVisualState.Blocked, toggle.State);
+        Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         toggle.Toggle();
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
@@ -158,8 +158,6 @@ public sealed class AutomataTests
     [Theory]
     [InlineData(0, "CN OFF")]
     [InlineData(1, "CN ON")]
-    [InlineData(2, "CN !")]
-    [InlineData(3, "CN ~")]
     public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
     {
         Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));

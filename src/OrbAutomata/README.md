@@ -107,7 +107,7 @@ A cast deferred by the shared coordinator is treated as a short-lived plan. Befo
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 
-The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active configuration. It uses the first equipped spell icon when available.
+The button shows only configured intent as `OFF` or `ON`; emergency blocking remains secondary runtime status in the tooltip. It uses the first equipped spell icon when available.
 
 ## Auto Concept
 
@@ -121,7 +121,7 @@ Auto Concept uses the shared `OrbModding.Common.AlchemyGameplayDomainClassifier`
 
 Every newly assigned lower-mastery concept in `RotateAll` or `PreserveManual` receives a catch-up training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. `TimedCycle` uses the same timer but never applies the catch-up shortcut. The default is 300 seconds and the accepted range is 10 through 3600 seconds. Native setup time does not consume the period, and the controller schedules the exact next session deadline even when its idle fallback is longer.
 
-The `CN ON/OFF/!` gameplay button toggles Auto Concept and reports emergency blocking. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the Automata Auto Buy tooltip instead.
+The `CN ON/OFF` gameplay button toggles Auto Concept. Like the Auto Buy and Auto Cast controls, its primary label and styling represent configured intent only; emergency blocking and other runtime health remain secondary structured tooltip status. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the Automata Auto Buy tooltip instead.
 
 `FallbackEvaluationIntervalSeconds` is an Advanced setting, not a rotation delay. It defaults to 300 seconds and accepts 10 through 1800 as the maximum idle delay between full plan calculations; native changes can request earlier passes. Existing `RebalanceIntervalSeconds` and `RebalanceIntervalMinutes` values migrate automatically.
 
@@ -135,7 +135,7 @@ Transient shared classifier readiness failures use the existing 30-second Auto C
 
 Set `Diagnostics.EnableOperationalLogging=true` only while troubleshooting. `DecisionLogLevel=Off` suppresses all normal Auto Buy and Auto Cast records even when the legacy enable switch remains true. Summary mode rate-limits recommendations, batch totals, casts, and queue waits to low-frequency records. Verbose mode additionally records individual purchases, bounded candidate rejections, and detailed Auto Cast resource snapshots.
 
-Auto Buy decisions use append-only Common codes rather than parsing diagnostic text. Candidate threshold parking, rejection telemetry, the latest tooltip status, and verbose rejection records all consume the same immutable decision. Observed quantities and wording can change without producing a new condition; stable thresholds, identities, policy, queue limits, and native states do produce a transition. Equivalent conditions are not republished to future Insights subscribers.
+Auto Buy decisions use append-only Common codes rather than parsing diagnostic text. Candidate threshold parking, rejection telemetry, the latest tooltip status, and verbose rejection records all consume the same immutable decision. The tooltip presents bounded, deterministic per-resource groups with required, available, cost, reserved, and shortfall values where the structured evidence supports them. Observed quantities and wording can change without producing a new condition; stable thresholds, identities, policy, queue limits, and native states do produce a transition. Equivalent conditions are not republished to future Insights subscribers.
 
 Every Orb Automata message includes local date, time to milliseconds, and UTC offset so runtime reports can identify when a failure began.
 Successful Auto Concept initialization records separate scoped-recipe, active-loadout, and eligible-candidate counts. When operational logging is enabled, assignment reservation, settled training start, catch-up/timeout completion, rotation, and a rate-limited no-change summary distinguish an active or idle balancer from a missed evaluation.

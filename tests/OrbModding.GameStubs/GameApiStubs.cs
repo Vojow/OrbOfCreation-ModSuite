@@ -548,26 +548,60 @@ public sealed class EquipmentSO : IdScriptableObject
     public string GetName() => name;
     public bool IsCreated() => isCreated;
     public ExperienceElement GetExperienceElement() => experienceContainer;
+    public void SetMasteryState(int level, BigDouble experience, BigDouble experiencePerLevel)
+    {
+        masteryLevel = level;
+        masteryXp = experience;
+        experienceContainer.SetState(level, experience, experiencePerLevel);
+    }
     private void GainMasteryLevels(int levels) => masteryLevel += levels;
 }
 
 public sealed class ExperienceElement
 {
     private BigDouble experience;
-    public int GainedLevels { get; set; }
+    private int currentLevel;
+    private BigDouble experiencePerLevel = new BigDouble(1, 100);
     public List<BigDouble> Grants { get; } = new List<BigDouble>();
     public Action? AfterGainExperience { get; set; }
+    public bool SuppressGain { get; set; }
+
+    public void SetState(int level, BigDouble currentExperience, BigDouble requiredPerLevel)
+    {
+        currentLevel = level;
+        experience = currentExperience;
+        experiencePerLevel = requiredPerLevel;
+    }
 
     public void GainExperience(BigDouble amount)
     {
         Grants.Add(amount);
-        experience = Add(experience, amount);
+        if (!SuppressGain) experience = Add(experience, amount);
         AfterGainExperience?.Invoke();
     }
 
-    public int GetGainedLevels() => GainedLevels;
+    public int GetGainedLevels()
+    {
+        var gained = 0;
+        while (Compare(experience, experiencePerLevel) >= 0 && gained < 10000)
+        {
+            experience = Subtract(experience, experiencePerLevel);
+            currentLevel++;
+            gained++;
+        }
+        return gained;
+    }
 
     public BigDouble GetExperience() => experience;
+
+    public int GetLevel() => currentLevel;
+
+    public ExperienceElement Clone()
+    {
+        var clone = new ExperienceElement();
+        clone.SetState(currentLevel, experience, experiencePerLevel);
+        return clone;
+    }
 
     private static BigDouble Add(BigDouble left, BigDouble right)
     {
@@ -578,6 +612,22 @@ public sealed class ExperienceElement
             left.mantissa * Math.Pow(10, left.exponent - exponent) +
             right.mantissa * Math.Pow(10, right.exponent - exponent),
             exponent);
+    }
+
+    private static BigDouble Subtract(BigDouble left, BigDouble right)
+    {
+        var exponent = Math.Max(left.exponent, right.exponent);
+        var mantissa = left.mantissa * Math.Pow(10, left.exponent - exponent) -
+                       right.mantissa * Math.Pow(10, right.exponent - exponent);
+        return mantissa <= 0 ? default : new BigDouble(mantissa, exponent);
+    }
+
+    private static int Compare(BigDouble left, BigDouble right)
+    {
+        if (left.mantissa == 0) return right.mantissa == 0 ? 0 : -1;
+        if (right.mantissa == 0) return 1;
+        if (left.exponent != right.exponent) return left.exponent.CompareTo(right.exponent);
+        return left.mantissa.CompareTo(right.mantissa);
     }
 }
 
@@ -744,8 +794,10 @@ public class TooltipableObject : UnityEngine.ScriptableObject { }
 
 public class TooltipNode
 {
-    public TooltipNode(string text) { }
-    public TooltipNode(string text, UnityEngine.Color color) { }
+    public TooltipNode(string text) { Text = text; }
+    public TooltipNode(string text, UnityEngine.Color color) { Text = text; Color = color; }
+    public string Text { get; }
+    public UnityEngine.Color? Color { get; }
 }
 
 public class HoverTooltip : UnityEngine.MonoBehaviour

@@ -6,8 +6,6 @@ internal enum AutoCastToggleVisualState
 {
     Off,
     On,
-    Blocked,
-    Waiting,
 }
 
 internal sealed class AutoCastToggleControl

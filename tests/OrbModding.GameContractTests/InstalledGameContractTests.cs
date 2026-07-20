@@ -356,6 +356,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ExperienceContainer", "GetGainedLevels", false, "System.Int32");
         AssertMethod(assembly, "ExperienceContainer", "GetExperience", false, "BigDouble");
         AssertMethod(assembly, "ExperienceContainer", "GetLevel", false, "System.Int32");
+        AssertMethod(assembly, "ExperienceContainer", "Clone", false, "ExperienceContainer");
         Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO+EquipmentSaveData", "mLv"));
     }

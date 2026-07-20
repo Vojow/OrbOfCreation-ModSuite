@@ -156,7 +156,7 @@ public sealed class AutomataFeatureStatusTests
     }
 
     [Fact]
-    public void ControlsRenderLockedAndContractFailuresAsBlockedWithoutChangingConfiguration()
+    public void ControlsKeepConfiguredIntentOnAcrossRuntimeHealthTransitions()
     {
         var config = AutomataConfig.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
@@ -164,7 +164,7 @@ public sealed class AutomataFeatureStatusTests
         using var statuses = new AutomataFeatureStatuses(config, 3, registry);
         var control = new AutoCastToggleControl(config, () => statuses.AutoCast.Current);
 
-        Assert.Equal(AutoCastToggleVisualState.Waiting, control.State);
+        Assert.Equal(AutoCastToggleVisualState.On, control.State);
         Assert.True(control.Status.ConfiguredEnabled);
 
         statuses.AutoCast.Observe(
@@ -173,10 +173,10 @@ public sealed class AutomataFeatureStatusTests
             FeatureStatusReasonCode.ContractUnavailable,
             "The native cast contract is unavailable.");
 
-        Assert.Equal(AutoCastToggleVisualState.Blocked, control.State);
+        Assert.Equal(AutoCastToggleVisualState.On, control.State);
         Assert.Equal(FeatureStatusState.ContractUnavailable, control.Status.State);
         Assert.Contains("Configured: Enabled", FeatureStatusPresenter.Format(control.Status));
-        Assert.Contains("Contract unavailable", FeatureStatusPresenter.Format(control.Status));
+        Assert.Contains("Runtime: Unavailable", FeatureStatusPresenter.Format(control.Status));
 
         statuses.AutoCast.ObserveOperational();
         Assert.Equal(AutoCastToggleVisualState.On, control.State);

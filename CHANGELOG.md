@@ -1,5 +1,12 @@
 # Changelog
 
+## Runtime validation corrections — 2026-07-20
+
+- Make Mentor Artifact XP postconditions level-aware by predicting the exact native `ExperienceContainer` transition on a clone, then verifying the live equipment mastery, container level, residual XP, and saved XP. Multi-level rollover no longer produces the false lifecycle fault introduced with #36's raw-XP verifier.
+- Complete #28's configured-versus-runtime presentation boundary: gameplay controls keep stable `ON`/`OFF` intent while waiting, blocking, degradation, and faults remain secondary structured health in tooltips, notices, and Orb Mod Config.
+- Format feature health and Auto Buy reserve evidence as bounded line-oriented tooltip rows, including deterministic per-resource required, available, cost, reserved, and shortfall fields. Every visible line owns a native tooltip node so wrapped reasons cannot collide with separators or later fields.
+- Keep the existing component versions unchanged for these unreleased next-beta corrections.
+
 ## Versioned configuration schemas — 2026-07-19
 
 - Add a shared pre-bind configuration transaction with hidden schema markers, exact-byte rollback, verified all-or-nothing first-free sibling backups, ordered reviewed migrations, and fail-closed malformed or future-version handling.
