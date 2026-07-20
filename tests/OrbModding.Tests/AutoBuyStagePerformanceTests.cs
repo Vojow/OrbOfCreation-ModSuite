@@ -10,13 +10,15 @@ namespace OrbModding.Tests;
 
 public sealed class AutoBuyStagePerformanceTests
 {
-    // data/entity-mappings.tsv contains 180 StructureSO definitions in the reviewed game snapshot.
+    // data/entity-mappings.tsv contains these definition counts in the reviewed
+    // serialized snapshot. Stress profiles use subsets independently of live availability.
     private const int AllKnownStructureCount = 180;
+    private const int AllKnownUpgradeCount = 223;
 
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     [Trait("Category", "AutoBuyPerformance")]
-    public void EarlyGame_FewCandidatesAndSlowCompletionsRemainResponsive() =>
+    public void EarlyStressProfile_FewCandidatesAndSlowCompletionsRemainResponsive() =>
         RunStage(new StageScenario(
             "stage-early",
             "early",
@@ -33,7 +35,7 @@ public sealed class AutoBuyStagePerformanceTests
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     [Trait("Category", "AutoBuyPerformance")]
-    public void MidGame_MoreCandidatesAndFasterCompletionsRemainResponsive() =>
+    public void MidStressProfile_MoreCandidatesAndFasterCompletionsRemainResponsive() =>
         RunStage(new StageScenario(
             "stage-mid",
             "mid",
@@ -50,9 +52,9 @@ public sealed class AutoBuyStagePerformanceTests
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     [Trait("Category", "AutoBuyPerformance")]
-    public void LateGame_AllStructuresAndPeriodicFastCompletionsRemainBounded()
+    public void LateStressProfile_AllMappedStructuresAndPeriodicFastCompletionsRemainBounded()
     {
-        AssertCanonicalStructureCount();
+        AssertCanonicalCatalogCounts();
         RunStage(new StageScenario(
             "stage-late",
             "late",
@@ -70,9 +72,9 @@ public sealed class AutoBuyStagePerformanceTests
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     [Trait("Category", "AutoBuyPerformance")]
-    public void EndGame_SameCatalogAndPerFrameCompletionsRemainBounded()
+    public void EndgameStressProfile_SameCatalogAndPerFrameCompletionsRemainBounded()
     {
-        AssertCanonicalStructureCount();
+        AssertCanonicalCatalogCounts();
         RunStage(new StageScenario(
             "stage-endgame",
             "endgame",
@@ -217,13 +219,16 @@ public sealed class AutoBuyStagePerformanceTests
         }
     }
 
-    private static void AssertCanonicalStructureCount()
+    private static void AssertCanonicalCatalogCounts()
     {
         var mappingPath = Path.Combine(AppContext.BaseDirectory, "data", "entity-mappings.tsv");
-        var mappedStructures = File.ReadLines(mappingPath)
-            .Skip(1)
-            .Count(line => line.EndsWith("\tStructureSO", StringComparison.Ordinal));
+        var mappings = File.ReadLines(mappingPath).Skip(1).ToArray();
+        var mappedStructures = mappings.Count(line =>
+            line.EndsWith("\tStructureSO", StringComparison.Ordinal));
+        var mappedUpgrades = mappings.Count(line =>
+            line.EndsWith("\tUpgradeSO", StringComparison.Ordinal));
         Assert.Equal(AllKnownStructureCount, mappedStructures);
+        Assert.Equal(AllKnownUpgradeCount, mappedUpgrades);
     }
 
     private static int CalculateTheoreticalMinimumSubmissionFrames(

@@ -68,10 +68,11 @@ Auto Buy changes use three complementary contracts:
    fairness, and frames to a fixed workload. Wall-clock duration is diagnostic
    because host scheduling and process startup are not controlled game inputs.
 
-Early, mid, late, and endgame workloads are checked against reviewed JSON
-history before production policy changes. The same workload definition must be
-used on both sides of an A/B comparison. A workload/schema mismatch is a test
-infrastructure failure, not a performance result.
+Synthetic early, mid, late, and endgame stress workloads are checked against
+reviewed JSON history before production policy changes. They are deliberately
+separate from evidence-backed progression profiles. The same workload
+definition must be used on both sides of an A/B comparison. A workload/schema
+mismatch is a test infrastructure failure, not a performance result.
 
 ## Failure evidence
 
@@ -113,6 +114,8 @@ Do not create low-value tests solely to increase a percentage.
 
 - Record an initial overall and per-assembly diagnostic branch snapshot.
   **Implemented; rerun before selecting floors.**
+- Enforce repository-local Markdown links, documented test-owner references,
+  valid UTF-8, and common mojibake rejection. **Implemented.**
 - Add branch regression floors where they measure decision and failure paths.
 - Split the largest test fixtures by responsibility while retaining shared,
   bounded scenario builders.

@@ -4,6 +4,10 @@
 
 Detailed invalid, race, completion-corruption, seeded, and adverse-performance
 coverage is owned by the [negative simulation plan](auto-buy-negative-simulations.md).
+The reverse-engineering dossier documents the [native purchase pipeline](../../reverse-engineering/auto-buy-native-pipeline.md),
+[queue/completion model](../../reverse-engineering/auto-buy-queue-and-completion.md),
+[simulation evidence map](../../reverse-engineering/auto-buy-simulation-evidence.md),
+and [stage-profile boundary](../../reverse-engineering/auto-buy-stage-profiles.md).
 
 ## Risk contract
 
@@ -71,7 +75,7 @@ per seed. Its failure message reduces to the first failing prefix and prints a
 bounded replay-compatible/synthetic event tail. Synthetic fault controls are
 never accepted as runtime-replay evidence.
 
-## Performance workloads
+## Synthetic performance workloads
 
 | Stage | Structures | Target per Structure | Upgrades | Completion cadence |
 |---|---:|---:|---:|---:|
@@ -79,6 +83,10 @@ never accepted as runtime-replay evidence.
 | Mid | 64 | 40 | 12 | 1 per 15 frames |
 | Late | 180 | 100 | 24 | 1 per 4 frames |
 | Endgame | 180 | 1,000 | 24 | 1 per frame |
+
+These are stable stress profiles, not observed progression populations. Only
+the 180-Structure total is grounded in the reviewed serialized mapping; see the
+[stage-profile boundary](../../reverse-engineering/auto-buy-stage-profiles.md).
 
 The checked report owns frames to all submissions/completions, theoretical
 submission overhead, queue depth, idle purchasable frames, candidate evaluations,

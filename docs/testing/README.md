@@ -75,6 +75,9 @@ When a test is added or its ownership changes:
    must still prove.
 5. Record results only when they ran on the current tree or exact release
    artifact.
+6. Keep local Markdown links, documented `*Tests` owners, and UTF-8 text clean;
+   `TestArchitectureTests` enforces these repository-wide documentation
+   contracts.
 
 Do not duplicate large test inventories across pages. Feature pages own detailed
 file maps; this hub owns navigation and shared rules.

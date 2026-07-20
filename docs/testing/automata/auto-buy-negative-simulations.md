@@ -173,7 +173,7 @@ Current-tree portable evidence from 2026-07-20 (`Debug`, game stubs):
 - `AutoBuyReliability`: 137 passed, 1 skipped;
 - `AutoBuyPerformance`: 11 passed, 1 skipped;
 - `PerformanceAll`: 20 passed, 1 skipped;
-- `All`: 831 passed, 1 skipped.
+- `All`: 834 passed, 1 skipped.
 
 The single skip in every applicable lane is NF-03; there are no other skipped
 or failing cases in this matrix.

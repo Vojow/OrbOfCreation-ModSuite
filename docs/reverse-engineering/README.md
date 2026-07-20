@@ -93,6 +93,18 @@ mindmap
 9. [Modding hooks](modding-hooks.md)
 10. [Reverse-engineering audit](audit.md)
 
+## Auto Buy dossier
+
+- [Native purchase pipeline](auto-buy-native-pipeline.md) — discovery,
+  admission, live validation, mutation verification, and failure boundaries.
+- [Queue and completion model](auto-buy-queue-and-completion.md) — shared queue
+  authority, manual versus automated signals, settlement, and lifecycle reset.
+- [Simulation evidence map](auto-buy-simulation-evidence.md) — how each modeled
+  seam maps to source, portable tests, installed contracts, and runtime gaps.
+- [Stage profiles](auto-buy-stage-profiles.md) — verified catalog facts,
+  synthetic stress workloads, and the still-missing observed progression
+  profiles.
+
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 
 ## Important discovered identifier

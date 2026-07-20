@@ -12,6 +12,10 @@
 
 The manifest does not change runtime behavior. Existing adapters and Harmony target factories still validate contracts and fail closed when a member is missing or ambiguous.
 
+For Auto Buy, the manifest-to-implementation relationship is documented in the
+[native purchase pipeline](../reverse-engineering/auto-buy-native-pipeline.md)
+and [queue/completion model](../reverse-engineering/auto-buy-queue-and-completion.md).
+
 ## Enforcement layers
 
 `NativeContractManifestTests` has two modes:

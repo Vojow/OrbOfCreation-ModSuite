@@ -18,10 +18,12 @@
 - Add a maintained Auto Buy negative-simulation matrix covering invalid queue, cost, availability, lifecycle, purchase, completion, and simulator-contract paths, with focused failure, race, and completion suites.
 - Add four deterministic 240-event Auto Buy state-machine tapes with per-event invariants, replay comparison, bounded diagnostic tails, and first-failing-prefix reduction.
 - Add adverse modeled workloads for scarcity, locked catalogs, live capacity changes, manual bursts, completion bursts, lifecycle replacement, and resource-observation outages; retain the persistent rejecting-leader case as an explicit skipped gate for the unresolved starvation policy.
+- Add an Auto Buy reverse-engineering dossier covering the native purchase transaction, shared queue/completion state model, simulation-to-evidence mapping, and the distinction between observed progression facts and synthetic stress profiles.
+- Enforce repository-local documentation links, documented test-owner class references, strict UTF-8 decoding, and common mojibake rejection through portable architecture tests.
 
 ## Progression-shaped Auto Buy performance simulations — 2026-07-20
 
-- Add deterministic early, mid, late, and endgame Auto Buy workloads with increasing Structure/Upgrade catalogs and queue-completion rates from one action per second through one action per simulated frame.
+- Add deterministic early, mid, late, and endgame Auto Buy stress workloads with increasing Structure/Upgrade catalogs and queue-completion rates from one action per second through one action per simulated frame; these names describe modeled workload shapes rather than observed save populations.
 - Exercise exact per-Structure targets of 10 early, 40 midgame, 100 late, and 1,000 endgame levels, all 180 mapped Structures in late/endgame, finite one-level Upgrade purchases, queue saturation and refill depth, bounded candidate work, and idle-room detection.
 - Extend the checked performance report with stage composition, repeated-Structure coverage, and deterministic frames/seconds to every stage target so CI can detect workload drift and scheduler throughput regressions.
 - Add a focused `AutoBuyDecision` policy contract for current group precedence, rerank/pass behavior, reserve monotonicity, unavailable-candidate isolation, fairness, and deterministic output.
