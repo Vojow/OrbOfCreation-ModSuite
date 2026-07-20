@@ -2,7 +2,7 @@
 
 > **Lifecycle: P0-P3 implemented / runtime validation pending.** Shared scheduling, lifecycle-aware indexing, dirty evaluation, and resource snapshots are implemented. Desktop and Steam Deck runtime profiling, the 30-minute soak, and later P4+ work remain outstanding.
 
-[Back to plan index](README.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 
@@ -63,7 +63,7 @@ P0-P3 now provide shared scheduling and metrics, lifecycle-aware candidate index
 
 The next beta also introduces a [shared gameplay invalidation bus](gameplay-invalidation-bus.md). It coalesces completed-frame cache and scheduling signals under one suite-wide operation cap and one measured cooperative coordinator registration while keeping lifecycle cancellation, native queue reactions, Mentor XP capture, and final gameplay validation synchronous. Delivery uses resumable eight-operation leases, so callback work shares the suite soft/hard CPU accounting and disabled plugin owners remain idle.
 
-The portable suite also includes a deterministic headless Auto Buy simulation. It drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its active performance baseline checks queue saturation, candidate handoff, operation-count budgets, and idle frames without depending on computer control or machine-speed wall-clock thresholds. Machine-readable reports now compare each run with a reviewed beta reference, publish normalized operations per purchase in the CI summary, and retain the raw run for 90 days. This history exposes slow drift while the scenario assertions continue to own correctness. Real-game computer control remains a UAT tool.
+The portable suite also includes deterministic `AutoBuyDecision` and `AutoBuyPerformance` layers. The fast decision contract characterizes current group precedence, rerank/pass behavior, reserve monotonicity, unavailable-candidate isolation, and repeatable ordering. The performance simulation drives the production engine, index, reserve policy, and shared coordinator through a simulated native queue, economy, and lifecycle boundary. Its active baseline checks queue saturation, candidate handoff, operation-count budgets, idle frames, deterministic frames to every stage purchase target, and overhead relative to a one-native-mutation-per-frame theoretical scheduler without depending on computer control or machine-speed wall-clock thresholds. Early, mid, late, and endgame workloads grow from 8 Structures and 2 finite Upgrades to all 180 mapped Structures and 24 finite Upgrades while increasing queue consumption from one completion per second to one per simulated frame. Their exact per-Structure targets are 10, 40, 100, and 1,000 live-cost levels. Early through late reach the theoretical submission floor; endgame currently requires 5,988 additional frames and attributes all 5,996 purchasable-work idle frames to evaluation-only work while requiring all 180,000 Structure submissions. Machine-readable reports compare each run with a reviewed beta reference, publish normalized operations, frames-to-target, scheduler efficiency, and idle attribution in the CI summary, and retain the raw run for 90 days. This history exposes slow drift while the scenario assertions continue to own correctness. Real-game computer control remains a UAT tool.
 
 A source-level compatibility runner also compiles the identical workload against the last pre-beta `main` engine through a narrow legacy native-boundary adapter. This makes queue output, fairness, refill latency, and diagnostic work directly reviewable before merge without altering the reference engine. Cross-version operation counts are not scored when the engines serve different candidate sets; elapsed time, allocations, and Unity behavior remain runtime profiling and UAT responsibilities.
 
@@ -541,7 +541,7 @@ literal `observe-only` results until comparable Windows desktop and Steam
 Deck/Proton captures are reviewed; incomplete or contaminated native timing still
 makes the required capture unusable. This does not schedule lower-priority loops,
 change fairness or mutation admission, or implement Auto Buy bursting. See
-[testing](../development/testing.md#suite-coordinator-performance-evidence) for
+[testing](../testing/strategy.md#suite-coordinator-performance-evidence) for
 the command and evidence-handling rules.
 
 Mentor's coordinated cooperative slice consumes the remaining shared soft budget
@@ -649,7 +649,7 @@ Exit: the suite backs off under load while safety actions and eventual progress 
 
 ## Automated test matrix
 
-The executable headless journeys and deterministic performance budgets are documented in [headless E2E simulation](../development/headless-e2e.md). They run in the portable suite and precede installed-game contract checks and runtime UAT.
+The executable headless journeys and deterministic performance budgets are documented in [headless E2E simulation](../testing/headless-e2e.md). They run in the portable suite and precede installed-game contract checks and runtime UAT.
 
 ### Lifecycle tests
 

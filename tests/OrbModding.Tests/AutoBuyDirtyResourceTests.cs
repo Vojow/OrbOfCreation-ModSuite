@@ -8,6 +8,7 @@ using Xunit;
 
 namespace OrbModding.Tests;
 
+[Trait("Category", "AutoBuyReliability")]
 public sealed class AutoBuyDirtyResourceTests
 {
     [Theory]

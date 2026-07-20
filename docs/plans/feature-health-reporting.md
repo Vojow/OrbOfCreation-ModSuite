@@ -2,7 +2,7 @@
 
 > **Lifecycle: Next beta / runtime validation pending.** Common defines the status contract and registry; Automata, Mentor, and Mod Config adopt it in the next-beta line. Interactive tooltip and layout validation remains required.
 
-[Back to plan index](README.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 

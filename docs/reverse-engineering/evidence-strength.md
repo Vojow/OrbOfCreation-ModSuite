@@ -1,6 +1,6 @@
 # Reverse-engineering evidence strength
 
-[Back to reverse-engineering notes](README.md) · [Native contract workflow](../development/native-contract-manifest.md)
+[Back to reverse-engineering notes](README.md) · [Native contract workflow](../testing/native-contracts.md)
 
 `OrbModding.Common.EvidenceAssessment` gives classifiers and resolvers one stable vocabulary for what is known, how it was established, and whether facts conflict. Strength never replaces required sources: an active mutation must meet both its minimum level and every source required by that feature.
 

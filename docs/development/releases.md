@@ -30,7 +30,7 @@ The supported package is an explicit allowlist:
 11. **Configuration-schema matrix:** fresh files, current version, reviewed version-zero migration, malformed markers and known values, verified all-or-nothing first-free backup suffixing, partial-write/flush and reload failure containment, save failure rollback, future-version read-only refusal, worker-thread status handoff, and failed/future status-only tabs. Confirm failure diagnostics contain no configuration paths or serialized values.
 12. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
 
-Interactive behavior must satisfy [runtime validation](runtime-validation.md); a successful build or package rehearsal is not runtime approval.
+Interactive behavior must satisfy [runtime validation](../testing/runtime-validation.md); a successful build or package rehearsal is not runtime approval.
 
 ### P1 — package quality
 

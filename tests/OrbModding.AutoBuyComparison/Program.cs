@@ -61,13 +61,20 @@ internal static class Program
 
         AutoBuyPerformanceReporter.Record(
             name,
+            "stress",
             simulation,
             candidateCount,
+            structureCount: 83,
+            upgradeCount: 83,
+            targetStructureLevels: 1,
             queueCapacity,
             simulation.Config.LeaveQueueSlots.Value,
             frameCount,
             completionStartFrame,
-            completionEveryFrames);
+            completionEveryFrames,
+            framesToAllSubmissions: null,
+            framesToAllCompletions: null,
+            theoreticalMinimumSubmissionFrames: null);
 
         if (simulation.World.QueueCount < 0 || simulation.World.QueueCount > queueCapacity)
         {

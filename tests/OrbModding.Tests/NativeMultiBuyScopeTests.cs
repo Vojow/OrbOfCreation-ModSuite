@@ -4,6 +4,7 @@ using Xunit;
 
 namespace OrbModding.Tests;
 
+[Trait("Category", "AutoBuyReliability")]
 public sealed class NativeMultiBuyScopeTests : IDisposable
 {
     public NativeMultiBuyScopeTests()

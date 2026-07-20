@@ -95,6 +95,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void LifecycleReload_ReplacesNativeIdentitiesAndResumesFromAuthoritativeState()
     {
         using var simulation = new AutoBuySimulation(
@@ -140,6 +141,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void AmbiguousNativeFailure_FailsClosedWithoutCorruptingQueueAccounting()
     {
         using var simulation = new AutoBuySimulation(
@@ -168,6 +170,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void CompletionCostIncrease_RefreshesReserveEvidenceBeforeImmediateRefill()
     {
         using var simulation = new AutoBuySimulation(
@@ -195,6 +198,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void CompletionWake_FailsClosedWhenManualActionConsumesTheReopenedSlot()
     {
         using var simulation = new AutoBuySimulation(
@@ -218,6 +222,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void LifecycleReload_DoesNotReuseAnOldCompletionRefreshGeneration()
     {
         using var simulation = new AutoBuySimulation(
@@ -251,6 +256,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void StructureBulkCompletion_OneCallbackReleasesMultipleSlotsAndRefillsFromLiveRoom()
     {
         using var simulation = new AutoBuySimulation(
@@ -287,6 +293,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void StructureEchoCompletion_RequeuesBeforeWakeAndNeverOverfillsLiveRoom()
     {
         using var simulation = new AutoBuySimulation(
@@ -315,6 +322,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void CompletionEffectsChangingAnotherCandidate_AreRevalidatedBeforeRefill()
     {
         using var simulation = new AutoBuySimulation(
@@ -345,6 +353,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void FiniteUpgradeRepeat_StopsAtNativeMaximumBeforeQueueCapacity()
     {
         using var simulation = new AutoBuySimulation(
@@ -367,6 +376,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void MultipleBigResources_AllBalancesRemainAuthoritativeAcrossAdmissionAndSpend()
     {
         var costs = new[]
@@ -434,6 +444,7 @@ public sealed class AutoBuySimulationE2ETests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
+    [Trait("Category", "AutoBuyReliability")]
     public void LifecycleReload_ReplacesCandidateWrapperAndRetainsStableTypedIdentity()
     {
         using var simulation = new AutoBuySimulation(
@@ -483,13 +494,20 @@ public sealed class AutoBuySimulationE2ETests
 
         AutoBuyPerformanceReporter.Record(
             "periodic-completions",
+            "stress",
             simulation,
             candidates.Length,
+            structureCount: 83,
+            upgradeCount: 83,
+            targetStructureLevels: 1,
             queueCapacity: 304,
             reservedQueueSlots: simulation.Config.LeaveQueueSlots.Value,
             frameCount: 900,
             completionStartFrame: 400,
-            completionEveryFrames: 20);
+            completionEveryFrames: 20,
+            framesToAllSubmissions: null,
+            framesToAllCompletions: null,
+            theoreticalMinimumSubmissionFrames: null);
 
         Assert.True(simulation.World.QueueHighWater >= 300,
             $"Queue high-water was only {simulation.World.QueueHighWater}/304.");
@@ -535,13 +553,20 @@ public sealed class AutoBuySimulationE2ETests
 
         AutoBuyPerformanceReporter.Record(
             "completion-storm",
+            "stress",
             simulation,
             candidates.Length,
+            structureCount: 83,
+            upgradeCount: 83,
+            targetStructureLevels: 1,
             queueCapacity: 304,
             reservedQueueSlots: simulation.Config.LeaveQueueSlots.Value,
             frameCount: 900,
             completionStartFrame: 400,
-            completionEveryFrames: 4);
+            completionEveryFrames: 4,
+            framesToAllSubmissions: null,
+            framesToAllCompletions: null,
+            theoreticalMinimumSubmissionFrames: null);
 
         Assert.True(simulation.World.QueueCount >= 295,
             $"Final queue depth was {simulation.World.QueueCount}/304.");

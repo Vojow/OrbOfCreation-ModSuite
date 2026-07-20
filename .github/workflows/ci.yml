@@ -24,14 +24,32 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Run game-independent tests
-        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true
+      - name: Run fast game-independent tests
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
+
+      - name: Run external-process repository contracts
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane ExternalProcess -NoBuild -NoRestore
 
       - name: Audit native contract manifest and reflection declarations
-        run: dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj --configuration Release -p:UseGameStubs=true
+        run: >-
+          dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj
+          --configuration Release -p:UseGameStubs=true
+          --results-directory artifacts/test-results/contracts
+          --logger "trx;LogFileName=portable-contracts.trx"
+
+      - name: Retain portable test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: portable-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 30
 
   headless-behavior:
-    name: Headless behavior and performance
+    name: Deterministic performance
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -44,14 +62,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Run headless integration and E2E journeys
-        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=HeadlessIntegration|Category=HeadlessE2E"
-
       - name: Run deterministic performance simulations
         env:
           OOC_PERFORMANCE_REPORT: ${{ github.workspace }}/artifacts/performance/autobuy-current.json
           OOC_SUITE_PERFORMANCE_EVIDENCE: ${{ github.workspace }}/artifacts/performance/suite-performance-evidence.json
-        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane PerformanceAll
 
       - name: Compare deterministic performance history
         shell: pwsh
@@ -75,7 +91,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: autobuy-performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/performance
+          path: |
+            artifacts/performance
+            artifacts/test-results/performanceall
           if-no-files-found: error
           retention-days: 90
 
@@ -94,7 +112,13 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Collect production coverage
-        run: dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj --configuration Release -p:UseGameStubs=true --collect:"XPlat Code Coverage" --settings tests/coverage.runsettings --results-directory artifacts/coverage
+        run: >-
+          dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj
+          --configuration Release -p:UseGameStubs=true
+          --filter "Category!=ExternalProcess"
+          --collect:"XPlat Code Coverage" --settings tests/coverage.runsettings
+          --results-directory artifacts/coverage
+          --logger "trx;LogFileName=coverage.trx"
 
       - name: Enforce coverage floors
         shell: pwsh
@@ -104,6 +128,15 @@ jobs:
             Select-Object -First 1
           if (-not $coverage) { throw 'Coverage report was not produced.' }
           powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-coverage.ps1 -CoveragePath $coverage.FullName
+
+      - name: Retain coverage and test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/coverage
+          if-no-files-found: warn
+          retention-days: 30
 
   repository-hygiene:
     name: Repository hygiene
