@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented for the next beta; interactive validation pending.** Automata, Mentor, and Mod Config consume the shared Common lifecycle monitor. This is not part of the frozen 0.3.2 release candidate.
 
-[Back to plans](README.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plans](README.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Contract
 

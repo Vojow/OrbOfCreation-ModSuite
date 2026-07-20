@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented / runtime validation pending.** The shared calculation and Auto Buy adoption are portable-tested; the installed field/method contracts are statically tested, while an interactive capacity-change probe remains.
 
-[Back to plans](README.md) · [Orb Automata plan](automata.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plans](README.md) · [Orb Automata plan](automata.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 

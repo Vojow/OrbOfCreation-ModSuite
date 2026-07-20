@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented for Auto Buy in the next beta; broader adoption and interactive validation pending.** Issue #27 establishes the shared contract and migrates Auto Buy without changing its scheduling or purchase policy.
 
-[Back to plan index](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 

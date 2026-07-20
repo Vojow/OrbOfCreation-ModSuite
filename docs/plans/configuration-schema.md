@@ -47,4 +47,4 @@ Orb Mod Config projects this in a dedicated band above the existing runtime-heal
 - Installed-game contracts: all supported plugins compile and bind against the installed BepInEx configuration API.
 - Interactive desktop and Steam Deck: the new schema band remains readable at 1280×720, 1280×800, and 1920×1080; Current, Migrated, Failed, and Future states remain distinct from runtime health; a failed/future configuration starts no affected plugin behavior.
 
-Runtime approval must be recorded through the normal [runtime validation](../development/runtime-validation.md) process before this lifecycle can advance.
+Runtime approval must be recorded through the normal [runtime validation](../testing/runtime-validation.md) process before this lifecycle can advance.

@@ -58,6 +58,7 @@ public sealed class KnownEntitiesGenerationTests
     }
 
     [Fact]
+    [Trait("Category", "ExternalProcess")]
     public void GeneratorRejectsInvalidDuplicateDriftAndStaleInputs()
     {
         const string id = "67acd892-8a8a-455a-aa71-3fb06e75bf38";

@@ -13,7 +13,7 @@ These notes describe the managed-code architecture of the installed Orb of Creat
 - Numeric library: `Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll`
 - Save format version observed: `6`
 
-The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified. Runtime-resolved compatibility findings are also recorded in the machine-readable [`data/native-contracts.json`](../../data/native-contracts.json); maintain it through the [native contract workflow](../development/native-contract-manifest.md).
+The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified. Runtime-resolved compatibility findings are also recorded in the machine-readable [`data/native-contracts.json`](../../data/native-contracts.json); maintain it through the [native contract workflow](../testing/native-contracts.md).
 
 ## Knowledge map
 
@@ -92,6 +92,18 @@ mindmap
 8. [Save system](save-system.md)
 9. [Modding hooks](modding-hooks.md)
 10. [Reverse-engineering audit](audit.md)
+
+## Auto Buy dossier
+
+- [Native purchase pipeline](auto-buy-native-pipeline.md) — discovery,
+  admission, live validation, mutation verification, and failure boundaries.
+- [Queue and completion model](auto-buy-queue-and-completion.md) — shared queue
+  authority, manual versus automated signals, settlement, and lifecycle reset.
+- [Simulation evidence map](auto-buy-simulation-evidence.md) — how each modeled
+  seam maps to source, portable tests, installed contracts, and runtime gaps.
+- [Stage profiles](auto-buy-stage-profiles.md) — verified catalog facts,
+  synthetic stress workloads, and the still-missing observed progression
+  profiles.
 
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 

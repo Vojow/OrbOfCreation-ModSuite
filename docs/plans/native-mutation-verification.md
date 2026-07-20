@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented for the next beta; interactive validation pending.** This foundation covers every active Automata gameplay mutation and every Mentor XP grant. It is not part of the frozen release candidate until the next-beta branch is validated and promoted.
 
-[Back to plans](README.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plans](README.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Goal
 

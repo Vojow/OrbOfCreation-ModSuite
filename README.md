@@ -30,7 +30,7 @@ The same next-beta line reports saved-off, locked, initializing, operational, te
 - Players: [install the supported suite](docs/user-guide/installation.md), then review [configuration and safety](docs/user-guide/configuration.md).
 - Contributors: read the [development setup](docs/development/setup.md) and [contributing guidelines](CONTRIBUTING.md).
 - Researchers: start with the [reverse-engineering knowledge map](docs/reverse-engineering/README.md).
-- Maintainers: use the [testing](docs/development/testing.md), [runtime validation](docs/development/runtime-validation.md), and [release](docs/development/releases.md) guides.
+- Maintainers: use the [testing hub](docs/testing/README.md), [runtime validation](docs/testing/runtime-validation.md), and [release](docs/development/releases.md) guides.
 
 The [documentation hub](docs/README.md) indexes all player, contributor, research, and planning material.
 

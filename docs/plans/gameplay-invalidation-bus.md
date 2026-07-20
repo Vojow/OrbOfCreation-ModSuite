@@ -2,7 +2,7 @@
 
 > **Lifecycle: Implemented for the next beta; interactive validation pending.** The bounded Common bus and its first Automata, Mentor, and Mod Config publishers are portable-tested. This is not released behavior until the next-beta branch completes review and runtime validation.
 
-[Back to plans](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plans](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 

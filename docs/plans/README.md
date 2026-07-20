@@ -7,6 +7,7 @@ These documents record design intent, implementation sequencing, or historical d
 | Plan | Status | Notes |
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio-level direction and sequencing. |
+| [Test strategy and architecture](testing-architecture.md) | Initial lanes and module guides implemented / reliability expansion pending | `docs/testing/` owns repository and per-module steering; risk lanes partition fast, reliability, performance, and external-process evidence while preserving installed-contract and runtime UAT gates. |
 | [Orb Automata](automata.md) | Implemented / evolving | Auto Buy, Auto Cast, Auto Concept, and progression-aware spell leveling are in public beta. |
 | [Auto Buy rejection-aware scheduler](autobuy-rejection-index.md) | Structure threshold parking implemented / runtime gate pending | Structure reserve/affordability waits use exact quantity crossings; conservative Upgrade handling, unavailable-resource backoff, and Steam Deck profiling remain. |
 | [Shared queue-capacity snapshots](queue-capacity.md) | Implemented / runtime validation pending | Centralized native capacity, occupancy, automation allocation, and manual reservation arithmetic is adopted by Auto Buy; an interactive capacity-change probe remains. |

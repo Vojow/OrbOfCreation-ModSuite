@@ -7,6 +7,27 @@
 - Format feature health and Auto Buy reserve evidence as bounded line-oriented tooltip rows, including deterministic per-resource required, available, cost, reserved, and shortfall fields. Every visible line owns a native tooltip node so wrapped reasons cannot collide with separators or later fields.
 - Keep the existing component versions unchanged for these unreleased next-beta corrections.
 
+## Selectable test strategy lanes — 2026-07-20
+
+- Centralize the maintained repository strategy, headless/replay/native-contract/runtime protocols, and test-steering entry points under `docs/testing/`, with compatibility redirects from their former development paths.
+- Add owned testing guides for Common, Mentor, Mod Config, suite integration, and an Automata subtree split into Auto Buy, Auto Cast, Auto Concept, spell leveling, and cross-feature integration.
+- Preserve the risk-based unit, headless, installed-contract, and runtime-UAT pyramid while adding explicit fast, Auto Buy decision, Auto Buy reliability, Auto Buy performance, complete performance, replay, and external-process development lanes.
+- Partition portable CI into fast, deterministic-performance, and external-process scopes, retain TRX evidence for portable, contract, performance, and coverage runs, and stop rerunning headless journeys already owned by the fast partition.
+- Establish the first selectable reliability corpus and Auto Buy subset from dirty-resource, native multi-buy, runtime replay, lifecycle, ambiguous-mutation, live-reserve, and live-queue-capacity journeys.
+- Report overall and per-assembly branch coverage diagnostically while retaining the existing reviewed line-coverage floors until branch baselines are reviewed.
+- Add a maintained Auto Buy negative-simulation matrix covering invalid queue, cost, availability, lifecycle, purchase, completion, and simulator-contract paths, with focused failure, race, and completion suites.
+- Add four deterministic 240-event Auto Buy state-machine tapes with per-event invariants, replay comparison, bounded diagnostic tails, and first-failing-prefix reduction.
+- Add adverse modeled workloads for scarcity, locked catalogs, live capacity changes, manual bursts, completion bursts, lifecycle replacement, and resource-observation outages; retain the persistent rejecting-leader case as an explicit skipped gate for the unresolved starvation policy.
+- Add an Auto Buy reverse-engineering dossier covering the native purchase transaction, shared queue/completion state model, simulation-to-evidence mapping, and the distinction between observed progression facts and synthetic stress profiles.
+
+## Progression-shaped Auto Buy performance simulations — 2026-07-20
+
+- Add deterministic early, mid, late, and endgame Auto Buy stress workloads with increasing Structure/Upgrade catalogs and queue-completion rates from one action per second through one action per simulated frame; these names describe modeled workload shapes rather than observed save populations.
+- Exercise exact per-Structure targets of 10 early, 40 midgame, 100 late, and 1,000 endgame levels, all 180 mapped Structures in late/endgame, finite one-level Upgrade purchases, queue saturation and refill depth, bounded candidate work, and idle-room detection.
+- Extend the checked performance report with stage composition, repeated-Structure coverage, and deterministic frames/seconds to every stage target so CI can detect workload drift and scheduler throughput regressions.
+- Add a focused `AutoBuyDecision` policy contract for current group precedence, rerank/pass behavior, reserve monotonicity, unavailable-candidate isolation, fairness, and deterministic output.
+- Compare stage submission time with a one-mutation-per-frame theoretical scheduler and split purchasable-work idle frames into evaluation-only versus other deferred work; the current endgame gap is 5,988 frames at 96.783% submission efficiency.
+
 ## Versioned configuration schemas — 2026-07-19
 
 - Add a shared pre-bind configuration transaction with hidden schema markers, exact-byte rollback, verified all-or-nothing first-free sibling backups, ordered reviewed migrations, and fail-closed malformed or future-version handling.

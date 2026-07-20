@@ -2,7 +2,7 @@
 
 > **Lifecycle: Next beta / runtime validation pending.** Common provides the bounded state machine; Auto Buy resource/cost candidates and Mentor domains use it. Desktop and Steam Deck soak evidence remains a release gate.
 
-[Back to plan index](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../development/runtime-validation.md)
+[Back to plan index](README.md) · [Performance architecture](performance-suite.md) · [Runtime validation](../testing/runtime-validation.md)
 
 ## Purpose
 
