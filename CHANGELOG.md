@@ -6,6 +6,7 @@
 - Revalidate mode, emergency state, ownership, lifecycle generation, candidate admission, live costs, reserves, and queue capacity between every level; stop immediately on any boundary, failure, ambiguous result, or operation cap.
 - Add deterministic 1/2/4/8/16 burst-cost tests, Bulk-3 and finite-Upgrade fairness, per-Upgrade native multi-buy restoration, queue/reserve/capacity containment, lifecycle/ownership/emergency interruption, ambiguous-mutation quarantine, coordinator accounting, Auto Cast fairness, and eight-completion-per-frame throughput coverage.
 - Compare the exact pull-request target and head with stable-cost plus cheap-call burst workloads, retain both raw reports, and update one deterministic performance comment on same-repository pull requests.
+- Keep pull-request performance comparisons buildable across the classic legacy, intermediate queue-snapshot, and current Auto Buy APIs.
 - Bump Orb Automata to 0.8.10.
 
 ## Auto Buy grouped continuation and rejection fairness — 2026-07-20

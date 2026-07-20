@@ -286,8 +286,9 @@ change from remaining queue room to the full queue-capacity snapshot, candidate
 evaluation evidence, and completion settlement/revalidation. It does not
 backport beta engine behavior into the reference build. Use
 `-ReferenceRef <commit>` to compare another commit; `-ReferenceApi Auto`
-selects the legacy adapter only when that source predates the ownership-aware
-constructor.
+selects the classic legacy, intermediate queue-snapshot, or current adapter
+from that source. `-ReferenceApi Intermediate` is available for an explicit
+comparison with the pre-ownership API used by the `0.3.2` suite baseline.
 
 Output and responsiveness metrics are interpreted directly: submissions,
 queue depth, distinct candidates, saturation time, and idle purchasable frames.

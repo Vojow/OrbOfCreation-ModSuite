@@ -7,6 +7,7 @@
     <RequireGameReferences>false</RequireGameReferences>
     <ComparisonSourceRoot Condition="'$(ComparisonSourceRoot)' == ''">$(MSBuildThisFileDirectory)..\..</ComparisonSourceRoot>
     <DefineConstants Condition="'$(LegacyMainApi)' == 'true'">$(DefineConstants);LEGACY_MAIN_API</DefineConstants>
+    <DefineConstants Condition="'$(IntermediateQueueApi)' == 'true'">$(DefineConstants);INTERMEDIATE_QUEUE_API</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

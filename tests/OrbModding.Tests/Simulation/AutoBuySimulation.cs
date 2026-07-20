@@ -1177,7 +1177,7 @@ internal sealed class SimulatedAutoBuyCatalog :
         IAutoBuyCandidate candidate,
         bool suppressResourceTracking,
         bool policyExcluded
-#if !LEGACY_MAIN_API
+#if !LEGACY_MAIN_API || INTERMEDIATE_QUEUE_API
         ,
         AutoBuyDecision? decision = null)
 #else
@@ -1185,7 +1185,7 @@ internal sealed class SimulatedAutoBuyCatalog :
 #endif
     {
         CompletedCandidateEvaluations++;
-#if LEGACY_MAIN_API
+#if LEGACY_MAIN_API && !INTERMEDIATE_QUEUE_API
         Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded);
 #else
         Index.CompleteCandidateEvaluation(candidate, suppressResourceTracking, policyExcluded, decision);
@@ -1294,7 +1294,7 @@ internal sealed class SimulatedAutoBuyCatalog :
         Index.Reconcile(_world.Candidates);
     }
 
-#if LEGACY_MAIN_API
+#if LEGACY_MAIN_API && !INTERMEDIATE_QUEUE_API
     public bool TryGetRemainingQueueRoom(out int remainingRoom)
     {
         QueueCapacityReads++;

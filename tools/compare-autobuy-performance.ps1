@@ -1,7 +1,7 @@
 param(
     [string]$ReferenceRef = '7f61f21d27c4b1a4996ba9888a303c42bb74e81c',
 
-    [ValidateSet('Auto', 'Legacy', 'Current')]
+    [ValidateSet('Auto', 'Legacy', 'Intermediate', 'Current')]
     [string]$ReferenceApi = 'Auto',
 
     [string]$ReferenceLabel = 'main reference',
@@ -66,7 +66,8 @@ function Invoke-ComparisonRunner {
         [Parameter(Mandatory = $true)][string]$SourceRoot,
         [Parameter(Mandatory = $true)][string]$ReportPath,
         [Parameter(Mandatory = $true)][string]$SourceLabel,
-        [Parameter(Mandatory = $true)][bool]$LegacyApi
+        [Parameter(Mandatory = $true)][bool]$LegacyApi,
+        [Parameter(Mandatory = $true)][bool]$IntermediateQueueApi
     )
 
     $arguments = @(
@@ -80,6 +81,9 @@ function Invoke-ComparisonRunner {
     if ($LegacyApi) {
         $arguments += '-p:LegacyMainApi=true'
     }
+    if ($IntermediateQueueApi) {
+        $arguments += '-p:IntermediateQueueApi=true'
+    }
 
     $arguments += @('--', '--report', $ReportPath, '--source', $SourceLabel)
     & dotnet @arguments
@@ -88,17 +92,20 @@ function Invoke-ComparisonRunner {
     }
 }
 
-function Test-LegacyReferenceApi {
+function Get-ReferenceApiProfile {
     param(
         [Parameter(Mandatory = $true)][string]$SourceRoot,
         [Parameter(Mandatory = $true)][string]$Mode
     )
 
     if ($Mode -eq 'Legacy') {
-        return $true
+        return [pscustomobject]@{ Legacy = $true; IntermediateQueue = $false }
+    }
+    if ($Mode -eq 'Intermediate') {
+        return [pscustomobject]@{ Legacy = $true; IntermediateQueue = $true }
     }
     if ($Mode -eq 'Current') {
-        return $false
+        return [pscustomobject]@{ Legacy = $false; IntermediateQueue = $false }
     }
 
     $enginePath = Join-Path $SourceRoot 'src\OrbAutomata\AutoBuyEngine.cs'
@@ -107,7 +114,13 @@ function Test-LegacyReferenceApi {
     }
 
     $engineSource = Get-Content -LiteralPath $enginePath -Raw
-    return $engineSource.IndexOf('ownsActionFamily', [StringComparison]::Ordinal) -lt 0
+    $legacy = $engineSource.IndexOf('ownsActionFamily', [StringComparison]::Ordinal) -lt 0
+    $intermediateQueue = $legacy -and
+        $engineSource.IndexOf('TryCaptureQueueCapacity', [StringComparison]::Ordinal) -ge 0
+    return [pscustomobject]@{
+        Legacy = $legacy
+        IntermediateQueue = $intermediateQueue
+    }
 }
 
 function Read-JsonReport {
@@ -135,18 +148,20 @@ $worktreeAdded = $false
 try {
     Invoke-Git worktree add --detach $worktreePath $referenceCommit
     $worktreeAdded = $true
-    $legacyReferenceApi = Test-LegacyReferenceApi -SourceRoot $worktreePath -Mode $ReferenceApi
+    $referenceApiProfile = Get-ReferenceApiProfile -SourceRoot $worktreePath -Mode $ReferenceApi
 
     Invoke-ComparisonRunner `
         -SourceRoot $worktreePath `
         -ReportPath $referenceReportPath `
         -SourceLabel $referenceSourceLabel `
-        -LegacyApi $legacyReferenceApi
+        -LegacyApi $referenceApiProfile.Legacy `
+        -IntermediateQueueApi $referenceApiProfile.IntermediateQueue
     Invoke-ComparisonRunner `
         -SourceRoot $repositoryRoot `
         -ReportPath $betaReportPath `
         -SourceLabel $betaSourceLabel `
-        -LegacyApi $false
+        -LegacyApi $false `
+        -IntermediateQueueApi $false
 }
 finally {
     if ($worktreeAdded) {
