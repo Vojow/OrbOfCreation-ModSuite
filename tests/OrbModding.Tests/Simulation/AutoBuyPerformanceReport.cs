@@ -113,6 +113,7 @@ internal static class AutoBuyPerformanceReporter
                     metrics.EvaluationOnlyFramesWithPurchasableWork,
                 DeferredFramesWithPurchasableWork = metrics.DeferredFramesWithPurchasableWork,
                 MaximumEvaluationsInFrame = metrics.MaximumEvaluationsInFrame,
+                MaximumPurchasesInFrame = metrics.MaximumPurchasesInFrame,
                 DistinctCandidatesSubmitted = world.DistinctCandidatesSubmitted,
                 StructuresSubmittedMultipleTimes = structureSubmissions.Count(count => count >= 2),
                 StructuresMeetingTarget = structureSubmissions.Count(
@@ -258,6 +259,8 @@ internal sealed class PerformanceMetrics
     public int DeferredFramesWithPurchasableWork { get; init; }
 
     public int MaximumEvaluationsInFrame { get; init; }
+
+    public int MaximumPurchasesInFrame { get; init; }
 
     public int DistinctCandidatesSubmitted { get; init; }
 

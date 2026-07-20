@@ -274,16 +274,20 @@ tools/compare-autobuy-performance.ps1
 The script checks out commit `7f61f21` into a disposable temporary worktree,
 compiles a legacy catalog adapter against that unmodified production source,
 then compiles the current adapter against the current production source. Both
-execute the same 166-candidate, 304-slot, 900-frame periodic-completion and
-completion-storm workloads. It writes `main-reference.json`,
-`beta-current.json`, and `comparison.md` under
+execute the same 166-candidate, 304-slot, 900-frame periodic-completion,
+completion-storm, and cheap-call burst-refill workloads. The first two retain a
+1.1 ms modeled purchase; the burst workload models 0.05 ms purchases while
+consuming eight queue entries per frame. It writes `reference.json`,
+`current.json`, and `comparison.md` under
 `artifacts/performance/ab` and removes only the temporary worktree it created.
 
 The compatibility adapter accounts only for intentional API differences: the
 change from remaining queue room to the full queue-capacity snapshot, candidate
 evaluation evidence, and completion settlement/revalidation. It does not
 backport beta engine behavior into the reference build. Use
-`-ReferenceRef <commit>` to compare another legacy-compatible commit.
+`-ReferenceRef <commit>` to compare another commit; `-ReferenceApi Auto`
+selects the legacy adapter only when that source predates the ownership-aware
+constructor.
 
 Output and responsiveness metrics are interpreted directly: submissions,
 queue depth, distinct candidates, saturation time, and idle purchasable frames.
@@ -291,6 +295,22 @@ Raw reads and modeled operations remain diagnostic in this cross-version view.
 An older engine can appear to perform less work simply because it does not
 revalidate or serve as many candidates, so operation density is a regression
 gate only between reports with equivalent engine semantics.
+
+### Pull-request target comparison comment
+
+For same-repository pull requests, the deterministic-performance job also runs
+the comparison against the exact `pull_request.base.sha`. It checks out the
+exact head SHA, writes the target/current reports under
+`artifacts/performance/pr`, and creates or updates one bot comment identified by
+`<!-- autobuy-performance-comparison -->`. Subsequent pushes update that comment
+instead of adding another one.
+
+The comment includes stable 1.1 ms regression scenarios and the cheap-call
+eight-completion burst scenario, with queue output, saturation, fairness,
+maximum purchases per frame, and normalized diagnostic work. It links the
+workflow run, while the raw reports remain in the retained artifact. Comment
+publication is best-effort and skipped for fork pull requests because their
+tokens are read-only; the deterministic gate and artifact remain authoritative.
 
 ## Scenario design rules
 
