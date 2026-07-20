@@ -50,8 +50,12 @@ internal sealed class AutoBuySimulation : IDisposable
             _readCost.Observe,
             _purchaseCost.Observe,
             _coordinator,
+#if LEGACY_MAIN_API
+            () => _frame);
+#else
             () => _frame,
             ownsActionFamily: ownsActionFamily);
+#endif
     }
 
     public AutomataConfig Config { get; }
