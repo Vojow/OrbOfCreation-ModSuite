@@ -41,6 +41,44 @@ public sealed class AutomataCoordinatorTests
     }
 
     [Fact]
+    public void AutoBuyBurstUsesOneFrameLeaseAndDoesNotStarveAutoCast()
+    {
+        var coordinator = Coordinator();
+        long frame = 50;
+        var buyConfig = Config();
+        buyConfig.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        buyConfig.FixedGroupSize.Value = 100;
+        buyConfig.LeaveQueueSlots.Value = 0;
+        var castConfig = Config();
+        castConfig.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var buyCandidate = new BuyCandidate("burst-fairness", AutoBuyCandidateKind.Structure);
+        var buyCatalog = new BuyCatalog(100, buyCandidate);
+        buyCandidate.OnPurchase = () => buyCatalog.RemainingRoom--;
+        var spell = new CastCandidate();
+        using var buy = BuyEngine(
+            buyConfig,
+            buyCatalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
+        using var cast = CastEngine(castConfig, new CastCatalog(spell), coordinator, () => frame);
+
+        for (var iteration = 0; iteration < 8; iteration++, frame++)
+        {
+            var purchasesBefore = buyCandidate.PurchaseCalls;
+            var firesBefore = spell.FireCalls;
+            buy.Tick(1.0f);
+            cast.Tick(1.0f);
+            Assert.False(
+                buyCandidate.PurchaseCalls > purchasesBefore && spell.FireCalls > firesBefore,
+                $"Auto Buy and Auto Cast both mutated frame {frame}.");
+        }
+
+        Assert.True(buyCandidate.PurchaseCalls >= AutoBuyEngine.MaximumNativePurchasesPerFrame);
+        Assert.True(spell.FireCalls > 0);
+    }
+
+    [Fact]
     public void ReadAdmissionDeferralRemainsPendingAndResumesWithoutLoss()
     {
         var coordinator = Coordinator();
@@ -97,7 +135,7 @@ public sealed class AutomataCoordinatorTests
     [InlineData(1, false, 0)]
     [InlineData(2, false, 0)]
     [InlineData(0, true, 1)]
-    public void PurchaseGroupKeepsInitialQueueClampAcrossMutationFrames(
+    public void PurchaseGroupKeepsInitialQueueClampInsideBurst(
         int groupingMode,
         bool useActionMultiplier,
         int candidateKind)
@@ -115,16 +153,14 @@ public sealed class AutomataCoordinatorTests
             BulkDevelopment = 20,
             ActionMultiplier = 20,
         };
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
         engine.Tick(1.0f);
-        Assert.Equal(1, candidate.PurchaseCalls);
-        frame++;
-        engine.Tick(0.0f);
-        Assert.Equal(2, candidate.PurchaseCalls);
-        frame++;
-        engine.Tick(0.0f);
-
         Assert.Equal(3, candidate.PurchaseCalls);
         Assert.Equal(1, catalog.DiscoverCalls);
     }
@@ -141,19 +177,20 @@ public sealed class AutomataCoordinatorTests
         var candidate = new BuyCandidate("capacity-growth", AutoBuyCandidateKind.Structure);
         var catalog = new BuyCatalog(2, candidate);
         candidate.OnPurchase = () => catalog.RemainingRoom--;
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
         engine.Tick(1.0f);
-        Assert.Equal(1, candidate.PurchaseCalls);
+        Assert.Equal(2, candidate.PurchaseCalls);
         catalog.RemainingRoom = 5;
 
         frame++;
         engine.Tick(0.0f);
-        Assert.Equal(2, candidate.PurchaseCalls);
-        frame++;
-        engine.Tick(0.0f);
-
-        Assert.Equal(3, candidate.PurchaseCalls);
+        Assert.Equal(7, candidate.PurchaseCalls);
         Assert.Equal(2, catalog.DiscoverCalls);
     }
 
@@ -170,23 +207,26 @@ public sealed class AutomataCoordinatorTests
         var catalog = new BuyCatalog(2, higher, repeating);
         higher.OnPurchase = () => catalog.RemainingRoom--;
         repeating.OnPurchase = () => catalog.RemainingRoom--;
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
         engine.Tick(1.0f);
-        Assert.Equal((0, 1), (higher.PurchaseCalls, repeating.PurchaseCalls));
+        Assert.Equal((0, 2), (higher.PurchaseCalls, repeating.PurchaseCalls));
 
         higher.Available = true;
         catalog.RemainingRoom = 2;
         engine.NotifyNativeCompletion();
-        frame++;
-        engine.Tick(0.0f);
-        Assert.Equal((0, 2), (higher.PurchaseCalls, repeating.PurchaseCalls));
+        for (var attempt = 0; attempt < 4 && higher.PurchaseCalls == 0; attempt++)
+        {
+            frame++;
+            engine.Tick(0.0f);
+        }
 
-        catalog.RemainingRoom = 1;
-        frame++;
-        engine.Tick(0.0f);
-
-        Assert.Equal((1, 2), (higher.PurchaseCalls, repeating.PurchaseCalls));
+        Assert.Equal((1, 3), (higher.PurchaseCalls, repeating.PurchaseCalls));
         Assert.Equal(2, catalog.DiscoverCalls);
     }
 
@@ -205,15 +245,16 @@ public sealed class AutomataCoordinatorTests
         {
             BulkDevelopment = 2,
         };
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
-        for (var expectedPurchases = 1; expectedPurchases <= 5; expectedPurchases++)
-        {
-            engine.Tick(expectedPurchases == 1 ? 1.0f : 0.0f);
-            Assert.Equal(expectedPurchases, candidate.PurchaseCalls);
-            frame++;
-        }
+        engine.Tick(1.0f);
 
+        Assert.Equal(5, candidate.PurchaseCalls);
         Assert.Equal(1, catalog.DiscoverCalls);
     }
 
@@ -229,11 +270,21 @@ public sealed class AutomataCoordinatorTests
         var selected = new BuyCandidate("only-candidate", AutoBuyCandidateKind.Structure);
         var catalog = new BuyCatalog(201, selected);
         selected.OnPurchase = () => catalog.RemainingRoom--;
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
-        for (var expectedPurchases = 1; expectedPurchases <= 200; expectedPurchases++)
+        var firstTick = true;
+        while (selected.PurchaseCalls < 200)
         {
-            engine.Tick(expectedPurchases == 1 ? 1.0f : 0.0f);
+            var expectedPurchases = Math.Min(
+                selected.PurchaseCalls + AutoBuyEngine.MaximumNativePurchasesPerFrame,
+                200);
+            engine.Tick(firstTick ? 1.0f : 0.0f);
+            firstTick = false;
             Assert.Equal(expectedPurchases, selected.PurchaseCalls);
             frame++;
         }
@@ -260,24 +311,99 @@ public sealed class AutomataCoordinatorTests
         first.OnPurchase = () => catalog.RemainingRoom--;
         second.OnPurchase = () => catalog.RemainingRoom--;
         third.OnPurchase = () => catalog.RemainingRoom--;
-        using var engine = BuyEngine(config, catalog, coordinator, () => frame);
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
 
         engine.Tick(1.0f);
-        Assert.Equal((1, 0, 0), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
-
-        frame++;
-        engine.Tick(0.0f);
-        Assert.Equal((1, 1, 0), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
-
-        frame++;
-        engine.Tick(0.0f);
         Assert.Equal((1, 1, 1), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
 
         frame++;
         engine.Tick(0.0f);
 
-        Assert.Equal((2, 1, 1), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
+        Assert.Equal((2, 2, 2), (first.PurchaseCalls, second.PurchaseCalls, third.PurchaseCalls));
         Assert.Equal(2, catalog.DiscoverCalls);
+    }
+
+    [Fact]
+    public void FastAutoBuyBurstUsesOneLeaseAndReportsEveryNativeMutation()
+    {
+        var coordinator = Coordinator();
+        long frame = 1;
+        var config = Config();
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 20;
+        config.LeaveQueueSlots.Value = 0;
+        var candidate = new BuyCandidate("burst", AutoBuyCandidateKind.Structure);
+        var catalog = new BuyCatalog(20, candidate);
+        candidate.OnPurchase = () => catalog.RemainingRoom--;
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => 0.0);
+
+        engine.Tick(1.0f);
+
+        Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, candidate.PurchaseCalls);
+        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbAutomata.AutoBuy", out var snapshot));
+        Assert.Equal(1, snapshot.NativeMutationLeaseAdmissions);
+        Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, snapshot.NativeCallsAttempted);
+        Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, snapshot.NativeMutationAttempts);
+        Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, snapshot.NativeMutationsCommitted);
+        var mutation = Assert.Single(
+            coordinator.GetRegistrationSnapshots(),
+            item => item.Subsystem == "OrbAutomata.AutoBuy" &&
+                    item.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+        Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, mutation.TotalOperations);
+    }
+
+    [Fact]
+    public void UpgradeBurstRestoresNativeMultiBuyAfterEveryLevel()
+    {
+        NativeMultiBuyScope.ResetQuarantineForTests();
+        GlobalVariables.MultiBuy = new IntVariable { Value = 7 };
+        try
+        {
+            var coordinator = Coordinator();
+            long frame = 1;
+            var config = Config();
+            config.LeaveQueueSlots.Value = 0;
+            var candidates = new ScopedUpgradeCandidate[AutoBuyEngine.MaximumNativePurchasesPerFrame];
+            for (var index = 0; index < candidates.Length; index++)
+            {
+                candidates[index] = new ScopedUpgradeCandidate($"burst-upgrade-{index:00}");
+            }
+
+            var catalog = new BuyCatalog(candidates.Length, candidates);
+            foreach (var candidate in candidates)
+            {
+                candidate.OnPurchase = () => catalog.RemainingRoom--;
+            }
+
+            using var engine = BuyEngine(
+                config,
+                catalog,
+                coordinator,
+                () => frame,
+                readPurchaseElapsedMilliseconds: _ => 0.0);
+
+            engine.Tick(1.0f);
+
+            Assert.All(candidates, candidate => Assert.Equal(1, candidate.PurchaseCalls));
+            Assert.Equal(7, GlobalVariables.MultiBuy.Value);
+            Assert.Equal(candidates.Length * 2, GlobalVariables.MultiBuy.SetCalls);
+            Assert.False(NativeMultiBuyScope.IsMutationQuarantined);
+        }
+        finally
+        {
+            NativeMultiBuyScope.ResetQuarantineForTests();
+            GlobalVariables.MultiBuy = new IntVariable();
+        }
     }
 
     [Fact]
@@ -705,13 +831,15 @@ public sealed class AutomataCoordinatorTests
         Func<long> frameIdentity,
         ManualLogSource? log = null,
         Func<Stopwatch, double>? readElapsedMilliseconds = null,
-        AutomataFeatureStatusReporter? featureStatus = null) =>
+        AutomataFeatureStatusReporter? featureStatus = null,
+        Func<Stopwatch, double>? readPurchaseElapsedMilliseconds = null) =>
         new(
             config,
             catalog,
             new ReservePolicy(config),
             log ?? new ManualLogSource(),
             readElapsedMilliseconds: readElapsedMilliseconds,
+            readPurchaseElapsedMilliseconds: readPurchaseElapsedMilliseconds,
             coordinator: coordinator,
             readFrameIdentity: frameIdentity,
             featureStatus: featureStatus);
@@ -820,6 +948,60 @@ public sealed class AutomataCoordinatorTests
         {
             PurchaseCalls++;
             OnPurchase?.Invoke();
+            reason = string.Empty;
+            return true;
+        }
+    }
+
+    private sealed class ScopedUpgradeCandidate : IAutoBuyCandidate
+    {
+        private readonly AutoBuyCandidateSnapshot _snapshot;
+
+        public ScopedUpgradeCandidate(string uuid)
+        {
+            _snapshot = new AutoBuyCandidateSnapshot(
+                this,
+                uuid,
+                uuid,
+                AutoBuyCandidateKind.Upgrade,
+                GetType().Name);
+        }
+
+        public int PurchaseCalls { get; private set; }
+
+        public Action? OnPurchase { get; set; }
+
+        public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
+
+        public bool IsAvailable() => PurchaseCalls == 0;
+
+        public bool CanPurchase(out string reason)
+        {
+            reason = PurchaseCalls == 0 ? string.Empty : "candidate is complete";
+            return PurchaseCalls == 0;
+        }
+
+        public IReadOnlyList<ResourceAdmissionCost> GetCosts() => Array.Empty<ResourceAdmissionCost>();
+
+        public bool TryPurchaseOne(out string reason)
+        {
+            if (!NativeMultiBuyScope.TryEnterOne(out var scope, out reason))
+            {
+                return false;
+            }
+
+            using (scope)
+            {
+                if (GlobalVariables.MultiBuy.Value != 1)
+                {
+                    reason = "native multi-buy was not constrained to one";
+                    return false;
+                }
+
+                PurchaseCalls++;
+                OnPurchase?.Invoke();
+            }
+
             reason = string.Empty;
             return true;
         }

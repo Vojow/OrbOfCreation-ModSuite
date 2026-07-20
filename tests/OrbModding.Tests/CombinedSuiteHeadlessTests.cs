@@ -90,7 +90,7 @@ public sealed class CombinedSuiteHeadlessTests
 
     [Fact]
     [Trait("Category", "HeadlessE2E")]
-    public void CombinedSuite_AllMutationProducersAllowOnlyOneNativeMutationPerFrame()
+    public void CombinedSuite_AllMutationProducersAllowOnlyOneMutationOwnerLeasePerFrame()
     {
         var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 128);
         var producers = CreateMutationProducers(coordinator);

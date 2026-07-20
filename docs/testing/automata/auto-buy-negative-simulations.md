@@ -27,7 +27,9 @@ Check applicable invariants immediately after every injected event:
 - accepted spending never crosses the configured reserve;
 - candidate current plus queued levels never exceeds its finite maximum;
 - completed automation levels never exceed submitted automation levels;
-- at most one supported native mutation is admitted per simulated frame;
+- at most one supported feature owns a mutation lease per simulated frame;
+- an Auto Buy lease attempts at most 16 sequential native purchases, with every
+  purchase independently revalidated and verified;
 - stale lifecycle/native identities never mutate;
 - ambiguous attempted mutations do not retry before explicit lifecycle recovery;
 - persistent faults use bounded work and do not starve healthy siblings;
@@ -111,14 +113,15 @@ wall-clock time and do not alter the clean early/mid/late/endgame history.
 | NF-06 | Completion bursts and gaps | clustered completions followed by quiet frames | settlement/evaluation work remains bounded |
 | NF-07 | Lifecycle interruption | reload halfway through sustained workload | stale work discarded; target progress resumes |
 | NF-08 | Resource-read outage | unresolved costs for a bounded interval | zero unsafe mutation; bounded recovery work |
-| NF-09 | Low-Bulk endgame matrix | 180 Structures at a 1,000-level ceiling plus 24 finite Upgrades; live Bulk Development 1/3/10/100 | every candidate progresses fairly; one-mutation-per-frame and evaluation-per-purchase budgets hold |
+| NF-09 | Low-Bulk endgame matrix | 180 Structures at a 1,000-level ceiling plus 24 finite Upgrades; live Bulk Development 1/3/10/100 with a modeled 1.1 ms purchase | every candidate progresses fairly; one-call-per-frame and evaluation-per-purchase budgets hold for this historical model |
 | NF-10 | Mixed transient cost outages | three disjoint cohorts become unresolved and recover while healthy work continues | each failed cohort stays unchanged during its outage and resumes on authoritative invalidation |
 | NF-11 | Bulk-3 completion invalidation storm | up to eight native completions before each tick against 130 Structures | callbacks coalesce into fewer evaluation batches; groups never exceed three; all candidates progress |
 | NF-12 | Near-threshold partial groups | exponentially rising live costs sit one unit below and then exactly at reserve boundaries | a Bulk-10 group stops at the first invalid level and resumes exactly at the next valid crossing |
-| NF-13 | Heavy-tail candidate read | one modeled read in each slice costs 35 ms while ordinary reads cost 0.02 ms | the indivisible over-budget read completes, later work resumes, and no frame mutates more than once |
+| NF-13 | Heavy-tail candidate read | one modeled read in each slice costs 35 ms while ordinary reads cost 0.02 ms | the indivisible over-budget read completes, later work resumes, and mutation calls remain within the modeled purchase slice and 16-call ceiling |
 | NF-14 | Catalog ramp under load | register candidates in four batches while purchases and completions continue, growing 28 to 137 | old and newly registered candidates progress without queue overfill or unbounded evaluation work |
+| NF-15 | Cheap-call refill burst | consume eight queue entries per frame with abundant mixed Structure/Upgrade work | one lease refills up to the adaptive 16-call ceiling; queue continuity, ranked fairness, exact accounting, and cross-feature exclusion hold |
 
-NF-09 through NF-14 are runtime-informed perturbations, not sanitized runtime
+NF-09 through NF-15 are runtime-informed perturbations, not sanitized runtime
 replays or observed progression profiles. Their deterministic operation budgets
 are intended for scheduler comparisons; host wall-clock duration remains
 diagnostic only.

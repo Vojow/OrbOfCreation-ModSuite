@@ -115,7 +115,7 @@ public sealed class LifecycleStateMachineScenarioTests
             GameLifecycleState.Playing,
             GameLifecycleState.Resetting,
             GameLifecycleState.Playing);
-        ScenarioOracles.OneNativeMutationPerFrame(kernel);
+        ScenarioOracles.OneMutationOwnerPerFrame(kernel);
         ScenarioOracles.MutationRequestsAreUnique(kernel);
         ScenarioOracles.NoLifecycleDispatchFailures(kernel);
     }
@@ -262,7 +262,7 @@ public sealed class LifecycleStateMachineScenarioTests
             kernel.InvalidationTrace,
             invalidation => invalidation.Domain == GameplayInvalidationDomains.MentorSpells);
         ScenarioOracles.OnlyFeaturesMutated(kernel, autoBuy.Name, mentor.Name);
-        ScenarioOracles.OneNativeMutationPerFrame(kernel);
+        ScenarioOracles.OneMutationOwnerPerFrame(kernel);
         ScenarioOracles.MutationRequestsAreUnique(kernel);
         ScenarioOracles.NoLifecycleDispatchFailures(kernel);
     }
@@ -270,7 +270,7 @@ public sealed class LifecycleStateMachineScenarioTests
     private static ScenarioAutoBuyFeature AvailableAutoBuy(
         LifecycleScenarioKernel kernel,
         string uuid,
-        int queueCapacity = 3) =>
+        int queueCapacity = 2) =>
         new(
             kernel,
             new[]

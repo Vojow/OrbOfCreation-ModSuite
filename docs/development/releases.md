@@ -6,7 +6,7 @@
 
 The supported package is an explicit allowlist:
 
-- **Orb Automata 0.8.9:** grouped, continuously repeating and rejection-aware queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed configuration migration.
+- **Orb Automata 0.8.10:** adaptive bounded-burst, grouped, continuously repeating and rejection-aware queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed configuration migration.
 - **Orb Mentor 0.3.8:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains, shared remaining-budget enforcement, and versioned configuration ownership.
 - **Orb Mod Config 0.6.3:** optional in-game configuration UI with separate configuration-schema and runtime-health status, variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
 - **Orb Modding Common 0.3.7:** bundled shared dependency with lifecycle, invalidation, configuration-schema, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.

@@ -92,8 +92,9 @@ work identity at both the start and end of an explicitly requested measurement
 window. The checker evaluates counter deltas; it never attributes a lifetime
 maximum that was already present at the start to the current capture.
 
-The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one mutation
-admission per frame, twelve supported work identities, exact 10/12/30-frame wait
+The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one
+mutation-owning feature admission per frame, twelve supported work identities,
+exact 10/12/30-frame wait
 limits, and a minimum of 30 samples. Cooperative p95, p99, and maximum targets,
 combined active-frame timing, wait limits, starvation, abandonment, and
 work/measurement failures are enforced merge evidence. Exceeded or insufficient
@@ -144,7 +145,10 @@ For a source-level A/B comparison with the last pre-beta `main` engine, run
 `tools/compare-autobuy-performance.ps1`. Its compatibility project compiles the
 same deterministic workload separately against the untouched reference and
 current production sources; it does not copy beta engine changes into the
-reference. See [main versus beta compatibility run](headless-e2e.md#main-versus-beta-compatibility-run).
+reference. Pull-request CI additionally compares the exact target SHA with the
+head SHA and updates one target/current performance comment. See
+[main versus beta compatibility run](headless-e2e.md#main-versus-beta-compatibility-run)
+and [pull-request target comparison comment](headless-e2e.md#pull-request-target-comparison-comment).
 
 Collect portable production coverage with the checked-in assembly allowlist:
 
