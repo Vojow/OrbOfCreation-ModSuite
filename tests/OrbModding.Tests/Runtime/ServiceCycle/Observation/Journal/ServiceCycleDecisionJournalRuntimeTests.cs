@@ -1,0 +1,309 @@
+using System;
+using System.Threading;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
+using Xunit;
+
+namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
+
+public sealed class ServiceCycleDecisionJournalRuntimeTests
+{
+    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(2);
+
+    [Fact]
+    public void ConstructorPreflightRejectsInvalidPumpsBeforeStartingStorage()
+    {
+        using (var emptyRegistry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100)))
+        {
+            emptyRegistry.Seal();
+            using var emptyPump = new SuiteFramePump(emptyRegistry);
+            using var emptyStorage = new DecisionJournalRuntimeTestStorage();
+            Assert.Throws<InvalidOperationException>(() => Runtime(emptyPump, emptyStorage));
+            Assert.False(emptyStorage.ReconcileEntered.IsSet);
+        }
+
+        using var disposedRegistry = WaitingRegistry(
+            "journal.runtime.disposed-preflight",
+            new ThreadSafeTestClock(100));
+        using var disposedPump = new SuiteFramePump(disposedRegistry);
+        disposedPump.Dispose();
+        using var disposedStorage = new DecisionJournalRuntimeTestStorage();
+        Assert.Throws<ObjectDisposedException>(() => Runtime(disposedPump, disposedStorage));
+        Assert.False(disposedStorage.ReconcileEntered.IsSet);
+    }
+
+    [Fact]
+    public void PumpOwnershipRejectsReplacementUntilTheOldWriterIsTerminal()
+    {
+        using var registry = WaitingRegistry("journal.runtime.ownership", new ThreadSafeTestClock(100));
+        using var pump = new SuiteFramePump(registry);
+        using var firstStorage = new DecisionJournalRuntimeTestStorage(blockReconcile: true);
+        using var first = Runtime(pump, firstStorage);
+        Assert.True(firstStorage.ReconcileEntered.Wait(Deadline));
+
+        using var rejectedStorage = new DecisionJournalRuntimeTestStorage();
+        Assert.Throws<InvalidOperationException>(() => Runtime(pump, rejectedStorage));
+        Assert.False(rejectedStorage.ReconcileEntered.IsSet);
+        Assert.Throws<InvalidOperationException>(() => pump.Dispose());
+        Assert.False(pump.IsDisposed);
+
+        firstStorage.ReconcileRelease.Set();
+        AdvanceTo(first, DecisionJournalRuntimeState.Recording);
+        first.RequestStop();
+        AdvanceTo(first, DecisionJournalRuntimeState.Stopped);
+
+        using var replacementStorage = new DecisionJournalRuntimeTestStorage();
+        using var replacement = Runtime(pump, replacementStorage);
+        AdvanceTo(replacement, DecisionJournalRuntimeState.Recording);
+        replacement.RequestStop();
+        AdvanceTo(replacement, DecisionJournalRuntimeState.Stopped);
+    }
+
+    [Fact]
+    public void InitializationAndEmergencyBoundaryArmWithoutInventingTransitions()
+    {
+        using var registry = WaitingRegistry("journal.runtime.arming", new ThreadSafeTestClock(100));
+        using var pump = new SuiteFramePump(registry);
+        pump.SetEmergencyStop(true);
+        using var storage = new DecisionJournalRuntimeTestStorage(blockReconcile: true);
+        using var runtime = Runtime(pump, storage);
+        var ownerThread = Environment.CurrentManagedThreadId;
+
+        Assert.True(storage.ReconcileEntered.Wait(Deadline));
+        Assert.NotEqual(ownerThread, storage.ReconcileThreadId);
+        runtime.Tick();
+        Assert.Equal(DecisionJournalRuntimeState.Initializing, runtime.Snapshot.State);
+
+        storage.ReconcileRelease.Set();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Arming);
+        Assert.False(runtime.Snapshot.Attached);
+
+        pump.SetEmergencyStop(false);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+        Assert.True(runtime.Snapshot.Attached);
+
+        runtime.RequestStop();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+        Assert.Empty(storage.Segments);
+    }
+
+    [Fact]
+    public void CompletedActionCycleWritesProjectionWakeAndTerminalFacts()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("journal.runtime.completed")
+        {
+            ActionCount = 1,
+            EvaluationWake = WakePolicy.AfterBatch(new MonotonicDuration(17)),
+        };
+        using var registration = registry.Register(
+            definition,
+            new ExecutionConfig(1),
+            new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage();
+        using var runtime = Runtime(pump, storage);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
+        Assert.Equal(1, pump.PumpFrame(frame).ActionsAttempted);
+        runtime.RequestStop();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+
+        var decision = Assert.Single(
+            storage.ReadRecords(),
+            item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
+        Assert.True(decision.HasProjection);
+        Assert.True(decision.HasWake);
+        Assert.Equal(WakePolicy.AfterBatch(new MonotonicDuration(17)), decision.Wake);
+        Assert.Equal(BatchTerminalDisposition.Completed, decision.TerminalDisposition);
+        Assert.Equal(1, decision.ActionCount);
+        Assert.Equal(1, decision.CommittedActions);
+        Assert.Equal(1, decision.NativeCallsAttempted);
+        Assert.Equal(1, decision.MutationAttempts);
+        Assert.Equal(1, decision.MutationsCommitted);
+    }
+
+    [Fact]
+    public void BetweenFrameEmergencyWritesTransitionAndRejectedTerminal()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("journal.runtime.emergency") { ActionCount = 2 };
+        using var registration = registry.Register(
+            definition,
+            new ExecutionConfig(1),
+            new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage();
+        using var runtime = Runtime(pump, storage);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        _ = ServiceRunnerTestWait.PrepareBatch(pump, registration);
+        pump.SetEmergencyStop(true, EmergencyStopReason.SafetyInterlock);
+        runtime.RequestStop();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+
+        var records = storage.ReadRecords();
+        var transition = Assert.Single(
+            records,
+            item => item.Kind == DecisionJournalRecordKind.EmergencyEntered);
+        var decision = Assert.Single(
+            records,
+            item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
+        Assert.Equal((int)EmergencyStopReason.SafetyInterlock, transition.TransitionCode);
+        Assert.Equal(BatchTerminalDisposition.Rejected, decision.TerminalDisposition);
+        Assert.Equal(CommonActionResultCodes.EmergencyStop.Value, decision.TerminalResultCode);
+        Assert.Equal(2, decision.ActionCount);
+        Assert.Equal(0, decision.CommittedActions);
+        Assert.Equal(0, definition.ActionExecutionCount);
+    }
+
+    [Fact]
+    public void CommitFailureDetachesJournalAndLeavesPumpOperational()
+    {
+        using var registry = WaitingRegistry("journal.runtime.failure", new IncrementingTestClock(100));
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage(failCommit: true);
+        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        Assert.True(pump.PumpFrame(1).Accepted);
+        Assert.True(storage.CommitEntered.Wait(Deadline));
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Faulted);
+
+        Assert.False(runtime.Snapshot.Attached);
+        Assert.True(pump.PumpFrame(2).Accepted);
+    }
+
+    [Fact]
+    public void DisposeReturnsWhileStorageCommitIsBlockedAndReleasesTerminalOwnership()
+    {
+        using var registry = WaitingRegistry("journal.runtime.nonblocking-stop", new IncrementingTestClock(100));
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage(blockCommit: true);
+        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        Assert.True(pump.PumpFrame(1).Accepted);
+        Assert.True(storage.CommitEntered.Wait(Deadline));
+
+        using var stopReturned = new ManualResetEventSlim();
+        var watchdogReleasedStorage = 0;
+        var watchdog = new Thread(() =>
+        {
+            if (stopReturned.Wait(Deadline)) return;
+            Interlocked.Exchange(ref watchdogReleasedStorage, 1);
+            storage.CommitRelease.Set();
+        })
+        {
+            IsBackground = true,
+            Name = "Decision journal stop watchdog",
+        };
+        watchdog.Start();
+        runtime.Dispose();
+        stopReturned.Set();
+        Assert.True(watchdog.Join(Deadline));
+        Assert.Equal(0, Volatile.Read(ref watchdogReleasedStorage));
+        Assert.False(storage.CommitRelease.IsSet);
+        Assert.Equal(DecisionJournalRuntimeState.Stopping, runtime.Snapshot.State);
+
+        storage.CommitRelease.Set();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+
+        using var replacementStorage = new DecisionJournalRuntimeTestStorage();
+        using var replacement = Runtime(pump, replacementStorage);
+        AdvanceTo(replacement, DecisionJournalRuntimeState.Recording);
+        replacement.RequestStop();
+        AdvanceTo(replacement, DecisionJournalRuntimeState.Stopped);
+    }
+
+    [Fact]
+    public void OwnedPumpShutdownDoesNotWaitForTheJournalWriter()
+    {
+        using var registry = WaitingRegistry("journal.runtime.pump-shutdown", new IncrementingTestClock(100));
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage(blockCommit: true);
+        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        Assert.True(pump.PumpFrame(1).Accepted);
+        Assert.True(storage.CommitEntered.Wait(Deadline));
+
+        using var shutdownReturned = new ManualResetEventSlim();
+        var watchdogReleasedStorage = 0;
+        var watchdog = new Thread(() =>
+        {
+            if (shutdownReturned.Wait(Deadline)) return;
+            Interlocked.Exchange(ref watchdogReleasedStorage, 1);
+            storage.CommitRelease.Set();
+        })
+        {
+            IsBackground = true,
+            Name = "Decision journal pump-shutdown watchdog",
+        };
+        watchdog.Start();
+        runtime.DisposeWithPump();
+        shutdownReturned.Set();
+
+        Assert.True(watchdog.Join(Deadline));
+        Assert.Equal(0, Volatile.Read(ref watchdogReleasedStorage));
+        Assert.True(pump.IsDisposed);
+        Assert.False(storage.CommitRelease.IsSet);
+        Assert.Equal(DecisionJournalRuntimeState.Stopping, runtime.Snapshot.State);
+
+        storage.CommitRelease.Set();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+    }
+
+    private static ServiceCycleDecisionJournalRuntime Runtime(
+        SuiteFramePump pump,
+        DecisionJournalRuntimeTestStorage storage,
+        long checkpointTicks = 1_000) => new(
+            pump,
+            storage,
+            new DecisionJournalRunId(1),
+            maximumCommittedSegments: 4,
+            blockCount: 3,
+            new MonotonicDuration(checkpointTicks));
+
+    private static ServiceCycleRegistry WaitingRegistry(string id, IMonotonicClock clock)
+    {
+        var registry = new ServiceCycleRegistry(1, clock);
+        registry.Register(
+            new ExecutionServiceDefinition(id)
+            {
+                StartDecision = ServiceStartDecision.Wait(
+                    CommonServiceDecisionCodes.NotReady,
+                    WakePolicy.AfterDecision(new MonotonicDuration(5))),
+            },
+            new ExecutionConfig(1),
+            new LifecycleGeneration(1));
+        registry.Seal();
+        return registry;
+    }
+
+    private static void AdvanceTo(
+        ServiceCycleDecisionJournalRuntime runtime,
+        DecisionJournalRuntimeState expected)
+    {
+        var observed = runtime.Snapshot;
+        Assert.True(
+            SpinWait.SpinUntil(() =>
+            {
+                runtime.Tick();
+                observed = runtime.Snapshot;
+                return observed.State == expected;
+            }, Deadline),
+            $"Expected {expected}; observed {observed.State}, attached {observed.Attached}, " +
+            $"transport {observed.Transport.Status}.");
+    }
+}

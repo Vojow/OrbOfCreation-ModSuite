@@ -610,7 +610,7 @@ public sealed class AutoBuyDirtyResourceTests
         var first = new EngineCandidate("first", 1.0);
         var second = new EngineCandidate("second", 2.0);
         var catalog = new IncrementalCatalog(first, second);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -641,7 +641,7 @@ public sealed class AutoBuyDirtyResourceTests
         var candidate = new EngineCandidate("waiting", 10.0) { CanPurchaseValue = false };
         var excluded = new EngineCandidate("excluded", 1.0);
         var catalog = new IncrementalCatalog(candidate, excluded);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -830,7 +830,7 @@ public sealed class AutoBuyDirtyResourceTests
     {
         var candidate = new EngineCandidate("unresolved", 1.0) { CostsResolved = false };
         var catalog = new IncrementalCatalog(candidate, new EngineCandidate("other", 2.0));
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -858,7 +858,7 @@ public sealed class AutoBuyDirtyResourceTests
         var first = new EngineCandidate("first", 1.0, AutoBuyCandidateKind.Structure);
         var second = new EngineCandidate("second", 2.0, AutoBuyCandidateKind.Structure);
         var catalog = new IncrementalCatalog(first, second);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -1401,7 +1401,7 @@ public sealed class AutoBuyDirtyResourceTests
 
     private static void AssertCpuSlicedSelfSignalingGroupCompletes(
         AutoBuyCandidateKind kind,
-        Action<AutomataConfig> configure)
+        Action<BepInExAutomataConfiguration> configure)
     {
         var candidate = new EngineCandidate("candidate", 1.0, kind)
         {
@@ -1509,7 +1509,7 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(0, tupleCount);
         Assert.Empty(decoded);
 
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var reserve = new ReservePolicy(config).Evaluate(Array.Empty<ResourceAdmissionCost>());
         Assert.True(reserve.Passed);
         Assert.Equal(0.0, reserve.MaxCostToQuantityRatio);
@@ -1791,9 +1791,9 @@ public sealed class AutoBuyDirtyResourceTests
         Assert.Equal(1, target.PurchaseCalls);
     }
 
-    private static AutomataConfig ActiveConfig(string allowedUuid)
+    private static BepInExAutomataConfiguration ActiveConfig(string allowedUuid)
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;

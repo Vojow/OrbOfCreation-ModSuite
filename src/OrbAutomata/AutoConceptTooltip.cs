@@ -7,7 +7,7 @@ namespace OrbAutomata;
 internal sealed class AutoConceptTooltip : ITooltipable
 {
     private readonly AutoConceptToggleControl _control;
-    private AutomataConfig Config => _control.Config;
+    private AutomataConfiguration Config => _control.Config;
 
     public AutoConceptTooltip(AutoConceptToggleControl control)
     {
@@ -40,10 +40,10 @@ internal sealed class AutoConceptTooltip : ITooltipable
         TooltipNodeLayout.AddFeatureStatus(nodes, _control.Status, GetColor(), lineWidth: 42);
         nodes.AddRange(new TooltipNode[]
         {
-            new($"Slot management: {Config.AutoConceptSlotManagement.Value}"),
-            new($"Training period: {Config.AutoConceptTrainingPeriodSeconds.Value} seconds"),
-            new($"Rate reserve: {Config.AutoConceptRateReservePercent.Value:0.##}%"),
-            new($"Minimum resource fullness: {Config.AutoConceptMinimumResourcePercent.Value:0.##}%"),
+            new($"Slot management: {Config.AutoConcept.SlotManagement}"),
+            new($"Training period: {Config.AutoConcept.TrainingPeriodSeconds} seconds"),
+            new($"Rate reserve: {Config.AutoConcept.RateReservePercent:0.##}%"),
+            new($"Minimum resource fullness: {Config.AutoConcept.MinimumResourcePercent:0.##}%"),
             new("Click to toggle Auto Concept."),
         });
         return nodes;

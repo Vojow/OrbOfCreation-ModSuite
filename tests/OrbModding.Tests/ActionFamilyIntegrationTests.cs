@@ -15,39 +15,41 @@ public sealed class ActionFamilyIntegrationTests
     public void ExactAutobuyOrbGuidBlocksOnlyOverlappingAutomataFamilies()
     {
         var registry = new ActionFamilyOwnershipRegistry();
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyStructures.Value = true;
         config.AutoBuyUpgrades.Value = true;
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         config.AutoLevelSpells.Value = true;
+        config.AutoHarvestMode.Value = AutoHarvestOperationMode.Active;
         using var ownership = new AutomataActionFamilyOwnership(registry);
 
         ownership.RefreshLoadedPluginInventory(
             1,
             guid => guid == AutomataActionFamilyOwnership.KnownAutoBuyPluginGuid);
-        ownership.Refresh(config, lifecycleReady: true);
+        ownership.Refresh(config.Current, lifecycleReady: true);
 
         Assert.False(ownership.OwnsAutoBuy(AutoBuyCandidateKind.Structure));
         Assert.False(ownership.OwnsAutoBuy(AutoBuyCandidateKind.Upgrade));
         Assert.True(ownership.OwnsCast);
         Assert.True(ownership.OwnsConcept);
         Assert.True(ownership.OwnsSpellLevel);
+        Assert.True(ownership.OwnsHarvest);
     }
 
     [Fact]
     public void SimilarUnknownGuidDoesNotClaimKnownExternalFamilies()
     {
         var registry = new ActionFamilyOwnershipRegistry();
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyStructures.Value = true;
         config.AutoBuyUpgrades.Value = true;
         using var ownership = new AutomataActionFamilyOwnership(registry);
 
         ownership.RefreshLoadedPluginInventory(1, guid => guid == "IngoH.OrbOfCreation.AutoBuyOrb.Fork");
-        ownership.Refresh(config, lifecycleReady: true);
+        ownership.Refresh(config.Current, lifecycleReady: true);
 
         Assert.True(ownership.OwnsAutoBuy(AutoBuyCandidateKind.Structure));
         Assert.True(ownership.OwnsAutoBuy(AutoBuyCandidateKind.Upgrade));
@@ -57,7 +59,7 @@ public sealed class ActionFamilyIntegrationTests
     public void PersistentKnownConflictRetriesClaimsOnlyAtBoundedIntervals()
     {
         var registry = new ActionFamilyOwnershipRegistry();
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyStructures.Value = true;
         config.AutoBuyUpgrades.Value = true;
@@ -65,14 +67,14 @@ public sealed class ActionFamilyIntegrationTests
         ownership.RefreshLoadedPluginInventory(
             1,
             guid => guid == AutomataActionFamilyOwnership.KnownAutoBuyPluginGuid);
-        ownership.Refresh(config, lifecycleReady: true, frame: 0);
+        ownership.Refresh(config.Current, lifecycleReady: true, frame: 0);
         var initialAttempts = ownership.ClaimAttempts;
 
         for (var frame = 1; frame < 60; frame++)
-            ownership.Refresh(config, lifecycleReady: true, frame);
+            ownership.Refresh(config.Current, lifecycleReady: true, frame);
 
         Assert.Equal(initialAttempts, ownership.ClaimAttempts);
-        ownership.Refresh(config, lifecycleReady: true, frame: 60);
+        ownership.Refresh(config.Current, lifecycleReady: true, frame: 60);
         Assert.Equal(initialAttempts + 2, ownership.ClaimAttempts);
     }
 
@@ -80,20 +82,42 @@ public sealed class ActionFamilyIntegrationTests
     public void AutomataConfigurationDisableReleasesClaims()
     {
         var registry = new ActionFamilyOwnershipRegistry();
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         using var ownership = new AutomataActionFamilyOwnership(registry);
-        ownership.Refresh(config, lifecycleReady: true);
+        ownership.Refresh(config.Current, lifecycleReady: true);
         Assert.True(ownership.OwnsCast);
 
         config.Enabled.Value = false;
-        ownership.Refresh(config, lifecycleReady: true);
+        ownership.Refresh(config.Current, lifecycleReady: true);
 
         using var replacement = Claim(
             registry,
             new FeatureStatusKey("tests", "replacement-cast"),
             AutomationActionFamily.SpellCast);
         Assert.True(replacement.IsHeld);
+    }
+
+    [Fact]
+    public void HarvestClaimIsRevokedBeforeAnotherNativeTransactionCanStart()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoHarvestMode.Value = AutoHarvestOperationMode.Active;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.True(ownership.OwnsHarvest);
+        Assert.True(ownership.TryCaptureHarvestMutationPermit());
+
+        using var external = registry.RegisterKnownExternal(
+            new ActionFamilyOwner(
+                new FeatureStatusKey("tests.external", "Harvest"),
+                "External Harvest"),
+            new[] { AutomationActionFamily.HarvestAction });
+
+        Assert.False(ownership.OwnsHarvest);
+        Assert.False(ownership.TryCaptureHarvestMutationPermit());
     }
 
     [Fact]
@@ -132,7 +156,7 @@ public sealed class ActionFamilyIntegrationTests
     [Fact]
     public void AutoBuyFinalGateRejectsOwnershipLostDuringAdmission()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyStructures.Value = true;
         config.AutoBuyUpgrades.Value = false;
@@ -155,7 +179,7 @@ public sealed class ActionFamilyIntegrationTests
     [Fact]
     public void AutoCastFinalGateRejectsOwnershipLostDuringAdmission()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         var owned = true;
         var candidate = new OwnershipChangingCastCandidate(() => owned = false);
@@ -176,12 +200,12 @@ public sealed class ActionFamilyIntegrationTests
     [Fact]
     public void PartialAutoBuyOwnershipImmediatelyReportsDegradedWhileIdle()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyStructures.Value = true;
         config.AutoBuyUpgrades.Value = true;
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         using var engine = new AutoBuyEngine(
             config,
             new EmptyBuyCatalog(),

@@ -6,6 +6,7 @@
     <AssemblyName>OrbModding.GameContractTests</AssemblyName>
     <RequireGameReferences>false</RequireGameReferences>
     <UseGameStubs Condition="'$(GameRoot)' == '' and '$(UseGameStubs)' == ''">true</UseGameStubs>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>

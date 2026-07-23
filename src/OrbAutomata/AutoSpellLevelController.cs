@@ -4,9 +4,9 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-internal sealed class AutoSpellLevelController : IDisposable
+internal sealed class AutoSpellLevelController : IAutomataService
 {
-    private readonly AutomataConfig _config;
+    private readonly IAutomataConfigurationSource _config;
     private readonly ReflectionSpellLevelRuntime _runtime;
     private readonly ManualLogSource _log;
     private readonly SuitePerformanceCoordinator _coordinator;
@@ -27,7 +27,7 @@ internal sealed class AutoSpellLevelController : IDisposable
     private NativeMutationCallOutcome _activeMutationOutcome;
 
     public AutoSpellLevelController(
-        AutomataConfig config,
+        IAutomataConfigurationSource config,
         ReflectionSpellLevelRuntime runtime,
         ManualLogSource log,
         SuitePerformanceCoordinator coordinator,
@@ -56,13 +56,15 @@ internal sealed class AutoSpellLevelController : IDisposable
             mutationIdentity.ExecutionKind);
     }
 
+    private AutomataConfiguration Config => _config.Current;
+
     public AutoSpellLevelCapability Capability => _capability;
 
     public void Tick(float unscaledDeltaTime)
     {
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _elapsedSeconds += elapsed;
-        var enabled = _config.CanStartAutoBuyActively && _config.AutoLevelSpells.Value;
+        var enabled = Config.CanStartAutoBuyActively && Config.AutoBuy.AutoLevelSpells;
         ObserveConfigurationStatus();
         if (enabled && !_ownsActionFamily())
         {
@@ -192,7 +194,7 @@ internal sealed class AutoSpellLevelController : IDisposable
         var candidate = _pending;
         var capability = _pendingCapability;
         _pending = null;
-        if (candidate is null || !_config.CanStartAutoBuyActively || !_config.AutoLevelSpells.Value)
+        if (candidate is null || !Config.CanStartAutoBuyActively || !Config.AutoBuy.AutoLevelSpells)
             return NoMutationCompletion();
         if (!_ownsActionFamily())
         {
@@ -234,7 +236,7 @@ internal sealed class AutoSpellLevelController : IDisposable
             }
             return _activeMutationOutcome.ToWorkCompletion();
         }
-        if (_config.IsOperationalLoggingEnabled)
+        if (Config.Diagnostics.IsOperationalLoggingEnabled)
             _log.LogAutomataInfo(capability == AutoSpellLevelCapability.All
                 ? "Auto Spell Leveling completed the native level-all action."
                 : $"Auto Spell Leveling raised {candidate.DisplayName} from mastery level {candidate.MasteryLevel}.");
@@ -261,7 +263,7 @@ internal sealed class AutoSpellLevelController : IDisposable
 
     private void ObserveConfigurationStatus()
     {
-        if (!_config.AutoLevelSpells.Value)
+        if (!Config.AutoBuy.AutoLevelSpells)
         {
             _featureStatus?.Observe(
                 false,
@@ -270,7 +272,7 @@ internal sealed class AutoSpellLevelController : IDisposable
                 "Spell Leveling is disabled by configuration.");
             return;
         }
-        if (_config.AutoBuyMode.Value != AutoBuyOperationMode.Active)
+        if (Config.AutoBuy.Mode != AutoBuyOperationMode.Active)
         {
             _featureStatus?.Observe(
                 true,
@@ -279,7 +281,7 @@ internal sealed class AutoSpellLevelController : IDisposable
                 "Auto Buy is disabled by configuration.");
             return;
         }
-        if (!_config.CanStartAutoBuyActively)
+        if (!Config.CanStartAutoBuyActively)
         {
             _featureStatus?.Observe(
                 true,
@@ -309,7 +311,7 @@ internal sealed class AutoSpellLevelController : IDisposable
         _pending = null;
     }
 
-    internal void CancelPreparedWork()
+    public void CancelPreparedWork()
     {
         _pending = null;
         _wasEnabled = false;

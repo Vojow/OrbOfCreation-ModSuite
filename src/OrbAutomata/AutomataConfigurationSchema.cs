@@ -17,7 +17,6 @@ internal static class AutomataConfigurationSchema
     internal static readonly ConfigurationKey LegacyRepeatWhileAffordable = new("AutoBuy", "RepeatWhileAffordable");
     internal static readonly ConfigurationKey LegacyStructureRepeatMode = new("AutoBuy", "StructureRepeatMode");
     internal static readonly ConfigurationKey LegacyFixedStructureLevels = new("AutoBuy", "FixedStructureLevelsPerCandidate");
-
     internal static readonly IReadOnlyList<ConfigurationKey> DiscardedObsoleteKeys = new[]
     {
         new ConfigurationKey("AutoBuy", "ActivePurchaseLimitPerSession"),
@@ -50,12 +49,17 @@ internal static class AutomataConfigurationSchema
             LegacyIntervalMinutes,
         };
         knownKeys.AddRange(DiscardedObsoleteKeys);
-        return new ConfigurationSchemaPlan(2, new[]
+        return new ConfigurationSchemaPlan(3, new[]
         {
             new ConfigurationMigrationStep(0, 1, knownKeys, MigrateVersionZero),
             new ConfigurationMigrationStep(
                 1,
                 2,
+                Array.Empty<ConfigurationKey>(),
+                static _ => { }),
+            new ConfigurationMigrationStep(
+                2,
+                3,
                 new[]
                 {
                     PurchaseGrouping,

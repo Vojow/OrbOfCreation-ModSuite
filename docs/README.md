@@ -15,12 +15,11 @@ Choose the path that matches what you are trying to do.
 ## Contributors and maintainers
 
 - [Development setup](development/setup.md)
-- [Testing documentation hub](testing/README.md)
+- [Testing hub](testing/README.md)
 - [Repository test strategy](testing/strategy.md)
-- [Per-module test guides](testing/README.md#module-guides)
 - [Headless E2E simulation](testing/headless-e2e.md)
 - [Runtime validation protocol](testing/runtime-validation.md)
-- [Orb Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
+- [Orb Mentor interactive runtime checklist](development/mentor-runtime-validation.md)
 - [Release process](development/releases.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)
@@ -38,10 +37,12 @@ Research pages distinguish **Verified**, **Inferred**, and **Candidate** finding
 
 - [Project roadmap](plans/roadmap.md)
 - [Plan index and lifecycle status](plans/README.md)
+- [Runtime architecture dossier](runtime-architecture/README.md)
+- [Accepted service-cycle runtime](runtime-architecture/service-cycle-runtime.md)
+- [Accepted deterministic replay target](runtime-architecture/replay.md)
 - [Mod suite performance architecture](plans/performance-suite.md)
-- [Auto Concept mastery-balancing architecture](plans/auto-concept.md)
-- [Orb Mentor artifacts and alchemy design](plans/mentor-artifacts-alchemy.md)
+- [Auto Buy ServiceCycle migration](plans/autobuy-service-cycle-port.md)
 
 Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.
 
-Experimental Orb Chronomancer and Orb Achievement Resonance documentation is intentionally absent from this supported branch. Their source, tests, and design notes live on `codex/experimental-chronomancer-resonance` until an explicit lifecycle promotion.
+Experimental Orb Chronomancer and Orb Achievement Resonance documentation is intentionally absent until an explicit lifecycle promotion.

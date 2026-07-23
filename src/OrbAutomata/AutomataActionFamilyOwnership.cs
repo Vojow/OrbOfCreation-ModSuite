@@ -17,6 +17,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.ConceptAssignment };
     private static readonly AutomationActionFamily[] SpellLevelFamilies =
         { AutomationActionFamily.SpellLevelPurchase };
+    private static readonly AutomationActionFamily[] HarvestFamilies =
+        { AutomationActionFamily.HarvestAction };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -26,6 +28,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private ActionFamilyLeaseSet? _cast;
     private ActionFamilyLeaseSet? _concept;
     private ActionFamilyLeaseSet? _spellLevel;
+    private ActionFamilyLeaseSet? _harvest;
     private IDisposable? _knownExternal;
     private int _pluginInventoryCount = -1;
     private long _structuresRetryFrame;
@@ -33,6 +36,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private long _castRetryFrame;
     private long _conceptRetryFrame;
     private long _spellLevelRetryFrame;
+    private long _harvestRetryFrame;
 
     internal int ClaimAttempts { get; private set; }
     public bool KnownAutoBuyLoaded { get; private set; }
@@ -50,6 +54,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     public bool OwnsCast => _cast?.IsHeld == true;
     public bool OwnsConcept => _concept?.IsHeld == true;
     public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;
+    public bool OwnsHarvest => _harvest?.IsHeld == true;
+    public bool TryCaptureHarvestMutationPermit() => _harvest?.TryCaptureMutationPermit() == true;
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -73,14 +79,14 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         }
     }
 
-    public void Refresh(AutomataConfig config, bool lifecycleReady, long frame = 0)
+    public void Refresh(AutomataConfiguration config, bool lifecycleReady, long frame = 0)
     {
-        var suiteReady = lifecycleReady && config.Enabled.Value;
+        var suiteReady = lifecycleReady && config.General.Enabled;
         RefreshLease(ref _structures, ref _structuresRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoBuyStructures.Value,
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeStructures,
             "AutoBuy.Structures", "Automata Auto Buy Structures", StructureFamilies);
         RefreshLease(ref _upgrades, ref _upgradesRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoBuyUpgrades.Value,
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades,
             "AutoBuy.Upgrades", "Automata Auto Buy Upgrades", UpgradeFamilies);
         RefreshLease(ref _cast, ref _castRetryFrame, frame,
             suiteReady && config.CanStartAutoCastActively,
@@ -89,12 +95,17 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             suiteReady && config.CanStartAutoConceptActively,
             "AutoConcept", "Automata Auto Concept", ConceptFamilies);
         RefreshLease(ref _spellLevel, ref _spellLevelRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoLevelSpells.Value,
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.AutoLevelSpells,
             "SpellLevel", "Automata Spell Leveling", SpellLevelFamilies);
+        RefreshLease(ref _harvest, ref _harvestRetryFrame, frame,
+            suiteReady && config.CanStartAutoHarvestActively &&
+            (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees),
+            "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
     }
 
     public void ReleaseLifecycleClaims()
     {
+        Release(ref _harvest);
         Release(ref _spellLevel);
         Release(ref _concept);
         Release(ref _cast);
@@ -154,5 +165,6 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _castRetryFrame = 0;
         _conceptRetryFrame = 0;
         _spellLevelRetryFrame = 0;
+        _harvestRetryFrame = 0;
     }
 }

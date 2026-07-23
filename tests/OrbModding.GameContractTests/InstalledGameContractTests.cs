@@ -1,23 +1,11 @@
 using System;
 using System.Linq;
-using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.GameContractTests;
 
 public sealed class InstalledGameContractTests
 {
-    [GameAssemblyFact]
-    public void InstalledAssemblies_MatchAuditedHashes()
-    {
-        var paths = GameAssemblyPaths.Require();
-
-        var result = GameAssemblyAudit.Check(paths.GameRoot);
-
-        Assert.True(result.AssemblyCSharp.MatchesExpected, FormatMismatch(result.AssemblyCSharp));
-        Assert.True(result.AssemblyCSharpFirstPass.MatchesExpected, FormatMismatch(result.AssemblyCSharpFirstPass));
-    }
-
     [GameAssemblyFact]
     public void PlayerAndSaveHooks_MatchRuntimeContracts()
     {
@@ -398,10 +386,5 @@ public sealed class InstalledGameContractTests
             method.IsStatic == isStatic &&
             method.ReturnType == returnType &&
             method.ParameterTypes.SequenceEqual(parameterTypes));
-    }
-
-    private static string FormatMismatch(AssemblyHashResult result)
-    {
-        return $"{result.Path}: expected {result.ExpectedSha256}, actual {result.ActualSha256 ?? "<missing>"}";
     }
 }

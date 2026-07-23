@@ -55,7 +55,7 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         var modConfigFile = new ConfigFile();
         var modConfig = ModConfigSettings.TryBind(modConfigFile);
         var automataFile = new ConfigFile();
-        var automata = AutomataConfig.TryBind(automataFile);
+        var automata = BepInExAutomataConfiguration.TryBind(automataFile);
 
         Assert.True(mentor.Success);
         Assert.True(modConfig.Success);
@@ -73,7 +73,7 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         var file = new ConfigFile();
         file.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
 
-        var migration = AutomataConfig.TryBind(file);
+        var migration = BepInExAutomataConfiguration.TryBind(file);
         var catalog = ConfigCatalog.Build(new[]
         {
             new ConfigPluginSource(PluginIds.AutomataGuid, PluginIds.AutomataName, PluginIds.AutomataVersion, file),

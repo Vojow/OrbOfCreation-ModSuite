@@ -46,7 +46,7 @@ public sealed class AutomataTests
     [Fact]
     public void DefaultConfiguration_IsReadyForReleaseUse()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
 
         Assert.Equal(AutoBuyOperationMode.Active, config.AutoBuyMode.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.AutoBuyAffordability.Value);
@@ -60,16 +60,22 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(AutoHarvestOperationMode.Disabled, config.AutoHarvestMode.Value);
+        Assert.True(config.AutoHarvestFruitTrees.Value);
+        Assert.True(config.AutoHarvestTreasureTrees.Value);
+        Assert.Equal(1.0f, config.AutoHarvestEvaluationIntervalSeconds.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
+        Assert.False(config.Replay.EnableAutoHarvestCapture.Value);
         Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
-        Assert.True(config.CanStartAutoBuyActively);
-        Assert.False(config.CanStartAutoCastActively);
-        Assert.False(config.CanStartAutoConceptActively);
+        Assert.True(config.Current.CanStartAutoBuyActively);
+        Assert.False(config.Current.CanStartAutoCastActively);
+        Assert.False(config.Current.CanStartAutoConceptActively);
+        Assert.False(config.Current.CanStartAutoHarvestActively);
     }
 
     [Fact]
@@ -78,10 +84,10 @@ public sealed class AutomataTests
         var configFile = new ConfigFile();
         configFile.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
 
-        var config = AutomataConfig.Bind(configFile);
+        var config = BepInExAutomataConfiguration.Bind(configFile);
 
         Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
-        Assert.True(config.CanStartAutoConceptActively);
+        Assert.True(config.Current.CanStartAutoConceptActively);
     }
 
     [Theory]
@@ -97,7 +103,7 @@ public sealed class AutomataTests
             "RebalanceIntervalMinutes",
             legacyMinutes.ToString(CultureInfo.InvariantCulture));
 
-        var config = AutomataConfig.Bind(configFile);
+        var config = BepInExAutomataConfiguration.Bind(configFile);
 
         Assert.Equal(expectedSeconds, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.DoesNotContain(
@@ -111,7 +117,7 @@ public sealed class AutomataTests
         var configFile = new ConfigFile();
         configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
 
-        var config = AutomataConfig.Bind(configFile);
+        var config = BepInExAutomataConfiguration.Bind(configFile);
 
         Assert.Equal(10, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.DoesNotContain(
@@ -127,7 +133,7 @@ public sealed class AutomataTests
         configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
         configFile.SeedSerialized("AutoConcept", "RebalanceIntervalMinutes", "2.0");
 
-        var config = AutomataConfig.Bind(configFile);
+        var config = BepInExAutomataConfiguration.Bind(configFile);
 
         Assert.Equal(45, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.DoesNotContain(
@@ -139,7 +145,7 @@ public sealed class AutomataTests
     [Fact]
     public void AutoConceptToggleSwitchesModeWithoutReplacingConfiguredIntent()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var toggle = new AutoConceptToggleControl(config);
 
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
@@ -394,7 +400,7 @@ public sealed class AutomataTests
     [Fact]
     public void ReservePolicy_RequiresCostPlusTheLargestReserveFloor()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "100";
         config.RelativeReserveMultiplier.Value = 2.0f;
         var policy = new ReservePolicy(config);

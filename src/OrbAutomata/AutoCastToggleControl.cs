@@ -10,16 +10,16 @@ internal enum AutoCastToggleVisualState
 
 internal sealed class AutoCastToggleControl
 {
-    private readonly AutomataConfig _config;
+    private readonly IAutomataConfigurationEditor _config;
     private readonly System.Func<FeatureStatusSnapshot>? _readStatus;
 
-    public AutoCastToggleControl(AutomataConfig config, System.Func<FeatureStatusSnapshot>? readStatus = null)
+    public AutoCastToggleControl(IAutomataConfigurationEditor config, System.Func<FeatureStatusSnapshot>? readStatus = null)
     {
         _config = config;
         _readStatus = readStatus;
     }
 
-    internal AutomataConfig Config => _config;
+    internal AutomataConfiguration Config => _config.Current;
     internal FeatureStatusSnapshot Status => _readStatus?.Invoke() ?? CreateFallbackStatus();
 
     public AutoCastToggleVisualState State
@@ -32,26 +32,24 @@ internal sealed class AutoCastToggleControl
 
     public void Toggle()
     {
-        _config.AutoCastMode.Value = _config.AutoCastMode.Value == AutoCastOperationMode.Active
-            ? AutoCastOperationMode.Disabled
-            : AutoCastOperationMode.Active;
+        _config.ToggleAutoCast();
     }
 
     private FeatureStatusSnapshot CreateFallbackStatus()
     {
-        var enabled = _config.AutoCastMode.Value == AutoCastOperationMode.Active;
+        var enabled = Config.AutoCast.Mode == AutoCastOperationMode.Active;
         return new FeatureStatusSnapshot(
             new FeatureStatusKey(PluginIds.AutomataGuid, AutomataFeatureStatuses.AutoCastFeatureId),
             "Auto Cast",
             enabled,
             !enabled
                 ? FeatureStatusState.ConfigurationDisabled
-                : !_config.CanStartAutoCastActively
+                : !Config.CanStartAutoCastActively
                     ? FeatureStatusState.TemporarilyBlocked
                     : FeatureStatusState.Operational,
             !enabled
                 ? new FeatureStatusReason(FeatureStatusReasonCode.ConfigurationDisabled, "Auto Cast is disabled by configuration.")
-                : !_config.CanStartAutoCastActively
+                : !Config.CanStartAutoCastActively
                     ? new FeatureStatusReason(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.")
                     : default);
     }

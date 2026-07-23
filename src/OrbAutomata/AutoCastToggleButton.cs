@@ -129,7 +129,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             }
 
             var hoverTooltip = root.AddComponent<HoverTooltip>();
-            hoverTooltip.Setup(new AutoCastTooltip(control.Config, control));
+            hoverTooltip.Setup(new AutoCastTooltip(control));
 
             var button = root.GetComponent<Button>();
             if (button is null)

@@ -5,6 +5,10 @@ using BepInEx.Bootstrap;
 using BepInEx.Logging;
 using HarmonyLib;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using UnityEngine.SceneManagement;
 
 namespace OrbAutomata;
@@ -15,13 +19,15 @@ public sealed class Plugin : BaseUnityPlugin
     private const float UiRetryIntervalSeconds = 5.0f;
     private const string AlchemyRecipeTypeName = "AlchemyRecipeSO";
     private Harmony? _harmony;
-    private AutomataConfig? _config;
+    private BepInExAutomataConfiguration? _config;
     private AutomataFeatureStatuses? _featureStatuses;
+    private readonly AutomataServiceRegistry _services = new();
     private AutoBuyEngine? _autoBuyEngine;
     private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
     private AutoSpellLevelController? _autoSpellLevelController;
     private AutomataActionFamilyOwnership? _actionFamilyOwnership;
+    private AutoHarvestServiceCycleActivation? _autoHarvestActivation;
     private AutoCastToggleControl? _autoCastToggleControl;
     private AutoCastToggleButton? _autoCastToggleButton;
     private AutoBuyToggleControl? _autoBuyToggleControl;
@@ -42,6 +48,7 @@ public sealed class Plugin : BaseUnityPlugin
     private GameplayInvalidationBus? _invalidationBus;
     private IDisposable? _conceptInventorySubscription;
     private IDisposable? _conceptProgressionSubscription;
+    private IDisposable? _autoHarvestConfigurationSubscription;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
 
@@ -50,7 +57,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void Awake()
     {
         Log = Logger;
-        var configuration = AutomataConfig.TryBind(Config);
+        var configuration = BepInExAutomataConfiguration.TryBind(Config);
         if (!configuration.Success)
         {
             Logger.LogError(configuration.Status.Reason);
@@ -60,12 +67,13 @@ public sealed class Plugin : BaseUnityPlugin
         foreach (var diagnostic in configuration.Diagnostics)
             Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
         _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
-        _featureStatuses = new AutomataFeatureStatuses(_config, _lifecycleGeneration);
+        _featureStatuses = new AutomataFeatureStatuses(_config.Current, _lifecycleGeneration);
 
         if (!LogAssemblyStatus())
         {
             _nativeContractsAvailable = false;
             _featureStatuses.ObserveContractUnavailable(
+                _config.Current,
                 _lifecycleGeneration,
                 "Installed game assemblies do not match Automata's audited native contracts.");
             Log.LogAutomataError(
@@ -77,7 +85,7 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
-        if (!_config.Enabled.Value)
+        if (!_config.Current.General.Enabled)
         {
             Log.LogAutomataInfo("Automata is disabled by configuration.");
             return;
@@ -102,41 +110,70 @@ public sealed class Plugin : BaseUnityPlugin
             () => _autoBuyEngine?.LatestDecision,
             () => _featureStatuses.AutoBuy.Current,
             () => _featureStatuses.SpellLevel.Current);
-        _autoBuyEngine = new AutoBuyEngine(
-            _config,
-            new ReflectionAutoBuyCatalog(),
-            reservePolicy,
-            Log,
-            coordinator: SuitePerformanceCoordinator.Shared,
-            readFrameIdentity: () => UnityEngine.Time.frameCount,
-            featureStatus: _featureStatuses.AutoBuy,
-            ownsActionFamily: kind => _actionFamilyOwnership?.OwnsAutoBuy(kind) == true);
-        _autoCastEngine = new AutoCastEngine(
-            _config,
-            new ReflectionAutoCastCatalog(),
-            reservePolicy,
-            new ResourceFullnessPolicy(),
-            Log,
-            coordinator: SuitePerformanceCoordinator.Shared,
-            readFrameIdentity: () => UnityEngine.Time.frameCount,
-            featureStatus: _featureStatuses.AutoCast,
-            ownsActionFamily: () => _actionFamilyOwnership?.OwnsCast == true);
-        _autoConceptController = new AutoConceptController(
-            _config,
-            new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
-            Log,
-            SuitePerformanceCoordinator.Shared,
-            () => UnityEngine.Time.frameCount,
-            _featureStatuses.AutoConcept,
-            () => _actionFamilyOwnership?.OwnsConcept == true);
-        _autoSpellLevelController = new AutoSpellLevelController(
-            _config,
-            new ReflectionSpellLevelRuntime(),
-            Log,
-            SuitePerformanceCoordinator.Shared,
-            () => UnityEngine.Time.frameCount,
-            _featureStatuses.SpellLevel,
-            () => _actionFamilyOwnership?.OwnsSpellLevel == true);
+        Func<long> readAutoHarvestLifecycleEpoch =
+            () => GameLifecycleMonitor.Shared.Current.Generation;
+        var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
+        AutomataProductionComposition.Register(
+            _services,
+            tryCreateAutoHarvest: () => _autoHarvestActivation =
+                new AutoHarvestServiceCycleActivation(
+                    IsLifecycleReady,
+                    () => AutoHarvestProductionComposition.TryCreate(
+                        _config.Current,
+                        new AutoHarvestServiceCycleDependencies(
+                            () => UnityEngine.Time.frameCount,
+                            readAutoHarvestLifecycleEpoch,
+                            autoHarvestRegistryResolver,
+                            ownsActionFamily: () => _actionFamilyOwnership?.OwnsHarvest == true,
+                            tryCaptureMutationPermit: () =>
+                                _actionFamilyOwnership?.TryCaptureHarvestMutationPermit() == true,
+                            pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
+                            runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
+                            featureStatus: _featureStatuses.AutoHarvest,
+                            replay: AutoHarvestReplayPathPolicy.Create(
+                                _config.Current.Replay.EnableAutoHarvestCapture,
+                                Log),
+                            observability: new AutomataServiceCycleObservabilityOptions(
+                                AutomataFullTracePathPolicy.Create(
+                                    ManualFullTraceControlRegistry.Shared),
+                                AutomataDecisionJournalPathPolicy.Create(
+                                    DecisionJournalStatusRegistry.Shared))),
+                        Log)),
+            createAutoBuy: () => _autoBuyEngine = new AutoBuyEngine(
+                _config,
+                new ReflectionAutoBuyCatalog(),
+                reservePolicy,
+                Log,
+                coordinator: SuitePerformanceCoordinator.Shared,
+                readFrameIdentity: () => UnityEngine.Time.frameCount,
+                featureStatus: _featureStatuses.AutoBuy,
+                ownsActionFamily: kind => _actionFamilyOwnership?.OwnsAutoBuy(kind) == true),
+            createAutoCast: () => _autoCastEngine = new AutoCastEngine(
+                _config,
+                new ReflectionAutoCastCatalog(),
+                reservePolicy,
+                new ResourceFullnessPolicy(),
+                Log,
+                coordinator: SuitePerformanceCoordinator.Shared,
+                readFrameIdentity: () => UnityEngine.Time.frameCount,
+                featureStatus: _featureStatuses.AutoCast,
+                ownsActionFamily: () => _actionFamilyOwnership?.OwnsCast == true),
+            createAutoConcept: () => _autoConceptController = new AutoConceptController(
+                _config,
+                new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
+                Log,
+                SuitePerformanceCoordinator.Shared,
+                () => UnityEngine.Time.frameCount,
+                _featureStatuses.AutoConcept,
+                () => _actionFamilyOwnership?.OwnsConcept == true),
+            createSpellLevel: () => _autoSpellLevelController = new AutoSpellLevelController(
+                _config,
+                new ReflectionSpellLevelRuntime(),
+                Log,
+                SuitePerformanceCoordinator.Shared,
+                () => UnityEngine.Time.frameCount,
+                _featureStatuses.SpellLevel,
+                () => _actionFamilyOwnership?.OwnsSpellLevel == true));
         _autoConceptToggleControl = new AutoConceptToggleControl(
             _config,
             () => _featureStatuses.AutoConcept.Current);
@@ -159,25 +196,35 @@ public sealed class Plugin : BaseUnityPlugin
                 GameplayInvalidationDomains.AutomataConcepts),
             OnAutoConceptProgressionInvalidated,
             "OrbAutomata.AutoConcept.Progression");
+        _autoHarvestConfigurationSubscription = _invalidationBus.Subscribe(
+            new GameplayInvalidationFilter(
+                GameplayInvalidationKind.Configuration,
+                GameplayInvalidationDomains.ModConfig),
+            OnAutoHarvestConfigurationInvalidated,
+            "OrbAutomata.AutoHarvest.Configuration");
+        var runtimeConfig = _config.Current;
         Log.LogAutomataInfo(
-            $"Automata loaded. AutoBuyMode={_config.AutoBuyMode.Value}, " +
-            $"StructureAffordability={_config.AutoBuyAffordability.Value}, " +
-            $"UpgradeAffordability={_config.UpgradeAffordability.Value}, " +
-            $"AutoBuyAllowedUuidCount={CountConfiguredUuids(_config.AllowedAutoBuyUuids.Value)}, " +
-            $"AutoBuyCandidateCap={_config.AutoBuyMaxCandidatesPerScan.Value}, " +
-            $"AutoBuyBatchSizing={_config.AutoBuyBatchSizing.Value}, " +
-            $"AutoBuyBatchSize={_config.MaxPurchasesPerBatch.Value}, " +
-            $"AutoBuyPurchaseGrouping={_config.PurchaseGrouping.Value}, " +
-            $"AutoBuyFixedGroupSize={_config.FixedGroupSize.Value}, " +
-            $"AutoCastMode={_config.AutoCastMode.Value}, " +
-            $"AutoCastFullCharge={_config.AutoCastFullCharge.Value}, " +
-            $"AutoCastStartResourcePercent={_config.AutoCastStartResourcePercent.Value}, " +
-            $"AutoConceptMode={_config.AutoConceptMode.Value}, " +
-            $"AutoConceptSlotManagement={_config.AutoConceptSlotManagement.Value}, " +
-            $"AutoLevelSpells={_config.AutoLevelSpells.Value}, " +
-            $"PrioritizeCostAndQualityStructures={_config.PrioritizeCostAndQualityStructures.Value}, " +
-            $"OperationalLogging={_config.IsOperationalLoggingEnabled}, " +
-            $"DecisionLogLevel={_config.DecisionLogLevel.Value}.");
+            $"Automata loaded. AutoBuyMode={runtimeConfig.AutoBuy.Mode}, " +
+            $"StructureAffordability={runtimeConfig.AutoBuy.StructureAffordability}, " +
+            $"UpgradeAffordability={runtimeConfig.AutoBuy.UpgradeAffordability}, " +
+            $"AutoBuyAllowedUuidCount={CountConfiguredUuids(runtimeConfig.AutoBuy.AllowedUuids)}, " +
+            $"AutoBuyCandidateCap={runtimeConfig.AutoBuy.MaxCandidatesPerScan}, " +
+            $"AutoBuyBatchSizing={runtimeConfig.AutoBuy.BatchSizing}, " +
+            $"AutoBuyBatchSize={runtimeConfig.AutoBuy.MaxPurchasesPerBatch}, " +
+            $"AutoBuyPurchaseGrouping={runtimeConfig.AutoBuy.PurchaseGrouping}, " +
+            $"AutoBuyFixedGroupSize={runtimeConfig.AutoBuy.FixedGroupSize}, " +
+            $"AutoCastMode={runtimeConfig.AutoCast.Mode}, " +
+            $"AutoCastFullCharge={runtimeConfig.AutoCast.FullCharge}, " +
+            $"AutoCastStartResourcePercent={runtimeConfig.AutoCast.StartResourcePercent}, " +
+            $"AutoConceptMode={runtimeConfig.AutoConcept.Mode}, " +
+            $"AutoConceptSlotManagement={runtimeConfig.AutoConcept.SlotManagement}, " +
+            $"AutoHarvestMode={runtimeConfig.AutoHarvest.Mode}, " +
+            $"AutoHarvestFruitTrees={runtimeConfig.AutoHarvest.CollectFruitTrees}, " +
+            $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
+            $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
+            $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}, " +
+            $"OperationalLogging={runtimeConfig.Diagnostics.IsOperationalLoggingEnabled}, " +
+            $"DecisionLogLevel={runtimeConfig.Diagnostics.DecisionLogLevel}.");
     }
 
     private void Update()
@@ -186,14 +233,15 @@ public sealed class Plugin : BaseUnityPlugin
         if (!_nativeContractsAvailable)
         {
             _featureStatuses?.ObserveContractUnavailable(
+                _config.Current,
                 _lifecycleGeneration,
                 "Installed game assemblies do not match Automata's audited native contracts.");
             return;
         }
-        if (!_config.Enabled.Value)
+        if (!_config.Current.General.Enabled)
         {
             CancelPreparedAutomationForOwnershipRelease();
-            _actionFamilyOwnership?.Refresh(_config, lifecycleReady: false, UnityEngine.Time.frameCount);
+            _actionFamilyOwnership?.Refresh(_config.Current, lifecycleReady: false, UnityEngine.Time.frameCount);
             return;
         }
         var deltaTime = UnityEngine.Time.unscaledDeltaTime;
@@ -208,29 +256,28 @@ public sealed class Plugin : BaseUnityPlugin
             Log.LogAutomataWarning(
                 "AutobuyOrb is loaded. Automata will block Structure and Upgrade purchases because those native action families overlap; Auto Cast, Auto Concept, Spell Leveling, and Mentor remain independent.");
         }
-        _actionFamilyOwnership?.Refresh(_config, lifecycleReady, UnityEngine.Time.frameCount);
+        _actionFamilyOwnership?.Refresh(_config.Current, lifecycleReady, UnityEngine.Time.frameCount);
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
-        if (_config is not null &&
-            (_config.CanStartAutoBuyActively ||
-             _config.CanStartAutoCastActively ||
-             _config.CanStartAutoConceptActively))
+        if (_invalidationBus is not null &&
+            (_config.Current.CanStartAutoBuyActively ||
+             _config.Current.CanStartAutoCastActively ||
+             _config.Current.CanStartAutoConceptActively ||
+             _config.Current.CanStartAutoHarvestActively ||
+             _invalidationBus.GetSnapshot().PendingCount != 0))
         {
-            _invalidationBus?.Pump(
+            _invalidationBus.Pump(
                 UnityEngine.Time.frameCount,
                 GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
         }
         if (lifecycleReady)
         {
-            _autoBuyEngine?.Tick(deltaTime);
-            _autoCastEngine?.Tick(deltaTime);
-            _autoConceptController?.Tick(deltaTime);
-            _autoSpellLevelController?.Tick(deltaTime);
+            _services.Tick(deltaTime);
         }
         else if (_config is not null)
         {
-            _featureStatuses?.ObserveLifecycleNotReady(_config, _lifecycleGeneration);
+            _featureStatuses?.ObserveLifecycleNotReady(_config.Current, _lifecycleGeneration);
         }
     }
 
@@ -246,17 +293,17 @@ public sealed class Plugin : BaseUnityPlugin
         _conceptInventorySubscription = null;
         _conceptProgressionSubscription?.Dispose();
         _conceptProgressionSubscription = null;
+        _autoHarvestConfigurationSubscription?.Dispose();
+        _autoHarvestConfigurationSubscription = null;
         _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
-        _autoBuyEngine?.Dispose();
+        _services.Dispose();
         _autoBuyEngine = null;
-        _autoCastEngine?.Dispose();
         _autoCastEngine = null;
-        _autoConceptController?.Dispose();
         _autoConceptController = null;
-        _autoSpellLevelController?.Dispose();
         _autoSpellLevelController = null;
+        _autoHarvestActivation = null;
         _actionFamilyOwnership?.Dispose();
         _actionFamilyOwnership = null;
         _autoCastToggleButton?.Dispose();
@@ -282,10 +329,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void CancelPreparedAutomationForOwnershipRelease()
     {
-        _autoBuyEngine?.CancelPreparedWork();
-        _autoCastEngine?.CancelPreparedWork();
-        _autoConceptController?.CancelPreparedWork();
-        _autoSpellLevelController?.CancelPreparedWork();
+        _services.CancelPreparedWork();
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
@@ -303,13 +347,10 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (transition.Current.Generation == _lifecycleGeneration) return;
         _lifecycleGeneration = transition.Current.Generation;
-        _autoBuyEngine?.InvalidateLifecycle();
-        _autoCastEngine?.InvalidateLifecycle();
-        _autoConceptController?.InvalidateLifecycle();
-        _autoSpellLevelController?.InvalidateLifecycle();
+        _services.InvalidateLifecycle();
         _actionFamilyOwnership?.ReleaseLifecycleClaims();
         if (_config is not null)
-            _featureStatuses?.ObserveLifecycleNotReady(_config, _lifecycleGeneration);
+            _featureStatuses?.ObserveLifecycleNotReady(_config.Current, _lifecycleGeneration);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
     }
 
@@ -395,6 +436,15 @@ public sealed class Plugin : BaseUnityPlugin
     {
         _autoConceptController?.NotifyNativeChange();
         _autoSpellLevelController?.NotifyNativeChange();
+    }
+
+    private void OnAutoHarvestConfigurationInvalidated(GameplayInvalidation _) =>
+        PublishSavedConfiguration();
+
+    private void PublishSavedConfiguration()
+    {
+        if (_config is null) return;
+        _autoHarvestActivation?.PublishSavedConfiguration(_config.Current);
     }
 
     private void PublishAutoBuyInvalidation(
@@ -484,12 +534,12 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         var inGameplay = SceneManager.GetActiveScene().name == "Main";
-        if (inGameplay && _config.AutoCastToggleShortcut.Value.IsDown())
+        if (inGameplay && _config.IsAutoCastTogglePressed())
         {
             _autoCastToggleControl.Toggle();
         }
 
-        if (!inGameplay || !_config.AutoCastShowToggleButton.Value)
+        if (!inGameplay || !_config.Current.AutoCast.ShowToggleButton)
         {
             _autoCastToggleButton?.Dispose();
             _autoCastToggleButton = null;
@@ -572,7 +622,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (_config is null || _autoConceptToggleControl is null) return;
         var inGameplay = SceneManager.GetActiveScene().name == "Main";
-        if (!inGameplay || !_config.AutoConceptShowToggleButton.Value)
+        if (!inGameplay || !_config.Current.AutoConcept.ShowToggleButton)
         {
             _autoConceptToggleButton?.Dispose();
             _autoConceptToggleButton = null;

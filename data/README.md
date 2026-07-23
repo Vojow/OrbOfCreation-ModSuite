@@ -10,10 +10,11 @@ The directory also contains `native-contracts.json`, the audited machine-readabl
 - `entity-types.tsv` — mapping count grouped by managed type.
 - `known-entities.tsv` — explicit supported-domain subset used to generate production identity declarations.
 - `autobuy-performance-baseline.json` — reviewed deterministic queue-performance history used by CI; update it only through the policy in [Headless E2E simulation](../docs/development/headless-e2e.md#historical-reports).
-- `suite-performance-profile-v1.json` — strict observational targets and exact
-  coordinator work identities for sanitized start/end suite evidence. The
-  profile is SHA-256-bound by the evidence format; update its version and hash
-  deliberately rather than editing it as runtime configuration. See
+- `suite-performance-profile-v1.json` — the SHA-256-bound observational policy
+  for the twelve work identities still owned by the legacy suite coordinator.
+  It is an input contract for sanitized start/end evidence, not captured test
+  output or runtime configuration. ServiceCycle services are measured through
+  their independent profile product and do not appear here. See
   [suite coordinator performance evidence](../docs/development/testing.md#suite-coordinator-performance-evidence).
 - `source/message.txt` — preserved UTF-8 source used for the current import.
 

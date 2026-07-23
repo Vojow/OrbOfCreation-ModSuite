@@ -58,7 +58,7 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
 
     public string Name => "OrbAutomata.AutoBuy";
 
-    public AutomataConfig Config { get; }
+    public BepInExAutomataConfiguration Config { get; }
 
     public SimulatedAutoBuyWorld World { get; }
 
@@ -232,9 +232,9 @@ internal sealed class ScenarioAutoBuyFeature : ILifecycleScenarioFeature
     private static string ExpectedNativeType(AutoBuyCandidateKind kind) =>
         kind == AutoBuyCandidateKind.Structure ? "StructureSO" : "UpgradeSO";
 
-    private static AutomataConfig CreateConfig()
+    private static BepInExAutomataConfiguration CreateConfig()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;

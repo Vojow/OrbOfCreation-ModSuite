@@ -77,7 +77,7 @@ public sealed class AutoBuyTests
     public void OperationalLoggingOff_SuppressesSuccessfulPurchaseChatter()
     {
         var candidate = Candidate("quiet", AutoBuyCandidateKind.Upgrade, 1, 1_000);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -204,7 +204,7 @@ public sealed class AutoBuyTests
         {
             BulkDevelopment = 2,
         };
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -349,7 +349,7 @@ public sealed class AutoBuyTests
     {
         var failing = Candidate("persistent-failure", AutoBuyCandidateKind.Structure, 1, 1_000, purchaseSucceeds: false);
         var catalog = new FakeCatalog(4, failing);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -374,7 +374,7 @@ public sealed class AutoBuyTests
         var second = Candidate("second", AutoBuyCandidateKind.Structure, 2, 1_000);
         var third = Candidate("third", AutoBuyCandidateKind.Upgrade, 3, 1_000);
         var catalog = new FakeCatalog(10, first, second, third);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -410,7 +410,7 @@ public sealed class AutoBuyTests
     {
         var candidate = Candidate("quiet", AutoBuyCandidateKind.Structure, 1, 1_000);
         var catalog = new FakeCatalog(4, candidate);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -433,7 +433,7 @@ public sealed class AutoBuyTests
         var first = Candidate("first", AutoBuyCandidateKind.Upgrade, 1, 1_000);
         var second = Candidate("second", AutoBuyCandidateKind.Upgrade, 2, 1_000);
         var catalog = new FakeCatalog(10, first, second);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -457,7 +457,7 @@ public sealed class AutoBuyTests
         {
             QueueRooms = new Queue<int>(new[] { 1, 1, 2, 2, 2 }),
         };
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -549,7 +549,7 @@ public sealed class AutoBuyTests
     {
         var candidate = Candidate("single-probe", AutoBuyCandidateKind.Upgrade, 1, 1_000);
         var catalog = new FakeCatalog(4, candidate);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
@@ -604,14 +604,20 @@ public sealed class AutoBuyTests
     {
         var candidate = Candidate("reserved", AutoBuyCandidateKind.Upgrade, 10, 100);
         var catalog = new FakeCatalog(10, candidate) { ActionMultiplier = 10 };
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "50";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.ActionMultiplier;
         config.AutoBuyBatchSizing.Value = AutoBuyBatchSizingMode.FillAvailableQueue;
-        using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), new ManualLogSource());
+        using var engine = new AutoBuyEngine(
+            config,
+            catalog,
+            new ReservePolicy(config),
+            new ManualLogSource(),
+            _ => 0.0,
+            _ => 0.0);
 
         engine.Tick(config.AutoBuyIntervalSeconds.Value);
 
@@ -624,7 +630,7 @@ public sealed class AutoBuyTests
         var first = Candidate("first", AutoBuyCandidateKind.Upgrade, 1, 1_000, available: false);
         var second = Candidate("second", AutoBuyCandidateKind.Upgrade, 1, 1_000, available: false);
         var catalog = new FakeCatalog(4, first, second);
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyIntervalSeconds.Value = 0.1f;
         var log = new ManualLogSource();
         using var engine = new AutoBuyEngine(config, catalog, new ReservePolicy(config), log, _ => double.PositiveInfinity);
@@ -637,9 +643,9 @@ public sealed class AutoBuyTests
         Assert.Equal(1, second.AvailabilityChecks);
     }
 
-    private static ManualLogSource Run(Action<AutomataConfig> configure, FakeCatalog catalog)
+    private static ManualLogSource Run(Action<BepInExAutomataConfiguration> configure, FakeCatalog catalog)
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.EnableOperationalLogging.Value = true;

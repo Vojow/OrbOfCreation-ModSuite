@@ -172,7 +172,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         active.SuppressAddMutation = true;
         var config = Config(AutoConceptSlotManagementMode.PreserveManual);
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         var coordinator = new SuitePerformanceCoordinator(new ZeroClock(), 10.0, 10.0, 16);
         long frame = 0;
         using var controller = new AutoConceptController(
@@ -198,7 +198,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         Assert.Equal(FeatureStatusReasonCode.PostconditionFailed, statuses.AutoConcept.Current.Reason.Code);
 
         controller.InvalidateLifecycle();
-        statuses.ObserveLifecycleNotReady(config, 2);
+        statuses.ObserveLifecycleNotReady(config.Current, 2);
         active.SuppressAddMutation = false;
         controller.NotifyNativeChange();
         Tick(controller, ref frame, 0.1f);
@@ -208,9 +208,9 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
         Assert.Single(active.value);
     }
 
-    private static AutomataConfig Config(AutoConceptSlotManagementMode mode)
+    private static BepInExAutomataConfiguration Config(AutoConceptSlotManagementMode mode)
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         config.AutoConceptSlotManagement.Value = mode;
         config.AutoConceptTrainingPeriodSeconds.Value = 10;

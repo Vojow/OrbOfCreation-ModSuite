@@ -7,6 +7,10 @@ bin/
 obj/
 bin-stubs/
 obj-stubs/
+bin-profile/
+obj-profile/
+bin-profile-stubs/
+obj-profile-stubs/
 
 # Local game libraries copied for compilation
 lib/

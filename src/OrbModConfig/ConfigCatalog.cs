@@ -38,13 +38,38 @@ internal sealed class ConfigPluginSource
 internal sealed class ConfigCatalogSnapshot
 {
     public ConfigCatalogSnapshot(IReadOnlyList<ModConfigDescriptor> mods)
+        : this(
+            mods,
+            mods.Select(mod => new LoadedPluginDescriptor(mod.Guid, mod.Name, mod.Version)).ToArray())
     {
-        Mods = mods;
+    }
+
+    public ConfigCatalogSnapshot(
+        IReadOnlyList<ModConfigDescriptor> mods,
+        IReadOnlyList<LoadedPluginDescriptor> loadedPlugins)
+    {
+        Mods = mods ?? throw new ArgumentNullException(nameof(mods));
+        LoadedPlugins = loadedPlugins ?? throw new ArgumentNullException(nameof(loadedPlugins));
         SettingCount = mods.Sum(mod => mod.Sections.Sum(section => section.Settings.Count));
     }
 
     public IReadOnlyList<ModConfigDescriptor> Mods { get; }
+    public IReadOnlyList<LoadedPluginDescriptor> LoadedPlugins { get; }
     public int SettingCount { get; }
+}
+
+internal sealed class LoadedPluginDescriptor
+{
+    public LoadedPluginDescriptor(string guid, string name, string version)
+    {
+        Guid = guid ?? throw new ArgumentNullException(nameof(guid));
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Version = version ?? throw new ArgumentNullException(nameof(version));
+    }
+
+    public string Guid { get; }
+    public string Name { get; }
+    public string Version { get; }
 }
 
 internal sealed class ModConfigDescriptor
@@ -144,8 +169,10 @@ internal static class ConfigCatalog
         typeof(float), typeof(double), typeof(decimal),
     };
 
-    public static ConfigCatalogSnapshot DiscoverLoaded()
+    public static ConfigCatalogSnapshot DiscoverLoaded(
+        IConfigurationSchemaStatusSource schemaStatuses)
     {
+        if (schemaStatuses is null) throw new ArgumentNullException(nameof(schemaStatuses));
         var sources = Chainloader.PluginInfos.Values
             .Where(plugin => plugin.Instance is not null)
             .Select(plugin => new ConfigPluginSource(
@@ -154,21 +181,31 @@ internal static class ConfigCatalog
                 plugin.Metadata.Version.ToString(),
                 plugin.Instance!.Config));
 
-        return Build(sources, ConfigurationSchemaStatusRegistry.Shared);
+        return Build(sources, schemaStatuses);
     }
+
+    public static ConfigCatalogSnapshot Build(IEnumerable<ConfigPluginSource> sources) =>
+        Build(sources, schemaStatuses: null);
 
     public static ConfigCatalogSnapshot Build(
         IEnumerable<ConfigPluginSource> sources,
-        IConfigurationSchemaStatusSource? schemaStatuses = null)
+        IConfigurationSchemaStatusSource? schemaStatuses)
     {
-        var mods = sources
+        if (sources is null) throw new ArgumentNullException(nameof(sources));
+        var sourceArray = sources.ToArray();
+        var loadedPlugins = sourceArray
+            .Select(source => new LoadedPluginDescriptor(source.Guid, source.Name, source.Version))
+            .OrderBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(plugin => plugin.Guid, StringComparer.Ordinal)
+            .ToArray();
+        var mods = sourceArray
             .Select(BuildMod)
             .Where(mod => mod.Sections.Count > 0 || HasSchemaStatus(schemaStatuses, mod.Guid))
             .OrderBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(mod => mod.Guid, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(mod => mod.Guid, StringComparer.Ordinal)
             .ToArray();
 
-        return new ConfigCatalogSnapshot(mods);
+        return new ConfigCatalogSnapshot(mods, loadedPlugins);
     }
 
     private static bool HasSchemaStatus(IConfigurationSchemaStatusSource? statuses, string pluginGuid) =>

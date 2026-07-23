@@ -174,9 +174,9 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
         SpellManager.instance = null;
     }
 
-    private static AutomataConfig ActiveConfig()
+    private static BepInExAutomataConfiguration ActiveConfig()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoLevelSpells.Value = true;
         config.EnableOperationalLogging.Value = false;

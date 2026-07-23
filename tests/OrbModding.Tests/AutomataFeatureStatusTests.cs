@@ -12,7 +12,7 @@ public sealed class AutomataFeatureStatusTests
     [Fact]
     public void AutomataRegistersConfigurationSeparatelyFromLifecycleReadiness()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
         var added = 0;
         var changed = 0;
@@ -21,7 +21,7 @@ public sealed class AutomataFeatureStatusTests
             if (transition.Kind == FeatureStatusTransitionKind.Added) added++;
             if (transition.Kind == FeatureStatusTransitionKind.Changed) changed++;
         };
-        using var statuses = new AutomataFeatureStatuses(config, 7, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 7, registry);
 
         Assert.Equal(FeatureStatusState.NotReady, statuses.AutoBuy.Current.State);
         Assert.True(statuses.AutoBuy.Current.ConfiguredEnabled);
@@ -30,17 +30,18 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusState.NotReady, statuses.SpellLevel.Current.State);
         Assert.True(statuses.SpellLevel.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(7, status.LifecycleGeneration));
-        Assert.Equal(4, added);
+        Assert.Equal(5, added);
         Assert.Equal(0, changed);
     }
 
     [Fact]
     public void AutomataReporterPublishesOnlyConditionTransitions()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         var changes = 0;
         registry.Transitioned += transition =>
         {
@@ -76,48 +77,65 @@ public sealed class AutomataFeatureStatusTests
     }
 
     [Fact]
+    public void AssemblyContractFailurePreservesConfigurationDisabledPrecedence()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
+
+        statuses.ObserveContractUnavailable(config.Current, 1, "Assembly contract mismatch.");
+
+        Assert.Equal(FeatureStatusState.ContractUnavailable, statuses.AutoBuy.Current.State);
+        Assert.Equal(FeatureStatusState.ContractUnavailable, statuses.SpellLevel.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+    }
+
+    [Fact]
     public void GloballyDisabledAutomataAdvancesEveryFeatureOnLifecycleTransitionsThenStaysIdle()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.Enabled.Value = false;
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 4, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 4, registry);
         var changes = 0;
         registry.Transitioned += transition =>
         {
             if (transition.Kind == FeatureStatusTransitionKind.Changed) changes++;
         };
 
-        statuses.ObserveLifecycleNotReady(config, 9);
+        statuses.ObserveLifecycleNotReady(config.Current, 9);
 
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(9, status.LifecycleGeneration));
-        Assert.Equal(4, changes);
+        Assert.Equal(5, changes);
 
         for (var index = 0; index < 10_000; index++)
-            statuses.ObserveLifecycleNotReady(config, 9);
+            statuses.ObserveLifecycleNotReady(config.Current, 9);
 
-        Assert.Equal(4, changes);
+        Assert.Equal(5, changes);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.AutoBuy.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.SpellLevel.Current.Reason.Code);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
     }
 
     [Fact]
     public void StableLifecycleProjectionReusesCachedConfigurationDisabledSummaries()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         var autoCastSummary = statuses.AutoCast.ConfigurationDisabledSummary;
         var autoConceptSummary = statuses.AutoConcept.ConfigurationDisabledSummary;
 
-        statuses.ObserveLifecycleNotReady(config, 2);
+        statuses.ObserveLifecycleNotReady(config.Current, 2);
         Assert.Same(autoCastSummary, statuses.AutoCast.Current.Reason.Summary);
         Assert.Same(autoConceptSummary, statuses.AutoConcept.Current.Reason.Summary);
 
         for (var index = 0; index < 10_000; index++)
-            statuses.ObserveLifecycleNotReady(config, 2);
+            statuses.ObserveLifecycleNotReady(config.Current, 2);
 
         Assert.Same(autoCastSummary, statuses.AutoCast.Current.Reason.Summary);
         Assert.Same(autoConceptSummary, statuses.AutoConcept.Current.Reason.Summary);
@@ -126,7 +144,7 @@ public sealed class AutomataFeatureStatusTests
     [Fact]
     public void AggregateRegistrationRollsBackEarlierKeysWhenALaterKeyIsAlreadyOwned()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
         var duplicateKey = new FeatureStatusKey(
             PluginIds.AutomataGuid,
@@ -142,7 +160,7 @@ public sealed class AutomataFeatureStatusTests
             3));
 
         Assert.Throws<InvalidOperationException>(() =>
-            new AutomataFeatureStatuses(config, 3, registry));
+            new AutomataFeatureStatuses(config.Current, 3, registry));
 
         var snapshot = Assert.Single(registry.GetSnapshot());
         Assert.Equal(duplicateKey, snapshot.Key);
@@ -158,10 +176,10 @@ public sealed class AutomataFeatureStatusTests
     [Fact]
     public void ControlsKeepConfiguredIntentOnAcrossRuntimeHealthTransitions()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 3, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
         var control = new AutoCastToggleControl(config, () => statuses.AutoCast.Current);
 
         Assert.Equal(AutoCastToggleVisualState.On, control.State);
@@ -186,9 +204,9 @@ public sealed class AutomataFeatureStatusTests
     [Trait("Category", "HeadlessIntegration")]
     public void SpellLevelHealthTransitionsAcrossUnlockFaultResetAndRecovery()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         var upgrade = new UpgradeSO { uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid };
         IdScriptableObject.RuntimeLookup.Clear();
         IdScriptableObject.RuntimeLookup[new System.Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
@@ -237,7 +255,7 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusReasonCode.PostconditionFailed, statuses.SpellLevel.Current.Reason.Code);
 
         controller.InvalidateLifecycle();
-        statuses.ObserveLifecycleNotReady(config, 2);
+        statuses.ObserveLifecycleNotReady(config.Current, 2);
         Assert.Equal(FeatureStatusState.NotReady, statuses.SpellLevel.Current.State);
         Assert.Equal(2, statuses.SpellLevel.Current.LifecycleGeneration);
         Assert.Equal(2, statuses.AutoCast.Current.LifecycleGeneration);

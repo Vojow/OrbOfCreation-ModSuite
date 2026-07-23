@@ -23,7 +23,7 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
     [Fact]
     public void DisabledAutoConceptDoesNotInitializeOrScanSharedClassifier()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var classifier = new AlchemyGameplayDomainClassifier();
         using var controller = Controller(config, classifier, new ManualLogSource(), () => 1);
 
@@ -36,7 +36,7 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
     [Fact]
     public void ActiveAutoConceptRetriesMissingClassifierEvidenceWithRateLimitedWarning()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         var classifier = new AlchemyGameplayDomainClassifier();
         var log = new ManualLogSource();
@@ -71,7 +71,7 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
         var conceptType = Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid);
         var ordinaryType = Type(AlchemyGameplayDomainClassifier.AlchemyTypeUuid);
         RegisterConceptRecipes(Recipe(Guid.NewGuid(), conceptType, ordinaryType));
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         var classifier = new AlchemyGameplayDomainClassifier();
         var log = new ManualLogSource();
@@ -93,7 +93,7 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
     }
 
     private static AutoConceptController Controller(
-        AutomataConfig config,
+        BepInExAutomataConfiguration config,
         AlchemyGameplayDomainClassifier classifier,
         ManualLogSource log,
         Func<long> frameIdentity)

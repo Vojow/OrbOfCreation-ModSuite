@@ -15,7 +15,10 @@ if (-not $OutputDirectory.StartsWith($artifacts, [StringComparison]::OrdinalIgno
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed.' }
 [xml]$project = Get-Content -Raw (Join-Path $root 'src/OrbMentor/OrbMentor.csproj')
 $version = @($project.Project.PropertyGroup.Version | Where-Object { $_ })[0]
-$name = if ($IncludeSupportedSuite) { "OrbOfCreation-ModSuite-$version" } else { "OrbMentor-$version" }
+[xml]$buildProps = Get-Content -Raw (Join-Path $root 'Directory.Build.props')
+$suiteVersion = @($buildProps.Project.PropertyGroup.SuiteVersion | Where-Object { $_ })[0]
+if ($IncludeSupportedSuite -and [string]::IsNullOrWhiteSpace($suiteVersion)) { throw 'SuiteVersion is missing from Directory.Build.props.' }
+$name = if ($IncludeSupportedSuite) { "OrbOfCreation-ModSuite-$suiteVersion" } else { "OrbMentor-$version" }
 $stage = Join-Path $OutputDirectory $name
 $zip = "$stage.zip"
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null

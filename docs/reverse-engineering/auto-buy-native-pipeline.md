@@ -21,6 +21,12 @@ The manifest proves that the selected members exist with the expected shape.
 It does not by itself prove the internal IL order of resource deduction, queue
 insertion, echo actions, UI refresh, or completion effects.
 
+This document describes the current production path. The proposed
+[raw-fact ServiceCycle port](../plans/autobuy-service-cycle-port.md) targets a collector that copies the
+[audited raw input graph](auto-buy-raw-fact-inputs.md) and reproduces its mathematics in pure worker code.
+Native convenience calls remain required until the installed serialized condition graph and formula parity
+have runtime evidence.
+
 ## Audited native surface
 
 | Concern | Structure contract | Upgrade contract | Evidence |

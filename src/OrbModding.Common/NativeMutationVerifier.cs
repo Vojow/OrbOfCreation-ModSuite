@@ -92,6 +92,32 @@ public static class NativeMutationVerifier
                 ex.GetBaseException().Message);
         }
 
+        return ExecuteAfterCapture(
+            feature,
+            identity,
+            expectedChange,
+            before,
+            capture,
+            execute,
+            verify);
+    }
+
+    public static NativeMutationEvidence<TState> ExecuteAfterCapture<TState>(
+        string feature,
+        string identity,
+        string expectedChange,
+        TState before,
+        Func<TState> captureAfter,
+        Action execute,
+        Func<TState, TState, bool> verify)
+    {
+        if (string.IsNullOrWhiteSpace(feature)) throw new ArgumentException("A feature name is required.", nameof(feature));
+        if (string.IsNullOrWhiteSpace(identity)) throw new ArgumentException("A mutation identity is required.", nameof(identity));
+        if (string.IsNullOrWhiteSpace(expectedChange)) throw new ArgumentException("An expected change is required.", nameof(expectedChange));
+        if (captureAfter is null) throw new ArgumentNullException(nameof(captureAfter));
+        if (execute is null) throw new ArgumentNullException(nameof(execute));
+        if (verify is null) throw new ArgumentNullException(nameof(verify));
+
         try
         {
             execute();
@@ -100,7 +126,7 @@ public static class NativeMutationVerifier
         {
             try
             {
-                var afterException = capture();
+                var afterException = captureAfter();
                 return Evidence<TState>(
                     feature,
                     identity,
@@ -130,7 +156,7 @@ public static class NativeMutationVerifier
         TState after;
         try
         {
-            after = capture();
+            after = captureAfter();
         }
         catch (Exception ex)
         {

@@ -74,6 +74,7 @@ function Invoke-ComparisonRunner {
         'run',
         '--project', $projectPath,
         '--configuration', 'Release',
+        '--no-restore',
         '--no-incremental',
         '-p:UseGameStubs=true',
         "-p:ComparisonSourceRoot=$SourceRoot"

@@ -1,0 +1,217 @@
+using System;
+using System.Threading;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+
+namespace OrbModding.Common.Runtime.ServiceCycle.Execution;
+
+internal sealed partial class ServiceCycleHandoff<TConfig>
+    where TConfig : notnull
+{
+    internal bool TryPublishRequest(
+        ConfigurationPublication<TConfig> configuration,
+        in ServiceCycleContext context,
+        BatchId batch,
+        out long sequence)
+    {
+        lock (_gate)
+        {
+            return PublishRequestUnderGate(
+                configuration,
+                in context,
+                batch,
+                out sequence);
+        }
+    }
+
+    internal bool TryPublishRequestNonBlocking(
+        ConfigurationPublication<TConfig> configuration,
+        in ServiceCycleContext context,
+        BatchId batch,
+        out long sequence)
+    {
+        if (PhaseHint != ServiceHandoffPhase.Empty ||
+            !Monitor.TryEnter(_gate, 0))
+        {
+            sequence = 0;
+            return false;
+        }
+        try
+        {
+            return PublishRequestUnderGate(
+                configuration,
+                in context,
+                batch,
+                out sequence);
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
+        }
+    }
+
+    private bool PublishRequestUnderGate(
+        ConfigurationPublication<TConfig> configuration,
+        in ServiceCycleContext context,
+        BatchId batch,
+        out long sequence)
+    {
+        if (_phase != ServiceHandoffPhase.Empty ||
+            _cleanupPending ||
+            Volatile.Read(ref _stopRequested))
+        {
+            sequence = 0;
+            return false;
+        }
+        if (_lifecycle.Value != 0 &&
+            context.Identity.Lifecycle != _lifecycle)
+        {
+            throw new InvalidOperationException(
+                "The request belongs to another lifecycle generation.");
+        }
+        sequence = checked(++_nextSequence);
+        _request = new ServiceEvaluationRequest<TConfig>(
+            sequence,
+            configuration,
+            context,
+            batch);
+        TransitionTo(ServiceHandoffPhase.RequestReady);
+        _workerWake.Set();
+        return true;
+    }
+
+    internal ServiceWorkerWorkKind WaitForWorkerWork(
+        out ServiceEvaluationRequest<TConfig> request,
+        out int cleanupFrom,
+        out int cleanupCount)
+    {
+        while (true)
+        {
+            lock (_gate)
+            {
+                if (_cleanupPending && !_cleanupClaimed)
+                {
+                    _cleanupClaimed = true;
+                    request = default;
+                    cleanupFrom = _cleanupFrom;
+                    cleanupCount = _cleanupCount;
+                    return ServiceWorkerWorkKind.ClearRejectedSuffix;
+                }
+                if (Volatile.Read(ref _stopRequested))
+                {
+                    TransitionTo(ServiceHandoffPhase.Stopping);
+                    request = default;
+                    cleanupFrom = 0;
+                    cleanupCount = 0;
+                    return ServiceWorkerWorkKind.Stop;
+                }
+                if (_phase == ServiceHandoffPhase.RequestReady)
+                {
+                    request = _request;
+                    TransitionTo(ServiceHandoffPhase.Evaluating);
+                    cleanupFrom = 0;
+                    cleanupCount = 0;
+                    return ServiceWorkerWorkKind.Evaluate;
+                }
+                _workerWaitCount++;
+                PulseOfflineWaitersUnderGate();
+            }
+            _workerWake.WaitOne();
+        }
+    }
+
+    internal bool TryPublishResponse(
+        long sequence,
+        in ServiceWorkerResponse response)
+    {
+        lock (_gate)
+        {
+            if (Volatile.Read(ref _stopRequested) ||
+                _phase != ServiceHandoffPhase.Evaluating ||
+                sequence != _request.Sequence ||
+                response.Sequence != sequence)
+                return false;
+            if (_lifecycle.Value != 0 &&
+                response.Cycle.Lifecycle != _lifecycle)
+                return false;
+            _response = response;
+            _request = default;
+            _responsePublishedWorkerWaitCount = _workerWaitCount;
+            TransitionTo(ServiceHandoffPhase.ResponseReady);
+            PulseOfflineWaitersUnderGate();
+            return true;
+        }
+    }
+
+    internal bool TryAcquireResponse(out ServiceWorkerResponse response)
+    {
+        lock (_gate)
+        {
+            return AcquireResponseUnderGate(out response);
+        }
+    }
+
+    internal bool TryAcquireResponseNonBlocking(out ServiceWorkerResponse response)
+    {
+        if (PhaseHint != ServiceHandoffPhase.ResponseReady ||
+            !Monitor.TryEnter(_gate, 0))
+        {
+            response = default;
+            return false;
+        }
+        try
+        {
+            return AcquireResponseUnderGate(out response);
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
+        }
+    }
+
+    internal bool TryAcquireAuthoritativeTerminalResponseNonBlocking(
+        out ServiceWorkerResponse response,
+        out bool acquired)
+    {
+        acquired = false;
+        if (PhaseHint != ServiceHandoffPhase.ResponseReady ||
+            !Monitor.TryEnter(_gate, 0))
+        {
+            response = default;
+            return false;
+        }
+        try
+        {
+            if (_phase != ServiceHandoffPhase.ResponseReady)
+            {
+                response = default;
+                return false;
+            }
+            if (!_response.Succeeded || !_response.ZeroActionReceipt.IsPresent)
+            {
+                response = default;
+                return true;
+            }
+            response = _response;
+            TransitionTo(ServiceHandoffPhase.MainOwnedBatch);
+            acquired = true;
+            return true;
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
+        }
+    }
+
+    private bool AcquireResponseUnderGate(out ServiceWorkerResponse response)
+    {
+        if (_phase != ServiceHandoffPhase.ResponseReady)
+        {
+            response = default;
+            return false;
+        }
+        response = _response;
+        TransitionTo(ServiceHandoffPhase.MainOwnedBatch);
+        return true;
+    }
+}

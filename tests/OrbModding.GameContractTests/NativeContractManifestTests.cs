@@ -33,7 +33,7 @@ public sealed class NativeContractManifestTests
         var manifest = NativeContractManifest.Load();
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
-        Assert.Equal(1, manifest.SchemaVersion);
+        Assert.Equal(2, manifest.SchemaVersion);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
         Assert.False(string.IsNullOrWhiteSpace(manifest.Provenance));
@@ -44,10 +44,34 @@ public sealed class NativeContractManifestTests
         {
             Assert.False(string.IsNullOrWhiteSpace(assembly.Id));
             Assert.EndsWith(".dll", assembly.File, StringComparison.OrdinalIgnoreCase);
-            Assert.Matches("^[A-F0-9]{64}$", assembly.Sha256);
-            Assert.False(string.IsNullOrWhiteSpace(assembly.Provenance));
         });
         Assert.Equal(manifest.Assemblies.Count, manifest.Assemblies.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
+
+        Assert.NotEmpty(manifest.Baselines);
+        Assert.Equal(
+            manifest.Baselines.Count,
+            manifest.Baselines.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(manifest.Baselines, baseline =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(baseline.Id));
+            Assert.Contains(baseline.Platform, new[] { "windows", "macos" });
+            Assert.False(string.IsNullOrWhiteSpace(baseline.AuditedAt));
+            Assert.False(string.IsNullOrWhiteSpace(baseline.GameBuild));
+            Assert.False(string.IsNullOrWhiteSpace(baseline.Provenance));
+            AssertNoUserSpecificPath(baseline.Provenance);
+            Assert.Equal(manifest.Assemblies.Count, baseline.Assemblies.Count);
+            Assert.Equal(
+                baseline.Assemblies.Count,
+                baseline.Assemblies.Select(item => item.Assembly).Distinct(StringComparer.Ordinal).Count());
+            Assert.All(baseline.Assemblies, assembly =>
+            {
+                Assert.Contains(manifest.Assemblies, declared => declared.Id == assembly.Assembly);
+                Assert.Matches("^[A-F0-9]{64}$", assembly.Sha256);
+                Assert.False(string.IsNullOrWhiteSpace(assembly.Provenance));
+                AssertNoUserSpecificPath(assembly.Provenance);
+                Assert.False(Path.IsPathRooted(assembly.Provenance));
+            });
+        });
 
         Assert.Equal(manifest.Contracts.Count, manifest.Contracts.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.All(manifest.Contracts, contract =>
@@ -104,18 +128,13 @@ public sealed class NativeContractManifestTests
     }
 
     [Fact]
-    public void RuntimeHashGuards_MatchManifestBaseline()
+    public void RuntimeHashGuards_MatchEveryManifestBaselinePair()
     {
         var manifest = NativeContractManifest.Load();
 
-        Assert.Equal(
-            GameAssemblyAudit.ExpectedAssemblyCSharpSha256,
-            manifest.RequireAssembly("assembly-csharp").Sha256,
-            ignoreCase: true);
-        Assert.Equal(
-            GameAssemblyAudit.ExpectedFirstPassSha256,
-            manifest.RequireAssembly("assembly-csharp-firstpass").Sha256,
-            ignoreCase: true);
+        Assert.Equal(2, manifest.Baselines.Count);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.WindowsSteamBaseline);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacSteamBaseline);
     }
 
     [Fact]
@@ -188,16 +207,30 @@ public sealed class NativeContractManifestTests
         var manifest = NativeContractManifest.Load();
         var paths = GameAssemblyPaths.Require();
         var failures = new List<string>();
+        var audit = GameAssemblyAudit.Check(paths.GameRoot);
+        NativeBaselineManifest? baseline = null;
+        if (!audit.MatchesExpected)
+        {
+            failures.Add(
+                $"Unknown assembly pair: main={audit.AssemblyCSharp.ActualSha256 ?? "<missing>"}, " +
+                $"first-pass={audit.AssemblyCSharpFirstPass.ActualSha256 ?? "<missing>"}; " +
+                $"discovery={audit.DiscoveryFailure}");
+        }
+        else
+        {
+            baseline = manifest.RequireBaseline(audit.MatchedBaselineId);
+        }
 
         foreach (var assemblyEntry in manifest.Assemblies)
         {
-            var path = Path.Combine(paths.GameRoot, "Orb Of Creation_Data", "Managed", assemblyEntry.File);
+            var path = Path.Combine(paths.ManagedDirectory, assemblyEntry.File);
             using var stream = File.OpenRead(path);
             var actualHash = Convert.ToHexString(SHA256.HashData(stream));
-            if (!string.Equals(actualHash, assemblyEntry.Sha256, StringComparison.OrdinalIgnoreCase))
+            var expectedHash = baseline?.RequireAssembly(assemblyEntry.Id).Sha256;
+            if (expectedHash is not null &&
+                !string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
             {
-                failures.Add($"{assemblyEntry.File}: expected SHA-256 {assemblyEntry.Sha256}, actual {actualHash}");
-                continue;
+                failures.Add($"{assemblyEntry.File}: expected SHA-256 {expectedHash}, actual {actualHash}");
             }
 
             using var metadata = new GameAssemblyMetadata(path);
@@ -208,6 +241,29 @@ public sealed class NativeContractManifestTests
         }
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    private static void AssertRuntimeBaseline(
+        NativeContractManifest manifest,
+        GameAssemblyBaseline runtime)
+    {
+        Assert.True(runtime.IsValid);
+        var declared = manifest.RequireBaseline(runtime.Id);
+        Assert.Equal(
+            runtime.AssemblyCSharpSha256,
+            declared.RequireAssembly("assembly-csharp").Sha256,
+            ignoreCase: true);
+        Assert.Equal(
+            runtime.FirstPassSha256,
+            declared.RequireAssembly("assembly-csharp-firstpass").Sha256,
+            ignoreCase: true);
+    }
+
+    private static void AssertNoUserSpecificPath(string value)
+    {
+        Assert.DoesNotContain("/Users/", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/home/", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotMatch("^[A-Za-z]:[/\\\\]Users[/\\\\]", value);
     }
 
     private static void ValidateContract(

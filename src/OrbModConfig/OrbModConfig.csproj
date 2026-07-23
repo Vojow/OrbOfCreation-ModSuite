@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>OrbModConfig</AssemblyName>
     <RootNamespace>OrbModConfig</RootNamespace>
-    <Version>0.6.3</Version>
+    <Version>0.7.0</Version>
     <RequireGameReferences>true</RequireGameReferences>
     <Description>In-game configuration browser and editor for Orb Of Creation BepInEx mods.</Description>
   </PropertyGroup>
@@ -28,5 +28,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbModding.ProfileTests" Condition="'$(EnableServiceCycleProfiler)' == 'true'" />
   </ItemGroup>
 </Project>

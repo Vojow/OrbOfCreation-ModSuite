@@ -7,9 +7,9 @@ using UnityEngine.SceneManagement;
 
 namespace OrbAutomata;
 
-internal sealed class AutoCastEngine : IDisposable
+internal sealed class AutoCastEngine : IAutomataService
 {
-    private readonly AutomataConfig _config;
+    private readonly IAutomataConfigurationSource _config;
     private readonly IAutoCastCatalog _catalog;
     private readonly ReservePolicy _reservePolicy;
     private readonly ResourceFullnessPolicy _fullnessPolicy;
@@ -36,7 +36,7 @@ internal sealed class AutoCastEngine : IDisposable
     private IAutoCastCandidate? _fullChargeCandidate;
 
     public AutoCastEngine(
-        AutomataConfig config,
+        IAutomataConfigurationSource config,
         IAutoCastCatalog catalog,
         ReservePolicy reservePolicy,
         ResourceFullnessPolicy fullnessPolicy,
@@ -73,14 +73,16 @@ internal sealed class AutoCastEngine : IDisposable
                 mutationIdentity.BudgetClass,
                 mutationIdentity.ExecutionKind);
         }
-        _secondsUntilEvaluation = ClampInterval(config.AutoCastIntervalSeconds.Value);
-        _operationalLoggingWasEnabled = config.IsOperationalLoggingEnabled;
+        _secondsUntilEvaluation = ClampInterval(config.Current.AutoCast.EvaluationIntervalSeconds);
+        _operationalLoggingWasEnabled = config.Current.Diagnostics.IsOperationalLoggingEnabled;
         AutoCastManualSignal.ManualSpellFired += OnManualSpellFired;
     }
 
+    private AutomataConfiguration Config => _config.Current;
+
     public void Tick(float unscaledDeltaTime)
     {
-        if (_config.AutoCastMode.Value == AutoCastOperationMode.Active && !_ownsActionFamily())
+        if (Config.AutoCast.Mode == AutoCastOperationMode.Active && !_ownsActionFamily())
         {
             ReleaseFullChargeHold("action-family ownership lost");
             ClearPendingCandidate();
@@ -114,7 +116,7 @@ internal sealed class AutoCastEngine : IDisposable
             return;
         }
 
-        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active)
+        if (Config.AutoCast.Mode != AutoCastOperationMode.Active)
         {
             return;
         }
@@ -125,7 +127,7 @@ internal sealed class AutoCastEngine : IDisposable
             return;
         }
 
-        _secondsUntilEvaluation = ClampInterval(_config.AutoCastIntervalSeconds.Value);
+        _secondsUntilEvaluation = ClampInterval(Config.AutoCast.EvaluationIntervalSeconds);
         Evaluate();
     }
 
@@ -137,8 +139,8 @@ internal sealed class AutoCastEngine : IDisposable
         ObserveTickStatus();
         ResetDiagnosticStateWhenLoggingIsEnabled();
 
-        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active ||
-            !_config.CanStartAutoCastActively)
+        if (Config.AutoCast.Mode != AutoCastOperationMode.Active ||
+            !Config.CanStartAutoCastActively)
         {
             ReleaseFullChargeHold("Auto Cast stopped");
             ClearPendingCandidate();
@@ -149,7 +151,7 @@ internal sealed class AutoCastEngine : IDisposable
         SetCoordinatorEnabled(true);
         if (_fullChargeCandidate is not null)
         {
-            if (!_config.AutoCastFullCharge.Value || !_isGameplayScene())
+            if (!Config.AutoCast.FullCharge || !_isGameplayScene())
             {
                 ReleaseFullChargeHold("full-charge mode or gameplay stopped");
                 SetCoordinatorPending(false, false);
@@ -197,7 +199,7 @@ internal sealed class AutoCastEngine : IDisposable
         {
             using (readLease)
             {
-                _secondsUntilEvaluation = ClampInterval(_config.AutoCastIntervalSeconds.Value);
+                _secondsUntilEvaluation = ClampInterval(Config.AutoCast.EvaluationIntervalSeconds);
                 PrepareCandidate();
                 readLease.Complete();
                 readCompleted = true;
@@ -326,7 +328,7 @@ internal sealed class AutoCastEngine : IDisposable
             if (!_isGameplayScene() ||
                 _manualPauseRemaining > 0.0f ||
                 _catalog.IsTargeting() ||
-                !_config.CanStartAutoCastActively ||
+                !Config.CanStartAutoCastActively ||
                 _catalog.IsNativeCastBusy())
             {
                 goto Complete;
@@ -360,7 +362,7 @@ internal sealed class AutoCastEngine : IDisposable
                 goto Complete;
             }
 
-            var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
+            var shouldFullCharge = candidate.IsCharged && Config.AutoCast.FullCharge;
             if (shouldFullCharge)
             {
                 bool held;
@@ -535,7 +537,7 @@ Complete:
         _catalog.Dispose();
     }
 
-    internal void CancelPreparedWork()
+    public void CancelPreparedWork()
     {
         ReleaseFullChargeHold("automation ownership released");
         ClearPendingCandidate();
@@ -559,7 +561,7 @@ Complete:
             return;
         }
 
-        if (!_config.CanStartAutoCastActively)
+        if (!Config.CanStartAutoCastActively)
         {
             return;
         }
@@ -615,7 +617,7 @@ Complete:
                 return;
             }
 
-            var shouldFullCharge = candidate.IsCharged && _config.AutoCastFullCharge.Value;
+            var shouldFullCharge = candidate.IsCharged && Config.AutoCast.FullCharge;
             if (shouldFullCharge && !candidate.TrySetChargeHold(true, out reason))
             {
                 _log.LogAutomataWarning($"Auto Cast could not hold slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}");
@@ -696,7 +698,7 @@ Complete:
         resourceSummary = _fullnessPolicy.Describe(
             immediateCosts,
             drainCosts,
-            _config.AutoCastStartResourcePercent.Value);
+            Config.AutoCast.StartResourcePercent);
 
         var positiveImmediateCosts = immediateCosts.Where(cost => !cost.Cost.IsZero).ToArray();
         if (positiveImmediateCosts.Length > 0)
@@ -710,7 +712,7 @@ Complete:
             }
         }
 
-        if (!_fullnessPolicy.Evaluate(immediateCosts, drainCosts, _config.AutoCastStartResourcePercent.Value, out reason))
+        if (!_fullnessPolicy.Evaluate(immediateCosts, drainCosts, Config.AutoCast.StartResourcePercent, out reason))
         {
             failureKind = AutoCastAdmissionFailureKind.OrdinaryRejection;
             return false;
@@ -728,7 +730,7 @@ Complete:
     private void OnManualSpellFired()
     {
         ReleaseFullChargeHold("manual spell input");
-        _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, _config.AutoCastManualPauseSeconds.Value));
+        _manualPauseRemaining = Math.Max(0.0f, Math.Min(60.0f, Config.AutoCast.ManualPauseSeconds));
         if (_manualPauseRemaining > 0.0f)
             ObserveTemporaryBlock(FeatureStatusReasonCode.ManualPause, "Auto Cast is paused after manual spell input.");
         ClearPendingCandidate();
@@ -737,7 +739,7 @@ Complete:
 
     private void ObserveTickStatus()
     {
-        if (_config.AutoCastMode.Value != AutoCastOperationMode.Active)
+        if (Config.AutoCast.Mode != AutoCastOperationMode.Active)
         {
             _featureStatus?.Observe(
                 false,
@@ -746,7 +748,7 @@ Complete:
                 "Auto Cast is disabled by configuration.");
             return;
         }
-        if (!_config.CanStartAutoCastActively)
+        if (!Config.CanStartAutoCastActively)
         {
             ObserveTemporaryBlock(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.");
             return;
@@ -798,8 +800,8 @@ Complete:
         }
 
         if (_isGameplayScene() &&
-            _config.CanStartAutoCastActively &&
-            _config.AutoCastFullCharge.Value &&
+            Config.CanStartAutoCastActively &&
+            Config.AutoCast.FullCharge &&
             _fullChargeCandidate.IsReadyingCast)
         {
             return false;
@@ -849,12 +851,12 @@ Complete:
 
     private void LogOperation(string message)
     {
-        if (!_config.IsOperationalLoggingEnabled)
+        if (!Config.Diagnostics.IsOperationalLoggingEnabled)
         {
             return;
         }
 
-        if (_config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose ||
+        if (Config.Diagnostics.DecisionLogLevel == AutomataDecisionLogLevel.Verbose ||
             _operationLogGate.ShouldLog("autocast-operation", TimeSpan.FromSeconds(_elapsedSeconds)))
         {
             _log.LogAutomataInfo(message);
@@ -863,7 +865,7 @@ Complete:
 
     private void LogStateTransition(string message)
     {
-        if (_config.IsOperationalLoggingEnabled)
+        if (Config.Diagnostics.IsOperationalLoggingEnabled)
         {
             _log.LogAutomataInfo(message);
         }
@@ -878,8 +880,8 @@ Complete:
             return;
         }
 
-        if (_config.IsOperationalLoggingEnabled &&
-            _config.DecisionLogLevel.Value == AutomataDecisionLogLevel.Verbose &&
+        if (Config.Diagnostics.IsOperationalLoggingEnabled &&
+            Config.Diagnostics.DecisionLogLevel == AutomataDecisionLogLevel.Verbose &&
             ShouldLogSlotState(candidate, state))
         {
             _log.LogAutomataInfo($"Auto Cast skipped slot {candidate.SlotIndex + 1}, {candidate.DisplayName}: {reason}.");
@@ -926,7 +928,7 @@ Complete:
 
     private void ResetDiagnosticStateWhenLoggingIsEnabled()
     {
-        var enabled = _config.IsOperationalLoggingEnabled;
+        var enabled = Config.Diagnostics.IsOperationalLoggingEnabled;
         if (enabled && !_operationalLoggingWasEnabled)
         {
             _slotLogGates.Clear();

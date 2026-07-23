@@ -291,7 +291,7 @@ public sealed class SuitePerformanceEvidence
         var work = coordinator.GetRegistrationSnapshots();
         if (work.Length > 64)
         {
-            throw new InvalidOperationException("Suite performance evidence V1 cannot contain more than 64 work identities.");
+            throw new InvalidOperationException("Suite performance evidence cannot contain more than 64 work identities.");
         }
         Array.Sort(work, CompareIdentity);
         for (var index = 1; index < work.Length; index++)

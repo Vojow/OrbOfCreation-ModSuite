@@ -5,6 +5,7 @@
     <IsTestProject>true</IsTestProject>
     <AssemblyName>OrbModding.Tests</AssemblyName>
     <RequireGameReferences>false</RequireGameReferences>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,9 +26,14 @@
     <ProjectReference Include="../OrbModding.RuntimeReplay/OrbModding.RuntimeReplay.csproj" />
     <ProjectReference Include="../../tools/OrbModding.ReplayConverter/OrbModding.ReplayConverter.csproj" />
     <ProjectReference Include="../../tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj" />
+    <ProjectReference Include="../../tools/OrbModding.ServiceCycleTrace/OrbModding.ServiceCycleTrace.csproj" />
     <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj" />
     <ProjectReference Include="../../src/OrbModConfig/OrbModConfig.csproj" />
     <ProjectReference Include="../../src/OrbMentor/OrbMentor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableSoakTests)' != 'true'">
+    <Compile Remove="Soak/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,6 +42,7 @@
     <None Include="../../data/known-entities.tsv" Link="data/known-entities.tsv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../data/suite-performance-profile-v1.json" Link="data/suite-performance-profile-v1.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/generate-known-entities.ps1" Link="tools/generate-known-entities.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../tools/generate-known-entities.sh" Link="tools/generate-known-entities.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../fixtures/automata/*.log" Link="fixtures/automata/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../fixtures/replays/*.json" Link="fixtures/replays/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

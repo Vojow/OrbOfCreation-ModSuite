@@ -1,6 +1,6 @@
 # Repository test strategy
 
-[Back to testing hub](README.md) · [Test architecture plan](../plans/testing-architecture.md) · [Headless E2E simulation](headless-e2e.md) · [Runtime UAT protocol](runtime-validation.md)
+[Back to testing hub](README.md) · [Headless E2E simulation](headless-e2e.md) · [Runtime UAT protocol](runtime-validation.md)
 
 Ordering-sensitive headless regressions may also use the
 [sanitized runtime replay format](runtime-replay.md).
@@ -18,11 +18,18 @@ Native Linux builds, BepInEx 6, and other game versions are unsupported until ex
 
 ## Automated test layers
 
-Run the deterministic suite without a game installation:
+Run the complete portable suite without a game installation:
 
 ```bash
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
+./script/test
 ```
+
+The script runs every ordinary partition, then the isolated compile-time profiling test project, under one
+hard 60-second deadline. Profiling outputs and intermediates cannot replace ordinary build artifacts.
+
+Concurrency tests synchronize on exact events or observable state and give every thread join a finite
+local failure deadline. A sleep interval is not evidence that work did not occur, and a multi-second test
+timeout is a failure bound rather than an expected test duration.
 
 The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status/ownership controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
 
@@ -31,6 +38,8 @@ Portable automation has three scopes:
 - unit/component tests isolate policies, reflection fixtures, schedulers, and lifecycle transitions;
 - headless integration tests connect production native adapters to focused game API stubs;
 - headless E2E runs the real mod engine against a deterministic simulated game boundary for complete queue, economy, lifecycle, and failure journeys.
+
+The production Common ServiceCycle engine is covered under `tests/OrbModding.Tests/Runtime/ServiceCycle`, with the Auto Harvest adapter and composition contracts under `tests/OrbModding.Tests/Services/AutoHarvest/Runtime/ServiceCycle`. Its portable gates prove ownership, half-duplex frame handoff, one-action-per-service frame rotation, lifecycle replacement, immediate emergency rejection, diagnostics coherence, bounded semantic tracing, replay validation, codec corruption handling, and allocation-free steady-state paths. They also exercise the opt-in exporter and real file storage in isolated temporary directories, including restart reconciliation, pruning, collision, stale-temporary cleanup, and ordinal exhaustion. Production path policy and composition have direct portable tests; installed-game behavior remains the separate UAT gate.
 
 Run the headless E2E and deterministic performance scopes independently with:
 
@@ -41,10 +50,11 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
 ```
 
-### Selectable test lanes
+### Focused and Windows test lanes
 
-Use the portable lane runner for normal development. It owns the stable filter
-expressions and writes a TRX result under `artifacts/test-results/`:
+Normal POSIX development uses `./script/test`. Focused raw `dotnet test --filter`
+commands are diagnostic aids. On Windows, the portable lane runner owns stable
+filter expressions and writes a TRX result under `artifacts/test-results/`:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
@@ -62,9 +72,6 @@ executes the complete portable suite. `AutoBuyDecision`,
 `AutoBuyReliability`, and `AutoBuyPerformance` answer independent policy,
 safety, and deterministic-work questions; a test may carry multiple positive
 categories when it supplies more than one kind of evidence.
-
-The complete layer/lane ownership model and its implementation phases live in
-the [test strategy and architecture plan](../plans/testing-architecture.md).
 
 Run the versioned configuration-schema scope independently with:
 
@@ -107,11 +114,14 @@ or contaminated native window still makes the capture unusable and returns 3.
 The coordinator's combined active-frame distribution is evaluated separately:
 p95 uses the 0.75 ms soft target, while p99 and maximum use the 1.0 ms hard
 target. A per-work pass therefore cannot hide stacked suite work in one frame.
-The twelve identity constants are consumed by the production registration
+The twelve active identity constants are consumed by the production registration
 sites as well as a checked-profile audit, so renaming or reclassifying runtime
 work without updating the profile fails portable CI. The same audit compares all
 twelve compiled starvation thresholds with both JSON wait fields, preventing the
 runtime resolver and checked profile from drifting independently.
+Auto Harvest is absent because ServiceCycle owns its capture and action rotation;
+its main-thread and worker costs are recorded by the independent performance-profile
+product rather than attributed to the legacy coordinator.
 
 CI produces a fixed-clock synthetic start/end capture and runs:
 

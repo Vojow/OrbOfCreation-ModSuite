@@ -1,53 +1,39 @@
 # Orb Mod Config
 
-Orb Mod Config is the optional in-game configuration surface for the mod suite and other loaded BepInEx plugins.
+Orb Mod Config `0.7.0` is the optional in-game configuration and runtime-diagnostics surface for the suite and other loaded BepInEx plugins.
 
-The current `0.6.3` build provides a simplified configuration UI:
+## Settings editor
 
-- feature-oriented presentation groups independent of raw BepInEx sections;
-- friendly setting names, hidden compatibility switches, dependency-aware controls, and apply indicators;
-- automatic Steam keyboard input for text fields when running on Steam Deck;
-- no hard Steamworks dependency, so desktop and non-Steam startup remain unchanged;
-- live synchronization of clean, unstaged fields when native controls or shortcuts change them;
-- staged multi-condition dependencies, so disabled modules and inactive subfeatures lock their tuning fields immediately while re-enable, safety, and diagnostic controls remain usable;
-- a distinct transition-driven configuration-schema band for plugins that publish Common migration status, joined by exact plugin GUID and kept separate from runtime health;
-- a distinct transition-driven runtime-status band for plugins that publish Common feature health, also joined by exact plugin GUID and kept separate from staged or saved configuration;
-- variable-height setting rows that keep complete descriptions and saved-versus-runtime guidance readable;
-- absolute same-page scroll retention across staged edits, defaults, Apply, Revert, and external refreshes;
-- responsive row remeasurement after resolution, window-size, or UI-scale width changes;
+- Discovers loaded plugins and typed BepInEx configuration entries.
+- Groups settings by mod and feature while preserving the original section/key contract.
+- Supports booleans, enums, bounded and unbounded numbers, strings, and keyboard shortcuts.
+- Stages edits until Apply, supports per-setting Default and global Revert, and rolls back earlier writes if Apply fails.
+- Honors optional presentation metadata for labels, dependencies, restart guidance, and hidden compatibility keys.
+- Keeps unstaged fields synchronized with external changes.
+- Preserves same-page scroll position and remeasures variable-height rows when the available width changes.
+- Removes its owned Unity objects and listeners on scene exit or plugin unload.
 
-The underlying editor continues to provide:
+The Mods button is cloned from native top-level navigation, remains last, and opens a mod-owned overlay rather than modifying native content panels. `[Interface] EnableButtonShell = false` disables that integration if the game UI changes incompatibly.
 
-- discovers loaded plugins and their typed BepInEx configuration entries;
-- groups entries deterministically by mod and presentation group, honoring optional public metadata;
-- classifies the editor each setting will require;
-- clones the last available native top-tab visuals into a Mods button that is available from the start and remains last;
-- opens a mod-owned overlay panel and closes it from Mods or any native top-level tab;
-- presents loaded mods as a horizontal tab row and simplified feature groups as a second tab row;
-- renders a scrollable settings list with descriptions, ranges, current values, and defaults;
-- edits booleans, enums, bounded/unbounded numbers, strings, and keyboard-shortcut serialization;
-- stages all changes until Apply, supports per-setting Default and global Revert, validates before writing, and saves through each owning `ConfigFile`;
-- rolls back already-written entries when an Apply operation throws;
-- removes every owned object and native close listener on scene exit or plugin unload.
+## Runtime page
 
-`0.3.1` also restores the Mods button's native inactive sprite when the panel is closed, instead of retaining the highlighted Time sprite copied during cloning.
+Runtime is separate from staged configuration. It joins evidence by exact plugin GUID and service ID and does not treat a successful config save as proof that behavior applied immediately.
 
-`0.3.2` makes Mods participate in the top-level navigation state: opening it temporarily deactivates the selected native tab, toggling Mods closed restores that tab, and choosing another native tab closes Mods without restoring the prior selection.
+It presents:
 
-`0.5.2` keeps all underlying BepInEx section/key names compatible while allowing plugins to supply UI-only grouping, labels, dependencies, and restart metadata. It also makes the Mods tab available before NG+, keeps it last in the native navigation row, and refreshes unstaged values when native controls or shortcuts change them.
+- configuration-schema and feature-health status;
+- per-service capability state and current reason;
+- latest scheduling and cycle evidence;
+- explicit start/stop controls for manual full traces;
+- start/stop controls for profiling builds;
+- read-only rolling decision-journal health; and
+- a bounded 1,200-frame ServiceCycle pump chart rendered directly into the available plot as one exact-frame
+  mesh, without paging or creating one Unity object per frame.
 
-`0.5.3` retries installation while slower UI hierarchies finish loading. Shell liveness includes both the button and its ScreenContent panel; losing either host or failing to open/close the panel restores the prior native view (or another surviving native view), detaches the old shell listeners, and schedules a clean reinstall. Loaded-plugin catalog discovery and logging, UI installation, repair, native-tab event maintenance, and the five-second integrity check run only when due through the shared cooperative frame budget. The catalog is enumerated and logged once, after the first admitted installation lease. Budget denial retains pending work without enumerating plugins, logging the catalog, scanning the scene, or rebinding listeners; disabled and non-gameplay scenes remain idle, and scene exit or unload unregisters the work and removes owned listeners.
+The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. Cards update through the existing open-page cadence, and pre-created chart bars are reused rather than allocated per sample.
 
-`0.6.0` lets one setting require multiple staged values and evaluates all requirements without writing configuration early. Enum changes rebuild the current settings rows immediately, matching the existing boolean behavior, so enabling or disabling a module updates its dependent editors in the same interaction.
+## Configuration behavior
 
-`0.6.1` consumes the suite's shared lifecycle generation so scene recreation and late plugin initialization use the same idempotent readiness boundary as Automata and Mentor.
+A successful Apply publishes exact plugin GUID plus section/key invalidations through Common. Validation failure, save failure, or rollback publishes nothing. Failed or future suite schemas remain selectable as read-only status-only tabs without exposing configuration paths or serialized values.
 
-`0.6.2` sizes each setting row from its rendered description, preserves the current absolute scroll offset when the same page rebuilds, and remeasures rows when the available content width changes. Selecting another mod or feature section still begins at the top.
-
-`0.6.3` claims schema version 1 before binding its own settings and adds a separate status band for the selected plugin's exact-GUID schema result: current, migrated, failed, future, saved, loaded, and whether a backup was created. Its status callback only marks an atomic latch, leaving Unity text access to the normal UI tick. Failed or future Automata/Mentor instances with no visible bound settings remain selectable as read-only status-only tabs with no Apply action; unreported empty third-party plugins remain omitted. It never exposes a configuration path or serialized value. This status remains independent from feature runtime health and from the Apply footer; Mod Config's own schema failure is logged before the UI starts.
-
-A fully successful Apply now publishes exact plugin GUID plus source section/key invalidations through Common's bounded completed-frame bus. Validation, save, or `SettingChanged` rollback publishes nothing. The existing 0.1-second clean-field polling remains the compatibility path for native controls and third-party plugins, and staged edits retain their conflict behavior.
-
-The next-beta health pass stops treating a successful config save as proof that runtime behavior applied immediately. The footer reports configuration transaction results, while the separate runtime band shows each selected plugin's published feature state and structured reason. Plugins that do not publish health remain supported and are shown as not reporting runtime status.
-
-Set `[Interface] EnableButtonShell = false` as an emergency off switch. Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.
+Unsupported custom setting types remain read-only. Closing the panel preserves staged values for the current scene; Revert explicitly discards them.

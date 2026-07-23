@@ -836,6 +836,7 @@ namespace BepInEx
     public static class Paths
     {
         public static string GameRootPath { get; set; } = string.Empty;
+        public static string ConfigPath { get; set; } = string.Empty;
     }
 
     public sealed class PluginInfo
@@ -878,6 +879,8 @@ namespace BepInEx.Configuration
         public int? ThrowOnSaveCall { get; set; }
 
         public int? ThrowOnReloadCall { get; set; }
+
+        public event EventHandler<SettingChangedEventArgs>? SettingChanged;
 
         public bool ThrowOnEveryReload { get; set; }
 
@@ -947,9 +950,20 @@ namespace BepInEx.Configuration
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
 
+        internal void OnSettingChanged(ConfigEntryBase entry) =>
+            SettingChanged?.Invoke(this, new SettingChangedEventArgs(entry));
+
         public IEnumerator<KeyValuePair<ConfigDefinition, ConfigEntryBase>> GetEnumerator() => _entries.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    public sealed class SettingChangedEventArgs : EventArgs
+    {
+        public SettingChangedEventArgs(ConfigEntryBase changedSetting) =>
+            ChangedSetting = changedSetting;
+
+        public ConfigEntryBase ChangedSetting { get; }
     }
 
     public sealed class ConfigDefinition : IEquatable<ConfigDefinition>
@@ -1032,6 +1046,7 @@ namespace BepInEx.Configuration
             {
                 _value = value;
                 SettingChanged?.Invoke(this, EventArgs.Empty);
+                ConfigFile.OnSettingChanged(this);
             }
         }
 
@@ -1422,6 +1437,20 @@ namespace UnityEngine
         public static Vector2 one => new Vector2(1f, 1f);
     }
 
+    public readonly struct Vector3
+    {
+        public Vector3(float x, float y, float z = 0f)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public readonly float x;
+        public readonly float y;
+        public readonly float z;
+    }
+
     public readonly struct Color
     {
         public Color(float r, float g, float b, float a = 1f)
@@ -1439,6 +1468,28 @@ namespace UnityEngine
         public static Color white => new Color(1f, 1f, 1f, 1f);
 
         public static Color Lerp(Color a, Color b, float t) => t < 0.5f ? a : b;
+    }
+
+    public readonly struct Color32
+    {
+        public Color32(byte r, byte g, byte b, byte a)
+        {
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.a = a;
+        }
+
+        public readonly byte r;
+        public readonly byte g;
+        public readonly byte b;
+        public readonly byte a;
+
+        public static implicit operator Color32(Color color) => new Color32(
+            (byte)(color.r * byte.MaxValue),
+            (byte)(color.g * byte.MaxValue),
+            (byte)(color.b * byte.MaxValue),
+            (byte)(color.a * byte.MaxValue));
     }
 
     public class CanvasRenderer : Component
@@ -1491,13 +1542,20 @@ namespace UnityEngine
     {
         public Rect(float x, float y, float width, float height)
         {
+            this.x = x;
+            this.y = y;
             this.width = width;
             this.height = height;
         }
 
+        public readonly float x;
+        public readonly float y;
         public readonly float width;
-
         public readonly float height;
+        public float xMin => x;
+        public float xMax => x + width;
+        public float yMin => y;
+        public float yMax => y + height;
     }
 
     public static class GUI
@@ -1519,6 +1577,36 @@ namespace UnityEngine.UI
     {
         public UnityEngine.Color color { get; set; } = UnityEngine.Color.white;
         public bool raycastTarget { get; set; }
+        public UnityEngine.RectTransform rectTransform =>
+            (UnityEngine.RectTransform)transform;
+
+        protected void SetVerticesDirty()
+        {
+        }
+    }
+
+    public class MaskableGraphic : Graphic
+    {
+        protected virtual void OnPopulateMesh(VertexHelper helper)
+        {
+        }
+    }
+
+    public sealed class VertexHelper
+    {
+        public int currentVertCount { get; private set; }
+
+        public void Clear() => currentVertCount = 0;
+
+        public void AddVert(
+            UnityEngine.Vector3 position,
+            UnityEngine.Color32 color,
+            UnityEngine.Vector2 uv0) =>
+            currentVertCount++;
+
+        public void AddTriangle(int index0, int index1, int index2)
+        {
+        }
     }
 
     public class Image : Graphic
@@ -1570,8 +1658,10 @@ namespace UnityEngine.UI
 
         public bool horizontal { get; set; }
         public bool vertical { get; set; }
+        public bool inertia { get; set; }
         public MovementType movementType { get; set; }
         public float scrollSensitivity { get; set; }
+        public float horizontalNormalizedPosition { get; set; }
         public float verticalNormalizedPosition { get; set; }
         public UnityEngine.RectTransform? viewport { get; set; }
         public UnityEngine.RectTransform? content { get; set; }

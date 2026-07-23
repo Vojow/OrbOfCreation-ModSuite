@@ -4,13 +4,13 @@ namespace OrbAutomata;
 
 internal sealed class AutoBuyToggleControl
 {
-    private readonly AutomataConfig _config;
+    private readonly IAutomataConfigurationEditor _config;
     private readonly System.Func<AutoSpellLevelCapability> _readSpellLevelCapability;
     private readonly System.Func<AutomationDecision?> _readLatestDecision;
     private readonly System.Func<FeatureStatusSnapshot>? _readStatus;
     private readonly System.Func<FeatureStatusSnapshot>? _readSpellLevelStatus;
     public AutoBuyToggleControl(
-        AutomataConfig config,
+        IAutomataConfigurationEditor config,
         System.Func<AutoSpellLevelCapability>? readSpellLevelCapability = null,
         System.Func<AutomationDecision?>? readLatestDecision = null,
         System.Func<FeatureStatusSnapshot>? readStatus = null,
@@ -22,7 +22,7 @@ internal sealed class AutoBuyToggleControl
         _readStatus = readStatus;
         _readSpellLevelStatus = readSpellLevelStatus;
     }
-    internal AutomataConfig Config => _config;
+    internal AutomataConfiguration Config => _config.Current;
     internal AutoSpellLevelCapability SpellLevelCapability => _readSpellLevelCapability();
     internal FeatureStatusSnapshot Status => _readStatus?.Invoke() ?? CreateFallbackStatus();
     internal FeatureStatusSnapshot SpellLevelStatus => _readSpellLevelStatus?.Invoke() ?? CreateFallbackSpellLevelStatus();
@@ -30,12 +30,12 @@ internal sealed class AutoBuyToggleControl
     {
         get
         {
-            if (_config.AutoBuyMode.Value == AutoBuyOperationMode.Disabled)
+            if (Config.AutoBuy.Mode == AutoBuyOperationMode.Disabled)
             {
                 return CreateConfigurationDecision("Auto Buy mode is disabled.");
             }
 
-            if (!_config.CanStartAutoBuyActively)
+            if (!Config.CanStartAutoBuyActively)
             {
                 return CreateConfigurationDecision("Automata Emergency Disable is active.");
             }
@@ -44,8 +44,7 @@ internal sealed class AutoBuyToggleControl
         }
     }
     public AutoCastToggleVisualState State => AutomataFeatureStatusVisuals.ToVisualState(Status);
-    public void Toggle() => _config.AutoBuyMode.Value = _config.AutoBuyMode.Value == AutoBuyOperationMode.Active
-        ? AutoBuyOperationMode.Disabled : AutoBuyOperationMode.Active;
+    public void Toggle() => _config.ToggleAutoBuy();
 
     private static AutomationDecision CreateConfigurationDecision(string detail) =>
         new AutomationDecision(
@@ -58,29 +57,29 @@ internal sealed class AutoBuyToggleControl
 
     private FeatureStatusSnapshot CreateFallbackStatus()
     {
-        var enabled = _config.AutoBuyMode.Value == AutoBuyOperationMode.Active;
+        var enabled = Config.AutoBuy.Mode == AutoBuyOperationMode.Active;
         return new FeatureStatusSnapshot(
             new FeatureStatusKey(PluginIds.AutomataGuid, AutomataFeatureStatuses.AutoBuyFeatureId),
             "Auto Buy",
             enabled,
             !enabled
                 ? FeatureStatusState.ConfigurationDisabled
-                : !_config.CanStartAutoBuyActively
+                : !Config.CanStartAutoBuyActively
                     ? FeatureStatusState.TemporarilyBlocked
                     : FeatureStatusState.Operational,
             !enabled
                 ? new FeatureStatusReason(FeatureStatusReasonCode.ConfigurationDisabled, "Auto Buy is disabled by configuration.")
-                : !_config.CanStartAutoBuyActively
+                : !Config.CanStartAutoBuyActively
                     ? new FeatureStatusReason(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.")
                     : default);
     }
 
     private FeatureStatusSnapshot CreateFallbackSpellLevelStatus()
     {
-        var configured = _config.AutoLevelSpells.Value;
+        var configured = Config.AutoBuy.AutoLevelSpells;
         var state = !configured
             ? FeatureStatusState.ConfigurationDisabled
-            : !_config.CanStartAutoBuyActively
+            : !Config.CanStartAutoBuyActively
                 ? FeatureStatusState.TemporarilyBlocked
                 : SpellLevelCapability == AutoSpellLevelCapability.Locked
                     ? FeatureStatusState.Locked

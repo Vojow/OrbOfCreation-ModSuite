@@ -10,16 +10,25 @@ module ownership, installed-game contracts, and runtime validation.
 - [Headless E2E](headless-e2e.md) — deterministic simulation boundaries,
   scenarios, metrics, and performance reports.
 - [Runtime replay](runtime-replay.md) — sanitized ordering-sensitive fixtures.
+- [ServiceCycle `.oscr` evidence](../runtime-architecture/replay.md#human-readable-trace-report) — decode a
+  production artifact into bounded timing and causal evidence.
 - [Native contracts](native-contracts.md) — manifest and installed-assembly
   verification.
 - [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
-- [Test architecture plan](../plans/testing-architecture.md) — lifecycle and
-  future improvements; plans are not evidence of completed behavior.
+Run the complete normal-development feedback loop with:
 
-Run the normal local feedback loop with:
+```bash
+./script/test
+```
+
+This runs every portable partition with a hard 60-second wall-clock deadline,
+including deterministic performance/allocation simulations and external-process
+tests. The deadline exposes deadlocks or accidental soak behavior promptly.
+
+On Windows, the equivalent lane helper remains:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane All
 ```
 
 Run a focused risk lane with:
@@ -70,10 +79,13 @@ When a test is added or its ownership changes:
 
 1. Put it in the narrowest module/feature guide that explains its risk.
 2. Add a stable category when the test belongs to a reusable risk lane.
-3. Keep `PerformanceSimulation` and `ExternalProcess` mutually exclusive.
-4. Update the relevant runtime handoff when portable evidence changes what UAT
+3. Put allocation probes, large deterministic stress workloads, and soak-style
+   iteration counts in `PerformanceSimulation`, even when they happen to run
+   quickly on one machine.
+4. Keep `PerformanceSimulation` and `ExternalProcess` mutually exclusive.
+5. Update the relevant runtime handoff when portable evidence changes what UAT
    must still prove.
-5. Record results only when they ran on the current tree or exact release
+6. Record results only when they ran on the current tree or exact release
    artifact.
 
 Do not duplicate large test inventories across pages. Feature pages own detailed

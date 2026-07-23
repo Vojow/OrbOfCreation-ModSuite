@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mode_args=()
+profile_args=()
+build_args=()
+output_root="bin-stubs"
+if [[ "${1:-}" == "--full" ]]; then
+    mode_args=(--full)
+    shift
+elif [[ "${1:-}" == "--journal" ]]; then
+    mode_args=(--journal)
+    shift
+elif [[ "${1:-}" == "--performance" ]]; then
+    mode_args=(--performance)
+    build_args=(-p:EnableServiceCycleProfiler=true)
+    output_root="bin-profile-stubs"
+    shift
+elif [[ "${1:-}" == "--dashboard" ]]; then
+    mode_args=(--dashboard)
+    build_args=(-p:EnableServiceCycleProfiler=true)
+    output_root="bin-profile-stubs"
+    shift
+elif [[ "${1:-}" == "--profile" ]]; then
+    if [[ "$#" -lt 3 ]]; then
+        echo "Usage: ./script/trace [--profile auto-harvest] <artifact.oscr> [report.md]" >&2
+        exit 2
+    fi
+    profile_args=(--profile "$2")
+    shift 2
+fi
+if [[ "$#" -ne 1 && "$#" -ne 2 ]]; then
+    echo "Usage: ./script/trace [--profile auto-harvest] <artifact.oscr> [report.md]" >&2
+    echo "       ./script/trace --full <session-directory> [report.md]" >&2
+    echo "       ./script/trace --journal <journal-directory> [report.md]" >&2
+    echo "       ./script/trace --performance <profile-session-directory> [report.md]" >&2
+    echo "       ./script/trace --dashboard <correlated-capture-directory> <dashboard.html>" >&2
+    exit 2
+fi
+if [[ "${mode_args[0]:-}" == "--dashboard" && "$#" -ne 2 ]]; then
+    echo "Usage: ./script/trace --dashboard <correlated-capture-directory> <dashboard.html>" >&2
+    exit 2
+fi
+
+project="${repository_root}/tools/OrbModding.ServiceCycleTrace/OrbModding.ServiceCycleTrace.csproj"
+build_command=(
+    dotnet build
+    "$project"
+    --configuration Debug
+    --disable-build-servers
+    -m:1
+    -p:UseGameStubs=true
+)
+if [[ -n "${build_args[0]:-}" ]]; then
+    build_command+=("${build_args[@]}")
+fi
+"${build_command[@]}"
+
+command=(
+    dotnet
+    "${repository_root}/tools/OrbModding.ServiceCycleTrace/${output_root}/Debug/net10.0/OrbModding.ServiceCycleTrace.dll"
+    --input "$1"
+)
+if [[ -n "${mode_args[0]:-}" ]]; then
+    command+=("${mode_args[@]}")
+fi
+if [[ -n "${profile_args[0]:-}" ]]; then
+    command+=("${profile_args[@]}")
+fi
+if [[ "$#" -eq 2 ]]; then
+    command+=(--output "$2")
+fi
+"${command[@]}"

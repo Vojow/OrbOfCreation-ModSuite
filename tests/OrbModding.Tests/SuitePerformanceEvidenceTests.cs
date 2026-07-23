@@ -25,8 +25,11 @@ public sealed class SuitePerformanceEvidenceTests
 
         Assert.EndsWith("\n", captured.Json, StringComparison.Ordinal);
         Assert.Equal(captured.Json, PerformanceEvidencePipeline.CanonicalizeEvidence(captured.Json));
-        Assert.Equal(12, captured.Evidence.Start.Work.Count);
-        Assert.Equal(12, captured.Evidence.End.Work.Count);
+        Assert.Equal(SuitePerformanceWorkIdentities.SupportedSuiteV1Count, captured.Evidence.Start.Work.Count);
+        Assert.Equal(SuitePerformanceWorkIdentities.SupportedSuiteV1Count, captured.Evidence.End.Work.Count);
+        Assert.Equal(1, captured.Evidence.SchemaVersion);
+        Assert.Equal(SuitePerformanceEvidence.ProfileId, captured.Evidence.ProfileId);
+        Assert.Equal(SuitePerformanceEvidence.ProfileVersion, captured.Evidence.ProfileVersion);
         Assert.Equal(SuitePerformanceEvidence.ProfileSha256, captured.Profile.SourceSha256);
         Assert.DoesNotContain(captured.Json, "registrationId", StringComparison.Ordinal);
         Assert.DoesNotContain(captured.Json, "user", StringComparison.OrdinalIgnoreCase);
@@ -109,6 +112,8 @@ public sealed class SuitePerformanceEvidenceTests
             new string(' ', PerformanceEvidencePipeline.MaximumBytes + 1)));
         Assert.Throws<InvalidDataException>(() => PerformanceEvidencePipeline.ParseEvidence(
             captured.Json.Replace("\"schemaVersion\":1", "\"schemaVersion\":2", StringComparison.Ordinal)));
+        Assert.Throws<InvalidDataException>(() => PerformanceEvidencePipeline.ParseEvidence(
+            captured.Json.Replace("\"profileVersion\":1", "\"profileVersion\":2", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -118,7 +123,10 @@ public sealed class SuitePerformanceEvidenceTests
         Assert.Throws<InvalidDataException>(() => PerformanceEvidencePipeline.ParseEvidence(
             captured.Json.Replace("\"synthetic\"", "\"unknown-platform\"", StringComparison.Ordinal)));
         Assert.Throws<InvalidDataException>(() => PerformanceEvidencePipeline.ParseEvidence(
-            captured.Json.Replace("\"durationFrames\":13", "\"durationFrames\":-1", StringComparison.Ordinal)));
+            captured.Json.Replace(
+                $"\"durationFrames\":{captured.Evidence.Metadata.DurationFrames}",
+                "\"durationFrames\":-1",
+                StringComparison.Ordinal)));
 
         var work = captured.Evidence.End.Work[0];
         var invalid = work with { NativeMutationAttempts = work.NativeCallsAttempted + 1 };
@@ -443,8 +451,13 @@ public sealed class SuitePerformanceEvidenceTests
     [Fact]
     public void CheckedProfileMatchesProductionRegistrationIdentityCatalog()
     {
-        var profile = PerformanceEvidencePipeline.ReadProfile(
-            Path.Combine(AppContext.BaseDirectory, "data", "suite-performance-profile-v1.json"));
+        var profilePath = Path.Combine(AppContext.BaseDirectory, "data", "suite-performance-profile-v1.json");
+        var profile = PerformanceEvidencePipeline.ReadProfile(profilePath);
+        Assert.Equal(4173, File.ReadAllBytes(profilePath).Length);
+        Assert.Equal(1, profile.SchemaVersion);
+        Assert.Equal(SuitePerformanceEvidence.ProfileId, profile.ProfileId);
+        Assert.Equal(SuitePerformanceEvidence.ProfileVersion, profile.ProfileVersion);
+        Assert.Equal(SuitePerformanceEvidence.ProfileSha256, profile.SourceSha256);
         Assert.Equal(SuitePerformanceWorkIdentities.SupportedSuiteV1Count, profile.Rules.Count);
         for (var index = 0; index < profile.Rules.Count; index++)
         {

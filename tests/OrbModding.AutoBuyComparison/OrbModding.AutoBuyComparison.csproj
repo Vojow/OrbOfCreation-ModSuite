@@ -5,6 +5,7 @@
     <AssemblyName>OrbModding.Tests</AssemblyName>
     <RootNamespace>OrbModding.AutoBuyComparison</RootNamespace>
     <RequireGameReferences>false</RequireGameReferences>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ComparisonSourceRoot Condition="'$(ComparisonSourceRoot)' == ''">$(MSBuildThisFileDirectory)..\..</ComparisonSourceRoot>
     <DefineConstants Condition="'$(LegacyMainApi)' == 'true'">$(DefineConstants);LEGACY_MAIN_API</DefineConstants>
     <DefineConstants Condition="'$(IntermediateQueueApi)' == 'true'">$(DefineConstants);INTERMEDIATE_QUEUE_API</DefineConstants>

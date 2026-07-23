@@ -11,6 +11,44 @@ namespace OrbModding.Tests;
 public sealed class ModConfigGameplayInvalidationTests
 {
     [Fact]
+    public void ApplyCoordinatorPublishesOnlyToItsInjectedBus()
+    {
+        var config = new ConfigFile();
+        config.Bind("General", "Enabled", true, "Enabled");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("injected.plugin", "Injected", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        session.Values.Single().Stage("false");
+        var monitor = new GameLifecycleMonitor(() => 1);
+        using var injected = new GameplayInvalidationBus(monitor, readThreadId: () => 1);
+        using var unrelated = new GameplayInvalidationBus(monitor, readThreadId: () => 1);
+        var injectedChanges = new List<GameplayInvalidation>();
+        var unrelatedChanges = new List<GameplayInvalidation>();
+        using var injectedSubscription = injected.Subscribe(
+            new GameplayInvalidationFilter(
+                GameplayInvalidationKind.Configuration,
+                GameplayInvalidationDomains.ModConfig),
+            injectedChanges.Add);
+        using var unrelatedSubscription = unrelated.Subscribe(
+            new GameplayInvalidationFilter(
+                GameplayInvalidationKind.Configuration,
+                GameplayInvalidationDomains.ModConfig),
+            unrelatedChanges.Add);
+        var apply = new ModSettingsApplyCoordinator(injected, () => 12);
+
+        Assert.True(apply.TryApply(session, out var error, out var published), error);
+        Assert.Equal(1, published);
+        injected.Pump(13, GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        unrelated.Pump(13, GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+
+        Assert.Single(injectedChanges);
+        Assert.Empty(unrelatedChanges);
+        Assert.Equal(12L, injectedChanges[0].Burst);
+    }
+
+    [Fact]
     public void SuccessfulApplyPublishesExactCommittedConfigurationTargets()
     {
         const string pluginGuid = "com.example.configuration";

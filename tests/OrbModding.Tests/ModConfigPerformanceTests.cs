@@ -127,43 +127,49 @@ public sealed class ModConfigPerformanceTests
         var references = new List<FakeReference> { deadA, alive, deadB };
         var detached = new List<string>();
 
-        var removed = ModConfigUiShell.PruneDead(references, item => item.Alive, item => detached.Add(item.Name));
+        var removed = ModConfigNativeNavigationPolicy.PruneDead(
+            references,
+            item => item.Alive,
+            item => detached.Add(item.Name));
 
         Assert.Equal(2, removed);
         Assert.Same(alive, Assert.Single(references));
         Assert.Equal(new[] { "dead-b", "dead-a" }, detached);
-        Assert.Equal(0, ModConfigUiShell.PruneDead(references, item => item.Alive, item => detached.Add(item.Name)));
+        Assert.Equal(0, ModConfigNativeNavigationPolicy.PruneDead(
+            references,
+            item => item.Alive,
+            item => detached.Add(item.Name)));
         Assert.Equal(2, detached.Count);
     }
 
     [Fact]
     public void PanelLossInvalidatesShellEvenWhenButtonSurvives()
     {
-        Assert.False(ModConfigUiShell.HostsAlive(
-            shellHealthy: true, buttonAlive: true, panelAlive: false, parentsAlive: true));
-        Assert.True(ModConfigUiShell.HostsAlive(
-            shellHealthy: true, buttonAlive: true, panelAlive: true, parentsAlive: true));
+        Assert.False(ModConfigNativeNavigationPolicy.HostsAlive(
+            hostHealthy: true, buttonAlive: true, panelAlive: false, parentsAlive: true));
+        Assert.True(ModConfigNativeNavigationPolicy.HostsAlive(
+            hostHealthy: true, buttonAlive: true, panelAlive: true, parentsAlive: true));
     }
 
     [Fact]
     public void OpenFailureRestoresPreviousNativeViewAndRequestsRepair()
     {
-        var recovery = ModConfigUiShell.OpenFailureRecovery(
+        var recovery = ModConfigNativeNavigationPolicy.OpenFailureRecovery(
             restoreRequested: true, previousAlive: true, fallbackAlive: true, anyNativeActive: false);
 
         Assert.True(recovery.RestorePrevious);
         Assert.False(recovery.RestoreFallback);
         Assert.True(recovery.RepairRequired);
-        Assert.False(ModConfigUiShell.OpenFailureRecovery(
+        Assert.False(ModConfigNativeNavigationPolicy.OpenFailureRecovery(
             restoreRequested: true, previousAlive: true, fallbackAlive: true, anyNativeActive: true).RestorePrevious);
-        Assert.False(ModConfigUiShell.HostsAlive(
-            shellHealthy: !recovery.RepairRequired, buttonAlive: true, panelAlive: true, parentsAlive: true));
+        Assert.False(ModConfigNativeNavigationPolicy.HostsAlive(
+            hostHealthy: !recovery.RepairRequired, buttonAlive: true, panelAlive: true, parentsAlive: true));
     }
 
     [Fact]
     public void OpenPanelHostLossRestoresFallbackAndDetachesOldListenersExactlyOnce()
     {
-        var recovery = ModConfigUiShell.OpenFailureRecovery(
+        var recovery = ModConfigNativeNavigationPolicy.OpenFailureRecovery(
             restoreRequested: true, previousAlive: false, fallbackAlive: true, anyNativeActive: false);
         var listeners = new List<string> { "magic", "time", "mods" };
         var detached = new List<string>();
@@ -171,10 +177,10 @@ public sealed class ModConfigPerformanceTests
         Assert.False(recovery.RestorePrevious);
         Assert.True(recovery.RestoreFallback);
         Assert.True(recovery.RepairRequired);
-        Assert.Equal(3, ModConfigUiShell.DetachAll(listeners, detached.Add));
+        Assert.Equal(3, ModConfigNativeNavigationPolicy.DetachAll(listeners, detached.Add));
         Assert.Empty(listeners);
         Assert.Equal(new[] { "magic", "time", "mods" }, detached);
-        Assert.Equal(0, ModConfigUiShell.DetachAll(listeners, detached.Add));
+        Assert.Equal(0, ModConfigNativeNavigationPolicy.DetachAll(listeners, detached.Add));
         Assert.Equal(3, detached.Count);
 
         // A repaired shell owns a fresh listener ledger; none of the disposed
@@ -184,5 +190,49 @@ public sealed class ModConfigPerformanceTests
         Assert.Empty(listeners);
     }
 
+    [Fact]
+    public void NativeViewContractIsValidatedAndCachedOncePerType()
+    {
+        Assert.False(NativeViewAdapter.IsViewTypeCached(typeof(FakeNativeView)));
+        Assert.True(NativeViewAdapter.TryValidateViewType(typeof(FakeNativeView), out var reason), reason);
+        Assert.True(NativeViewAdapter.IsViewTypeCached(typeof(FakeNativeView)));
+        Assert.True(NativeViewAdapter.TryValidateViewType(typeof(FakeNativeView), out reason), reason);
+    }
+
+    [Fact]
+    public void NativeViewContractRejectsIncorrectMethodShapes()
+    {
+        Assert.False(NativeViewAdapter.TryValidateViewType(typeof(InvalidNativeView), out var reason));
+        Assert.Contains("bool IsActive()", reason);
+    }
+
+    [Fact]
+    public void OpeningUiSchedulesRefreshForCoordinatorInsteadOfRunningItInline()
+    {
+        var refresh = new ModConfigRefreshScheduler(0.1f);
+
+        refresh.Open();
+
+        Assert.True(refresh.IsPending);
+        refresh.Complete();
+        Assert.False(refresh.IsPending);
+        Assert.False(refresh.Schedule(0.05f));
+        Assert.True(refresh.Schedule(0.06f));
+        refresh.Close();
+        Assert.False(refresh.IsPending);
+    }
+
     private sealed record FakeReference(bool Alive, string Name);
+
+    private sealed class FakeNativeView
+    {
+        public bool IsActive() => true;
+        public void SetActive(bool active) { }
+    }
+
+    private sealed class InvalidNativeView
+    {
+        public int IsActive() => 1;
+        public void SetActive(bool active) { }
+    }
 }

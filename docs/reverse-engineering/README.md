@@ -95,6 +95,8 @@ mindmap
 
 ## Auto Buy dossier
 
+- [Raw-fact input graph](auto-buy-raw-fact-inputs.md) — installed Structure,
+  Upgrade, resource, prerequisite, and modifier inputs for worker-side game math.
 - [Native purchase pipeline](auto-buy-native-pipeline.md) — discovery,
   admission, live validation, mutation verification, and failure boundaries.
 - [Queue and completion model](auto-buy-queue-and-completion.md) — shared queue

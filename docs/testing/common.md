@@ -21,6 +21,10 @@ unit test for the changed type.
 | Failure circuits/admission | [AutomationCircuitBreakerTests.cs](../../tests/OrbModding.Tests/AutomationCircuitBreakerTests.cs), [AutomationAdmissionAdapterTests.cs](../../tests/OrbModding.Tests/AutomationAdmissionAdapterTests.cs) | Automata and Mentor adapters |
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
+| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | Auto Harvest production registration and frame pump |
+| ServiceCycle semantic trace and replay | [Runtime/ServiceCycle/Replay](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Replay), [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing) | Auto Harvest replay capture and offline verification |
+| Replay segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle exporters and future service capture adapters |
+| Runtime architecture boundaries | [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs), [ServiceCycleArchitectureTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Registration/ServiceCycleArchitectureTests.cs) | Common and every future ServiceCycle service |
 
 ## Selection
 

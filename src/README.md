@@ -2,7 +2,7 @@
 
 Build plugin projects with `OOC_GAME_DIR` set to the Orb Of Creation install root.
 
-Expected install layout:
+Expected build-reference layout (use a gitignored staged tree on non-Windows platforms):
 
 ```text
 $OOC_GAME_DIR/
@@ -13,15 +13,21 @@ $OOC_GAME_DIR/
   Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll
 ```
 
-Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally small and must not grow into a shared gameplay framework until duplicated implementation pressure proves it is worth extracting.
+Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by those DLLs. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
-Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance source lives only on `codex/experimental-chronomancer-resonance` and must not be inferred from old build-output directories.
+Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance are not part of this branch and must not be inferred from old build-output directories.
 
 ## Shared configuration schemas
 
 `OrbModding.Common.ConfigurationSchemaTransaction` is the supported pre-bind configuration boundary. A plugin declares ordered one-version steps and a hidden `[OrbModding] ConfigurationSchemaVersion`; the transaction snapshots the original file, creates a non-overwriting sibling backup, disables `SaveOnConfigSet`, consumes only reviewed source keys, runs normal typed binding, writes the marker last, and saves once. Current schema files bypass mutation. Malformed, negative, future, bind, and save failures return no usable configuration and restore the original file exactly before publishing a sanitized exact-GUID status.
 
-Migration code must use explicit known-key maps and closed safe failure codes. It must not surface arbitrary exception messages, file paths, serialized values, or infer meaning from unknown settings. See the [versioned configuration schema plan](../docs/plans/configuration-schema.md).
+Migration code must use explicit known-key maps and closed safe failure codes. It must not surface arbitrary exception messages, file paths, serialized values, or infer meaning from unknown settings.
+
+## Deterministic runtime foundation
+
+`OrbModding.Common.Runtime` still contains the production-composed R0 scheduler used by Auto Harvest: monotonic time, generation-stamped demand, bounded mailboxes, deterministic collect-then-dispatch selection, command admission, native outcomes, fixed-capacity causal telemetry, and exact-plugin runtime diagnostics. The contracts contain no Unity objects or gameplay policy, and Orb Mod Config consumes their typed projections.
+
+`OrbModding.Common.Runtime.ServiceCycle` is the accepted replacement foundation. The ordinary runner through semantic export, snapshot export, schema-v5 recording, and strict full-topology production replay is portable-verified and has passed the completed S5 adversarial review. None is production-composed. The uncomposed Auto Harvest pilot, atomic cutover, and deletion of the older R0 scheduler remain. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
 
 ## Shared automation decisions
 
@@ -41,13 +47,13 @@ The classifier caches the verified registry snapshot and per-recipe results. Cal
 
 ## Shared typed registry resolver
 
-`OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only. See the [typed resolver plan](../docs/plans/typed-registry-resolver.md).
+`OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only.
 
 Common's suite-internal `KnownEntities` is a checked-in generated declaration set for the small, explicitly selected supported-domain subset in `data/known-entities.tsv`. Each `KnownEntity<TContract>` has a suite-owned type marker plus UUID, expected managed type name, and diagnostic asset name; generated signatures never embed fragile game types. The build verifies it against the canonical 2,792-row mapping, while runtime consumers still resolve through `TypedRegistryResolver` and validate the installed game.
 
-`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across supported plugins. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct. See the [invalidation bus plan](../docs/plans/gameplay-invalidation-bus.md).
+`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across supported plugins. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct.
 
-`OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation. See the [ownership plan](../docs/plans/action-family-ownership.md).
+`OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation.
 
 ## Orb Mentor
 

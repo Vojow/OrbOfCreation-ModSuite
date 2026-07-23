@@ -1,5 +1,16 @@
 # Changelog
 
+## Orb Of Creation Mod Suite 0.4.0 Beta 1 — 2026-07-23
+
+- Add ServiceCycle, a shared engine that handles scheduling, background decisions, save and scene changes, diagnostics, and shutdown for automation features.
+- Move Fruit Tree and Treasure Tree Auto Harvest onto ServiceCycle. Auto Harvest keeps its existing settings and behavior and remains disabled by default.
+- Add three separate diagnostics: a detailed full trace, a compact rolling decision journal, and an opt-in performance profile.
+- Add a command-line trace reader and an interactive HTML timeline that combines those three recordings.
+- Add a Runtime page to Orb Mod Config with service health, recording controls, journal status, and a graph of the last 1,200 frames.
+- Make the main build, test, packaging, and validation scripts work on macOS and Linux while keeping Windows Mono as the game target.
+- Read Automata settings into one consistent snapshot instead of letting individual features read live configuration entries at different times.
+- Update the suite versions to Automata 0.9.0, Mod Config 0.7.0, Common 0.4.0, Mentor 0.3.8, and package 0.4.0.
+
 ## Auto Buy bounded purchase bursts — 2026-07-20
 
 - Allow one Auto Buy coordinator lease to submit up to 16 exact one-level native purchases when live queue room and the existing 1 ms purchase slice permit, while retaining one mutation-owning feature per suite frame.
@@ -231,7 +242,7 @@
 - Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, and transiently ineligible UUIDs park with exact XP until a later authoritative refresh without retry churn or head-of-line blocking. The parked ledger is bounded and fails the domain closed on overflow. AutoBuy plus Mentor can start only one native mutation in a Unity frame.
 - Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
-- Move Orb Chronomancer and Orb Achievement Resonance source, tests, and design notes to the dedicated `codex/experimental-chronomancer-resonance` branch; supported `main` builds and archives contain only the allowlisted suite modules.
+- Remove Orb Chronomancer and Orb Achievement Resonance source, tests, and design notes from the supported branch; supported builds and archives contain only the allowlisted suite modules.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

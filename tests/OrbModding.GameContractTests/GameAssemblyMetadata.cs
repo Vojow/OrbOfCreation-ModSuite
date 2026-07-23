@@ -50,6 +50,25 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return GetField(fullName, fieldName).FieldType;
     }
 
+    public IReadOnlyDictionary<string, int> GetInt32EnumMembers(string fullName)
+    {
+        if (GetBaseType(fullName) != "System.Enum" || GetFieldType(fullName, "value__") != "System.Int32")
+            throw new InvalidOperationException($"Type {fullName} is not an Int32-backed enum.");
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        var members = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var fieldHandle in definition.GetFields())
+        {
+            var field = Reader.GetFieldDefinition(fieldHandle);
+            var constantHandle = field.GetDefaultValue();
+            if (constantHandle.IsNil) continue;
+            var constant = Reader.GetConstant(constantHandle);
+            if (constant.TypeCode != ConstantTypeCode.Int32)
+                throw new InvalidOperationException($"Enum {fullName} does not use Int32 constants.");
+            members.Add(Reader.GetString(field.Name), Reader.GetBlobReader(constant.Value).ReadInt32());
+        }
+        return members;
+    }
+
     public FieldContract GetField(string fullName, string fieldName)
     {
         var definition = Reader.GetTypeDefinition(RequireType(fullName));

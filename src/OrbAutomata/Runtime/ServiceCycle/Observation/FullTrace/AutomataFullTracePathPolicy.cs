@@ -1,0 +1,56 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading;
+using BepInEx;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Tracing;
+using OrbModding.Common.Runtime.Tracing;
+
+namespace OrbAutomata;
+
+internal sealed class AutomataFullTracePathPolicy : IAutomataFullTraceSessionSource
+{
+    private static long _nextIdentity = DateTime.UtcNow.Ticks;
+    private readonly string _rootDirectory;
+
+    private AutomataFullTracePathPolicy(string rootDirectory) => _rootDirectory = rootDirectory;
+
+    internal static AutomataFullTraceOptions Create(ManualFullTraceControlRegistry control)
+    {
+        if (control is null) throw new ArgumentNullException(nameof(control));
+        var root = Path.Combine(
+            Paths.ConfigPath,
+            "OrbOfCreation-ModSuite",
+            "trace",
+            "full");
+        return new AutomataFullTraceOptions(control, new AutomataFullTracePathPolicy(root));
+    }
+
+    public AutomataFullTraceSessionSpec Create()
+    {
+        var session = new FullTraceSessionId(NextIdentity());
+        var semanticSession = new ServiceCycleTraceSessionId(NextIdentity());
+        var artifactName = "session-" + session.Value.ToString("x16", CultureInfo.InvariantCulture);
+        return new AutomataFullTraceSessionSpec(
+            session,
+            semanticSession,
+            new AtomicSegmentSessionStorage(
+                _rootDirectory,
+                artifactName,
+                ".oscs",
+                "manifest.oscm"),
+            artifactName);
+    }
+
+    internal static string FormatRelativeArtifactPath(string artifactName)
+    {
+        if (!ManualFullTraceStatus.IsSafeArtifactName(artifactName))
+            throw new ArgumentException("A full-trace artifact basename is required.", nameof(artifactName));
+        return "BepInEx/config/OrbOfCreation-ModSuite/trace/full/" + artifactName;
+    }
+
+    private static ulong NextIdentity() =>
+        checked((ulong)Interlocked.Increment(ref _nextIdentity));
+}

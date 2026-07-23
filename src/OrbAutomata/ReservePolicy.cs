@@ -6,12 +6,14 @@ namespace OrbAutomata;
 
 internal sealed class ReservePolicy
 {
-    private readonly AutomataConfig _config;
+    private readonly IAutomataConfigurationSource _config;
 
-    public ReservePolicy(AutomataConfig config)
+    public ReservePolicy(IAutomataConfigurationSource config)
     {
         _config = config;
     }
+
+    private AutomataConfiguration Config => _config.Current;
 
     public ReserveDecision Evaluate(IReadOnlyList<ResourceAdmissionCost> costs)
     {
@@ -20,14 +22,14 @@ internal sealed class ReservePolicy
             return ReserveDecision.Accepted(0.0, "native cost list is empty");
         }
 
-        if (!BigAmount.TryParse(_config.AbsoluteReserve.Value, out var absoluteReserve))
+        if (!BigAmount.TryParse(Config.Reserves.AbsoluteReserve, out var absoluteReserve))
         {
             return ReserveDecision.Rejected(
                 ReserveDecisionFailure.InvalidPolicy,
-                $"invalid AbsoluteReserve '{_config.AbsoluteReserve.Value}'");
+                $"invalid AbsoluteReserve '{Config.Reserves.AbsoluteReserve}'");
         }
 
-        var relativeMultiplier = Math.Max(0.0, _config.RelativeReserveMultiplier.Value);
+        var relativeMultiplier = Math.Max(0.0, Config.Reserves.RelativeReserveMultiplier);
         var maxRatio = 0.0;
         List<AutoBuyResourceBlocker>? blockers = null;
 

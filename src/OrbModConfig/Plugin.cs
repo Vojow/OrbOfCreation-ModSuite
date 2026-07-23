@@ -3,6 +3,13 @@ using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+#if SERVICE_CYCLE_PROFILE
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile.Control;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -22,11 +29,14 @@ public sealed class Plugin : BaseUnityPlugin
     private float _uiIntegritySeconds;
     private bool _uiFailureLogged;
     private bool _uiMaintenanceDue;
+    private bool _uiIntegrityDue;
     private int _deferInstallUntilFrame;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
     private ModConfigCoordinatorWork? _uiWork;
     private GameplayInvalidationBus? _invalidationBus;
+    private ModConfigRuntimeSources? _runtimeSources;
+    private Action? _runUiMaintenance;
     private long _lifecycleGeneration;
 
     private void Awake()
@@ -41,6 +51,18 @@ public sealed class Plugin : BaseUnityPlugin
         _enableUiShell = configuration.Config.EnableUiShell;
 
         _invalidationBus = GameplayInvalidationBus.Shared;
+        _runtimeSources = new ModConfigRuntimeSources(
+            ConfigurationSchemaStatusRegistry.Shared,
+            FeatureStatusRegistry.Shared,
+            RuntimeDiagnosticsRegistry.Shared,
+            ServiceCyclePumpTimingRegistry.Shared,
+            ManualFullTraceControlRegistry.Shared,
+            DecisionJournalStatusSources.Shared
+#if SERVICE_CYCLE_PROFILE
+            , PerformanceProfileControlRegistry.Shared
+#endif
+            );
+        _runUiMaintenance = RunUiMaintenance;
 
         if (!_enabled.Value)
         {
@@ -101,12 +123,17 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else
         {
-            _uiShell.Tick(Time.unscaledDeltaTime);
+            if (_uiShell.ScheduleRefresh(Time.unscaledDeltaTime)) _uiMaintenanceDue = true;
             if (AdvanceCadence(ref _uiIntegritySeconds, Time.unscaledDeltaTime, UiIntegrityIntervalSeconds))
+            {
+                _uiIntegrityDue = true;
                 _uiMaintenanceDue = true;
+            }
         }
 
-        _uiWork?.TryRun(true, _uiMaintenanceDue, RunUiMaintenance);
+        var runUiMaintenance = _runUiMaintenance;
+        if (runUiMaintenance is not null)
+            _uiWork?.TryRun(true, _uiMaintenanceDue, runUiMaintenance);
         _uiWork?.SetState(true, _uiMaintenanceDue);
     }
 
@@ -123,18 +150,35 @@ public sealed class Plugin : BaseUnityPlugin
         }
         if (_uiShell is not null)
         {
-            _uiShell.RefreshNavigation();
-            _uiIntegritySeconds = UiIntegrityIntervalSeconds;
+            _uiShell.RunPendingRefresh();
+            if (_uiIntegrityDue)
+            {
+                _uiShell.RefreshNavigation();
+                _uiIntegrityDue = false;
+                _uiIntegritySeconds = UiIntegrityIntervalSeconds;
+            }
+            _uiMaintenanceDue = _uiIntegrityDue || _uiShell.HasPendingRefresh;
             return;
         }
 
         _uiRetrySeconds = UiRetryIntervalSeconds;
+        var invalidationBus = _invalidationBus ??
+                              throw new InvalidOperationException("Mod Config invalidation bus was not composed.");
+        var runtimeSources = _runtimeSources ??
+                             throw new InvalidOperationException("Mod Config runtime sources were not composed.");
         var catalog = ModConfigCatalogSession.GetOrDiscover(
             ref _catalog,
-            ConfigCatalog.DiscoverLoaded,
+            () => ConfigCatalog.DiscoverLoaded(runtimeSources.SchemaStatuses),
             LogCatalog);
         if (!ModConfigUiShell.TryCreate(
-                Logger, catalog, out _uiShell, out var reason, MarkUiMaintenanceDue))
+                Logger,
+                catalog,
+                invalidationBus,
+                runtimeSources,
+                MarkUiMaintenanceDue,
+                MarkNavigationMaintenanceDue,
+                out _uiShell,
+                out var reason))
         {
             if (!_uiFailureLogged)
             {
@@ -162,10 +206,17 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void MarkUiMaintenanceDue() => _uiMaintenanceDue = true;
 
+    private void MarkNavigationMaintenanceDue()
+    {
+        _uiIntegrityDue = true;
+        _uiMaintenanceDue = true;
+    }
+
     private void DeactivateUiWork(bool disposeShell)
     {
         _uiWork?.SetState(false, false);
         _uiMaintenanceDue = false;
+        _uiIntegrityDue = false;
         if (!disposeShell || _uiShell is null) return;
         _uiShell.Dispose();
         _uiShell = null;
@@ -179,6 +230,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiShell = null;
         _uiWork?.Dispose();
         _uiWork = null;
+        _runUiMaintenance = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
     }
@@ -218,6 +270,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiIntegritySeconds = 0f;
         _uiFailureLogged = false;
         _uiMaintenanceDue = false;
+        _uiIntegrityDue = false;
         _deferInstallUntilFrame = 0;
         _uiWork?.SetState(scene.name == "Main", false);
     }

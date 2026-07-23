@@ -27,7 +27,8 @@ internal sealed class AutoBuySimulation : IDisposable
         double readObservationCostMilliseconds = 0.05,
         double purchaseObservationCostMilliseconds = 1.1,
         Func<int, double>? readObservationCostSchedule = null,
-        Func<AutoBuyCandidateKind, bool>? ownsActionFamily = null)
+        Func<AutoBuyCandidateKind, bool>? ownsActionFamily = null,
+        SuitePerformanceCoordinator? externalCoordinator = null)
     {
         World = new SimulatedAutoBuyWorld(queueCapacity, initialResourceQuantity);
         foreach (var spec in candidateSpecs)
@@ -41,7 +42,7 @@ internal sealed class AutoBuySimulation : IDisposable
             readObservationCostMilliseconds,
             readObservationCostSchedule);
         _purchaseCost = new DeterministicStopwatchCost(purchaseObservationCostMilliseconds);
-        _coordinator = new SuitePerformanceCoordinator(_performanceClock, 1.0, 2.0, 64);
+        _coordinator = externalCoordinator ?? new SuitePerformanceCoordinator(_performanceClock, 1.0, 2.0, 64);
         _engine = new AutoBuyEngine(
             Config,
             Catalog,
@@ -58,7 +59,7 @@ internal sealed class AutoBuySimulation : IDisposable
 #endif
     }
 
-    public AutomataConfig Config { get; }
+    public BepInExAutomataConfiguration Config { get; }
 
     public SimulatedAutoBuyWorld World { get; }
 
@@ -239,9 +240,9 @@ internal sealed class AutoBuySimulation : IDisposable
         _engine.Dispose();
     }
 
-    private static AutomataConfig CreateConfig()
+    private static BepInExAutomataConfiguration CreateConfig()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;

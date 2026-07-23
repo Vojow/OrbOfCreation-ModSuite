@@ -94,8 +94,8 @@ public static class PerformanceEvidencePipeline
                 rule.MaximumConsecutiveDeferredFrames);
 
             var native = rule.TimingMode == "observe-only";
-            EvaluateTiming(results, identity, "workItemTiming", rule, start.WorkItemTiming, end.WorkItemTiming, native);
-            EvaluateTiming(results, identity, "frameTiming", rule, start.FrameTiming, end.FrameTiming, native);
+            EvaluateTiming(results, identity, "workItemTiming", rule, start.WorkItemTiming, end.WorkItemTiming, native, profile.ProfileVersion);
+            EvaluateTiming(results, identity, "frameTiming", rule, start.FrameTiming, end.FrameTiming, native, profile.ProfileVersion);
 
             var nativeOverruns = Delta(
                 start.NativeHardBudgetOverruns,
@@ -210,18 +210,19 @@ public static class PerformanceEvidencePipeline
         Object(root, "$profile", "schemaId", "schemaVersion", "profileId", "profileVersion", "scope", "policy", "rules");
         Exact(root, "schemaId", "orb-modsuite-suite-performance-profile", "$profile");
         Exact(root, "schemaVersion", 1, "$profile");
-        Exact(root, "profileId", "supported-suite-beta-v1", "$profile");
-        Exact(root, "profileVersion", 1, "$profile");
+        var profileId = Text(root, "profileId", "$profile", 128);
+        var profileVersion = checked((int)Integer(root, "profileVersion", "$profile"));
+        var expectedRuleCount = GetExpectedRuleCount(profileId, profileVersion, "$profile");
         Exact(root, "scope", "full-supported-suite", "$profile");
         var policy = ParsePolicy(Required(root, "policy", JsonValueKind.Object, "$profile"), "$profile.policy");
         if (policy.SoftBudgetMilliseconds != 0.75 || policy.HardBudgetMilliseconds != 1.0 || policy.NativeMutationAdmissionsPerFrame != 1)
         {
-            throw Invalid("$profile.policy", "profile V1 requires the 0.75/1.0 ms and one-mutation policy");
+            throw Invalid("$profile.policy", "supported suite profiles require the 0.75/1.0 ms and one-mutation policy");
         }
         var rulesElement = Required(root, "rules", JsonValueKind.Array, "$profile");
-        if (rulesElement.GetArrayLength() != 12)
+        if (rulesElement.GetArrayLength() != expectedRuleCount)
         {
-            throw Invalid("$profile.rules", "profile V1 must contain exactly 12 rules");
+            throw Invalid("$profile.rules", $"profile V{profileVersion} must contain exactly {expectedRuleCount} rules");
         }
 
         var rules = new List<PerformanceRule>(rulesElement.GetArrayLength());
@@ -248,7 +249,7 @@ public static class PerformanceEvidencePipeline
 
             if (rule.ExecutionKind == "cooperative" != (rule.TimingMode == "enforce"))
             {
-                throw Invalid(path, "only cooperative work may enforce timing in profile V1");
+                throw Invalid(path, "only cooperative work may enforce timing in supported suite profiles");
             }
 
             rules.Add(rule);
@@ -258,8 +259,8 @@ public static class PerformanceEvidencePipeline
         return new PerformanceProfile(
             Text(root, "schemaId", "$profile", 128),
             checked((int)Integer(root, "schemaVersion", "$profile")),
-            Text(root, "profileId", "$profile", 128),
-            checked((int)Integer(root, "profileVersion", "$profile")),
+            profileId,
+            profileVersion,
             Text(root, "scope", "$profile", 128),
             policy,
             rules,
@@ -271,8 +272,9 @@ public static class PerformanceEvidencePipeline
         Object(root, "$evidence", "schemaId", "schemaVersion", "profileId", "profileVersion", "profileSha256", "scope", "metadata", "policy", "start", "end");
         Exact(root, "schemaId", "orb-modsuite-suite-performance-evidence", "$evidence");
         Exact(root, "schemaVersion", 1, "$evidence");
-        Exact(root, "profileId", "supported-suite-beta-v1", "$evidence");
-        Exact(root, "profileVersion", 1, "$evidence");
+        var profileId = Text(root, "profileId", "$evidence", 128);
+        var profileVersion = checked((int)Integer(root, "profileVersion", "$evidence"));
+        _ = GetExpectedRuleCount(profileId, profileVersion, "$evidence");
         Exact(root, "scope", "full-supported-suite", "$evidence");
         var profileSha = Text(root, "profileSha256", "$evidence", 64);
         if (profileSha.Length != 64 || profileSha.Any(character => !Uri.IsHexDigit(character)) || profileSha != profileSha.ToLowerInvariant())
@@ -287,8 +289,8 @@ public static class PerformanceEvidencePipeline
         return new PerformanceEvidenceDocument(
             Text(root, "schemaId", "$evidence", 128),
             checked((int)Integer(root, "schemaVersion", "$evidence")),
-            Text(root, "profileId", "$evidence", 128),
-            checked((int)Integer(root, "profileVersion", "$evidence")),
+            profileId,
+            profileVersion,
             profileSha,
             Text(root, "scope", "$evidence", 128),
             metadata,
@@ -466,9 +468,13 @@ public static class PerformanceEvidencePipeline
 
     private static void ValidateCompatibility(PerformanceProfile profile, PerformanceEvidenceDocument evidence)
     {
-        if (profile.SchemaVersion != 1 || evidence.SchemaVersion != 1 || profile.ProfileVersion != 1 || evidence.ProfileVersion != 1)
+        if (profile.SchemaVersion != 1 || evidence.SchemaVersion != 1)
             throw Invalid("compatibility", "unknown schema or profile version");
-        if (profile.ProfileId != evidence.ProfileId || profile.SourceSha256 != evidence.ProfileSha256)
+        _ = GetExpectedRuleCount(profile.ProfileId, profile.ProfileVersion, "compatibility.profile");
+        _ = GetExpectedRuleCount(evidence.ProfileId, evidence.ProfileVersion, "compatibility.evidence");
+        if (profile.ProfileId != evidence.ProfileId ||
+            profile.ProfileVersion != evidence.ProfileVersion ||
+            profile.SourceSha256 != evidence.ProfileSha256)
             throw Invalid("compatibility", "evidence/profile id or SHA-256 mismatch");
         if (profile.Scope != evidence.Scope || evidence.Scope != "full-supported-suite")
             throw Invalid("compatibility", "scope mismatch");
@@ -555,7 +561,15 @@ public static class PerformanceEvidencePipeline
         results.Add(new(identity, metric, classification, end, target, note));
     }
 
-    private static void EvaluateTiming(List<MetricEvaluation> results, string identity, string prefix, PerformanceRule rule, EvidenceTiming start, EvidenceTiming end, bool observeOnly)
+    private static void EvaluateTiming(
+        List<MetricEvaluation> results,
+        string identity,
+        string prefix,
+        PerformanceRule rule,
+        EvidenceTiming start,
+        EvidenceTiming end,
+        bool observeOnly,
+        int profileVersion)
     {
         var addedSamples = Delta(start.TotalSamples, end.TotalSamples, identity, prefix + ".totalSamples");
         if (start.SampleCount != 0 && addedSamples < end.Capacity)
@@ -572,9 +586,9 @@ public static class PerformanceEvidencePipeline
 
         if (observeOnly)
         {
-            AddObserveOnlyTimingMetric(results, identity, prefix + ".p95Milliseconds", end.P95Milliseconds, rule.P95Milliseconds);
-            AddObserveOnlyTimingMetric(results, identity, prefix + ".p99Milliseconds", end.P99Milliseconds, rule.P99Milliseconds);
-            AddObserveOnlyTimingMetric(results, identity, prefix + ".maximumMilliseconds", end.MaximumMilliseconds, rule.MaximumMilliseconds);
+            AddObserveOnlyTimingMetric(results, identity, prefix + ".p95Milliseconds", end.P95Milliseconds, rule.P95Milliseconds, profileVersion);
+            AddObserveOnlyTimingMetric(results, identity, prefix + ".p99Milliseconds", end.P99Milliseconds, rule.P99Milliseconds, profileVersion);
+            AddObserveOnlyTimingMetric(results, identity, prefix + ".maximumMilliseconds", end.MaximumMilliseconds, rule.MaximumMilliseconds, profileVersion);
             return;
         }
 
@@ -586,8 +600,21 @@ public static class PerformanceEvidencePipeline
     private static void AddTimingMetric(List<MetricEvaluation> results, string identity, string metric, double observed, double target) =>
         results.Add(new(identity, metric, observed <= target ? "within-target" : "exceeded", observed, target, null));
 
-    private static void AddObserveOnlyTimingMetric(List<MetricEvaluation> results, string identity, string metric, double observed, double target) =>
-        results.Add(new(identity, metric, "observe-only", observed, target, "native timing is not enforced in profile V1"));
+    private static void AddObserveOnlyTimingMetric(
+        List<MetricEvaluation> results,
+        string identity,
+        string metric,
+        double observed,
+        double target,
+        int profileVersion) =>
+        results.Add(new(identity, metric, "observe-only", observed, target, $"native timing is not enforced in profile V{profileVersion}"));
+
+    private static int GetExpectedRuleCount(string profileId, int profileVersion, string path) =>
+        (profileId, profileVersion) switch
+        {
+            ("supported-suite-beta-v1", 1) => 12,
+            _ => throw Invalid(path, $"unknown profile id/version '{profileId}' v{profileVersion}"),
+        };
 
     private static void EvaluateCoordinatorTiming(
         List<MetricEvaluation> results,

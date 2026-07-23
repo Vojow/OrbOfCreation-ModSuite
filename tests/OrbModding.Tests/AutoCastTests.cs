@@ -14,7 +14,7 @@ public sealed class AutoCastTests
     [Fact]
     public void FreshConfigUsesZeroResourceThreshold()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
 
         Assert.Equal(0.0f, config.AutoCastStartResourcePercent.Value);
     }
@@ -22,7 +22,7 @@ public sealed class AutoCastTests
     [Fact]
     public void FreshConfigFullChargesChargedSpellsByDefault()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
 
         Assert.True(config.AutoCastFullCharge.Value);
     }
@@ -33,7 +33,7 @@ public sealed class AutoCastTests
         var file = new ConfigFile();
         file.Bind("AutoCast", "StartResourcePercent", 80.0f, "existing").Value = 37.0f;
 
-        var config = AutomataConfig.Bind(file);
+        var config = BepInExAutomataConfiguration.Bind(file);
 
         Assert.Equal(37.0f, config.AutoCastStartResourcePercent.Value);
     }
@@ -49,7 +49,7 @@ public sealed class AutoCastTests
     [Fact]
     public void ToggleSwitchesBetweenDisabledAndActive()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var toggle = new AutoCastToggleControl(config);
 
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
@@ -66,7 +66,7 @@ public sealed class AutoCastTests
     [Fact]
     public void EmergencyDisableKeepsConfiguredIntentVisuallyOn()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         var toggle = new AutoCastToggleControl(config);
 
@@ -90,10 +90,10 @@ public sealed class AutoCastTests
     [Fact]
     public void ActiveEmptyLoadoutRemainsOperational()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         using var engine = new AutoCastEngine(
             config,
             new FakeCatalog(),
@@ -235,7 +235,7 @@ public sealed class AutoCastTests
         var charged = Spell("charged", charged: true);
         charged.IsReadyingCast = true;
         var inGameplay = true;
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
@@ -783,11 +783,11 @@ public sealed class AutoCastTests
 
     private static Fixture CreateWithCoordinator(params FakeSpell[] spells)
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         var log = new ManualLogSource();
-        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var statuses = new AutomataFeatureStatuses(config.Current, 1, new FeatureStatusRegistry());
         var coordinator = new SuitePerformanceCoordinator(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
         var engine = new AutoCastEngine(
             config,
@@ -804,11 +804,11 @@ public sealed class AutoCastTests
 
     private static Fixture Create(FakeCatalog catalog)
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         var log = new ManualLogSource();
-        var statuses = new AutomataFeatureStatuses(config, 1, new FeatureStatusRegistry());
+        var statuses = new AutomataFeatureStatuses(config.Current, 1, new FeatureStatusRegistry());
         var engine = new AutoCastEngine(
             config,
             catalog,
@@ -823,7 +823,7 @@ public sealed class AutoCastTests
     private sealed class Fixture : IDisposable
     {
         public Fixture(
-            AutomataConfig config,
+            BepInExAutomataConfiguration config,
             ManualLogSource log,
             AutoCastEngine engine,
             AutomataFeatureStatuses featureStatuses)
@@ -834,7 +834,7 @@ public sealed class AutoCastTests
             FeatureStatuses = featureStatuses;
         }
 
-        public AutomataConfig Config { get; }
+        public BepInExAutomataConfiguration Config { get; }
 
         public ManualLogSource Log { get; }
 

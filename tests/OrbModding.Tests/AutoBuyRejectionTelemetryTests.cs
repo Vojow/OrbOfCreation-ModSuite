@@ -12,7 +12,7 @@ public sealed class AutoBuyRejectionTelemetryTests
     [Fact]
     public void ReservePolicy_CapturesEveryBlockingResource()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
         var decision = new ReservePolicy(config).Evaluate(new[]
@@ -42,7 +42,7 @@ public sealed class AutoBuyRejectionTelemetryTests
     [Fact]
     public void ReservePolicy_DescribesZeroReserveFailureAsInsufficientCostCoverage()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "0";
         config.RelativeReserveMultiplier.Value = 0.0f;
 
@@ -200,7 +200,7 @@ public sealed class AutoBuyRejectionTelemetryTests
     [Fact]
     public void ToggleControl_ExposesLatestStructuredDecisionAndConfigurationStatus()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         var latest = ResourceRejection(
             new FakeCandidate("tooltip-candidate").Snapshot(),

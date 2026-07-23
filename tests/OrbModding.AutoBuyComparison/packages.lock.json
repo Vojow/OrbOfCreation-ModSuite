@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Assembly-CSharp": {
+        "type": "Project"
+      },
+      "orbautomata": {
+        "type": "Project",
+        "dependencies": {
+          "OrbModding.Common": "[0.4.0, )"
+        }
+      },
+      "orbmodding.common": {
+        "type": "Project"
+      }
+    }
+  }
+}

@@ -9,15 +9,24 @@
     <Authors>Vojow</Authors>
     <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <SuiteVersion>0.4.0</SuiteVersion>
     <GameRoot>$(OOC_GAME_DIR)</GameRoot>
     <ManagedDir>$(GameRoot)/Orb Of Creation_Data/Managed</ManagedDir>
     <BepInExCoreDir>$(GameRoot)/BepInEx/core</BepInExCoreDir>
-    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;bin-stubs/**;obj/**;obj-stubs/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;bin-stubs/**;obj/**;obj-stubs/**;bin-profile/**;obj-profile/**;bin-profile-stubs/**;obj-profile-stubs/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(UseGameStubs)' == 'true'">
     <BaseOutputPath>bin-stubs/</BaseOutputPath>
     <BaseIntermediateOutputPath>obj-stubs/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableServiceCycleProfiler)' == 'true'">
+    <DefineConstants>$(DefineConstants);SERVICE_CYCLE_PROFILE</DefineConstants>
+    <BaseOutputPath Condition="'$(UseGameStubs)' == 'true'">bin-profile-stubs/</BaseOutputPath>
+    <BaseOutputPath Condition="'$(UseGameStubs)' != 'true'">bin-profile/</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(UseGameStubs)' == 'true'">obj-profile-stubs/</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(UseGameStubs)' != 'true'">obj-profile/</BaseIntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' == 'true'">

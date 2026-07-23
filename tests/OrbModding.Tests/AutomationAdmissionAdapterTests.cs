@@ -174,11 +174,11 @@ public sealed class AutomationAdmissionAdapterTests
     public void AssemblyHashMismatchFailsClosedBeforeNativeMutationSetup()
     {
         var matching = new AssemblyAuditResult(
-            new AssemblyHashResult("main", "AA", "AA"),
-            new AssemblyHashResult("first", "BB", "BB"));
+            new AssemblyHashResult("main", GameAssemblyAudit.WindowsAssemblyCSharpSha256),
+            new AssemblyHashResult("first", GameAssemblyAudit.WindowsFirstPassSha256));
         var mismatch = new AssemblyAuditResult(
-            new AssemblyHashResult("main", "AA", "CC"),
-            new AssemblyHashResult("first", "BB", "BB"));
+            new AssemblyHashResult("main", GameAssemblyAudit.MacAssemblyCSharpSha256),
+            new AssemblyHashResult("first", GameAssemblyAudit.WindowsFirstPassSha256));
 
         Assert.True(Plugin.AssemblyAuditAllowsMutation(matching));
         Assert.False(Plugin.AssemblyAuditAllowsMutation(mismatch));

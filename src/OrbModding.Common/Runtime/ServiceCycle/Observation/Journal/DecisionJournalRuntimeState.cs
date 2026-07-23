@@ -1,0 +1,33 @@
+using OrbModding.Common.Runtime.Tracing.BufferedSegments;
+
+namespace OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
+
+internal enum DecisionJournalRuntimeState
+{
+    Initializing = 0,
+    Arming = 1,
+    Recording = 2,
+    Stopping = 3,
+    Stopped = 4,
+    Faulted = 5,
+}
+
+internal readonly struct DecisionJournalRuntimeSnapshot
+{
+    internal DecisionJournalRuntimeSnapshot(
+        DecisionJournalRuntimeState state,
+        bool attached,
+        in BufferedSegmentMetrics transport,
+        in DecisionJournalConsumerMetrics consumer)
+    {
+        State = state;
+        Attached = attached;
+        Transport = transport;
+        Consumer = consumer;
+    }
+
+    internal DecisionJournalRuntimeState State { get; }
+    internal bool Attached { get; }
+    internal BufferedSegmentMetrics Transport { get; }
+    internal DecisionJournalConsumerMetrics Consumer { get; }
+}

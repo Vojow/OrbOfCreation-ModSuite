@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>OrbAutomata</AssemblyName>
     <RootNamespace>OrbAutomata</RootNamespace>
-    <Version>0.8.10</Version>
+    <Version>0.9.0</Version>
     <RequireGameReferences>true</RequireGameReferences>
     <Description>Safe configurable buying and progression automation for Orb Of Creation.</Description>
   </PropertyGroup>
@@ -28,5 +28,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbModding.ServiceCycleTrace" />
+    <InternalsVisibleTo Include="OrbModding.ProfileTests" Condition="'$(EnableServiceCycleProfiler)' == 'true'" />
   </ItemGroup>
 </Project>

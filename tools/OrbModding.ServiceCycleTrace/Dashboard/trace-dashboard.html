@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServiceCycle trace dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; --bg:#f4f5f7; --panel:#fff; --text:#18202a; --muted:#657080; --border:#d8dde5; --accent:#3f68d8; --capture:#2d9d78; --action:#d65d54; --worker:#7a65c7; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#11151b; --panel:#1a2029; --text:#edf1f7; --muted:#9da8b8; --border:#343d4a; --accent:#7fa2ff; --capture:#5bc9a4; --action:#ff877e; --worker:#aa96f2; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1500px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 4px; font-size:24px; font-weight:650; }
+    h2 { margin:0 0 14px; font-size:17px; }
+    .subtitle,.muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:20px 0; }
+    .metric,.panel { background:var(--panel); border:1px solid var(--border); border-radius:9px; }
+    .metric { padding:13px 15px; }
+    .metric b { display:block; font-size:20px; margin-top:2px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:16px 0; }
+    label { display:grid; gap:4px; color:var(--muted); font-size:12px; }
+    select,input { min-width:170px; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text); }
+    input[type=number] { min-width:120px; width:120px; }
+    button { padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text); cursor:pointer; }
+    button[aria-selected=true] { color:#fff; background:var(--accent); border-color:var(--accent); }
+    nav { display:flex; gap:8px; margin:18px 0 12px; }
+    .view { display:none; }
+    .view.active { display:block; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .panel { padding:15px; min-width:0; }
+    .wide { grid-column:1/-1; }
+    .chart { position:relative; height:300px; }
+    .chart.tall { height:390px; }
+    .detail { min-height:54px; color:var(--muted); white-space:pre-wrap; }
+    table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+    th,td { padding:7px 8px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; font-weight:600; }
+    .table-wrap { overflow:auto; max-height:330px; }
+    .error { display:none; padding:16px; border:1px solid var(--action); color:var(--action); }
+    @media (max-width:900px) { main{padding:14px}.metrics,.grid{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1} }
+    @media (max-width:620px) { .metrics,.grid{grid-template-columns:1fr}.wide{grid-column:auto}nav{overflow:auto}.chart{height:260px} }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ServiceCycle trace dashboard</h1>
+  <div id="subtitle" class="subtitle"></div>
+  <div id="chartError" class="error">Chart.js could not be loaded. The generated JSON beside this file still contains the complete dashboard dataset.</div>
+
+  <section class="metrics" aria-label="Capture summary">
+    <div class="metric"><span class="muted">Observed window</span><b id="windowMetric"></b></div>
+    <div class="metric"><span class="muted">Pumps</span><b id="pumpMetric"></b></div>
+    <div class="metric"><span class="muted">Service cycles</span><b id="cycleMetric"></b></div>
+    <div class="metric"><span class="muted">Committed actions</span><b id="actionMetric"></b></div>
+  </section>
+
+  <div class="toolbar">
+    <label>Service<select id="serviceFilter"></select></label>
+    <label>From (seconds)<input id="timeStart" type="number" min="0" step="0.1"></label>
+    <label>To (seconds)<input id="timeEnd" type="number" min="0" step="0.1"></label>
+    <button id="applyFilter" type="button">Apply range</button>
+    <button id="resetFilter" type="button">Full range</button>
+  </div>
+
+  <nav aria-label="Dashboard views">
+    <button type="button" data-view="overview" aria-selected="true">Runtime overview</button>
+    <button type="button" data-view="service" aria-selected="false">Service decisions</button>
+    <button type="button" data-view="performance" aria-selected="false">Performance stages</button>
+  </nav>
+
+  <section id="overview" class="view active">
+    <div class="grid">
+      <article class="panel wide"><h2>Pump elapsed time by frame</h2><div class="chart tall"><canvas id="pumpTimeline"></canvas></div></article>
+      <article class="panel"><h2>Pump duration distribution</h2><div class="chart"><canvas id="pumpHistogram"></canvas></div></article>
+      <article class="panel"><h2>Measured phase time</h2><div class="chart"><canvas id="phaseTotals"></canvas></div></article>
+      <article class="panel wide"><h2>Slowest pumps in range</h2><div class="table-wrap"><table><thead><tr><th>At</th><th>Frame</th><th>Total</th><th>Response</th><th>Capture</th><th>Action</th><th>Work</th></tr></thead><tbody id="slowPumps"></tbody></table></div></article>
+    </div>
+  </section>
+
+  <section id="service" class="view">
+    <div class="grid">
+      <article class="panel wide"><h2>Semantic event timeline</h2><div class="chart tall"><canvas id="eventTimeline"></canvas></div></article>
+      <article class="panel wide"><h2>Decision journal timeline</h2><div class="chart"><canvas id="decisionTimeline"></canvas></div></article>
+      <article class="panel wide"><h2>Selected evidence</h2><div id="selectedDetail" class="detail">Click an event or decision point to inspect its exact evidence.</div></article>
+      <article class="panel wide"><h2>Decision spans in range</h2><div class="table-wrap"><table><thead><tr><th>At</th><th>Cycles</th><th>Repeated</th><th>Capture decision</th><th>Terminal</th><th>Projection</th></tr></thead><tbody id="decisions"></tbody></table></div></article>
+    </div>
+  </section>
+
+  <section id="performance" class="view">
+    <div class="grid">
+      <article class="panel wide"><h2>Stage average and maximum</h2><div class="chart tall"><canvas id="stageDurations"></canvas></div></article>
+      <article class="panel"><h2>Total measured time by stage</h2><div class="chart"><canvas id="stageTotals"></canvas></div></article>
+      <article class="panel"><h2>Recorded profile samples in time</h2><div class="chart"><canvas id="stageSamples"></canvas></div></article>
+      <article class="panel wide"><h2>Stage evidence</h2><div class="table-wrap"><table><thead><tr><th>Stage</th><th>Count</th><th>Average</th><th>Min</th><th>Max</th><th>Operation signature</th></tr></thead><tbody id="stages"></tbody></table></div></article>
+    </div>
+  </section>
+</main>
+<script id="traceData" type="application/json">__TRACE_DASHBOARD_JSON__</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById('traceData').textContent);
+  const m = data.metadata;
+  const seconds = m.windowMilliseconds / 1000;
+  const fmt = (v, digits=3) => Number(v).toLocaleString(undefined,{maximumFractionDigits:digits});
+  const esc = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const services = [...new Set([...data.events.map(x=>x.service),...data.decisions.map(x=>x.service)].filter(Boolean))].sort((a,b)=>a-b);
+  let range = [0, m.windowMilliseconds];
+  let service = 0;
+  const charts = {};
+
+  document.getElementById('subtitle').textContent = `${m.fullTraceSession} · ${m.fullTraceState}/${m.fullTraceReason} · profile ${m.profileState}/${m.profileReason} · journal run ${m.journalRun}`;
+  document.getElementById('windowMetric').textContent = `${fmt(seconds,1)} s`;
+  document.getElementById('pumpMetric').textContent = data.pumps.length.toLocaleString();
+  document.getElementById('cycleMetric').textContent = data.events.filter(x=>x.kind==='CycleCompleted').length.toLocaleString();
+  document.getElementById('actionMetric').textContent = data.events.filter(x=>x.kind==='ActionCommitted').length.toLocaleString();
+  const serviceFilter = document.getElementById('serviceFilter');
+  serviceFilter.innerHTML = '<option value="0">All services</option>' + services.map(x=>`<option value="${x}">Service ${x}</option>`).join('');
+  const startInput = document.getElementById('timeStart');
+  const endInput = document.getElementById('timeEnd');
+  startInput.value = '0'; endInput.value = seconds.toFixed(1); endInput.max = seconds.toFixed(3); startInput.max = seconds.toFixed(3);
+
+  const inRange = offset => offset >= range[0] && offset <= range[1];
+  const eventMatches = x => inRange(x.offsetMilliseconds) && (!service || x.service===service);
+  const decisionMatches = x => x.endMilliseconds>=range[0] && x.startMilliseconds<=range[1] && (!service || x.service===service);
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const color = {accent:css('--accent'), capture:css('--capture'), action:css('--action'), worker:css('--worker'), muted:css('--muted'), border:css('--border')};
+  const common = {responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{labels:{color:color.muted}},tooltip:{callbacks:{}}},scales:{x:{type:'linear',title:{display:true,text:'Seconds'},ticks:{color:color.muted},grid:{color:color.border}},y:{ticks:{color:color.muted},grid:{color:color.border}}}};
+
+  function create(id, config) {
+    charts[id] = new Chart(document.getElementById(id), config);
+  }
+  function replace(id, datasets, labels) {
+    const chart=charts[id]; chart.data.datasets=datasets; if(labels) chart.data.labels=labels; chart.update();
+  }
+  function pumpsInRange() { return data.pumps.filter(x=>inRange(x.offsetMilliseconds)); }
+  function eventsInRange() { return data.events.filter(eventMatches); }
+  function decisionsInRange() { return data.decisions.filter(decisionMatches); }
+
+  function initializeCharts() {
+    create('pumpTimeline',{type:'line',data:{datasets:[]},options:{...common,plugins:{...common.plugins,tooltip:{callbacks:{label:c=>{const p=c.raw.source;return ` ${fmt(p.totalMilliseconds)} ms · frame ${p.frame} · response/capture/action ${p.responses}/${p.captures}/${p.actions}`;}}}},scales:{...common.scales,y:{...common.scales.y,title:{display:true,text:'Milliseconds'},beginAtZero:true}}}});
+    create('pumpHistogram',{type:'bar',data:{labels:[],datasets:[]},options:{...common,scales:{x:{ticks:{color:color.muted},grid:{display:false}},y:{ticks:{color:color.muted},grid:{color:color.border},beginAtZero:true,title:{display:true,text:'Frames'}}}}});
+    create('phaseTotals',{type:'bar',data:{labels:[],datasets:[]},options:{...common,indexAxis:'y',scales:{x:{ticks:{color:color.muted},grid:{color:color.border},beginAtZero:true,title:{display:true,text:'Total milliseconds'}},y:{ticks:{color:color.muted},grid:{display:false}}}}});
+    const lanes=['Control','Lifecycle','Capture','Worker','Publication','Action'];
+    create('eventTimeline',{type:'scatter',data:{datasets:[]},options:{...common,onClick:(_,els)=>{if(els.length) showEvent(charts.eventTimeline.data.datasets[els[0].datasetIndex].data[els[0].index].source);},plugins:{...common.plugins,tooltip:{callbacks:{label:c=>{const e=c.raw.source;return ` ${e.kind} · cycle ${e.cycle||'-'} · ${fmt(e.durationMilliseconds)} ms`;}}}},scales:{...common.scales,y:{min:-.5,max:lanes.length-.5,ticks:{color:color.muted,callback:v=>lanes[v]||''},grid:{color:color.border}}}}});
+    const decisions=['Unavailable','Feature','Captured','NotReady','CaptureUnavailable','TransientContention','Other'];
+    create('decisionTimeline',{type:'bubble',data:{datasets:[]},options:{...common,onClick:(_,els)=>{if(els.length) showDecision(charts.decisionTimeline.data.datasets[els[0].datasetIndex].data[els[0].index].source);},plugins:{...common.plugins,tooltip:{callbacks:{label:c=>{const d=c.raw.source;return ` ${d.captureDecision} · ${d.terminal} · cycles ${d.firstCycle}-${d.lastCycle}`;}}}},scales:{...common.scales,y:{min:-.5,max:decisions.length-.5,ticks:{color:color.muted,callback:v=>decisions[v]||''},grid:{color:color.border}}}}});
+    create('stageDurations',{type:'bar',data:{labels:[],datasets:[]},options:{...common,scales:{x:{ticks:{color:color.muted,maxRotation:45,minRotation:25},grid:{display:false}},y:{type:'logarithmic',ticks:{color:color.muted},grid:{color:color.border},title:{display:true,text:'Microseconds (log scale)'}}}}});
+    create('stageTotals',{type:'bar',data:{labels:[],datasets:[]},options:{...common,indexAxis:'y',scales:{x:{ticks:{color:color.muted},grid:{color:color.border},beginAtZero:true,title:{display:true,text:'Total milliseconds'}},y:{ticks:{color:color.muted},grid:{display:false}}}}});
+    create('stageSamples',{type:'scatter',data:{datasets:[]},options:{...common,plugins:{...common.plugins,tooltip:{callbacks:{label:c=>{const s=c.raw.source;return ` ${s.stage} · ${fmt(s.elapsedMicroseconds)} µs · cycle ${s.cycle||'-'}`;}}}},scales:{...common.scales,y:{type:'logarithmic',ticks:{color:color.muted},grid:{color:color.border},title:{display:true,text:'Microseconds (log scale)'}}}}});
+  }
+
+  function updateOverview() {
+    const pumps=pumpsInRange();
+    if (window.Chart) {
+      replace('pumpTimeline',[{label:'Pump elapsed',borderColor:color.accent,backgroundColor:color.accent,borderWidth:1,pointRadius:pumps.map(x=>x.actions?5:x.captures?3:0),pointBackgroundColor:pumps.map(x=>x.actions?color.action:x.captures?color.capture:color.accent),data:pumps.map(x=>({x:x.offsetMilliseconds/1000,y:x.totalMilliseconds,source:x}))}]);
+      const bounds=[.025,.05,.1,.25,.5,1,2,5,10,30,Infinity];
+      const labels=bounds.map((x,i)=>i===0?`≤${x}`:`${bounds[i-1]}–${x===Infinity?'∞':x}`);
+      const counts=bounds.map(()=>0); pumps.forEach(p=>{const i=bounds.findIndex(x=>p.totalMilliseconds<=x); counts[i<0?counts.length-1:i]++;});
+      replace('pumpHistogram',[{label:'Pumps',data:counts,backgroundColor:color.accent}],labels);
+      const totals=['totalMilliseconds','responseMilliseconds','captureMilliseconds','actionMilliseconds'].map(k=>pumps.reduce((a,x)=>a+x[k],0));
+      replace('phaseTotals',[{label:'Elapsed ms',data:totals,backgroundColor:[color.accent,color.worker,color.capture,color.action]}],['Whole pump','Response','Capture','Action']);
+    }
+    document.getElementById('slowPumps').innerHTML=pumps.slice().sort((a,b)=>b.totalMilliseconds-a.totalMilliseconds).slice(0,20).map(p=>`<tr><td>${fmt(p.offsetMilliseconds/1000)} s</td><td>${p.frame}</td><td>${fmt(p.totalMilliseconds)} ms</td><td>${fmt(p.responseMilliseconds)}</td><td>${fmt(p.captureMilliseconds)}</td><td>${fmt(p.actionMilliseconds)}</td><td>${p.responses}/${p.captures}/${p.actions}</td></tr>`).join('');
+  }
+
+  function updateService() {
+    const lanes={Control:0,Lifecycle:1,Capture:2,Worker:3,Publication:4,Action:5};
+    const events=eventsInRange();
+    const eventColors={Capture:color.capture,Worker:color.worker,Publication:color.accent,Action:color.action,Lifecycle:color.muted,Control:color.border};
+    const order={Unavailable:0,Feature:1,Captured:2,NotReady:3,CaptureUnavailable:4,TransientContention:5};
+    const decisions=decisionsInRange();
+    if (window.Chart) {
+      replace('eventTimeline',Object.keys(lanes).map(lane=>({label:lane,backgroundColor:eventColors[lane],pointRadius:lane==='Action'?5:3,data:events.filter(x=>x.lane===lane).map(x=>({x:x.offsetMilliseconds/1000,y:lanes[lane],source:x}))})));
+      replace('decisionTimeline',[{label:'Decision spans',backgroundColor:color.capture,data:decisions.map(x=>({x:(x.startMilliseconds+x.endMilliseconds)/2000,y:order[x.captureDecision]??6,r:Math.min(9,3+Math.log2(x.repeatCount||1)),source:x}))}]);
+    }
+    document.getElementById('decisions').innerHTML=decisions.map(d=>`<tr><td>${fmt(d.startMilliseconds/1000)} s</td><td>${d.firstCycle}${d.lastCycle!==d.firstCycle?'–'+d.lastCycle:''}</td><td>${d.repeatCount}</td><td>${esc(d.captureDecision)}<br><span class="muted">${esc(d.wake)}</span></td><td>${esc(d.terminal)}<br><span class="muted">actions ${d.actionCount}, committed ${d.committedActions}</span></td><td>${projection(d)}</td></tr>`).join('');
+  }
+
+  function updatePerformance() {
+    const aggs=data.stageAggregates.filter(x=>!service||x.service===service||x.service===0);
+    const labels=aggs.map((x,i)=>aggs.filter(y=>y.stage===x.stage).length>1?`${x.stage} (${i+1})`:x.stage);
+    const byStage=new Map(); aggs.forEach(x=>byStage.set(x.stage,(byStage.get(x.stage)||0)+x.totalMicroseconds/1000));
+    const samples=data.stageSamples.filter(x=>inRange(x.offsetMilliseconds)&&(!service||x.service===service||x.service===0));
+    const groups=[...new Set(samples.map(x=>x.stage))];
+    if (window.Chart) {
+      replace('stageDurations',[{label:'Average',backgroundColor:color.accent,data:aggs.map(x=>x.averageMicroseconds)},{label:'Maximum',backgroundColor:color.action,data:aggs.map(x=>x.maximumMicroseconds)}],labels);
+      replace('stageTotals',[{label:'Measured ms',backgroundColor:color.accent,data:[...byStage.values()]}],[...byStage.keys()]);
+      replace('stageSamples',groups.map((name,i)=>({label:name,backgroundColor:[color.accent,color.capture,color.action,color.worker][i%4],data:samples.filter(x=>x.stage===name).map(x=>({x:x.offsetMilliseconds/1000,y:x.elapsedMicroseconds,source:x}))})));
+    }
+    document.getElementById('stages').innerHTML=aggs.map(x=>`<tr><td>${esc(x.stage)}<br><span class="muted">${esc(x.temperature)}</span></td><td>${x.count}</td><td>${fmt(x.averageMicroseconds)} µs</td><td>${fmt(x.minimumMicroseconds)} µs</td><td>${fmt(x.maximumMicroseconds)} µs</td><td>${operations(x.operations)}</td></tr>`).join('');
+  }
+
+  function projection(d) { return d.projection.length?d.projection.map(x=>`${esc(x.name)}=${esc(x.value)}`).join('<br>'):'Unavailable'; }
+  function operations(o) { const names={reflectedFieldReads:'fields',reflectedMethodCalls:'methods',stableIdReads:'ids',listEntries:'entries',selectedPairs:'selected',readyPairs:'ready',invocationArgumentArrays:'args',recordCopies:'copies'}; const parts=Object.entries(names).filter(([k])=>o[k]).map(([k,n])=>`${n}=${o[k]}`); return parts.join(', ')||'–'; }
+  function showEvent(e) { document.getElementById('selectedDetail').textContent=`${e.kind} at ${fmt(e.offsetMilliseconds/1000)} s\nService ${e.service||'-'}, lifecycle ${e.lifecycle||'-'}, capture ${e.capture||'-'}, cycle ${e.cycle||'-'}, batch ${e.batch||'-'}, action ${e.action||'-'}, frame ${e.frame||'-'}\nDuration ${fmt(e.durationMilliseconds)} ms; code ${e.code}; disposition ${e.disposition}; native calls/mutation attempts/commits ${e.nativeCallsAttempted}/${e.mutationAttempts}/${e.mutationsCommitted}`; }
+  function showDecision(d) { document.getElementById('selectedDetail').textContent=`Decision span at ${fmt(d.startMilliseconds/1000)}–${fmt(d.endMilliseconds/1000)} s\nService ${d.service}, cycles ${d.firstCycle}–${d.lastCycle}, repeated ${d.repeatCount}\nStart ${d.startDecision}; capture ${d.captureDecision}; wake ${d.wake}; terminal ${d.terminal}\n${d.projection.map(x=>`${x.name}=${x.value}`).join(', ')||'No projection'}`; }
+
+  function updateAll() { updateOverview(); updateService(); updatePerformance(); }
+  document.getElementById('applyFilter').addEventListener('click',()=>{const a=Math.max(0,Number(startInput.value)||0)*1000;const b=Math.min(m.windowMilliseconds,(Number(endInput.value)||seconds)*1000);range=a<=b?[a,b]:[b,a];service=Number(serviceFilter.value);updateAll();});
+  document.getElementById('resetFilter').addEventListener('click',()=>{startInput.value='0';endInput.value=seconds.toFixed(1);serviceFilter.value='0';range=[0,m.windowMilliseconds];service=0;updateAll();});
+  document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(x=>x.setAttribute('aria-selected',String(x===button)));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===button.dataset.view));setTimeout(()=>Object.values(charts).forEach(x=>x.resize()),0);}));
+
+  if (!window.Chart) { document.getElementById('chartError').style.display='block'; updateAll(); return; }
+  initializeCharts(); updateAll();
+})();
+</script>
+</body>
+</html>

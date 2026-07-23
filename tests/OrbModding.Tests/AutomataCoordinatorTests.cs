@@ -12,7 +12,7 @@ namespace OrbModding.Tests;
 public sealed class AutomataCoordinatorTests
 {
     [Fact]
-    public void AutoBuyAndAutoCastShareFrameIdentityAndOnlyOneMutatesPerFrame()
+    public void AutoBuyAndAutoCastShareFrameIdentityAndOnlyOneOwnsTheMutationLeasePerFrame()
     {
         var coordinator = Coordinator();
         long frame = 41;
@@ -316,6 +316,7 @@ public sealed class AutomataCoordinatorTests
             catalog,
             coordinator,
             () => frame,
+            readElapsedMilliseconds: _ => 0.0,
             readPurchaseElapsedMilliseconds: _ => 0.0);
 
         engine.Tick(1.0f);
@@ -360,6 +361,49 @@ public sealed class AutomataCoordinatorTests
             item => item.Subsystem == "OrbAutomata.AutoBuy" &&
                     item.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
         Assert.Equal(AutoBuyEngine.MaximumNativePurchasesPerFrame, mutation.TotalOperations);
+    }
+
+    [Fact]
+    public void AutoBuyBurstUsesOnlyTheSharedHardBudgetRemainingAfterEarlierFrameWork()
+    {
+        var clock = new ManualCoordinatorClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 0.75, 1.0, 64);
+        const long frame = 1;
+        using var earlierWork = coordinator.Register("Earlier", "Consume frame budget");
+        earlierWork.SetPending(true);
+        Assert.Equal(
+            SuiteWorkAdmission.Granted,
+            coordinator.RequestWork(earlierWork, frame, out var earlierLease));
+        clock.Advance(0.6);
+        earlierLease.Complete();
+        earlierWork.SetPending(false);
+
+        var config = Config();
+        config.PurchaseGrouping.Value = AutoBuyPurchaseGroupingMode.Fixed;
+        config.FixedGroupSize.Value = 20;
+        config.LeaveQueueSlots.Value = 0;
+        var candidate = new BuyCandidate("remaining-budget-burst", AutoBuyCandidateKind.Structure);
+        var catalog = new BuyCatalog(20, candidate);
+        var purchaseElapsed = 0.0;
+        candidate.OnPurchase = () =>
+        {
+            catalog.RemainingRoom--;
+            purchaseElapsed += 0.15;
+            clock.Advance(0.15);
+        };
+        using var engine = BuyEngine(
+            config,
+            catalog,
+            coordinator,
+            () => frame,
+            readPurchaseElapsedMilliseconds: _ => purchaseElapsed);
+
+        engine.Tick(1.0f);
+
+        // Only 0.4 ms remained. The synchronous third call may cross the
+        // boundary, but the burst cannot receive a fresh 1 ms Auto Buy slice.
+        Assert.Equal(3, candidate.PurchaseCalls);
+        Assert.Equal(1.05, coordinator.CurrentFrameElapsedMilliseconds, 6);
     }
 
     [Fact]
@@ -641,7 +685,7 @@ public sealed class AutomataCoordinatorTests
         long frame = 55;
         var config = Config();
         var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
         using var engine = BuyEngine(
             config,
             new BuyCatalog(0, new BuyCandidate("queue-full", AutoBuyCandidateKind.Structure)),
@@ -670,7 +714,7 @@ public sealed class AutomataCoordinatorTests
             var structure = new BuyCandidate("z-structure", AutoBuyCandidateKind.Structure);
             var config = Config();
             var registry = new FeatureStatusRegistry();
-            using var statuses = new AutomataFeatureStatuses(config, 1, registry);
+            using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
             using var engine = BuyEngine(
                 config,
                 new BuyCatalog(4, upgrade, structure),
@@ -813,9 +857,9 @@ public sealed class AutomataCoordinatorTests
     private static SuitePerformanceCoordinator Coordinator() =>
         new(StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
 
-    private static AutomataConfig Config()
+    private static BepInExAutomataConfiguration Config()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
         config.AutoBuyAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
         config.UpgradeAffordability.Value = AutoBuyAffordabilityMode.BuyAll;
@@ -825,7 +869,7 @@ public sealed class AutomataCoordinatorTests
     }
 
     private static AutoBuyEngine BuyEngine(
-        AutomataConfig config,
+        BepInExAutomataConfiguration config,
         IAutoBuyCatalog catalog,
         SuitePerformanceCoordinator coordinator,
         Func<long> frameIdentity,
@@ -845,7 +889,7 @@ public sealed class AutomataCoordinatorTests
             featureStatus: featureStatus);
 
     private static AutoCastEngine CastEngine(
-        AutomataConfig config,
+        BepInExAutomataConfiguration config,
         IAutoCastCatalog catalog,
         SuitePerformanceCoordinator coordinator,
         Func<long> frameIdentity) =>
@@ -858,6 +902,19 @@ public sealed class AutomataCoordinatorTests
             () => true,
             coordinator,
             frameIdentity);
+
+    private sealed class ManualCoordinatorClock : IPerformanceClock
+    {
+        private long _microseconds;
+
+        public long GetTimestamp() => _microseconds;
+
+        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
+            (endTimestamp - startTimestamp) / 1000.0;
+
+        public void Advance(double milliseconds) =>
+            _microseconds += (long)(milliseconds * 1000.0);
+    }
 
     private sealed class BuyCatalog : IAutoBuyCatalog
     {

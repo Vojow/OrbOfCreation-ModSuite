@@ -7,7 +7,7 @@ namespace OrbAutomata;
 internal sealed class AutoBuyTooltip : ITooltipable
 {
     private readonly AutoBuyToggleControl _control;
-    private AutomataConfig Config => _control.Config;
+    private AutomataConfiguration Config => _control.Config;
     public AutoBuyTooltip(AutoBuyToggleControl control) { _control = control; }
     public string GetName() => "Automata Auto Buy";
     public string GetDisplayType() => _control.State == AutoCastToggleVisualState.On ? "ON" : "OFF";
@@ -22,8 +22,8 @@ internal sealed class AutoBuyTooltip : ITooltipable
         TooltipNodeLayout.AddFeatureStatus(nodes, _control.Status, GetColor(), lineWidth: 68);
         nodes.AddRange(new[]
         {
-            new TooltipNode($"Structures: {(Config.AutoBuyStructures.Value ? "ON" : "OFF")} ({Config.AutoBuyAffordability.Value})"),
-            new TooltipNode($"Upgrades: {(Config.AutoBuyUpgrades.Value ? "ON" : "OFF")} ({Config.UpgradeAffordability.Value})"),
+            new TooltipNode($"Structures: {(Config.AutoBuy.IncludeStructures ? "ON" : "OFF")} ({Config.AutoBuy.StructureAffordability})"),
+            new TooltipNode($"Upgrades: {(Config.AutoBuy.IncludeUpgrades ? "ON" : "OFF")} ({Config.AutoBuy.UpgradeAffordability})"),
         });
         TooltipNodeLayout.AddCompactFeatureStatus(
             nodes,
@@ -32,9 +32,9 @@ internal sealed class AutoBuyTooltip : ITooltipable
             lineWidth: 68);
         nodes.AddRange(new[]
         {
-            new TooltipNode($"Queue slots reserved: {Config.LeaveQueueSlots.Value}"),
-            new TooltipNode($"Batch sizing: {Config.AutoBuyBatchSizing.Value}"),
-            new TooltipNode($"Purchase grouping: {Config.PurchaseGrouping.Value}"),
+            new TooltipNode($"Queue slots reserved: {Config.AutoBuy.LeaveQueueSlots}"),
+            new TooltipNode($"Batch sizing: {Config.AutoBuy.BatchSizing}"),
+            new TooltipNode($"Purchase grouping: {Config.AutoBuy.PurchaseGrouping}"),
             new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         });
         var latestDecision = _control.LatestDecision;
