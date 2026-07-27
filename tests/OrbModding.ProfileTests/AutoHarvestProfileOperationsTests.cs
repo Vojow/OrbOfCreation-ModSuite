@@ -5,7 +5,7 @@ using static OrbModding.ProfileTests.AutoHarvestProfileTestSupport;
 
 namespace OrbModding.ProfileTests;
 
-public sealed class AutoHarvestProfileOperationsTests
+public sealed class AutomataProfileOperationsTests
 {
     [Fact]
     public void NestedStageFaultsTheProfileWithoutEscapingIntoGameplay()
@@ -15,12 +15,18 @@ public sealed class AutoHarvestProfileOperationsTests
             new ProvenIncrementingProfileAllocationCounter());
         var probe = new ServiceCycleProfileProbe();
         probe.Attach(recorder);
-        var operations = new AutoHarvestProfileOperations(probe);
-        var context = CaptureContext(serviceOrdinal: 0, frameIdentity: 1);
-        var outer = operations.Begin(1001, context, ServiceCycleProfileTemperature.Warm);
+        var operations = new AutomataProfileOperations(probe);
+        var context = ActionContext(serviceOrdinal: 0, frameIdentity: 1);
+        var outer = operations.Begin(
+            ServiceCycleProfileSpan.AutoHarvestBindingAndCoherence,
+            context,
+            ServiceCycleProfileTemperature.Warm);
         try
         {
-            var nested = operations.Begin(1002, context, ServiceCycleProfileTemperature.Warm);
+            var nested = operations.Begin(
+                ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
+                context,
+                ServiceCycleProfileTemperature.Warm);
             Assert.False(nested.IsActive);
             nested.Abandon();
             outer.Complete();
@@ -45,15 +51,15 @@ public sealed class AutoHarvestProfileOperationsTests
             new ProvenIncrementingProfileAllocationCounter());
         var probe = new ServiceCycleProfileProbe();
         probe.Attach(recorder);
-        var operations = new AutoHarvestProfileOperations(probe);
+        var operations = new AutomataProfileOperations(probe);
         var stage = operations.Begin(
-            1001,
-            CaptureContext(serviceOrdinal: 0, frameIdentity: 1),
+            ServiceCycleProfileSpan.AutoHarvestBindingAndCoherence,
+            ActionContext(serviceOrdinal: 0, frameIdentity: 1),
             ServiceCycleProfileTemperature.Warm);
         try
         {
-            operations.AddSelectedPairs(uint.MaxValue);
-            operations.AddSelectedPairs(1);
+            operations.AddReflectedMethodCalls(uint.MaxValue);
+            operations.AddReflectedMethodCalls(1);
             stage.Complete();
         }
         finally
@@ -74,16 +80,18 @@ public sealed class AutoHarvestProfileOperationsTests
         var measurement = new CapturingMeasurementPort();
         var probe = new ServiceCycleProfileProbe();
         probe.Attach(measurement);
-        var operations = new AutoHarvestProfileOperations(probe);
+        var operations = new AutomataProfileOperations(probe);
         var stage = operations.Begin(
-            AutoHarvestServiceCycleProfileStageCodes.ActionFactRevalidation,
+            ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
             ActionContext(serviceOrdinal: 3, frameIdentity: 42),
             ServiceCycleProfileTemperature.Warm);
 
         stage.Complete();
 
         var completed = Assert.Single(measurement.Completed);
-        Assert.Equal(AutoHarvestServiceCycleProfileStageCodes.ActionFactRevalidation, completed.Context.StageCode);
+        Assert.Equal(
+            (int)ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
+            completed.Context.StageCode);
         Assert.Equal(3, completed.Context.ServiceOrdinal);
         Assert.Equal(42UL, completed.Context.Frame);
         Assert.Equal(5UL, completed.Context.Cycle);

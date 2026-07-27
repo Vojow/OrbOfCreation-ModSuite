@@ -7,8 +7,6 @@ queues, saves, and player control. Fail closed when a game contract is unknown.
 
 - Never install DLLs into the game, create tags, publish releases, or push
   unless the user explicitly asks for that action.
-- `OrbChronomancer` and `OrbAchievementResonance` are experimental and must
-  never enter supported builds or packages.
 - Nested `AGENTS.md` files apply to their subtrees (`src/`, `tools/`).
 
 ## Runtime invariants
@@ -16,8 +14,10 @@ queues, saves, and player control. Fail closed when a game contract is unknown.
 - Unity objects and game APIs stay on the Unity main thread.
 - Never edit an active save file.
 - Identity is stable UUID plus expected native type; names are diagnostics only.
-- The game stays authoritative for availability, cost, quantity, queue room,
-  and completion; revalidate native state immediately before mutating it.
+- The game stays authoritative for availability, quantity, queue room, and
+  completion; revalidate native state immediately before mutating it. Cost is
+  the one exception: the suite computes it, which is why an unaudited game build
+  refuses to load.
 - Scene, save-load, reset, and NG+ transitions invalidate cached native
   references.
 

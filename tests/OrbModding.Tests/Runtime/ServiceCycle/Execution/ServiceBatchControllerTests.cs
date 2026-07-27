@@ -24,9 +24,9 @@ public sealed class ServiceBatchControllerTests
         {
             ActionCount = actionCount,
         };
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(3));
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(3),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -46,8 +46,8 @@ public sealed class ServiceBatchControllerTests
         Assert.Equal(actionCount, runner.Snapshot.PreviousReceipt.ActionCount);
         Assert.Equal(actionCount, runner.Snapshot.PreviousReceipt.CommittedCount);
         if (actionCount == 0) Assert.Equal(5, runner.Snapshot.Handoff.TransitionCount);
-        Assert.Equal(3, definition.LastEvaluationConfig);
-        if (actionCount != 0) Assert.Equal(3, definition.LastExecutionConfig);
+        Assert.Equal(3, definition.LastEvaluatedSetting);
+        if (actionCount != 0) Assert.Equal(3, definition.LastExecutedSetting);
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
@@ -68,7 +68,6 @@ public sealed class ServiceBatchControllerTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -102,7 +101,7 @@ public sealed class ServiceBatchControllerTests
             ActionCount = 2,
             CommittedNativeOutcome = new NativeMutationCallOutcome(int.MaxValue, int.MaxValue, int.MaxValue),
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         ServiceRunnerTestWait.RunAndDrain(runner, clock, 2);
@@ -111,6 +110,33 @@ public sealed class ServiceBatchControllerTests
         Assert.Equal(2L * int.MaxValue, runner.Snapshot.PreviousReceipt.NativeCallOutcome.NativeCallsAttempted);
         Assert.Equal(2L * int.MaxValue, runner.Snapshot.PreviousReceipt.NativeCallOutcome.MutationAttempts);
         Assert.Equal(2L * int.MaxValue, runner.Snapshot.PreviousReceipt.NativeCallOutcome.MutationsCommitted);
+    }
+
+    [Fact]
+    public void SkippedActionAdvancesAndLaterActionStillCommits()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("test.execution.skipped")
+        {
+            ActionCount = 3,
+            SkipAtIndex = 1,
+        };
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(1));
+        var runner = registration.Runner;
+
+        ServiceRunnerTestWait.RunAndDrain(runner, clock, 3);
+
+        var receipt = runner.Snapshot.PreviousReceipt;
+        Assert.Equal(BatchTerminalDisposition.Completed, receipt.Disposition);
+        Assert.Equal(3, receipt.ActionCount);
+        Assert.Equal(2, receipt.CommittedCount);
+        Assert.Equal(1, receipt.SkippedCount);
+        Assert.Equal(3, definition.ActionExecutionCount);
+        Assert.Equal(3, receipt.NativeCallOutcome.MutationAttempts);
+        Assert.Equal(2, receipt.NativeCallOutcome.MutationsCommitted);
     }
 
     [Fact]
@@ -123,7 +149,7 @@ public sealed class ServiceBatchControllerTests
             ActionCount = 100_000,
             RejectAtIndex = 0,
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
         var reference = SetUniquePayload(definition);
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -28,7 +29,6 @@ public sealed class SuiteFramePumpSemanticCaptureTests
         using var registry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100));
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -36,9 +36,10 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             eventCapacity: 64,
             serviceCapacity: 1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
         var source = Assert.IsType<ServiceCycleSemanticTraceSource>(pump.SemanticTrace);
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
         Assert.True(evaluationEntered.Wait(TimeSpan.FromSeconds(2)));
         Assert.Equal(
             ServiceCycleSemanticTraceCloseResult.Pending,
@@ -73,7 +74,6 @@ public sealed class SuiteFramePumpSemanticCaptureTests
         using var registry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100));
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -81,10 +81,11 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             eventCapacity: 64,
             serviceCapacity: 1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
         using var contention = new HandoffGateContention(registration.Runner);
-        definition.CaptureCallback = contention.Acquire;
+        definition.ShouldStartCallback = contention.Acquire;
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
 
         Assert.Equal(ServiceHandoffPhase.Empty, registration.Runner.HandoffPhaseHint);
         Assert.Equal(
@@ -104,7 +105,6 @@ public sealed class SuiteFramePumpSemanticCaptureTests
         using var registry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100));
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -112,10 +112,11 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             eventCapacity: 64,
             serviceCapacity: 1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
         using var contention = new HandoffGateContention(registration.Runner);
-        definition.CaptureCallback = contention.Acquire;
+        definition.ShouldStartCallback = contention.Acquire;
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
 
         Assert.Equal(
@@ -136,7 +137,6 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             workerStarter: starter);
         using var registration = registry.Register(
             new ExecutionServiceDefinition("trace.capture.queued-lifecycle") { ActionCount = 0 },
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -144,8 +144,9 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             eventCapacity: 64,
             serviceCapacity: 1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
         Assert.Equal(ServiceHandoffPhase.RequestReady, registration.Runner.HandoffPhaseHint);
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
 
@@ -157,14 +158,10 @@ public sealed class SuiteFramePumpSemanticCaptureTests
     [Fact]
     public void LifecycleReplacementInsideCaptureInvalidatesTheUnpublishedCycle()
     {
-        var definition = new ExecutionServiceDefinition("trace.capture.callback-lifecycle")
-        {
-            ActionCount = 0,
-        };
+        var definition = new SourceServiceDefinition("trace.capture.callback-lifecycle");
         using var registry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100));
-        using var registration = registry.Register(
+        using var registration = registry.RegisterSource(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -197,7 +194,6 @@ public sealed class SuiteFramePumpSemanticCaptureTests
         using var registry = new ServiceCycleRegistry(1, new ThreadSafeTestClock(100));
         var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         var recorder = new ServiceCycleSemanticRecorder(
@@ -205,6 +201,7 @@ public sealed class SuiteFramePumpSemanticCaptureTests
             eventCapacity: 64,
             serviceCapacity: 1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
 
         try
         {

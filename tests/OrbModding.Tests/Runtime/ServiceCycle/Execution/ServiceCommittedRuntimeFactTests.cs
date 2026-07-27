@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Lifecycle;
@@ -18,14 +19,8 @@ public sealed class ServiceCommittedRuntimeFactTests
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("test.execution.facts.deferred")
-        {
-            ActionCount = 0,
-        };
-        using var registration = registry.Register(
-            definition,
-            new ExecutionConfig(3),
-            new LifecycleGeneration(1));
+        var definition = new SourceServiceDefinition("test.execution.facts.deferred");
+        using var registration = registry.RegisterSource(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
         using var contention = new HandoffGateContention(runner);
         definition.CaptureCallback = () =>
@@ -62,7 +57,7 @@ public sealed class ServiceCommittedRuntimeFactTests
         Assert.Equal(captured.Cycle, queued.Cycle);
         Assert.Equal(captured.Batch, queued.Batch);
         Assert.Equal(105, queued.QueuedAt.Ticks);
-        Assert.Equal(1, definition.CaptureCount);
+        Assert.Equal(1, definition.StartCount);
     }
 
     [Fact]
@@ -83,18 +78,17 @@ public sealed class ServiceCommittedRuntimeFactTests
         definition.FailNextEvaluations(1);
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         var start = runner.TryStartCycle(clock.Now);
         Assert.True(start.Queued);
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+        ServiceCycleTestDeadline.ForSignal(entered, "the evaluation callback");
         clock.Advance(new MonotonicDuration(9));
         release.Set();
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
 
-        var acquisition = runner.TryAcquireResponseNonBlocking(clock.Now);
+        var acquisition = ServiceRunnerTestWait.AcquireResponse(runner, clock);
 
         Assert.True(acquisition.Acquired);
         Assert.False(acquisition.Response.Succeeded);
@@ -116,7 +110,6 @@ public sealed class ServiceCommittedRuntimeFactTests
         var definition = new ExecutionServiceDefinition("test.execution.facts.response.contention");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
@@ -124,7 +117,7 @@ public sealed class ServiceCommittedRuntimeFactTests
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(registry)!;
         Assert.Equal(
             ServiceResourceClaimResult.Claimed,
-            ledger.TryBeginFactory(ServiceResourceRole.Frame, out var blocker));
+            ledger.TryBeginFactory(ServiceResourceRole.WorkerDefinition, out var blocker));
 
         try
         {
@@ -132,7 +125,7 @@ public sealed class ServiceCommittedRuntimeFactTests
             Assert.True(start.Queued);
             ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
 
-            var acquisition = runner.TryAcquireResponseNonBlocking(clock.Now);
+            var acquisition = ServiceRunnerTestWait.AcquireResponse(runner, clock);
 
             Assert.True(acquisition.Acquired);
             Assert.False(acquisition.Response.Succeeded);
@@ -156,18 +149,16 @@ public sealed class ServiceCommittedRuntimeFactTests
     {
         var captureClock = new ThreadSafeTestClock(100);
         using var captureRegistry = new ServiceCycleRegistry(1, captureClock);
-        var captureDefinition = new ExecutionServiceDefinition("test.execution.facts.capture-recovery")
+        var captureDefinition = new SourceServiceDefinition("test.execution.facts.capture-recovery")
         {
-            ActionCount = 0,
             CaptureCallback = () =>
             {
                 captureClock.Advance(new MonotonicDuration(4));
                 throw new InvalidOperationException("capture fault");
             },
         };
-        using var captureRegistration = captureRegistry.Register(
+        using var captureRegistration = captureRegistry.RegisterSource(
             captureDefinition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var captureRunner = captureRegistration.Runner;
 
@@ -195,20 +186,19 @@ public sealed class ServiceCommittedRuntimeFactTests
         workerDefinition.FailNextEvaluations(1);
         using var workerRegistration = workerRegistry.Register(
             workerDefinition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var workerRunner = workerRegistration.Runner;
 
         Assert.True(workerRunner.TryStartCycle(workerClock.Now).Queued);
         ServiceRunnerTestWait.ForPhase(workerRunner, ServiceHandoffPhase.ResponseReady);
-        var failed = workerRunner.TryAcquireResponseNonBlocking(workerClock.Now);
+        var failed = ServiceRunnerTestWait.AcquireResponse(workerRunner, workerClock);
         Assert.True(failed.Response.Fault.IsValid);
         Assert.True(workerRunner.TryAdvancePendingMainOwnership());
         workerClock.AdvanceTo(failed.Response.RetryDue);
         Assert.True(workerRunner.TryStartCycle(workerClock.Now).Queued);
         ServiceRunnerTestWait.ForPhase(workerRunner, ServiceHandoffPhase.ResponseReady);
 
-        var recovered = workerRunner.TryAcquireResponseNonBlocking(workerClock.Now);
+        var recovered = ServiceRunnerTestWait.AcquireResponse(workerRunner, workerClock);
 
         Assert.True(recovered.Response.Succeeded);
         Assert.True(recovered.Response.RecoveredFault.IsPresent);
@@ -231,7 +221,6 @@ public sealed class ServiceCommittedRuntimeFactTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -281,7 +270,6 @@ public sealed class ServiceCommittedRuntimeFactTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         var emergency = new EmergencyStopContext(
@@ -291,13 +279,13 @@ public sealed class ServiceCommittedRuntimeFactTests
 
         var start = runner.TryStartCycle(clock.Now);
         Assert.True(start.Queued);
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+        ServiceCycleTestDeadline.ForSignal(entered, "the evaluation callback");
         Assert.False(runner.RejectForEmergencyStop(emergency, clock.Now, out _));
         clock.Advance(new MonotonicDuration(6));
         release.Set();
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
 
-        var acquisition = runner.TryAcquireResponseNonBlocking(clock.Now);
+        var acquisition = ServiceRunnerTestWait.AcquireResponse(runner, clock);
 
         Assert.True(acquisition.Acquired);
         Assert.True(acquisition.Response.Succeeded);
@@ -326,18 +314,17 @@ public sealed class ServiceCommittedRuntimeFactTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         var start = runner.TryStartCycle(clock.Now);
         Assert.True(start.Queued);
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+        ServiceCycleTestDeadline.ForSignal(entered, "the evaluation callback");
         clock.Advance(new MonotonicDuration(7));
         release.Set();
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
 
-        var acquisition = runner.TryAcquireResponseNonBlocking(clock.Now);
+        var acquisition = ServiceRunnerTestWait.AcquireResponse(runner, clock);
 
         Assert.True(acquisition.Acquired);
         Assert.True(acquisition.Response.Succeeded);
@@ -359,13 +346,13 @@ public sealed class ServiceCommittedRuntimeFactTests
     }
 
     private static ServiceCycleStartAttempt StartAndAcquire(
-        ServiceRunner<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction> runner,
+        ServiceRunner<ExecutionState, ExecutionAction> runner,
         ThreadSafeTestClock clock)
     {
         var start = runner.TryStartCycle(clock.Now);
         Assert.True(start.Queued);
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
-        Assert.True(runner.TryAcquireResponseNonBlocking(clock.Now).Acquired);
+        ServiceRunnerTestWait.AcquireResponse(runner, clock);
         return start;
     }
 }

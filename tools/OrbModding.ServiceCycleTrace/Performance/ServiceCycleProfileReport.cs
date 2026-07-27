@@ -50,8 +50,6 @@ internal static class ServiceCycleProfileReport
         Add(parts, "methods", value.ReflectedMethodCalls);
         Add(parts, "ids", value.StableIdReads);
         Add(parts, "entries", value.ListEntries);
-        Add(parts, "selected", value.SelectedPairs);
-        Add(parts, "ready", value.ReadyPairs);
         Add(parts, "args", value.InvocationArgumentArrays);
         Add(parts, "copies", value.RecordCopies);
         return parts.Count == 0 ? "-" : string.Join(", ", parts);

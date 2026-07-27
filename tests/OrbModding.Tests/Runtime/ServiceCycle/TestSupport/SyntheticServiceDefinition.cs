@@ -1,26 +1,17 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
 using RuntimeLifecycleGeneration = OrbModding.Common.Runtime.LifecycleGeneration;
 using RuntimeStrategyGeneration = OrbModding.Common.Runtime.StrategyGeneration;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
-
-internal sealed class SyntheticFrame
-{
-    public int StrategyValue { get; internal set; }
-}
-
-internal readonly struct SyntheticConfig
-{
-    public SyntheticConfig(int value) => Value = value;
-    public int Value { get; }
-}
 
 internal sealed class SyntheticState
 {
@@ -34,15 +25,12 @@ internal readonly struct SyntheticAction
 }
 
 internal sealed class SyntheticServiceDefinition :
-    IServiceCycleDefinition<SyntheticFrame, SyntheticConfig, SyntheticState, SyntheticAction>
+    IServiceCycleDefinition<SyntheticState, SyntheticAction>
 {
-    private readonly SyntheticWorkerControl _worker;
-    private readonly ManualResetEventSlim _resourcesReleased = new(false);
-    internal SyntheticServiceDefinition(string serviceId)
-    {
-        ServiceId = new ServiceId(serviceId);
-        _worker = new SyntheticWorkerControl(SyntheticReleaseSignals.Register(_resourcesReleased));
-    }
+    private readonly SyntheticWorkerControl _worker = new();
+    private int _workerDefinitionCreateCount;
+
+    internal SyntheticServiceDefinition(string serviceId) => ServiceId = new ServiceId(serviceId);
 
     public ServiceId ServiceId { get; }
     public WakePolicy DefaultWakePolicy { get; set; } = WakePolicy.Immediate;
@@ -52,45 +40,29 @@ internal sealed class SyntheticServiceDefinition :
     public bool ThrowFromStateFactory { get => _worker.ThrowFromStateFactory; set => _worker.ThrowFromStateFactory = value; }
     public bool ReturnNullState { get => _worker.ReturnNullState; set => _worker.ReturnNullState = value; }
     public bool ThrowFromWorkerFactory { get; set; }
-    public bool ReturnNullFrame { get; set; }
+    public bool ReturnNullWorkerDefinition { get; set; }
     public bool ThrowFromStateRelease { get => _worker.ThrowFromStateRelease; set => _worker.ThrowFromStateRelease = value; }
-    public bool ThrowFromFrameRelease { get => _worker.ThrowFromFrameRelease; set => _worker.ThrowFromFrameRelease = value; }
-    public int FrameCreateCount { get; private set; }
+    public int WorkerDefinitionCreateCount => Volatile.Read(ref _workerDefinitionCreateCount);
     public int StateCreateCount => _worker.StateCreateCount;
-    public int FrameReleaseCount => _worker.FrameReleaseCount;
     public int StateReleaseCount => _worker.StateReleaseCount;
-    public ManualResetEventSlim ResourcesReleased => _resourcesReleased;
 
-    public SyntheticFrame CreateFrame()
-    {
-        FrameCreateCount++;
-        return ReturnNullFrame ? null! : new SyntheticFrame();
-    }
-
-    public IServiceCycleWorkerDefinition<SyntheticFrame, SyntheticConfig, SyntheticState, SyntheticAction>
+    public IServiceCycleWorkerDefinition<SyntheticState, SyntheticAction>
         CreateWorkerDefinition()
     {
+        Interlocked.Increment(ref _workerDefinitionCreateCount);
         if (ThrowFromWorkerFactory) throw new InvalidOperationException("synthetic worker construction failure");
-        return new WorkerDefinition(_worker);
+        return ReturnNullWorkerDefinition ? null! : new WorkerDefinition(_worker);
     }
 
     public ServiceStartDecision ShouldStart(
-        in SyntheticConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceCycleStartContext context) =>
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
-
-    public ServiceCaptureResult Capture(
-        ref SyntheticFrame frame,
-        in SyntheticConfig config,
-        in ServiceCaptureContext context) =>
-        ServiceCaptureResult.Captured(
-            new RuntimeStrategyGeneration(1),
-            CommonServiceDecisionCodes.Captured);
 
 
     public ServiceActionResult TryExecute(
         in SyntheticAction action,
-        in SyntheticConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceActionContext context) =>
         ServiceActionResult.Committed(
             CommonActionResultCodes.Committed,
@@ -99,16 +71,17 @@ internal sealed class SyntheticServiceDefinition :
                 new NativeMutationCallOutcome(1, 1, 1)));
 
     private sealed class WorkerDefinition :
-        IServiceCycleWorkerDefinition<SyntheticFrame, SyntheticConfig, SyntheticState, SyntheticAction>
+        IServiceCycleWorkerDefinition<SyntheticState, SyntheticAction>
     {
         private readonly SyntheticWorkerControl _control;
         internal WorkerDefinition(SyntheticWorkerControl control) => _control = control;
         public SyntheticState CreateState(RuntimeLifecycleGeneration lifecycle) => _control.CreateState();
         public void ReleaseState(ref SyntheticState state) => _control.ReleaseState(ref state);
-        public void ReleaseFrame(ref SyntheticFrame frame) => _control.ReleaseFrame(ref frame);
+
         public WakePolicy Evaluate(
-            in SyntheticFrame frame,
-            in SyntheticConfig config,
+            in SuiteRuntimeConfiguration config,
+            GameWorldState world,
+            SuiteStrategy strategy,
             in ServiceCycleContext context,
             ref SyntheticState state,
             ServiceActionWriter<SyntheticAction> actions) =>
@@ -122,14 +95,10 @@ internal sealed class SyntheticServiceDefinition :
 
 internal sealed class SyntheticWorkerControl
 {
-    internal SyntheticWorkerControl(int releaseSignalId) => ReleaseSignalId = releaseSignalId;
-    internal int ReleaseSignalId { get; }
     internal bool ThrowFromStateFactory;
     internal bool ReturnNullState;
     internal bool ThrowFromStateRelease;
-    internal bool ThrowFromFrameRelease;
     internal int StateCreateCount;
-    internal int FrameReleaseCount;
     internal int StateReleaseCount;
 
     internal SyntheticState CreateState()
@@ -144,35 +113,9 @@ internal sealed class SyntheticWorkerControl
         if (ThrowFromStateRelease) throw new InvalidOperationException("synthetic state release failure");
         state = null!;
     }
-    internal void ReleaseFrame(ref SyntheticFrame frame)
-    {
-        FrameReleaseCount++;
-        try
-        {
-            if (ThrowFromFrameRelease) throw new InvalidOperationException("synthetic frame release failure");
-            frame = null!;
-        }
-        finally { SyntheticReleaseSignals.Signal(ReleaseSignalId); }
-    }
     internal WakePolicy Evaluate(ref SyntheticState state)
     {
         state.Evaluations++;
         return WakePolicy.Immediate;
-    }
-}
-
-internal static class SyntheticReleaseSignals
-{
-    private static readonly ConcurrentDictionary<int, ManualResetEventSlim> Signals = new();
-    private static int _nextId;
-    internal static int Register(ManualResetEventSlim signal)
-    {
-        var id = Interlocked.Increment(ref _nextId);
-        if (!Signals.TryAdd(id, signal)) throw new InvalidOperationException("Duplicate test signal id.");
-        return id;
-    }
-    internal static void Signal(int id)
-    {
-        if (Signals.TryRemove(id, out var signal)) signal.Set();
     }
 }

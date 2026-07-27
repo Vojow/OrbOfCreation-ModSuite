@@ -1,8 +1,11 @@
 using System;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 
@@ -24,10 +27,25 @@ internal sealed class ExecutionWorkerControl
     internal bool MeasureAppendAllocations;
     internal bool DuplicateProjectionKey;
     internal long LastAppendAllocatedBytes;
-    internal int LastEvaluationConfig;
+    internal int LastEvaluatedSetting;
+    internal int LastEvaluatedStrategySetting;
     internal int StateCreateCount => Volatile.Read(ref _stateCreateCount);
     internal int StateReleaseCount => Volatile.Read(ref _stateReleaseCount);
     internal int EvaluationCount => Volatile.Read(ref _evaluationCount);
+
+    private int _lastProjectedStructures;
+    private int _lastProjectedWasEmptyDefault;
+
+    /// <summary>How many structures the world the runtime handed the evaluation described.</summary>
+    /// <remarks>
+    /// Recorded as a count rather than as the snapshot itself because a worker may not hold one: the
+    /// graph audit rejects a worker field of a Common storage type, which is the rule that stops a
+    /// worker from keeping a world across cycles. Reading a number out of it does not keep it.
+    /// </remarks>
+    internal int LastEvaluatedStructures => Volatile.Read(ref _lastProjectedStructures);
+
+    /// <summary>Whether the runtime handed over the publisher's empty seed rather than a collected world.</summary>
+    internal bool LastEvaluatedWorldWasTheEmptyDefault => Volatile.Read(ref _lastProjectedWasEmptyDefault) != 0;
 
     internal void FailNextEvaluations(int count) => Volatile.Write(ref _evaluationFaults, count);
     internal void FailNextProjections(int count) => Volatile.Write(ref _projectionFaults, count);
@@ -47,13 +65,19 @@ internal sealed class ExecutionWorkerControl
     }
 
     internal WakePolicy Evaluate(
-        in ExecutionFrame frame,
-        in ExecutionConfig config,
+        in SuiteRuntimeConfiguration config,
+        GameWorldState world,
+        SuiteStrategy strategy,
         ref ExecutionState state,
         ServiceActionWriter<ExecutionAction> actions)
     {
         var signals = ExecutionWorkerSignals.Get(SignalId);
-        LastEvaluationConfig = config.Value;
+        LastEvaluatedSetting = TestSuiteConfiguration.SettingOf(config);
+        LastEvaluatedStrategySetting = TestSuiteStrategy.SettingOf(strategy);
+        Volatile.Write(ref _lastProjectedStructures, world.Structures.AsSpan().Length);
+        Volatile.Write(
+            ref _lastProjectedWasEmptyDefault,
+            ReferenceEquals(world, GameWorldStateDefaults.Empty) ? 1 : 0);
         state.Evaluations++;
         Interlocked.Increment(ref _evaluationCount);
         signals.EvaluationEntered?.Set();
@@ -95,7 +119,7 @@ internal sealed class ExecutionWorkerControl
 }
 
 internal sealed class ExecutionWorkerDefinition :
-    IServiceCycleWorkerDefinition<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction>
+    IServiceCycleWorkerDefinition<ExecutionState, ExecutionAction>
 {
     private readonly ExecutionWorkerControl _control;
 
@@ -104,19 +128,14 @@ internal sealed class ExecutionWorkerDefinition :
     public ExecutionState CreateState(LifecycleGeneration lifecycle) => _control.CreateState();
     public void ReleaseState(ref ExecutionState state) => _control.ReleaseState(ref state);
 
-    public void ReleaseFrame(ref ExecutionFrame frame)
-    {
-        frame = null!;
-        ExecutionWorkerSignals.Release(_control.SignalId);
-    }
-
     public WakePolicy Evaluate(
-        in ExecutionFrame frame,
-        in ExecutionConfig config,
+        in SuiteRuntimeConfiguration config,
+        GameWorldState world,
+        SuiteStrategy strategy,
         in ServiceCycleContext context,
         ref ExecutionState state,
         ServiceActionWriter<ExecutionAction> actions) =>
-        _control.Evaluate(in frame, in config, ref state, actions);
+        _control.Evaluate(in config, world, strategy, ref state, actions);
 
     public void ProjectState(
         in ExecutionState state,

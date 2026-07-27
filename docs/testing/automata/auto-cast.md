@@ -16,7 +16,7 @@ Automata action families.
   contract caching.
 - [AutomationAdmissionAdapterTests.cs](../../../tests/OrbModding.Tests/AutomationAdmissionAdapterTests.cs) owns normalized cost and readiness facts.
 - [NativeMutationVerifierTests.cs](../../../tests/OrbModding.Tests/NativeMutationVerifierTests.cs) owns capture/execute/capture failure semantics.
-- [AutomataCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutomataCoordinatorTests.cs) owns scheduling and sibling-feature isolation.
+- [AutoCastCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutoCastCoordinatorTests.cs) owns coordinator scheduling and mutation-lease behavior.
 - Game contract tests own exact loadout, cast, resource, target, and Harmony
   members from the installed assemblies.
 

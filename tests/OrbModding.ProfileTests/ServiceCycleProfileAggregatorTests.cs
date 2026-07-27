@@ -229,8 +229,6 @@ public sealed class ServiceCycleProfileAggregatorTests
         reflectedMethodCalls: 2,
         stableIdReads: 3,
         listEntries,
-        selectedPairs: 0,
-        readyPairs: 0,
         invocationArgumentArrays: 0,
         recordCopies: 0);
 

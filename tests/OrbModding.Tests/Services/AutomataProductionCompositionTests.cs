@@ -16,7 +16,6 @@ public sealed class AutomataProductionCompositionTests
         AutomataProductionComposition.Register(
             registry,
             () => Create("harvest", calls),
-            () => Create("buy", calls),
             () => Create("cast", calls),
             () => Create("concept", calls),
             () => Create("spell-level", calls));
@@ -26,12 +25,10 @@ public sealed class AutomataProductionCompositionTests
         Assert.Equal(new[]
         {
             "harvest.create",
-            "buy.create",
             "cast.create",
             "concept.create",
             "spell-level.create",
             "harvest.tick",
-            "buy.tick",
             "cast.tick",
             "concept.tick",
             "spell-level.tick",
@@ -39,7 +36,7 @@ public sealed class AutomataProductionCompositionTests
     }
 
     [Fact]
-    public void FailedOptionalAutoHarvestConstructionLeavesTheFourCoreServicesRunnable()
+    public void FailedOptionalAutoHarvestConstructionLeavesTheThreeCoreServicesRunnable()
     {
         var calls = new List<string>();
         using var registry = new AutomataServiceRegistry();
@@ -47,7 +44,6 @@ public sealed class AutomataProductionCompositionTests
         AutomataProductionComposition.Register(
             registry,
             () => null,
-            () => Create("buy", calls),
             () => Create("cast", calls),
             () => Create("concept", calls),
             () => Create("spell-level", calls));
@@ -66,22 +62,21 @@ public sealed class AutomataProductionCompositionTests
         Assert.Throws<InvalidOperationException>(() => AutomataProductionComposition.Register(
             registry,
             () => Create("harvest", new List<string>()),
-            () => Create("buy", new List<string>()),
             () => Create("cast", new List<string>()),
             () => Create("concept", new List<string>()),
             () => Create("spell-level", new List<string>())));
     }
 
     [Fact]
-    public void AutoHarvestStartupContainsOnlyRecoverableFailures()
+    public void ServiceCycleHostStartupContainsOnlyRecoverableFailures()
     {
-        Assert.True(AutoHarvestProductionComposition.IsContainedStartupFailure(
+        Assert.True(AutomataServiceCycleProductionComposition.IsContainedStartupFailure(
             new InvalidOperationException("recoverable")));
-        Assert.False(AutoHarvestProductionComposition.IsContainedStartupFailure(
+        Assert.False(AutomataServiceCycleProductionComposition.IsContainedStartupFailure(
             new StackOverflowException()));
-        Assert.False(AutoHarvestProductionComposition.IsContainedStartupFailure(
+        Assert.False(AutomataServiceCycleProductionComposition.IsContainedStartupFailure(
             new OutOfMemoryException()));
-        Assert.False(AutoHarvestProductionComposition.IsContainedStartupFailure(
+        Assert.False(AutomataServiceCycleProductionComposition.IsContainedStartupFailure(
             new AccessViolationException()));
     }
 

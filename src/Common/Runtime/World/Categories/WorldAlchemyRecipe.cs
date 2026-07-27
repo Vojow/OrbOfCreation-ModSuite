@@ -1,0 +1,244 @@
+using System;
+
+namespace OrbModding.Common.Runtime.World;
+
+/// <summary>One alchemy recipe as published: what it is, how far it has been taken, and its cost inputs.</summary>
+internal readonly struct WorldAlchemyRecipe : IWorldEntity
+{
+    internal WorldAlchemyRecipe(
+        Guid recipeId,
+        bool discovered,
+        int maxLevel,
+        int advancementLevel,
+        int discoveryRarityLevel,
+        BigDouble masteryXp,
+        int masteryLevel,
+        BigDouble recipeTime,
+        bool isRequiredDiscovery,
+        bool isCompletionRecipe,
+        bool isAdvancementRecipe,
+        double completionTime,
+        bool isDebugAlchemy,
+        BigDouble power,
+        BigDouble speed,
+        BigDouble drainCostMod,
+        BigDouble special,
+        BigDouble timeReqMod,
+        BigDouble timeScalingMod,
+        BigDouble masteryXpRate,
+        BigDouble effectLevels,
+        BigDouble overdrivePower,
+        BigDouble overdriveSpeed,
+        BigDouble overdriveDrainCostMod,
+        BigDouble overdriveXpRate,
+        BigDouble freeUsageSlots,
+        BigDouble maxUsageSlots,
+        BigDouble cachedCompletionTime,
+        BigDouble cachedRequiredXp)
+    {
+        RecipeId = recipeId;
+        Discovered = discovered;
+        MaxLevel = maxLevel;
+        AdvancementLevel = advancementLevel;
+        DiscoveryRarityLevel = discoveryRarityLevel;
+        MasteryXp = masteryXp;
+        MasteryLevel = masteryLevel;
+        RecipeTime = recipeTime;
+        IsRequiredDiscovery = isRequiredDiscovery;
+        IsCompletionRecipe = isCompletionRecipe;
+        IsAdvancementRecipe = isAdvancementRecipe;
+        CompletionTime = completionTime;
+        IsDebugAlchemy = isDebugAlchemy;
+        Power = power;
+        Speed = speed;
+        DrainCostMod = drainCostMod;
+        Special = special;
+        TimeReqMod = timeReqMod;
+        TimeScalingMod = timeScalingMod;
+        MasteryXpRate = masteryXpRate;
+        EffectLevels = effectLevels;
+        OverdrivePower = overdrivePower;
+        OverdriveSpeed = overdriveSpeed;
+        OverdriveDrainCostMod = overdriveDrainCostMod;
+        OverdriveXpRate = overdriveXpRate;
+        FreeUsageSlots = freeUsageSlots;
+        MaxUsageSlots = maxUsageSlots;
+        CachedCompletionTime = cachedCompletionTime;
+        CachedRequiredXp = cachedRequiredXp;
+    }
+
+    internal Guid RecipeId { get; }
+
+    public Guid EntityId => RecipeId;
+
+    internal bool Discovered { get; }
+
+    /// <summary>
+    /// The highest level unlocked. The level currently selected to brew at is not here: the game
+    /// writes one into its save record but never reads it back, and the runtime type has no such
+    /// field — it is dead save data rather than state.
+    /// </summary>
+    internal int MaxLevel { get; }
+
+    internal int AdvancementLevel { get; }
+
+    /// <summary>The rarity tier the recipe was discovered at.</summary>
+    internal int DiscoveryRarityLevel { get; }
+
+    internal BigDouble MasteryXp { get; }
+
+    internal int MasteryLevel { get; }
+
+    /// <summary>Seconds one brew takes at the base rate.</summary>
+    internal BigDouble RecipeTime { get; }
+
+    /// <summary>
+    /// The rest of what the runtime type carries: the two times the game caches rather than persists,
+    /// the flags that classify the recipe, and the fourteen records a batch is a function of.
+    /// </summary>
+    internal bool IsRequiredDiscovery { get; }
+
+    internal bool IsCompletionRecipe { get; }
+
+    internal bool IsAdvancementRecipe { get; }
+
+    internal double CompletionTime { get; }
+
+    internal bool IsDebugAlchemy { get; }
+
+    internal BigDouble Power { get; }
+
+    internal BigDouble Speed { get; }
+
+    internal BigDouble DrainCostMod { get; }
+
+    internal BigDouble Special { get; }
+
+    internal BigDouble TimeReqMod { get; }
+
+    internal BigDouble TimeScalingMod { get; }
+
+    internal BigDouble MasteryXpRate { get; }
+
+    internal BigDouble EffectLevels { get; }
+
+    internal BigDouble OverdrivePower { get; }
+
+    internal BigDouble OverdriveSpeed { get; }
+
+    internal BigDouble OverdriveDrainCostMod { get; }
+
+    internal BigDouble OverdriveXpRate { get; }
+
+    internal BigDouble FreeUsageSlots { get; }
+
+    internal BigDouble MaxUsageSlots { get; }
+
+    internal BigDouble CachedCompletionTime { get; }
+
+    internal BigDouble CachedRequiredXp { get; }
+}
+
+internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRecipe>
+{
+    private Func<object, Guid>? _id;
+    private Func<object, bool>? _discovered;
+    private Func<object, int>? _maxLevel;
+    private Func<object, int>? _advancementLevel;
+    private Func<object, int>? _discRarityLevel;
+    private Func<object, BigDouble>? _masteryXp;
+    private Func<object, int>? _masteryLevel;
+    private Func<object, BigDouble>? _recipeTime;
+    private Func<object, bool>? _isRequiredDiscovery;
+    private Func<object, bool>? _isCompletionRecipe;
+    private Func<object, bool>? _isAdvancementRecipe;
+    private Func<object, double>? _completionTime;
+    private Func<object, bool>? _isDebugAlchemy;
+    private Func<object, BigDouble>? _power;
+    private Func<object, BigDouble>? _speed;
+    private Func<object, BigDouble>? _drainCostMod;
+    private Func<object, BigDouble>? _special;
+    private Func<object, BigDouble>? _timeReqMod;
+    private Func<object, BigDouble>? _timeScalingMod;
+    private Func<object, BigDouble>? _masteryXpRate;
+    private Func<object, BigDouble>? _effectLevels;
+    private Func<object, BigDouble>? _overdrivePower;
+    private Func<object, BigDouble>? _overdriveSpeed;
+    private Func<object, BigDouble>? _overdriveDrainCostMod;
+    private Func<object, BigDouble>? _overdriveXpRate;
+    private Func<object, BigDouble>? _freeUsageSlots;
+    private Func<object, BigDouble>? _maxUsageSlots;
+    private Func<object, BigDouble>? _cachedCompletionTime;
+    private Func<object, BigDouble>? _cachedRequiredXp;
+
+    internal override string Category => "alchemy recipes";
+
+    internal override string TypeName => "AlchemyRecipeSO";
+
+    internal override string Bind(Type type)
+    {
+        var bind = new WorldMemberBinding(type, TypeName);
+        _id = bind.Call<Guid>("GetGuid");
+        _discovered = bind.Field<bool>("discovered");
+        _maxLevel = bind.Field<int>("maxLevel");
+        _advancementLevel = bind.Field<int>("advancementLevel");
+        _discRarityLevel = bind.Field<int>("discRarityLevel");
+        _masteryXp = bind.Field<BigDouble>("masteryXp");
+        _masteryLevel = bind.Field<int>("masteryLevel");
+        _recipeTime = bind.Field<BigDouble>("recipeTime");
+        _isRequiredDiscovery = bind.Field<bool>("isRequiredDiscovery");
+        _isCompletionRecipe = bind.Field<bool>("isCompletionRecipe");
+        _isAdvancementRecipe = bind.Field<bool>("isAdvancementRecipe");
+        _completionTime = bind.Field<double>("completionTime");
+        _isDebugAlchemy = bind.Field<bool>("isDebugAlchemy");
+        _power = bind.ModifierRecord("power");
+        _speed = bind.ModifierRecord("speed");
+        _drainCostMod = bind.ModifierRecord("drainCostMod");
+        _special = bind.ModifierRecord("special");
+        _timeReqMod = bind.ModifierRecord("timeReqMod");
+        _timeScalingMod = bind.ModifierRecord("timeScalingMod");
+        _masteryXpRate = bind.ModifierRecord("masteryXpRate");
+        _effectLevels = bind.ModifierRecord("effectLevels");
+        _overdrivePower = bind.ModifierRecord("overdrivePower");
+        _overdriveSpeed = bind.ModifierRecord("overdriveSpeed");
+        _overdriveDrainCostMod = bind.ModifierRecord("overdriveDrainCostMod");
+        _overdriveXpRate = bind.ModifierRecord("overdriveXpRate");
+        _freeUsageSlots = bind.ModifierRecord("freeUsageSlots");
+        _maxUsageSlots = bind.ModifierRecord("maxUsageSlots");
+        _cachedCompletionTime = bind.Field<BigDouble>("cachedCompletionTime");
+        _cachedRequiredXp = bind.Field<BigDouble>("cachedRequiredXp");
+        return bind.Failure;
+    }
+
+    internal override WorldAlchemyRecipe Read(object entity) =>
+        new(
+            _id!(entity),
+            _discovered!(entity),
+            _maxLevel!(entity),
+            _advancementLevel!(entity),
+            _discRarityLevel!(entity),
+            _masteryXp!(entity),
+            _masteryLevel!(entity),
+            _recipeTime!(entity),
+            _isRequiredDiscovery!(entity),
+            _isCompletionRecipe!(entity),
+            _isAdvancementRecipe!(entity),
+            _completionTime!(entity),
+            _isDebugAlchemy!(entity),
+            _power!(entity),
+            _speed!(entity),
+            _drainCostMod!(entity),
+            _special!(entity),
+            _timeReqMod!(entity),
+            _timeScalingMod!(entity),
+            _masteryXpRate!(entity),
+            _effectLevels!(entity),
+            _overdrivePower!(entity),
+            _overdriveSpeed!(entity),
+            _overdriveDrainCostMod!(entity),
+            _overdriveXpRate!(entity),
+            _freeUsageSlots!(entity),
+            _maxUsageSlots!(entity),
+            _cachedCompletionTime!(entity),
+            _cachedRequiredXp!(entity));
+}

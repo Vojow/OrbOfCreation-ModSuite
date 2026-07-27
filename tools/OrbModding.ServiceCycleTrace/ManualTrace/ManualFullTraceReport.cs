@@ -32,6 +32,7 @@ internal static class ManualFullTraceReport
         if (document.FirstSemanticSequence > 1)
             writer.WriteLine("- Causal boundary: parents before this recording are external ancestry and are not present.");
         writer.WriteLine();
+        ManualFullTraceStoreView.Write(writer, session);
         ManualFullTraceServiceView.Write(writer, session);
         ManualFullTracePumpView.Write(writer, session);
         ManualFullTraceTimelineView.Write(writer, session);

@@ -4,15 +4,23 @@
 
 ## Supported package
 
-The supported suite is an explicit allowlist:
+The release is one artifact containing one plugin assembly:
 
-- Orb Automata `0.9.0`
-- Orb Mentor `0.3.8`
-- Orb Mod Config `0.7.0`
-- Orb Modding Common `0.4.0`
-- suite archive `0.4.0`
+```text
+OrbOfCreation-ModSuite-<SuiteVersion>.zip
+|-- BepInEx/plugins/OrbModSuite/OrbModSuite.dll
+|-- README.md
+|-- CHANGELOG.md
+|-- LICENSE
+`-- THIRD_PARTY_NOTICES.md
+```
 
-`OrbChronomancer` and `OrbAchievementResonance` are experimental and must not enter a supported archive. Orb Insights and Orb Toolbox are plans, not plugins.
+There is one version. `SuiteVersion` in `Directory.Build.props` names the archive;
+`<Version>` in `src/OrbModSuite.csproj` and `PluginIds.Version` name the assembly and the
+loaded plugin, and the packaging script fails if the two disagree. There are no
+per-component versions to reconcile.
+
+Orb Insights and Orb Toolbox are plans, not plugins.
 
 ## Candidate review
 
@@ -20,9 +28,8 @@ Before publishing, record:
 
 - exact clean commit and intended tag;
 - prerelease or stable status;
-- project, plugin, and suite-package versions;
+- suite version and plugin GUID;
 - installed game, BepInEx, and audited assembly hashes;
-- supported plugin allowlist;
 - exact archive entries and SHA-256 checksums;
 - portable, real-reference, installed-contract, and interactive evidence; and
 - known limitations.
@@ -31,27 +38,43 @@ Build success alone is not publication approval.
 
 ## Package gate
 
-1. Run the supported package rehearsal from a clean commit.
-2. Reject rooted paths, backslashes, missing `BepInEx/plugins/` entries, unexpected DLLs, duplicate shared dependencies, or inconsistent versions.
-3. Confirm no game, Unity, Harmony, BepInEx, test-stub, debug-symbol, save, configuration, trace, or experimental artifact entered the archive.
-4. Include only the required DLLs, README, changelog, license, and third-party notices.
-5. Verify generated checksums against the final archive.
+Run `./script/package` from a clean commit with `OOC_GAME_DIR` pointing at a game
+installation. It refuses a dirty or moved working tree, then runs the bounded portable
+gate, the installed-game contracts, and a real-reference Release build before staging the
+archive.
 
-On POSIX hosts, `./script/package` runs the bounded portable gate, installed contracts, real-reference builds, archive inspection, and checksum generation. The PowerShell package path remains available on Windows.
+It fails the release when:
+
+- the built output is missing `OrbModSuite.dll`, or game/loader assemblies leaked beside it;
+- the archive entries differ from the five expected paths above in either direction;
+- the project version and `PluginIds.Version` disagree; or
+- an output archive or checksum file for that version already exists.
+
+Confirm by inspection that no game, Unity, Harmony, BepInEx, test-stub, debug-symbol, save,
+configuration, trace, or experimental artifact reached the archive, and verify the generated
+checksums against the final file.
 
 ## Runtime gate
 
-Use a clean BepInEx profile and fresh generated configurations. Complete the applicable V0–V7 [runtime validation](../testing/runtime-validation.md), including:
+Use a clean BepInEx profile and a freshly generated configuration file. Complete the
+applicable V0–V7 [runtime validation](../testing/runtime-validation.md), including:
 
 - save backup, reload, removal, and restoration;
-- representative Automata and Mentor behavior;
+- representative automation and Mentor behavior;
 - emergency, lifecycle, ownership, queue, reserve, and native postcondition checks;
-- Mod Config Apply/Revert and Runtime-page behavior;
+- the configuration UI's Apply/Revert and Runtime-page behavior;
+- a load-gate check: confirm the suite loads against the audited baseline and logs its
+  refusal, unchanged, against an unaudited one;
 - quiet-log acceptance; and
 - representative desktop and Steam Deck/Proton performance where claimed.
 
 ## Publication
 
-Create the tag and artifacts only from the reviewed clean commit. Release notes must state the supported game/BepInEx baseline, included versions, important behavior changes, known limitations, and validation scope.
+Create the tag and artifacts only from the reviewed clean commit. Release notes must state
+the supported game/BepInEx baseline, the audited assembly baselines, important behavior
+changes, known limitations, and validation scope. A release that changes the plugin GUID or
+the configuration schema must say so as a breaking change, because settings do not migrate
+across a GUID change.
 
-Replacing or deleting an existing public release or tag requires explicit owner authorization naming that target.
+Replacing or deleting an existing public release or tag requires explicit maintainer
+authorization naming that target.

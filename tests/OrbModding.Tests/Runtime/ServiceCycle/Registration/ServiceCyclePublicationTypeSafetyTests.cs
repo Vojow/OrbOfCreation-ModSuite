@@ -1,6 +1,9 @@
 using System;
-using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 using static OrbModding.Tests.Runtime.ServiceCycle.TestSupport.ServiceCycleTypeSafetyFixtures;
@@ -14,80 +17,90 @@ public sealed class ServiceCyclePublicationTypeSafetyTests
     {
         using var registry = new ServiceCycleRegistry(1);
         using var registration = registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, ImmutableAction>(
-                new SafeFrame(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, ImmutableAction>(
+                new SafeState()),
             new LifecycleGeneration(1));
 
-        Assert.Equal(1, registration.Configuration.ReadLatest().Snapshot.Value);
+        Assert.Same(TestSuiteConfiguration.Default, registry.Configuration.ReadLatest().Snapshot);
+    }
+
+    /// <summary>
+    /// The snapshot every service actually reads passes the audit its role defines.
+    /// </summary>
+    /// <remarks>
+    /// The rule used to be enforced incidentally: each registration walked whatever configuration
+    /// type its service named, so the suite's own record was audited only because something happened
+    /// to register. There is one record now, and this is where it is proved — a setting added as a
+    /// mutable property, an array, or anything holding a Unity object fails here rather than
+    /// wherever the first service happens to be registered.
+    /// </remarks>
+    [Fact]
+    public void TheSuiteConfigurationPassesTheDeepImmutabilityAudit()
+    {
+        var violation = ServiceCycleTypeSafetyValidator.ValidateSuiteConfiguration();
+
+        Assert.False(violation.HasValue, violation.HasValue ? violation.Value.Message : string.Empty);
+    }
+
+    /// <summary>
+    /// The bulletin every service is handed passes the audit its role defines.
+    /// </summary>
+    /// <remarks>
+    /// Proved here rather than at construction for the same reason the configuration is: the suite
+    /// names one bulletin type, so the audit belongs where the type is named. It also replaces what
+    /// the publisher's type parameter used to check per closure — the strategy role and the
+    /// configuration role admit exactly the same shapes, so the shape rules are proved once.
+    /// </remarks>
+    [Fact]
+    public void TheSuiteStrategyPassesTheDeepImmutabilityAudit()
+    {
+        var violation = ServiceCycleTypeSafetyValidator.ValidateSuiteStrategy();
+
+        Assert.False(violation.HasValue, violation.HasValue ? violation.Value.Message : string.Empty);
     }
 
     [Fact]
-    public void CyclicSealedReadonlyPublicationGraphTerminatesAndIsAccepted()
-    {
-        using var registry = new ServiceCycleRegistry(1);
-        using var registration = registry.Register(
-            new TypeSafetyDefinition<SafeFrame, CyclicConfig, SafeState, ImmutableAction>(
-                new SafeFrame(), new SafeState()),
-            new CyclicConfig(null),
-            new LifecycleGeneration(1));
-
-        Assert.Null(registration.Configuration.ReadLatest().Snapshot.Next);
-    }
+    public void CyclicSealedReadonlyPublicationGraphTerminatesAndIsAccepted() =>
+        AssertConfigurationAccepted(new CyclicConfig(new CyclicConfig(null)));
 
     [Fact]
     public void MutableConfigurationAndActionShapesAreRejectedBeforeConstruction()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        var mutableConfig = new TypeSafetyDefinition<SafeFrame, MutableConfig, SafeState, ImmutableAction>(
-            new SafeFrame(), new SafeState());
-        Assert.Throws<InvalidOperationException>(() => registry.Register(
-            mutableConfig, new MutableConfig { Value = 1 }, new LifecycleGeneration(1)));
-        Assert.Equal(0, mutableConfig.FrameCreates);
+        AssertConfigurationRejected(new MutableConfig());
 
-        var mutableAction = new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, MutableAction>(
-            new SafeFrame(), new SafeState());
+        using var registry = new ServiceCycleRegistry(1);
+        var mutableAction = new TypeSafetyDefinition<SafeState, MutableAction>(
+            new SafeState());
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            mutableAction, new ImmutableConfig(1), new LifecycleGeneration(1)));
-        Assert.Equal(0, mutableAction.FrameCreates);
+            mutableAction, new LifecycleGeneration(1)));
     }
 
     [Fact]
     public void ArraysDelegatesAndUnityTypesAreRejectedFromPublishedGraphs()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new ArrayConfig(new[] { 1 }));
-        AssertConfigurationRejected(registry, new DelegateConfig(() => { }));
-        AssertConfigurationRejected(registry, new UnityConfig(null));
+        AssertConfigurationRejected(new ArrayConfig(new[] { 1 }));
+        AssertConfigurationRejected(new DelegateConfig(() => { }));
+        AssertConfigurationRejected(new UnityConfig(null));
     }
 
     [Fact]
     public void StaticStorageIsRejectedButLiteralConstantsRemainSafe()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new StaticUnityCacheConfig(1));
-
-        using var registration = registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ConstantBearingConfig, SafeState, ImmutableAction>(
-                new SafeFrame(), new SafeState()),
-            new ConstantBearingConfig(1),
-            new LifecycleGeneration(1));
-        Assert.Equal(ConstantBearingConfig.SchemaVersion, registration.Configuration.ReadLatest().Snapshot.Value);
+        AssertConfigurationRejected(new StaticUnityCacheConfig(1));
+        AssertConfigurationAccepted(new ConstantBearingConfig(ConstantBearingConfig.SchemaVersion));
     }
 
     [Fact]
-    public void ActionsCannotBeOrRecursivelyRetainTheirServiceFrame()
+    public void ActionsCannotBeOrRecursivelyRetainTheCaptureBuffer()
     {
         using var registry = new ServiceCycleRegistry(1);
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, SafeFrame>(
-                new SafeFrame(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, GameWorldCycleFrame>(
+                new SafeState()),
             new LifecycleGeneration(1)));
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, ActionWithFrame>(
-                new SafeFrame(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, ActionWithCaptureBuffer>(
+                new SafeState()),
             new LifecycleGeneration(1)));
     }
 
@@ -129,9 +142,9 @@ public sealed class ServiceCyclePublicationTypeSafetyTests
         internal ConstantBearingConfig(int value) => _value = value;
         internal int Value => _value;
     }
-    private readonly struct ActionWithFrame
+    private readonly struct ActionWithCaptureBuffer
     {
-        private readonly SafeFrame _frame;
-        internal ActionWithFrame(SafeFrame frame) => _frame = frame;
+        private readonly GameWorldCycleFrame _frame;
+        internal ActionWithCaptureBuffer(GameWorldCycleFrame frame) => _frame = frame;
     }
 }

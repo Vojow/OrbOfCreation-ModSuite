@@ -46,7 +46,7 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
             "Valid concept",
             new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
         {
-            maxUsageSlots = 2,
+            maxUsageSlots = new ValueModifierRecord(new BigDouble(2.0, 0)),
             drainCost = new ConceptCostVector(
                 new ConceptCostEntry(resource, new BigDouble(10.0, 0))),
         };
@@ -84,7 +84,7 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
             "No-op concept",
             new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
         {
-            maxUsageSlots = 2,
+            maxUsageSlots = new ValueModifierRecord(new BigDouble(2.0, 0)),
         };
         var active = InstallNativeLists(recipe);
         active.SuppressAddMutation = true;
@@ -125,7 +125,7 @@ public sealed class ConceptRuntimeHeadlessTests : IDisposable
             "Zero resource concept",
             new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString()) })
         {
-            maxUsageSlots = 4,
+            maxUsageSlots = new ValueModifierRecord(new BigDouble(4.0, 0)),
             drainCost = new ConceptCostVector(
                 new ConceptCostEntry(resource, new BigDouble(1.0, 0))),
         };

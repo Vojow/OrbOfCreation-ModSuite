@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -17,7 +18,7 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.FullTrace;
 
 public sealed class FullTraceRuntimeSessionTests
 {
-    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan Deadline = ServiceCycleTestDeadline.Value;
 
     [Fact]
     public void IdleSessionOwnsNoStorageAndStartArmsUntilWorkerInitializationCompletes()
@@ -93,17 +94,17 @@ public sealed class FullTraceRuntimeSessionTests
         var definition = new ExecutionServiceDefinition("trace.session.shutdown") { ActionCount = 0 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         using var firstStorage = new MemorySessionStorage();
         using var session = new FullTraceRuntimeSession(pump, 1);
         session.Start(new FullTraceSessionId(901), new ServiceCycleTraceSessionId(902), firstStorage);
         AdvanceTo(session, FullTraceRuntimeSessionState.Recording);
 
         var frame = 1L;
-        PumpUntil(pump, ref frame, report => report.CapturesAttempted != 0, "capture admission");
+        PumpUntil(pump, ref frame, report => report.CyclesStarted != 0, "capture admission");
         session.Dispose();
 
         Assert.True(firstStorage.ManifestPublished.Wait(Deadline));
@@ -166,30 +167,108 @@ public sealed class FullTraceRuntimeSessionTests
                     CommonServiceDecisionCodes.NotReady,
                     WakePolicy.AfterDecision(new MonotonicDuration(1))),
             },
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         return registry;
     }
 
-    private sealed class MemorySessionStorage : ISegmentSessionStorage, IDisposable
+    [Fact]
+    public void ARecordingSessionStoresEachPublicationGenerationItSeesExactlyOnce()
+    {
+        using var registry = Registry("trace.session.stores");
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new MemorySessionStorage();
+        using var session = new FullTraceRuntimeSession(pump, 1);
+        session.Start(new FullTraceSessionId(901), new ServiceCycleTraceSessionId(902), storage);
+        AdvanceTo(session, FullTraceRuntimeSessionState.Recording);
+
+        pump.PumpFrame(1);
+        session.Tick();
+        pump.PumpFrame(2);
+        session.Tick();
+
+        Assert.Equal(
+            new[] { "configuration-0000000000000001.oscv", "strategy-0000000000000001.oscv" },
+            Ordered(storage.SideArtifacts.Keys));
+        var configuration = Encoding.UTF8.GetString(storage.SideArtifacts["configuration-0000000000000001.oscv"]);
+        Assert.StartsWith("OSCV 1 configuration 0000000000000001\n", configuration, StringComparison.Ordinal);
+        Assert.Contains("General.Enabled = false", configuration, StringComparison.Ordinal);
+        Assert.Equal(2, session.Snapshot.StoreCount);
+        Assert.False(session.Snapshot.StoresLost);
+    }
+
+    /// <summary>
+    /// A store that cannot be written costs a reader the settings behind a generation, not the
+    /// events. The session finishes, and its completion record says the stores were lost — the
+    /// failure used to live in a private flag nothing read, so the artifact reported itself whole
+    /// while missing every file a decision's generation pointed at.
+    /// </summary>
+    [Fact]
+    public void ALostPublicationStoreIsRecordedOnTheCompletedSessionAndStopsFurtherStoreWrites()
+    {
+        using var registry = Registry("trace.session.store-failure");
+        using var pump = new SuiteFramePump(registry);
+        using var storage = new MemorySessionStorage(failSideArtifactWrite: true);
+        using var session = new FullTraceRuntimeSession(pump, 1);
+        session.Start(new FullTraceSessionId(1001), new ServiceCycleTraceSessionId(1002), storage);
+        AdvanceTo(session, FullTraceRuntimeSessionState.Recording);
+
+        pump.PumpFrame(1);
+        session.Tick();
+        pump.PumpFrame(2);
+        session.Tick();
+
+        Assert.True(session.Snapshot.StoresLost);
+        Assert.Equal(0, session.Snapshot.StoreCount);
+        Assert.Equal(1, storage.SideArtifactAttempts);
+
+        session.RequestStop();
+        AdvanceTo(session, FullTraceRuntimeSessionState.Complete);
+
+        var snapshot = session.Snapshot;
+        Assert.True(snapshot.ManifestCommitted);
+        Assert.True(snapshot.StoresLost);
+        Assert.Equal(1, storage.SideArtifactAttempts);
+        Assert.Empty(storage.SideArtifacts);
+    }
+
+    private static string[] Ordered(IEnumerable<string> names)
+    {
+        var ordered = new List<string>(names);
+        ordered.Sort(StringComparer.Ordinal);
+        return ordered.ToArray();
+    }
+
+    private sealed class MemorySessionStorage : ISegmentSessionStorage, ISessionSideArtifactSink, IDisposable
     {
         private readonly bool _blockInitialization;
         private readonly bool _failSegmentWrite;
+        private readonly bool _failSideArtifactWrite;
 
         internal MemorySessionStorage(
             bool blockInitialization = false,
-            bool failSegmentWrite = false)
+            bool failSegmentWrite = false,
+            bool failSideArtifactWrite = false)
         {
             _blockInitialization = blockInitialization;
             _failSegmentWrite = failSegmentWrite;
+            _failSideArtifactWrite = failSideArtifactWrite;
         }
 
         internal ManualResetEventSlim InitializeEntered { get; } = new();
         internal ManualResetEventSlim InitializeRelease { get; } = new();
         internal ManualResetEventSlim ManifestPublished { get; } = new();
         internal List<byte[]> Segments { get; } = new();
+        internal Dictionary<string, byte[]> SideArtifacts { get; } = new(StringComparer.Ordinal);
+        internal int SideArtifactAttempts { get; private set; }
         internal byte[]? Manifest { get; private set; }
+
+        public void CommitSideArtifact(string name, ReadOnlySpan<byte> bytes)
+        {
+            SideArtifactAttempts++;
+            if (_failSideArtifactWrite) throw new InvalidOperationException("Injected side-artifact failure.");
+            SideArtifacts[name] = bytes.ToArray();
+        }
 
         public void Initialize()
         {

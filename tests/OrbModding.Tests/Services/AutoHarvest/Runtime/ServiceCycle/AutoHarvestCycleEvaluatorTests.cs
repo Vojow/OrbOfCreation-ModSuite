@@ -1,10 +1,12 @@
 using System;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 public sealed class AutoHarvestCycleEvaluatorTests
 {
@@ -19,6 +21,56 @@ public sealed class AutoHarvestCycleEvaluatorTests
         Assert.Equal(AutoHarvestPair.FruitTree, result.State.PlannedPair);
         Assert.Equal(WakePolicyKind.AfterBatch, result.Wake.Kind);
         Assert.Equal(TimeSpan.FromSeconds(1), result.Wake.Delay.ToTimeSpan());
+    }
+
+    /// <summary>
+    /// The planned action carries the facts of the pair it plans, so the boundary judges the same
+    /// evidence this decision was taken on rather than re-reading the game for it.
+    /// </summary>
+    [Fact]
+    public void ThePlannedActionCarriesTheSelectedPairsFacts()
+    {
+        var frame = new AutoHarvestCycleFrame(
+            Captured(
+                AutoHarvestPair.FruitTree,
+                new AutoHarvestPairFacts(
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Rejected)),
+            Captured(AutoHarvestPair.TreasureTree, ReadyFacts()));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.True(result.HasAction);
+        Assert.Equal(AutoHarvestPair.TreasureTree, result.Action.Pair);
+        Assert.Equal(AutoHarvestEvidenceState.Verified, result.Action.Facts.Readiness);
+    }
+
+    /// <summary>
+    /// The planned action also carries the safety verdict drawn for that pair, and the plan is made
+    /// without regard to it.
+    /// </summary>
+    /// <remarks>
+    /// Whether an audited-unsafe action may run is the boundary's judgement, not the evaluator's. An
+    /// evaluator that filtered on it here would hide the rejection from the boundary that reports it.
+    /// </remarks>
+    [Fact]
+    public void ThePlannedActionCarriesTheSelectedPairsSafety()
+    {
+        var frame = new AutoHarvestCycleFrame(
+            Captured(
+                AutoHarvestPair.FruitTree,
+                ReadyFacts(),
+                AutoHarvestActionSafetyState.Destructive),
+            Captured(AutoHarvestPair.TreasureTree, ReadyFacts()));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.True(result.HasAction);
+        Assert.Equal(AutoHarvestPair.FruitTree, result.Action.Pair);
+        Assert.Equal(AutoHarvestActionSafetyState.Destructive, result.Action.Safety);
     }
 
     [Fact]
@@ -71,49 +123,250 @@ public sealed class AutoHarvestCycleEvaluatorTests
         Assert.Equal(AutoHarvestPair.FruitTree, second.State.NextPair);
     }
 
+    /// <summary>
+    /// A pair this service has already broken is not tried again, and its sibling still is.
+    /// </summary>
     [Theory]
-    [InlineData((int)AutoHarvestCaptureUnavailableReason.RegistryNotReady, (int)AutoHarvestPairHealthKind.RegistryNotReady)]
-    [InlineData((int)AutoHarvestCaptureUnavailableReason.Faulted, (int)AutoHarvestPairHealthKind.Faulted)]
-    public void PairScopedFailureDoesNotBlockEligibleSibling(
-        int reason,
-        int expectedHealth)
+    [InlineData((int)AutoHarvestFaultKind.Faulted, (int)AutoHarvestPairHealthKind.Faulted)]
+    [InlineData(
+        (int)AutoHarvestFaultKind.ContractUnavailable,
+        (int)AutoHarvestPairHealthKind.ContractUnavailable)]
+    public void ARememberedPairFaultDoesNotBlockAnEligibleSibling(int fault, int expectedHealth)
     {
-        var fruit = AutoHarvestPairCapture.Unavailable(
-            AutoHarvestPair.FruitTree,
-            (AutoHarvestCaptureUnavailableReason)reason,
-            AutoHarvestCaptureFailureScope.Pair);
-        var treasure = Captured(AutoHarvestPair.TreasureTree, ReadyFacts());
-        var frame = new AutoHarvestCycleFrame(fruit, treasure, ownsActionFamily: true);
+        var state = StateRemembering(
+            new AutoHarvestFaultMemory(
+                AutoHarvestFaultKind.None, (AutoHarvestFaultKind)fault, AutoHarvestFaultKind.None));
 
-        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+        var result = Evaluate(ReadyFrame(), Configuration(), state, Context(1));
 
         Assert.True(result.HasAction);
         Assert.Equal(AutoHarvestPair.TreasureTree, result.Action.Pair);
         Assert.Equal((AutoHarvestPairHealthKind)expectedHealth, result.State.FruitHealth.Kind);
+        Assert.False(result.State.FruitHealth.FeatureScoped);
         Assert.Equal(AutoHarvestPairHealthKind.Eligible, result.State.TreasureHealth.Kind);
     }
 
+    /// <summary>
+    /// A failure in something both pairs share stops both, however ready the world says they are.
+    /// </summary>
     [Fact]
-    public void FeatureScopedFailureBlocksAnEligibleSibling()
+    public void ARememberedFeatureFaultBlocksAnEligibleSibling()
     {
-        var fruit = AutoHarvestPairCapture.Unavailable(
-            AutoHarvestPair.FruitTree,
-            AutoHarvestCaptureUnavailableReason.ContractUnavailable,
-            AutoHarvestCaptureFailureScope.Feature);
-        var treasure = Captured(AutoHarvestPair.TreasureTree, ReadyFacts());
-        var frame = new AutoHarvestCycleFrame(fruit, treasure, ownsActionFamily: true);
+        var state = StateRemembering(
+            new AutoHarvestFaultMemory(
+                AutoHarvestFaultKind.ContractUnavailable,
+                AutoHarvestFaultKind.None,
+                AutoHarvestFaultKind.None));
 
-        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+        var result = Evaluate(ReadyFrame(), Configuration(), state, Context(1));
 
         Assert.False(result.HasAction);
         Assert.False(result.State.HasPlannedAction);
         Assert.True(result.State.FruitHealth.FeatureScoped);
+        Assert.True(result.State.TreasureHealth.FeatureScoped);
+        Assert.Equal(
+            AutoHarvestPairHealthKind.ContractUnavailable, result.State.TreasureHealth.Kind);
+    }
+
+    /// <summary>
+    /// A world that holds no plots at all stops both pairs and is reported as the feature-wide thing
+    /// it is.
+    /// </summary>
+    [Fact]
+    public void AnUncollectedWorldBlocksBothPairs()
+    {
+        var frame = new AutoHarvestCycleFrame(
+            AutoHarvestPairCapture.Unavailable(AutoHarvestPair.FruitTree),
+            AutoHarvestPairCapture.Unavailable(AutoHarvestPair.TreasureTree));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.False(result.HasAction);
+        Assert.Equal(AutoHarvestPairHealthKind.RegistryNotReady, result.State.FruitHealth.Kind);
+        Assert.True(result.State.FruitHealth.FeatureScoped);
+    }
+
+    /// <summary>
+    /// A pair the world could not describe stops its sibling too.
+    /// </summary>
+    /// <remarks>
+    /// The reason capture has left to report is that the game's registries have not been collected,
+    /// which is not a thing one pair can suffer alone. Letting a sibling act on facts read from the
+    /// same empty world would be acting on the absence of evidence.
+    /// </remarks>
+    [Fact]
+    public void AnUnavailablePairStopsAnEligibleSibling()
+    {
+        var frame = new AutoHarvestCycleFrame(
+            AutoHarvestPairCapture.Unavailable(AutoHarvestPair.FruitTree),
+            Captured(AutoHarvestPair.TreasureTree, ReadyFacts()));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.False(result.HasAction);
         Assert.Equal(AutoHarvestPairHealthKind.Eligible, result.State.TreasureHealth.Kind);
     }
 
+    /// <summary>
+    /// A code is not evidence on its own: only a batch that faulted says something went wrong.
+    /// </summary>
+    [Fact]
+    public void ARejectedBatchCarryingAFaultCodeIsNotRemembered()
+    {
+        var firstContext = Context(1);
+        var first = Evaluate(ReadyFrame(), Configuration(), InitialState(), firstContext);
+        var receipt = BatchReceipt.Terminated(
+            firstContext.Identity,
+            new BatchId(1),
+            1,
+            0,
+            0,
+            ServiceActionResult.Rejected(AutoHarvestActionResultCodes.PairFaulted),
+            new ServiceNativeCallTotals(0, 0, 0),
+            new MonotonicTimestamp(20));
+
+        var second = Evaluate(ReadyFrame(), Configuration(), first.State, Context(2, receipt));
+
+        Assert.Equal(AutoHarvestPairHealthKind.Eligible, second.State.FruitHealth.Kind);
+    }
+
+    /// <summary>
+    /// A remembered fault outranks what the world says, which is the order the two main-thread flags
+    /// produced when capture consulted them before reading the world.
+    /// </summary>
+    [Fact]
+    public void ARememberedFaultOutranksAReadyWorld()
+    {
+        var state = StateRemembering(
+            new AutoHarvestFaultMemory(
+                AutoHarvestFaultKind.None,
+                AutoHarvestFaultKind.Faulted,
+                AutoHarvestFaultKind.None));
+
+        var result = Evaluate(ReadyFrame(), Configuration(), state, Context(1));
+
+        Assert.Equal(AutoHarvestPairHealthKind.Faulted, result.State.FruitHealth.Kind);
+    }
+
+    /// <summary>
+    /// A faulted batch is remembered against the pair the plan named, in the terms its code carries.
+    /// </summary>
+    [Theory]
+    [InlineData(1027, (int)AutoHarvestPairHealthKind.Faulted, false)]
+    [InlineData(1025, (int)AutoHarvestPairHealthKind.ContractUnavailable, false)]
+    [InlineData(1026, (int)AutoHarvestPairHealthKind.ContractUnavailable, true)]
+    public void AFaultedBatchIsRememberedAsTheFailureItsCodeNames(
+        int code,
+        int expectedHealth,
+        bool featureScoped)
+    {
+        var firstContext = Context(1);
+        var first = Evaluate(ReadyFrame(), Configuration(), InitialState(), firstContext);
+        Assert.Equal(AutoHarvestPair.FruitTree, first.Action.Pair);
+
+        var second = Evaluate(
+            ReadyFrame(),
+            Configuration(),
+            first.State,
+            Context(2, FaultedReceipt(firstContext, new ServiceActionResultCode(code))));
+
+        Assert.Equal((AutoHarvestPairHealthKind)expectedHealth, second.State.FruitHealth.Kind);
+        Assert.Equal(featureScoped, second.State.FruitHealth.FeatureScoped);
+        Assert.Equal(
+            featureScoped
+                ? (AutoHarvestPairHealthKind)expectedHealth
+                : AutoHarvestPairHealthKind.Eligible,
+            second.State.TreasureHealth.Kind);
+    }
+
+    /// <summary>
+    /// A remembered fault stays remembered for the lifecycle, even across a batch that says nothing.
+    /// </summary>
+    [Fact]
+    public void ARememberedFaultSurvivesALaterCycleThatReportsNothing()
+    {
+        var firstContext = Context(1);
+        var first = Evaluate(ReadyFrame(), Configuration(), InitialState(), firstContext);
+        var second = Evaluate(
+            ReadyFrame(),
+            Configuration(),
+            first.State,
+            Context(2, FaultedReceipt(firstContext, AutoHarvestActionResultCodes.PairFaulted)));
+
+        var third = Evaluate(ReadyFrame(), Configuration(), second.State, Context(3));
+
+        Assert.Equal(AutoHarvestPairHealthKind.Faulted, third.State.FruitHealth.Kind);
+    }
+
+    /// <summary>
+    /// A rejection says the action was declined, not that it went wrong, and is not remembered.
+    /// </summary>
+    [Fact]
+    public void ARejectedBatchIsNotRememberedAsAFault()
+    {
+        var firstContext = Context(1);
+        var first = Evaluate(ReadyFrame(), Configuration(), InitialState(), firstContext);
+        var terminal = ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
+        var receipt = BatchReceipt.Terminated(
+            firstContext.Identity,
+            new BatchId(1),
+            1,
+            0,
+            0,
+            terminal,
+            new ServiceNativeCallTotals(0, 0, 0),
+            new MonotonicTimestamp(20));
+
+        var second = Evaluate(ReadyFrame(), Configuration(), first.State, Context(2, receipt));
+
+        Assert.Equal(AutoHarvestPairHealthKind.Eligible, second.State.FruitHealth.Kind);
+    }
+
+    /// <summary>
+    /// A fault code this service does not attribute to a pair leaves the memory alone rather than
+    /// blaming whichever pair happened to be planned.
+    /// </summary>
+    [Fact]
+    public void AFaultedBatchWithAnUnattributedCodeIsNotRemembered()
+    {
+        var firstContext = Context(1);
+        var first = Evaluate(ReadyFrame(), Configuration(), InitialState(), firstContext);
+
+        var second = Evaluate(
+            ReadyFrame(),
+            Configuration(),
+            first.State,
+            Context(2, FaultedReceipt(firstContext, CommonActionResultCodes.AdapterFault)));
+
+        Assert.Equal(AutoHarvestPairHealthKind.Eligible, second.State.FruitHealth.Kind);
+    }
+
+    private static BatchReceipt FaultedReceipt(
+        in ServiceCycleContext context,
+        ServiceActionResultCode code) =>
+        BatchReceipt.Terminated(
+            context.Identity,
+            new BatchId(1),
+            1,
+            0,
+            0,
+            ServiceActionResult.Faulted(code),
+            new ServiceNativeCallTotals(0, 0, 0),
+            new MonotonicTimestamp(20));
+
+    private static AutoHarvestCycleState StateRemembering(AutoHarvestFaultMemory faults) =>
+        AutoHarvestCycleState.Restore(
+            new LifecycleGeneration(1),
+            AutoHarvestPair.FruitTree,
+            hasPlannedAction: false,
+            default,
+            AutoHarvestPairHealth.NotObserved(AutoHarvestPair.FruitTree),
+            AutoHarvestPairHealth.NotObserved(AutoHarvestPair.TreasureTree),
+            faults);
+
     private static AutoHarvestCycleEvaluation Evaluate(
         in AutoHarvestCycleFrame frame,
-        in AutomataConfiguration config,
+        in SuiteRuntimeConfiguration config,
         in AutoHarvestCycleState state,
         in ServiceCycleContext context) =>
         new AutoHarvestCycleEvaluator().Evaluate(frame, config, state, context);
@@ -123,25 +376,24 @@ public sealed class AutoHarvestCycleEvaluatorTests
         var facts = ReadyFacts();
         var fruit = Captured(AutoHarvestPair.FruitTree, facts);
         var treasure = Captured(AutoHarvestPair.TreasureTree, facts);
-        return new AutoHarvestCycleFrame(fruit, treasure, ownsActionFamily: true);
+        return new AutoHarvestCycleFrame(fruit, treasure);
     }
 
     private static AutoHarvestPairCapture Captured(
         AutoHarvestPair pair,
-        in AutoHarvestPairFacts facts) =>
-        AutoHarvestPairCapture.Captured(pair, facts);
+        in AutoHarvestPairFacts facts,
+        AutoHarvestActionSafetyState safety =
+            AutoHarvestActionSafetyState.NativePhaseCyclePreserving) =>
+        AutoHarvestPairCapture.Captured(pair, facts, safety);
 
     private static AutoHarvestPairFacts ReadyFacts() => new(
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState.Verified,
-        AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-        AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified);
 
-    private static AutomataConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
+    private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
@@ -159,7 +411,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(cycle),
+            new WorldGeneration(1),
             new CycleId(cycle));
         return new ServiceCycleContext(identity, receipt, new MonotonicTimestamp(10 + (long)cycle));
     }

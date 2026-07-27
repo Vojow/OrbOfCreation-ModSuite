@@ -115,7 +115,7 @@ internal sealed class NativeContractEntry
 
     public List<string> Usages { get; set; } = new();
 
-    public List<string> Sources { get; set; } = new();
+    public string Place { get; set; } = string.Empty;
 
     public List<string> SourceTokens { get; set; } = new();
 }

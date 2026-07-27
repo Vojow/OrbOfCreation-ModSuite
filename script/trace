@@ -3,9 +3,76 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode_args=()
-profile_args=()
 build_args=()
 output_root="bin-stubs"
+
+serve_dashboard() {
+    local output_path="$1"
+    local traces_root="${repository_root}/traces"
+    local output_directory
+    output_directory="$(cd "$(dirname "${output_path}")" && pwd)"
+    local output_absolute="${output_directory}/$(basename "${output_path}")"
+    case "${output_absolute}" in
+        "${traces_root}/"*) ;;
+        *)
+            echo "Dashboard generated outside traces/; automatic local serving was skipped." >&2
+            return
+            ;;
+    esac
+
+    local port="${TRACE_DASHBOARD_PORT:-8765}"
+    if [[ ! "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+        echo "TRACE_DASHBOARD_PORT must be an integer from 1 through 65535." >&2
+        exit 2
+    fi
+    for command_name in curl python3; do
+        if ! command -v "${command_name}" >/dev/null 2>&1; then
+            echo "Dashboard serving requires ${command_name}." >&2
+            exit 1
+        fi
+    done
+
+    local relative_path="${output_absolute#"${traces_root}/"}"
+    local encoded_path
+    encoded_path="$(python3 -c \
+        'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' \
+        "${relative_path}")"
+    local origin="http://127.0.0.1:${port}"
+    local dashboard_url="${origin}/${encoded_path}"
+    if curl --fail --silent --head --max-time 1 "${dashboard_url}" >/dev/null; then
+        echo "Dashboard: ${dashboard_url}"
+        return
+    fi
+    if curl --fail --silent --head --max-time 1 "${origin}/" >/dev/null; then
+        echo "Port ${port} is already serving a different root; dashboard server was not started." >&2
+        echo "Set TRACE_DASHBOARD_PORT to another local port and retry." >&2
+        exit 1
+    fi
+
+    local server_log="${repository_root}/artifacts/trace-dashboard-server.log"
+    local server_pid="${repository_root}/artifacts/trace-dashboard-server.pid"
+    mkdir -p "${repository_root}/artifacts"
+    rm -f "${server_pid}"
+    python3 "${repository_root}/tools/serve-trace-dashboard.py" \
+        --root "${traces_root}" \
+        --port "${port}" \
+        --log "${server_log}" \
+        --pid-file "${server_pid}"
+
+    local attempt
+    for attempt in {1..40}; do
+        if curl --fail --silent --head --max-time 1 "${dashboard_url}" >/dev/null; then
+            local pid="unknown"
+            if [[ -f "${server_pid}" ]]; then pid="$(<"${server_pid}")"; fi
+            echo "Dashboard server started (PID ${pid})."
+            echo "Dashboard: ${dashboard_url}"
+            return
+        fi
+        sleep 0.05
+    done
+    echo "Dashboard server did not become ready; see ${server_log}." >&2
+    exit 1
+}
 if [[ "${1:-}" == "--full" ]]; then
     mode_args=(--full)
     shift
@@ -22,24 +89,19 @@ elif [[ "${1:-}" == "--dashboard" ]]; then
     build_args=(-p:EnableServiceCycleProfiler=true)
     output_root="bin-profile-stubs"
     shift
-elif [[ "${1:-}" == "--profile" ]]; then
-    if [[ "$#" -lt 3 ]]; then
-        echo "Usage: ./script/trace [--profile auto-harvest] <artifact.oscr> [report.md]" >&2
-        exit 2
-    fi
-    profile_args=(--profile "$2")
-    shift 2
 fi
 if [[ "$#" -ne 1 && "$#" -ne 2 ]]; then
-    echo "Usage: ./script/trace [--profile auto-harvest] <artifact.oscr> [report.md]" >&2
-    echo "       ./script/trace --full <session-directory> [report.md]" >&2
+    echo "Usage: ./script/trace [--full] <capture-directory> [report.md]" >&2
     echo "       ./script/trace --journal <journal-directory> [report.md]" >&2
     echo "       ./script/trace --performance <profile-session-directory> [report.md]" >&2
-    echo "       ./script/trace --dashboard <correlated-capture-directory> <dashboard.html>" >&2
+    echo "       ./script/trace --dashboard <capture-directory> <dashboard.html>" >&2
+    echo >&2
+    echo "A capture directory is the trace root, one of its run-<timestamp>/ folders, or a" >&2
+    echo "full/session-<id> directory. The trace root reads its newest run folder and says so." >&2
     exit 2
 fi
 if [[ "${mode_args[0]:-}" == "--dashboard" && "$#" -ne 2 ]]; then
-    echo "Usage: ./script/trace --dashboard <correlated-capture-directory> <dashboard.html>" >&2
+    echo "Usage: ./script/trace --dashboard <capture-directory> <dashboard.html>" >&2
     exit 2
 fi
 
@@ -65,10 +127,10 @@ command=(
 if [[ -n "${mode_args[0]:-}" ]]; then
     command+=("${mode_args[@]}")
 fi
-if [[ -n "${profile_args[0]:-}" ]]; then
-    command+=("${profile_args[@]}")
-fi
 if [[ "$#" -eq 2 ]]; then
     command+=(--output "$2")
 fi
 "${command[@]}"
+if [[ "${mode_args[0]:-}" == "--dashboard" ]]; then
+    serve_dashboard "$2"
+fi

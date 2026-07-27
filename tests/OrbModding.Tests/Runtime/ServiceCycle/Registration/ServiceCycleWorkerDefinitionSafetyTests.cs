@@ -1,12 +1,13 @@
 using System;
 using System.Threading;
-using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution.Validation;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Contracts;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Recording;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
 using Xunit;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Registration;
@@ -37,28 +38,24 @@ public sealed class ServiceCycleWorkerDefinitionSafetyTests
     }
 
     [Fact]
+    public void WorkerMayRetainAnAuditedPublicationValueFromTheRuntimeNamespace()
+    {
+        // PublicationTable lives under the very namespace that now marks mutable runtime plumbing, so
+        // the audited-value admission has to be consulted before the namespace rejection. Swapping
+        // those two checks would reject every worker holding a published table, and nothing else in
+        // the suite would notice until a service failed to register.
+        var main = new SafetyMainDefinition();
+        var worker = new PublicationTableRetainingWorker(
+            PublicationTable<SafetyRow>.Create(stackalloc SafetyRow[] { new SafetyRow(1) }));
+
+        ServiceCycleWorkerDefinitionValidator.EnsureSeparated(main, worker);
+    }
+
+    [Fact]
     public void WorkerCannotHideStorageInPrivateBaseOrStaticField()
     {
         AssertRejected(_ => new InheritedObjectRetainingWorker(new object()));
         AssertRejected(_ => new StaticObjectRetainingWorker());
-    }
-
-    [Fact]
-    public void TrustedReplayBaseCannotHideUnsafeFeatureDerivedFields()
-    {
-        var main = new SafetyMainDefinition();
-        var worker = new UnsafeReplayWorker(new object());
-        Assert.Throws<InvalidOperationException>(() =>
-            ServiceCycleWorkerDefinitionValidator.EnsureSeparated(main, worker));
-    }
-
-    [Fact]
-    public void TrustedReplayBaseStillAuditsFeatureCodecGraphs()
-    {
-        var main = new SafetyMainDefinition();
-        var worker = new UnsafeCodecReplayWorker();
-        Assert.Throws<InvalidOperationException>(() =>
-            ServiceCycleWorkerDefinitionValidator.EnsureSeparated(main, worker));
     }
 
     private static void AssertRejected(Func<SafetyMainDefinition, SafetyWorkerBase> factory)
@@ -69,37 +66,33 @@ public sealed class ServiceCycleWorkerDefinitionSafetyTests
             ServiceCycleWorkerDefinitionValidator.EnsureSeparated(main, worker));
     }
 
-    private sealed class SafetyFrame { }
-    private readonly struct SafetyConfig { }
     private sealed class SafetyState { }
     private readonly struct SafetyAction { }
 
     private sealed class SafetyMainDefinition :
-        IServiceCycleDefinition<SafetyFrame, SafetyConfig, SafetyState, SafetyAction>
+        IServiceCycleDefinition<SafetyState, SafetyAction>
     {
         public ServiceId ServiceId => new("test.worker-safety");
         public WakePolicy DefaultWakePolicy => WakePolicy.Immediate;
         public ServiceFaultRecoveryPolicy FaultRecoveryPolicy => new(new MonotonicDuration(1), new MonotonicDuration(2));
-        public SafetyFrame CreateFrame() => new();
-        public IServiceCycleWorkerDefinition<SafetyFrame, SafetyConfig, SafetyState, SafetyAction>
+        public IServiceCycleWorkerDefinition<SafetyState, SafetyAction>
             CreateWorkerDefinition() => new SafeWorker();
-        public ServiceStartDecision ShouldStart(in SafetyConfig config, in ServiceCycleStartContext context) =>
+        public ServiceStartDecision ShouldStart(in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
-        public ServiceCaptureResult Capture(ref SafetyFrame frame, in SafetyConfig config, in ServiceCaptureContext context) =>
-            ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
-        public ServiceActionResult TryExecute(in SafetyAction action, in SafetyConfig config, in ServiceActionContext context) =>
+        public ServiceActionResult TryExecute(in SafetyAction action, in SuiteRuntimeConfiguration config, in ServiceActionContext context) =>
             ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
     }
 
     private abstract class SafetyWorkerBase :
-        IServiceCycleWorkerDefinition<SafetyFrame, SafetyConfig, SafetyState, SafetyAction>
+        IServiceCycleWorkerDefinition<SafetyState, SafetyAction>
     {
         public SafetyState CreateState(LifecycleGeneration lifecycle) => new();
         public void ReleaseState(ref SafetyState state) => state = null!;
-        public void ReleaseFrame(ref SafetyFrame frame) => frame = null!;
+
         public WakePolicy Evaluate(
-            in SafetyFrame frame,
-            in SafetyConfig config,
+            in SuiteRuntimeConfiguration config,
+            GameWorldState world,
+            SuiteStrategy strategy,
             in ServiceCycleContext context,
             ref SafetyState state,
             ServiceActionWriter<SafetyAction> actions) => WakePolicy.Immediate;
@@ -142,6 +135,16 @@ public sealed class ServiceCycleWorkerDefinitionSafetyTests
         private readonly ServiceCycleRegistry _hidden;
         internal CommonRuntimeRetainingWorker(ServiceCycleRegistry hidden) => _hidden = hidden;
     }
+    private readonly struct SafetyRow
+    {
+        internal SafetyRow(int value) => Value = value;
+        internal int Value { get; }
+    }
+    private sealed class PublicationTableRetainingWorker : SafetyWorkerBase
+    {
+        private readonly PublicationTable<SafetyRow> _rows;
+        internal PublicationTableRetainingWorker(PublicationTable<SafetyRow> rows) => _rows = rows;
+    }
     private abstract class ObjectRetainingWorkerBase : SafetyWorkerBase
     {
         private readonly object _hidden;
@@ -154,88 +157,5 @@ public sealed class ServiceCycleWorkerDefinitionSafetyTests
     private sealed class StaticObjectRetainingWorker : SafetyWorkerBase
     {
         private static readonly object Hidden = new();
-    }
-
-    private readonly struct SafetyReplayRecord : IServiceCycleReplayRecord
-    {
-        internal SafetyReplayRecord(int value) => Value = value;
-        internal int Value { get; }
-    }
-
-    private sealed class SafetyReplayCodec : IServiceCycleReplayCodec<SafetyReplayRecord>
-    {
-        public ServiceCycleReplayCodecDescriptor Descriptor => new(1, 1);
-        public int Encode(in SafetyReplayRecord record, Span<byte> destination)
-        {
-            destination[0] = unchecked((byte)record.Value);
-            return 1;
-        }
-        public SafetyReplayRecord Decode(ReadOnlySpan<byte> source) => new(source[0]);
-    }
-
-    private sealed class UnsafeReplayWorker : ServiceCycleReplayWorker<
-        SafetyFrame,
-        SafetyConfig,
-        SafetyState,
-        SafetyAction,
-        SafetyReplayRecord,
-        SafetyReplayRecord,
-        SafetyReplayRecord>
-    {
-        private readonly object _hidden;
-
-        internal UnsafeReplayWorker(object hidden)
-            : base(new SafetyReplayCodec(), new SafetyReplayCodec(), new SafetyReplayCodec()) => _hidden = hidden;
-
-        protected override SafetyState CreateStateCore(LifecycleGeneration lifecycle) => new();
-        protected override void ReleaseStateCore(ref SafetyState state) => state = null!;
-        protected override void ReleaseFrameCore(ref SafetyFrame frame) => frame = null!;
-        protected override SafetyReplayRecord CreateStateRecordCore(in SafetyState state) => new(1);
-        protected override WakePolicy EvaluateCore(
-            in SafetyFrame frame,
-            in SafetyConfig config,
-            in ServiceCycleContext context,
-            ref SafetyState state,
-            ServiceCycleReplayActionWriter<SafetyAction, SafetyReplayRecord> actions) => WakePolicy.Immediate;
-        protected override void ProjectStateCore(
-            in SafetyState state,
-            in ServiceProjectionContext context,
-            ServiceStateProjectionBuilder output) { }
-    }
-
-    private sealed class UnsafeReplayCodec : IServiceCycleReplayCodec<SafetyReplayRecord>
-    {
-        private readonly object _hidden = new();
-        public ServiceCycleReplayCodecDescriptor Descriptor => new(1, 1);
-        public int Encode(in SafetyReplayRecord record, Span<byte> destination) => 0;
-        public SafetyReplayRecord Decode(ReadOnlySpan<byte> source) => new(1);
-    }
-
-    private sealed class UnsafeCodecReplayWorker : ServiceCycleReplayWorker<
-        SafetyFrame,
-        SafetyConfig,
-        SafetyState,
-        SafetyAction,
-        SafetyReplayRecord,
-        SafetyReplayRecord,
-        SafetyReplayRecord>
-    {
-        internal UnsafeCodecReplayWorker()
-            : base(new UnsafeReplayCodec(), new SafetyReplayCodec(), new SafetyReplayCodec()) { }
-
-        protected override SafetyState CreateStateCore(LifecycleGeneration lifecycle) => new();
-        protected override void ReleaseStateCore(ref SafetyState state) => state = null!;
-        protected override void ReleaseFrameCore(ref SafetyFrame frame) => frame = null!;
-        protected override SafetyReplayRecord CreateStateRecordCore(in SafetyState state) => new(1);
-        protected override WakePolicy EvaluateCore(
-            in SafetyFrame frame,
-            in SafetyConfig config,
-            in ServiceCycleContext context,
-            ref SafetyState state,
-            ServiceCycleReplayActionWriter<SafetyAction, SafetyReplayRecord> actions) => WakePolicy.Immediate;
-        protected override void ProjectStateCore(
-            in SafetyState state,
-            in ServiceProjectionContext context,
-            ServiceStateProjectionBuilder output) { }
     }
 }

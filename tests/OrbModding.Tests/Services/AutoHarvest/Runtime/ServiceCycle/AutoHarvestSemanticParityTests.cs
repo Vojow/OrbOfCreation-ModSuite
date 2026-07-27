@@ -1,10 +1,12 @@
 using System;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 public sealed class AutoHarvestSemanticParityTests
 {
@@ -29,14 +31,12 @@ public sealed class AutoHarvestSemanticParityTests
         FeatureStatusReasonCode expectedReason)
     {
         var input = CreateInput(scenario);
-        var result = Evaluate(input, InitialState(), Context(1));
-        var state = new AutoHarvestStateRecord(result.State).ToState();
+        var result = Evaluate(input, InitialState(scenario), Context(1));
         var health = AutoHarvestFeatureStatusProjector.Project(
-            state.FruitHealth,
-            state.TreasureHealth);
-        var pair = result.HasAction
-            ? (int)new AutoHarvestActionRecord(result.Action).Pair
-            : -1;
+            featureEnabled: true,
+            result.State.FruitHealth,
+            result.State.TreasureHealth);
+        var pair = result.HasAction ? (int)result.Action.Pair : -1;
 
         Assert.Equal(expectedAction, result.HasAction);
         Assert.Equal(expectedPair, pair);
@@ -53,7 +53,7 @@ public sealed class AutoHarvestSemanticParityTests
     {
         var input = CreateInput(DecisionScenario.BothReady);
         var firstContext = Context(1);
-        var first = Evaluate(input, InitialState(), firstContext);
+        var first = Evaluate(input, InitialState(DecisionScenario.BothReady), firstContext);
         var receipt = committed
             ? BatchReceipt.Completed(
                 firstContext.Identity,
@@ -71,26 +71,23 @@ public sealed class AutoHarvestSemanticParityTests
                 new ServiceNativeCallTotals(0, 0, 0),
                 new MonotonicTimestamp(20));
 
-        var second = Evaluate(
-            input,
-            new AutoHarvestStateRecord(first.State).ToState(),
-            Context(2, receipt));
+        var second = Evaluate(input, first.State, Context(2, receipt));
 
         Assert.True(second.HasAction);
-        Assert.Equal(expectedNext, (int)new AutoHarvestActionRecord(second.Action).Pair);
+        Assert.Equal(expectedNext, (int)second.Action.Pair);
     }
 
     private static AutoHarvestCycleEvaluation Evaluate(
-        in AutoHarvestCycleInputRecord input,
+        in CycleInput input,
         in AutoHarvestCycleState state,
         in ServiceCycleContext context) =>
         new AutoHarvestCycleEvaluator().Evaluate(
-            input.ToFrame(),
-            input.ToConfiguration(),
+            input.Frame,
+            input.Config,
             state,
             context);
 
-    private static AutoHarvestCycleInputRecord CreateInput(DecisionScenario scenario)
+    private static CycleInput CreateInput(DecisionScenario scenario)
     {
         var fruitSelected = scenario != DecisionScenario.OnlyTreasureSelected;
         var fruit = scenario switch
@@ -98,12 +95,8 @@ public sealed class AutoHarvestSemanticParityTests
             DecisionScenario.FruitLocked => Captured(
                 AutoHarvestPair.FruitTree,
                 Facts(actionAvailability: AutoHarvestEvidenceState.Rejected)),
-            DecisionScenario.FruitPairUnavailable => Unavailable(
-                AutoHarvestPair.FruitTree,
-                AutoHarvestCaptureFailureScope.Pair),
-            DecisionScenario.FeatureUnavailable => Unavailable(
-                AutoHarvestPair.FruitTree,
-                AutoHarvestCaptureFailureScope.Feature),
+            DecisionScenario.FeatureUnavailable =>
+                AutoHarvestPairCapture.Unavailable(AutoHarvestPair.FruitTree),
             DecisionScenario.BothNativeBusy => Captured(
                 AutoHarvestPair.FruitTree,
                 Facts(readiness: AutoHarvestEvidenceState.Rejected)),
@@ -116,8 +109,7 @@ public sealed class AutoHarvestSemanticParityTests
             : Facts();
         var frame = new AutoHarvestCycleFrame(
             fruit,
-            Captured(AutoHarvestPair.TreasureTree, treasureFacts),
-            ownsActionFamily: true);
+            Captured(AutoHarvestPair.TreasureTree, treasureFacts));
         var config = AutoHarvestConfigurationFactory.Create(
             masterEnabled: true,
             emergencyDisabled: false,
@@ -125,21 +117,14 @@ public sealed class AutoHarvestSemanticParityTests
             fruitSelected,
             treasureSelected: true,
             MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
-        return new AutoHarvestCycleInputRecord(frame, config);
+        return new CycleInput(frame, config);
     }
 
     private static AutoHarvestPairCapture Captured(
         AutoHarvestPair pair,
         in AutoHarvestPairFacts facts) =>
-        AutoHarvestPairCapture.Captured(pair, facts);
-
-    private static AutoHarvestPairCapture Unavailable(
-        AutoHarvestPair pair,
-        AutoHarvestCaptureFailureScope scope) =>
-        AutoHarvestPairCapture.Unavailable(
-            pair,
-            AutoHarvestCaptureUnavailableReason.RegistryNotReady,
-            scope);
+        AutoHarvestPairCapture.Captured(
+            pair, facts, AutoHarvestActionSafetyState.NativePhaseCyclePreserving);
 
     private static AutoHarvestPairFacts Facts(
         AutoHarvestEvidenceState actionAvailability = AutoHarvestEvidenceState.Verified,
@@ -148,15 +133,42 @@ public sealed class AutoHarvestSemanticParityTests
         AutoHarvestEvidenceState.Verified,
         actionAvailability,
         AutoHarvestEvidenceState.Verified,
-        readiness,
-        AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-        AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState.Verified);
+        readiness);
 
-    private static AutoHarvestCycleState InitialState() =>
-        new AutoHarvestStateRecord(
-            AutoHarvestCycleState.Create(new LifecycleGeneration(1)))
-        .ToState();
+    /// <summary>
+    /// The state each scenario starts from.
+    /// </summary>
+    /// <remarks>
+    /// One scenario needs a state rather than a frame: a pair that is unavailable on its own is a
+    /// failure this service remembers about itself, not something the world reports, so it starts
+    /// from a remembered fault. See W45.
+    /// </remarks>
+    private static AutoHarvestCycleState InitialState(DecisionScenario scenario)
+    {
+        var fresh = AutoHarvestCycleState.Create(new LifecycleGeneration(1));
+        return scenario == DecisionScenario.FruitPairUnavailable
+            ? AutoHarvestCycleState.Restore(
+                fresh.Lifecycle,
+                fresh.NextPair,
+                fresh.HasPlannedAction,
+                fresh.PlannedPair,
+                fresh.FruitHealth,
+                fresh.TreasureHealth,
+                fresh.Faults.With(AutoHarvestPair.FruitTree, AutoHarvestFaultKind.Faulted))
+            : fresh;
+    }
+
+    private readonly struct CycleInput
+    {
+        internal CycleInput(in AutoHarvestCycleFrame frame, SuiteRuntimeConfiguration config)
+        {
+            Frame = frame;
+            Config = config;
+        }
+
+        internal AutoHarvestCycleFrame Frame { get; }
+        internal SuiteRuntimeConfiguration Config { get; }
+    }
 
     private static ServiceCycleContext Context(ulong cycle, BatchReceipt receipt = default)
     {
@@ -165,7 +177,7 @@ public sealed class AutoHarvestSemanticParityTests
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(cycle),
+            new WorldGeneration(1),
             new CycleId(cycle));
         return new ServiceCycleContext(
             identity,

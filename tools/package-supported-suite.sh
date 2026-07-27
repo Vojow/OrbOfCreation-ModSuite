@@ -71,7 +71,7 @@ read_plugin_version() {
     local constant_name="$1"
     local version
     version="$(sed -n "s/.*public const string ${constant_name} = \"\([^\"]*\)\";.*/\1/p" \
-        "${repository_root}/src/OrbModding.Common/PluginIds.cs")"
+        "${repository_root}/src/Common/PluginIds.cs")"
     if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
         echo "Could not read PluginIds.${constant_name}." >&2
         exit 1
@@ -89,15 +89,18 @@ assert_version() {
     fi
 }
 
-automata_version="$(read_project_version "${repository_root}/src/OrbAutomata/OrbAutomata.csproj")"
-mod_config_version="$(read_project_version "${repository_root}/src/OrbModConfig/OrbModConfig.csproj")"
-mentor_version="$(read_project_version "${repository_root}/src/OrbMentor/OrbMentor.csproj")"
-common_version="$(read_project_version "${repository_root}/src/OrbModding.Common/OrbModding.Common.csproj")"
+suite_project_version="$(read_project_version "${repository_root}/src/OrbModSuite.csproj")"
 suite_version="$(read_suite_version)"
-assert_version "Orb Automata" "${automata_version}" "$(read_plugin_version AutomataVersion)"
-assert_version "Orb Mod Config" "${mod_config_version}" "$(read_plugin_version ModConfigVersion)"
-assert_version "Orb Mentor" "${mentor_version}" "$(read_plugin_version MentorVersion)"
-assert_version "Orb Modding Common" "${common_version}" "$(read_plugin_version Version)"
+assert_version "Orb Of Creation ModSuite" "${suite_project_version}" "$(read_plugin_version Version)"
+
+# The archive is named from SuiteVersion, the assembly is stamped with the csproj Version, and the
+# plugin announces PluginIds.Version to BepInEx. Nothing else compares the first to the other two,
+# so a bumped project version would ship inside an archive still named for the old release.
+if [[ "${suite_version}" != "${suite_project_version}" ]]; then
+    echo "Package version mismatch: Directory.Build.props SuiteVersion=${suite_version}," >&2
+    echo "src/OrbModSuite.csproj Version=${suite_project_version} (PluginIds.Version matches the project)." >&2
+    exit 1
+fi
 
 package_name="OrbOfCreation-ModSuite-${suite_version}"
 zip_path="${output_directory}/${package_name}.zip"
@@ -110,42 +113,45 @@ fi
 echo "Running the bounded portable gate..."
 "${repository_root}/script/test"
 
+# The portable gate above restores the stub configuration only. The two commands below are the
+# real-reference one, and they pass --no-restore deliberately: a release build must not quietly
+# acquire a package mid-flight. That makes this the only place their dependencies are fetched, and
+# without it packaging a clean checkout fails on the first of them.
+echo "Restoring the real-reference configuration..."
+for project in \
+    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+    "${repository_root}/src/OrbModSuite.csproj"; do
+    OOC_GAME_DIR="${game_root}" dotnet restore "${project}" -p:Configuration=Release
+done
+
 echo "Running installed-game contracts against staged references..."
 OOC_GAME_DIR="${game_root}" dotnet test \
     "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
     --configuration Release --no-restore
 
 echo "Building the supported suite against staged references..."
-for project in OrbModding.Common OrbAutomata OrbModConfig OrbMentor; do
-    OOC_GAME_DIR="${game_root}" dotnet build \
-        "${repository_root}/src/${project}/${project}.csproj" \
-        --configuration Release --no-restore
-done
+OOC_GAME_DIR="${game_root}" dotnet build \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --configuration Release --no-restore
 
 assert_plugin_output() {
-    local project="$1"
-    local plugin="$2"
-    local output="${repository_root}/src/${project}/bin/Release/netstandard2.1"
-    for required in "${plugin}" OrbModding.Common.dll; do
-        if [[ ! -f "${output}/${required}" ]]; then
-            echo "Required ${project} output is missing: ${required}" >&2
-            exit 1
-        fi
-    done
+    local output="${repository_root}/src/bin/Release/netstandard2.1"
+    if [[ ! -f "${output}/OrbModSuite.dll" ]]; then
+        echo "Required suite output is missing: OrbModSuite.dll" >&2
+        exit 1
+    fi
     if find "${output}" -maxdepth 1 -type f \( \
         -name 'Assembly-CSharp*.dll' -o \
         -name 'BepInEx.dll' -o \
         -name '0Harmony.dll' -o \
         -name 'UnityEngine*.dll' -o \
         -name 'OrbModding.GameStubs.dll' \) | grep -q .; then
-        echo "Game or loader assemblies leaked into ${project} output." >&2
+        echo "Game or loader assemblies leaked into the suite output." >&2
         exit 1
     fi
 }
 
-assert_plugin_output OrbAutomata OrbAutomata.dll
-assert_plugin_output OrbModConfig OrbModConfig.dll
-assert_plugin_output OrbMentor OrbMentor.dll
+assert_plugin_output
 assert_clean_head
 
 mkdir -p "${output_directory}"
@@ -158,27 +164,15 @@ stage="${temporary_root}/${package_name}"
 temporary_zip="${temporary_root}/${package_name}.zip"
 temporary_checksums="${temporary_root}/${package_name}-SHA256SUMS.txt"
 
-mkdir -p \
-    "${stage}/BepInEx/plugins/OrbAutomata" \
-    "${stage}/BepInEx/plugins/OrbMentor" \
-    "${stage}/BepInEx/plugins/OrbModConfig"
-cp "${repository_root}/src/OrbAutomata/bin/Release/netstandard2.1/OrbAutomata.dll" \
-    "${stage}/BepInEx/plugins/OrbAutomata/"
-cp "${repository_root}/src/OrbMentor/bin/Release/netstandard2.1/OrbMentor.dll" \
-    "${stage}/BepInEx/plugins/OrbMentor/"
-cp "${repository_root}/src/OrbMentor/bin/Release/netstandard2.1/OrbModding.Common.dll" \
-    "${stage}/BepInEx/plugins/OrbMentor/"
-cp "${repository_root}/src/OrbModConfig/bin/Release/netstandard2.1/OrbModConfig.dll" \
-    "${stage}/BepInEx/plugins/OrbModConfig/"
+mkdir -p "${stage}/BepInEx/plugins/OrbModSuite"
+cp "${repository_root}/src/bin/Release/netstandard2.1/OrbModSuite.dll" \
+    "${stage}/BepInEx/plugins/OrbModSuite/"
 for document in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
     cp "${repository_root}/${document}" "${stage}/"
 done
 
 expected_entries=(
-    "BepInEx/plugins/OrbAutomata/OrbAutomata.dll"
-    "BepInEx/plugins/OrbMentor/OrbMentor.dll"
-    "BepInEx/plugins/OrbMentor/OrbModding.Common.dll"
-    "BepInEx/plugins/OrbModConfig/OrbModConfig.dll"
+    "BepInEx/plugins/OrbModSuite/OrbModSuite.dll"
     "CHANGELOG.md"
     "LICENSE"
     "README.md"

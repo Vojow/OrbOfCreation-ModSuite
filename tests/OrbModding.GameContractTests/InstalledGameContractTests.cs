@@ -62,6 +62,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "QueueBuild", false, "System.Void", "System.Int32");
         AssertMethod(assembly, "StructureSO", "CompleteAction", false, "System.Void");
+        AssertOnlyMethod(assembly, "StructureSO", "CompleteAction");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
@@ -75,6 +76,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
+        AssertOnlyMethod(assembly, "UpgradeSO", "CompleteAction");
 
         Assert.Equal("ActionManager", assembly.GetFieldType("ActionManager", "instance"));
         Assert.Equal("ActionableListVariable", assembly.GetFieldType("ActionManager", "actionableItems"));
@@ -386,5 +388,18 @@ public sealed class InstalledGameContractTests
             method.IsStatic == isStatic &&
             method.ReturnType == returnType &&
             method.ParameterTypes.SequenceEqual(parameterTypes));
+    }
+
+    /// <summary>
+    /// The suite installs a few hooks by name alone — <c>Plugin.NativeCompletionHookTargets</c> hands
+    /// Harmony a bare <c>Type:Member</c> string. An overload appearing on one of those would move the
+    /// hook onto a method nobody meant to patch, and Harmony would pick one and carry on.
+    /// </summary>
+    private static void AssertOnlyMethod(
+        GameAssemblyMetadata assembly,
+        string typeName,
+        string methodName)
+    {
+        Assert.Single(assembly.GetMethods(typeName, methodName));
     }
 }

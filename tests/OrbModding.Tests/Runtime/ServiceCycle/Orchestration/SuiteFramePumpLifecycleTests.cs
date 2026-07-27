@@ -23,30 +23,28 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(2, new LifecycleGeneration(7), clock);
         var definition = new LifecycleServiceDefinition("lifecycle.registry");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(7));
-        var publisher = registration.Configuration;
+            definition, new LifecycleGeneration(7));
+        var publisher = registry.Configuration;
 
         Assert.Throws<InvalidOperationException>(() => registry.Register(
             new LifecycleServiceDefinition("lifecycle.mismatch"),
-            new LifecycleConfig(1),
             new LifecycleGeneration(8)));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(8)));
         Assert.False(pump.RequestLifecycleReplacement(new LifecycleGeneration(8)));
         Assert.False(pump.RequestLifecycleReplacement(new LifecycleGeneration(6)));
-        Assert.Same(publisher, registration.Configuration);
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<LifecycleConfig>.Saved(new LifecycleConfig(2))));
+        Assert.Same(publisher, registry.Configuration);
+        publisher.Publish(TestSuiteConfiguration.WithSetting(2));
         Assert.Equal((ulong)8, registration.Runner.Lifecycle.Value);
-        Assert.Equal(2, registration.Configuration.ReadLatest().Snapshot.Value);
+        Assert.Equal(2, TestSuiteConfiguration.SettingOf(publisher.ReadLatest().Snapshot));
     }
 
     [Fact]
     public void ReentrantShouldStartAndCaptureReplacementPreventOldRequestPublication()
     {
-        VerifyReentrantStartReplacement(duringCapture: false);
-        VerifyReentrantStartReplacement(duringCapture: true);
+        VerifyReentrantStartReplacement();
     }
 
     [Fact]
@@ -56,15 +54,16 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.capture-deferred");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var oldRunner = registration.Runner;
         using var contention = new HandoffGateContention(oldRunner);
-        definition.CaptureCallback = contention.Acquire;
+        definition.ShouldStartCallback = contention.Acquire;
 
         var captured = pump.PumpFrame(1);
-        Assert.Equal(1, captured.CapturesAttempted);
+        Assert.Equal(1, captured.CyclesStarted);
         Assert.Equal(ServiceHandoffPhase.Empty, oldRunner.HandoffPhaseHint);
         var stopwatch = Stopwatch.StartNew();
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
@@ -87,9 +86,10 @@ public sealed class SuiteFramePumpLifecycleTests
             1, clock, measureWorkerAllocations: false, workerStarter: starter);
         var definition = new LifecycleServiceDefinition("lifecycle.request-ready");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var oldRunner = registration.Runner;
 
         pump.PumpFrame(1);
@@ -114,11 +114,11 @@ public sealed class SuiteFramePumpLifecycleTests
         using var gate = definition.BlockEvaluation(1);
         using var freshGate = definition.BlockEvaluation(2);
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        var frame = 1L;
-        PumpUntil(pump, ref frame, () => gate.Entered.IsSet);
+        var frame = 2L;
+        PumpUntil(pump, ref frame, () => gate.Entered.IsSet, collector: registry);
 
         var oldRunner = registration.Runner;
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
@@ -129,10 +129,10 @@ public sealed class SuiteFramePumpLifecycleTests
             () => oldRunner.HandoffPhaseHint == ServiceHandoffPhase.Stopped,
             TimeSpan.FromSeconds(2)));
 
-        PumpUntil(pump, ref frame, () => freshGate.Entered.IsSet);
+        PumpUntil(pump, ref frame, () => freshGate.Entered.IsSet, collector: registry);
         freshGate.Release.Set();
         Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(3)));
-        PumpUntil(pump, ref frame, () => registration.Runner.Snapshot.Projection.IsPresent);
+        PumpUntil(pump, ref frame, () => registration.Runner.Snapshot.Projection.IsPresent, collector: registry);
         Assert.Equal((ulong)2, registration.Runner.Snapshot.Projection.Context.Cycle.Lifecycle.Value);
         Assert.Equal(0, definition.ExecutionCount(1));
         Assert.Equal((ulong)1, registration.LifecycleSnapshot.LatestTerminal.RetiredLifecycle.Value);
@@ -145,9 +145,10 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.response") { ActionCount = 3 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         WaitForResponse(pump, registration, ref frame);
 
@@ -166,9 +167,10 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.action") { ActionCount = 4 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         PrepareBatch(pump, registration, ref frame);
         definition.ActionCallback = () => pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
@@ -200,9 +202,10 @@ public sealed class SuiteFramePumpLifecycleTests
             FaultAtIndex = outcome == "faulted" ? 0 : -1,
         };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         PrepareBatch(pump, registration, ref frame);
         var oldRunner = registration.Runner;
@@ -230,15 +233,15 @@ public sealed class SuiteFramePumpLifecycleTests
         using var firstGate = definition.BlockEvaluation(1);
         using var secondGate = definition.BlockEvaluation(2);
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        var frame = 1L;
-        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet);
+        var frame = 2L;
+        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet, collector: registry);
         var firstRunner = registration.Runner;
 
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
-        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet);
+        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet, collector: registry);
         var secondRunner = registration.Runner;
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(3)));
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(4)));
@@ -275,9 +278,10 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.huge") { ActionCount = 100_000 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         PrepareBatch(pump, registration, ref frame);
 
@@ -302,9 +306,10 @@ public sealed class SuiteFramePumpLifecycleTests
             1, clock, false, starter, exit);
         var definition = new LifecycleServiceDefinition("lifecycle.actual-exit");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var first = registration.Runner;
 
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
@@ -340,9 +345,10 @@ public sealed class SuiteFramePumpLifecycleTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.zero-terminal") { ActionCount = 0 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         WaitForResponse(pump, registration, ref frame);
 
@@ -354,20 +360,17 @@ public sealed class SuiteFramePumpLifecycleTests
         Assert.Equal((ulong)1, fact.Receipt.Cycle.Lifecycle.Value);
     }
 
-    private static void VerifyReentrantStartReplacement(bool duringCapture)
+    private static void VerifyReentrantStartReplacement()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new LifecycleServiceDefinition(
-            duringCapture ? "lifecycle.capture" : "lifecycle.should-start");
+        var definition = new LifecycleServiceDefinition("lifecycle.should-start");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        if (duringCapture)
-            definition.CaptureCallback = () => pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
-        else
-            definition.ShouldStartCallback = () => pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
+        TestWorldCollector.CollectedAtActivation(registry);
+        definition.ShouldStartCallback = () => pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
 
         var frame = 1L;
         PumpUntil(pump, ref frame, () =>

@@ -6,8 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/OrbModding.Common/OrbModding.Common.csproj" />
-    <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj"
+    <ProjectReference Include="../../src/OrbModSuite.csproj"
                       AdditionalProperties="UseGameStubs=true" />
   </ItemGroup>
   <ItemGroup>
@@ -15,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Dashboard/trace-dashboard.html" CopyToOutputDirectory="PreserveNewest" TargetPath="trace-dashboard.html" />
+    <Content Include="Dashboard/vendor/*.js" CopyToOutputDirectory="PreserveNewest" TargetPath="dashboard-vendor/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -24,18 +24,16 @@ public sealed class ServiceCycleDiagnosticsTests
         using var registry = new ServiceCycleRegistry(3);
         using var first = registry.Register(
             new ExecutionServiceDefinition("diagnostics.order.a"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var second = registry.Register(
             new ExecutionServiceDefinition("diagnostics.order.b"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         using var third = registry.Register(
             new ExecutionServiceDefinition("diagnostics.order.c"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var beforeDisposal = new ServiceCycleServiceDiagnosticsSnapshot[3];
         ServiceCycleDiagnostics.CopyServices(pump, beforeDisposal);
         var secondInstance = beforeDisposal[1].RegistrationInstance;
@@ -89,17 +87,16 @@ public sealed class ServiceCycleDiagnosticsTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
 
         try
         {
             Assert.True(registration.Runner.TryStartCycle(clock.Now).Queued);
             Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
-            Assert.True(registration.Configuration.CompleteSave(
-                ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
+            registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
 
             var buffer = new ServiceCycleServiceDiagnosticsSnapshot[1];
             var copy = ServiceCycleDiagnostics.CopyServices(pump, buffer);
@@ -117,9 +114,9 @@ public sealed class ServiceCycleDiagnosticsTests
                 ServiceCycleDiagnosticsValueAvailability.Available,
                 snapshot.Context.LatestConfigurationAvailability);
             Assert.Equal(
-                ServiceCycleDiagnosticsValueAvailability.NotAvailable,
+                ServiceCycleDiagnosticsValueAvailability.Available,
                 snapshot.Context.LatestStrategyAvailability);
-            Assert.Equal(0UL, snapshot.Context.LatestStrategy.Value);
+            Assert.Equal(1UL, snapshot.Context.LatestStrategy.Value);
             Assert.True(snapshot.Worker.IsBackground);
             Assert.True(snapshot.Worker.ThreadId > 0);
             Assert.Equal(
@@ -139,16 +136,13 @@ public sealed class ServiceCycleDiagnosticsTests
         using var registry = new ServiceCycleRegistry(1);
         using var registration = registry.Register(
             new ExecutionServiceDefinition("diagnostics.contention"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<int>(1);
-        registration.BindStrategy(strategy);
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var buffer = new ServiceCycleServiceDiagnosticsSnapshot[1];
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
-        strategy.Publish(2);
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
         using var contention = new HandoffGateContention(registration.Runner);
         contention.Acquire();
         var stopwatch = Stopwatch.StartNew();
@@ -200,10 +194,10 @@ public sealed class ServiceCycleDiagnosticsTests
         var definition = new ExecutionServiceDefinition("diagnostics.batch") { ActionCount = 2 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         Assert.True(registration.Runner.TryStartCycle(clock.Now).Queued);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
         Assert.True(registration.Runner.TryAcquireResponse());
@@ -241,15 +235,16 @@ public sealed class ServiceCycleDiagnosticsTests
         using var secondGate = definition.BlockEvaluation(2);
         using var registration = registry.Register(
             definition,
-            new LifecycleConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        var frame = 1L;
+        var frame = 2L;
 
-        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet);
+        ServiceCyclePumpTestWait.PumpUntil(
+            pump, ref frame, () => firstGate.Entered.IsSet, collector: registry);
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
-        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet);
+        ServiceCyclePumpTestWait.PumpUntil(
+            pump, ref frame, () => secondGate.Entered.IsSet, collector: registry);
         Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(3)));
 
         var buffer = new ServiceCycleServiceDiagnosticsSnapshot[1];
@@ -283,10 +278,10 @@ public sealed class ServiceCycleDiagnosticsTests
         using var registry = new ServiceCycleRegistry(1, clock);
         using var registration = registry.Register(
             new ExecutionServiceDefinition("diagnostics.pump"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
 
         var accepted = pump.PumpFrame(1);
         var rejected = pump.PumpFrame(1);
@@ -342,15 +337,4 @@ public sealed class ServiceCycleDiagnosticsTests
         }
     }
 
-    private static void PumpUntil(SuiteFramePump pump, ref long frame, Func<bool> condition)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (!condition())
-        {
-            pump.PumpFrame(frame++);
-            if (deadline.Elapsed > TimeSpan.FromSeconds(5))
-                throw new TimeoutException("The diagnostics lifecycle fixture did not reach the expected state.");
-            Thread.Yield();
-        }
-    }
 }

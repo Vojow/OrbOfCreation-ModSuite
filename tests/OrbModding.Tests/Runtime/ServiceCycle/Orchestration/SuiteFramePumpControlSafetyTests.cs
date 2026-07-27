@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
@@ -18,11 +19,12 @@ public sealed class SuiteFramePumpControlSafetyTests
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("pump.episode.response") { ActionCount = 3 };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
 
@@ -30,7 +32,7 @@ public sealed class SuiteFramePumpControlSafetyTests
         var engagedGeneration = pump.EmergencyTransition;
         pump.SetEmergencyStop(false);
         clock.Advance(new MonotonicDuration(17));
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var receipt = registration.Runner.Snapshot.PreviousReceipt;
         Assert.Equal(1, engagedGeneration.Value);
@@ -54,11 +56,12 @@ public sealed class SuiteFramePumpControlSafetyTests
             EvaluationEntered = entered,
             EvaluationRelease = release,
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
 
@@ -67,7 +70,7 @@ public sealed class SuiteFramePumpControlSafetyTests
         release.Set();
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
         clock.Advance(new MonotonicDuration(23));
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var receipt = registration.Runner.Snapshot.PreviousReceipt;
         Assert.Equal(CommonActionResultCodes.EmergencyStop, receipt.ResultCode);
@@ -82,23 +85,33 @@ public sealed class SuiteFramePumpControlSafetyTests
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("pump.guard.registration") { ActionCount = 0 };
-        var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        var registration = registry.Register(definition, new LifecycleGeneration(1));
         Exception? observed = null;
-        definition.CaptureCallback = () =>
+        definition.ShouldStartCallback = () =>
         {
             try { registration.Dispose(); }
             catch (Exception ex) { observed = ex; }
         };
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
+        // The pump probes the handoff with a zero-timeout lock so a worker can never park the main
+        // thread, and the freshly started worker holds that same lock while it parks itself. Pumping
+        // one frame before the park is a race the pump is designed to lose — it comes back with no
+        // cycle and tries again next frame — so this frame waits for the park it is asserting about
+        // rather than for the scheduler.
+        ServiceRunnerTestWait.ForHandoff(
+            registration.Runner,
+            value => value.Phase == ServiceHandoffPhase.Empty && value.WorkerWaitCount > 0,
+            "the initial worker wait");
 
         var report = pump.PumpFrame(1);
 
-        Assert.Equal(1, report.CapturesAttempted);
+        Assert.Equal(1, report.CyclesStarted);
         Assert.IsType<InvalidOperationException>(observed);
         Assert.Equal(1, registry.Count);
-        Assert.Equal(1, registration.Configuration.ReadLatest().Snapshot.Value);
-        definition.CaptureCallback = null;
+        Assert.Same(TestSuiteConfiguration.Default, registry.Configuration.ReadLatest().Snapshot);
+        definition.ShouldStartCallback = null;
         registration.Dispose();
         Assert.Equal(0, registry.Count);
     }
@@ -109,7 +122,7 @@ public sealed class SuiteFramePumpControlSafetyTests
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("pump.guard.registry") { ActionCount = 1 };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         Exception? observed = null;
         definition.ActionCallback = () =>
         {
@@ -118,6 +131,7 @@ public sealed class SuiteFramePumpControlSafetyTests
         };
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = PrepareBatch(pump, registration);
 
         var action = pump.PumpFrame(frame);
@@ -126,7 +140,7 @@ public sealed class SuiteFramePumpControlSafetyTests
         Assert.IsType<InvalidOperationException>(observed);
         Assert.Equal(1, registry.Count);
         Assert.Equal(1, definition.ActionExecutionCount);
-        Assert.Equal(1, registration.Configuration.ReadLatest().Snapshot.Value);
+        Assert.Same(TestSuiteConfiguration.Default, registry.Configuration.ReadLatest().Snapshot);
     }
 
     [Fact]
@@ -134,13 +148,13 @@ public sealed class SuiteFramePumpControlSafetyTests
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("pump.capture.throw") { ActionCount = 1 };
+        var definition = new SourceServiceDefinition("pump.capture.throw");
         definition.CaptureCallback = () =>
         {
             clock.Advance(new MonotonicDuration(13));
             throw new InvalidOperationException("synthetic capture fault");
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.RegisterSource(definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
@@ -172,10 +186,10 @@ public sealed class SuiteFramePumpControlSafetyTests
         Assert.True(report.TotalDuration.Ticks >= 13);
         Assert.True(afterCapture.Accepted);
         Assert.Equal(0, afterCapture.CapturesAttempted);
-        Assert.Equal(1, definition.CaptureCount);
+        Assert.Equal(1, definition.StartCount);
         Assert.Equal(ServiceHandoffPhase.Empty, registration.Runner.HandoffPhaseHint);
         Assert.False(duplicate.Accepted);
-        Assert.Equal(1, definition.CaptureCount);
+        Assert.Equal(1, definition.StartCount);
     }
 
     [Fact]
@@ -185,9 +199,10 @@ public sealed class SuiteFramePumpControlSafetyTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("pump.action.throw") { ActionCount = 3 };
         definition.ActionCallback = () => throw new InvalidOperationException("synthetic action fault");
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = PrepareBatch(pump, registration);
 
         var action = pump.PumpFrame(frame++);
@@ -210,13 +225,13 @@ public sealed class SuiteFramePumpControlSafetyTests
 
     private static long PrepareBatch(
         SuiteFramePump pump,
-        ServiceRegistration<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction> registration)
+        ServiceRegistration<ExecutionState, ExecutionAction> registration)
     {
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
         return frame;
     }
 }

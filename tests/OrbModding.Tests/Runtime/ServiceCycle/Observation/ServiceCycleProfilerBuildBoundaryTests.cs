@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Recording;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Registration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
@@ -25,12 +23,9 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
     [Fact]
     public void OrdinaryAssembliesContainNoProfilerTypes()
     {
-        var assemblies = new[]
-        {
-            typeof(ServiceCycleRegistry).Assembly,
-            typeof(AutoHarvestServiceCycleRuntime).Assembly,
-            typeof(global::OrbModConfig.Plugin).Assembly,
-        };
+        // Runtime, features and plugin ship as one assembly; scanning it three times said nothing
+        // three times.
+        var assemblies = new[] { typeof(global::OrbModding.Plugin).Assembly };
 
         foreach (var assembly in assemblies)
         {
@@ -52,22 +47,22 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
         var guardedTypes = new[]
         {
             typeof(SuiteFramePump),
-            typeof(ServiceCycleStartCoordinator<,,,>),
-            typeof(ServiceCycleWorker<,,,>),
-            typeof(ServiceCycleReplayDefinitionAdapter<,,,,,,>),
-            typeof(ServiceCycleReplayInputBridge<>),
+            typeof(ServiceCycleStartCoordinator<,>),
+            typeof(ServiceCycleWorker<,>),
             typeof(ServiceCycleSemanticRuntimeTrace),
             typeof(ServiceCycleSemanticRuntimeTraceMultiplexer),
-            typeof(AutoHarvestServiceCycleFactory),
+            typeof(AutomataServiceCycleComposition),
+            typeof(AutomataServiceCycleRuntime),
+            typeof(AutoHarvestServiceCycleFeature),
+            typeof(AutoHarvestFeatureRuntime),
             typeof(AutoHarvestServiceAdapterComposition),
-            typeof(AutoHarvestServiceCycleRuntime),
-            typeof(AutoHarvestCycleCaptureAdapter),
+            typeof(AutoHarvestFrameProjector),
             typeof(AutoHarvestBindingResolver),
             typeof(AutoHarvestNativeStateReader),
-            typeof(AutoHarvestStaticContractAuditor),
+            typeof(AutoHarvestActionSafety),
             typeof(AutoHarvestStableIdAccessor),
             typeof(AutoHarvestReflectionAccess),
-            typeof(global::OrbModConfig.Plugin),
+            typeof(global::OrbModding.Plugin),
         };
         var violations = new List<string>();
         const BindingFlags members = BindingFlags.Instance | BindingFlags.Static |

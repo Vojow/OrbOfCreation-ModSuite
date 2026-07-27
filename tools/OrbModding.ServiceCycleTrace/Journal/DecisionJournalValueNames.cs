@@ -35,6 +35,13 @@ internal static class DecisionJournalValueNames
         _ => "Unknown",
     };
 
+    internal static string WorldGate(int code) => code switch
+    {
+        1 => "WorldBehindLastAction",
+        2 => "WorldUnanswered",
+        _ => "Unknown",
+    };
+
     internal static string Emergency(int code) => code switch
     {
         (int)EmergencyStopReason.UserRequested => nameof(EmergencyStopReason.UserRequested),

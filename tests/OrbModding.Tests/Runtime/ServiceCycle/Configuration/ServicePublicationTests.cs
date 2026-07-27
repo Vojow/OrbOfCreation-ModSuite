@@ -1,38 +1,147 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
-using Xunit;
 using RuntimeLifecycleGeneration = OrbModding.Common.Runtime.LifecycleGeneration;
+using Xunit;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Configuration;
 
 public sealed class ServicePublicationTests
 {
     [Fact]
-    public void DraftAndFailedSavesNeverPublishButSuccessfulSavesAdvance()
+    public void PublishingAdvancesTheOneGenerationEveryServiceReads()
+    {
+        using var registry = new ServiceCycleRegistry(3);
+        registry.ConfigurationPublication.Publish(TestSuiteConfiguration.WithSetting(10));
+        using var first = registry.Register(
+            new SyntheticServiceDefinition("test.config.a"),
+            new RuntimeLifecycleGeneration(1));
+        using var second = registry.Register(
+            new SyntheticServiceDefinition("test.config.b"),
+            new RuntimeLifecycleGeneration(1));
+        using var third = registry.Register(
+            new SyntheticServiceDefinition("test.config.c"),
+            new RuntimeLifecycleGeneration(1));
+
+        Assert.Equal(2UL, registry.GetSlot(0).LatestConfiguration.Value);
+        Assert.Equal(
+            10,
+            TestSuiteConfiguration.SettingOf(registry.Configuration.ReadLatest().Snapshot));
+
+        var published = registry.ConfigurationPublication.Publish(
+            TestSuiteConfiguration.WithSetting(20));
+
+        Assert.Equal(3UL, published.Value);
+        Assert.Equal(
+            20,
+            TestSuiteConfiguration.SettingOf(registry.Configuration.ReadLatest().Snapshot));
+        for (var ordinal = 0; ordinal < 3; ordinal++)
+            Assert.Equal(3UL, registry.GetSlot(ordinal).LatestConfiguration.Value);
+    }
+
+    /// <summary>
+    /// A registry has its configuration from the moment it exists, on the all-defaults snapshot.
+    /// </summary>
+    /// <remarks>
+    /// This used to be an installation step with an ordering rule and a "the suite has one" guard.
+    /// Both are gone with the type: there is one configuration record, so the registry constructs it
+    /// the way it constructs the world, and a service registered before anything published still
+    /// reads a real snapshot rather than failing.
+    /// </remarks>
+    [Fact]
+    public void ARegistryStartsOnTheAllDefaultsConfigurationBeforeAnythingPublishes()
     {
         using var registry = new ServiceCycleRegistry(1);
+
+        Assert.Same(TestSuiteConfiguration.Default, registry.Configuration.ReadLatest().Snapshot);
+        Assert.Equal(1UL, registry.Configuration.ReadLatest().Generation.Value);
+
         using var registration = registry.Register(
-            new SyntheticServiceDefinition("test.config"),
-            new SyntheticConfig(10),
+            new SyntheticServiceDefinition("test.config.defaults"),
             new RuntimeLifecycleGeneration(1));
-        var publisher = registration.Configuration;
 
-        Assert.False(publisher.CompleteSave(
-            ConfigurationSaveResult<SyntheticConfig>.NotSaved(ConfigurationSaveDisposition.Draft)));
-        Assert.False(publisher.CompleteSave(
-            ConfigurationSaveResult<SyntheticConfig>.NotSaved(ConfigurationSaveDisposition.ValidationFailed)));
-        Assert.False(publisher.CompleteSave(
-            ConfigurationSaveResult<SyntheticConfig>.NotSaved(ConfigurationSaveDisposition.PersistenceFailed)));
-        Assert.Equal(1UL, publisher.ReadLatest().Generation.Value);
-        Assert.Equal(10, publisher.ReadLatest().Snapshot.Value);
+        Assert.Equal(1UL, registry.GetSlot(0).LatestConfiguration.Value);
+    }
 
-        Assert.True(publisher.CompleteSave(ConfigurationSaveResult<SyntheticConfig>.Saved(new SyntheticConfig(20))));
-        Assert.Equal(2UL, publisher.ReadLatest().Generation.Value);
-        Assert.Equal(20, publisher.ReadLatest().Snapshot.Value);
+    /// <summary>
+    /// A registry has its strategy from the moment it exists, on the neutral bulletin.
+    /// </summary>
+    /// <remarks>
+    /// The third copy of the world's and the configuration's bargain, and it lands the same way:
+    /// constructed with the registry rather than installed into it, so there is no ordering rule to
+    /// get wrong and a service registered before any strategist exists still reads a real bulletin.
+    /// </remarks>
+    [Fact]
+    public void ARegistryStartsOnTheNeutralBulletinBeforeAnythingPublishes()
+    {
+        using var registry = new ServiceCycleRegistry(1);
+
+        Assert.Same(TestSuiteStrategy.Neutral, registry.Strategy.ReadLatest().Bulletin);
+        Assert.Equal(1UL, registry.Strategy.ReadLatest().Generation.Value);
+
+        using var registration = registry.Register(
+            new SyntheticServiceDefinition("test.strategy.defaults"),
+            new RuntimeLifecycleGeneration(1));
+
+        Assert.Equal(1UL, registry.GetSlot(0).LatestStrategy.Value);
+    }
+
+    [Fact]
+    public void PublishingAStrategyAdvancesTheOneGenerationEveryServiceReads()
+    {
+        using var registry = new ServiceCycleRegistry(3);
+        using var first = registry.Register(
+            new SyntheticServiceDefinition("test.strategy.a"),
+            new RuntimeLifecycleGeneration(1));
+        using var second = registry.Register(
+            new SyntheticServiceDefinition("test.strategy.b"),
+            new RuntimeLifecycleGeneration(1));
+        using var third = registry.Register(
+            new SyntheticServiceDefinition("test.strategy.c"),
+            new RuntimeLifecycleGeneration(1));
+
+        var published = registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(7));
+
+        Assert.Equal(2UL, published.Value);
+        Assert.Equal(
+            7,
+            TestSuiteStrategy.SettingOf(registry.Strategy.ReadLatest().Bulletin));
+        for (var ordinal = 0; ordinal < 3; ordinal++)
+            Assert.Equal(2UL, registry.GetSlot(ordinal).LatestStrategy.Value);
+    }
+
+    /// <summary>
+    /// The worker is handed the bulletin its own cycle pinned, and the identity says which one.
+    /// </summary>
+    /// <remarks>
+    /// The delivery half of the publication: a generation nothing can read is a number, not a
+    /// policy. Both halves are asserted together because they are the same claim — the bulletin the
+    /// evaluation saw is the one the cycle is stamped with.
+    /// </remarks>
+    [Fact]
+    public void AWorkerIsHandedTheBulletinItsCycleWasPinnedTo()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("test.strategy.pinned");
+        using var registration = registry.Register(
+            definition,
+            new RuntimeLifecycleGeneration(1));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(5));
+        var runner = registration.Runner;
+
+        var attempt = runner.TryStartCycle(clock.Now);
+
+        Assert.True(attempt.Queued);
+        ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
+        Assert.Equal(5, definition.LastEvaluatedStrategySetting);
+        Assert.Equal(2UL, attempt.Cycle.Strategy.Value);
     }
 
     [Fact]
@@ -41,87 +150,23 @@ public sealed class ServicePublicationTests
         using var registry = new ServiceCycleRegistry(1);
         using var registration = registry.Register(
             new SyntheticServiceDefinition("test.independent"),
-            new SyntheticConfig(1),
             new RuntimeLifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(1));
 
-        var strategyTwo = strategy.Publish(new StrategyBulletin(2));
-        registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<SyntheticConfig>.Saved(new SyntheticConfig(2)));
-        var strategyThree = strategy.Publish(new StrategyBulletin(3));
+        var strategyTwo = registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
+        registry.ConfigurationPublication.Publish(TestSuiteConfiguration.WithSetting(2));
+        var strategyThree = registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(3));
 
         Assert.Equal(2UL, strategyTwo.Value);
         Assert.Equal(3UL, strategyThree.Value);
-        Assert.Equal(2UL, registration.Configuration.ReadLatest().Generation.Value);
-    }
-
-    [Fact]
-    public void RegistrationAcceptsExactlyOneStrategySourceBeforeCompositionIsSealed()
-    {
-        using var registry = new ServiceCycleRegistry(1);
-        using var registration = registry.Register(
-            new SyntheticServiceDefinition("test.strategy.binding"),
-            new SyntheticConfig(1),
-            new RuntimeLifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(1));
-        using var replacement = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(2));
-
-        registration.BindStrategy(strategy);
-
-        Assert.Throws<InvalidOperationException>(() => registration.BindStrategy(replacement));
-        registry.Seal();
-    }
-
-    [Fact]
-    public void StrategyBindingAfterCompositionIsSealedIsRejected()
-    {
-        using var registry = new ServiceCycleRegistry(1);
-        using var registration = registry.Register(
-            new SyntheticServiceDefinition("test.strategy.late-binding"),
-            new SyntheticConfig(1),
-            new RuntimeLifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(1));
-        registry.Seal();
-
-        Assert.Throws<InvalidOperationException>(() => registration.BindStrategy(strategy));
-    }
-
-    [Fact]
-    public void StrategyCaptureReportsTheGenerationWhoseFactsWereCopied()
-    {
-        using var publisher = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(10));
-        var capture = new StrategyCapture(publisher);
-        var frame = new SyntheticFrame();
-
-        publisher.Publish(new StrategyBulletin(25));
-        var generation = capture.Capture(ref frame);
-
-        Assert.Equal(2UL, generation.Value);
-        Assert.Equal(25, frame.StrategyValue);
-    }
-
-    [Fact]
-    public void MutableStrategyPublicationShapeIsRejectedBeforeItCanAlias()
-    {
-        Assert.Throws<InvalidOperationException>(() =>
-            new ServiceStrategyPublisher<MutableStrategy>(new MutableStrategy { Value = 1 }));
-    }
-
-    [Fact]
-    public void StrategyGraphsCannotHideStaticOrMethodSignatureBoundaries()
-    {
-        Assert.Throws<InvalidOperationException>(() =>
-            new ServiceStrategyPublisher<StaticNativeStrategy>(new StaticNativeStrategy(1)));
-        Assert.Throws<InvalidOperationException>(() =>
-            new ServiceStrategyPublisher<MethodBoundaryStrategy>(new MethodBoundaryStrategy(1)));
+        Assert.Equal(2UL, registry.Configuration.ReadLatest().Generation.Value);
     }
 
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     public async Task ConcurrentConfigurationAndStrategyReadsRemainGenerationCoherent()
     {
-        using var configuration = new ServiceConfigurationPublisher<SyntheticConfig>(new SyntheticConfig(1));
-        using var strategy = new ServiceStrategyPublisher<StrategyBulletin>(new StrategyBulletin(1));
+        using var configuration = new ServiceConfigurationPublisher(TestSuiteConfiguration.WithSetting(1));
+        using var strategy = new ServiceStrategyPublisher(TestSuiteStrategy.WithSetting(1));
         using var gate = new ManualResetEventSlim(false);
 
         var configWriter = Task.Run(() =>
@@ -129,14 +174,7 @@ public sealed class ServicePublicationTests
             gate.Wait();
             for (var value = 2; value <= 2000; value++)
             {
-                if (value % 19 == 0)
-                {
-                    Assert.False(configuration.CompleteSave(
-                        ConfigurationSaveResult<SyntheticConfig>.NotSaved(
-                            ConfigurationSaveDisposition.PersistenceFailed)));
-                }
-                configuration.CompleteSave(
-                    ConfigurationSaveResult<SyntheticConfig>.Saved(new SyntheticConfig(value)));
+                configuration.Publish(TestSuiteConfiguration.WithSetting(value));
                 if (value % 8 == 0) Thread.Yield();
             }
         });
@@ -148,7 +186,9 @@ public sealed class ServicePublicationTests
             {
                 var publication = configuration.ReadLatest();
                 Assert.True(publication.Generation.Value >= previous);
-                Assert.Equal((int)publication.Generation.Value, publication.Snapshot.Value);
+                Assert.Equal(
+                    (int)publication.Generation.Value,
+                    TestSuiteConfiguration.SettingOf(publication.Snapshot));
                 previous = publication.Generation.Value;
                 if (read % 16 == 0) Thread.Yield();
             }
@@ -158,7 +198,7 @@ public sealed class ServicePublicationTests
             gate.Wait();
             for (var value = 2; value <= 2000; value++)
             {
-                strategy.Publish(new StrategyBulletin(value));
+                strategy.Publish(TestSuiteStrategy.WithSetting(value));
                 if (value % 8 == 0) Thread.Yield();
             }
         });
@@ -170,7 +210,9 @@ public sealed class ServicePublicationTests
             {
                 var publication = strategy.ReadLatest();
                 Assert.True(publication.Generation.Value >= previous);
-                Assert.Equal((int)publication.Generation.Value, publication.Bulletin.Value);
+                Assert.Equal(
+                    (int)publication.Generation.Value,
+                    TestSuiteStrategy.SettingOf(publication.Bulletin));
                 previous = publication.Generation.Value;
                 if (read % 16 == 0) Thread.Yield();
             }
@@ -179,50 +221,10 @@ public sealed class ServicePublicationTests
         gate.Set();
         await Task.WhenAll(configWriter, configReader, strategyWriter, strategyReader);
         Assert.Equal(2000UL, configuration.ReadLatest().Generation.Value);
-        Assert.Equal(2000, configuration.ReadLatest().Snapshot.Value);
+        Assert.Equal(
+            2000,
+            TestSuiteConfiguration.SettingOf(configuration.ReadLatest().Snapshot));
         Assert.Equal(2000UL, strategy.ReadLatest().Generation.Value);
-        Assert.Equal(2000, strategy.ReadLatest().Bulletin.Value);
-    }
-
-    private readonly struct StrategyBulletin
-    {
-        internal StrategyBulletin(int value) => Value = value;
-        internal int Value { get; }
-    }
-
-    private sealed class MutableStrategy
-    {
-        internal int Value { get; set; }
-    }
-
-    private sealed class StaticNativeStrategy
-    {
-        private static UnityEngine.Object? _cache = null;
-        private readonly int _value;
-        internal StaticNativeStrategy(int value) => _value = value;
-        internal int Value => _value;
-        private static UnityEngine.Object? Cache => _cache;
-    }
-
-    private sealed class MethodBoundaryStrategy
-    {
-        private readonly int _value;
-        internal MethodBoundaryStrategy(int value) => _value = value;
-        internal int Value => _value;
-        public StrategyWrapper<UnityEngine.Object?> ReadNative() => new(null);
-    }
-
-    private readonly struct StrategyWrapper<T>
-    {
-        private readonly T _value;
-        internal StrategyWrapper(T value) => _value = value;
-    }
-
-    private sealed class StrategyCapture : ServiceStrategyCapture<SyntheticFrame, StrategyBulletin>
-    {
-        internal StrategyCapture(ServiceStrategyPublisher<StrategyBulletin> publisher) : base(publisher) { }
-
-        protected override void CopyToFrame(in StrategyBulletin bulletin, ref SyntheticFrame frame) =>
-            frame.StrategyValue = bulletin.Value;
+        Assert.Equal(2000, TestSuiteStrategy.SettingOf(strategy.ReadLatest().Bulletin));
     }
 }

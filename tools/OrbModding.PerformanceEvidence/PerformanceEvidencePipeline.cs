@@ -612,7 +612,7 @@ public static class PerformanceEvidencePipeline
     private static int GetExpectedRuleCount(string profileId, int profileVersion, string path) =>
         (profileId, profileVersion) switch
         {
-            ("supported-suite-beta-v1", 1) => 12,
+            ("supported-suite-beta-v1", 1) => 10,
             _ => throw Invalid(path, $"unknown profile id/version '{profileId}' v{profileVersion}"),
         };
 

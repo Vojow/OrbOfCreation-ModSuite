@@ -24,10 +24,9 @@ public sealed class AutoHarvestProfileBindingObservationTests
             () => TypedRegistrySourceSnapshot.Ready((IDictionary)registry),
             value => identities[value]);
         var probe = new ServiceCycleProfileProbe();
-        var operations = new AutoHarvestProfileOperations(probe);
+        var operations = new AutomataProfileOperations(probe);
         var resolver = new AutoHarvestBindingResolver(
             nativeResolver,
-            new AutoHarvestStaticContractAuditor(operations),
             new ContractCircuit(),
             operations);
         var shared = SharedBinding(nativeResolver, registry, identities);
@@ -68,7 +67,6 @@ public sealed class AutoHarvestProfileBindingObservationTests
         var scaling = Resolve(resolver, registry, identities, out _);
         return new AutoHarvestSharedBinding(
             active.Value!,
-            scaling.Value!,
             active,
             scaling,
             active.LifecycleGeneration);
@@ -93,10 +91,7 @@ public sealed class AutoHarvestProfileBindingObservationTests
             reward.Value!,
             plot,
             action,
-            reward,
-            growthSeconds: 1,
-            restSeconds: 1,
-            actionSeconds: 1);
+            reward);
     }
 
     private static TypedRegistryResolution Resolve(

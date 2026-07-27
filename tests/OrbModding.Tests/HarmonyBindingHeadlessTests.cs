@@ -14,24 +14,8 @@ public sealed class HarmonyBindingHeadlessTests
     [Trait("Category", "HeadlessIntegration")]
     public void AutomataHarmonyTargets_ResolveExactNativeShapedMethods()
     {
-        AssertTarget("OrbAutomata.AutoBuyStructureQueuePatch", "QueueBuild", typeof(global::StructureSO), typeof(int));
-        AssertTarget("OrbAutomata.AutoBuyUpgradeQueuePatch", "Purchase", typeof(UpgradeSO));
         AssertTarget("OrbAutomata.SpellFirePatch", "Fire", typeof(Spell));
 
-        AssertTarget(
-            "OrbAutomata.AutoBuyStructureCompletionPatch",
-            "CompleteAction",
-            typeof(global::StructureSO));
-        AssertTarget(
-            "OrbAutomata.AutoBuyUpgradeCompletionPatch",
-            "CompleteAction",
-            typeof(UpgradeSO));
-        AssertTargets(
-            "OrbAutomata.AutoBuyLifecyclePatch",
-            (typeof(GameManager), "InitGame", Type.EmptyTypes),
-            (typeof(GameManager), "ResetGameState", Type.EmptyTypes),
-            (typeof(SaveStateManager), "ImplementLoadedJson", Type.EmptyTypes),
-            (typeof(PersistentResetManager), "PersistentResetLogic", Type.EmptyTypes));
         AssertTargets(
             "OrbAutomata.AutoConceptActiveListPatch",
             (typeof(AlchemyInstanceListVariable), "AddAlchemyInstances", new[] { typeof(AlchemyRecipeSO), typeof(int) }),
@@ -74,43 +58,6 @@ public sealed class HarmonyBindingHeadlessTests
 
         void OnInventory(object? identity) => inventory.Add(identity);
         void OnProgression(object identity) => progression.Add(identity);
-    }
-
-    [Fact]
-    [Trait("Category", "HeadlessIntegration")]
-    public void AutoBuyPatchCallbacks_SuppressOnlyExactAutomatedIdentityAndEmitOneCompletionSignal()
-    {
-        var automated = new global::StructureSO();
-        var manual = new global::StructureSO();
-        var structureSignals = new List<object>();
-        var completions = new List<(object Identity, AutoBuyCandidateKind Kind)>();
-        AutoBuyLifecycleSignal.StructureQueueChanged += OnStructure;
-        AutoBuyLifecycleSignal.NativeCompletion += OnCompletion;
-        try
-        {
-            using (AutoBuyLifecycleSignal.EnterAutomatedMutation(automated))
-            {
-                InvokePatch("OrbAutomata.AutoBuyStructureQueuePatch", "Postfix", automated);
-                InvokePatch("OrbAutomata.AutoBuyStructureQueuePatch", "Postfix", manual);
-            }
-
-            InvokePatch("OrbAutomata.AutoBuyStructureCompletionPatch", "Postfix", automated);
-
-            Assert.Single(structureSignals);
-            Assert.Same(manual, structureSignals[0]);
-            var completion = Assert.Single(completions);
-            Assert.Same(automated, completion.Identity);
-            Assert.Equal(AutoBuyCandidateKind.Structure, completion.Kind);
-        }
-        finally
-        {
-            AutoBuyLifecycleSignal.StructureQueueChanged -= OnStructure;
-            AutoBuyLifecycleSignal.NativeCompletion -= OnCompletion;
-        }
-
-        void OnStructure(object identity) => structureSignals.Add(identity);
-        void OnCompletion(object identity, AutoBuyCandidateKind kind) =>
-            completions.Add((identity, kind));
     }
 
     [Fact]
@@ -185,7 +132,7 @@ public sealed class HarmonyBindingHeadlessTests
 
     private static object? InvokePatch(string patchTypeName, string methodName, params object[] arguments)
     {
-        var type = typeof(AutoBuyLifecycleSignal).Assembly.GetType(patchTypeName, throwOnError: true)!;
+        var type = typeof(AutoConceptLifecycleSignal).Assembly.GetType(patchTypeName, throwOnError: true)!;
         var method = type.GetMethod(
             methodName,
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic) ??

@@ -154,29 +154,6 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
-    public void AutoBuyFinalGateRejectsOwnershipLostDuringAdmission()
-    {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
-        config.AutoBuyStructures.Value = true;
-        config.AutoBuyUpgrades.Value = false;
-        config.AbsoluteReserve.Value = "0";
-        config.RelativeReserveMultiplier.Value = 0;
-        var owned = true;
-        var candidate = new OwnershipChangingBuyCandidate(() => owned = false);
-        using var engine = new AutoBuyEngine(
-            config,
-            new SingleBuyCatalog(candidate),
-            new ReservePolicy(config),
-            new ManualLogSource(),
-            ownsActionFamily: _ => owned);
-
-        engine.Tick(config.AutoBuyIntervalSeconds.Value);
-
-        Assert.Equal(0, candidate.PurchaseCalls);
-    }
-
-    [Fact]
     public void AutoCastFinalGateRejectsOwnershipLostDuringAdmission()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
@@ -195,29 +172,6 @@ public sealed class ActionFamilyIntegrationTests
         engine.Tick(config.AutoCastIntervalSeconds.Value);
 
         Assert.Equal(0, candidate.FireCalls);
-    }
-
-    [Fact]
-    public void PartialAutoBuyOwnershipImmediatelyReportsDegradedWhileIdle()
-    {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
-        config.AutoBuyStructures.Value = true;
-        config.AutoBuyUpgrades.Value = true;
-        var registry = new FeatureStatusRegistry();
-        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
-        using var engine = new AutoBuyEngine(
-            config,
-            new EmptyBuyCatalog(),
-            new ReservePolicy(config),
-            new ManualLogSource(),
-            featureStatus: statuses.AutoBuy,
-            ownsActionFamily: kind => kind == AutoBuyCandidateKind.Upgrade);
-
-        engine.Tick(config.AutoBuyIntervalSeconds.Value);
-
-        Assert.Equal(FeatureStatusState.Degraded, statuses.AutoBuy.Current.State);
-        Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, statuses.AutoBuy.Current.Reason.Code);
     }
 
     [Fact]
@@ -262,49 +216,6 @@ public sealed class ActionFamilyIntegrationTests
             out var lease,
             out _));
         return lease!;
-    }
-
-    private sealed class SingleBuyCatalog : IAutoBuyCatalog
-    {
-        private readonly IAutoBuyCandidate _candidate;
-        public SingleBuyCatalog(IAutoBuyCandidate candidate) => _candidate = candidate;
-        public IEnumerable<IAutoBuyCandidate> Discover() { yield return _candidate; }
-        public bool TryCaptureQueueCapacity(int usage, int reservation, out QueueCapacitySnapshot snapshot) =>
-            QueueCapacitySnapshot.TryCreate(10, 10, usage, reservation, out snapshot, out _);
-        public bool TryGetBulkDevelopment(out int levels) { levels = 1; return true; }
-        public bool TryGetActionMultiplier(out int multiplier) { multiplier = 1; return true; }
-        public void Dispose() { }
-    }
-
-    private sealed class EmptyBuyCatalog : IAutoBuyCatalog
-    {
-        public IEnumerable<IAutoBuyCandidate> Discover() => Array.Empty<IAutoBuyCandidate>();
-        public bool TryCaptureQueueCapacity(int usage, int reservation, out QueueCapacitySnapshot snapshot) =>
-            QueueCapacitySnapshot.TryCreate(10, 10, usage, reservation, out snapshot, out _);
-        public bool TryGetBulkDevelopment(out int levels) { levels = 1; return true; }
-        public bool TryGetActionMultiplier(out int multiplier) { multiplier = 1; return true; }
-        public void Dispose() { }
-    }
-
-    private sealed class OwnershipChangingBuyCandidate : IAutoBuyCandidate
-    {
-        private readonly Action _loseOwnership;
-        private readonly AutoBuyCandidateSnapshot _snapshot;
-        public OwnershipChangingBuyCandidate(Action loseOwnership)
-        {
-            _loseOwnership = loseOwnership;
-            _snapshot = new AutoBuyCandidateSnapshot(this, "structure", "Structure", AutoBuyCandidateKind.Structure, "StructureSO");
-        }
-        public int PurchaseCalls { get; private set; }
-        public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
-        public bool IsAvailable() => true;
-        public bool CanPurchase(out string reason) { reason = string.Empty; return true; }
-        public IReadOnlyList<ResourceAdmissionCost> GetCosts()
-        {
-            _loseOwnership();
-            return new[] { new ResourceAdmissionCost("resource", "Resource", new BigAmount(1, 0), new BigAmount(100, 0)) };
-        }
-        public bool TryPurchaseOne(out string reason) { PurchaseCalls++; reason = string.Empty; return true; }
     }
 
     private sealed class SingleCastCatalog : IAutoCastCatalog

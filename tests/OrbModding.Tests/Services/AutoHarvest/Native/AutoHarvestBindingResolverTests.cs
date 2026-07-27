@@ -15,26 +15,17 @@ public sealed class AutoHarvestBindingResolverTests
         (int)AutoHarvestPair.FruitTree,
         AutoHarvestKnownIds.FruitTreePlot,
         AutoHarvestKnownIds.FruitTreeCollect,
-        AutoHarvestKnownIds.FruitTreeRewardPool,
-        480.0,
-        340.0,
-        3.0)]
+        AutoHarvestKnownIds.FruitTreeRewardPool)]
     [InlineData(
         (int)AutoHarvestPair.TreasureTree,
         AutoHarvestKnownIds.TreasureTreePlot,
         AutoHarvestKnownIds.TreasureTreeCollect,
-        AutoHarvestKnownIds.TreasureTreeRewardPool,
-        720.0,
-        360.0,
-        10.0)]
-    public void PairSpecificationKeepsGeneratedIdentitiesWithAuditedTiming(
+        AutoHarvestKnownIds.TreasureTreeRewardPool)]
+    public void PairSpecificationKeepsGeneratedIdentities(
         int pairValue,
         string plotUuid,
         string actionUuid,
-        string rewardPoolUuid,
-        double growthSeconds,
-        double restSeconds,
-        double actionSeconds)
+        string rewardPoolUuid)
     {
         var pair = (AutoHarvestPair)pairValue;
         var specification = AutoHarvestPairSpecification.For(pair);
@@ -43,9 +34,6 @@ public sealed class AutoHarvestBindingResolverTests
         Assert.Equal(plotUuid, specification.PlotUuid);
         Assert.Equal(actionUuid, specification.ActionUuid);
         Assert.Equal(rewardPoolUuid, specification.RewardPool.Uuid.ToString("D"));
-        Assert.Equal(growthSeconds, specification.ExpectedGrowthSeconds);
-        Assert.Equal(restSeconds, specification.ExpectedRestSeconds);
-        Assert.Equal(actionSeconds, specification.ExpectedActionSeconds);
     }
 
     [Fact]
@@ -59,20 +47,9 @@ public sealed class AutoHarvestBindingResolverTests
     }
 
     [Fact]
-    public void MissingExactTypeUsesPermanentContractSignal()
-    {
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => AutoHarvestReflectionTypes.RequireLoadedExactType(
-                "OrbModding.Tests.MissingExactAutoHarvestNativeType"));
-
-        Assert.Contains("is not registered exactly", exception.Message);
-    }
-
-    [Fact]
     public void PairSetReturnsBothBindingsInEachResolvedSnapshot()
     {
         var shared = new AutoHarvestSharedBinding(
-            new object(),
             new object(),
             null!,
             null!,
@@ -92,8 +69,10 @@ public sealed class AutoHarvestBindingResolverTests
         Assert.True(pairs.Treasure.Succeeded);
         Assert.Same(fruit, pairs.Treasure.Pair.Fruit);
         Assert.Same(treasure, pairs.Fruit.Pair.Treasure);
-        Assert.True(AutoHarvestNativeLifecycle.Matches(pairs, new LifecycleGeneration(7)));
-        Assert.False(AutoHarvestNativeLifecycle.Matches(pairs, new LifecycleGeneration(8)));
+        Assert.True(AutoHarvestNativeLifecycle.Matches(
+            pairs.Fruit.Pair.LifecycleGeneration, new LifecycleGeneration(7)));
+        Assert.False(AutoHarvestNativeLifecycle.Matches(
+            pairs.Treasure.Pair.LifecycleGeneration, new LifecycleGeneration(8)));
     }
 
     [Fact]
@@ -152,7 +131,6 @@ public sealed class AutoHarvestBindingResolverTests
                 () => throw new InvalidOperationException("shared resolution was not admitted"),
                 () => throw new InvalidOperationException("shared resolution was not admitted"),
                 _ => throw new InvalidOperationException("shared resolution was not admitted")),
-            new AutoHarvestStaticContractAuditor(),
             circuit);
 
         var pairs = resolver.ResolvePairSet();
@@ -175,10 +153,7 @@ public sealed class AutoHarvestBindingResolverTests
             new object(),
             null!,
             null!,
-            null!,
-            growthSeconds: 1,
-            restSeconds: 1,
-            actionSeconds: 1);
+            null!);
 
     private static AutoHarvestSharedBinding SharedBinding(
         TypedRegistryResolver resolver,
@@ -189,7 +164,6 @@ public sealed class AutoHarvestBindingResolverTests
         var scaling = Resolve(resolver, registry, identities);
         return new AutoHarvestSharedBinding(
             active.Value!,
-            scaling.Value!,
             active,
             scaling,
             active.LifecycleGeneration);
@@ -209,10 +183,7 @@ public sealed class AutoHarvestBindingResolverTests
             new object(),
             Resolve(resolver, registry, identities),
             Resolve(resolver, registry, identities),
-            Resolve(resolver, registry, identities),
-            growthSeconds: 1,
-            restSeconds: 1,
-            actionSeconds: 1);
+            Resolve(resolver, registry, identities));
 
     private static TypedRegistryResolution Resolve(
         TypedRegistryResolver resolver,

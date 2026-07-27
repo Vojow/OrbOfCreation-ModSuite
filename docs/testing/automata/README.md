@@ -1,6 +1,6 @@
 # Orb Automata testing
 
-[Testing hub](../README.md) · [Automata behavior reference](../../../src/OrbAutomata/README.md) · [Runtime protocol](../runtime-validation.md)
+[Testing hub](../README.md) · [Automata behavior reference](../../../src/Automata/README.md) · [Runtime protocol](../runtime-validation.md)
 
 Orb Automata has several independent native action families and a shared
 coordinator. Start with the feature being changed, then include integration
@@ -10,9 +10,7 @@ or action-family ownership is affected.
 ## Feature guides
 
 - [Auto Buy](auto-buy.md) — candidate decisions, reserves, grouping,
-  continuation, lifecycle, queue safety, and progression-shaped performance.
-  Its [negative simulation plan](auto-buy-negative-simulations.md) owns invalid,
-  race, seeded, and adverse-performance scenarios.
+  continuation, lifecycle, queue safety, and native performance traces.
 - [Auto Cast](auto-cast.md) — loadout discovery, charges, costs, targeting,
   mutation verification, and controls.
 - [Auto Concept](auto-concept.md) — catalog classification, slot policy,
@@ -29,7 +27,7 @@ For an isolated feature change:
 1. Run the feature’s focused component tests.
 2. Run its headless integration/E2E scope.
 3. Run `Fast`.
-4. Run `AutoBuyPerformance` or `PerformanceAll` when scheduling, coordinator,
+4. Run `PerformanceAll` when scheduling, coordinator,
    invalidation, or hot-path work changed.
 5. Run installed contracts when a reflected member, Harmony target, native type,
    UUID/type assumption, or mutation postcondition changed.

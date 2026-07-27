@@ -71,7 +71,8 @@ public sealed class ManualFullTraceControlRegistryTests
             0,
             false,
             ManualFullTraceResult.None,
-            "private/session-1"));
+            "private/session-1",
+            storesLost: false));
         Assert.Throws<ArgumentException>(() => new ManualFullTraceStatus(
             ManualFullTraceState.Complete,
             TimeSpan.FromSeconds(1),
@@ -82,7 +83,8 @@ public sealed class ManualFullTraceControlRegistryTests
             0,
             false,
             ManualFullTraceResult.UserStopped,
-            "session-0000000000000001"));
+            "session-0000000000000001",
+            storesLost: false));
         Assert.Throws<ArgumentException>(() => new ManualFullTraceStatus(
             ManualFullTraceState.Incomplete,
             TimeSpan.FromSeconds(1),
@@ -93,7 +95,8 @@ public sealed class ManualFullTraceControlRegistryTests
             0,
             true,
             ManualFullTraceResult.WriteFailed,
-            "session-0000000000000001"));
+            "session-0000000000000001",
+            storesLost: false));
     }
 
     [Fact]
@@ -148,7 +151,8 @@ public sealed class ManualFullTraceControlRegistryTests
         0,
         false,
         ManualFullTraceResult.None,
-        "session-0000000000000001");
+        "session-0000000000000001",
+        storesLost: false);
 
     private static ManualFullTraceStatus Complete() => new(
         ManualFullTraceState.Complete,
@@ -160,5 +164,6 @@ public sealed class ManualFullTraceControlRegistryTests
         0,
         true,
         ManualFullTraceResult.UserStopped,
-        "session-0000000000000001");
+        "session-0000000000000001",
+        storesLost: false);
 }

@@ -5,18 +5,6 @@ internal sealed class ExecutionFrame
     public int Value { get; internal set; }
 }
 
-internal sealed class ExecutionConfig
-{
-    internal ExecutionConfig(int value, ActionPayload? payload = null)
-    {
-        Value = value;
-        Payload = payload;
-    }
-
-    public int Value { get; }
-    public ActionPayload? Payload { get; }
-}
-
 internal sealed class ExecutionState
 {
     internal int Evaluations;

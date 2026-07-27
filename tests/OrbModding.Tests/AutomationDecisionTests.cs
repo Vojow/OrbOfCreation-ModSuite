@@ -357,8 +357,13 @@ public sealed class AutomationDecisionTests
                            type == typeof(AutomationQueueDetail) ||
                            type == typeof(AutomationNativeDetail))
             .SelectMany(type => type.GetProperties())
-            .Select(property => property.PropertyType.Assembly.GetName().Name)
-            .Where(name => name is not null && name.Contains("OrbAutomata", StringComparison.Ordinal))
+            // Keyed on the property type's namespace rather than its declaring assembly: after the
+            // one-DLL merge every suite type answers to one assembly name, and an assembly filter
+            // would keep passing only because it had stopped selecting anything. The namespace still
+            // draws the line this test cares about, between feature-owned types and Common or BCL.
+            .Where(property => (property.PropertyType.Namespace ?? string.Empty)
+                .StartsWith("OrbAutomata", StringComparison.Ordinal))
+            .Select(property => $"{property.DeclaringType?.Name}.{property.Name}")
             .ToArray();
 
         Assert.Empty(forbidden);

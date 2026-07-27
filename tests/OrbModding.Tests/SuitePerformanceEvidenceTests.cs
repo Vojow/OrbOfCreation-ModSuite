@@ -139,7 +139,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void Evaluator_AttributesSameSubsystemMetricsByCompositeIdentity()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Evaluate candidates");
+        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Evaluate loadout");
         var work = captured.Evidence.End.Work[index];
         var timing = work.WorkItemTiming with { P95Milliseconds = 0.6, P99Milliseconds = 0.8, MaximumMilliseconds = 1.1 };
         var changed = ReplaceEndWork(captured.Evidence, index, work with { WorkItemTiming = timing });
@@ -147,22 +147,22 @@ public sealed class SuitePerformanceEvidenceTests
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         var exceeded = Assert.Single(evaluation.Results, result =>
             result.Metric == "workItemTiming.p95Milliseconds" && result.Classification == "exceeded");
-        Assert.Contains("OrbAutomata.AutoBuy", exceeded.WorkIdentity, StringComparison.Ordinal);
-        Assert.Contains("Evaluate candidates", exceeded.WorkIdentity, StringComparison.Ordinal);
+        Assert.Contains("OrbAutomata.AutoCast", exceeded.WorkIdentity, StringComparison.Ordinal);
+        Assert.Contains("Evaluate loadout", exceeded.WorkIdentity, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Evaluator_NativeTimingRemainsObserveOnlyEvenWhenSlow()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Submit one purchase");
+        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Fire spell or release charge hold");
         var work = captured.Evidence.End.Work[index];
         var slow = work.WorkItemTiming with { AverageMilliseconds = 2, P95Milliseconds = 3, P99Milliseconds = 4, MaximumMilliseconds = 5 };
         var changed = ReplaceEndWork(captured.Evidence, index, work with { WorkItemTiming = slow });
 
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         Assert.Contains(evaluation.Results, result =>
-            result.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
+            result.WorkIdentity.Contains("Fire spell or release charge hold", StringComparison.Ordinal) &&
             result.Metric == "workItemTiming.p99Milliseconds" &&
             result.Classification == "observe-only");
         Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
@@ -175,7 +175,7 @@ public sealed class SuitePerformanceEvidenceTests
         var passing = PerformanceEvidencePipeline.Evaluate(captured.Profile, captured.Evidence);
         Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, passing));
 
-        var cooperativeIndex = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Evaluate candidates");
+        var cooperativeIndex = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Evaluate loadout");
         var cooperative = captured.Evidence.End.Work[cooperativeIndex];
         var slow = cooperative with
         {
@@ -212,7 +212,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void EnforcedGateRejectsUnqualifiedObserveOnlyNativeTiming()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var nativeIdentity = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Submit one purchase");
+        var nativeIdentity = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Fire spell or release charge hold");
         var nativeStart = captured.Evidence.Start.Work[nativeIdentity] with
         {
             WorkItemTiming = captured.Evidence.Start.Work[nativeIdentity].WorkItemTiming with
@@ -242,7 +242,7 @@ public sealed class SuitePerformanceEvidenceTests
         var contaminatedNative = ReplaceWork(captured.Evidence, nativeIdentity, nativeStart, nativeEnd);
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, contaminatedNative);
         Assert.Contains(evaluation.Results, result =>
-            result.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
+            result.WorkIdentity.Contains("Fire spell or release charge hold", StringComparison.Ordinal) &&
             result.Classification == "insufficient-window");
         Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
     }
@@ -281,12 +281,19 @@ public sealed class SuitePerformanceEvidenceTests
     public void Evaluator_CoordinatorTimingRejectsContaminationAndCapacityDrift()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
+
+        // Derived from the capture rather than written out: a start one sample behind the end is
+        // what makes the window insufficient, and the literals that used to say so were tuned to
+        // the frame count of a twelve-registration suite.
+        var endBaseline = captured.Evidence.End.Coordinator.FrameTiming;
+        var contaminatedSamples = endBaseline.TotalSamples - 1;
+        var contaminatedOperations = endBaseline.TotalOperations - 1;
         var startTiming = captured.Evidence.Start.Coordinator.FrameTiming with
         {
-            SampleCount = 300,
-            TotalSamples = 359,
-            Operations = 300,
-            TotalOperations = 359,
+            SampleCount = Math.Min(contaminatedSamples, endBaseline.Capacity),
+            TotalSamples = contaminatedSamples,
+            Operations = Math.Min(contaminatedOperations, endBaseline.Capacity),
+            TotalOperations = contaminatedOperations,
             AverageMilliseconds = 0.1,
             P95Milliseconds = 0.1,
             P99Milliseconds = 0.1,
@@ -325,7 +332,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void Evaluator_NativeTimingRejectsContaminatedWindowBeforeObserveOnlyFacts()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.Start.Work.FindIndex(item => item.WorkName == "Submit one purchase");
+        var index = captured.Evidence.Start.Work.FindIndex(item => item.WorkName == "Fire spell or release charge hold");
         var startWork = captured.Evidence.Start.Work[index];
         var contaminated = startWork with
         {
@@ -336,11 +343,11 @@ public sealed class SuitePerformanceEvidenceTests
 
         var result = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         Assert.Contains(result.Results, item =>
-            item.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
+            item.WorkIdentity.Contains("Fire spell or release charge hold", StringComparison.Ordinal) &&
             item.Metric == "workItemTiming" &&
             item.Classification == "insufficient-window");
         Assert.DoesNotContain(result.Results, item =>
-            item.WorkIdentity.Contains("Submit one purchase", StringComparison.Ordinal) &&
+            item.WorkIdentity.Contains("Fire spell or release charge hold", StringComparison.Ordinal) &&
             item.Metric.StartsWith("workItemTiming.", StringComparison.Ordinal) &&
             item.Classification == "observe-only");
     }
@@ -453,7 +460,6 @@ public sealed class SuitePerformanceEvidenceTests
     {
         var profilePath = Path.Combine(AppContext.BaseDirectory, "data", "suite-performance-profile-v1.json");
         var profile = PerformanceEvidencePipeline.ReadProfile(profilePath);
-        Assert.Equal(4173, File.ReadAllBytes(profilePath).Length);
         Assert.Equal(1, profile.SchemaVersion);
         Assert.Equal(SuitePerformanceEvidence.ProfileId, profile.ProfileId);
         Assert.Equal(SuitePerformanceEvidence.ProfileVersion, profile.ProfileVersion);
@@ -473,15 +479,12 @@ public sealed class SuitePerformanceEvidenceTests
     }
 
     [Fact]
-    public void Capture_RejectsPolicyChangesAndMoreThan64Registrations()
+    public void Capture_RejectsForeignCoordinatorsAndMoreThan64Registrations()
     {
         var clock = new ManualClock();
         var coordinator = new SuitePerformanceCoordinator(clock);
         using var work = coordinator.Register("test", "work");
-        var start = SuitePerformanceEvidence.StartCapture(coordinator);
-        coordinator.SetBudgets(0.5, 1);
         var metadata = Metadata(1);
-        Assert.Throws<InvalidOperationException>(() => SuitePerformanceEvidence.Capture(coordinator, metadata, start));
 
         var foreign = new SuitePerformanceCoordinator(clock);
         Assert.Throws<InvalidOperationException>(() => SuitePerformanceEvidence.Capture(

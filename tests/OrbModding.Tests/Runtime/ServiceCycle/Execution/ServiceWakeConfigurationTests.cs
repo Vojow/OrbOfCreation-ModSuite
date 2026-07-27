@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -25,43 +26,42 @@ public sealed class ServiceWakeConfigurationTests
             EvaluationEntered = entered,
             EvaluationRelease = release,
         };
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(1));
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         Assert.True(SpinWait.SpinUntil(
             () => runner.Snapshot.WorkerThreadId != 0 && runner.Snapshot.Handoff.WorkerWaitCount != 0,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
         Assert.Equal(ServiceHandoffPhase.Empty, runner.Snapshot.Handoff.Phase);
         Assert.Equal(1, runner.Snapshot.Handoff.WorkerWaitCount);
         Assert.True(runner.Snapshot.WorkerIsBackground);
         Assert.Equal("Orb.ServiceCycle.test.execution.handoff.lifecycle-1", runner.WorkerName);
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(2)));
+        Assert.True(entered.Wait(ServiceCycleTestDeadline.Value));
         Assert.Equal(ServiceHandoffPhase.Evaluating, runner.ProbeHandoff().Phase);
 
         var stopwatch = Stopwatch.StartNew();
         Assert.False(runner.TryAcquireResponse());
         stopwatch.Stop();
         Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(100));
-        registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2)));
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
         release.Set();
 
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
         Assert.True(runner.TryAcquireResponse());
         Assert.Equal(ServiceHandoffPhase.Empty, runner.Snapshot.Handoff.Phase);
-        Assert.Equal(1, definition.LastEvaluationConfig);
-        Assert.Equal(2UL, runner.Snapshot.Projection.LatestConfiguration.Value);
+        Assert.Equal(1, definition.LastEvaluatedSetting);
+        Assert.Equal(3UL, runner.Snapshot.Projection.LatestConfiguration.Value);
         Assert.Equal(1L, runner.Snapshot.Projection.Snapshot.GetEntry(0).Value.Integer);
 
         definition.EvaluationRelease = null;
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
         Assert.True(runner.TryAcquireResponse());
-        Assert.Equal(2, definition.LastEvaluationConfig);
+        Assert.Equal(2, definition.LastEvaluatedSetting);
         Assert.Equal(2L, runner.Snapshot.Projection.Snapshot.GetEntry(0).Value.Integer);
     }
 
@@ -85,7 +85,6 @@ public sealed class ServiceWakeConfigurationTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -110,7 +109,6 @@ public sealed class ServiceWakeConfigurationTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -128,28 +126,27 @@ public sealed class ServiceWakeConfigurationTests
     }
 
     [Fact]
-    public void CaptureFaultBackoffBeginsWhenTheCaptureCallbackEnds()
+    public void StartFaultBackoffBeginsWhenTheShouldStartCallbackEnds()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("test.execution.capture-fault-end");
-        definition.CaptureCallback = () =>
+        var definition = new ExecutionServiceDefinition("test.execution.start-fault-end");
+        definition.ShouldStartCallback = () =>
         {
             clock.Advance(new MonotonicDuration(13));
-            throw new InvalidOperationException("synthetic capture fault");
+            throw new InvalidOperationException("synthetic start fault");
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         var attempt = runner.TryStartCycle(clock.Now);
         var snapshot = runner.Snapshot;
 
-        Assert.True(attempt.CaptureAttempted);
         Assert.False(attempt.Queued);
-        Assert.Equal(ServiceFaultCategory.Capture, snapshot.Fault.Category);
+        Assert.False(attempt.StartDecisionFact.IsPresent);
+        Assert.Equal(ServiceFaultCategory.Start, snapshot.Fault.Category);
         Assert.Equal(113, snapshot.Fault.ObservedAt.Ticks);
         Assert.Equal(123, snapshot.NextWakeDue.Ticks);
     }
@@ -167,7 +164,6 @@ public sealed class ServiceWakeConfigurationTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
@@ -201,7 +197,6 @@ public sealed class ServiceWakeConfigurationTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
 
         var attempt = registration.Runner.TryStartCycle(clock.Now);
@@ -216,17 +211,14 @@ public sealed class ServiceWakeConfigurationTests
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("test.execution.capture-wait-end")
+        var definition = new SourceServiceDefinition("test.source.capture-wait-end")
         {
             CaptureResult = ServiceCaptureResult.Unavailable(
                 CommonServiceDecisionCodes.CaptureUnavailable,
                 WakePolicy.AfterDecision(new MonotonicDuration(10))),
             CaptureCallback = () => clock.Advance(new MonotonicDuration(13)),
         };
-        using var registration = registry.Register(
-            definition,
-            new ExecutionConfig(1),
-            new LifecycleGeneration(1));
+        using var registration = registry.RegisterSource(definition, new LifecycleGeneration(1));
 
         var attempt = registration.Runner.TryStartCycle(clock.Now);
 

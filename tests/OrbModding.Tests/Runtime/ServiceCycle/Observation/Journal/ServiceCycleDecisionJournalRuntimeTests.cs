@@ -13,7 +13,7 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
 
 public sealed class ServiceCycleDecisionJournalRuntimeTests
 {
-    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan Deadline = ServiceCycleTestDeadline.Value;
 
     [Fact]
     public void ConstructorPreflightRejectsInvalidPumpsBeforeStartingStorage()
@@ -43,8 +43,9 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         using var registry = WaitingRegistry("journal.runtime.ownership", new ThreadSafeTestClock(100));
         using var pump = new SuiteFramePump(registry);
         using var firstStorage = new DecisionJournalRuntimeTestStorage(blockReconcile: true);
-        using var first = Runtime(pump, firstStorage);
-        Assert.True(firstStorage.ReconcileEntered.Wait(Deadline));
+        var first = Runtime(pump, firstStorage);
+        using var firstTeardown = new JournalTeardown(first);
+        ServiceCycleTestDeadline.ForSignal(firstStorage.ReconcileEntered, "the first journal reconcile");
 
         using var rejectedStorage = new DecisionJournalRuntimeTestStorage();
         Assert.Throws<InvalidOperationException>(() => Runtime(pump, rejectedStorage));
@@ -58,7 +59,8 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         AdvanceTo(first, DecisionJournalRuntimeState.Stopped);
 
         using var replacementStorage = new DecisionJournalRuntimeTestStorage();
-        using var replacement = Runtime(pump, replacementStorage);
+        var replacement = Runtime(pump, replacementStorage);
+        using var replacementTeardown = new JournalTeardown(replacement);
         AdvanceTo(replacement, DecisionJournalRuntimeState.Recording);
         replacement.RequestStop();
         AdvanceTo(replacement, DecisionJournalRuntimeState.Stopped);
@@ -71,10 +73,11 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         using var pump = new SuiteFramePump(registry);
         pump.SetEmergencyStop(true);
         using var storage = new DecisionJournalRuntimeTestStorage(blockReconcile: true);
-        using var runtime = Runtime(pump, storage);
+        var runtime = Runtime(pump, storage);
+        using var teardown = new JournalTeardown(runtime);
         var ownerThread = Environment.CurrentManagedThreadId;
 
-        Assert.True(storage.ReconcileEntered.Wait(Deadline));
+        ServiceCycleTestDeadline.ForSignal(storage.ReconcileEntered, "the journal reconcile");
         Assert.NotEqual(ownerThread, storage.ReconcileThreadId);
         runtime.Tick();
         Assert.Equal(DecisionJournalRuntimeState.Initializing, runtime.Snapshot.State);
@@ -104,12 +107,13 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         using var storage = new DecisionJournalRuntimeTestStorage();
-        using var runtime = Runtime(pump, storage);
+        var runtime = Runtime(pump, storage);
+        using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
@@ -139,12 +143,13 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         var definition = new ExecutionServiceDefinition("journal.runtime.emergency") { ActionCount = 2 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         using var storage = new DecisionJournalRuntimeTestStorage();
-        using var runtime = Runtime(pump, storage);
+        var runtime = Runtime(pump, storage);
+        using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
         _ = ServiceRunnerTestWait.PrepareBatch(pump, registration);
@@ -173,11 +178,12 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         using var registry = WaitingRegistry("journal.runtime.failure", new IncrementingTestClock(100));
         using var pump = new SuiteFramePump(registry);
         using var storage = new DecisionJournalRuntimeTestStorage(failCommit: true);
-        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
         Assert.True(pump.PumpFrame(1).Accepted);
-        Assert.True(storage.CommitEntered.Wait(Deadline));
+        ServiceCycleTestDeadline.ForSignal(storage.CommitEntered, "the failing journal commit");
         AdvanceTo(runtime, DecisionJournalRuntimeState.Faulted);
 
         Assert.False(runtime.Snapshot.Attached);
@@ -190,11 +196,12 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         using var registry = WaitingRegistry("journal.runtime.nonblocking-stop", new IncrementingTestClock(100));
         using var pump = new SuiteFramePump(registry);
         using var storage = new DecisionJournalRuntimeTestStorage(blockCommit: true);
-        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
         Assert.True(pump.PumpFrame(1).Accepted);
-        Assert.True(storage.CommitEntered.Wait(Deadline));
+        ServiceCycleTestDeadline.ForSignal(storage.CommitEntered, "the blocked journal commit");
 
         using var stopReturned = new ManualResetEventSlim();
         var watchdogReleasedStorage = 0;
@@ -211,7 +218,7 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         watchdog.Start();
         runtime.Dispose();
         stopReturned.Set();
-        Assert.True(watchdog.Join(Deadline));
+        Assert.True(watchdog.Join(Deadline), "The stop watchdog never finished.");
         Assert.Equal(0, Volatile.Read(ref watchdogReleasedStorage));
         Assert.False(storage.CommitRelease.IsSet);
         Assert.Equal(DecisionJournalRuntimeState.Stopping, runtime.Snapshot.State);
@@ -220,7 +227,8 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
 
         using var replacementStorage = new DecisionJournalRuntimeTestStorage();
-        using var replacement = Runtime(pump, replacementStorage);
+        var replacement = Runtime(pump, replacementStorage);
+        using var replacementTeardown = new JournalTeardown(replacement);
         AdvanceTo(replacement, DecisionJournalRuntimeState.Recording);
         replacement.RequestStop();
         AdvanceTo(replacement, DecisionJournalRuntimeState.Stopped);
@@ -232,11 +240,12 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         using var registry = WaitingRegistry("journal.runtime.pump-shutdown", new IncrementingTestClock(100));
         using var pump = new SuiteFramePump(registry);
         using var storage = new DecisionJournalRuntimeTestStorage(blockCommit: true);
-        using var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        var runtime = Runtime(pump, storage, checkpointTicks: 1);
+        using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
         Assert.True(pump.PumpFrame(1).Accepted);
-        Assert.True(storage.CommitEntered.Wait(Deadline));
+        ServiceCycleTestDeadline.ForSignal(storage.CommitEntered, "the blocked journal commit");
 
         using var shutdownReturned = new ManualResetEventSlim();
         var watchdogReleasedStorage = 0;
@@ -254,7 +263,7 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         runtime.DisposeWithPump();
         shutdownReturned.Set();
 
-        Assert.True(watchdog.Join(Deadline));
+        Assert.True(watchdog.Join(Deadline), "The pump-shutdown watchdog never finished.");
         Assert.Equal(0, Volatile.Read(ref watchdogReleasedStorage));
         Assert.True(pump.IsDisposed);
         Assert.False(storage.CommitRelease.IsSet);
@@ -262,6 +271,28 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
 
         storage.CommitRelease.Set();
         AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+    }
+
+    /// <summary>
+    /// Tears the pump down through the journal runtime that owns it, whatever the body did.
+    /// </summary>
+    /// <remarks>
+    /// A runtime claims the pump for as long as it is not terminal, and <c>Dispose</c> only requests
+    /// the stop — it does not release the claim, because the background writer may still be inside a
+    /// commit. So the pump's own <c>using</c> is a second owner: a body that failed before the
+    /// runtime reached a terminal state left that dispose to trip the ownership guard from the
+    /// unwind, and the guard's exception replaced the assertion that actually failed. Declared after
+    /// the pump, this runs first and hands the pump back through its owner; the pump's own dispose
+    /// then finds nothing left to do. Where a test claims the pump twice, each claim gets its own
+    /// teardown and the newest one unwinds first.
+    /// </remarks>
+    private readonly struct JournalTeardown : IDisposable
+    {
+        private readonly ServiceCycleDecisionJournalRuntime _runtime;
+
+        internal JournalTeardown(ServiceCycleDecisionJournalRuntime runtime) => _runtime = runtime;
+
+        public void Dispose() => _runtime.DisposeWithPump();
     }
 
     private static ServiceCycleDecisionJournalRuntime Runtime(
@@ -285,7 +316,6 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
                     CommonServiceDecisionCodes.NotReady,
                     WakePolicy.AfterDecision(new MonotonicDuration(5))),
             },
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         return registry;

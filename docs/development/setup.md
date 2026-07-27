@@ -6,9 +6,7 @@ Portable tests require only the .NET SDK. Production builds also require local O
 
 ```powershell
 $env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
-dotnet build src/OrbAutomata/OrbAutomata.csproj -c Release
-dotnet build src/OrbMentor/OrbMentor.csproj -c Release
-dotnet build src/OrbModConfig/OrbModConfig.csproj -c Release
+dotnet build src/OrbModSuite.csproj -c Release
 ```
 
 Expected external references are documented in the [source layout](../../src/README.md). Run portable tests with:
@@ -25,9 +23,7 @@ BepInEx 5 `core` files under `lib/BepInEx/core`. Then build without PowerShell:
 
 ```bash
 export OOC_GAME_DIR="$PWD/lib"
-dotnet build src/OrbAutomata/OrbAutomata.csproj -c Release
-dotnet build src/OrbMentor/OrbMentor.csproj -c Release
-dotnet build src/OrbModConfig/OrbModConfig.csproj -c Release
+dotnet build src/OrbModSuite.csproj -c Release
 ```
 
 Keep user-specific absolute paths out of tracked files. Staging and building do not authorize copying
@@ -42,8 +38,8 @@ For an explicitly authorized local smoke-test installation, use one of the suppo
 
 `release` builds the ordinary Release assemblies without ServiceCycle profiling probes. `perf-debug` builds
 Debug assemblies with `EnableServiceCycleProfiler=true`. Both modes refuse to run while the game is open,
-run the complete portable gate and installed-game contracts, build only the four supported assemblies,
-reject duplicate or experimental ModSuite DLLs, back up active top-level saves and installed DLLs, install
+run the complete portable gate and installed-game contracts, build the one supported assembly,
+reject duplicate ModSuite DLLs and any retired per-plugin DLL still installed, back up active top-level saves and installed DLLs, install
 the verified outputs, and print their SHA-256 hashes. Set `OOC_GAME_DIR` or `OOC_SAVE_DIR` when local Steam
 discovery does not match the installation. The command never packages, tags, publishes, or launches the game.
 
@@ -57,5 +53,3 @@ staging root:
 The command runs the bounded portable gate, installed contracts, and all real-reference Release builds
 before creating an allowlisted ZIP and SHA-256 manifest under `artifacts/releases/`. It never writes to the
 game installation and refuses to overwrite an existing rehearsal for the same suite version.
-
-Orb Chronomancer and Orb Achievement Resonance are not tracked on this supported branch. Never copy separately built experimental DLLs into a supported-suite rehearsal.

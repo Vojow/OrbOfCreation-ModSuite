@@ -96,19 +96,7 @@
       "Assembly-CSharp": {
         "type": "Project"
       },
-      "orbautomata": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.Common": "[0.4.0, )"
-        }
-      },
-      "orbmodconfig": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.Common": "[0.4.0, )"
-        }
-      },
-      "orbmodding.common": {
+      "orbmodsuite": {
         "type": "Project"
       }
     }

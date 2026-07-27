@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Threading;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
@@ -14,7 +15,7 @@ internal sealed class HandoffGateContention : IDisposable
     private readonly Thread _thread;
 
     internal HandoffGateContention(
-        ServiceRunner<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction> runner)
+        ServiceRunner<ExecutionState, ExecutionAction> runner)
         : this((object)runner) { }
 
     internal HandoffGateContention(object runner)

@@ -17,17 +17,17 @@ public sealed class FullTraceFormatCodecTests
         var trace = new byte[ServiceCycleTraceCodec.GetEncodedLength(events.Length)];
         ServiceCycleTraceCodec.Encode(ServiceCycleTraceFixtures.Session, default, events, trace);
 
-        var record = new byte[ServiceCycleSemanticEventV5Codec.RecordBytes];
+        var record = new byte[ServiceCycleSemanticEventV7Codec.RecordBytes];
         for (var index = 0; index < events.Length; index++)
         {
             Array.Fill(record, (byte)0xff);
-            ServiceCycleSemanticEventV5Codec.Write(record, in events[index]);
+            ServiceCycleSemanticEventV7Codec.Write(record, in events[index]);
             Assert.Equal(
                 trace.AsSpan(
                     ServiceCycleTraceCodec.HeaderBytes + index * ServiceCycleTraceCodec.RecordBytes,
                     ServiceCycleTraceCodec.RecordBytes).ToArray(),
                 record);
-            Assert.Equal(events[index], ServiceCycleSemanticEventV5Codec.Read(record));
+            Assert.Equal(events[index], ServiceCycleSemanticEventV7Codec.Read(record));
         }
     }
 

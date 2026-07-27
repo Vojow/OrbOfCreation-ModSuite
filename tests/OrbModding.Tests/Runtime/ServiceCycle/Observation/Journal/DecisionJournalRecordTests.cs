@@ -30,6 +30,31 @@ public sealed class DecisionJournalRecordTests
         Assert.Equal(2, span.MutationsCommitted);
     }
 
+    /// <summary>
+    /// Published actions sum across a span the way committed ones do.
+    /// </summary>
+    /// <remarks>
+    /// Per-repeat, like the action count, would be wrong: two repeats that share an action count can
+    /// publish different halves of it, and the span's native expectations are stated against the sum.
+    /// A span of pure publications therefore keeps owing no native evidence however long it runs.
+    /// </remarks>
+    [Fact]
+    public void ConsecutivePublicationsSumThePublishedActions()
+    {
+        var first = DecisionJournalRecord.Decision(PublicationObservation(1, 10));
+        var second = DecisionJournalRecord.Decision(PublicationObservation(2, 20));
+
+        var span = first.Coalesce(in second);
+
+        Assert.Equal(2, span.RepeatCount);
+        Assert.Equal(1, span.ActionCount);
+        Assert.Equal(2, span.CommittedActions);
+        Assert.Equal(2, span.PublishedActions);
+        Assert.Equal(0, span.NativeCallsAttempted);
+        Assert.Equal(0, span.MutationAttempts);
+        Assert.Equal(0, span.MutationsCommitted);
+    }
+
     [Fact]
     public void ProjectionChangeBreaksSpan()
     {
@@ -57,15 +82,28 @@ public sealed class DecisionJournalRecordTests
         Assert.False(first.CanCoalesceWith(in third));
     }
 
+    /// <summary>
+    /// Lifecycle names a service; configuration, strategy and emergency name the suite.
+    /// </summary>
+    /// <remarks>
+    /// The suite publishes one configuration record and one strategy bulletin that every service
+    /// reads, so a change is one record. Attributing it to a service produced N identical records
+    /// and implied a per-service generation the runtime does not have.
+    /// </remarks>
     [Fact]
-    public void ServiceAndGlobalTransitionsHaveDistinctIdentityRules()
+    public void ServiceAndSuiteWideTransitionsHaveDistinctIdentityRules()
     {
         var service = new ServiceCycleTraceServiceId(1);
-        var configuration = DecisionJournalRecord.Transition(
-            DecisionJournalRecordKind.ConfigurationChanged,
+        var lifecycle = DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.LifecycleChanged,
             service,
             2,
             new MonotonicTimestamp(10));
+        var configuration = DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.ConfigurationChanged,
+            default,
+            2,
+            new MonotonicTimestamp(15));
         var emergency = DecisionJournalRecord.Transition(
             DecisionJournalRecordKind.EmergencyEntered,
             default,
@@ -73,12 +111,43 @@ public sealed class DecisionJournalRecordTests
             new MonotonicTimestamp(20),
             code: 1);
 
+        var worldGate = DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.WorldGateHeld,
+            service,
+            2,
+            new MonotonicTimestamp(25),
+            code: 1);
+
+        Assert.Equal((ulong)2, lifecycle.Lifecycle);
+        Assert.Equal((ulong)2, worldGate.Lifecycle);
+        Assert.True(worldGate.Service.IsValid);
         Assert.Equal((ulong)2, configuration.Configuration);
+        Assert.False(configuration.Service.IsValid);
         Assert.Equal(DecisionJournalRecordKind.EmergencyEntered, emergency.Kind);
+        Assert.Throws<ArgumentException>(() => DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.ConfigurationChanged,
+            service,
+            2,
+            default));
+        Assert.Throws<ArgumentException>(() => DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.StrategyChanged,
+            service,
+            2,
+            default));
         Assert.Throws<ArgumentException>(() => DecisionJournalRecord.Transition(
             DecisionJournalRecordKind.EmergencyCleared,
             service,
             0,
+            default));
+        Assert.Throws<ArgumentOutOfRangeException>(() => DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.ConfigurationChanged,
+            default,
+            0,
+            default));
+        Assert.Throws<ArgumentException>(() => DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.WorldGateHeld,
+            default,
+            2,
             default));
     }
 
@@ -93,7 +162,6 @@ public sealed class DecisionJournalRecordTests
             lifecycle: 1,
             configuration: 1,
             strategy: 0,
-            capture: 4,
             cycle: 4,
             default,
             default,
@@ -108,7 +176,7 @@ public sealed class DecisionJournalRecordTests
 
         var record = DecisionJournalRecord.Decision(in observation);
 
-        Assert.Equal((ulong)4, record.FirstCapture);
+        Assert.Equal((ulong)4, record.FirstCycle);
         Assert.Equal((ulong)0, record.Strategy);
         Assert.Equal(CommonServiceDecisionCodes.CaptureUnavailable.Value, record.CaptureDecisionCode);
     }
@@ -128,7 +196,6 @@ public sealed class DecisionJournalRecordTests
             lifecycle: 1,
             configuration: 1,
             strategy: 0,
-            capture: 5,
             cycle: 5,
             default,
             default,
@@ -148,4 +215,15 @@ public sealed class DecisionJournalRecordTests
         Assert.Equal(0, record.CaptureDecisionCode);
     }
 
+    private static DecisionJournalObservation PublicationObservation(ulong cycleValue, long timestamp) =>
+        CreateObservation(
+            BatchReceipt.Completed(
+                Identity(cycleValue),
+                new BatchId(cycleValue),
+                actionCount: 1,
+                committedCount: 1,
+                default,
+                new MonotonicTimestamp(timestamp + 1),
+                publishedCount: 1),
+            timestamp);
 }

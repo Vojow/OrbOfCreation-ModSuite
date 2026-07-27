@@ -93,7 +93,7 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "orbmodding.common": {
+      "orbmodsuite": {
         "type": "Project"
       }
     }

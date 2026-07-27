@@ -23,11 +23,12 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         using var registry = new ServiceCycleRegistry(1, clock, false, starter);
         var definition = new LifecycleServiceDefinition("lifecycle.transition-report");
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var retiringWorker = starter.FirstThread;
-        definition.CaptureCallback = () =>
+        definition.ShouldStartCallback = () =>
             pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
 
         var replacementFrame = pump.PumpFrame(1);
@@ -48,9 +49,10 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         using var registry = new ServiceCycleRegistry(1, clock, false, workerExitObserver: exit);
         var definition = new LifecycleServiceDefinition("lifecycle.huge-cleanup") { ActionCount = 100_000 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         PrepareBatch(pump, registration, ref frame);
         Assert.True(definition.IsPayloadAlive(1));
@@ -74,20 +76,22 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         using var firstGate = stuckDefinition.BlockEvaluation(1);
         using var secondGate = stuckDefinition.BlockEvaluation(2);
         using var stuck = registry.Register(
-            stuckDefinition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            stuckDefinition, new LifecycleGeneration(1));
         using var sibling = registry.Register(
-            siblingDefinition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            siblingDefinition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        var frame = 1L;
-        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet, clock);
+        // The sibling changes the game, so it only keeps running while something reads the world:
+        // these waits collect every frame the way the game's collection service does.
+        var frame = 2L;
+        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet, clock, registry);
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
-        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet, clock);
+        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet, clock, registry);
         pump.RequestLifecycleReplacement(new LifecycleGeneration(3));
         Assert.Equal(2, stuck.LifecycleSnapshot.LivePositionCount);
         Assert.Throws<InvalidOperationException>(() => _ = stuck.Runner);
 
-        PumpUntil(pump, ref frame, () => siblingDefinition.ExecutionCount(3) != 0, clock);
+        PumpUntil(pump, ref frame, () => siblingDefinition.ExecutionCount(3) != 0, clock, registry);
         Assert.Equal(2, stuck.LifecycleSnapshot.LivePositionCount);
         Assert.True(siblingDefinition.EvaluationCount(3) > 0);
         firstGate.Release.Set();
@@ -103,12 +107,12 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         var stuckDefinition = new LifecycleServiceDefinition("lifecycle.resource-suspended");
         var siblingDefinition = new LifecycleServiceDefinition("lifecycle.resource-sibling");
         using var stuck = registry.Register(
-            stuckDefinition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            stuckDefinition, new LifecycleGeneration(1));
         using var sibling = registry.Register(
-            siblingDefinition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            siblingDefinition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
-        var frame = 1L;
+        var frame = 2L;
 
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
         Assert.True(exit.WaitForCount(1));
@@ -116,7 +120,8 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
             pump,
             ref frame,
             () => sibling.LifecycleSnapshot.LivePositionCount == 1,
-            clock);
+            clock,
+            registry);
 
         var control = Stopwatch.StartNew();
         pump.RequestLifecycleReplacement(new LifecycleGeneration(3));
@@ -129,7 +134,7 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         pump.PumpFrame(frame++);
         oneFrame.Stop();
         Assert.True(oneFrame.Elapsed < TimeSpan.FromMilliseconds(250));
-        PumpUntil(pump, ref frame, () => siblingDefinition.ExecutionCount(3) != 0, clock);
+        PumpUntil(pump, ref frame, () => siblingDefinition.ExecutionCount(3) != 0, clock, registry);
         Assert.Equal(2, stuck.LifecycleSnapshot.LivePositionCount);
         exit.Release.Set();
     }
@@ -141,9 +146,10 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new LifecycleServiceDefinition("lifecycle.emergency") { ActionCount = 3 };
         using var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         PrepareBatch(pump, registration, ref frame);
         definition.ActionCallback = () =>
@@ -159,6 +165,9 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         for (var index = 0; index < 5; index++) pump.PumpFrame(frame++);
         Assert.Equal(0, definition.EvaluationCount(2));
         pump.SetEmergencyStop(false);
+        // The orphaned batch changed the game before it was cut short, so the fresh runner waits for
+        // a reading that contains the change like any other cycle.
+        TestWorldCollector.CollectedAt(registry, frame);
         PumpUntil(pump, ref frame, () => definition.EvaluationCount(2) != 0);
     }
 
@@ -171,13 +180,13 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
         using var firstGate = definition.BlockEvaluation(1);
         using var secondGate = definition.BlockEvaluation(2);
         var registration = registry.Register(
-            definition, new LifecycleConfig(1), new LifecycleGeneration(1));
+            definition, new LifecycleGeneration(1));
         registry.Seal();
         var pump = new SuiteFramePump(registry);
-        var frame = 1L;
-        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet);
+        var frame = 2L;
+        PumpUntil(pump, ref frame, () => firstGate.Entered.IsSet, collector: registry);
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
-        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet);
+        PumpUntil(pump, ref frame, () => secondGate.Entered.IsSet, collector: registry);
         pump.RequestLifecycleReplacement(new LifecycleGeneration(3));
 
         for (var index = 0; index < 10; index++) pump.PumpFrame(frame++);
@@ -242,7 +251,7 @@ public sealed class SuiteFramePumpLifecycleConcurrencyTests
 
         internal bool WaitForCount(int count) => SpinWait.SpinUntil(
             () => Volatile.Read(ref _enteredCount) >= count,
-            TimeSpan.FromSeconds(2));
+            ServiceCycleTestDeadline.Value);
 
         public void Dispose()
         {

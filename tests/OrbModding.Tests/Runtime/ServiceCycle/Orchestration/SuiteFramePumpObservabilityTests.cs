@@ -18,10 +18,10 @@ public sealed class SuiteFramePumpObservabilityTests
         using var registry = new ServiceCycleRegistry(1, clock);
         using var registration = registry.Register(
             new ExecutionServiceDefinition("pump.observability.lifecycle"),
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
 
         var initial = ServiceCycleDiagnostics.ReadPump(pump);
 
@@ -47,10 +47,10 @@ public sealed class SuiteFramePumpObservabilityTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
 
         var before = ServiceCycleDiagnostics.ReadPump(pump);

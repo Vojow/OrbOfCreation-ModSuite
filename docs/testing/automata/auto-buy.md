@@ -1,140 +1,70 @@
 # Auto Buy testing
 
-[Automata test map](README.md) · [Headless E2E](../headless-e2e.md) · [Performance plan](../../plans/performance-suite.md)
+[Automata test map](README.md) · [Runtime architecture](../../runtime-architecture/README.md)
 
-Detailed invalid, race, completion-corruption, seeded, and adverse-performance
-coverage is owned by the [negative simulation plan](auto-buy-negative-simulations.md).
-The reverse-engineering dossier documents the [native purchase pipeline](../../reverse-engineering/auto-buy-native-pipeline.md),
-[queue/completion model](../../reverse-engineering/auto-buy-queue-and-completion.md),
-[simulation evidence map](../../reverse-engineering/auto-buy-simulation-evidence.md),
-and [stage-profile boundary](../../reverse-engineering/auto-buy-stage-profiles.md).
+Auto Buy is a typed ServiceCycle service. The deleted legacy scheduler,
+incremental catalog, dirty-resource index, retry dictionaries, completion
+settlement model, and synthetic scheduler simulations are not compatibility
+surfaces.
 
 ## Risk contract
 
-Auto Buy must select fairly, respect live affordability and reserves, preserve
-manual queue room, revalidate every individual level, avoid completed or stale
-candidates, restore native global state, and remain responsive under rapid queue
-turnover. The game remains authoritative for identity, availability, cost,
-level, completion, and queue admission.
+Auto Buy must decide from the published world snapshot rather than reading the
+game — it has no capture; `AutoBuyFrameProjector` runs on the worker — evaluate
+only native-free immutable facts, preserve UUID plus exact-type identity, respect
+reserves and live queue room, and freshly revalidate lifecycle and native
+admission before every mutation. Structures commit one exact queued
+level. Upgrades may commit a verified partial or full native multi-buy, with the
+global multiplier restored on every exit.
 
-## Test layers
+## Test ownership
 
 | Concern | Primary tests |
 |---|---|
-| Candidate/group/continuation decisions | [AutoBuyDecisionTests.cs](../../../tests/OrbModding.Tests/AutoBuyDecisionTests.cs), [AutoBuyTests.cs](../../../tests/OrbModding.Tests/AutoBuyTests.cs) |
-| Dirty resources, parking, rejection, lifecycle | [AutoBuyDirtyResourceTests.cs](../../../tests/OrbModding.Tests/AutoBuyDirtyResourceTests.cs), [AutoBuyLifecycleTests.cs](../../../tests/OrbModding.Tests/AutoBuyLifecycleTests.cs), [AutoBuyRejectionTelemetryTests.cs](../../../tests/OrbModding.Tests/AutoBuyRejectionTelemetryTests.cs) |
-| Native catalog/adapters and multi-buy | [AutoBuyCatalogHeadlessTests.cs](../../../tests/OrbModding.Tests/AutoBuyCatalogHeadlessTests.cs), [NativeMultiBuyScopeTests.cs](../../../tests/OrbModding.Tests/NativeMultiBuyScopeTests.cs), [QueueCapacitySnapshotTests.cs](../../../tests/OrbModding.Tests/QueueCapacitySnapshotTests.cs) |
-| Complete queue/economy journeys | [AutoBuySimulationE2ETests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationE2ETests.cs), [AutoBuyReliabilityTests.cs](../../../tests/OrbModding.Tests/AutoBuyReliabilityTests.cs) |
-| Invalid observations and mutation failures | [AutoBuySimulationFailureTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationFailureTests.cs) |
-| Live queue/economy/lifecycle races | [AutoBuySimulationRaceTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationRaceTests.cs) |
-| Malformed completion observations | [AutoBuySimulationCompletionTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationCompletionTests.cs) |
-| Simulator contract | [AutoBuySimulationContractTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationContractTests.cs) |
-| Seeded mixed-event reliability | [AutoBuySimulationStateMachineTests.cs](../../../tests/OrbModding.Tests/AutoBuySimulationStateMachineTests.cs) |
-| Bounded purchase burst safety and throughput | [AutoBuyBurstTests.cs](../../../tests/OrbModding.Tests/AutoBuyBurstTests.cs), [AutomataCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutomataCoordinatorTests.cs) |
-| Stage and adverse throughput | [AutoBuyStagePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyStagePerformanceTests.cs), [AutoBuyAdversePerformanceTests.cs](../../../tests/OrbModding.Tests/AutoBuyAdversePerformanceTests.cs), [AutoBuyRuntimeDerivedSimulationTests.cs](../../../tests/OrbModding.Tests/AutoBuyRuntimeDerivedSimulationTests.cs) |
-| Real native shape | `OrbModding.GameContractTests` Auto Buy contracts |
+| Worker admission, reserves, ranking, grouping, and batch shape | [AutoBuyCycleEvaluatorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleEvaluatorTests.cs) |
+| Worker input, eligibility, action, and requested-level cardinality | `AutoBuyCycleEvaluatorTests` and the decision-journal state projection |
+| Worker-side frame projection from the shared world snapshot | [AutoBuyFrameProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyFrameProjectorTests.cs) |
+| Final lifecycle, queue-room, native admission, mutation, and postcondition gates | [AutoBuyCycleActionAdapterTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleActionAdapterTests.cs) |
+| Typed registration on the shared Automata host | [AutoBuyServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyServiceCompositionTests.cs) |
+| Human-readable purchase outcomes | [AutoBuyPurchaseNarrationTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyPurchaseNarrationTests.cs) |
+| Native multiplier restoration and quarantine | [NativeMultiBuyScopeTests.cs](../../../tests/OrbModding.Tests/NativeMultiBuyScopeTests.cs) |
+| Profile-stage bracketing and operation counts | `tests/OrbModding.ProfileTests/AutoBuyProfileTests.cs` |
+| Exact installed native shape | `tests/OrbModding.GameContractTests` |
+
+Shared ServiceCycle action, batch, lifecycle, tracing, trace-format, and pump
+changes also require their focused Common tests. A change to drain several
+actions per frame must cover emergency interruption, per-action semantic facts,
+terminal receipts, fairness between registered services, and a bounded
+main-thread execution policy.
 
 ## Commands
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyDecision
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
+Run the complete portable gate:
+
+```bash
+./script/test
 ```
 
-Use `Fast` after the focused lanes because Auto Buy shares Common scheduling,
-configuration, decisions, ownership, and mutation verification with other
-features.
+Then compile against the audited game references:
 
-## Decision coverage
+```bash
+OOC_GAME_DIR="$PWD/lib" dotnet build src/OrbModSuite.csproj \
+  -p:RequireGameReferences=true -p:UseGameStubs=false -c Debug
+```
 
-Decision tests own:
-
-- stable candidate ranking and deterministic order;
-- Structure group size versus ranked-pass continuation;
-- one-level finite Upgrade behavior;
-- unavailable-candidate isolation;
-- reserve monotonicity;
-- fairness before a candidate is revisited;
-- independent purchase-group size and always-continuing ranked passes;
-- legacy configuration precedence into the single `PurchaseGrouping` policy.
-
-When changing policy, add the desired contract first. Do not weaken a current
-characterization test merely to make the implementation pass; rename or replace
-it when the intended contract genuinely changes.
-
-## Reliability coverage
-
-Reliability tests own live queue-capacity and reserve changes, resource
-threshold crossings, completion effects, lifecycle replacement, manual actions,
-finite maximum levels, ambiguous mutation outcomes, native multi-buy restoration,
-definite pre-mutation rejection backoff, and healthy sibling progress. Safety invariants should be checked after the
-event that can violate them, not only at the end of a long simulation.
-
-The seeded state machine uses four reviewed deterministic seeds and 240 events
-per seed. Its failure message reduces to the first failing prefix and prints a
-bounded replay-compatible/synthetic event tail. Synthetic fault controls are
-never accepted as runtime-replay evidence.
-
-## Synthetic performance workloads
-
-| Stage | Structures | Target per Structure | Upgrades | Bulk Development | Completion cadence |
-|---|---:|---:|---:|---:|---:|
-| Early | 8 | 10 | 2 | 10 | 1 per 60 frames |
-| Mid | 64 | 40 | 12 | 25 | 1 per 15 frames |
-| Late | 180 | 100 | 24 | 100 | 1 per 4 frames |
-| Endgame | 180 | 1,000 | 24 | 100 | 1 per frame |
-
-These are stable stress profiles, not observed progression populations. Only
-the 180-Structure total is grounded in the reviewed serialized mapping; see the
-[stage-profile boundary](../../reverse-engineering/auto-buy-stage-profiles.md).
-
-The checked report owns frames to all submissions/completions, theoretical
-submission overhead, queue depth, idle purchasable frames, candidate evaluations,
-cost/lifecycle reads, and repeated-Structure coverage. Wall-clock time is never
-the sole gate.
-
-Current `BulkDevelopment` baseline at 60 simulated frames/second:
-
-| Stage | All submitted | All completed | Submission efficiency | Idle purchasable frames |
-|---|---:|---:|---:|---:|
-| Early | 60.017 s | 83.017 s | 100% | 0 |
-| Mid | 615.017 s | 646.767 s | 100% | 1 |
-| Late | 1,188.017 s | 1,208.217 s | 100% | 301 |
-| Endgame | 3,006.800 s | 3,007.067 s | 99.841% | 291 |
-
-These are deterministic simulated durations dominated by each stage's queue
-consumer cadence, not claims about real gameplay time or host wall-clock speed.
-They retain a 1.1 ms modeled native purchase and therefore intentionally remain
-a stable one-call-per-frame history. `AutoBuyBurstTests` is the separate gate for
-cheap calls: it verifies adaptive 1/2/4/8/16-call leases, a hard 16-call cap,
-live mid-burst safety changes, exact accounting, and sustained refill while the
-queue consumes eight entries per frame.
-
-The runtime-derived performance suite complements the stable stage history with
-six perturbations: Bulk Development 1/3/10/100 at endgame catalog scale,
-staggered cost-read outages, a Bulk-3 completion-invalidation storm, partial
-groups at exact reserve thresholds, a 35 ms heavy-tail read inside a 1 ms
-slice, and catalog growth from 28 to 137 candidates under load. These cases
-gate operation counts, progress, fairness, queue safety, recovery, and maximum
-per-frame work. They deliberately do not use host wall-clock assertions.
+Performance changes are incomplete until a profiler-enabled debug build is
+installed and compared against a recorded gameplay trace. Portable timings and
+synthetic operation counts do not establish Unity-frame performance.
 
 ## Runtime handoff
 
-Portable tests cannot prove Harmony callbacks, actual native cost deduction,
-queue visualization, save/load effects, or player controls. Follow Automata V3
-and V4 in the [runtime protocol](../runtime-validation.md), including Structure
-and Upgrade isolation, reserves, action multiplier, queue reservation, sustained
-group/pass fairness, pre-mutation rejection recovery, and emergency disable.
-
-## Known next work
-
-- Compare the same four stage definitions through the pre-change and candidate
-  engines, not only against checked historical JSON.
-- Capture installed-game evidence for definite pre-mutation rejection causes
-  and the 0.25-to-5-second retry cadence.
-- Capture native burst-size and queue-continuity distributions on desktop and
-  Steam Deck/Proton before replacing the historical stage cost model.
-- Promote a reviewed sanitized runtime trace into a versioned replay/profile;
-  the runtime-derived perturbations are deterministic models, not that evidence.
-- Add controlled allocation evidence and desktop/Steam Deck runtime profiles.
+Portable tests cannot prove Harmony callback order, actual queue consumption,
+save/load behavior, visible controls, or player responsiveness. Follow Automata
+V3/V4 in the [runtime protocol](../runtime-validation.md). Record the exact
+trace run folder and compare Auto Buy capture, action, total pump, worst-frame,
+worker decision, commit, skip, rejection, and fault distributions before
+starting the next worklist item. The dashboard correlates worker duration with
+captured candidates and planned actions, reporting average milliseconds plus
+microseconds per input candidate and per planned action.
+The profiler-enabled debug install starts the full trace and performance
+profile automatically; closing the game is sufficient to stop and flush both.

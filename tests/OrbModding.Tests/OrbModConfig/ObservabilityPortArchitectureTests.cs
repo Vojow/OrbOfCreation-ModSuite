@@ -15,20 +15,29 @@ public sealed class ObservabilityPortArchitectureTests
     private const string DecisionJournalNamespace =
         "OrbModding.Common.Runtime.ServiceCycle.Observation.Journal";
     private const string DecisionJournalStatusNamespace = DecisionJournalNamespace + ".Status";
+    private const string HostTraceNamespace =
+        "OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace";
+    private const string HostTraceControlNamespace = HostTraceNamespace + ".Control";
     private static readonly string[] ForbiddenNamespaces =
-        { FullTraceNamespace, DecisionJournalNamespace };
+        { FullTraceNamespace, DecisionJournalNamespace, HostTraceNamespace };
     private static readonly string[] AllowedNamespaces =
-        { ControlNamespace, DecisionJournalStatusNamespace };
+        { ControlNamespace, DecisionJournalStatusNamespace, HostTraceControlNamespace };
     private const BindingFlags DeclaredMembers =
         BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public |
         BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-    private static readonly Assembly ModConfigAssembly = typeof(global::OrbModConfig.Plugin).Assembly;
+    private static readonly Assembly SuiteAssembly = typeof(global::OrbModConfig.ModConfigUiShell).Assembly;
 
     [Fact]
     public void ModConfigSeesObservabilityOnlyThroughItsPublicPorts()
     {
         var violations = new List<string>();
-        foreach (var type in ModConfigAssembly.GetTypes()) AuditType(type, violations);
+        // One DLL now holds the ports and their implementations alike, so the scan is scoped to
+        // the namespace this rule was always about: Mod Config may only see observability through
+        // the public control and status ports.
+        var modConfigTypes = SuiteAssembly.GetTypes()
+            .Where(type => (type.Namespace ?? string.Empty)
+                .StartsWith("OrbModConfig", StringComparison.Ordinal));
+        foreach (var type in modConfigTypes) AuditType(type, violations);
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 

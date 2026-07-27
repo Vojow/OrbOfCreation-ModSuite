@@ -13,40 +13,32 @@ public sealed class ServiceCycleMethodSurfaceTypeSafetyTests
     [Fact]
     public void PublicAndProtectedMethodsCannotExposeUnityOrHandleTypes()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new ConfigWithPublicUnityReturn());
-        AssertConfigurationRejected(registry, new ConfigWithProtectedUnityParameter());
-        AssertConfigurationRejected(registry, new ConfigWithWrappedUnityReturn());
-        AssertConfigurationRejected(registry, new ConfigWithWrappedHandleParameter());
+        AssertConfigurationRejected(new ConfigWithPublicUnityReturn());
+        AssertConfigurationRejected(new ConfigWithProtectedUnityParameter());
+        AssertConfigurationRejected(new ConfigWithWrappedUnityReturn());
+        AssertConfigurationRejected(new ConfigWithWrappedHandleParameter());
     }
 
     [Fact]
     public void OpenEndedMethodAndConstructorSurfacesAreRejected()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new ConfigWithObjectReturn());
-        AssertConfigurationRejected(registry, new ConfigWithProviderReturn());
-        AssertConfigurationRejected(registry, new ConfigWithObjectConstructor(new object()));
-        AssertConfigurationRejected(registry, new ConfigWithArrayParameter());
-        AssertConfigurationRejected(registry, new ConfigWithCollectionReturn());
-        AssertConfigurationRejected(registry, new ConfigWithMemoryReturn());
-        AssertConfigurationRejected(registry, new ConfigWithByRefParameter());
-        AssertConfigurationRejected(registry, new ConfigWithOpenGenericMethod());
-        AssertConfigurationRejected(registry, new ConfigWithDelegateReturn());
-        AssertConfigurationRejected(registry, new ConfigWithDowncastableReturn());
+        AssertConfigurationRejected(new ConfigWithObjectReturn());
+        AssertConfigurationRejected(new ConfigWithProviderReturn());
+        AssertConfigurationRejected(new ConfigWithObjectConstructor(new object()));
+        AssertConfigurationRejected(new ConfigWithArrayParameter());
+        AssertConfigurationRejected(new ConfigWithCollectionReturn());
+        AssertConfigurationRejected(new ConfigWithMemoryReturn());
+        AssertConfigurationRejected(new ConfigWithByRefParameter());
+        AssertConfigurationRejected(new ConfigWithOpenGenericMethod());
+        AssertConfigurationRejected(new ConfigWithDelegateReturn());
+        AssertConfigurationRejected(new ConfigWithDowncastableReturn());
     }
 
     [Fact]
     public void StronglyTypedNeutralDomainMethodsAndConstructorsAreAccepted()
     {
-        using var registry = new ServiceCycleRegistry(1);
-        using var registration = registry.Register(
-            new TypeSafetyDefinition<SafeFrame, SafeNeutralMethodConfig, SafeState, ImmutableAction>(
-                new SafeFrame(), new SafeState()),
-            new SafeNeutralMethodConfig(new NeutralMethodValue(7)),
-            new LifecycleGeneration(1));
-
-        var snapshot = registration.Configuration.ReadLatest().Snapshot;
+        var snapshot = new SafeNeutralMethodConfig(new NeutralMethodValue(7));
+        AssertConfigurationAccepted(snapshot);
         Assert.Equal(7, snapshot.Select(new NeutralMethodValue(9)).Value);
         Assert.Equal(7, snapshot.ReadValue());
     }

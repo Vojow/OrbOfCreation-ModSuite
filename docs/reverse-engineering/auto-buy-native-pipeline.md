@@ -1,19 +1,20 @@
 # Auto Buy native purchase pipeline
 
-[Reverse-engineering index](README.md) · [Queue and completion](auto-buy-queue-and-completion.md) · [Simulation evidence](auto-buy-simulation-evidence.md) · [Native contracts](../testing/native-contracts.md)
+[Reverse-engineering index](README.md) · [Queue and completion](auto-buy-queue-and-completion.md) · [Native contracts](../testing/native-contracts.md)
 
 ## Scope and evidence boundary
 
-This document connects the audited game-member inventory to Automata's active
-purchase path. It describes three different kinds of evidence and does not
+This document connects the audited game-member inventory to the suite's
+active Auto Buy purchase path. It describes three different kinds of evidence and does not
 promote one into another:
 
 - **Static native contract:** exact type/member shape in the audited installed
   assemblies, recorded in [`data/native-contracts.json`](../../data/native-contracts.json).
-- **Automata implementation:** ordering and fail-closed behavior in
-  [AutoBuyEngine.cs](../../src/OrbAutomata/AutoBuyEngine.cs),
-  [AutomationAdmission.cs](../../src/OrbAutomata/AutomationAdmission.cs), and
-  [ReflectionAutoBuyCatalog.cs](../../src/OrbAutomata/ReflectionAutoBuyCatalog.cs).
+- **Suite implementation:** ordering and fail-closed behavior in the active
+  native adapters under `src/AutoBuy/ServiceCycle/Native/`, which are the only
+  Auto Buy code that touches the game. Auto Buy has no capture of its own: the
+  facts it decides from arrive on the shared world snapshot published by world
+  collection.
 - **Runtime behavior:** side effects and callback order observed in Unity. Only
   statements explicitly labelled runtime-observed carry this authority.
 
@@ -21,11 +22,18 @@ The manifest proves that the selected members exist with the expected shape.
 It does not by itself prove the internal IL order of resource deduction, queue
 insertion, echo actions, UI refresh, or completion effects.
 
-This document describes the current production path. The proposed
-[raw-fact ServiceCycle port](../plans/autobuy-service-cycle-port.md) targets a collector that copies the
-[audited raw input graph](auto-buy-raw-fact-inputs.md) and reproduces its mathematics in pure worker code.
-Native convenience calls remain required until the installed serialized condition graph and formula parity
-have runtime evidence.
+The legacy engine and its incremental catalog have been deleted. The sections
+below that describe them are kept as a record of the native surface and of how
+it was once driven; they are history, not a description of the running code, and
+are written in the past tense for that reason.
+
+The active ServiceCycle service decides from the shared world snapshot:
+candidates, availability, level, queued state and price all arrive as published
+rows, and the cost chain in particular is now computed by `GameCostMath` rather
+than asked for. What Auto Buy calls natively is the action boundary —
+`CanPurchase()`, `Purchase()`, and `ActionManager.GetRemainingRoom()` — plus a
+refusal-diagnostics cold path that runs only after `CanPurchase()` has already
+said no.
 
 ## Audited native surface
 
@@ -39,8 +47,25 @@ have runtime evidence.
 | Queued state | `GetQueuedQuantity()` | `GetQueuedPurchaseLevel()` | Static contract |
 | Mutation | `Purchase(bool)` | `Purchase()` | Static contract |
 | Completion | `CompleteAction()` | `CompleteAction()` | Static contract/Harmony target |
-| Queue signal | `QueueBuild(int)` | `Purchase()` | Static contract/Harmony target |
+| Queue signal | `QueueBuild(int)` | `Purchase()` | Static contract |
 | Finite lifecycle | not used by adapter | `HasFiniteLevels()`, `IsMaxLevel()`, `IsMaxQueuedLevel()` | Static contract |
+
+This table records what the installed assemblies offer, not what the suite calls
+each cycle. On the ordinary path only `CanPurchase()` and `Purchase()` are
+invoked, at the action boundary; the rest are read once per collection into the
+shared world snapshot, and nothing prices through `GetPurchaseCost()` — the suite
+owns that arithmetic and publishes `WorldPurchaseCost`.
+
+One cold path adds to that. When `CanPurchase()` refuses, the adapter asks the
+game *why*, so a refusal can name a cause instead of being a silent skip:
+`IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()` and
+`GetPurchaseCost().HasEnough()` — the game's own verdict on the price, not a
+re-pricing. Every term is optional and answers `Unread` rather than throwing,
+because a diagnosis that can fail the action it is diagnosing is worse than no
+diagnosis. The manifest carries these under the owner *Automata Auto Buy
+diagnostics*: `GetPurchaseCost`, `HasEnough`, `IsMaxLevel` and
+`IsMaxQueuedLevel` at place `action`, and `IsAvailable` at place `capture`,
+since collection already calls it on every entity of every cycle.
 
 The shared queue contract is `ActionManager.GetRemainingRoom()` plus
 `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Upgrade
@@ -48,99 +73,100 @@ single-level isolation additionally uses `GlobalVariables.GetMultiBuy()` and
 `IntVariable.AsInt()/SetValue(int)`. Structure fallback grouping may read
 `Player.GetBulkDevelopment()`.
 
-## Candidate discovery and lifecycle admission
+## What the deleted incremental catalog established
 
-1. `ReflectionAutoBuyCatalog` incrementally enumerates both native registries.
-2. Identity is the stable UUID plus the exact audited native type. A UUID/type
-   contradiction is invalid; a same-UUID native-reference replacement advances
-   the lifecycle epoch and replaces the wrapper.
-3. Lifecycle evidence reads availability, current level, and queued state.
-   Upgrade evidence also reads finite/max/max-queued flags. Negative or
-   contradictory evidence is rejected by the candidate index.
-4. Locked content stays lifecycle-visible and can become active after
-   progression or registry invalidation. Registry presence is never treated as
-   availability or completion.
-5. Reconciliation and lifecycle maintenance are sliced. The current catalog
-   processes at most 32 registry items and 32 lifecycle items in an evaluation,
-   with smaller periodic active/slow refresh slices.
+The pre-collection pipeline enumerated both registries itself, sliced the walk, and admitted a
+candidate only on a complete contract. Its slicing did not survive — a shared collection pass
+replaced per-feature enumeration — but three of its rules did, and they are why the current shape
+looks the way it does.
 
-These are Automata implementation facts exercised against game-shaped stubs.
-The earliest real Unity point at which every registry is complete remains a
-runtime contract; lifecycle hooks therefore invalidate and reconcile instead
-of assuming one permanent startup snapshot.
+- **Identity is the stable UUID plus the exact audited native type.** A UUID/type contradiction is
+  invalid, and a same-UUID native-reference replacement advances the lifecycle epoch rather than
+  being treated as the same object.
+- **Registry presence is never availability or completion.** Locked content stays visible and can
+  become active after progression, so the two questions are asked separately.
+- **A partial cost vector never authorizes a purchase.** World collection resolves cost rows the
+  same way: a candidate whose vector cannot be fully resolved is skipped rather than guessed at.
 
-## Evaluation and ranking
-
-```mermaid
-flowchart TD
-    Registry["Incremental native registries"] --> Lifecycle["UUID + exact type + lifecycle evidence"]
-    Lifecycle --> Admission["Availability + CanPurchase + complete cost vector"]
-    Admission --> Policy["Allow/block lists + affordability + reserves"]
-    Policy --> Rank["Economic priority + deterministic ranking"]
-    Rank --> Prepared["Prepared ranked candidate"]
-    Prepared --> Queue["Fresh authoritative queue snapshot"]
-    Queue --> Ownership["Action-family ownership recheck"]
-    Ownership --> Live["Live candidate revalidation"]
-    Live --> Mutation["One native purchase + exact queued delta verification"]
-```
-
-`AutoBuyAdmissionAdapter` requires stable identity, known availability, known
-native admission, a fully resolved immediate-cost vector, no unresolved drain
-vector, and one known queue slot. Structure admission reads availability before
-calling `CanPurchase`; Upgrade admission calls `CanPurchase` and then reads
-availability. Both paths fail closed if the complete adapter contract is not
-available.
-
-The cost decoder accepts a vector only when every bounded entry has a stable
-resource identity and readable live values. Duplicate contradictory resources,
-negative costs, negative quantities, missing identities, and partial reads make
-the candidate unresolved. Reserve and affordability policy evaluate that whole
-vector; no partial vector may authorize a purchase.
+The earliest real Unity point at which every registry is complete remains a runtime contract, which
+is why lifecycle transitions still invalidate and recollect rather than assuming one permanent
+startup snapshot.
 
 ## Immediate pre-mutation validation
 
-Every individual level repeats the following checks on the Unity main thread:
+Every action the worker planned is revalidated on the Unity main thread before it
+is allowed to mutate:
 
-1. capture a consistent shared-queue snapshot;
-2. refresh completion-sensitive lifecycle/cost evidence when required;
-3. reevaluate identity, availability, native admission, costs, affordability,
-   reserves, finite level, and policy;
-4. capture the shared queue again after native reads;
-5. confirm action-family ownership;
-6. enter an automated-mutation identity scope;
-7. call the candidate adapter.
+1. read live queue room through `ActionManager.GetRemainingRoom()` and subtract
+   the configured reserve; the worker does not bound its plan by the queue at all,
+   so this read is the only queue authority;
+2. resolve the candidate from its stable UUID to the live native object;
+3. call `CanPurchase()`, which folds in live requirements and queue admission —
+   the two things that can change between planning and acting;
+4. call the candidate adapter.
 
-The second queue capture is intentional: availability and cost reads can invoke
-native code, so an earlier room observation is not sufficient mutation
-authority.
+`IsAvailable()` is deliberately *not* read on the admitting path. Availability is
+a published snapshot field, so the worker never plans an unavailable candidate,
+and re-reading it to admit would pay for a fact already known.
+
+The same is now true of the per-level prerequisites, which used to be the one
+admitting term the snapshot could not carry, because the game's own answer takes
+the level as an argument. The conditions are published as rows and the worker
+evaluates them for the level a purchase would reach — `level + queuedLevels + 1`
+for an upgrade, `quantity` for a structure — so a candidate whose next level is
+gated never reaches the boundary at all. A condition the suite cannot evaluate
+counts as gated. This is what stopped Auto Buy planning `ScribeScroll4` against
+an unfinished `ImprovedScribing`. See W58.
+
+## Refusal diagnosis
+
+`CanPurchase()` refusing a purchase the worker planned means the plan and the
+game disagree, which is a planner bug rather than a race to ride out. So the
+fold is taken apart on the cold path, after the refusal, by reading each term the
+game exposes on its own: `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`
+and `GetPurchaseCost().HasEnough()`. The first that refuses is named in the log
+line and in the diagnostic bundle. The per-level prerequisites take a level
+argument and cannot be read parameterlessly, so when every readable term passes
+they are named by elimination rather than guessed at — and since the planner now
+models them itself, reaching that clause means the suite's model and the game
+disagree, which the line says in those words. None of these reads happen on an
+admitted purchase.
 
 ## Mutation transaction
 
 ### Structure
 
 1. Capture `GetQueuedQuantity()`.
-2. Invoke `StructureSO.Purchase(true)`.
+2. Invoke `StructureSO.Purchase(true)`, once per requested level, re-reading
+   `CanPurchase()` before each level past the first.
 3. Capture `GetQueuedQuantity()` again.
-4. Accept only an exact delta of `+1`.
+4. Accept an exact delta of `+1` for a single-level request, and a delta in
+   `[1, count]` for a group.
 
-The Boolean argument shape and exact queued-state methods are statically
-verified. The meaning of the `true` argument and the internal native order of
-resource spending versus `QueueBuild` are not asserted here without a reviewed
-IL/runtime observation.
+`Purchase(true)` forces exactly one level and consults no multiplier, so a bulk
+structure buy is the same call repeated inside one verifier scope — which is what
+the Bulk Development grouping mode asks for. A group that stops early because the
+game stopped admitting is a partial success, not a refusal. The Boolean argument
+shape and exact queued-state methods are statically verified. The meaning of the
+`true` argument and the internal native order of resource spending versus
+`QueueBuild` are not asserted here without a reviewed IL/runtime observation.
 
 ### Upgrade
 
 1. Resolve and read the global multi-buy variable.
-2. Set it to `1` and verify the readback.
+2. Set it to the requested level count and verify the readback.
 3. Capture `GetQueuedPurchaseLevel()`.
 4. Invoke `UpgradeSO.Purchase()`.
 5. Capture `GetQueuedPurchaseLevel()` again.
-6. Accept only an exact delta of `+1`.
+6. Accept a delta in `[1, count]`. `Purchase()` honours the multiplier but the
+   game may afford fewer levels than asked for, so any committed level is a
+   success and only a zero delta is a miss.
 7. Restore the original global multi-buy value and verify restoration on every
    exit path.
 
-If multi-buy entry or restoration cannot be verified, Upgrade mutation is
-quarantined. Structure purchasing is independent of that global quarantine.
+If multi-buy entry or restoration cannot be verified, no mutation is attempted
+and Upgrade purchasing is quarantined. Structure purchasing is independent of
+that global quarantine.
 
 ## Mutation outcomes
 
@@ -152,19 +178,20 @@ internal intent:
 | Before capture failed | No | No mutation authority was obtained |
 | Execution threw | Yes | Ambiguous even when an after-state can be read |
 | After capture failed | Yes | Ambiguous |
-| Postcondition failed | Yes | Ambiguous/no verified exact delta |
-| Verified | Yes | Exact queued delta `+1` observed |
+| Postcondition failed | No exception, but no queued delta | Benign skip |
+| Verified | Yes | The expected queued delta was observed |
 
-Any attempted but unverified mutation blocks that candidate until a newer
-lifecycle. This is why the simulator separates pre-mutation rejection from
-post-mutation ambiguity.
+A call that threw is ambiguous and blocks that candidate until a newer lifecycle.
+A call that completed cleanly and simply moved nothing is a benign skip, not a
+fault: the batch advances to its next action. Reserving the fault classification
+for real exceptions is deliberate — around a fifth of attempts in observed play
+are zero-delta misses, and treating each as a fault discarded the rest of the
+batch.
 
-The scheduler distinguishes a definite rejection before any native call from
-an attempted or ambiguous mutation. Definite rejection advances to the next
-ranked candidate and records an exponential 0.25-to-5-second retry; attempted or
-ambiguous mutation remains blocked until lifecycle recovery. `NF-03` enforces
-that a permanently rejecting highest rank cannot starve healthy lower ranks and
-that a transiently rejecting candidate later recovers.
+A definite rejection before any native call — no queue room, admission refused —
+is distinguished from an attempted or ambiguous mutation. Rejection terminates
+the batch, because no later queued purchase can fit either; an ambiguous mutation
+remains blocked until lifecycle recovery.
 
 ## What remains unknown
 

@@ -1,0 +1,109 @@
+using System;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.World;
+
+namespace OrbAutomata;
+
+/// <summary>
+/// World collection's contribution to the Automata ServiceCycle host.
+/// </summary>
+/// <remarks>
+/// The simplest feature in the suite, and deliberately so: no native gates, no action family, and
+/// no diagnostics bridge. It reads the game and publishes; there is nothing it can do wrong to a
+/// save, so there is nothing for those layers to guard.
+/// </remarks>
+internal sealed class AutomataWorldCollectionFeature : IAutomataServiceCycleFeature
+{
+    private readonly Func<long> _readFrameIdentity;
+    private readonly Func<long> _readLifecycleEpoch;
+    private readonly Func<GameWorldCollector> _createCollector;
+    private readonly Action<WorldCollectionReport>? _announce;
+
+    /// <param name="readFrameIdentity">
+    /// The same counter the host pumps with, so a snapshot's generation and a consumer's last-action
+    /// frame are the same units and can simply be compared.
+    /// </param>
+    /// <param name="readLifecycleEpoch">
+    /// The same counter the host replaces its lifecycle on, so a snapshot's epoch and a service's
+    /// pinned lifecycle are the same units too.
+    /// </param>
+    internal AutomataWorldCollectionFeature(
+        Func<long> readFrameIdentity,
+        Func<long> readLifecycleEpoch,
+        Action<WorldCollectionReport>? announce = null,
+        Func<GameWorldCollector>? createCollector = null)
+    {
+        _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
+        _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
+        _announce = announce;
+        _createCollector = createCollector ?? (static () => new GameWorldCollector());
+    }
+
+    public IAutomataServiceCycleFeatureRuntime Register(in AutomataServiceCycleFeatureContext context)
+    {
+        // Constructed here rather than at plugin startup because binding compiles an accessor per
+        // member per category against the loaded game assembly, which is only meaningful once the
+        // runtime is being stood up for a playable lifecycle.
+        var definition = AutomataWorldCollectionService.Define(
+            new AutomataWorldCapturePort(
+                _createCollector(), _readFrameIdentity, _readLifecycleEpoch, _announce),
+            context.Registry.WorldPublication);
+
+        // No dispatch policy here: registering through the source path is the declaration, and one
+        // publish per frame ahead of every mutating service is what that path means.
+        return new AutomataWorldCollectionFeatureRuntime(
+            context.Registry.RegisterSource(definition));
+    }
+
+    public void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception)
+    {
+        // Collection has no feature status of its own. A host that failed to start has already
+        // disabled every feature that would have consumed the world, so reporting it twice would only
+        // add noise to a message the player has already been given.
+    }
+}
+
+/// <summary>The per-frame runtime for collection: a registration handle and nothing else.</summary>
+internal sealed class AutomataWorldCollectionFeatureRuntime : IAutomataServiceCycleFeatureRuntime
+{
+    private readonly ServiceRegistration<
+        AutomataWorldCollectionState,
+        AutomataWorldCollectionAction> _registration;
+
+    internal AutomataWorldCollectionFeatureRuntime(
+        ServiceRegistration<
+            AutomataWorldCollectionState,
+            AutomataWorldCollectionAction> registration) =>
+        _registration = registration ?? throw new ArgumentNullException(nameof(registration));
+
+    public void ActivateDiagnostics()
+    {
+    }
+
+    public void ObserveFrame(SuiteFramePump pump, in SuiteFramePumpReport report)
+    {
+    }
+
+    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration)
+    {
+    }
+
+    /// <summary>
+    /// Nothing to invalidate. Collection holds no native handles between cycles — every accessor is
+    /// resolved against a type, not an instance, and every instance is re-read from its registry each
+    /// pass, so a save load simply yields a different set of entities next cycle.
+    /// </summary>
+    public void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration)
+    {
+    }
+
+    public void DisposeDiagnostics()
+    {
+    }
+
+    public void DisposeRegistration() => _registration.Dispose();
+}

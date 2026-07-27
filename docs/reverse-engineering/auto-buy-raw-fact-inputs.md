@@ -1,23 +1,29 @@
 # Auto Buy raw-fact input graph
 
 [Reverse-engineering index](README.md) ·
-[Current native pipeline](auto-buy-native-pipeline.md) ·
-[ServiceCycle port plan](../plans/autobuy-service-cycle-port.md)
+[Current native pipeline](auto-buy-native-pipeline.md)
 
 ## Scope and evidence
 
 This document identifies the native data that can replace game-calculated Auto Buy answers with a
 native-free worker calculation. It records static IL evidence, not completed production behavior.
 
-The audit used Mono.Cecil against this admitted installed-game assembly pair:
+The audit used Mono.Cecil against the assembly pair admitted by the `steam-macos-2026-07-13`
+baseline in [`data/native-contracts.json`](../../data/native-contracts.json):
 
 - `Assembly-CSharp.dll`
   `5652EBE35A4B87223A014EAA7B364AE921477D2E016789CB4E13C8C892055DE4`;
 - `Assembly-CSharp-firstpass.dll`
-  `CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891`;
-- main MVID `1ca9f623-3310-4e13-a004-4fdfc1be7fc1`; and
-- firstpass MVID `18707adf-0256-424c-9b70-c896ca37639b`.
+  `CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891`.
 
+Those two SHA-256 values are the whole of what the manifest admits — a baseline names its
+assemblies by hash and has no module-id field — so the module ids recorded from the same audited
+files, main `1ca9f623-3310-4e13-a004-4fdfc1be7fc1` and firstpass
+`18707adf-0256-424c-9b70-c896ca37639b`, are provenance for this document rather than manifest
+evidence. Nothing loads or refuses to load on them.
+
+Note that this is the macOS baseline. [`audit.md`](audit.md) records the pair that
+`steam-windows-2026-07-11` admits instead, so the two documents audited different platform builds.
 These findings do not prove equivalent behavior for another platform or assembly hash. Serialized asset
 membership also remains runtime evidence: IL proves which condition types and formula shapes are possible,
 not which graph is attached to every installed candidate.
@@ -299,8 +305,12 @@ native reflection with arithmetic and silently maps some invalid numeric inputs 
 
 ## Acceptance gates
 
-Before `CanPurchase()`, `GetPurchaseCost()`, or the resource convenience calculations leave the production
-path:
+`GetPurchaseCost()` has left the pricing path: the cost chain is ported to `GameCostMath` and published
+as `WorldPurchaseCost`, and gate 3 below is the one the differential verification run satisfies, entity
+by entity against a live save. The accessor survives on the refusal-diagnostics cold path only, where
+`GetPurchaseCost().HasEnough()` is one of the terms that names why the game refused a purchase.
+`CanPurchase()` is still called at the action boundary. Before it or the resource convenience
+calculations follow:
 
 1. capture the installed candidates' actual prerequisite subtype/topology inventory;
 2. implement the exact native modifier order and both rounding variants;

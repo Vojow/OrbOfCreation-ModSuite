@@ -19,9 +19,6 @@ public sealed class ServiceCycleContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new ConfigGeneration(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new CaptureSequence(0));
         Assert.Throws<ArgumentException>(() => new ServiceId("  "));
-        Assert.Throws<ArgumentException>(() => ServiceCaptureResult.Captured(
-            default,
-            CommonServiceDecisionCodes.Captured));
 
         Assert.NotEqual(typeof(CycleId), typeof(BatchId));
         Assert.NotEqual(typeof(RuntimeLifecycleGeneration), typeof(ConfigGeneration));
@@ -93,7 +90,6 @@ public sealed class ServiceCycleContractTests
             CommonServiceDecisionCodes.Ready,
             WakePolicy.AfterDecision(MonotonicDuration.FromTimeSpan(TimeSpan.FromTicks(1)))));
         Assert.Throws<ArgumentException>(() => ServiceCaptureResult.Captured(
-            new RuntimeStrategyGeneration(1),
             CommonServiceDecisionCodes.CaptureUnavailable));
         Assert.Throws<ArgumentException>(() => ServiceCaptureResult.Unavailable(
             CommonServiceDecisionCodes.Captured,
@@ -125,9 +121,15 @@ public sealed class ServiceCycleContractTests
         var committed = ServiceActionResult.Committed(CommonActionResultCodes.Committed, verified);
         var rejected = ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
         var faulted = ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault, failed);
+        var skippedEvidence = ServiceNativeMutationEvidence.Observed(
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 0));
+        var skipped = ServiceActionResult.Skipped(CommonActionResultCodes.Skipped, skippedEvidence);
         var preNativeFault = ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
 
         Assert.True(committed.IsValid);
+        Assert.True(skipped.IsValid);
+        Assert.Equal(ServiceActionDisposition.Skipped, skipped.Disposition);
         Assert.False(rejected.HasNativeEvidence);
         Assert.Equal(ServiceActionDisposition.Rejected, rejected.Disposition);
         Assert.Equal(1, faulted.NativeCallOutcome.MutationAttempts);
@@ -137,6 +139,9 @@ public sealed class ServiceCycleContractTests
             failed));
         Assert.Throws<ArgumentException>(() => ServiceActionResult.Faulted(
             CommonActionResultCodes.AdapterFault,
+            verified));
+        Assert.Throws<ArgumentException>(() => ServiceActionResult.Skipped(
+            CommonActionResultCodes.Skipped,
             verified));
         Assert.Throws<ArgumentException>(() => ServiceNativeMutationEvidence.Observed(
             NativeMutationOutcome.ExecutionThrew,
@@ -168,9 +173,18 @@ public sealed class ServiceCycleContractTests
         Assert.Equal(3, orphaned.UntouchedSuffixCount);
         Assert.Equal(CommonActionResultCodes.LifecycleReplaced, orphaned.ResultCode);
         Assert.Equal(0, empty.ActionCount);
-        Assert.Throws<ArgumentOutOfRangeException>(() => BatchReceipt.Terminated(
+        var skippedPrefix = BatchReceipt.Terminated(
             cycle, new BatchId(4), actionCount: 3, committedCount: 0, terminalIndex: 1,
-            rejected, aggregate, new MonotonicTimestamp(40)));
+            rejected, new NativeMutationCallOutcome(1, 1, 0), new MonotonicTimestamp(40));
+        Assert.Equal(1, skippedPrefix.SkippedCount);
+        var skippedAction = ServiceActionResult.Skipped(
+            CommonActionResultCodes.Skipped,
+            ServiceNativeMutationEvidence.Observed(
+                NativeMutationOutcome.PostconditionFailed,
+                new NativeMutationCallOutcome(1, 1, 0)));
+        Assert.Throws<ArgumentException>(() => BatchReceipt.Terminated(
+            cycle, new BatchId(12), actionCount: 1, committedCount: 0, terminalIndex: 0,
+            skippedAction, new NativeMutationCallOutcome(1, 1, 0), new MonotonicTimestamp(45)));
         Assert.Throws<ArgumentException>(() => BatchReceipt.Terminated(
             cycle, new BatchId(5), actionCount: 3, committedCount: 1, terminalIndex: 1,
             rejected, default, new MonotonicTimestamp(50)));
@@ -216,6 +230,6 @@ public sealed class ServiceCycleContractTests
         new RuntimeLifecycleGeneration(1),
         new ConfigGeneration(1),
         new RuntimeStrategyGeneration(1),
-        new CaptureSequence(1),
+        new WorldGeneration(1),
         new CycleId(1));
 }

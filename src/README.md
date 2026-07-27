@@ -1,6 +1,6 @@
 # Source layout
 
-Build plugin projects with `OOC_GAME_DIR` set to the Orb Of Creation install root.
+Build the suite with `OOC_GAME_DIR` set to the Orb Of Creation install root.
 
 Expected build-reference layout (use a gitignored staged tree on non-Windows platforms):
 
@@ -13,9 +13,9 @@ $OOC_GAME_DIR/
   Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll
 ```
 
-Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by those DLLs. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
+The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.csproj` at this directory's root, which compiles every feature folder below it. `Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by the features. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
-Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance are not part of this branch and must not be inferred from old build-output directories.
+The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
 
 ## Shared configuration schemas
 
@@ -25,15 +25,15 @@ Migration code must use explicit known-key maps and closed safe failure codes. I
 
 ## Deterministic runtime foundation
 
-`OrbModding.Common.Runtime` still contains the production-composed R0 scheduler used by Auto Harvest: monotonic time, generation-stamped demand, bounded mailboxes, deterministic collect-then-dispatch selection, command admission, native outcomes, fixed-capacity causal telemetry, and exact-plugin runtime diagnostics. The contracts contain no Unity objects or gameplay policy, and Orb Mod Config consumes their typed projections.
+`OrbModding.Common.Runtime` holds monotonic time, catalogs, configuration and strategy publications, the shared world collection, diagnostics, and tracing. The contracts contain no Unity objects or gameplay policy, and the configuration UI consumes their typed projections. The earlier R0 scheduler it once carried was deleted at the Auto Harvest cutover.
 
-`OrbModding.Common.Runtime.ServiceCycle` is the accepted replacement foundation. The ordinary runner through semantic export, snapshot export, schema-v5 recording, and strict full-topology production replay is portable-verified and has passed the completed S5 adversarial review. None is production-composed. The uncomposed Auto Harvest pilot, atomic cutover, and deletion of the older R0 scheduler remain. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
+`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it drives Auto Harvest, Auto Buy, and world collection. The ordinary runner through semantic export, snapshot export, and schema-v7 recording is verified by the portable suite. Replay was retired as a runtime system rather than rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
 
 ## Shared automation decisions
 
-`OrbModding.Common.AutomationDecision` is the cross-plugin diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.
+`OrbModding.Common.AutomationDecision` is the suite-wide automation diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.
 
-Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, feature-health state, and configuration transaction results remain outside this contract until their separately scoped issues are implemented.
+Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, feature-health state, and configuration transaction results remain outside this contract for now.
 
 ## Shared gameplay controls
 
@@ -51,11 +51,11 @@ The classifier caches the verified registry snapshot and per-recipe results. Cal
 
 Common's suite-internal `KnownEntities` is a checked-in generated declaration set for the small, explicitly selected supported-domain subset in `data/known-entities.tsv`. Each `KnownEntity<TContract>` has a suite-owned type marker plus UUID, expected managed type name, and diagnostic asset name; generated signatures never embed fragile game types. The build verifies it against the canonical 2,792-row mapping, while runtime consumers still resolve through `TypedRegistryResolver` and validate the installed game.
 
-`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across supported plugins. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct.
+`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across the suite's features. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct.
 
 `OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation.
 
-## Orb Mentor
+## Mentor
 
 `OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.
 

@@ -3,10 +3,14 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Registration;
@@ -33,7 +37,10 @@ public sealed class ServiceCycleTombstoneRetentionTests
         Assert.Equal(proof.Ordinal, slot.Ordinal);
         Assert.True(slot.RegistrationToken > 0);
         Assert.False(proof.ReleaseFailed);
-        Assert.Throws<ObjectDisposedException>(() => proof.Registration.Configuration.ReadLatest());
+        // A tombstone consumed no configuration, and says so, even though the suite's publication is
+        // very much alive: it belongs to the registry, not to any one registration.
+        Assert.Equal(default, slot.LatestConfiguration);
+        Assert.Equal(1UL, proof.Registry.Configuration.ReadLatest().Generation.Value);
 
         GC.KeepAlive(proof.Registry);
         GC.KeepAlive(proof.Registration);
@@ -46,13 +53,11 @@ public sealed class ServiceCycleTombstoneRetentionTests
         using var registry = new ServiceCycleRegistry(2);
         var first = registry.Register(
             new RetainedDefinition("test.tombstone.preseal.a", new RetainedPayload(1),
-                new RetainedFrame(new RetainedPayload(2)), new RetainedState(new RetainedPayload(3)), false),
-            new ReferenceConfig(new RetainedPayload(4)),
+                new RetainedState(new RetainedPayload(3)), false),
             new LifecycleGeneration(1));
         using var second = registry.Register(
             new RetainedDefinition("test.tombstone.preseal.b", new RetainedPayload(5),
-                new RetainedFrame(new RetainedPayload(6)), new RetainedState(new RetainedPayload(7)), false),
-            new ReferenceConfig(new RetainedPayload(8)),
+                new RetainedState(new RetainedPayload(7)), false),
             new LifecycleGeneration(1));
 
         first.Dispose();
@@ -70,36 +75,33 @@ public sealed class ServiceCycleTombstoneRetentionTests
     private static TombstoneRetentionProof CreateDisposedGraph(bool throwOnRelease)
     {
         var definitionPayload = new RetainedPayload(1);
-        var framePayload = new RetainedPayload(2);
         var statePayload = new RetainedPayload(3);
-        var configPayload = new RetainedPayload(4);
-        var frame = new RetainedFrame(framePayload);
         var state = new RetainedState(statePayload);
-        var configuration = new ReferenceConfig(configPayload);
         var definition = new RetainedDefinition(
             throwOnRelease ? "test.tombstone.throw" : "test.tombstone.clean",
             definitionPayload,
-            frame,
             state,
             throwOnRelease);
         var payloadReferences = new[]
         {
             new WeakReference(definitionPayload),
-            new WeakReference(framePayload),
             new WeakReference(statePayload),
-            new WeakReference(configPayload),
-            new WeakReference(frame),
             new WeakReference(state),
-            new WeakReference(configuration),
             new WeakReference(definition),
         };
 
-        var registry = new ServiceCycleRegistry(1);
+        var clock = new ThreadSafeTestClock(100);
+        var registry = new ServiceCycleRegistry(1, clock);
         var registration = registry.Register(
             definition,
-            configuration,
             new LifecycleGeneration(1));
         registry.Seal();
+        // One cycle first: worker state is minted lazily, and a state that was never created is a
+        // state whose release cannot be observed to throw — which is half of what this proves.
+        var runner = registration.Runner;
+        Assert.True(runner.TryStartCycle(clock.Now).Queued);
+        ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
         var releaseFailed = false;
         try { registration.Dispose(); }
         catch (InvalidOperationException) { releaseFailed = true; }
@@ -129,7 +131,7 @@ public sealed class ServiceCycleTombstoneRetentionTests
     {
         internal TombstoneRetentionProof(
             ServiceCycleRegistry registry,
-            ServiceRegistration<RetainedFrame, ReferenceConfig, RetainedState, RetainedAction> registration,
+            ServiceRegistration<RetainedState, RetainedAction> registration,
             WeakReference[] payloadReferences,
             int ordinal,
             ServiceId serviceId,
@@ -144,7 +146,7 @@ public sealed class ServiceCycleTombstoneRetentionTests
         }
 
         internal ServiceCycleRegistry Registry { get; }
-        internal ServiceRegistration<RetainedFrame, ReferenceConfig, RetainedState, RetainedAction> Registration { get; }
+        internal ServiceRegistration<RetainedState, RetainedAction> Registration { get; }
         internal WeakReference[] PayloadReferences { get; }
         internal int Ordinal { get; }
         internal ServiceId ServiceId { get; }
@@ -156,16 +158,6 @@ public sealed class ServiceCycleTombstoneRetentionTests
         private readonly int _value;
         internal RetainedPayload(int value) => _value = value;
     }
-    private sealed class ReferenceConfig
-    {
-        private readonly RetainedPayload _payload;
-        internal ReferenceConfig(RetainedPayload payload) => _payload = payload;
-    }
-    private sealed class RetainedFrame
-    {
-        private readonly RetainedPayload _payload;
-        internal RetainedFrame(RetainedPayload payload) => _payload = payload;
-    }
     private sealed class RetainedState
     {
         private readonly RetainedPayload _payload;
@@ -174,24 +166,21 @@ public sealed class ServiceCycleTombstoneRetentionTests
     private readonly struct RetainedAction { }
 
     private sealed class RetainedDefinition :
-        IServiceCycleDefinition<RetainedFrame, ReferenceConfig, RetainedState, RetainedAction>
+        IServiceCycleDefinition<RetainedState, RetainedAction>
     {
         private readonly ServiceId _serviceId;
         private readonly RetainedPayload _payload;
-        private readonly RetainedFrame _frame;
         private readonly RetainedWorkerResources _worker;
         private readonly ManualResetEventSlim _released = new(false);
 
         internal RetainedDefinition(
             string serviceId,
             RetainedPayload payload,
-            RetainedFrame frame,
             RetainedState state,
             bool throwOnRelease)
         {
             _serviceId = new ServiceId(serviceId);
             _payload = payload;
-            _frame = frame;
             _worker = new RetainedWorkerResources(
                 state,
                 throwOnRelease,
@@ -203,53 +192,39 @@ public sealed class ServiceCycleTombstoneRetentionTests
         public ServiceFaultRecoveryPolicy FaultRecoveryPolicy => new(
             MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(1)),
             MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
-        public RetainedFrame CreateFrame()
-        {
-            GC.KeepAlive(_payload);
-            return _frame;
-        }
-        public IServiceCycleWorkerDefinition<RetainedFrame, ReferenceConfig, RetainedState, RetainedAction>
+        public IServiceCycleWorkerDefinition<RetainedState, RetainedAction>
             CreateWorkerDefinition() => new WorkerDefinition(_worker);
         internal bool WaitForRelease() => _released.Wait(TimeSpan.FromSeconds(2));
         public ServiceStartDecision ShouldStart(
-            in ReferenceConfig config,
+            in SuiteRuntimeConfiguration config,
             in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
-        public ServiceCaptureResult Capture(
-            ref RetainedFrame frame,
-            in ReferenceConfig config,
-            in ServiceCaptureContext context) =>
-            ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
         public ServiceActionResult TryExecute(
             in RetainedAction action,
-            in ReferenceConfig config,
+            in SuiteRuntimeConfiguration config,
             in ServiceActionContext context) =>
             ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
 
         private sealed class WorkerDefinition :
-            IServiceCycleWorkerDefinition<RetainedFrame, ReferenceConfig, RetainedState, RetainedAction>
+            IServiceCycleWorkerDefinition<RetainedState, RetainedAction>
         {
             private readonly RetainedWorkerResources _resources;
             internal WorkerDefinition(RetainedWorkerResources resources) => _resources = resources;
             public RetainedState CreateState(LifecycleGeneration lifecycle) => _resources.State;
             public void ReleaseState(ref RetainedState state)
             {
-                if (_resources.ThrowOnRelease)
-                    throw new InvalidOperationException("release failed without clearing state");
-            }
-            public void ReleaseFrame(ref RetainedFrame frame)
-            {
                 try
                 {
                     if (_resources.ThrowOnRelease)
-                        throw new InvalidOperationException("frame release failed without clearing frame");
-                    frame = null!;
+                        throw new InvalidOperationException("release failed without clearing state");
                 }
                 finally { RetainedReleaseSignals.Signal(_resources.ReleaseSignalId); }
             }
+
             public WakePolicy Evaluate(
-                in RetainedFrame frame,
-                in ReferenceConfig config,
+                in SuiteRuntimeConfiguration config,
+                GameWorldState world,
+                SuiteStrategy strategy,
                 in ServiceCycleContext context,
                 ref RetainedState state,
                 ServiceActionWriter<RetainedAction> actions) => WakePolicy.Immediate;

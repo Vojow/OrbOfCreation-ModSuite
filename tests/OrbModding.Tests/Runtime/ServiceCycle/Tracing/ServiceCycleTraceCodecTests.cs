@@ -49,13 +49,65 @@ public sealed class ServiceCycleTraceCodecTests
         var payload = ServiceCycleSemanticPayload.ActionFact(
             in ServiceCycleTraceFixtures.Cycle, 8, 10, 0, 3, 7,
             outcome.HasValue ? (NativeMutationOutcome?)outcome.Value : null,
-            calls, attempts, committed, 100, 10);
+            calls, attempts, committed, 100, 10, ServiceCycleTraceFixtures.Frame);
         var item = new ServiceCycleSemanticEvent(
             new ServiceCycleTraceEventId(ServiceCycleTraceFixtures.Session, 1), default,
             ServiceCycleSemanticEventKind.ActionFaulted, in payload);
         var decoded = ServiceCycleTraceCodec.Decode(Encode(new[] { item }));
         Assert.Equal(item, decoded[0]);
         Assert.Equal(outcome.HasValue, decoded[0].Payload.HasNativeOutcome);
+    }
+
+    [Fact]
+    public void WorldGenerationAndStallCountersSurviveTheRoundTrip()
+    {
+        var decoded = ServiceCycleTraceCodec.Decode(Encode(ServiceCycleTraceFixtures.EveryEventKind()));
+
+        var cycle = FirstOfKind(decoded, ServiceCycleSemanticEventKind.CycleStarted).Payload;
+        Assert.Equal(ServiceCycleTraceFixtures.Cycle.WorldGeneration, cycle.World);
+        Assert.Equal(0, cycle.CyclesStarted);
+        Assert.Equal(0, cycle.WorldGateDeferrals);
+
+        var pump = FirstOfKind(decoded, ServiceCycleSemanticEventKind.PumpCompleted).Payload;
+        Assert.Equal(9, pump.CyclesStarted);
+        Assert.Equal(13, pump.WorldGateDeferrals);
+        Assert.Equal(0UL, pump.World);
+    }
+
+    [Fact]
+    public void CaptureAndActionFactsCarryTheFrameTheyRanInsideOrNoneAtAll()
+    {
+        var decoded = ServiceCycleTraceCodec.Decode(Encode(ServiceCycleTraceFixtures.EveryEventKind()));
+
+        var framed = new[]
+        {
+            ServiceCycleSemanticEventKind.CaptureStarted,
+            ServiceCycleSemanticEventKind.CaptureCompleted,
+            ServiceCycleSemanticEventKind.CaptureUnavailable,
+            ServiceCycleSemanticEventKind.ActionAttempted,
+            ServiceCycleSemanticEventKind.ActionCommitted,
+            ServiceCycleSemanticEventKind.ActionSkipped,
+            ServiceCycleSemanticEventKind.ActionRejected,
+        };
+        foreach (var kind in framed)
+        {
+            var payload = FirstOfKind(decoded, kind).Payload;
+            Assert.True((payload.Fields & ServiceCycleSemanticFields.FrameIdentity) != 0, kind.ToString());
+            Assert.Equal(ServiceCycleTraceFixtures.Frame, payload.FrameIdentity);
+        }
+
+        // A fact the runtime reported from outside any frame claims none: the field stays absent and
+        // the offset stays zero, exactly as it did before frames were carried at all.
+        foreach (var kind in new[]
+                 {
+                     ServiceCycleSemanticEventKind.CaptureFaulted,
+                     ServiceCycleSemanticEventKind.ActionFaulted,
+                 })
+        {
+            var payload = FirstOfKind(decoded, kind).Payload;
+            Assert.True((payload.Fields & ServiceCycleSemanticFields.FrameIdentity) == 0, kind.ToString());
+            Assert.Equal(0, payload.FrameIdentity);
+        }
     }
 
     [Fact]
@@ -107,6 +159,9 @@ public sealed class ServiceCycleTraceCodecTests
     [InlineData(64 + 32, 999)]
     [InlineData(64 + 36, 1)]
     [InlineData(64 + 188, 1)]
+    [InlineData(64 + 272, 0)]
+    [InlineData(64 + 280, 5)]
+    [InlineData(64 + 284, 5)]
     public void CorruptHeaderRecordAndEnumFieldsFailClosed(int offset, int value)
     {
         var bytes = Encode(new[] { ServiceCycleTraceFixtures.Event(1) });
@@ -202,6 +257,7 @@ public sealed class ServiceCycleTraceCodecTests
     [InlineData(ServiceCycleSemanticEventKind.CaptureCompleted, 160, 3)]
     [InlineData(ServiceCycleSemanticEventKind.CaptureUnavailable, 160, 2)]
     [InlineData(ServiceCycleSemanticEventKind.ActionCommitted, 160, 2)]
+    [InlineData(ServiceCycleSemanticEventKind.ActionCommitted, 144, -1)]
     [InlineData(ServiceCycleSemanticEventKind.ActionCommitted, 188, 2)]
     [InlineData(ServiceCycleSemanticEventKind.ActionCommitted, 208, 0)]
     [InlineData(ServiceCycleSemanticEventKind.ActionRejected, 160, 1)]
@@ -397,6 +453,15 @@ public sealed class ServiceCycleTraceCodecTests
         Assert.Equal(bytes.Length, ServiceCycleTraceCodec.Encode(
             ServiceCycleTraceFixtures.Session, dropped, events, bytes));
         return bytes;
+    }
+
+    private static ServiceCycleSemanticEvent FirstOfKind(
+        ServiceCycleTraceDocument document,
+        ServiceCycleSemanticEventKind kind)
+    {
+        for (var index = 0; index < document.Count; index++)
+            if (document[index].Kind == kind) return document[index];
+        throw new InvalidOperationException($"The decoded trace carries no {kind} event.");
     }
 
     private static void RewriteChecksum(byte[] bytes)

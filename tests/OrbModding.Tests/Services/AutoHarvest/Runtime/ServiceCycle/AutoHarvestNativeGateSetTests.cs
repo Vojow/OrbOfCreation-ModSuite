@@ -1,6 +1,7 @@
+using OrbAutomata;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 public sealed class AutoHarvestNativeGateSetTests
 {

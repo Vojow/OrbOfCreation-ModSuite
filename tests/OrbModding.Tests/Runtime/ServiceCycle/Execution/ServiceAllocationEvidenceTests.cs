@@ -20,7 +20,6 @@ public sealed class ServiceAllocationEvidenceTests
         var definition = new ExecutionServiceDefinition("test.execution.alloc") { ActionCount = 512 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -31,7 +30,7 @@ public sealed class ServiceAllocationEvidenceTests
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
         Assert.True(SpinWait.SpinUntil(
             () => runner.Snapshot.MeasuredWorkerCycleCount > measuredBefore,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
         Assert.True(runner.TryAcquireResponse());
         Assert.Equal(0, definition.LastAppendAllocatedBytes);
         Assert.Equal(0, runner.Snapshot.WorkerCycleAllocatedBytes);

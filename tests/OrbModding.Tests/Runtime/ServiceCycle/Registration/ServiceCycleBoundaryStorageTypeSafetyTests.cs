@@ -14,13 +14,13 @@ public sealed class ServiceCycleBoundaryStorageTypeSafetyTests
     public void PointerSizedHandlesSafeHandlesAndWeakReferencesAreRejected()
     {
         using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new IntPtrConfig(IntPtr.Zero));
-        AssertConfigurationRejected(registry, new UIntPtrConfig(UIntPtr.Zero));
-        AssertConfigurationRejected(registry, new GcHandleConfig(default));
-        AssertConfigurationRejected(registry, new SafeHandleConfig(null));
-        AssertConfigurationRejected(registry, new CriticalHandleConfig(null));
-        AssertConfigurationRejected(registry, new WeakReferenceConfig(new WeakReference(new object())));
-        AssertConfigurationRejected(registry, new GenericWeakReferenceConfig(
+        AssertConfigurationRejected(new IntPtrConfig(IntPtr.Zero));
+        AssertConfigurationRejected(new UIntPtrConfig(UIntPtr.Zero));
+        AssertConfigurationRejected(new GcHandleConfig(default));
+        AssertConfigurationRejected(new SafeHandleConfig(null));
+        AssertConfigurationRejected(new CriticalHandleConfig(null));
+        AssertConfigurationRejected(new WeakReferenceConfig(new WeakReference(new object())));
+        AssertConfigurationRejected(new GenericWeakReferenceConfig(
             new WeakReference<object>(new object())));
     }
 
@@ -28,9 +28,7 @@ public sealed class ServiceCycleBoundaryStorageTypeSafetyTests
     public void ClosedGenericArgumentsCannotHideUnityTypes()
     {
         using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(
-            registry,
-            new WrappedUnityConfig(new GenericWrapper<UnityEngine.Object?>(null)));
+        AssertConfigurationRejected(new WrappedUnityConfig(new GenericWrapper<UnityEngine.Object?>(null)));
     }
 
     private readonly struct IntPtrConfig

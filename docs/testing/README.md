@@ -9,9 +9,8 @@ module ownership, installed-game contracts, and runtime validation.
   coverage, compatibility, and release gates.
 - [Headless E2E](headless-e2e.md) — deterministic simulation boundaries,
   scenarios, metrics, and performance reports.
-- [Runtime replay](runtime-replay.md) — sanitized ordering-sensitive fixtures.
-- [ServiceCycle `.oscr` evidence](../runtime-architecture/replay.md#human-readable-trace-report) — decode a
-  production artifact into bounded timing and causal evidence.
+- [ServiceCycle observability](../runtime-architecture/observability.md) — decode a
+  production trace artifact into bounded timing and causal evidence.
 - [Native contracts](native-contracts.md) — manifest and installed-assembly
   verification.
 - [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
@@ -24,6 +23,9 @@ Run the complete normal-development feedback loop with:
 This runs every portable partition with a hard 60-second wall-clock deadline,
 including deterministic performance/allocation simulations and external-process
 tests. The deadline exposes deadlocks or accidental soak behavior promptly.
+It is per attempt, not for the whole gate: a failing run is retried up to
+`ORB_TEST_ATTEMPTS` times (default 3), and a pass-after-retry is a broken test
+rather than a pass. Set `ORB_TEST_ATTEMPTS=1` when you want the first answer.
 
 On Windows, the equivalent lane helper remains:
 
@@ -35,9 +37,7 @@ Run a focused risk lane with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyDecision
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
 ```
 
 ## Module guides
@@ -45,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Change area | Test guide | First focused scope |
 |---|---|---|
 | Orb Automata | [Automata test map](automata/README.md) | select the changed feature below |
-| Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `AutoBuyDecision`, then `AutoBuyReliability` |
+| Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
 | Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
 | Auto Concept | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
 | Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~AutoSpellLevel` |

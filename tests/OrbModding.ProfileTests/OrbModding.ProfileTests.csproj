@@ -20,11 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="../OrbModding.GameStubs/OrbModding.GameStubs.csproj"
                       AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
-    <ProjectReference Include="../../src/OrbModding.Common/OrbModding.Common.csproj"
-                      AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
-    <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj"
-                      AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
-    <ProjectReference Include="../../src/OrbModConfig/OrbModConfig.csproj"
+    <ProjectReference Include="../../src/OrbModSuite.csproj"
                       AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
   </ItemGroup>
 </Project>

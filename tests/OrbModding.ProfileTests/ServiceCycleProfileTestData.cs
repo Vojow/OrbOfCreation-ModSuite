@@ -18,7 +18,7 @@ internal static class ServiceCycleProfileTestData
         long elapsed = 40,
         long allocatedBytes = 16)
     {
-        var operations = new ServiceCycleProfileOperations(1, 2, 3, 4, 5, 6, 7, 8);
+        var operations = new ServiceCycleProfileOperations(1, 2, 3, 4, 7, 8);
         return ServiceCycleProfileRecord.Sample(
             stage,
             serviceOrdinal: 2,

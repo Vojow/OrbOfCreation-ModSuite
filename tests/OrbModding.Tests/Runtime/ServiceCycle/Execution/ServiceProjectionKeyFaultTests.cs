@@ -17,7 +17,6 @@ public sealed class ServiceProjectionKeyFaultTests
         var definition = new ExecutionServiceDefinition("test.projection.duplicate-key");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 

@@ -1,6 +1,6 @@
 # Auto Buy stage profiles
 
-[Reverse-engineering index](README.md) · [Simulation evidence](auto-buy-simulation-evidence.md) · [Auto Buy testing](../testing/automata/auto-buy.md) · [Entity catalog](entity-catalog.md)
+[Reverse-engineering index](README.md) · [Auto Buy testing](../testing/automata/auto-buy.md) · [Entity catalog](entity-catalog.md)
 
 ## Two different profile classes
 
@@ -50,14 +50,15 @@ history.
 
 ## Runtime-derived perturbations
 
-`AutoBuyRuntimeDerivedSimulationTests` keeps diagnostic-inspired disturbances
-separate from the four stable stage profiles. It varies low Bulk Development
-sizes, transient unresolved costs, completion storms, exact affordability
-boundaries, one indivisible 35 ms modeled read, and registry growth from 28 to
-137 candidates. The inputs intentionally exaggerate or isolate one behavior at
-a time. They are useful for detecting scheduler and recovery regressions, but
-they are not evidence-backed progression populations and do not change the
-checked early/mid/late/endgame workload definitions.
+`AutoBuyRuntimeDerivedSimulationTests` kept diagnostic-inspired disturbances
+separate from the four stable stage profiles: low Bulk Development sizes,
+transient unresolved costs, completion storms, exact affordability boundaries,
+one indivisible 35 ms modeled read, and registry growth from 28 to 137
+candidates. It was deleted with the legacy Auto Buy runtime and has no
+replacement. The perturbations are recorded here because they are worth
+rebuilding against the ServiceCycle service, not because they run today. They
+were never evidence-backed progression populations and never changed the checked
+early/mid/late/endgame workload definitions.
 
 ## Observed-profile capture schema
 

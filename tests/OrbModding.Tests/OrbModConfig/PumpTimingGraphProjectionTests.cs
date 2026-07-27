@@ -73,15 +73,38 @@ public sealed class PumpTimingGraphProjectionTests
     }
 
     [Fact]
-    public void HeightUsesActualMaximumInsteadOfClippingAtP95()
+    public void OneWarmupFrameDoesNotFlattenTheRestOfTheWindow()
     {
-        var p95Ticks = TimeSpan.FromMilliseconds(0.040).Ticks;
-        var maximumTicks = TimeSpan.FromMilliseconds(0.180).Ticks;
+        var sorted = new long[100];
+        for (var index = 0; index < sorted.Length - 1; index++)
+            sorted[index] = TimeSpan.FromMilliseconds(1).Ticks;
+        sorted[^1] = TimeSpan.FromMilliseconds(244).Ticks;
 
-        var p95Height = PumpTimingGraphProjection.Height(p95Ticks, maximumTicks);
+        var scale = PumpTimingGraphProjection.ScaleTicks(sorted);
 
-        Assert.InRange(p95Height, 0.22f, 0.23f);
-        Assert.Equal(1f, PumpTimingGraphProjection.Height(maximumTicks, maximumTicks));
+        Assert.Equal(TimeSpan.FromMilliseconds(1).Ticks, scale);
+        Assert.Equal(1f, PumpTimingGraphProjection.Height(sorted[0], scale));
+        Assert.Equal(1f, PumpTimingGraphProjection.Height(sorted[^1], scale));
+    }
+
+    [Fact]
+    public void ScaleTracksTheWindowWhenNothingIsAnOutlier()
+    {
+        var sorted = new long[100];
+        for (var index = 0; index < sorted.Length; index++)
+            sorted[index] = TimeSpan.FromMilliseconds(index + 1).Ticks;
+
+        var scale = PumpTimingGraphProjection.ScaleTicks(sorted);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(99).Ticks, scale);
+        Assert.InRange(PumpTimingGraphProjection.Height(sorted[49], scale), 0.5f, 0.51f);
+    }
+
+    [Fact]
+    public void AnIdleFrameDrawsNothingRatherThanAStub()
+    {
+        Assert.Equal(0f, PumpTimingGraphProjection.Height(0, TimeSpan.FromMilliseconds(1).Ticks));
+        Assert.Equal(1, PumpTimingGraphProjection.ScaleTicks(ReadOnlySpan<long>.Empty));
     }
 
     private static ServiceCyclePumpTimingSample Sample(
@@ -98,6 +121,8 @@ public sealed class PumpTimingGraphProjectionTests
             responses,
             actions,
             captures,
+            cyclesStarted: captures,
+            worldGateDeferrals: 0,
             emergencyBatchesRejected: 0,
             lifecyclePositionTransitions: 0,
             responseDuration: default,

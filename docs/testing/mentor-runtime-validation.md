@@ -1,8 +1,6 @@
-# Orb Mentor interactive runtime checklist
+# Mentor interactive runtime checklist
 
-[Back to Mentor testing](mentor.md) · [Testing hub](README.md) · [Runtime protocol](runtime-validation.md)
-
-[Back to development documentation](../README.md) · [Orb Mentor reference](../../src/OrbMentor/README.md)
+[Back to Mentor testing](mentor.md) · [Testing hub](README.md) · [Runtime protocol](runtime-validation.md) · [Mentor reference](../../src/Mentor/README.md)
 
 Use only on a backed-up save and a manually installed test copy of the built DLLs. Automated checks do not install anything into the live game.
 

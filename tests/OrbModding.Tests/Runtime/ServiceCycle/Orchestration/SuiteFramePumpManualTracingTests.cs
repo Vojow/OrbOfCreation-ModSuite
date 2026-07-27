@@ -14,7 +14,7 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Orchestration;
 public sealed class SuiteFramePumpManualTracingTests
 {
     [Fact]
-    public void ManualTraceAttachesAndDetachesAtSettledBoundariesWithoutReplay()
+    public void ManualTraceAttachesAndDetachesAtSettledBoundariesWithoutAHostTrace()
     {
         using var registry = Registry("trace.manual.only");
         using var pump = new SuiteFramePump(registry);
@@ -38,18 +38,18 @@ public sealed class SuiteFramePumpManualTracingTests
     }
 
     [Fact]
-    public void ClosingReplayLeavesTheIndependentlyOwnedManualTraceAttached()
+    public void ClosingTheHostTraceLeavesTheIndependentlyOwnedManualTraceAttached()
     {
-        using var registry = Registry("trace.manual.with-replay");
-        var replay = new ServiceCycleSemanticRecorder(new ServiceCycleTraceSessionId(301), 64, 1);
-        using var pump = new SuiteFramePump(registry, replay);
-        var replaySource = Assert.IsType<ServiceCycleSemanticTraceSource>(pump.SemanticTrace);
+        using var registry = Registry("trace.manual.with-host-trace");
+        var host = new ServiceCycleSemanticRecorder(new ServiceCycleTraceSessionId(301), 64, 1);
+        using var pump = new SuiteFramePump(registry, host);
+        var hostSource = Assert.IsType<ServiceCycleSemanticTraceSource>(pump.SemanticTrace);
         var observer = new RecordingObserver();
         var manual = Recorder(new ServiceCycleTraceSessionId(302), observer);
         Assert.True(pump.TryAttachManualSemanticTrace(manual, out var attached));
 
         pump.PumpFrame(1);
-        var replayCursor = replaySource.Cursor;
+        var hostCursor = hostSource.Cursor;
         var manualCount = observer.Events.Count;
 
         Assert.Equal(
@@ -58,7 +58,7 @@ public sealed class SuiteFramePumpManualTracingTests
         Assert.Null(pump.SemanticTrace);
         pump.PumpFrame(2);
 
-        Assert.Equal(replayCursor, replaySource.Cursor);
+        Assert.Equal(hostCursor, hostSource.Cursor);
         Assert.True(observer.Events.Count > manualCount);
         Assert.True(pump.TryDetachManualSemanticTrace(attached!));
     }
@@ -109,7 +109,7 @@ public sealed class SuiteFramePumpManualTracingTests
                 CommonServiceDecisionCodes.NotReady,
                 WakePolicy.AfterDecision(new MonotonicDuration(1))),
         };
-        registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        registry.Register(definition, new LifecycleGeneration(1));
         registry.Seal();
         return registry;
     }

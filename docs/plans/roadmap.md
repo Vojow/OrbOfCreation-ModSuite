@@ -4,18 +4,15 @@
 
 [Back to plans](README.md) · [Project overview](../../README.md)
 
-## Current direction
+What the suite already does is the [runtime architecture dossier](../runtime-architecture/README.md)'s
+to state, not this file's.
 
-Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common form the supported suite. Native game APIs remain authoritative for progression, queues, saves, availability, costs, and final mutation validation.
+## What remains
 
-The next foundational change is the [Auto Buy ServiceCycle port](autobuy-service-cycle-port.md). It will reuse the neutral host already proven by Auto Harvest, move calculations into native-free worker policy, and delete the legacy Auto Buy scheduler once parity is established.
-
-After Auto Buy is migrated:
-
-1. compare Auto Buy and Auto Harvest traces to identify measured runtime costs;
-2. address only material findings under the [performance plan](performance-suite.md);
-3. complete combined-suite runtime and package validation; and
-4. prepare a reviewed beta release from the supported plugin allowlist.
+1. Migrate the remaining features — Auto Cast, Auto Concept, Spell Leveling, and Mentor — onto ServiceCycle. Each migration also retires that feature's declared legacy native surface and the parts of the CPU-budget machinery that exist only to serve unmigrated work.
+2. Compare Auto Buy and Auto Harvest traces to identify measured runtime costs, and act only on material findings.
+3. Complete combined-suite runtime and package validation, then prepare a reviewed beta release.
+4. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
 
 ## Later modules
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export NUGET_HTTP_CACHE_PATH="${NUGET_HTTP_CACHE_PATH:-${repository_root}/artifacts/nuget-http-cache}"
 
 usage() {
     echo "Usage: ./script/install release|perf-debug" >&2
@@ -156,57 +157,52 @@ echo "Running the complete portable gate..."
 "${repository_root}/script/test"
 
 echo "Running installed-game contracts..."
+OOC_GAME_DIR="${reference_root}" dotnet restore \
+    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+    --force-evaluate \
+    --disable-build-servers
 OOC_GAME_DIR="${reference_root}" dotnet test \
     "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-    --configuration "${configuration}"
+    --configuration "${configuration}" \
+    --no-restore
 
 echo "Building the supported suite in ${mode} mode..."
-for project in OrbModding.Common OrbAutomata OrbModConfig OrbMentor; do
-    OOC_GAME_DIR="${reference_root}" dotnet build \
-        "${repository_root}/src/${project}/${project}.csproj" \
-        --configuration "${configuration}" \
-        --disable-build-servers \
-        -m:1 \
-        --no-incremental \
-        "${profile_build_arguments[@]}"
-done
+OOC_GAME_DIR="${reference_root}" dotnet restore \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --force-evaluate \
+    --disable-build-servers \
+    "${profile_build_arguments[@]}"
+OOC_GAME_DIR="${reference_root}" dotnet build \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --configuration "${configuration}" \
+    --disable-build-servers \
+    -m:1 \
+    --no-incremental \
+    "${profile_build_arguments[@]}"
 
 output_directory() {
-    printf '%s/src/%s/%s/%s/netstandard2.1\n' \
-        "${repository_root}" "$1" "${output_root}" "${configuration}"
+    printf '%s/src/%s/%s/netstandard2.1\n' \
+        "${repository_root}" "${output_root}" "${configuration}"
 }
 
-automata_source="$(output_directory OrbAutomata)/OrbAutomata.dll"
-mentor_source="$(output_directory OrbMentor)/OrbMentor.dll"
-config_source="$(output_directory OrbModConfig)/OrbModConfig.dll"
-common_source="$(output_directory OrbModding.Common)/OrbModding.Common.dll"
-for build_output in "${automata_source}" "${mentor_source}" "${config_source}" "${common_source}"; do
-    if [[ ! -f "${build_output}" ]]; then
-        echo "Required supported build output is missing: ${build_output}" >&2
-        exit 1
-    fi
-done
-if [[ "${mode}" == "perf-debug" ]]; then
-    if ! grep -a -q "AutomataServiceCycleProfileController" "${automata_source}" ||
-        ! grep -a -q "ServiceCycleProfileRuntimeSession" "${common_source}"; then
-        echo "The perf-debug outputs do not contain the required ServiceCycle profiling components." >&2
-        exit 1
-    fi
-elif grep -a -q "AutomataServiceCycleProfileController" "${automata_source}" ||
-    grep -a -q "ServiceCycleProfileRuntimeSession" "${common_source}"; then
-    echo "The release outputs unexpectedly contain ServiceCycle profiling components." >&2
+suite_source="$(output_directory)/OrbModSuite.dll"
+if [[ ! -f "${suite_source}" ]]; then
+    echo "Required supported build output is missing: ${suite_source}" >&2
     exit 1
 fi
-if find "${repository_root}/src" -path "*/${output_root}/${configuration}/netstandard2.1/*" \
-    -type f \( -name 'OrbChronomancer.dll' -o -name 'OrbAchievementResonance.dll' \) | grep -q .; then
-    echo "A forbidden experimental DLL appeared in the selected build outputs." >&2
+if [[ "${mode}" == "perf-debug" ]]; then
+    if ! grep -a -q "AutomataServiceCycleProfileController" "${suite_source}" ||
+        ! grep -a -q "ServiceCycleProfileRuntimeSession" "${suite_source}"; then
+        echo "The perf-debug output does not contain the required ServiceCycle profiling components." >&2
+        exit 1
+    fi
+elif grep -a -q "AutomataServiceCycleProfileController" "${suite_source}" ||
+    grep -a -q "ServiceCycleProfileRuntimeSession" "${suite_source}"; then
+    echo "The release output unexpectedly contains ServiceCycle profiling components." >&2
     exit 1
 fi
 
-automata_target="${plugins_root}/OrbAutomata/OrbAutomata.dll"
-mentor_target="${plugins_root}/OrbMentor/OrbMentor.dll"
-common_target="${plugins_root}/OrbMentor/OrbModding.Common.dll"
-config_target="${plugins_root}/OrbModConfig/OrbModConfig.dll"
+suite_target="${plugins_root}/OrbModSuite/OrbModSuite.dll"
 
 reject_duplicate() {
     local assembly_name="$1"
@@ -220,15 +216,32 @@ reject_duplicate() {
     done < <(find "${plugins_root}" -type f -name "${assembly_name}" -print)
 }
 
-reject_duplicate OrbAutomata.dll "${automata_target}"
-reject_duplicate OrbMentor.dll "${mentor_target}"
-reject_duplicate OrbModding.Common.dll "${common_target}"
-reject_duplicate OrbModConfig.dll "${config_target}"
-if find "${plugins_root}" -type f \
-    \( -name 'OrbChronomancer.dll' -o -name 'OrbAchievementResonance.dll' \) | grep -q .; then
-    echo "Remove experimental ModSuite DLLs before installing the supported suite." >&2
-    exit 1
-fi
+reject_duplicate OrbModSuite.dll "${suite_target}"
+
+# The three retired plugins loaded under their own GUIDs. Left in place beside the merged DLL they
+# still load, and two Automatas would fight over the same native action families. Refuse rather than
+# delete: this script has never removed a user's files and should not start now.
+reject_retired() {
+    local found_path
+    local found_any=0
+    while IFS= read -r found_path; do
+        if [[ "${found_any}" -eq 0 ]]; then
+            echo "Retired suite DLLs are still installed and would load beside the merged plugin." >&2
+            echo "Remove these before installing:" >&2
+            found_any=1
+        fi
+        echo "  ${found_path}" >&2
+    done < <(find "${plugins_root}" -type f \( \
+        -name 'OrbAutomata.dll' -o \
+        -name 'OrbMentor.dll' -o \
+        -name 'OrbModConfig.dll' -o \
+        -name 'OrbModding.Common.dll' \) -print)
+    if [[ "${found_any}" -ne 0 ]]; then
+        exit 1
+    fi
+}
+
+reject_retired
 
 if game_is_running; then
     echo "Orb of Creation started during validation. Close it before installation." >&2
@@ -261,16 +274,9 @@ if [[ "${save_count}" -eq 0 ]]; then
     exit 1
 fi
 
-mkdir -p \
-    "${dll_backup}/OrbAutomata" \
-    "${dll_backup}/OrbMentor" \
-    "${dll_backup}/OrbModConfig"
+mkdir -p "${dll_backup}/OrbModSuite"
 dll_backup_count=0
-for installed_dll in \
-    "${automata_target}" \
-    "${mentor_target}" \
-    "${common_target}" \
-    "${config_target}"; do
+for installed_dll in "${suite_target}"; do
     if [[ ! -f "${installed_dll}" ]]; then
         continue
     fi
@@ -283,19 +289,44 @@ for installed_dll in \
     dll_backup_count=$((dll_backup_count + 1))
 done
 
+# The retired four-plugin era left its configuration files behind. BepInEx names a configuration file
+# after the plugin GUID, so the suite reads only dev.vojow.orbofcreation.modsuite.cfg and these three
+# are dead settings that still read as live to anyone who opens the config folder. Retired DLLs are
+# refused because two of them loading at once would fight over the same native action families; these
+# do nothing at all, so they are moved rather than made the user's problem. Moved, not deleted: they
+# go into the same timestamped backup as the installed DLL, and the copy is verified before the
+# original is dropped.
+config_root="${game_root}/BepInEx/config"
+retired_config_count=0
+for retired_config_name in \
+    dev.vojow.orbofcreation.automata.cfg \
+    dev.vojow.orbofcreation.mentor.cfg \
+    dev.vojow.orbofcreation.modconfig.cfg; do
+    retired_config="${config_root}/${retired_config_name}"
+    if [[ ! -f "${retired_config}" ]]; then
+        continue
+    fi
+    mkdir -p "${dll_backup}/config"
+    cp -p "${retired_config}" "${dll_backup}/config/${retired_config_name}"
+    if ! cmp -s "${retired_config}" "${dll_backup}/config/${retired_config_name}"; then
+        echo "Retired-configuration backup verification failed for ${retired_config_name}." >&2
+        exit 1
+    fi
+    rm -f -- "${retired_config}"
+    if [[ -e "${retired_config}" ]]; then
+        echo "Retired configuration could not be moved out of the config folder: ${retired_config_name}" >&2
+        exit 1
+    fi
+    retired_config_count=$((retired_config_count + 1))
+done
+
 if game_is_running; then
     echo "Orb of Creation started during backup. Close it before installation." >&2
     exit 1
 fi
 
-mkdir -p \
-    "$(dirname "${automata_target}")" \
-    "$(dirname "${mentor_target}")" \
-    "$(dirname "${config_target}")"
-cp -p "${automata_source}" "${automata_target}"
-cp -p "${mentor_source}" "${mentor_target}"
-cp -p "${common_source}" "${common_target}"
-cp -p "${config_source}" "${config_target}"
+mkdir -p "$(dirname "${suite_target}")"
+cp -p "${suite_source}" "${suite_target}"
 
 verify_install() {
     local source_file="$1"
@@ -306,10 +337,7 @@ verify_install() {
     fi
 }
 
-verify_install "${automata_source}" "${automata_target}"
-verify_install "${mentor_source}" "${mentor_target}"
-verify_install "${common_source}" "${common_target}"
-verify_install "${config_source}" "${config_target}"
+verify_install "${suite_source}" "${suite_target}"
 
 print_hash() {
     local installed_file="$1"
@@ -324,8 +352,6 @@ echo "  Mode: ${mode}"
 echo "  Source: ${source_commit} (${source_state})"
 echo "  Save backup: backups/$(basename "${save_backup}") (${save_count} files)"
 echo "  DLL backup: BepInEx/modsuite-backups/$(basename "${dll_backup}") (${dll_backup_count} files)"
+echo "  Retired configuration files moved into that backup: ${retired_config_count}"
 echo "  Installed SHA-256:"
-print_hash "${automata_target}"
-print_hash "${mentor_target}"
-print_hash "${common_target}"
-print_hash "${config_target}"
+print_hash "${suite_target}"

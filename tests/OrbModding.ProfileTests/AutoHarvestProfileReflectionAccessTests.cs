@@ -14,17 +14,19 @@ public sealed class AutoHarvestProfileReflectionAccessTests
         var measurement = new CapturingMeasurementPort();
         var probe = new ServiceCycleProfileProbe();
         probe.Attach(measurement);
-        var operations = new AutoHarvestProfileOperations(probe);
-        var context = CaptureContext(serviceOrdinal: 0, frameIdentity: 1);
+        var operations = new AutomataProfileOperations(probe);
+        var context = ActionContext(serviceOrdinal: 0, frameIdentity: 1);
         var target = new ReflectionTarget();
         var field = typeof(ReflectionTarget).GetField(nameof(ReflectionTarget.Value))!;
         var visible = typeof(ReflectionTarget).GetMethod(nameof(ReflectionTarget.IsVisible))!;
         var add = typeof(ReflectionTarget).GetMethod(nameof(ReflectionTarget.Add))!;
-        var stage = operations.Begin(1003, context, ServiceCycleProfileTemperature.Warm);
+        var stage = operations.Begin(
+            ServiceCycleProfileSpan.AutoHarvestBindingAndCoherence,
+            context,
+            ServiceCycleProfileTemperature.Warm);
         try
         {
             Assert.Equal(4, AutoHarvestReflectionAccess.GetValue(field, target, operations));
-            Assert.Equal(4, AutoHarvestReflectionAccess.ReadInt(field, target, operations));
             Assert.True(AutoHarvestReflectionAccess.InvokeBool(visible, target, operations));
             Assert.Equal(
                 7,
@@ -41,7 +43,7 @@ public sealed class AutoHarvestProfileReflectionAccessTests
         }
 
         var captured = Assert.Single(measurement.Completed);
-        Assert.Equal((uint)2, captured.Operations.ReflectedFieldReads);
+        Assert.Equal((uint)1, captured.Operations.ReflectedFieldReads);
         Assert.Equal((uint)2, captured.Operations.ReflectedMethodCalls);
         Assert.Equal((uint)1, captured.Operations.InvocationArgumentArrays);
         Assert.Same(measurement, probe.Detach());

@@ -2,13 +2,15 @@ using System;
 using System.Threading;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 
 internal class ExecutionServiceDefinition :
-    IServiceCycleDefinition<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction>
+    IServiceCycleDefinition<ExecutionState, ExecutionAction>
 {
     private readonly ExecutionWorkerSignals _signals;
     private readonly ExecutionWorkerControl _worker;
@@ -33,7 +35,11 @@ internal class ExecutionServiceDefinition :
     }
     internal int RejectAtIndex { get; set; } = -1;
     internal int FaultAtIndex { get; set; } = -1;
+    internal int SkipAtIndex { get; set; } = -1;
     internal NativeMutationCallOutcome CommittedNativeOutcome { get; set; } = new(1, 1, 1);
+
+    /// <summary>When set, actions commit as publications instead of native mutations.</summary>
+    internal WorldGeneration? PublishesGeneration { get; set; }
     internal WakePolicy EvaluationWake { get => _worker.EvaluationWake; set => _worker.EvaluationWake = value; }
     internal ManualResetEventSlim? EvaluationEntered
     {
@@ -67,62 +73,70 @@ internal class ExecutionServiceDefinition :
         get => _worker.DuplicateProjectionKey;
         set => _worker.DuplicateProjectionKey = value;
     }
-    internal int LastEvaluationConfig => _worker.LastEvaluationConfig;
-    internal int LastExecutionConfig { get; private set; }
+    internal int LastEvaluatedSetting => _worker.LastEvaluatedSetting;
+    internal int LastEvaluatedStrategySetting => _worker.LastEvaluatedStrategySetting;
+    internal int LastExecutedSetting { get; private set; }
     internal int ActionExecutionCount { get; private set; }
-    internal int CaptureCount { get; private set; }
+    /// <summary>
+    /// How many times the runtime asked this service whether to start.
+    /// </summary>
+    /// <remarks>
+    /// Observed on the pump thread inside <see cref="ShouldStart"/>, which is where the world
+    /// freshness gate is decided, so a test can read it straight after pumping. The worker's
+    /// evaluation count cannot serve: it is raced against the pump call that provoked it.
+    /// </remarks>
+    internal int StartCount { get; private set; }
     internal ServiceStartDecision StartDecision { get; set; } =
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
-    internal ServiceCaptureResult CaptureResult { get; set; } =
-        ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
     internal Action? ShouldStartCallback { get; set; }
-    internal Action? CaptureCallback { get; set; }
     internal Action? ActionCallback { get; set; }
     internal MonotonicTimestamp LastActionAttemptedAt { get; private set; }
     internal int StateCreateCount => _worker.StateCreateCount;
     internal int StateReleaseCount => _worker.StateReleaseCount;
     internal int EvaluationCount => _worker.EvaluationCount;
-    internal ManualResetEventSlim ResourcesReleased => _signals.ResourcesReleased;
+    internal int LastEvaluatedStructures => _worker.LastEvaluatedStructures;
+    internal bool LastEvaluatedWorldWasTheEmptyDefault => _worker.LastEvaluatedWorldWasTheEmptyDefault;
 
     internal void FailNextEvaluations(int count) => _worker.FailNextEvaluations(count);
     internal void FailNextProjections(int count) => _worker.FailNextProjections(count);
     internal void FailNextStateFactories(int count) => _worker.FailNextStateFactories(count);
 
-    public ExecutionFrame CreateFrame() => new();
-
-    public IServiceCycleWorkerDefinition<ExecutionFrame, ExecutionConfig, ExecutionState, ExecutionAction>
+    public IServiceCycleWorkerDefinition<ExecutionState, ExecutionAction>
         CreateWorkerDefinition() => new ExecutionWorkerDefinition(_worker);
 
-    public ServiceStartDecision ShouldStart(in ExecutionConfig config, in ServiceCycleStartContext context)
+    public ServiceStartDecision ShouldStart(in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context)
     {
+        StartCount++;
         ShouldStartCallback?.Invoke();
         return StartDecision;
     }
 
-    public ServiceCaptureResult Capture(
-        ref ExecutionFrame frame,
-        in ExecutionConfig config,
-        in ServiceCaptureContext context)
-    {
-        CaptureCount++;
-        CaptureCallback?.Invoke();
-        frame.Value = config.Value * 10;
-        return CaptureResult;
-    }
-
     public ServiceActionResult TryExecute(
         in ExecutionAction action,
-        in ExecutionConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
     {
         ActionExecutionCount++;
         LastActionAttemptedAt = context.AttemptedAt;
         ActionCallback?.Invoke();
-        LastExecutionConfig = config.Value;
+        LastExecutedSetting = TestSuiteConfiguration.SettingOf(config);
         if (context.ActionIndex == FaultAtIndex)
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         if (context.ActionIndex == RejectAtIndex)
             return ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
+        if (context.ActionIndex == SkipAtIndex)
+            return ServiceActionResult.Skipped(
+                CommonActionResultCodes.Skipped,
+                ServiceNativeMutationEvidence.Observed(
+                    NativeMutationOutcome.PostconditionFailed,
+                    new NativeMutationCallOutcome(1, 1, 0)));
+        if (PublishesGeneration is { } published)
+        {
+            return ServiceActionResult.CommittedPublication(
+                CommonActionResultCodes.Committed,
+                ServicePublicationEvidence.World(published));
+        }
+
         return ServiceActionResult.Committed(
             CommonActionResultCodes.Committed,
             ServiceNativeMutationEvidence.Observed(NativeMutationOutcome.Verified, CommittedNativeOutcome));

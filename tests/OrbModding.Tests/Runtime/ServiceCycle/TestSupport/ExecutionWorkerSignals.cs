@@ -16,7 +16,6 @@ internal sealed class ExecutionWorkerSignals
     internal ManualResetEventSlim? EvaluationRelease;
     internal ManualResetEventSlim? ActionsAppended;
     internal ManualResetEventSlim? ActionsRelease;
-    internal ManualResetEventSlim ResourcesReleased { get; } = new(false);
 
     internal static ExecutionWorkerSignals Create()
     {
@@ -26,10 +25,4 @@ internal sealed class ExecutionWorkerSignals
     }
 
     internal static ExecutionWorkerSignals Get(int id) => Signals[id];
-
-    internal static void Release(int id)
-    {
-        if (!Signals.TryRemove(id, out var signals)) return;
-        signals.ResourcesReleased.Set();
-    }
 }

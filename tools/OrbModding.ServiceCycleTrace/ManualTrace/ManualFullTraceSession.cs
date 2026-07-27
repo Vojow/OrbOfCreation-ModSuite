@@ -1,4 +1,5 @@
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 
 namespace OrbModding.ServiceCycleTrace.ManualTrace;
 
@@ -18,6 +19,11 @@ internal sealed class ManualFullTraceSession
     internal FullTraceSessionDocument Document { get; }
 
     internal void EnsureSafeReportPath(string path) => _directory.EnsureSafeReportPath(path);
+
+    internal IReadOnlyList<PublicationStoreEntry> PublicationStores() =>
+        _directory.ReadPublicationStores();
+
+    internal ServiceCycleTraceRoster Roster() => _directory.ReadRoster();
 
     internal IEnumerable<FullTraceSegmentDocument> Segments()
     {

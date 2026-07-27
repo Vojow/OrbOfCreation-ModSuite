@@ -190,7 +190,7 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
             new UpgradeSO
             {
                 uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid,
-                purchaseLevel = purchaseLevel,
+                level = purchaseLevel,
             });
     }
 
@@ -203,7 +203,7 @@ public sealed class AutoSpellLevelControllerHeadlessTests : IDisposable
             discovered = true,
             readyToLevel = true,
         };
-        recipe.levelingPrerequisites.unlocked = true;
+        recipe.levelingPrerequisites.available = true;
         SpellManager.instance!.availableSpellRecipes.value.Add(recipe);
         return recipe;
     }

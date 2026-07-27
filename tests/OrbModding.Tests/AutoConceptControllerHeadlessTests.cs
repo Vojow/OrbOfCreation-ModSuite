@@ -229,7 +229,7 @@ public sealed class AutoConceptControllerHeadlessTests : IDisposable
             uuid,
             new[] { new AlchemyTypeSO(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString()) })
         {
-            maxUsageSlots = 1,
+            maxUsageSlots = new ValueModifierRecord(new BigDouble(1.0, 0)),
             drainCost = new ConceptCostVector(
                 new ConceptCostEntry(resource, new BigDouble(1.0, 0))),
         };

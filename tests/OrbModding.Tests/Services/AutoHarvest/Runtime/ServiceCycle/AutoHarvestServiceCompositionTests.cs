@@ -1,34 +1,31 @@
 using System;
 using System.Threading;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Recording;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Tracing;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 public sealed class AutoHarvestServiceCompositionTests
 {
     [Fact]
-    public void CommonPumpExecutesTheReplayableServiceThroughMainThreadPorts()
+    public void CommonPumpExecutesTheServiceThroughMainThreadPorts()
     {
         var ownerThread = Thread.CurrentThread.ManagedThreadId;
-        var capture = new CapturePort(ownerThread);
         var actions = new ActionPort(ownerThread);
-        var definition = AutoHarvestService.Define(capture, actions);
-        var config = Configuration();
+        var definition = AutoHarvestService.Define(actions);
         using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(7));
-        var session = new ServiceCycleReplaySession(
-            new ServiceCycleTraceSessionId(1),
-            new ServiceCycleReplaySessionOptions(false, 0, 0, 0));
-        using var registration = registry.RegisterReplay(definition, config, session);
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(definition);
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAt(registry, 2, AutoHarvestTestWorlds.Harvestable());
 
         pump.PumpFrame(1);
         Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
@@ -37,35 +34,15 @@ public sealed class AutoHarvestServiceCompositionTests
 
         Assert.Equal(1, actions.ExecutionCount);
         Assert.Equal(AutoHarvestPair.FruitTree, actions.LastPair);
-        Assert.True(capture.CaptureCount > 0);
     }
 
-    private static AutomataConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
+    private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
         treasureSelected: false,
         MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(10)));
-
-    private sealed class CapturePort : IAutoHarvestCycleCapturePort
-    {
-        private readonly int _ownerThread;
-
-        public CapturePort(int ownerThread) => _ownerThread = ownerThread;
-        public int CaptureCount { get; private set; }
-
-        public AutoHarvestCycleCaptureDisposition Capture(
-            in AutomataConfiguration config,
-            LifecycleGeneration lifecycle,
-            out AutoHarvestCycleFrame frame)
-        {
-            Assert.Equal(_ownerThread, Thread.CurrentThread.ManagedThreadId);
-            CaptureCount++;
-            frame = ReadyFruitFrame();
-            return AutoHarvestCycleCaptureDisposition.Captured;
-        }
-    }
 
     private sealed class ActionPort : IAutoHarvestCycleActionPort
     {
@@ -77,7 +54,7 @@ public sealed class AutoHarvestServiceCompositionTests
 
         public ServiceActionResult TryExecute(
             in AutoHarvestCycleAction action,
-            in AutomataConfiguration config,
+            in SuiteRuntimeConfiguration config,
             in ServiceActionContext context)
         {
             Assert.Equal(_ownerThread, Thread.CurrentThread.ManagedThreadId);
@@ -88,22 +65,5 @@ public sealed class AutoHarvestServiceCompositionTests
                 CommonActionResultCodes.Committed,
                 ServiceNativeMutationEvidence.Observed(NativeMutationOutcome.Verified, call));
         }
-    }
-
-    private static AutoHarvestCycleFrame ReadyFruitFrame()
-    {
-        var facts = new AutoHarvestPairFacts(
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-            AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified);
-        return new AutoHarvestCycleFrame(
-            AutoHarvestPairCapture.Captured(AutoHarvestPair.FruitTree, facts),
-            AutoHarvestPairCapture.NotSelected(AutoHarvestPair.TreasureTree),
-            ownsActionFamily: true);
     }
 }

@@ -28,7 +28,6 @@ public sealed class ServiceWorkerFaultTransactionTests
             $"test.execution.recovery-contention.{projectionFault}");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         ServiceRunnerTestWait.RunZeroActionCycle(runner, clock);
@@ -38,13 +37,13 @@ public sealed class ServiceWorkerFaultTransactionTests
         else definition.FailNextEvaluations(1);
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
-        Assert.True(actionsAppended.Wait(TimeSpan.FromSeconds(2)));
+        Assert.True(actionsAppended.Wait(ServiceCycleTestDeadline.Value));
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
             "_resourceClaims",
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(registry)!;
         Assert.Equal(
             ServiceResourceClaimResult.Claimed,
-            ledger.TryBeginFactory(ServiceResourceRole.Frame, out var blocker));
+            ledger.TryBeginFactory(ServiceResourceRole.WorkerDefinition, out var blocker));
         actionsRelease.Set();
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
         Assert.True(runner.TryAcquireResponse());
@@ -78,7 +77,7 @@ public sealed class ServiceWorkerFaultTransactionTests
         registration.Dispose();
         Assert.True(SpinWait.SpinUntil(
             () => runner.HandoffPhaseHint == ServiceHandoffPhase.Stopped,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
         stopping.Stop();
         Assert.True(stopping.Elapsed < TimeSpan.FromMilliseconds(250));
     }
@@ -97,7 +96,6 @@ public sealed class ServiceWorkerFaultTransactionTests
             $"test.execution.recovery-contention-superseded.{projectionFault}");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         ServiceRunnerTestWait.RunZeroActionCycle(runner, clock);
@@ -107,13 +105,13 @@ public sealed class ServiceWorkerFaultTransactionTests
         else definition.FailNextEvaluations(1);
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
-        Assert.True(actionsAppended.Wait(TimeSpan.FromSeconds(2)));
+        Assert.True(actionsAppended.Wait(ServiceCycleTestDeadline.Value));
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
             "_resourceClaims",
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(registry)!;
         Assert.Equal(
             ServiceResourceClaimResult.Claimed,
-            ledger.TryBeginFactory(ServiceResourceRole.Frame, out var blocker));
+            ledger.TryBeginFactory(ServiceResourceRole.WorkerDefinition, out var blocker));
         definition.FailNextStateFactories(1);
         actionsRelease.Set();
         ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
@@ -159,11 +157,11 @@ public sealed class ServiceWorkerFaultTransactionTests
             ActionsAppended = appended,
             ActionsRelease = release,
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
-        Assert.True(appended.Wait(TimeSpan.FromSeconds(2)));
+        Assert.True(appended.Wait(ServiceCycleTestDeadline.Value));
         var whileWorkerOwns = runner.Snapshot;
         Assert.Equal(ServiceHandoffPhase.Evaluating, whileWorkerOwns.Handoff.Phase);
         Assert.Equal(0, whileWorkerOwns.ActionCount);
@@ -186,7 +184,6 @@ public sealed class ServiceWorkerFaultTransactionTests
         var definition = new ExecutionServiceDefinition($"test.execution.fault.{projectionFault}");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
@@ -228,7 +225,7 @@ public sealed class ServiceWorkerFaultTransactionTests
             PartialActionCountBeforeFault = 500,
         };
         definition.FailNextEvaluations(1);
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
@@ -253,7 +250,7 @@ public sealed class ServiceWorkerFaultTransactionTests
             ActionCount = 1,
             FaultAtIndex = 0,
         };
-        using var registration = registry.Register(definition, new ExecutionConfig(1), new LifecycleGeneration(1));
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
@@ -294,7 +291,6 @@ public sealed class ServiceWorkerFaultTransactionTests
         var definition = new ExecutionServiceDefinition("test.execution.factory");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 

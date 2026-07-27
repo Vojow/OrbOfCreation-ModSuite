@@ -1,19 +1,20 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Recording;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Tracing;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
+using OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 using Xunit;
 
-namespace OrbAutomata.Tests.Soak;
+namespace OrbModding.Tests.Soak;
 
 public sealed class AutoHarvestServiceCycleSoakEvidence
 {
@@ -25,20 +26,17 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
     public void SameInstanceSurvivesConfigurationAndLifecycleChurn()
     {
         var clock = new ThreadSafeTestClock(100);
-        var capture = new ReadyCapture();
         var actions = new CommittingActions();
-        var definition = AutoHarvestService.Define(capture, actions);
+        var definition = AutoHarvestService.Define(actions);
+        var world = AutoHarvestTestWorlds.Harvestable();
         using var registry = new ServiceCycleRegistry(1, clock);
-        var recording = new ServiceCycleReplaySession(
-            new ServiceCycleTraceSessionId(830),
-            new ServiceCycleReplaySessionOptions(false, 0, 0, 0));
-        using var registration = registry.RegisterReplay(
+        registry.ConfigurationPublication.Publish(Configuration(Step));
+        using var registration = registry.Register(
             definition,
-            Configuration(Step),
-            recording,
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var deadline = Stopwatch.GetTimestamp() + 20 * Stopwatch.Frequency;
         var frame = 0L;
         var lifecycle = 2UL;
@@ -50,11 +48,11 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
 
         for (var cycle = 1; cycle <= CycleCount; cycle++)
         {
-            RunCycle(pump, registration, clock, ref frame, deadline);
+            RunCycle(pump, registry, world, registration, clock, ref frame, deadline);
             if (cycle == CycleCount / 3)
-                PublishConfiguration(registration, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(750)));
+                PublishConfiguration(registry, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(750)));
             if (cycle == CycleCount * 2 / 3)
-                PublishConfiguration(registration, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(500)));
+                PublishConfiguration(registry, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(500)));
             if (cycle % 500 != 0 || cycle == CycleCount) continue;
 
             lifecycle++;
@@ -66,8 +64,7 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
 
         Assert.Equal(CycleCount / 2, actions.FruitCount);
         Assert.Equal(CycleCount / 2, actions.TreasureCount);
-        Assert.Equal(CycleCount, capture.CaptureCount);
-        Assert.Equal(3UL, registration.Configuration.ReadLatest().Generation.Value);
+        Assert.Equal(4UL, registry.Configuration.ReadLatest().Generation.Value);
         Assert.InRange(maximumLivePositions, 1, 2);
         Assert.Equal(1, registration.Slot.LifecycleSnapshot.LivePositionCount);
         Assert.Equal(lifecycle, registration.Runner.Lifecycle.Value);
@@ -75,9 +72,9 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
 
     private static void RunCycle(
         SuiteFramePump pump,
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
+        ServiceCycleRegistry registry,
+        GameWorldState world,
+        ServiceRegistration<
             AutoHarvestCycleState,
             AutoHarvestCycleAction> registration,
         ThreadSafeTestClock clock,
@@ -85,7 +82,8 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         long deadline)
     {
         clock.Advance(Step);
-        Assert.Equal(1, pump.PumpFrame(++frame).CapturesAttempted);
+        TestWorldCollector.CollectedAt(registry, frame + 2, world);
+        Assert.Equal(1, pump.PumpFrame(++frame).CyclesStarted);
         Assert.True(registration.WaitForResponseReady(Remaining(deadline)));
         Assert.Equal(1, pump.PumpFrame(++frame).ResponsesAcquired);
         Assert.Equal(1, pump.PumpFrame(++frame).ActionsAttempted);
@@ -94,19 +92,12 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
     }
 
     private static void PublishConfiguration(
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
-            AutoHarvestCycleState,
-            AutoHarvestCycleAction> registration,
+        ServiceCycleRegistry registry,
         MonotonicDuration interval) =>
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<AutomataConfiguration>.Saved(Configuration(interval))));
+        registry.ConfigurationPublication.Publish(Configuration(interval));
 
     private static void WaitForCleanup(
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
+        ServiceRegistration<
             AutoHarvestCycleState,
             AutoHarvestCycleAction> registration,
         long deadline)
@@ -127,40 +118,13 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         return TimeSpan.FromSeconds((double)ticks / Stopwatch.Frequency);
     }
 
-    private static AutomataConfiguration Configuration(MonotonicDuration interval) => AutoHarvestConfigurationFactory.Create(
+    private static SuiteRuntimeConfiguration Configuration(MonotonicDuration interval) => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
         treasureSelected: true,
         interval);
-
-    private sealed class ReadyCapture : IAutoHarvestCycleCapturePort
-    {
-        public int CaptureCount { get; private set; }
-
-        public bool TryCapture(
-            in AutomataConfiguration config,
-            LifecycleGeneration lifecycle,
-            out AutoHarvestCycleFrame frame)
-        {
-            CaptureCount++;
-            var facts = new AutoHarvestPairFacts(
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified);
-            frame = new AutoHarvestCycleFrame(
-                AutoHarvestPairCapture.Captured(AutoHarvestPair.FruitTree, facts),
-                AutoHarvestPairCapture.Captured(AutoHarvestPair.TreasureTree, facts),
-                ownsActionFamily: true);
-            return true;
-        }
-    }
 
     private sealed class CommittingActions : IAutoHarvestCycleActionPort
     {
@@ -169,7 +133,7 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
 
         public ServiceActionResult TryExecute(
             in AutoHarvestCycleAction action,
-            in AutomataConfiguration config,
+            in SuiteRuntimeConfiguration config,
             in ServiceActionContext context)
         {
             if (action.Pair == AutoHarvestPair.FruitTree) FruitCount++;

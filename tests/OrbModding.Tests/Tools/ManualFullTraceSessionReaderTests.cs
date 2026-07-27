@@ -26,7 +26,7 @@ public sealed class ManualFullTraceSessionReaderTests
         Assert.Contains("- Eligibility: DiagnosticOnly", report);
         Assert.Contains("- Completeness: Complete", report);
         Assert.Contains("## Service view", report);
-        Assert.Contains("Format v1 carries numeric service identities only", report);
+        Assert.Contains("This capture carries no roster", report);
         Assert.Contains("## Pump view", report);
         Assert.Contains("Otherwise idle accepted pumps", report);
         Assert.Contains("## Worker and service timeline", report);
@@ -84,7 +84,7 @@ public sealed class ManualFullTraceSessionReaderTests
         ManualFullTraceServiceView.Write(output, session);
 
         Assert.Contains(
-            "| 7 | 3 | 0 / 0 / 0 | 1 / 0 / 1 | 1 | 0 / 0 / 0 | — | 20.000 | — |",
+            "| 7 | 3 | 0 / 0 / 0 | 1 / 0 / 1 | 1 | 0 / 0 / 0 / 0 | — | 20.000 | — |",
             output.ToString());
     }
 

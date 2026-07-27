@@ -6,11 +6,11 @@ namespace OrbModding.Tests.Tools;
 public sealed class TraceCommandLineTests
 {
     [Fact]
-    public void FullModeParsesWithoutChangingReplayDefaults()
+    public void ManualFullTraceIsTheDefaultModeAndJournalIsOptIn()
     {
         Assert.True(TraceCommandLine.TryParse(
-            new[] { "--input", "artifact.oscr" },
-            out var replay));
+            new[] { "--input", "session-0000000000000001" },
+            out var implicitFull));
         Assert.True(TraceCommandLine.TryParse(
             new[] { "--full", "--input", "session-0000000000000001", "--output", "report.md" },
             out var full));
@@ -18,8 +18,7 @@ public sealed class TraceCommandLineTests
             new[] { "--journal", "--input", "journal", "--output", "report.md" },
             out var journal));
 
-        Assert.Equal(TraceInputKind.Replay, replay.InputKind);
-        Assert.Equal(ServiceCycleTraceProfile.Generic, replay.Profile);
+        Assert.Equal(TraceInputKind.ManualFullTrace, implicitFull.InputKind);
         Assert.Equal(TraceInputKind.ManualFullTrace, full.InputKind);
         Assert.Equal(TraceInputKind.DecisionJournal, journal.InputKind);
         Assert.Equal("report.md", full.OutputPath);
@@ -32,6 +31,6 @@ public sealed class TraceCommandLineTests
     [InlineData("--journal", "--input", "journal", "--profile", "generic")]
     [InlineData("--journal", "--full", "--input", "journal")]
     [InlineData("--journal", "--journal", "--input", "journal")]
-    public void NonReplayModesRejectProfilesDuplicatesAndMissingValues(params string[] args) =>
+    public void UnknownArgumentsDuplicateModesAndMissingValuesAreRejected(params string[] args) =>
         Assert.False(TraceCommandLine.TryParse(args, out _));
 }

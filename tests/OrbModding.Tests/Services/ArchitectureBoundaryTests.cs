@@ -7,10 +7,16 @@ using Xunit;
 namespace OrbModding.Tests.Services;
 
 /// <summary>
-/// Mechanically enforces the runtime dependency direction so that namespaces and folders
-/// are not the only boundary. Common must depend only on neutral contracts and value types;
-/// it must not reference a feature plugin assembly, contain a feature domain identity type,
-/// or reintroduce the superseded runtime substrate.
+/// Mechanically enforces the runtime boundary so that namespaces and folders are not the only
+/// guard. Nothing under the <c>OrbModding.Common</c> namespaces may carry a feature domain identity
+/// or reintroduce the superseded runtime substrate, and the plugin patches exactly the classes it
+/// names.
+/// <para>
+/// The two assembly-reference facts that used to live here — Common referencing no feature plugin,
+/// and Automata referencing Common — are gone. Both are about to be answered by a single DLL, where
+/// one is vacuously true and the other simply false; every fact left here is keyed on namespaces, so
+/// it survives the merge saying the same thing.
+/// </para>
 /// </summary>
 public sealed class ArchitectureBoundaryTests
 {
@@ -33,7 +39,6 @@ public sealed class ArchitectureBoundaryTests
         "BoundedTraceWriter",
         "CausalTraceCodec",
         "CausalTraceDocument",
-        "CausalTraceReplayOracle",
         "CausalTraceRecord",
         "CommandGeneration",
         "CommandId",
@@ -58,55 +63,66 @@ public sealed class ArchitectureBoundaryTests
     {
         "AutoHarvest", "AutoBuy", "AutoCast", "AutoConcept",
         "AutoSpell", "SpellLevel", "Mentor", "Agrimancy", "Agromancy",
+        "Automata", "ModConfig",
+    };
+
+    /// <summary>
+    /// The only Common types allowed to carry a feature fragment in their name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both are the vocabulary a feature uses to describe its own settings to whoever renders them.
+    /// Common owns the contract and Mod Config is merely its reader, so they are not the leak the
+    /// rule is looking for — unlike every other fragment, whose feature could not name a Common type
+    /// for any honest reason. The fragment is carried rather than dropped so that a real Mod Config
+    /// type landing in Common is still caught.
+    /// </para>
+    /// <para>
+    /// Renaming these two would touch every feature that declares config metadata, so it is deferred
+    /// as its own change rather than folded in here. <see cref="FeatureIdentityExemptionsAreLive"/>
+    /// makes the deferral expire on its own: the day they are renamed, this list must shrink.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] FeatureIdentityExemptions =
+    {
+        "ModConfigDependency", "ModConfigMetadata",
     };
 
     [Fact]
-    public void CommonDoesNotReferenceAnyFeaturePluginAssembly()
-    {
-        var referenced = CommonAssembly.GetReferencedAssemblies()
-            .Select(a => a.Name)
-            .ToArray();
-
-        Assert.DoesNotContain("OrbAutomata", referenced);
-        Assert.DoesNotContain("OrbMentor", referenced);
-        Assert.DoesNotContain("OrbModConfig", referenced);
-    }
+    public void CommonContainsNoFeatureDomainIdentityType() =>
+        Assert.Empty(FeatureIdentityOffenders("OrbModding.Common"));
 
     [Fact]
-    public void AutomataReferencesCommon_ProvingTheDirectionIsOneWay()
-    {
-        var referenced = AutomataAssembly.GetReferencedAssemblies()
-            .Select(a => a.Name)
-            .ToArray();
+    public void CommonRuntimeContainsNoFeatureDomainIdentityType() =>
+        Assert.Empty(FeatureIdentityOffenders("OrbModding.Common.Runtime"));
 
-        Assert.Contains("OrbModding.Common", referenced);
-    }
-
+    /// <summary>
+    /// An exemption that no longer names a Common type is a carve-out held open for nothing.
+    /// </summary>
     [Fact]
-    public void CommonContainsNoFeatureDomainIdentityType()
+    public void FeatureIdentityExemptionsAreLive()
     {
-        var offenders = CommonAssembly.GetTypes()
-            .Where(t => FeatureIdentityFragments.Any(fragment =>
-                t.Name.IndexOf(fragment, StringComparison.Ordinal) >= 0))
-            .Select(t => t.FullName)
-            .ToArray();
+        var commonTypeNames = CommonAssembly.GetTypes()
+            .Where(type => type.Namespace is not null &&
+                           type.Namespace.StartsWith("OrbModding.Common", StringComparison.Ordinal))
+            .Select(type => type.Name)
+            .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Empty(offenders);
+        Assert.All(FeatureIdentityExemptions, exemption =>
+            Assert.True(
+                commonTypeNames.Contains(exemption),
+                $"Exempted from the feature-identity rule but no longer a Common type: {exemption}"));
     }
 
-    [Fact]
-    public void CommonRuntimeContainsNoFeatureDomainIdentityType()
-    {
-        var offenders = CommonAssembly.GetTypes()
-            .Where(t => t.Namespace is not null &&
-                        t.Namespace.StartsWith("OrbModding.Common.Runtime", StringComparison.Ordinal))
-            .Where(t => FeatureIdentityFragments.Any(fragment =>
-                t.Name.IndexOf(fragment, StringComparison.Ordinal) >= 0))
-            .Select(t => t.FullName)
+    private static string[] FeatureIdentityOffenders(string namespacePrefix) =>
+        CommonAssembly.GetTypes()
+            .Where(type => type.Namespace is not null &&
+                           type.Namespace.StartsWith(namespacePrefix, StringComparison.Ordinal))
+            .Where(type => !FeatureIdentityExemptions.Contains(type.Name, StringComparer.Ordinal))
+            .Where(type => FeatureIdentityFragments.Any(fragment =>
+                type.Name.IndexOf(fragment, StringComparison.Ordinal) >= 0))
+            .Select(type => type.FullName!)
             .ToArray();
-
-        Assert.Empty(offenders);
-    }
 
     [Fact]
     public void CommonContainsNoSupersededRuntimeSubstrate()
@@ -129,6 +145,27 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
+    public void AutomataPatchesExactlyTheClassesItNames()
+    {
+        // Assembly-wide PatchAll would adopt every [HarmonyPatch] compiled beside it, which after the
+        // merge is the whole suite. Plugin names its patch classes instead; this pins the naming to
+        // the classes that actually exist, so a new patch class cannot install itself and an existing
+        // one cannot be dropped from the list unnoticed.
+        var declared = AutomataAssembly.GetTypes()
+            .Where(type => type.IsDefined(typeof(HarmonyLib.HarmonyPatchAttribute), inherit: false))
+            .Select(type => type.FullName)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        var patched = global::OrbModding.Plugin.HarmonyPatchTypes
+            .Select(type => type.FullName)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(declared, patched);
+        Assert.Equal(patched.Length, patched.Distinct().Count());
+    }
+
+    [Fact]
     public void AutoHarvestServiceCycleDoesNotReferenceTheLegacyPerformanceCoordinator()
     {
         var forbidden = new[]
@@ -140,9 +177,7 @@ public sealed class ArchitectureBoundaryTests
             typeof(SuitePerformanceWorkIdentity),
         };
         var offenders = AutomataAssembly.GetTypes()
-            .Where(type =>
-                type.Name.IndexOf("AutoHarvest", StringComparison.Ordinal) >= 0 ||
-                type.Name == "AutomataReplayExportPort")
+            .Where(type => type.Name.IndexOf("AutoHarvest", StringComparison.Ordinal) >= 0)
             .SelectMany(type => ReferencedMemberTypes(type)
                 .Where(reference => ContainsAny(reference, forbidden))
                 .Select(reference => $"{type.FullName} -> {reference.FullName}"))

@@ -17,13 +17,13 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
         var measurement = new CapturingMeasurementPort();
         var probe = new ServiceCycleProfileProbe();
         probe.Attach(measurement);
-        var operations = new AutoHarvestProfileOperations(probe);
+        var operations = new AutomataProfileOperations(probe);
         var fixture = NativeReaderFixture.Create();
         var reader = new AutoHarvestNativeStateReader(operations);
-        var context = CaptureContext(serviceOrdinal: 0, frameIdentity: 1);
+        var context = ActionContext(serviceOrdinal: 0, frameIdentity: 1);
 
         var activeStage = operations.Begin(
-            AutoHarvestServiceCycleProfileStageCodes.ActiveActionTraversal,
+            ServiceCycleProfileSpan.AutoHarvestBindingAndCoherence,
             context,
             ServiceCycleProfileTemperature.Warm);
         AutoHarvestActiveActionSnapshot active;
@@ -37,60 +37,58 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
             activeStage.Abandon();
         }
 
-        var factStage = operations.Begin(
-            AutoHarvestServiceCycleProfileStageCodes.FruitFactCapture,
+        var prototypeStage = operations.Begin(
+            ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
             context,
             ServiceCycleProfileTemperature.Warm);
-        AutoHarvestPairFacts facts;
+        object? prototype;
         try
         {
-            reader.ReadFacts(
-                fixture.Resolved,
-                active.Project(AutoHarvestPair.FruitTree),
-                out facts,
-                out _);
-            factStage.Complete();
+            prototype = reader.ReadPrototype(fixture.Resolved);
+            prototypeStage.Complete();
         }
         finally
         {
-            factStage.Abandon();
+            prototypeStage.Abandon();
         }
 
         Assert.True(active.IsValid);
-        Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Identity);
-        Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Readiness);
+        Assert.NotNull(prototype);
         Assert.Collection(
             measurement.Completed,
             item => AssertOperations(
                 item,
-                AutoHarvestServiceCycleProfileStageCodes.ActiveActionTraversal,
+                ServiceCycleProfileSpan.AutoHarvestBindingAndCoherence,
                 fieldReads: 1,
                 methodCalls: 7,
                 stableIdReads: 2,
                 listEntries: 1,
                 argumentArrays: 0),
+            // Was 1 field read, 9 method calls, 4 stable-id reads, 2 list entries and 1 argument
+            // array when the boundary re-derived the pair's facts here. What is left is resolving
+            // the instance to submit into.
             item => AssertOperations(
                 item,
-                AutoHarvestServiceCycleProfileStageCodes.FruitFactCapture,
-                fieldReads: 1,
-                methodCalls: 9,
-                stableIdReads: 4,
-                listEntries: 2,
-                argumentArrays: 1));
+                ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
+                fieldReads: 0,
+                methodCalls: 3,
+                stableIdReads: 2,
+                listEntries: 1,
+                argumentArrays: 0));
         Assert.Empty(measurement.Abandoned);
         Assert.Same(measurement, probe.Detach());
     }
 
     private static void AssertOperations(
         in CapturedMeasurement item,
-        int stageCode,
+        ServiceCycleProfileSpan span,
         uint fieldReads,
         uint methodCalls,
         uint stableIdReads,
         uint listEntries,
         uint argumentArrays)
     {
-        Assert.Equal(stageCode, item.Context.StageCode);
+        Assert.Equal((int)span, item.Context.StageCode);
         Assert.Equal(fieldReads, item.Operations.ReflectedFieldReads);
         Assert.Equal(methodCalls, item.Operations.ReflectedMethodCalls);
         Assert.Equal(stableIdReads, item.Operations.StableIdReads);
@@ -109,12 +107,11 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
             var plot = new ProfilePlot();
             var action = new ProfileAction();
             var instance = new ProfileInstance(plot, action);
-            plot.availableActions.Add(action);
             plot.instances.Add(instance);
             var active = new ProfileActiveActions(instance);
             var types = CreateTypes();
             var contract = CreateContract(types);
-            var shared = new AutoHarvestSharedBinding(active, new object(), null!, null!, 1);
+            var shared = new AutoHarvestSharedBinding(active, null!, null!, 1);
             var fruit = new AutoHarvestPairBinding(
                 AutoHarvestPair.FruitTree,
                 plot,
@@ -124,13 +121,7 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
                 new object(),
                 null!,
                 null!,
-                null!,
-                growthSeconds: 1,
-                restSeconds: 1,
-                actionSeconds: 1)
-            {
-                ActionSafety = AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-            };
+                null!);
             return new NativeReaderFixture(
                 new ResolvedAutoHarvestPair(contract, shared, fruit, fruit, null));
         }
@@ -160,30 +151,16 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
                 AutoHarvestStableIdAccessor.Bind(typeof(ProfilePlot)));
             Set(contract, nameof(AutoHarvestReflectionContract.ActionStableId),
                 AutoHarvestStableIdAccessor.Bind(typeof(ProfileAction)));
-            Set(contract, nameof(AutoHarvestReflectionContract.PlotAvailableActions),
-                Field<ProfilePlot>(nameof(ProfilePlot.availableActions)));
-            Set(contract, nameof(AutoHarvestReflectionContract.PlotIsVisible),
-                Method<ProfilePlot>(nameof(ProfilePlot.IsVisible)));
             Set(contract, nameof(AutoHarvestReflectionContract.PlotGetActionInstances),
                 Method<ProfilePlot>(nameof(ProfilePlot.GetActionInstances)));
-            Set(contract, nameof(AutoHarvestReflectionContract.PlotGetRemainingQuantity),
-                Method<ProfilePlot>(nameof(ProfilePlot.GetRemainingQuantity)));
-            Set(contract, nameof(AutoHarvestReflectionContract.ActionGetElementCost),
-                Method<ProfileAction>(nameof(ProfileAction.GetElementCost), typeof(ProfilePlot)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetAction),
                 Method<ProfileInstance>(nameof(ProfileInstance.GetAction)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetElement),
                 Method<ProfileInstance>(nameof(ProfileInstance.GetElement)));
-            Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsVisible),
-                Method<ProfileInstance>(nameof(ProfileInstance.IsVisible)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsEmpty),
                 Method<ProfileInstance>(nameof(ProfileInstance.IsEmpty)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsEngaged),
                 Method<ProfileInstance>(nameof(ProfileInstance.IsEngaged)));
-            Set(contract, nameof(AutoHarvestReflectionContract.InstanceHasEnough),
-                Method<ProfileInstance>(nameof(ProfileInstance.HasEnoughForOneInstance)));
-            Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetMaximumRemaining),
-                Method<ProfileInstance>(nameof(ProfileInstance.GetMaximumRemInstances)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetActualQuantity),
                 Method<ProfileInstance>(nameof(ProfileInstance.GetActualQuantity)));
             Set(contract, nameof(AutoHarvestReflectionContract.ActiveValues),
@@ -206,16 +183,12 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
 
     private sealed class ProfilePlot : IdScriptableObject
     {
-        public readonly List<ProfileAction> availableActions = new();
         public readonly List<ProfileInstance> instances = new();
-        public bool IsVisible() => true;
         public List<ProfileInstance> GetActionInstances() => instances;
-        public int GetRemainingQuantity() => 1;
     }
 
     private sealed class ProfileAction : IdScriptableObject
     {
-        public int GetElementCost(ProfilePlot plot) => plot is null ? 0 : 1;
     }
 
     private sealed class ProfileInstance
@@ -231,11 +204,8 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
 
         public ProfileAction GetAction() => _action;
         public ProfilePlot GetElement() => _plot;
-        public bool IsVisible() => true;
         public bool IsEmpty() => false;
         public bool IsEngaged() => false;
-        public bool HasEnoughForOneInstance() => true;
-        public int GetMaximumRemInstances() => 1;
         public int GetActualQuantity() => 1;
     }
 

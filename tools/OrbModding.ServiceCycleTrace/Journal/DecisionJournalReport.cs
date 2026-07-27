@@ -53,7 +53,7 @@ internal static class DecisionJournalReport
             "- Writer terminal state: Unavailable. OSJD has no terminal manifest or persisted live-status result.");
         writer.WriteLine();
         writer.WriteLine(
-            "This format omits empty pumps, frame and pump timing, physical worker scheduling, wall-clock time, service names, exception text, and replay state. Those facts are not inferred.");
+            "This format omits empty pumps, frame and pump timing, physical worker scheduling, wall-clock time, service names, and exception text. Those facts are not inferred.");
         writer.WriteLine();
     }
 
@@ -114,8 +114,8 @@ internal static class DecisionJournalReport
         }
         else
         {
-            writer.WriteLine("| Run | Service | Spans / observations / capture attempts | Terminals complete / rejected / faulted / orphaned / unavailable | Actions planned / committed | Native calls / mutation attempts / committed | Fault-bearing observations | Config / strategy / lifecycle transitions |");
-            writer.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|");
+            writer.WriteLine("| Run | Service | Spans / observations / capture attempts | Terminals complete / rejected / faulted / orphaned / unavailable | Actions planned / committed | Native calls / mutation attempts / committed | Fault-bearing observations | Lifecycle transitions | World-gate holds |");
+            writer.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
             for (var index = 0; index < analysis.ServiceCount; index++)
             {
                 var service = analysis.GetService(index);
@@ -148,14 +148,15 @@ internal static class DecisionJournalReport
                 writer.Write(" | ");
                 writer.Write(Number(service.FaultBearingObservations));
                 writer.Write(" | ");
-                WriteTriple(
-                    writer,
-                    service.ConfigurationChanges,
-                    service.StrategyChanges,
-                    service.LifecycleChanges);
+                writer.Write(Number(service.LifecycleChanges));
+                writer.Write(" | ");
+                writer.Write(Number(service.WorldGateHolds));
                 writer.WriteLine(" |");
             }
         }
+        writer.WriteLine();
+        writer.WriteLine(
+            $"Suite-wide configuration / strategy publications: {Number(analysis.ConfigurationChanges)} / {Number(analysis.StrategyChanges)}. The suite publishes one configuration record and one strategy bulletin, so a publication is one record rather than one per service.");
         writer.WriteLine();
         writer.WriteLine(
             $"Global emergency transitions entered / cleared: {Number(analysis.EmergencyEntered)} / {Number(analysis.EmergencyCleared)}.");

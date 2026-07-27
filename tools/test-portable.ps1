@@ -3,12 +3,9 @@ param(
     [ValidateSet(
         'Fast',
         'Reliability',
-        'AutoBuyDecision',
         'AutoBuyReliability',
-        'AutoBuyPerformance',
         'PerformanceAll',
         'Headless',
-        'Replay',
         'ExternalProcess',
         'All')]
     [string]$Lane = 'Fast',
@@ -27,12 +24,9 @@ $resultDirectory = Join-Path $repositoryRoot "artifacts/test-results/$($Lane.ToL
 $filters = @{
     Fast = 'Category!=PerformanceSimulation&Category!=ExternalProcess'
     Reliability = 'Category=Reliability|Category=AutoBuyReliability'
-    AutoBuyDecision = 'Category=AutoBuyDecision'
     AutoBuyReliability = 'Category=AutoBuyReliability'
-    AutoBuyPerformance = 'Category=AutoBuyPerformance'
     PerformanceAll = 'Category=PerformanceSimulation'
     Headless = 'Category=HeadlessIntegration|Category=HeadlessE2E'
-    Replay = 'FullyQualifiedName~RuntimeReplayTests'
     ExternalProcess = 'Category=ExternalProcess'
     All = $null
 }

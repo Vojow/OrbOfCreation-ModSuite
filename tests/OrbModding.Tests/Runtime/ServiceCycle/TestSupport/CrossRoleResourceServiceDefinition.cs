@@ -2,15 +2,16 @@ using System.Collections.Concurrent;
 using System.Threading;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 
 internal sealed class CrossRoleResource :
     IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
         CrossRoleResource,
         CrossRoleAction>
 {
@@ -18,67 +19,39 @@ internal sealed class CrossRoleResource :
 
     internal int Id { get; }
 
-    CrossRoleResource IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
-        CrossRoleResource,
-        CrossRoleAction>.CreateState(LifecycleGeneration lifecycle) =>
+    CrossRoleResource IServiceCycleWorkerStateDefinition<
+        CrossRoleResource>.CreateState(LifecycleGeneration lifecycle) =>
         CrossRoleResourceRuntime.CreateState(Id);
 
-    void IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
-        CrossRoleResource,
-        CrossRoleAction>.ReleaseState(ref CrossRoleResource state)
+    void IServiceCycleWorkerStateDefinition<
+        CrossRoleResource>.ReleaseState(ref CrossRoleResource state)
     {
         CrossRoleResourceRuntime.RecordStateRelease(Id);
         state = null!;
     }
 
-    void IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
-        CrossRoleResource,
-        CrossRoleAction>.ReleaseFrame(ref CrossRoleFrame frame) => frame = null!;
-
     WakePolicy IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
         CrossRoleResource,
         CrossRoleAction>.Evaluate(
-        in CrossRoleFrame frame,
-        in CrossRoleConfig config,
+        in SuiteRuntimeConfiguration config,
+        GameWorldState world,
+        SuiteStrategy strategy,
         in ServiceCycleContext context,
         ref CrossRoleResource state,
         ServiceActionWriter<CrossRoleAction> actions) => WakePolicy.AfterBatch(new MonotonicDuration(1_000));
 
-    void IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
-        CrossRoleResource,
-        CrossRoleAction>.ProjectState(
+    void IServiceCycleWorkerStateDefinition<
+        CrossRoleResource>.ProjectState(
         in CrossRoleResource state,
         in ServiceProjectionContext context,
         ServiceStateProjectionBuilder output) =>
         output.Add(new ServiceProjectionKey(1), ServiceProjectionValue.FromInteger(state.Id));
 }
 
-internal sealed class CrossRoleFrame
-{
-    internal CrossRoleFrame(int id) => Id = id;
-    internal int Id { get; }
-}
-
 internal sealed class CrossRoleState
 {
     internal CrossRoleState(int id) => Id = id;
     internal int Id { get; }
-}
-
-internal readonly struct CrossRoleConfig
-{
-    internal CrossRoleConfig(int value) => Value = value;
-    internal int Value { get; }
 }
 
 internal readonly struct CrossRoleAction
@@ -88,13 +61,12 @@ internal readonly struct CrossRoleAction
 }
 
 internal sealed class CrossRoleServiceDefinition :
-    IServiceCycleDefinition<CrossRoleFrame, CrossRoleConfig, CrossRoleResource, CrossRoleAction>
+    IServiceCycleDefinition<CrossRoleResource, CrossRoleAction>
 {
     internal CrossRoleServiceDefinition(string id)
     {
         ServiceId = new ServiceId(id);
         WorkerResource = new CrossRoleResource();
-        FrameResource = new CrossRoleFrame(WorkerResource.Id);
         StateResource = new CrossRoleResource();
     }
 
@@ -104,17 +76,12 @@ internal sealed class CrossRoleServiceDefinition :
         new MonotonicDuration(10),
         new MonotonicDuration(80));
     internal CrossRoleResource WorkerResource { get; set; }
-    internal CrossRoleFrame FrameResource { get; set; }
     internal CrossRoleResource StateResource { get; set; }
     internal bool Ready { get; set; } = true;
     internal int StateCreateCount => CrossRoleResourceRuntime.StateCreateCount(WorkerResource.Id);
     internal int StateReleaseCount => CrossRoleResourceRuntime.StateReleaseCount(WorkerResource.Id);
 
-    public CrossRoleFrame CreateFrame() => FrameResource;
-
     public IServiceCycleWorkerDefinition<
-        CrossRoleFrame,
-        CrossRoleConfig,
         CrossRoleResource,
         CrossRoleAction> CreateWorkerDefinition()
     {
@@ -123,103 +90,22 @@ internal sealed class CrossRoleServiceDefinition :
     }
 
     public ServiceStartDecision ShouldStart(
-        in CrossRoleConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceCycleStartContext context) => Ready
         ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
         : ServiceStartDecision.Wait(
             CommonServiceDecisionCodes.NotReady,
             WakePolicy.AfterDecision(new MonotonicDuration(1_000)));
 
-    public ServiceCaptureResult Capture(
-        ref CrossRoleFrame frame,
-        in CrossRoleConfig config,
-        in ServiceCaptureContext context) =>
-        ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
-
     public ServiceActionResult TryExecute(
         in CrossRoleAction action,
-        in CrossRoleConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceActionContext context) =>
         ServiceActionResult.Committed(
             CommonActionResultCodes.Committed,
             ServiceNativeMutationEvidence.Observed(
                 NativeMutationOutcome.Verified,
                 new NativeMutationCallOutcome(1, 1, 1)));
-}
-
-internal sealed class CrossRoleFrameOwnerDefinition :
-    IServiceCycleDefinition<CrossRoleResource, CrossRoleConfig, CrossRoleState, CrossRoleAction>
-{
-    private readonly CrossRoleFrameOwnerWorker _worker = new();
-
-    internal CrossRoleFrameOwnerDefinition(string id, CrossRoleResource frame)
-    {
-        ServiceId = new ServiceId(id);
-        Frame = frame;
-    }
-
-    public ServiceId ServiceId { get; }
-    public WakePolicy DefaultWakePolicy => WakePolicy.AfterBatch(new MonotonicDuration(1_000));
-    public ServiceFaultRecoveryPolicy FaultRecoveryPolicy => new(
-        new MonotonicDuration(10),
-        new MonotonicDuration(80));
-    internal CrossRoleResource Frame { get; }
-
-    public CrossRoleResource CreateFrame() => Frame;
-
-    public IServiceCycleWorkerDefinition<
-        CrossRoleResource,
-        CrossRoleConfig,
-        CrossRoleState,
-        CrossRoleAction> CreateWorkerDefinition() => _worker;
-
-    public ServiceStartDecision ShouldStart(
-        in CrossRoleConfig config,
-        in ServiceCycleStartContext context) =>
-        ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
-
-    public ServiceCaptureResult Capture(
-        ref CrossRoleResource frame,
-        in CrossRoleConfig config,
-        in ServiceCaptureContext context) =>
-        ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
-
-    public ServiceActionResult TryExecute(
-        in CrossRoleAction action,
-        in CrossRoleConfig config,
-        in ServiceActionContext context) =>
-        ServiceActionResult.Committed(
-            CommonActionResultCodes.Committed,
-            ServiceNativeMutationEvidence.Observed(
-                NativeMutationOutcome.Verified,
-                new NativeMutationCallOutcome(1, 1, 1)));
-
-    private sealed class CrossRoleFrameOwnerWorker :
-        IServiceCycleWorkerDefinition<
-            CrossRoleResource,
-            CrossRoleConfig,
-            CrossRoleState,
-            CrossRoleAction>
-    {
-        public CrossRoleState CreateState(LifecycleGeneration lifecycle) =>
-            new((int)lifecycle.Value);
-        public void ReleaseState(ref CrossRoleState state) => state = null!;
-        public void ReleaseFrame(ref CrossRoleResource frame) => frame = null!;
-
-        public WakePolicy Evaluate(
-            in CrossRoleResource frame,
-            in CrossRoleConfig config,
-            in ServiceCycleContext context,
-            ref CrossRoleState state,
-            ServiceActionWriter<CrossRoleAction> actions) =>
-            WakePolicy.AfterBatch(new MonotonicDuration(1_000));
-
-        public void ProjectState(
-            in CrossRoleState state,
-            in ServiceProjectionContext context,
-            ServiceStateProjectionBuilder output) =>
-            output.Add(new ServiceProjectionKey(1), ServiceProjectionValue.FromInteger(state.Id));
-    }
 }
 
 internal static class CrossRoleResourceRuntime

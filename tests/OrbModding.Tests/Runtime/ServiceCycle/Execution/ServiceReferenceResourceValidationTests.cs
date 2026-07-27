@@ -1,12 +1,15 @@
 using System;
 using System.Reflection;
 using System.Threading;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Lifecycle;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
@@ -15,28 +18,25 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Execution;
 public sealed class ServiceReferenceResourceValidationTests
 {
     [Fact]
-    public void NullReferenceFrameIsRejectedAndConstructionResourcesRemainReusable()
+    public void NullWorkerDefinitionIsRejectedAndConstructionResourcesRemainReusable()
     {
         using var registry = new ServiceCycleRegistry(1);
-        var invalid = new SyntheticServiceDefinition("test.reference-frame.null")
+        var invalid = new SyntheticServiceDefinition("test.reference-worker.null")
         {
-            ReturnNullFrame = true,
+            ReturnNullWorkerDefinition = true,
         };
 
         var exception = Assert.Throws<InvalidOperationException>(() => registry.Register(
             invalid,
-            new SyntheticConfig(1),
             new LifecycleGeneration(1)));
 
-        Assert.Contains("reference frame", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(1, invalid.FrameCreateCount);
-        Assert.Equal(0, invalid.FrameReleaseCount);
+        Assert.Contains("worker definition", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, invalid.WorkerDefinitionCreateCount);
         Assert.Equal(0, invalid.StateCreateCount);
         Assert.Equal(0, registry.Count);
 
         using var valid = registry.Register(
-            new SyntheticServiceDefinition("test.reference-frame.recovery"),
-            new SyntheticConfig(1),
+            new SyntheticServiceDefinition("test.reference-worker.recovery"),
             new LifecycleGeneration(1));
         Assert.Equal(1, registry.Count);
     }
@@ -52,7 +52,6 @@ public sealed class ServiceReferenceResourceValidationTests
         };
         using var registration = registry.Register(
             definition,
-            new SyntheticConfig(1),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
@@ -65,7 +64,7 @@ public sealed class ServiceReferenceResourceValidationTests
             Assert.True(runner.TryStartCycle(clock.Now).Queued);
             Assert.True(SpinWait.SpinUntil(
                 () => runner.Snapshot.Handoff.Phase == ServiceHandoffPhase.ResponseReady,
-                TimeSpan.FromSeconds(5)));
+                ServiceCycleTestDeadline.Value));
             Assert.True(runner.TryAcquireResponse());
             var faulted = runner.Snapshot;
             retryDue = faulted.NextWakeDue;
@@ -73,7 +72,7 @@ public sealed class ServiceReferenceResourceValidationTests
             Assert.Equal(ServiceFaultCategory.StateFactory, faulted.Fault.Category);
             Assert.Equal(attempt, definition.StateCreateCount);
             Assert.Equal(0, definition.StateReleaseCount);
-            Assert.Equal(2, ledger.LiveClaimCount);
+            Assert.Equal(1, ledger.LiveClaimCount);
             if (attempt < 4) clock.AdvanceTo(retryDue);
         }
 
@@ -82,12 +81,12 @@ public sealed class ServiceReferenceResourceValidationTests
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
         Assert.True(SpinWait.SpinUntil(
             () => runner.Snapshot.Handoff.Phase == ServiceHandoffPhase.ResponseReady,
-            TimeSpan.FromSeconds(5)));
+            ServiceCycleTestDeadline.Value));
         Assert.True(runner.TryAcquireResponse());
 
         Assert.False(runner.Snapshot.Fault.IsValid);
         Assert.Equal(5, definition.StateCreateCount);
-        Assert.Equal(3, ledger.LiveClaimCount);
+        Assert.Equal(2, ledger.LiveClaimCount);
     }
 
     [Fact]
@@ -97,14 +96,13 @@ public sealed class ServiceReferenceResourceValidationTests
         using var registry = new ServiceCycleRegistry(1, clock);
         using var registration = registry.Register(
             new DefaultValueServiceDefinition(),
-            default(DefaultValueConfig),
             new LifecycleGeneration(1));
         var runner = registration.Runner;
 
         Assert.True(runner.TryStartCycle(clock.Now).Queued);
         Assert.True(SpinWait.SpinUntil(
             () => runner.Snapshot.Handoff.Phase == ServiceHandoffPhase.ResponseReady,
-            TimeSpan.FromSeconds(5)));
+            ServiceCycleTestDeadline.Value));
         Assert.True(runner.TryAcquireResponse());
 
         var projection = runner.Snapshot.Projection.Snapshot;
@@ -112,8 +110,6 @@ public sealed class ServiceReferenceResourceValidationTests
         Assert.Equal(1L, projection.GetEntry(0).Value.Integer);
     }
 
-    private struct DefaultValueFrame { }
-    private readonly struct DefaultValueConfig { }
     private struct DefaultValueState
     {
         internal int EvaluationCount;
@@ -121,7 +117,7 @@ public sealed class ServiceReferenceResourceValidationTests
     private readonly struct DefaultValueAction { }
 
     private sealed class DefaultValueServiceDefinition :
-        IServiceCycleDefinition<DefaultValueFrame, DefaultValueConfig, DefaultValueState, DefaultValueAction>
+        IServiceCycleDefinition<DefaultValueState, DefaultValueAction>
     {
         public ServiceId ServiceId { get; } = new("test.value-defaults");
         public WakePolicy DefaultWakePolicy => WakePolicy.Immediate;
@@ -129,40 +125,31 @@ public sealed class ServiceReferenceResourceValidationTests
             new MonotonicDuration(10),
             new MonotonicDuration(80));
 
-        public DefaultValueFrame CreateFrame() => default;
-        public IServiceCycleWorkerDefinition<DefaultValueFrame, DefaultValueConfig, DefaultValueState, DefaultValueAction>
+        public IServiceCycleWorkerDefinition<DefaultValueState, DefaultValueAction>
             CreateWorkerDefinition() => new DefaultValueWorkerDefinition();
 
         public ServiceStartDecision ShouldStart(
-            in DefaultValueConfig config,
+            in SuiteRuntimeConfiguration config,
             in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
 
-        public ServiceCaptureResult Capture(
-            ref DefaultValueFrame frame,
-            in DefaultValueConfig config,
-            in ServiceCaptureContext context) =>
-            ServiceCaptureResult.Captured(
-                new StrategyGeneration(1),
-                CommonServiceDecisionCodes.Captured);
-
         public ServiceActionResult TryExecute(
             in DefaultValueAction action,
-            in DefaultValueConfig config,
+            in SuiteRuntimeConfiguration config,
             in ServiceActionContext context) =>
             ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
     }
 
     private sealed class DefaultValueWorkerDefinition :
-        IServiceCycleWorkerDefinition<DefaultValueFrame, DefaultValueConfig, DefaultValueState, DefaultValueAction>
+        IServiceCycleWorkerDefinition<DefaultValueState, DefaultValueAction>
     {
         public DefaultValueState CreateState(LifecycleGeneration lifecycle) => default;
         public void ReleaseState(ref DefaultValueState state) { }
-        public void ReleaseFrame(ref DefaultValueFrame frame) { }
 
         public WakePolicy Evaluate(
-            in DefaultValueFrame frame,
-            in DefaultValueConfig config,
+            in SuiteRuntimeConfiguration config,
+            GameWorldState world,
+            SuiteStrategy strategy,
             in ServiceCycleContext context,
             ref DefaultValueState state,
             ServiceActionWriter<DefaultValueAction> actions)

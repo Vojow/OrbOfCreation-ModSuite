@@ -1,7 +1,8 @@
 using System;
+using OrbAutomata;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Native;
 
 public sealed class AutoHarvestNativeFailureTests
 {

@@ -19,7 +19,7 @@ public sealed class DecisionJournalReportTests
         var decision = DecisionJournalRecord.Decision(CreateObservation(5, 100));
         var transition = DecisionJournalRecord.Transition(
             DecisionJournalRecordKind.ConfigurationChanged,
-            new ServiceCycleTraceServiceId(1),
+            default,
             generation: 2,
             new MonotonicTimestamp(120));
         fixture.WriteSegment(3, run: 11, firstSequence: 5, decision, transition);
@@ -38,6 +38,7 @@ public sealed class DecisionJournalReportTests
         Assert.Contains("## Retained record lineage", text);
         Assert.Contains("`#5`", text);
         Assert.Contains("ConfigurationChanged; generation `2`", text);
+        Assert.Contains("Suite-wide configuration / strategy publications: 1 / 0", text);
         Assert.Contains("omits empty pumps", text);
         Assert.DoesNotContain("Auto Harvest", text);
         Assert.DoesNotContain(fixture.Root, text, StringComparison.Ordinal);

@@ -96,7 +96,7 @@ public sealed class ModConfigGameplayInvalidationTests
             Assert.Equal(GameplayInvalidationKind.Configuration, change.Kinds);
             Assert.Equal(GameplayInvalidationDomains.ModConfig, change.Domain);
             Assert.Equal(string.Empty, change.ExpectedTypeName);
-            Assert.Equal(PluginIds.ModConfigGuid, change.Source);
+            Assert.Equal(PluginIds.SuiteGuid, change.Source);
         });
         Assert.Equal(
             new[]

@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Execution;
@@ -14,7 +16,7 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public async Task OfflineWorkerReadyWaitObservesTheInitialParkWithoutPolling()
     {
-        var handoff = new ServiceCycleHandoff<int>();
+        var handoff = new ServiceCycleHandoff();
         Assert.False(handoff.WaitForWorkerReady(TimeSpan.Zero));
 
         var worker = Task.Run(() =>
@@ -32,22 +34,24 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public async Task OfflineWaitObservesResponsePublicationWithoutPollingOrLostWakeups()
     {
-        var handoff = new ServiceCycleHandoff<int>();
-        var configuration = new ConfigurationPublication<int>(new ConfigGeneration(1), 7);
+        var handoff = new ServiceCycleHandoff();
+        var configuration = new ConfigurationPublication(new ConfigGeneration(1), TestSuiteConfiguration.Default);
         var identity = new ServiceCycleIdentity(
             new ServiceId("test.handoff.offline-wait"),
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(1),
+            new WorldGeneration(1),
             new CycleId(1));
         var context = new ServiceCycleContext(identity, default, new MonotonicTimestamp(10));
         var batch = new BatchId(1);
+        var world = EmptyWorld();
+        var strategy = NeutralStrategy();
 
-        Assert.True(handoff.TryPublishRequest(configuration, in context, batch, out var sequence));
+        Assert.True(handoff.TryPublishRequest(configuration, world, strategy, in context, batch, out var sequence));
         Assert.Equal(ServiceWorkerWorkKind.Evaluate, handoff.WaitForWorkerWork(out _, out _, out _));
         var wait = Task.Run(() => handoff.WaitForResponseReady(TimeSpan.FromSeconds(2)));
-        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, 1_000));
+        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, ServiceCycleTestDeadline.Value));
 
         var fault = new ServiceFault(
             ServiceFaultCategory.Evaluation,
@@ -73,26 +77,28 @@ public sealed class ServiceCycleHandoffTests
     }
 
     [Fact]
-    public async Task ReplayWaitObservesTheWorkerSettledAfterResponsePublication()
+    public async Task SettledWaitObservesTheWorkerSettledAfterResponsePublication()
     {
-        var handoff = new ServiceCycleHandoff<int>();
-        var configuration = new ConfigurationPublication<int>(new ConfigGeneration(1), 7);
+        var handoff = new ServiceCycleHandoff();
+        var configuration = new ConfigurationPublication(new ConfigGeneration(1), TestSuiteConfiguration.Default);
         var identity = new ServiceCycleIdentity(
-            new ServiceId("test.handoff.replay-settled"),
+            new ServiceId("test.handoff.settled-wait"),
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(1),
+            new WorldGeneration(1),
             new CycleId(1));
         var context = new ServiceCycleContext(identity, default, new MonotonicTimestamp(10));
         var batch = new BatchId(1);
+        var world = EmptyWorld();
+        var strategy = NeutralStrategy();
         var fault = new ServiceFault(
             ServiceFaultCategory.Evaluation,
             CommonActionResultCodes.AdapterFault,
             1,
             new MonotonicTimestamp(11));
 
-        Assert.True(handoff.TryPublishRequest(configuration, in context, batch, out var sequence));
+        Assert.True(handoff.TryPublishRequest(configuration, world, strategy, in context, batch, out var sequence));
         using var responsePublished = new ManualResetEventSlim();
         using var allowWorkerToSettle = new ManualResetEventSlim();
         var worker = Task.Run(() =>
@@ -118,7 +124,7 @@ public sealed class ServiceCycleHandoffTests
         Assert.False(handoff.WaitForResponseReadyAndWorkerSettled(identity, TimeSpan.Zero));
         var wait = Task.Run(() =>
             handoff.WaitForResponseReadyAndWorkerSettled(identity, TimeSpan.FromSeconds(2)));
-        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, 1_000));
+        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, ServiceCycleTestDeadline.Value));
         allowWorkerToSettle.Set();
 
         Assert.True(await wait);
@@ -133,13 +139,13 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public async Task OfflineWaitStopsPromptlyAndRejectsUnboundedTimeout()
     {
-        var handoff = new ServiceCycleHandoff<int>();
+        var handoff = new ServiceCycleHandoff();
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             handoff.WaitForResponseReady(TimeSpan.FromMilliseconds((double)int.MaxValue + 1)));
         Assert.False(handoff.WaitForResponseReady(TimeSpan.Zero));
 
         var wait = Task.Run(() => handoff.WaitForResponseReady(TimeSpan.FromSeconds(2)));
-        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, 1_000));
+        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, ServiceCycleTestDeadline.Value));
         handoff.SignalStop();
         Assert.False(await wait);
         Assert.Equal(1, handoff.OfflineResponseWakePulseCount);
@@ -152,9 +158,9 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public async Task OfflineWaitWakesWhenWorkerExitMakesResponseImpossible()
     {
-        var handoff = new ServiceCycleHandoff<int>();
+        var handoff = new ServiceCycleHandoff();
         var wait = Task.Run(() => handoff.WaitForResponseReady(TimeSpan.FromSeconds(2)));
-        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, 1_000));
+        Assert.True(SpinWait.SpinUntil(() => handoff.OfflineResponseWaiterCount == 1, ServiceCycleTestDeadline.Value));
 
         handoff.PrepareWorkerExit();
 
@@ -166,7 +172,7 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public void StopSignalAfterWorkerWakeDisposalIsIdempotent()
     {
-        var handoff = new ServiceCycleHandoff<int>();
+        var handoff = new ServiceCycleHandoff();
         handoff.PrepareWorkerExit();
         Assert.True(handoff.WorkerWakeDisposed);
 
@@ -179,19 +185,21 @@ public sealed class ServiceCycleHandoffTests
     [Fact]
     public void StaleAndDuplicateResponsesCannotCrossTheHalfDuplexBoundary()
     {
-        var handoff = new ServiceCycleHandoff<int>();
-        var configuration = new ConfigurationPublication<int>(new ConfigGeneration(1), 7);
+        var handoff = new ServiceCycleHandoff();
+        var configuration = new ConfigurationPublication(new ConfigGeneration(1), TestSuiteConfiguration.Default);
         var identity = new ServiceCycleIdentity(
             new ServiceId("test.handoff.identity"),
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(1),
+            new WorldGeneration(1),
             new CycleId(1));
         var context = new ServiceCycleContext(identity, default, new MonotonicTimestamp(10));
         var batch = new BatchId(1);
+        var world = EmptyWorld();
+        var strategy = NeutralStrategy();
 
-        Assert.True(handoff.TryPublishRequest(configuration, in context, batch, out var sequence));
+        Assert.True(handoff.TryPublishRequest(configuration, world, strategy, in context, batch, out var sequence));
         Assert.Equal(ServiceWorkerWorkKind.Evaluate, handoff.WaitForWorkerWork(out _, out _, out _));
         var fault = new ServiceFault(
             ServiceFaultCategory.Evaluation,
@@ -226,5 +234,18 @@ public sealed class ServiceCycleHandoffTests
         Assert.Equal(ServiceHandoffPhase.Empty, handoff.Snapshot.Phase);
         handoff.DisposeNeverStarted();
         Assert.True(handoff.WorkerWakeDisposed);
+    }
+
+    /// <summary>The world publication a request carries when the test is not about the world.</summary>
+    private static WorldPublication<GameWorldState> EmptyWorld()
+    {
+        using var publisher = new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        return publisher.ReadLatest();
+    }
+
+    private static StrategyPublication NeutralStrategy()
+    {
+        using var publisher = new ServiceStrategyPublisher(TestSuiteStrategy.Neutral);
+        return publisher.ReadLatest();
     }
 }

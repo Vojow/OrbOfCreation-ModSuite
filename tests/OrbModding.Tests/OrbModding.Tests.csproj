@@ -23,13 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../OrbModding.GameStubs/OrbModding.GameStubs.csproj" />
-    <ProjectReference Include="../OrbModding.RuntimeReplay/OrbModding.RuntimeReplay.csproj" />
-    <ProjectReference Include="../../tools/OrbModding.ReplayConverter/OrbModding.ReplayConverter.csproj" />
     <ProjectReference Include="../../tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj" />
     <ProjectReference Include="../../tools/OrbModding.ServiceCycleTrace/OrbModding.ServiceCycleTrace.csproj" />
-    <ProjectReference Include="../../src/OrbAutomata/OrbAutomata.csproj" />
-    <ProjectReference Include="../../src/OrbModConfig/OrbModConfig.csproj" />
-    <ProjectReference Include="../../src/OrbMentor/OrbMentor.csproj" />
+    <ProjectReference Include="../../src/OrbModSuite.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(EnableSoakTests)' != 'true'">
@@ -44,6 +40,5 @@
     <None Include="../../tools/generate-known-entities.ps1" Link="tools/generate-known-entities.ps1" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/generate-known-entities.sh" Link="tools/generate-known-entities.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../fixtures/automata/*.log" Link="fixtures/automata/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../fixtures/replays/*.json" Link="fixtures/replays/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -64,7 +64,7 @@ public sealed class DecisionJournalCoalescerTests
         journal.Observe(CreateObservation(1, 1, serviceValue: 1));
         journal.Observe(CreateObservation(1, 2, serviceValue: 2));
         var transition = DecisionJournalRecord.Transition(
-            DecisionJournalRecordKind.ConfigurationChanged,
+            DecisionJournalRecordKind.LifecycleChanged,
             new ServiceCycleTraceServiceId(1),
             2,
             new MonotonicTimestamp(3));
@@ -74,7 +74,7 @@ public sealed class DecisionJournalCoalescerTests
         Assert.Collection(
             sink.Records,
             span => Assert.Equal(new ServiceCycleTraceServiceId(1), span.Service),
-            item => Assert.Equal(DecisionJournalRecordKind.ConfigurationChanged, item.Kind));
+            item => Assert.Equal(DecisionJournalRecordKind.LifecycleChanged, item.Kind));
         journal.Stop(new MonotonicTimestamp(4));
         Assert.Equal(new ServiceCycleTraceServiceId(2), sink.Records[2].Service);
     }

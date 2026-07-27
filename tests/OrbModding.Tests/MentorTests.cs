@@ -146,11 +146,11 @@ public sealed class MentorTests
 
         MentorRuntime.GrantArtifact(artifact, new global::BigDouble(7.0, 8));
 
-        Assert.Equal(7.0, artifact.Container.Received.mantissa);
-        Assert.Equal(8, artifact.Container.Received.exponent);
+        Assert.Equal(7.0, artifact.Container.Received.Mantissa);
+        Assert.Equal(8, artifact.Container.Received.Exponent);
         Assert.Equal(2, artifact.masteryLevel);
-        Assert.Equal(3.0, artifact.masteryXp.mantissa);
-        Assert.Equal(4, artifact.masteryXp.exponent);
+        Assert.Equal(3.0, artifact.masteryXp.Mantissa);
+        Assert.Equal(4, artifact.masteryXp.Exponent);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class MentorTests
         Assert.False(config.AlchemyEnabled.Value);
         Assert.Equal(10.0, config.AlchemySharePercent.Value);
         Assert.Equal(2, config.OperationsPerFrame.Value);
-        Assert.Equal(0.5, config.CpuBudgetMilliseconds.Value);
+        Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.Equal(MentorSpellSourcePolicy.EquippedSpells, config.SpellSourcePolicy.Value);
     }
 

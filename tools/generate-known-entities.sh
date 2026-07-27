@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates or verifies src/OrbModding.Common/KnownEntities.Generated.cs from
+# Generates or verifies src/Common/KnownEntities.Generated.cs from
 # data/known-entities.tsv, validated against data/entity-mappings.tsv.
 # Behavioral mirror of tools/generate-known-entities.ps1 (same validation, same bytes),
 # so non-Windows builds do not require PowerShell. Portable: stock macOS bash 3.2 + awk.
@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(dirname "$SCRIPT_DIR")"
 CANONICAL_PATH="$REPOSITORY_ROOT/data/entity-mappings.tsv"
 SELECTION_PATH="$REPOSITORY_ROOT/data/known-entities.tsv"
-OUTPUT_PATH="$REPOSITORY_ROOT/src/OrbModding.Common/KnownEntities.Generated.cs"
+OUTPUT_PATH="$REPOSITORY_ROOT/src/Common/KnownEntities.Generated.cs"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

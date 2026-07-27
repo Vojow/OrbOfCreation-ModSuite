@@ -147,7 +147,7 @@ public sealed class AutomataFeatureStatusTests
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
         var duplicateKey = new FeatureStatusKey(
-            PluginIds.AutomataGuid,
+            PluginIds.SuiteGuid,
             AutomataFeatureStatuses.AutoConceptFeatureId);
         using var existing = registry.Register(new FeatureStatusSnapshot(
             duplicateKey,
@@ -166,10 +166,10 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(duplicateKey, snapshot.Key);
         Assert.Equal("Existing Auto Concept", snapshot.DisplayName);
         Assert.False(registry.TryGet(
-            new FeatureStatusKey(PluginIds.AutomataGuid, AutomataFeatureStatuses.AutoBuyFeatureId),
+            new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoBuyFeatureId),
             out _));
         Assert.False(registry.TryGet(
-            new FeatureStatusKey(PluginIds.AutomataGuid, AutomataFeatureStatuses.AutoCastFeatureId),
+            new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoCastFeatureId),
             out _));
     }
 
@@ -226,7 +226,7 @@ public sealed class AutomataFeatureStatusTests
         controller.Tick(1.0f);
         Assert.Equal(FeatureStatusState.Locked, statuses.SpellLevel.Current.State);
 
-        recipe.levelingPrerequisites.unlocked = true;
+        recipe.levelingPrerequisites.available = true;
         recipe.levelCost.affordable = false;
         controller.NotifyNativeChange();
         frame++;

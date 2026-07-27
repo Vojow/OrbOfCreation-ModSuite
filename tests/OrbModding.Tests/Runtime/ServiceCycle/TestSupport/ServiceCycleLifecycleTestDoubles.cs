@@ -28,7 +28,7 @@ internal sealed class HoldWorkerExitObserver : IServiceCycleWorkerExitObserver, 
 
     internal bool WaitForCount(int count) => SpinWait.SpinUntil(
         () => Volatile.Read(ref _enteredCount) >= count,
-        TimeSpan.FromSeconds(2));
+        ServiceCycleTestDeadline.Value);
 
     public void Dispose()
     {

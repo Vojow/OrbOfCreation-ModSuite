@@ -166,9 +166,14 @@ public sealed class AutoHarvestPolicyTests
         AssertRejected(decision, (AutoHarvestRejectionReason)expectedValue);
     }
 
+    /// <summary>
+    /// Both readings refuse. The rejected one is the native latch reading false, which is the absence
+    /// of a verdict rather than a refusal by the game — the gate treats absent evidence as grounds not
+    /// to act, and that is the half of this that must never change.
+    /// </summary>
     [Theory]
     [InlineData((int)AutoHarvestEvidenceState.Unknown, (int)AutoHarvestRejectionReason.PrerequisitesUnknown)]
-    [InlineData((int)AutoHarvestEvidenceState.Rejected, (int)AutoHarvestRejectionReason.PrerequisitesUnmet)]
+    [InlineData((int)AutoHarvestEvidenceState.Rejected, (int)AutoHarvestRejectionReason.PrerequisitesNotConfirmed)]
     public void PrerequisitesFailClosed(int stateValue, int expectedValue)
     {
         var decision = Evaluate(ReadyFacts(
@@ -188,6 +193,14 @@ public sealed class AutoHarvestPolicyTests
         AssertRejected(decision, (AutoHarvestRejectionReason)expectedValue);
     }
 
+    /// <summary>
+    /// Safety is judged at the action boundary, against the live objects, and before the queue.
+    /// </summary>
+    /// <remarks>
+    /// Before the queue because an unsafe action is unsafe whether or not there is room to run it,
+    /// and a rejection naming the full queue would read as "try again later" for something that must
+    /// never be submitted at all.
+    /// </remarks>
     [Theory]
     [InlineData((int)AutoHarvestActionSafetyState.Unknown, (int)AutoHarvestRejectionReason.PreservationUnknown)]
     [InlineData((int)AutoHarvestActionSafetyState.Destructive, (int)AutoHarvestRejectionReason.DestructiveAction)]
@@ -195,40 +208,90 @@ public sealed class AutoHarvestPolicyTests
     [InlineData((int)AutoHarvestActionSafetyState.UnsafeCompletionEffects, (int)AutoHarvestRejectionReason.UnsafeCompletionEffects)]
     public void OnlyAuditedNativePhaseCycleActionsAreSafe(int stateValue, int expectedValue)
     {
-        var decision = Evaluate(ReadyFacts(
-            actionSafety: (AutoHarvestActionSafetyState)stateValue));
+        var safety = (AutoHarvestActionSafetyState)stateValue;
 
-        AssertRejected(decision, (AutoHarvestRejectionReason)expectedValue);
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(), safety: safety),
+            (AutoHarvestRejectionReason)expectedValue);
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(empty: 0), safety: safety),
+            (AutoHarvestRejectionReason)expectedValue);
     }
 
-    [Theory]
-    [InlineData((int)AutoHarvestEvidenceState.Unknown, (int)AutoHarvestRejectionReason.DuplicateStateUnknown)]
-    [InlineData((int)AutoHarvestEvidenceState.Rejected, (int)AutoHarvestRejectionReason.AlreadyQueuedOrRunning)]
-    public void DuplicateStateFailsClosed(int stateValue, int expectedValue)
+    /// <summary>
+    /// The world facts alone cannot tell whether the action is one the suite audited.
+    /// </summary>
+    [Fact]
+    public void AnUnsafeActionIsStillAdmittedByTheWorldFactsAlone()
     {
-        var decision = Evaluate(ReadyFacts(
-            noDuplicate: (AutoHarvestEvidenceState)stateValue));
+        Assert.True(Evaluate(ReadyFacts()).ShouldSubmit);
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(), safety: AutoHarvestActionSafetyState.Destructive),
+            AutoHarvestRejectionReason.DestructiveAction);
+    }
 
-        AssertRejected(decision, (AutoHarvestRejectionReason)expectedValue);
+    /// <summary>
+    /// The queue is judged only at the action boundary, and only after every world fact has passed.
+    /// </summary>
+    /// <remarks>
+    /// Ordering matters here: an unreadable queue must not mask a pair that was never going to be
+    /// harvested anyway, or the rejection reason names the wrong thing and the diagnostics send
+    /// someone looking at the action list.
+    /// </remarks>
+    [Fact]
+    public void ADecisionWithoutTheQueueIsAdmittedAndTheBoundaryStillAsks()
+    {
+        Assert.True(Evaluate(ReadyFacts()).ShouldSubmit);
+
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(supported: 1)),
+            AutoHarvestRejectionReason.AlreadyQueuedOrRunning);
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(empty: 0)),
+            AutoHarvestRejectionReason.NoActionSlot);
+        AssertRejected(
+            Submit(ReadyFacts(), AutoHarvestSubmissionState.Invalid),
+            AutoHarvestRejectionReason.DuplicateStateUnknown);
+        AssertRejected(
+            Submit(ReadyFacts(readiness: AutoHarvestEvidenceState.Rejected), Queue(empty: 0)),
+            AutoHarvestRejectionReason.NotReady);
     }
 
     [Fact]
-    public void UnknownActionSlotStateFailsClosed()
+    public void ANativeEmptyEntryDenialRejectsTheSlotEvenWithEntriesCounted()
     {
-        var decision = Evaluate(ReadyFacts(
-            actionSlotAvailability: AutoHarvestEvidenceState.Unknown));
-
-        AssertRejected(decision, AutoHarvestRejectionReason.ActionSlotStateUnknown);
+        AssertRejected(
+            Submit(ReadyFacts(), Queue(empty: 1, nativeHasEmptyEntry: false)),
+            AutoHarvestRejectionReason.NoActionSlot);
     }
 
     [Fact]
-    public void FullNativeActionSlotListBlocksSubmission()
+    public void AQueueWithRoomAndNothingRunningAdmitsTheSubmission()
     {
-        var decision = Evaluate(ReadyFacts(
-            actionSlotAvailability: AutoHarvestEvidenceState.Rejected));
-
-        AssertRejected(decision, AutoHarvestRejectionReason.NoActionSlot);
+        Assert.True(Submit(ReadyFacts(), Queue()).ShouldSubmit);
     }
+
+    private static AutoHarvestPairDecision Submit(
+        AutoHarvestPairFacts facts,
+        in AutoHarvestSubmissionState queue,
+        AutoHarvestPair pair = AutoHarvestPair.FruitTree,
+        AutoHarvestActionSafetyState safety =
+            AutoHarvestActionSafetyState.NativePhaseCyclePreserving) =>
+        AutoHarvestPolicy.EvaluateSubmission(pair, in facts, safety, in queue);
+
+    private static AutoHarvestSubmissionState Queue(
+        int empty = 1,
+        int supported = 0,
+        bool nativeHasEmptyEntry = true) =>
+        new(
+            isValid: true,
+            usedEntryCount: 0,
+            emptyEntryCount: empty,
+            nativeHasEmptyEntry,
+            supportedCollectCount: supported,
+            pairMatchCount: 0,
+            pairQuantity: 0,
+            pairEngaged: false);
 
     private static AutoHarvestPairDecision Evaluate(
         AutoHarvestPairFacts facts,
@@ -241,19 +304,13 @@ public sealed class AutoHarvestPolicyTests
         AutoHarvestEvidenceState plotVisibility = AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState actionAvailability = AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState prerequisites = AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState readiness = AutoHarvestEvidenceState.Verified,
-        AutoHarvestActionSafetyState actionSafety = AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-        AutoHarvestEvidenceState noDuplicate = AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState actionSlotAvailability = AutoHarvestEvidenceState.Verified) =>
+        AutoHarvestEvidenceState readiness = AutoHarvestEvidenceState.Verified) =>
         new(
             identity,
             plotVisibility,
             actionAvailability,
             prerequisites,
-            readiness,
-            actionSafety,
-            noDuplicate,
-            actionSlotAvailability);
+            readiness);
 
     private static void AssertRejected(
         AutoHarvestPairDecision decision,

@@ -1,0 +1,462 @@
+using System;
+using System.Collections;
+using System.Linq.Expressions;
+using System.Reflection;
+
+namespace OrbModding.Common.Runtime.World;
+
+/// <summary>
+/// Compiles typed accessors for native members once, so reading a value on the warm path is a direct
+/// call returning an unboxed result rather than a reflective one.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the mechanism the Auto Buy reader already proved out: binding
+/// <c>Expression.Lambda&lt;Func&lt;object, T&gt;&gt;</c> once and invoking it per entity removed
+/// roughly 15 ms from a 23.7 ms collect, almost all of it <see cref="MethodInfo.Invoke"/> overhead and
+/// the boxing it forces on every value-typed read. Nothing here is novel; it is that technique
+/// factored out so world collection does not reimplement it a fifth time.
+/// </para>
+/// <para>
+/// Every binder returns <see langword="null"/> rather than throwing when a member is absent or has an
+/// unexpected type. A collector that cannot bind an accessor must degrade that category with evidence,
+/// which it can only do if binding failure is a value it can inspect.
+/// </para>
+/// <para>
+/// Return types are matched exactly rather than converted. An implicit widening would let a member
+/// whose type changed between game versions keep binding and start returning subtly different numbers —
+/// exactly the silent drift the assembly hash gate exists to prevent, reintroduced one member at a
+/// time.
+/// </para>
+/// </remarks>
+internal static class NativeAccessorBinder
+{
+    private const BindingFlags Instance =
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+    private const BindingFlags Static =
+        BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+    /// <summary>Binds a direct field read. The cheapest form: one cast, one load.</summary>
+    internal static Func<object, TValue>? Field<TValue>(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        if (field is null || field.FieldType != typeof(TValue)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Field(Expression.Convert(source, owner), field);
+        return Compile<TValue>(read, source);
+    }
+
+    /// <summary>Binds a no-argument instance method.</summary>
+    internal static Func<object, TValue>? Call<TValue>(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var method = owner.GetMethod(name, Instance, null, Type.EmptyTypes, null);
+        if (method is null || method.ReturnType != typeof(TValue)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var call = Expression.Call(Expression.Convert(source, owner), method);
+        return Compile<TValue>(call, source);
+    }
+
+    /// <summary>
+    /// Binds "read a field, then read a field on it" as one accessor — the shape a stored struct's
+    /// members take, such as a <c>ValueModifier</c>'s amount and order.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to be how every <c>ValueModifierRecord</c> was read, reaching past the record's own
+    /// accessor to its <c>calculatedValue</c> cache. Avoiding the accessor is still right —
+    /// <c>GetValue()</c> calls <c>Calculate()</c> on a dirty record, which allocates a LINQ pass over
+    /// both modifier dictionaries and writes four fields of game state — but the cache alone was the
+    /// wrong substitute, because it is <c>[NonSerialized]</c> and holds zero until something calls the
+    /// accessor. Records go through a read-only port of the accessor now; see
+    /// <see cref="ModifierRecord"/>.
+    /// </para>
+    /// <para>
+    /// What is left here is the honest case: a field inside a field that is plain stored data on both
+    /// levels, where reading it asks the game nothing and can be neither stale nor unset.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, TValue>? NestedField<TValue>(Type? owner, string fieldName, string nestedName)
+    {
+        if (owner is null) return null;
+
+        var outer = owner.GetField(fieldName, Instance);
+        if (outer is null) return null;
+
+        var inner = outer.FieldType.GetField(nestedName, Instance);
+        if (inner is null || inner.FieldType != typeof(TValue)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Field(Expression.Field(Expression.Convert(source, owner), outer), inner);
+        return Compile<TValue>(read, source);
+    }
+
+    /// <summary>
+    /// Binds a <c>ValueModifierRecord</c> field as the value the game itself reads out of it: its memo
+    /// while that memo stands, and a recomputation from base value and modifier sets when the game
+    /// would recompute.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This replaces <c>NestedField&lt;BigDouble&gt;(field, "calculatedValue")</c> everywhere. That
+    /// read took half of <c>GetValue()</c> and called it the answer: for a record whose modifiers have
+    /// churned, the memo is the previous answer and the game is about to replace it. A zero read of
+    /// the global structure-cost multiplier priced every structure at nothing. But the other half is
+    /// no more the answer on its own — a record nothing ever dirties is never recomputed, so its memo
+    /// is what the game charges from forever, and recomputing it instead over-priced every structure
+    /// by 1.25 to the power of its owned levels.
+    /// </para>
+    /// <para>
+    /// Either way it is strictly read-only, which is the property the cached read was chosen for in
+    /// the first place. <c>GetValue()</c> writes <c>calculatedValue</c>, clears
+    /// <c>calculationDirty</c> and re-stamps the record's observable; this reads members and, when the
+    /// record is dirty, does the arithmetic in this assembly. See
+    /// <see cref="NativeModifierRecordAccess"/>.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, BigDouble>? ModifierRecord(Type? owner, string fieldName)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(fieldName, Instance);
+        if (field is null || field.FieldType.IsValueType) return null;
+
+        var access = NativeModifierRecordAccess.For(field.FieldType);
+        var read = Reference(owner, fieldName);
+        if (access is null || read is null) return null;
+
+        return source => access.Fold(read(source));
+    }
+
+    /// <summary>
+    /// Binds an enum field inside a field, as its underlying integer — <see cref="NestedField{T}"/>
+    /// and <see cref="EnumField"/> composed, with both of their type checks.
+    /// </summary>
+    internal static Func<object, int>? NestedEnumField(Type? owner, string fieldName, string nestedName)
+    {
+        if (owner is null) return null;
+
+        var outer = owner.GetField(fieldName, Instance);
+        if (outer is null) return null;
+
+        var inner = outer.FieldType.GetField(nestedName, Instance);
+        if (inner is null || !inner.FieldType.IsEnum) return null;
+        if (Enum.GetUnderlyingType(inner.FieldType) != typeof(int)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Convert(
+            Expression.Field(Expression.Field(Expression.Convert(source, owner), outer), inner),
+            typeof(int));
+        return Compile<int>(read, source);
+    }
+
+    /// <summary>
+    /// Binds an enum field as its underlying integer.
+    /// </summary>
+    /// <remarks>
+    /// The suite deliberately does not mirror the game's enum types. A published row that named
+    /// <c>ChallengeState.Completed</c> would have to redeclare every member, and a build that inserted
+    /// one in the middle would silently renumber the copy while every comparison kept compiling. The
+    /// integer is what the game persists and what a comparison actually rests on, so that is what
+    /// travels; naming a state is the caller's problem, at the one place it matters.
+    /// <para>
+    /// The underlying type is checked exactly, for the same reason every other accessor checks its
+    /// return type: a widened enum would keep binding and start meaning something else.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, int>? EnumField(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        if (field is null || !field.FieldType.IsEnum) return null;
+        if (Enum.GetUnderlyingType(field.FieldType) != typeof(int)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Convert(
+            Expression.Field(Expression.Convert(source, owner), field), typeof(int));
+        return Compile<int>(read, source);
+    }
+
+    /// <summary>
+    /// Binds the element count of a collection-typed field.
+    /// </summary>
+    /// <remarks>
+    /// The size of a variable-size thing is a fixed-size fact. An immutable publication cannot carry
+    /// <c>List&lt;RitualEffectInstance&gt;</c>, and deferring the elements is usually right — but the
+    /// game's own answer to "is this ritual running" is <c>ritualInstances.Count &gt; 0</c>, and that
+    /// is an integer. Refusing the count along with the list would defer the fact as well as the
+    /// storage, which was never the point. See D17.
+    /// <para>
+    /// A null collection reads as zero rather than throwing. The game leaves these fields null before
+    /// first use, and "no instances" is the honest reading of that, not a failure.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, int>? CollectionCount(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        var count = field?.FieldType.GetProperty("Count", BindingFlags.Instance | BindingFlags.Public);
+        if (field is null || count is null || count.PropertyType != typeof(int)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var collection = Expression.Field(Expression.Convert(source, owner), field);
+        var read = Expression.Condition(
+            Expression.Equal(collection, Expression.Constant(null, field.FieldType)),
+            Expression.Constant(0),
+            Expression.Property(collection, count));
+        return Compile<int>(read, source);
+    }
+
+    /// <summary>
+    /// Binds a collection field as the list itself rather than its count.
+    /// </summary>
+    /// <remarks>
+    /// The exception to <see cref="CollectionCount"/>'s rule, and it earns it: a purchase cost really
+    /// is a variable-length list of resource amounts, and no scalar stands in for it. Everything the
+    /// list yields is still copied out by value before it is published, so nothing escapes into a
+    /// publication — the elements are read, converted, and dropped inside the collecting pass.
+    /// <para>
+    /// Typed as <see cref="IList"/> because the element type is a game type this assembly cannot
+    /// name, and a null collection reads as null rather than throwing.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// The element type of a generic collection field, or <see langword="null"/> when the field is
+    /// absent or not generic. What <see cref="CollectionField"/> yields has to be read somehow, and
+    /// the accessors that read it have to be bound against a type this assembly cannot name.
+    /// </summary>
+    internal static Type? CollectionElementType(Type? owner, string name)
+    {
+        var field = owner?.GetField(name, Instance)?.FieldType;
+        return field is { IsGenericType: true } ? field.GetGenericArguments()[0] : null;
+    }
+
+    internal static Func<object, IList?>? CollectionField(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        if (field is null || !typeof(IList).IsAssignableFrom(field.FieldType)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Convert(
+            Expression.Field(Expression.Convert(source, owner), field), typeof(IList));
+
+        try
+        {
+            return Expression.Lambda<Func<object, IList?>>(read, source).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Binds "read a field, then count the collection on it" — the shape
+    /// <c>ModifierRecord.HasActiveElements()</c> takes.
+    /// </summary>
+    /// <remarks>
+    /// <c>HasActiveElements()</c> is <c>activeModifiers.Count &gt; 0</c> over a public dictionary, so
+    /// reading the count asks the same question without the call. It is also strictly more than the
+    /// method returns: how many modifiers are stacked on a record is a fact the boolean throws away,
+    /// and the collector is here to grab facts rather than answers.
+    /// <para>
+    /// Both levels read a null as zero, for the same reason <see cref="CollectionCount"/> does.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, int>? NestedCollectionCount(Type? owner, string fieldName, string nestedName)
+    {
+        if (owner is null) return null;
+
+        var outer = owner.GetField(fieldName, Instance);
+        var inner = outer?.FieldType.GetField(nestedName, Instance);
+        var count = inner?.FieldType.GetProperty("Count", BindingFlags.Instance | BindingFlags.Public);
+        if (outer is null || inner is null || count is null || count.PropertyType != typeof(int))
+        {
+            return null;
+        }
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var record = Expression.Field(Expression.Convert(source, owner), outer);
+        var collection = Expression.Field(record, inner);
+        var zero = Expression.Constant(0);
+        var read = Expression.Condition(
+            Expression.Equal(record, Expression.Constant(null, outer.FieldType)),
+            zero,
+            Expression.Condition(
+                Expression.Equal(collection, Expression.Constant(null, inner.FieldType)),
+                zero,
+                Expression.Property(collection, count)));
+        return Compile<int>(read, source);
+    }
+
+    /// <summary>
+    /// Binds a reference-typed field as the object it holds, so members can be bound against that
+    /// object rather than against its owner.
+    /// </summary>
+    /// <remarks>
+    /// This returns the object itself rather than a value read from it, which every other binder here
+    /// deliberately avoids. It is the one case where that is right: the object is another entity, and
+    /// what a caller wants is to bind <em>its</em> members. Nothing published ever holds the result —
+    /// it is consumed inside <c>WorldMemberBinding.Through</c> and never reaches a row.
+    /// </remarks>
+    internal static Func<object, object?>? Reference(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        if (field is null || field.FieldType.IsValueType) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Convert(
+            Expression.Field(Expression.Convert(source, owner), field), typeof(object));
+
+        try
+        {
+            return Expression.Lambda<Func<object, object?>>(read, source).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Binds a single-valued reference to another entity as that entity's identity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A published row may not hold a live game object, so an edge to another entity travels as the
+    /// <see cref="Guid"/> a consumer can look up — which is D17's rule for references and the reason
+    /// <c>AlchemyTypeSO.selectedLevel</c> was missing: the chosen level is an <c>IntVariable</c> that
+    /// the global registry already collects, so only the edge to it was absent.
+    /// </para>
+    /// <para>
+    /// The game spells a reference two ways. An <c>IdScriptableObject</c> answers <c>GetGuid()</c>; a
+    /// <c>GuidContainer</c> wraps a private <c>_guid</c>. Both are accepted here because both mean
+    /// "this points at that", and a caller should not have to know which one a field happens to use.
+    /// </para>
+    /// <para>
+    /// An unset reference reads as <see cref="Guid.Empty"/> rather than throwing. Empty is already
+    /// the suite's "no entity" — <c>WorldTable</c> refuses to admit a row carrying it — so a null
+    /// reference arrives as a value that cannot be mistaken for a real edge.
+    /// </para>
+    /// </remarks>
+    internal static Func<object, Guid>? ReferenceGuid(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var field = owner.GetField(name, Instance);
+        if (field is null || field.FieldType.IsValueType) return null;
+
+        var getGuid = field.FieldType.GetMethod("GetGuid", Instance, null, Type.EmptyTypes, null);
+        var guidField = field.FieldType.GetField("_guid", Instance);
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var reference = Expression.Field(Expression.Convert(source, owner), field);
+
+        Expression identity;
+        if (getGuid is not null && getGuid.ReturnType == typeof(Guid))
+        {
+            identity = Expression.Call(reference, getGuid);
+        }
+        else if (guidField is not null && guidField.FieldType == typeof(Guid))
+        {
+            identity = Expression.Field(reference, guidField);
+        }
+        else
+        {
+            return null;
+        }
+
+        var read = Expression.Condition(
+            Expression.Equal(reference, Expression.Constant(null, field.FieldType)),
+            Expression.Constant(Guid.Empty),
+            identity);
+        return Compile<Guid>(read, source);
+    }
+
+    /// <summary>
+    /// Binds a no-argument method that answers with another entity, as that entity's identity.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ReferenceGuid"/>'s shape for the edges the game exposes as accessors rather than as
+    /// fields. The method is invoked once and the result held, because calling it twice — to test for
+    /// null and then to read the identity — would ask the game the same question twice per entity.
+    /// </remarks>
+    internal static Func<object, Guid>? CallReferenceGuid(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var method = owner.GetMethod(name, Instance, null, Type.EmptyTypes, null);
+        if (method is null || method.ReturnType.IsValueType) return null;
+
+        var getGuid = method.ReturnType.GetMethod("GetGuid", Instance, null, Type.EmptyTypes, null);
+        if (getGuid is null || getGuid.ReturnType != typeof(Guid)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var referenced = Expression.Variable(method.ReturnType, "referenced");
+        var read = Expression.Block(
+            new[] { referenced },
+            Expression.Assign(referenced, Expression.Call(Expression.Convert(source, owner), method)),
+            Expression.Condition(
+                Expression.Equal(referenced, Expression.Constant(null, method.ReturnType)),
+                Expression.Constant(Guid.Empty),
+                Expression.Call(referenced, getGuid)));
+        return Compile<Guid>(read, source);
+    }
+
+    /// <summary>
+    /// Reads a public static list member — the per-type <c>All</c> registry every category exposes,
+    /// and the same discovery mechanism Auto Buy already uses for candidate enumeration.
+    /// </summary>
+    internal static IList? StaticList(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var value = owner.GetField(name, Static)?.GetValue(null) ??
+            owner.GetProperty(name, Static)?.GetValue(null, null);
+        return value as IList;
+    }
+
+    /// <summary>
+    /// Reads a static dictionary member — the game's identity registry, which is how an entity that
+    /// belongs to no per-type <c>All</c> list is reached.
+    /// </summary>
+    /// <remarks>
+    /// The list variables holding the action queues are such entities: their <c>All</c> is declared on
+    /// the generic base rather than on the concrete type, so it is not a registry of queues at all.
+    /// Looking one up by its stable uuid is the path the rest of the suite already takes to them.
+    /// </remarks>
+    internal static IDictionary? StaticDictionary(Type? owner, string name)
+    {
+        if (owner is null) return null;
+
+        var value = owner.GetField(name, Static)?.GetValue(null) ??
+            owner.GetProperty(name, Static)?.GetValue(null, null);
+        return value as IDictionary;
+    }
+
+    private static Func<object, TValue>? Compile<TValue>(Expression body, ParameterExpression source)
+    {
+        try
+        {
+            return Expression.Lambda<Func<object, TValue>>(body, source).Compile();
+        }
+        catch (Exception)
+        {
+            // Compilation can fail on a runtime without dynamic code generation. Treating that as an
+            // unbound accessor keeps the failure on the one path callers already handle.
+            return null;
+        }
+    }
+}

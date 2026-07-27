@@ -26,7 +26,7 @@ flowchart LR
     Assets["Gameplay assets<br/>2,312 rows / 64 *SO types"] --> Types["Domain type assets"]
     Assets --> Relations["Prerequisites, recipes, effects"]
     Lists["List variables<br/>206 rows / 60 types"] --> Assets
-    Scalars["Scalar/reference variables<br/>219 rows / 13 types"] --> Assets
+    Scalars["Scalar/reference variables<br/>274 rows / 17 types"] --> Assets
     Assets --> Registry["IdScriptableObject.RuntimeLookup"]
     Registry --> UUID["Stable UUID identity"]
 ```
@@ -148,14 +148,13 @@ The mapping includes 206 list-variable assets across 60 managed types. Important
 - `ViewListVariable`, `RecipeBookListVariable`, `UpgradeListVariable`
 - runtime-state collections such as `StatusEffectListVariable`, `EngagedEffectListVariable`, and instance/snapshot lists
 
-Scalar/reference assets include:
+The remaining 274 rows across 17 managed types are the scalar/reference assets. The largest are:
 
 | Type | Count | Typical use |
 |---|---:|---|
 | `DoubleVariable` | 80 | Global numeric stats and timers |
 | `IntVariable` | 69 | Levels, slots, limits, counters, and selections |
 | `KeyBindingVariable` | 52 | Input bindings and attached views |
-| `ModifierListVariable` | 43 | Reusable modifier lists |
 | `ValueModifierVariable` | 33 | Reusable single modifier/scaling values |
 | `BoolVariable` | 12 | Saved or observable flags |
 | `StringVariable` | 7 | Observable text state |

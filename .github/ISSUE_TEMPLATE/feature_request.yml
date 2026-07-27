@@ -6,14 +6,19 @@ body:
   - type: dropdown
     id: component
     attributes:
-      label: Component
+      label: Area
+      description: The suite ships as one plugin; pick the feature area the request belongs to.
       options:
-        - Orb Automata
-        - Orb Mod Config
-        - Orb Chronomancer
-        - Orb Achievement Resonance
+        - Auto Buy
+        - Auto Harvest
+        - Auto Cast
+        - Auto Concept
+        - Spell Leveling
+        - Mentor
+        - Mod Config UI
         - Reverse-engineering documentation or tools
-        - New mod concept
+        - New feature concept
+        - Other
     validations:
       required: true
 

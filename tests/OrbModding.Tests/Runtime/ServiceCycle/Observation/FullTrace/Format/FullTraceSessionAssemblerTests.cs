@@ -131,11 +131,7 @@ public sealed class FullTraceSessionAssemblerTests
         long timestamp,
         ulong parentSequence = 0)
     {
-        var payload = ServiceCycleSemanticPayload.Publication(
-            false,
-            ServiceCycleTraceFixtures.Service,
-            1,
-            timestamp);
+        var payload = ServiceCycleSemanticPayload.Publication(false, 1, timestamp);
         return new ServiceCycleSemanticEvent(
             new ServiceCycleTraceEventId(semantic, sequence),
             parentSequence == 0 ? default : new ServiceCycleTraceEventId(semantic, parentSequence),

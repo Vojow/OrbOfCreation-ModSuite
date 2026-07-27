@@ -17,8 +17,7 @@ inventory, mastery, scene, save, reset, and NG+ changes.
   classification and rejected identities.
 - [ConceptRuntimeHeadlessTests.cs](../../../tests/OrbModding.Tests/ConceptRuntimeHeadlessTests.cs) owns reflection-shaped runtime state.
 - [AutomataTests.cs](../../../tests/OrbModding.Tests/AutomataTests.cs) owns configuration defaults and migration-facing values.
-- [GameplayInvalidationBusTests.cs](../../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs) and [AutomataCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutomataCoordinatorTests.cs) own
-  scheduling/invalidation integration.
+- [GameplayInvalidationBusTests.cs](../../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs) owns invalidation integration.
 
 ## Focused command
 

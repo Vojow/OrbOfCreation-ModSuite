@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($CanonicalPath)) { $CanonicalPath = Join-Path $repositoryRoot 'data/entity-mappings.tsv' }
 if ([string]::IsNullOrWhiteSpace($SelectionPath)) { $SelectionPath = Join-Path $repositoryRoot 'data/known-entities.tsv' }
-if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = Join-Path $repositoryRoot 'src/OrbModding.Common/KnownEntities.Generated.cs' }
+if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = Join-Path $repositoryRoot 'src/Common/KnownEntities.Generated.cs' }
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 function Read-StrictTsv([string] $path, [string] $header) {

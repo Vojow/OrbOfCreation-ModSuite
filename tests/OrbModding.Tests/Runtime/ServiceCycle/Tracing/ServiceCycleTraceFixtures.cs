@@ -11,14 +11,21 @@ internal static class ServiceCycleTraceFixtures
     internal static readonly ServiceCycleTraceSessionId Session = new(101);
     internal static readonly ServiceCycleTraceServiceId Service = new(7);
     internal static readonly ServiceCycleTraceCaptureIdentity Capture = new(Service, 2, 3, 5, 6);
-    internal static readonly ServiceCycleTraceCycleIdentity Cycle = new(Service, 2, 3, 4, 5, 6);
+    internal static readonly ServiceCycleTraceCycleIdentity Cycle = new(Service, 2, 3, 4, 11, 6);
+
+    /// <summary>
+    /// The pump frame the framed capture and action fixtures ran inside. The faulted capture and the
+    /// faulted action deliberately carry no frame, so both admissible shapes stay covered.
+    /// </summary>
+    internal const long Frame = 21;
+    internal const long Unframed = -1;
 
     internal static ServiceCycleSemanticPayload Payload(ServiceCycleSemanticEventKind kind) => kind switch
     {
         ServiceCycleSemanticEventKind.ConfigurationPublished =>
-            ServiceCycleSemanticPayload.Publication(false, Service, 3, 100),
+            ServiceCycleSemanticPayload.Publication(false, 3, 100),
         ServiceCycleSemanticEventKind.StrategyPublished =>
-            ServiceCycleSemanticPayload.Publication(true, Service, 4, 100),
+            ServiceCycleSemanticPayload.Publication(true, 4, 100),
         ServiceCycleSemanticEventKind.LifecycleRetired =>
             ServiceCycleSemanticPayload.LifecycleFact(Service, 2, CommonActionResultCodes.LifecycleReplaced.Value, 100),
         ServiceCycleSemanticEventKind.LifecycleRequested or
@@ -38,18 +45,21 @@ internal static class ServiceCycleTraceFixtures
         ServiceCycleSemanticEventKind.CycleFaulted =>
             ServiceCycleSemanticPayload.CycleFact(in Cycle, CommonActionResultCodes.AdapterFault.Value, 100, 10),
         ServiceCycleSemanticEventKind.CaptureStarted =>
-            ServiceCycleSemanticPayload.CaptureFact(in Capture, 0, 0, 100, 10),
+            ServiceCycleSemanticPayload.CaptureFact(in Capture, 0, 0, 100, 10, Frame),
         ServiceCycleSemanticEventKind.CaptureCompleted =>
-            ServiceCycleSemanticPayload.CaptureFact(in Capture, 4, CommonServiceDecisionCodes.Captured.Value, 100, 10),
+            ServiceCycleSemanticPayload.CaptureFact(
+                in Capture, 4, CommonServiceDecisionCodes.Captured.Value, 100, 10, Frame),
         ServiceCycleSemanticEventKind.CaptureUnavailable =>
             ServiceCycleSemanticPayload.CaptureUnavailable(
                 in Capture,
                 CommonServiceDecisionCodes.CaptureUnavailable.Value,
                 WakePolicy.AfterDecision(new MonotonicDuration(20)),
                 100,
-                10),
+                10,
+                Frame),
         ServiceCycleSemanticEventKind.CaptureFaulted =>
-            ServiceCycleSemanticPayload.CaptureFact(in Capture, 0, CommonActionResultCodes.AdapterFault.Value, 100, 10),
+            ServiceCycleSemanticPayload.CaptureFact(
+                in Capture, 0, CommonActionResultCodes.AdapterFault.Value, 100, 10, Unframed),
         ServiceCycleSemanticEventKind.EvaluationStarted =>
             ServiceCycleSemanticPayload.Evaluation(in Cycle, 0, 0, 100, 10),
         ServiceCycleSemanticEventKind.EvaluationCompleted =>
@@ -86,16 +96,21 @@ internal static class ServiceCycleTraceFixtures
             ServiceCycleSemanticPayload.BatchFact(in Cycle, 8, (int)BatchTerminalDisposition.Orphaned,
                 CommonActionResultCodes.LifecycleReplaced.Value, 3, 1, -1, 2, 1, 1, 1, 100),
         ServiceCycleSemanticEventKind.ActionAttempted =>
-            ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, 0, 0, null, 0, 0, 0, 100, 10),
+            ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, 0, 0, null, 0, 0, 0, 100, 10, Frame),
         ServiceCycleSemanticEventKind.ActionCommitted =>
             ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, (int)ServiceActionDisposition.Committed,
-                CommonActionResultCodes.Committed.Value, NativeMutationOutcome.Verified, 1, 1, 1, 100, 10),
+                CommonActionResultCodes.Committed.Value, NativeMutationOutcome.Verified, 1, 1, 1, 100, 10, Frame),
+        ServiceCycleSemanticEventKind.ActionSkipped =>
+            ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, (int)ServiceActionDisposition.Skipped,
+                CommonActionResultCodes.Skipped.Value, NativeMutationOutcome.PostconditionFailed, 1, 1, 0, 100, 10,
+                Frame),
         ServiceCycleSemanticEventKind.ActionRejected =>
             ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, (int)ServiceActionDisposition.Rejected,
-                CommonActionResultCodes.NativeRejected.Value, null, 0, 0, 0, 100, 10),
+                CommonActionResultCodes.NativeRejected.Value, null, 0, 0, 0, 100, 10, Frame),
         ServiceCycleSemanticEventKind.ActionFaulted =>
             ServiceCycleSemanticPayload.ActionFact(in Cycle, 8, 10, 0, (int)ServiceActionDisposition.Faulted,
-                CommonActionResultCodes.AdapterFault.Value, NativeMutationOutcome.ExecutionThrew, 1, 1, 0, 100, 10),
+                CommonActionResultCodes.AdapterFault.Value, NativeMutationOutcome.ExecutionThrew, 1, 1, 0, 100, 10,
+                Unframed),
         ServiceCycleSemanticEventKind.RetryScheduled =>
             ServiceCycleSemanticPayload.FaultOrRetry(Service, 2, (int)ServiceFaultCategory.Evaluation,
                 CommonActionResultCodes.AdapterFault.Value, 1, 100, 200),
@@ -103,7 +118,7 @@ internal static class ServiceCycleTraceFixtures
             ServiceCycleSemanticPayload.FaultOrRetry(Service, 2, (int)ServiceFaultCategory.Evaluation,
                 CommonActionResultCodes.AdapterFault.Value, 1, 100, 0),
         ServiceCycleSemanticEventKind.PumpCompleted =>
-            ServiceCycleSemanticPayload.Pump(12, true, 3, 1, 2, 3, 4, 5, 6, 7, 8, 30, 100),
+            ServiceCycleSemanticPayload.Pump(12, true, 3, 1, 2, 3, 9, 13, 4, 5, 6, 7, 8, 30, 100),
         ServiceCycleSemanticEventKind.StartAttempted =>
             ServiceCycleSemanticPayload.StartAttempted(Service, 2, 3, 100),
         ServiceCycleSemanticEventKind.StartDeferred =>
@@ -113,7 +128,7 @@ internal static class ServiceCycleTraceFixtures
         ServiceCycleSemanticEventKind.StartFaulted =>
             ServiceCycleSemanticPayload.StartFaulted(
                 Service, 2, 3, CommonActionResultCodes.AdapterFault.Value,
-                (int)ServiceFaultCategory.Capture, 1, 100, 10, 200),
+                (int)ServiceFaultCategory.Start, 1, 100, 10, 200),
         ServiceCycleSemanticEventKind.StartReady =>
             ServiceCycleSemanticPayload.StartReady(
                 Service, 2, 3, CommonServiceDecisionCodes.Ready.Value, 100, 10),

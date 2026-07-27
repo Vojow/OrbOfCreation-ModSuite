@@ -1,5 +1,6 @@
 using System.Globalization;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.ServiceCycleTrace.IO;
 
@@ -8,6 +9,8 @@ namespace OrbModding.ServiceCycleTrace.ManualTrace;
 internal sealed class ManualFullTraceSessionDirectory : IFullTracePriorEventReader
 {
     private const string ManifestName = "manifest.oscm";
+    private const string StoreExtension = ".oscv";
+    private const string StoreMagic = "OSCV";
     private readonly string _path;
 
     internal ManualFullTraceSessionDirectory(string path)
@@ -65,8 +68,60 @@ internal sealed class ManualFullTraceSessionDirectory : IFullTracePriorEventRead
             : StringComparison.Ordinal;
         if (!string.Equals(parent, _path, comparison)) return;
         var name = Path.GetFileName(fullPath);
-        if (LooksLikeSegment(name) || LooksLikeManifest(name))
+        if (LooksLikeSegment(name) || LooksLikeManifest(name) ||
+            string.Equals(name, TraceRosterFormat.FileName, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The report cannot overwrite full-trace session evidence.");
+    }
+
+    /// <summary>
+    /// What the recording called the services it recorded, or an empty roster. Absent is not an error:
+    /// a session recorded before the roster existed carries numeric identities and nothing else, which
+    /// is what every reader of this format assumed until now.
+    /// </summary>
+    internal ServiceCycleTraceRoster ReadRoster()
+    {
+        var path = Path.Combine(_path, TraceRosterFormat.FileName);
+        return File.Exists(path)
+            ? TraceRosterFormat.Decode(File.ReadAllText(path))
+            : ServiceCycleTraceRoster.Empty;
+    }
+
+    /// <summary>
+    /// The generation-keyed publication stores written beside the segments, oldest generation first
+    /// per store. Absent stores are not an error: a session recorded before they existed, or one that
+    /// saw no publication, simply has none.
+    /// </summary>
+    internal IReadOnlyList<PublicationStoreEntry> ReadPublicationStores()
+    {
+        var entries = new List<PublicationStoreEntry>();
+        foreach (var path in Directory.EnumerateFiles(_path, "*" + StoreExtension, SearchOption.TopDirectoryOnly))
+        {
+            var text = File.ReadAllText(path);
+            var breakIndex = text.IndexOf('\n');
+            var header = (breakIndex < 0 ? text : text.Substring(0, breakIndex)).Split(' ');
+            if (header.Length != 4 || !string.Equals(header[0], StoreMagic, StringComparison.Ordinal))
+                throw new InvalidDataException("A publication store file has no recognizable header.");
+            entries.Add(new PublicationStoreEntry(
+                header[2],
+                ulong.Parse(header[3], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+                CountValues(text, breakIndex),
+                Path.GetFileName(path)));
+        }
+        entries.Sort(static (left, right) =>
+        {
+            var byStore = string.CompareOrdinal(left.Store, right.Store);
+            return byStore != 0 ? byStore : left.Generation.CompareTo(right.Generation);
+        });
+        return entries;
+    }
+
+    private static int CountValues(string text, int headerBreakIndex)
+    {
+        if (headerBreakIndex < 0) return 0;
+        var values = 0;
+        for (var index = headerBreakIndex; index < text.Length; index++)
+            if (text[index] == '\n' && index + 1 < text.Length) values++;
+        return values;
     }
 
     internal FullTraceSegmentDocument ReadSegment(ulong ordinal)
@@ -84,13 +139,13 @@ internal sealed class ManualFullTraceSessionDirectory : IFullTracePriorEventRead
             throw new InvalidDataException("The full-trace parent index is invalid.");
         using var stream = new FileStream(SegmentPath(segmentOrdinal), FileMode.Open, FileAccess.Read, FileShare.Read);
         var offset = checked(FullTraceSegmentCodec.HeaderBytes +
-            eventIndex * ServiceCycleSemanticEventV5Codec.RecordBytes);
-        if (offset + ServiceCycleSemanticEventV5Codec.RecordBytes > stream.Length - FullTraceSegmentCodec.FooterBytes)
+            eventIndex * ServiceCycleSemanticEventV7Codec.RecordBytes);
+        if (offset + ServiceCycleSemanticEventV7Codec.RecordBytes > stream.Length - FullTraceSegmentCodec.FooterBytes)
             throw new InvalidDataException("The full-trace parent record is absent.");
         stream.Position = offset;
-        Span<byte> record = stackalloc byte[ServiceCycleSemanticEventV5Codec.RecordBytes];
+        Span<byte> record = stackalloc byte[ServiceCycleSemanticEventV7Codec.RecordBytes];
         stream.ReadExactly(record);
-        return ServiceCycleSemanticEventV5Codec.Read(record);
+        return ServiceCycleSemanticEventV7Codec.Read(record);
     }
 
     private string SegmentPath(ulong ordinal) => Path.Combine(
@@ -157,9 +212,19 @@ internal sealed class ManualFullTraceSessionDirectory : IFullTracePriorEventRead
                 StringComparison.Ordinal);
     }
 
+    internal static bool IsSessionDirectoryName(string name) => TryParseSessionName(name, out _);
+
     private static FullTraceSessionId ParseSessionName(string name)
     {
+        if (!TryParseSessionName(name, out var session))
+            throw new InvalidDataException("The full-trace session directory name is invalid.");
+        return session;
+    }
+
+    private static bool TryParseSessionName(string name, out FullTraceSessionId session)
+    {
         const string prefix = "session-";
+        session = default;
         if (name.Length != prefix.Length + 16 || !name.StartsWith(prefix, StringComparison.Ordinal) ||
             !ulong.TryParse(
                 name.AsSpan(prefix.Length),
@@ -171,7 +236,14 @@ internal sealed class ManualFullTraceSessionDirectory : IFullTracePriorEventRead
                 name,
                 prefix + value.ToString("x16", CultureInfo.InvariantCulture),
                 StringComparison.Ordinal))
-            throw new InvalidDataException("The full-trace session directory name is invalid.");
-        return new FullTraceSessionId(value);
+            return false;
+        session = new FullTraceSessionId(value);
+        return true;
     }
 }
+
+internal readonly record struct PublicationStoreEntry(
+    string Store,
+    ulong Generation,
+    int ValueCount,
+    string FileName);

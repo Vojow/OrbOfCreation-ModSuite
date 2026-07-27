@@ -9,17 +9,15 @@ public sealed class PerformanceFoundationTests
 {
     [Theory]
     [InlineData(0, 12)]
-    [InlineData(1, 10)]
+    [InlineData(1, 12)]
     [InlineData(2, 12)]
     [InlineData(3, 12)]
     [InlineData(4, 12)]
     [InlineData(5, 12)]
     [InlineData(6, 12)]
     [InlineData(7, 12)]
-    [InlineData(8, 12)]
+    [InlineData(8, 30)]
     [InlineData(9, 12)]
-    [InlineData(10, 30)]
-    [InlineData(11, 12)]
     public void SupportedProfileIdentityAppliesExactStarvationThreshold(int identityIndex, int expected)
     {
         var identity = SuitePerformanceWorkIdentities.GetSupportedSuiteV1(identityIndex);
@@ -40,7 +38,7 @@ public sealed class PerformanceFoundationTests
     [Fact]
     public void SupportedProfileMatchingIsExactAndConstructorFallbackCanBeTighter()
     {
-        var expected = SuitePerformanceWorkIdentities.AutoBuyMutation;
+        var expected = SuitePerformanceWorkIdentities.AutoCastMutation;
         var fallback = new SuitePerformanceCoordinator(
             new ManualPerformanceClock(),
             starvationThresholdFrames: 77);
@@ -87,25 +85,6 @@ public sealed class PerformanceFoundationTests
             expected.ExecutionKind);
         Assert.True(tighter.TryGetRegistrationSnapshot(exact, out var exactSnapshot));
         Assert.Equal(5, exactSnapshot.StarvationThresholdFrames);
-    }
-
-    [Fact]
-    public void SetBudgetsAcceptsEqualOrTighterAndRejectsAnyIncreaseAtomically()
-    {
-        var coordinator = new SuitePerformanceCoordinator(new ManualPerformanceClock(), 0.75, 1.0);
-
-        coordinator.SetBudgets(0.75, 1.0);
-        coordinator.SetBudgets(0.5, 0.9);
-        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
-        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
-
-        Assert.Throws<InvalidOperationException>(() => coordinator.SetBudgets(0.6, 0.8));
-        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
-        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
-
-        Assert.Throws<InvalidOperationException>(() => coordinator.SetBudgets(0.4, 1.0));
-        Assert.Equal(0.5, coordinator.SoftBudgetMilliseconds);
-        Assert.Equal(0.9, coordinator.HardBudgetMilliseconds);
     }
 
     [Fact]

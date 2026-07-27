@@ -13,8 +13,6 @@ recovery.
 
 - [AutoSpellLevelControllerHeadlessTests.cs](../../../tests/OrbModding.Tests/AutoSpellLevelControllerHeadlessTests.cs) owns controller modes, capability,
   cost, readiness, and mutation behavior.
-- [AutomataCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutomataCoordinatorTests.cs) owns scheduling beside Auto Buy and other action
-  families.
 - [AutomataFeatureStatusTests.cs](../../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) owns locked, operational, blocked, and faulted
   projections.
 - Game contract tests own `PurchaseLevel`, `TryLevelAllSpells`, prerequisite,

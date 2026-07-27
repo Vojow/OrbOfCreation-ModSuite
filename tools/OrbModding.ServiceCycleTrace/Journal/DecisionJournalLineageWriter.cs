@@ -80,7 +80,6 @@ internal sealed class DecisionJournalLineageWriter
         _writer.Write('/');
         _writer.Write(record.Strategy.ToString(CultureInfo.InvariantCulture));
         _writer.Write('`');
-        WriteRange("capture", record.FirstCapture, record.LastCapture);
         WriteRange("cycle", record.FirstCycle, record.LastCycle);
         _writer.Write("; start ");
         WriteCode(DecisionJournalValueNames.Decision(record.StartDecisionCode), record.StartDecisionCode);
@@ -117,6 +116,11 @@ internal sealed class DecisionJournalLineageWriter
                 WriteGeneration(record.Lifecycle);
                 _writer.Write("; state ");
                 WriteCode(DecisionJournalValueNames.Lifecycle(record.TransitionCode), record.TransitionCode);
+                break;
+            case DecisionJournalRecordKind.WorldGateHeld:
+                WriteGeneration(record.Lifecycle);
+                _writer.Write("; waiting on ");
+                WriteCode(DecisionJournalValueNames.WorldGate(record.TransitionCode), record.TransitionCode);
                 break;
             case DecisionJournalRecordKind.EmergencyEntered:
             case DecisionJournalRecordKind.EmergencyCleared:

@@ -13,16 +13,19 @@ internal sealed class DecisionJournalRuntimeTestStorage : IRestartAwareTraceSegm
     private readonly bool _blockReconcile;
     private readonly bool _blockCommit;
     private readonly bool _failCommit;
+    private readonly TraceSegmentStorageRecovery _recovery;
     private readonly List<byte[]> _segments = new();
 
     internal DecisionJournalRuntimeTestStorage(
         bool blockReconcile = false,
         bool blockCommit = false,
-        bool failCommit = false)
+        bool failCommit = false,
+        TraceSegmentStorageRecovery recovery = default)
     {
         _blockReconcile = blockReconcile;
         _blockCommit = blockCommit;
         _failCommit = failCommit;
+        _recovery = recovery;
     }
 
     internal ManualResetEventSlim ReconcileEntered { get; } = new();
@@ -31,6 +34,7 @@ internal sealed class DecisionJournalRuntimeTestStorage : IRestartAwareTraceSegm
     internal ManualResetEventSlim CommitEntered { get; } = new();
     internal ManualResetEventSlim CommitRelease { get; } = new();
     internal int ReconcileThreadId { get; private set; }
+    internal ITraceSegmentHeaderProbe? Probe { get; private set; }
 
     internal byte[][] Segments
     {
@@ -48,13 +52,16 @@ internal sealed class DecisionJournalRuntimeTestStorage : IRestartAwareTraceSegm
         return records.ToArray();
     }
 
-    public TraceSegmentStorageRecovery Reconcile(int maximumCommittedSegments)
+    public TraceSegmentStorageRecovery Reconcile(
+        int maximumCommittedSegments,
+        ITraceSegmentHeaderProbe? probe = null)
     {
         ReconcileThreadId = Environment.CurrentManagedThreadId;
+        Probe = probe;
         ReconcileEntered.Set();
         if (_blockReconcile) ReconcileRelease.Wait();
         ReconcileCompleted.Set();
-        return default;
+        return _recovery;
     }
 
     public object BeginSegment(int ordinal) => new MemorySegment();

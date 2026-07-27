@@ -52,6 +52,26 @@ public sealed class DecisionJournalRecordCodecTests
     }
 
     [Fact]
+    public void WorldGateHoldRoundTripsItsServiceLifecycleAndReason()
+    {
+        var expected = DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.WorldGateHeld,
+            new ServiceCycleTraceServiceId(2),
+            5,
+            new MonotonicTimestamp(42),
+            code: 2);
+        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
+
+        DecisionJournalRecordCodec.Write(bytes, in expected);
+        var actual = DecisionJournalRecordCodec.Read(bytes);
+
+        Assert.Equal(DecisionJournalRecordKind.WorldGateHeld, actual.Kind);
+        Assert.Equal(expected.Service, actual.Service);
+        Assert.Equal((ulong)5, actual.Lifecycle);
+        Assert.Equal(2, actual.TransitionCode);
+    }
+
+    [Fact]
     public void EveryTerminalDispositionRoundTripsCanonicalAggregate()
     {
         var cycle = Identity(1);
@@ -60,6 +80,13 @@ public sealed class DecisionJournalRecordCodecTests
             new BatchId(1),
             1,
             new ServiceNativeCallTotals(1, 1, 1),
+            new MonotonicTimestamp(11));
+        var skipped = BatchReceipt.Completed(
+            cycle,
+            new BatchId(5),
+            1,
+            0,
+            new ServiceNativeCallTotals(1, 1, 0),
             new MonotonicTimestamp(11));
         var rejectedAction = ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
         var rejected = BatchReceipt.Terminated(
@@ -88,7 +115,15 @@ public sealed class DecisionJournalRecordCodecTests
             1,
             new ServiceNativeCallTotals(1, 1, 1),
             new MonotonicTimestamp(11));
-        var receipts = new[] { completed, rejected, faulted, orphaned };
+        var published = BatchReceipt.Completed(
+            cycle,
+            new BatchId(6),
+            actionCount: 2,
+            committedCount: 2,
+            new ServiceNativeCallTotals(1, 1, 1),
+            new MonotonicTimestamp(11),
+            publishedCount: 1);
+        var receipts = new[] { completed, skipped, rejected, faulted, orphaned, published };
         var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
 
         foreach (var receipt in receipts)
@@ -101,6 +136,8 @@ public sealed class DecisionJournalRecordCodecTests
 
             Assert.Equal(receipt.Disposition, actual.TerminalDisposition);
             Assert.Equal(receipt.ResultCode.Value, actual.TerminalResultCode);
+            Assert.Equal(receipt.CommittedCount, actual.CommittedActions);
+            Assert.Equal(receipt.PublishedCount, actual.PublishedActions);
         }
     }
 
@@ -133,9 +170,12 @@ public sealed class DecisionJournalRecordCodecTests
     [InlineData((int)DecisionJournalRecordKind.ConfigurationChanged, 32)]
     public void TransitionRejectsNonOwnedGeneration(int kindValue, int offset)
     {
+        var kind = (DecisionJournalRecordKind)kindValue;
         var record = DecisionJournalRecord.Transition(
-            (DecisionJournalRecordKind)kindValue,
-            new ServiceCycleTraceServiceId(1),
+            kind,
+            kind == DecisionJournalRecordKind.LifecycleChanged
+                ? new ServiceCycleTraceServiceId(1)
+                : default,
             2,
             new MonotonicTimestamp(3));
         var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
@@ -218,5 +258,48 @@ public sealed class DecisionJournalRecordCodecTests
         BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(64, 8), 2);
 
         Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
+    }
+
+    [Fact]
+    public void MorePublishedActionsThanCommittedAreRejected()
+    {
+        var record = PublicationRecord();
+        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
+        DecisionJournalRecordCodec.Write(bytes, in record);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(PublishedActionsOffset, 8), 2);
+
+        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
+    }
+
+    /// <summary>
+    /// A span whose every action published made no native call, so any native evidence in it is a lie
+    /// about which action produced it.
+    /// </summary>
+    [Fact]
+    public void AFullyPublishedSpanCannotCarryNativeEvidence()
+    {
+        var record = PublicationRecord();
+        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
+        DecisionJournalRecordCodec.Write(bytes, in record);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(152, 8), 1);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(160, 8), 1);
+
+        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
+    }
+
+    private const int PublishedActionsOffset = 440;
+
+    private static DecisionJournalRecord PublicationRecord()
+    {
+        var receipt = BatchReceipt.Completed(
+            Identity(1),
+            new BatchId(1),
+            actionCount: 1,
+            committedCount: 1,
+            default,
+            new MonotonicTimestamp(11),
+            publishedCount: 1);
+        var observation = CreateObservation(in receipt, 10);
+        return DecisionJournalRecord.Decision(in observation);
     }
 }

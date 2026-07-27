@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 
 namespace OrbModding.Tests.Tools;
@@ -13,13 +14,20 @@ internal sealed class ManualFullTraceTestDirectory : IDisposable
 
     internal ManualFullTraceTestDirectory(
         ServiceCycleSemanticEvent[] events,
-        bool writeManifest = true)
+        bool writeManifest = true,
+        ServiceCycleTraceRoster? roster = null)
     {
         _root = Path.Combine(Path.GetTempPath(), "orb-manual-trace-report-" + Guid.NewGuid().ToString("N"));
         SessionPath = Path.Combine(
             _root,
             "session-" + Session.Value.ToString("x16", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(SessionPath);
+        if (roster is not null)
+        {
+            File.WriteAllBytes(
+                Path.Combine(SessionPath, TraceRosterFormat.FileName),
+                TraceRosterFormat.Encode(roster));
+        }
         if (events.Length == 0)
         {
             if (writeManifest) WriteManifest(events, 0, 0);

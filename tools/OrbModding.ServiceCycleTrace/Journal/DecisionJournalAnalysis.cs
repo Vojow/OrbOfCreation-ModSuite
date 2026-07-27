@@ -8,6 +8,8 @@ internal sealed class DecisionJournalAnalysis
 {
     private readonly SortedDictionary<(ulong Run, ulong Service), ServiceBuilder> _services = new();
 
+    internal long ConfigurationChanges { get; private set; }
+    internal long StrategyChanges { get; private set; }
     internal long EmergencyEntered { get; private set; }
     internal long EmergencyCleared { get; private set; }
 
@@ -15,12 +17,25 @@ internal sealed class DecisionJournalAnalysis
     {
         try
         {
+            // A record with no service names the suite: emergency episodes, and the one
+            // configuration record and one strategy bulletin every service reads.
             if (!record.Service.IsValid)
             {
-                if (record.Kind == DecisionJournalRecordKind.EmergencyEntered)
-                    EmergencyEntered = checked(EmergencyEntered + 1);
-                else if (record.Kind == DecisionJournalRecordKind.EmergencyCleared)
-                    EmergencyCleared = checked(EmergencyCleared + 1);
+                switch (record.Kind)
+                {
+                    case DecisionJournalRecordKind.ConfigurationChanged:
+                        ConfigurationChanges = checked(ConfigurationChanges + 1);
+                        break;
+                    case DecisionJournalRecordKind.StrategyChanged:
+                        StrategyChanges = checked(StrategyChanges + 1);
+                        break;
+                    case DecisionJournalRecordKind.EmergencyEntered:
+                        EmergencyEntered = checked(EmergencyEntered + 1);
+                        break;
+                    case DecisionJournalRecordKind.EmergencyCleared:
+                        EmergencyCleared = checked(EmergencyCleared + 1);
+                        break;
+                }
                 return;
             }
 
@@ -48,6 +63,8 @@ internal sealed class DecisionJournalAnalysis
             services[index++] = service.Complete();
         return new DecisionJournalAnalysisDocument(
             services,
+            ConfigurationChanges,
+            StrategyChanges,
             EmergencyEntered,
             EmergencyCleared);
     }
@@ -70,9 +87,8 @@ internal sealed class DecisionJournalAnalysis
         private long _mutationAttempts;
         private long _mutationsCommitted;
         private long _faultBearingObservations;
-        private long _configurationChanges;
-        private long _strategyChanges;
         private long _lifecycleChanges;
+        private long _worldGateHolds;
 
         internal ServiceBuilder(ulong run, ulong service)
         {
@@ -87,7 +103,7 @@ internal sealed class DecisionJournalAnalysis
                 case DecisionJournalRecordKind.DecisionSpan:
                     _decisionSpans = checked(_decisionSpans + 1);
                     _observations = checked(_observations + record.RepeatCount);
-                    if (record.FirstCapture != 0)
+                    if (record.FirstCycle != 0)
                         _captureAttempts = checked(_captureAttempts + record.RepeatCount);
                     if (record.FaultCategory != 0)
                     {
@@ -102,14 +118,11 @@ internal sealed class DecisionJournalAnalysis
                     _mutationsCommitted = checked(_mutationsCommitted + record.MutationsCommitted);
                     AddTerminal(record.TerminalDisposition, record.RepeatCount);
                     break;
-                case DecisionJournalRecordKind.ConfigurationChanged:
-                    _configurationChanges = checked(_configurationChanges + 1);
-                    break;
-                case DecisionJournalRecordKind.StrategyChanged:
-                    _strategyChanges = checked(_strategyChanges + 1);
-                    break;
                 case DecisionJournalRecordKind.LifecycleChanged:
                     _lifecycleChanges = checked(_lifecycleChanges + 1);
+                    break;
+                case DecisionJournalRecordKind.WorldGateHeld:
+                    _worldGateHolds = checked(_worldGateHolds + 1);
                     break;
             }
         }
@@ -131,9 +144,8 @@ internal sealed class DecisionJournalAnalysis
             _mutationAttempts,
             _mutationsCommitted,
             _faultBearingObservations,
-            _configurationChanges,
-            _strategyChanges,
-            _lifecycleChanges);
+            _lifecycleChanges,
+            _worldGateHolds);
 
         private void AddTerminal(BatchTerminalDisposition disposition, long count)
         {
@@ -163,15 +175,21 @@ internal sealed class DecisionJournalAnalysisDocument
 
     internal DecisionJournalAnalysisDocument(
         DecisionJournalServiceSummary[] services,
+        long configurationChanges,
+        long strategyChanges,
         long emergencyEntered,
         long emergencyCleared)
     {
         _services = services;
+        ConfigurationChanges = configurationChanges;
+        StrategyChanges = strategyChanges;
         EmergencyEntered = emergencyEntered;
         EmergencyCleared = emergencyCleared;
     }
 
     internal int ServiceCount => _services.Length;
+    internal long ConfigurationChanges { get; }
+    internal long StrategyChanges { get; }
     internal long EmergencyEntered { get; }
     internal long EmergencyCleared { get; }
     internal DecisionJournalServiceSummary GetService(int index) => _services[index];
@@ -196,9 +214,8 @@ internal readonly struct DecisionJournalServiceSummary
         long mutationAttempts,
         long mutationsCommitted,
         long faultBearingObservations,
-        long configurationChanges,
-        long strategyChanges,
-        long lifecycleChanges)
+        long lifecycleChanges,
+        long worldGateHolds)
     {
         Run = run;
         Service = service;
@@ -216,9 +233,8 @@ internal readonly struct DecisionJournalServiceSummary
         MutationAttempts = mutationAttempts;
         MutationsCommitted = mutationsCommitted;
         FaultBearingObservations = faultBearingObservations;
-        ConfigurationChanges = configurationChanges;
-        StrategyChanges = strategyChanges;
         LifecycleChanges = lifecycleChanges;
+        WorldGateHolds = worldGateHolds;
     }
 
     internal ulong Run { get; }
@@ -237,7 +253,11 @@ internal readonly struct DecisionJournalServiceSummary
     internal long MutationAttempts { get; }
     internal long MutationsCommitted { get; }
     internal long FaultBearingObservations { get; }
-    internal long ConfigurationChanges { get; }
-    internal long StrategyChanges { get; }
     internal long LifecycleChanges { get; }
+
+    /// <summary>
+    /// How often the world freshness gate began holding this service closed. A hold is counted once
+    /// however long it lasts, so a small number beside a service that committed nothing is a stall.
+    /// </summary>
+    internal long WorldGateHolds { get; }
 }

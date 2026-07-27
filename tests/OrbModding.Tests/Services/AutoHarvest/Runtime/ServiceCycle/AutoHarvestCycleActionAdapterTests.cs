@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
+using OrbAutomata;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 public sealed class AutoHarvestCycleActionAdapterTests
 {
@@ -39,6 +40,25 @@ public sealed class AutoHarvestCycleActionAdapterTests
         Assert.Equal(1, fixture.Gates.QuarantineReadCount);
     }
 
+    /// <summary>
+    /// The facts and the safety verdict the worker planned against reach the mutation, which is what
+    /// lets the boundary decide without asking the game a question the plan already answered.
+    /// </summary>
+    [Fact]
+    public void ThePlannedFactsAndSafetyReachTheMutationUnchanged()
+    {
+        using var fixture = new Fixture();
+
+        fixture.Execute();
+
+        Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.Identity);
+        Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.PlotVisibility);
+        Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.ActionAvailability);
+        Assert.Equal(AutoHarvestEvidenceState.Rejected, fixture.Mutation.Facts.Prerequisites);
+        Assert.Equal(AutoHarvestEvidenceState.Unknown, fixture.Mutation.Facts.Readiness);
+        Assert.Equal(AutoHarvestActionSafetyState.ResourceDrain, fixture.Mutation.Safety);
+    }
+
     [Fact]
     public void AttemptedUnverifiedMutationQuarantinesThePair()
     {
@@ -54,6 +74,29 @@ public sealed class AutoHarvestCycleActionAdapterTests
         Assert.Equal(1, fixture.Gates.QuarantineCount);
     }
 
+    /// <summary>
+    /// An outcome read without a mutation having been attempted is not this pair's fault.
+    /// </summary>
+    /// <remarks>
+    /// The quarantine exists to stop retrying something the game refused to do. Nothing was asked of
+    /// the game here, so there is nothing to stop retrying, and naming it a pair fault would make the
+    /// worker give up on a pair over a failure that never touched it.
+    /// </remarks>
+    [Fact]
+    public void AnUnverifiedOutcomeWithNoAttemptIsNotAPairFault()
+    {
+        using var fixture = new Fixture();
+        fixture.Mutation.Result = new AutoHarvestSubmissionResult(
+            NativeMutationOutcome.BeforeCaptureFailed,
+            new NativeMutationCallOutcome(0, 0, 0));
+
+        var result = fixture.Execute();
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
+        Assert.Equal(0, fixture.Gates.QuarantineCount);
+    }
+
     [Fact]
     public void NonAttemptedFinalPreflightRejectionDoesNotQuarantine()
     {
@@ -66,6 +109,44 @@ public sealed class AutoHarvestCycleActionAdapterTests
         Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
         Assert.False(result.HasNativeEvidence);
         Assert.Equal(0, fixture.Gates.QuarantineCount);
+    }
+
+    /// <summary>
+    /// A refused binding is reported in the terms the worker records it in: which pairs it stops.
+    /// </summary>
+    /// <remarks>
+    /// The worker keeps this service's fault memory, and its only view of what happened is the
+    /// receipt's code. A pair-scoped failure reported as a feature-wide one would stop the sibling
+    /// too; the reverse would keep retrying a feature the build cannot support.
+    /// </remarks>
+    [Theory]
+    [InlineData((int)AutoHarvestRuntimeFailureScope.Pair, 1025)]
+    [InlineData((int)AutoHarvestRuntimeFailureScope.Feature, 1026)]
+    public void ARefusedBindingReportsHowFarItsContractFailureReaches(int scope, int expectedCode)
+    {
+        using var fixture = new Fixture();
+        fixture.FailResolution((AutoHarvestRuntimeFailureScope)scope);
+
+        var result = fixture.Execute();
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(new ServiceActionResultCode(expectedCode), result.Code);
+        Assert.Equal(0, fixture.Mutation.SubmitCount);
+    }
+
+    /// <summary>
+    /// A resolution that failed without tripping the circuit is not reported as a contract the build
+    /// does not have.
+    /// </summary>
+    [Fact]
+    public void ARefusedBindingWithNoTrippedCircuitStaysAnUnattributedFault()
+    {
+        using var fixture = new Fixture();
+        fixture.FailResolution(scope: null);
+
+        var result = fixture.Execute();
+
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
     }
 
     private static void AssertOrdered(IReadOnlyList<string> events, params string[] expected)
@@ -99,10 +180,12 @@ public sealed class AutoHarvestCycleActionAdapterTests
             Bindings = new BindingPort(Events, () => _nativeLifecycle);
             Mutation = new MutationPort(Events);
             Gates = new GatePort();
+            ContractCircuit = new AutoHarvestContractCircuit();
             _adapter = new AutoHarvestCycleActionAdapter(
                 Bindings,
                 Mutation,
                 Gates,
+                ContractCircuit,
                 () =>
                 {
                     Events.Add("ownership");
@@ -119,6 +202,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
         public BindingPort Bindings { get; }
         public MutationPort Mutation { get; }
         public GatePort Gates { get; }
+        public AutoHarvestContractCircuit ContractCircuit { get; }
 
         public ServiceActionResultCode ConfigureScenario(RejectionScenario scenario)
         {
@@ -142,7 +226,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
         private ServiceActionResultCode SetQuarantined()
         {
             Gates.Quarantined = true;
-            return CommonActionResultCodes.AdapterFault;
+            return AutoHarvestActionResultCodes.PairFaulted;
         }
 
         private ServiceActionResultCode SetOwnershipUnavailable()
@@ -163,6 +247,16 @@ public sealed class AutoHarvestCycleActionAdapterTests
             return CommonActionResultCodes.LifecycleReplaced;
         }
 
+        /// <summary>
+        /// Makes binding resolution fail, having tripped the circuit at <paramref name="scope"/>
+        /// first — the order the resolver itself produces, since it blocks the circuit as it fails.
+        /// </summary>
+        public void FailResolution(AutoHarvestRuntimeFailureScope? scope)
+        {
+            Bindings.FailsToResolve = true;
+            if (scope is not null) ContractCircuit.Block(AutoHarvestPair.FruitTree, scope.Value);
+        }
+
         public ServiceActionResult Execute()
         {
             var configuration = AutoHarvestConfigurationFactory.Create(
@@ -177,7 +271,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
                 new LifecycleGeneration(7),
                 new ConfigGeneration(1),
                 new StrategyGeneration(1),
-                new CaptureSequence(1),
+                new WorldGeneration(1),
                 new CycleId(1));
             var context = new ServiceActionContext(
                 cycle,
@@ -185,7 +279,17 @@ public sealed class AutoHarvestCycleActionAdapterTests
                 new ActionId(1),
                 actionIndex: 0,
                 new MonotonicTimestamp(1));
-            var action = new AutoHarvestCycleAction(AutoHarvestPair.FruitTree);
+            // Deliberately not all-verified, and deliberately not the safe verdict, so an adapter
+            // that substituted a plan of its own would not match.
+            var action = new AutoHarvestCycleAction(
+                AutoHarvestPair.FruitTree,
+                new AutoHarvestPairFacts(
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Verified,
+                    AutoHarvestEvidenceState.Rejected,
+                    AutoHarvestEvidenceState.Unknown),
+                AutoHarvestActionSafetyState.ResourceDrain);
             return _adapter.TryExecute(action, configuration, context);
         }
 
@@ -203,11 +307,27 @@ public sealed class AutoHarvestCycleActionAdapterTests
             _readLifecycle = readLifecycle;
         }
 
+        public bool FailsToResolve { get; set; }
+
         public AutoHarvestResolvedPairSet ResolvePairSet()
         {
             _events.Add("resolve");
+            if (FailsToResolve)
+            {
+                return AutoHarvestResolvedPairSet.Create(
+                    null!,
+                    null!,
+                    fruit: null,
+                    AutoHarvestNativeFailure.Create(
+                        AutoHarvestRuntimeFailureKind.Contract,
+                        AutoHarvestRuntimeFailureScope.Pair),
+                    treasure: null,
+                    AutoHarvestNativeFailure.Create(
+                        AutoHarvestRuntimeFailureKind.Contract,
+                        AutoHarvestRuntimeFailureScope.Pair));
+            }
+
             var shared = new AutoHarvestSharedBinding(
-                new object(),
                 new object(),
                 null!,
                 null!,
@@ -221,10 +341,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
                 new object(),
                 null!,
                 null!,
-                null!,
-                growthSeconds: 1,
-                restSeconds: 1,
-                actionSeconds: 1);
+                null!);
             return AutoHarvestResolvedPairSet.Create(
                 null!,
                 shared,
@@ -252,12 +369,18 @@ public sealed class AutoHarvestCycleActionAdapterTests
 
         public AutoHarvestSubmissionResult Result { get; set; }
         public int SubmitCount { get; private set; }
+        public AutoHarvestPairFacts Facts { get; private set; }
+        public AutoHarvestActionSafetyState Safety { get; private set; }
 
         public AutoHarvestSubmissionResult Submit(
-            in ResolvedAutoHarvestPair resolved)
+            in ResolvedAutoHarvestPair resolved,
+            in AutoHarvestPairFacts facts,
+            AutoHarvestActionSafetyState safety)
         {
             _events.Add("mutate");
             SubmitCount++;
+            Facts = facts;
+            Safety = safety;
             return Result;
         }
     }

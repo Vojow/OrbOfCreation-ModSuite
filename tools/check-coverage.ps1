@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$CoveragePath,
-    [double]$MinimumOverallLineRate = 0.65
+    # One assembly, one coverlet package, one floor: the single package's rate is the overall rate,
+    # so a second number here could only ever disagree with itself. Set two points under the rate
+    # measured when the suite merged into one DLL.
+    [double]$MinimumOverallLineRate = 0.765
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,12 +20,7 @@ $overall = [double]::Parse(
 $overallBranch = [double]::Parse(
     $report.coverage.'branch-rate',
     [Globalization.CultureInfo]::InvariantCulture)
-$packageMinimums = [ordered]@{
-    'OrbAutomata' = 0.70
-    'OrbMentor' = 0.64
-    'OrbModConfig' = 0.24
-    'OrbModding.Common' = 0.83
-}
+$productionPackage = 'OrbModSuite'
 
 $failures = [Collections.Generic.List[string]]::new()
 if ($overall -lt $MinimumOverallLineRate) {
@@ -30,22 +28,20 @@ if ($overall -lt $MinimumOverallLineRate) {
 }
 
 $packages = @($report.coverage.packages.package)
-foreach ($entry in $packageMinimums.GetEnumerator()) {
-    $package = $packages | Where-Object { $_.name -eq $entry.Key } | Select-Object -First 1
-    if ($null -eq $package) {
-        $failures.Add("required production package $($entry.Key) is absent from coverage")
-        continue
-    }
-
+$package = $packages | Where-Object { $_.name -eq $productionPackage } | Select-Object -First 1
+if ($null -eq $package) {
+    $failures.Add("required production package $productionPackage is absent from coverage")
+}
+else {
     $rate = [double]::Parse(
         $package.'line-rate',
         [Globalization.CultureInfo]::InvariantCulture)
     $branchRate = [double]::Parse(
         $package.'branch-rate',
         [Globalization.CultureInfo]::InvariantCulture)
-    Write-Host "$($entry.Key) line coverage: $($rate.ToString('P2')) (minimum $(([double]$entry.Value).ToString('P2'))); branch coverage: $($branchRate.ToString('P2')) (diagnostic)"
-    if ($rate -lt [double]$entry.Value) {
-        $failures.Add("$($entry.Key) line rate $($rate.ToString('P2')) is below $(([double]$entry.Value).ToString('P2'))")
+    Write-Host "$productionPackage line coverage: $($rate.ToString('P2')) (minimum $($MinimumOverallLineRate.ToString('P2'))); branch coverage: $($branchRate.ToString('P2')) (diagnostic)"
+    if ($rate -lt $MinimumOverallLineRate) {
+        $failures.Add("$productionPackage line rate $($rate.ToString('P2')) is below $($MinimumOverallLineRate.ToString('P2'))")
     }
 }
 

@@ -6,6 +6,8 @@ using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.Tracing;
 using OrbModding.Common.Runtime.Tracing.BufferedSegments;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
+using OrbModding.Tests.Tools;
 using Xunit;
 using static OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal.DecisionJournalTestData;
 using static OrbModding.Tests.Runtime.Tracing.BufferedSegments.BufferedSegmentTestWait;
@@ -31,7 +33,7 @@ public sealed class DecisionJournalSegmentConsumerTests
         Assert.Equal(BufferedSegmentFlushResult.Flushed, sink.Flush());
         Assert.True(SpinWait.SpinUntil(
             () => sink.Metrics().WrittenBlocks == 1,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
         Assert.Equal(BufferedSegmentAppendResult.Accepted, sink.Append(in second));
         sink.Stop();
         ForStatus(sink, BufferedSegmentStatus.Stopped);
@@ -132,6 +134,112 @@ public sealed class DecisionJournalSegmentConsumerTests
         }
     }
 
+    /// <summary>
+    /// A store this build cannot continue is abandoned at startup, and the journal records anyway.
+    /// </summary>
+    /// <remarks>
+    /// The store outlives the process. Refusing it stopped the journal on that machine for good,
+    /// which trades every future session for segments no build in the future can read either. The
+    /// count is what makes the trade visible.
+    /// </remarks>
+    [Fact]
+    public void AStoreThisBuildCannotContinueIsAbandonedRatherThanRefused()
+    {
+        using var directory = new DecisionJournalTestDirectory();
+        for (var ordinal = 1; ordinal <= 3; ordinal++)
+            File.WriteAllBytes(directory.SegmentPath(ordinal), new byte[] { 7, 7, 7, 7 });
+
+        var consumer = Consume(directory, run: 31, out var written);
+
+        Assert.Equal(3, consumer.Metrics.IncompatibleSegmentsPruned);
+        Assert.Equal(1, consumer.Metrics.RetainedSegments);
+        Assert.Equal("journal-000000.osjd", Path.GetFileName(written));
+        var segment = DecisionJournalSegmentCodec.Decode(File.ReadAllBytes(written));
+        Assert.Equal(new DecisionJournalRunId(31), segment.Run);
+        Assert.Equal((ulong)0, segment.Ordinal);
+        Assert.Equal((ulong)1, segment.FirstRecordSequence);
+    }
+
+    [Fact]
+    public void ASegmentFromAnotherSchemaVersionIsAbandonedRatherThanRefused()
+    {
+        using var directory = new DecisionJournalTestDirectory();
+        var path = directory.WriteSegment(
+            1,
+            32,
+            1,
+            DecisionJournalRecord.Decision(CreateObservation(1, 10)));
+        var bytes = File.ReadAllBytes(path);
+        bytes[4] = DecisionJournalSegmentCodec.SchemaVersion + 1;
+        File.WriteAllBytes(path, bytes);
+
+        var consumer = Consume(directory, run: 33, out var written);
+
+        Assert.Equal(1, consumer.Metrics.IncompatibleSegmentsPruned);
+        Assert.Equal("journal-000000.osjd", Path.GetFileName(written));
+        var segment = DecisionJournalSegmentCodec.Decode(File.ReadAllBytes(written));
+        Assert.Equal(new DecisionJournalRunId(33), segment.Run);
+        Assert.Equal((ulong)1, segment.FirstRecordSequence);
+    }
+
+    /// <summary>
+    /// The store every installed build left behind — journal format v1, written before the span
+    /// carried its published-action total — is abandoned on the next launch rather than refused.
+    /// </summary>
+    /// <remarks>
+    /// Backwards is the direction that actually happens: a schema bump meets stores already on disk.
+    /// A v1 record cannot be read as v2, because its silence about publications is indistinguishable
+    /// from a claim that there were none.
+    /// </remarks>
+    [Fact]
+    public void AStoreWrittenBeforeThePublishedActionTotalIsAbandoned()
+    {
+        using var directory = new DecisionJournalTestDirectory();
+        var path = directory.WriteSegment(
+            1,
+            36,
+            1,
+            DecisionJournalRecord.Decision(CreateObservation(1, 10)));
+        var bytes = File.ReadAllBytes(path);
+        bytes[4] = 1;
+        bytes[8] = 1;
+        File.WriteAllBytes(path, bytes);
+
+        var consumer = Consume(directory, run: 37, out var written);
+
+        Assert.Equal(1, consumer.Metrics.IncompatibleSegmentsPruned);
+        Assert.Equal(
+            DecisionJournalConsumerFaultReason.None,
+            consumer.Metrics.FaultReason);
+        Assert.Equal("journal-000000.osjd", Path.GetFileName(written));
+    }
+
+    /// <summary>
+    /// A readable store from an earlier run is continued, not discarded.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of abandonment: restart evidence is the journal's whole point across a crash, so
+    /// a store that a probe accepts must keep its segments and its ordinal.
+    /// </remarks>
+    [Fact]
+    public void AReadableStoreFromAnEarlierRunIsContinued()
+    {
+        using var directory = new DecisionJournalTestDirectory();
+        directory.WriteSegment(0, 34, 1, DecisionJournalRecord.Decision(CreateObservation(1, 10)));
+        directory.WriteSegment(1, 34, 2, DecisionJournalRecord.Decision(CreateObservation(2, 20)));
+
+        var consumer = Consume(directory, run: 35, out var written);
+
+        Assert.Equal(0, consumer.Metrics.IncompatibleSegmentsPruned);
+        Assert.Equal(3, consumer.Metrics.RetainedSegments);
+        Assert.Equal("journal-000002.osjd", Path.GetFileName(written));
+        Assert.Equal(3, Directory.GetFiles(directory.Root, "journal-*.osjd").Length);
+        var segment = DecisionJournalSegmentCodec.Decode(File.ReadAllBytes(written));
+        Assert.Equal(new DecisionJournalRunId(35), segment.Run);
+        Assert.Equal((ulong)2, segment.Ordinal);
+        Assert.Equal((ulong)1, segment.FirstRecordSequence);
+    }
+
     [Fact]
     public void LastStorageOrdinalRemainsDurableAndFaultsBeforeItsSuccessor()
     {
@@ -185,7 +293,7 @@ public sealed class DecisionJournalSegmentConsumerTests
         Assert.True(sink.TryFlush());
         Assert.True(SpinWait.SpinUntil(
             () => sink.ConsumerMetrics.CannotContinue,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
 
         Assert.False(sink.TryAppend(in second));
         Assert.False(sink.TryFlush());
@@ -201,6 +309,33 @@ public sealed class DecisionJournalSegmentConsumerTests
         Assert.Equal(
             DecisionJournalConsumerFaultReason.RetentionFailed,
             sink.ConsumerMetrics.FaultReason);
+    }
+
+    /// <summary>
+    /// Writes one record into the store the directory holds, and names the segment it landed in.
+    /// </summary>
+    private static DecisionJournalSegmentConsumer Consume(
+        DecisionJournalTestDirectory directory,
+        ulong run,
+        out string written)
+    {
+        var consumer = new DecisionJournalSegmentConsumer(
+            new FileTraceSegmentStorage(directory.Root, "journal", ".osjd"),
+            new DecisionJournalRunId(run),
+            maximumCommittedSegments: 4);
+        using (var sink = CreateSink(consumer))
+        {
+            ForStatus(sink, BufferedSegmentStatus.Running);
+            var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
+            Assert.Equal(BufferedSegmentAppendResult.Accepted, sink.Append(in record));
+            sink.Stop();
+            ForStatus(sink, BufferedSegmentStatus.Stopped);
+        }
+
+        var paths = Directory.GetFiles(directory.Root, "journal-*.osjd");
+        Array.Sort(paths, StringComparer.Ordinal);
+        written = paths[paths.Length - 1];
+        return consumer;
     }
 
     private static BufferedSegmentSink<DecisionJournalRecord> CreateSink(
@@ -228,7 +363,7 @@ public sealed class DecisionJournalSegmentConsumerTests
         Assert.True(sink.TryFlush());
         Assert.True(SpinWait.SpinUntil(
             () => sink.TransportMetrics.WrittenBlocks == 1,
-            TimeSpan.FromSeconds(2)));
+            ServiceCycleTestDeadline.Value));
         Assert.True(sink.TryAppend(in second));
         sink.Stop();
         WaitForFacadeStatus(sink, BufferedSegmentStatus.Stopped);
@@ -240,7 +375,7 @@ public sealed class DecisionJournalSegmentConsumerTests
     {
         Assert.True(SpinWait.SpinUntil(
             () => sink.TransportMetrics.Status == expected,
-            TimeSpan.FromSeconds(2)),
+            ServiceCycleTestDeadline.Value),
             $"Expected {expected}, observed {sink.TransportMetrics.Status}.");
     }
 
@@ -266,7 +401,9 @@ public sealed class DecisionJournalSegmentConsumerTests
         internal int DeleteCalls { get; private set; }
         internal bool FailDelete { get; init; }
 
-        public TraceSegmentStorageRecovery Reconcile(int maximumCommittedSegments) => _recovery;
+        public TraceSegmentStorageRecovery Reconcile(
+            int maximumCommittedSegments,
+            ITraceSegmentHeaderProbe? probe = null) => _recovery;
 
         public object BeginSegment(int ordinal) => new MemorySegment(ordinal);
 

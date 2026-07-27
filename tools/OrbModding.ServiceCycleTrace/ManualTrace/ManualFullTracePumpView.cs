@@ -15,6 +15,7 @@ internal static class ManualFullTracePumpView
         writer.WriteLine($"- Otherwise idle accepted pumps: {summary.Idle.ToString("N0", CultureInfo.InvariantCulture)}");
         writer.WriteLine($"- Active accepted pumps: {summary.Active.ToString("N0", CultureInfo.InvariantCulture)}");
         writer.WriteLine($"- Responses / captures / actions: {summary.Responses.ToString("N0", CultureInfo.InvariantCulture)} / {summary.Captures.ToString("N0", CultureInfo.InvariantCulture)} / {summary.Actions.ToString("N0", CultureInfo.InvariantCulture)}");
+        writer.WriteLine($"- Cycles started / world-gate holds: {summary.Started.ToString("N0", CultureInfo.InvariantCulture)} / {summary.Held.ToString("N0", CultureInfo.InvariantCulture)}");
         writer.WriteLine();
         writer.WriteLine("| Phase | Samples | Total ms | Average ms | Max ms |");
         writer.WriteLine("|---|---:|---:|---:|---:|");
@@ -29,8 +30,8 @@ internal static class ManualFullTracePumpView
 
         writer.WriteLine("### Active or rejected pumps");
         writer.WriteLine();
-        writer.WriteLine("| Offset ms | Frame | Accepted | Start ordinal | Responses | Captures | Actions | Lifecycle transitions | Pump ms |");
-        writer.WriteLine("|---:|---:|:---:|---:|---:|---:|---:|---:|---:|");
+        writer.WriteLine("| Offset ms | Frame | Accepted | Start ordinal | Responses | Captures | Actions | Started | Held | Lifecycle transitions | Pump ms |");
+        writer.WriteLine("|---:|---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var segment in session.Segments())
         foreach (var item in segment.Events)
         {
@@ -52,6 +53,10 @@ internal static class ManualFullTracePumpView
             writer.Write(payload.CapturesAttempted.ToString(CultureInfo.InvariantCulture));
             writer.Write(" | ");
             writer.Write(payload.ActionsAttempted.ToString(CultureInfo.InvariantCulture));
+            writer.Write(" | ");
+            writer.Write(payload.CyclesStarted.ToString(CultureInfo.InvariantCulture));
+            writer.Write(" | ");
+            writer.Write(payload.WorldGateDeferrals.ToString(CultureInfo.InvariantCulture));
             writer.Write(" | ");
             writer.Write(payload.LifecycleTransitions.ToString(CultureInfo.InvariantCulture));
             writer.Write(" | ");
@@ -82,6 +87,8 @@ internal static class ManualFullTracePumpView
             result.Responses += payload.ResponsesAcquired;
             result.Captures += payload.CapturesAttempted;
             result.Actions += payload.ActionsAttempted;
+            result.Started += payload.CyclesStarted;
+            result.Held += payload.WorldGateDeferrals;
             result.Pump.AddTicks(payload.TotalDurationTicks);
             result.Response.AddTicks(payload.ResponseDurationTicks);
             result.Capture.AddTicks(payload.CaptureDurationTicks);
@@ -118,6 +125,8 @@ internal static class ManualFullTracePumpView
         internal long Responses;
         internal long Captures;
         internal long Actions;
+        internal long Started;
+        internal long Held;
         internal TraceMetricBuilder Pump { get; } = new();
         internal TraceMetricBuilder Response { get; } = new();
         internal TraceMetricBuilder Capture { get; } = new();

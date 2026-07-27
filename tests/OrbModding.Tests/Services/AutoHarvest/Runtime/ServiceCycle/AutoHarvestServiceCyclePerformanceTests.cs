@@ -2,21 +2,21 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using BepInEx.Logging;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Recording;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Registration;
-using OrbModding.Common.Runtime.ServiceCycle.Tracing;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
-namespace OrbAutomata.Tests;
+namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class AutoHarvestAllocationMeasurementCollection
@@ -38,20 +38,16 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
     public void WarmedFeatureCyclesStayWithinReviewedOwnerAndWorkerAllocationCeilings()
     {
         var clock = new ThreadSafeTestClock(100);
-        var capture = new ReadyCapture();
         var actions = new CommittingActions();
-        var definition = AutoHarvestService.Define(capture, actions);
+        var definition = AutoHarvestService.Define(actions);
+        var world = AutoHarvestTestWorlds.Harvestable();
         using var registry = new ServiceCycleRegistry(
             1,
             clock,
             measureWorkerAllocations: true);
-        var recording = new ServiceCycleReplaySession(
-            new ServiceCycleTraceSessionId(820),
-            new ServiceCycleReplaySessionOptions(false, 0, 0, 0));
-        using var registration = registry.RegisterReplay(
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(
             definition,
-            Configuration(),
-            recording,
             new LifecycleGeneration(7));
         registry.Seal();
         var pump = new SuiteFramePump(registry);
@@ -72,8 +68,8 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
             ownsActionFamily: true,
             new RuntimeDiagnosticsRegistry(),
             featureStatus: null);
-        var frame = 0L;
-        var deadline = Stopwatch.GetTimestamp() + 2 * Stopwatch.Frequency;
+        // Past the world publication's own seed generation, as a real frame counter always is.
+        var frame = 1L;
 
         try
         {
@@ -81,9 +77,11 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
             {
                 journal.Tick();
                 return journalStatus.Status.State == DecisionJournalStatusState.Recording;
-            }, TimeSpan.FromSeconds(2)));
+            }, ServiceCycleTestDeadline.Value));
             Assert.NotEqual(Environment.CurrentManagedThreadId, storage.ReconcileThreadId);
-            RunCycle(pump, journal, diagnostics, registration, clock, ref frame, deadline, out _);
+            // Armed only once the journal is recording, so warm-up latency cannot eat the measured window.
+            var deadline = ArmDeadline();
+            RunCycle(pump, registry, world, journal, diagnostics, registration, clock, ref frame, deadline, out _);
             // A collection can charge this thread its unused allocation quantum inside the probe.
             Assert.True(GC.TryStartNoGCRegion(NoGcRegionSize, disallowFullBlockingGC: true));
             try
@@ -95,6 +93,8 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
                 {
                     var cycleOwnerAllocated = RunCycle(
                         pump,
+                        registry,
+                        world,
                         journal,
                         diagnostics,
                         registration,
@@ -112,7 +112,6 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
                 var workerCycles = workerAfter.MeasuredWorkerCycleCount - workerBefore.MeasuredWorkerCycleCount;
                 Assert.Equal(MeasuredCycles, workerCycles);
                 Assert.Equal(MeasuredCycles + 1, actions.ExecutionCount);
-                Assert.Equal(MeasuredCycles + 1, capture.CaptureCount);
                 Assert.InRange(ownerAllocated, 0, MeasuredCycles * MaximumBytesPerCycle);
                 Assert.InRange(workerAllocated, 0, MeasuredCycles * MaximumBytesPerCycle);
             }
@@ -129,11 +128,11 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
 
     private static long RunCycle(
         SuiteFramePump pump,
+        ServiceCycleRegistry registry,
+        GameWorldState world,
         AutomataDecisionJournalController journal,
         AutoHarvestServiceCycleDiagnosticsBridge diagnostics,
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
+        ServiceRegistration<
             AutoHarvestCycleState,
             AutoHarvestCycleAction> registration,
         ThreadSafeTestClock clock,
@@ -142,9 +141,12 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
         out long workerAllocated)
     {
         clock.Advance(Interval);
+        // Collection runs every frame in the game, and the previous cycle's action means this one
+        // does not start until a reading later than it arrives.
+        TestWorldCollector.CollectedAt(registry, frame + 1, world);
         var expectedWorkerCycles = registration.Runner.Snapshot.MeasuredWorkerCycleCount + 1;
         var allocated = MeasurePump(pump, journal, diagnostics, ref frame, out var capture);
-        Assert.Equal(1, capture.CapturesAttempted);
+        Assert.Equal(1, capture.CyclesStarted);
         Assert.True(registration.WaitForResponseReady(Remaining(deadline)));
         WaitForMeasuredWorkerCycle(registration, expectedWorkerCycles, deadline);
         workerAllocated = registration.Runner.Snapshot.WorkerCycleAllocatedBytes;
@@ -155,7 +157,7 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
 
         Assert.Equal(1, response.ResponsesAcquired);
         Assert.Equal(1, action.ActionsAttempted);
-        Assert.Equal(0, handback.CapturesAttempted);
+        Assert.Equal(0, handback.CyclesStarted);
         return allocated;
     }
 
@@ -174,9 +176,7 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
     }
 
     private static void WaitForCleanup(
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
+        ServiceRegistration<
             AutoHarvestCycleState,
             AutoHarvestCycleAction> registration,
         long deadline)
@@ -191,9 +191,7 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
     }
 
     private static void WaitForMeasuredWorkerCycle(
-        ServiceCycleReplayRegistration<
-            AutoHarvestCycleFrame,
-            AutomataConfiguration,
+        ServiceRegistration<
             AutoHarvestCycleState,
             AutoHarvestCycleAction> registration,
         long expectedCount,
@@ -208,6 +206,9 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
         }
     }
 
+    private static long ArmDeadline() => Stopwatch.GetTimestamp()
+        + (long)(ServiceCycleTestDeadline.Value.TotalSeconds * Stopwatch.Frequency);
+
     private static TimeSpan Remaining(long deadline)
     {
         var ticks = deadline - Stopwatch.GetTimestamp();
@@ -215,7 +216,7 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
         return TimeSpan.FromSeconds((double)ticks / Stopwatch.Frequency);
     }
 
-    private static AutomataConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
+    private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
@@ -237,40 +238,13 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
             new MonotonicDuration(long.MaxValue));
     }
 
-    private sealed class ReadyCapture : IAutoHarvestCycleCapturePort
-    {
-        public int CaptureCount { get; private set; }
-
-        public AutoHarvestCycleCaptureDisposition Capture(
-            in AutomataConfiguration config,
-            LifecycleGeneration lifecycle,
-            out AutoHarvestCycleFrame frame)
-        {
-            CaptureCount++;
-            var facts = new AutoHarvestPairFacts(
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified);
-            frame = new AutoHarvestCycleFrame(
-                AutoHarvestPairCapture.Captured(AutoHarvestPair.FruitTree, facts),
-                AutoHarvestPairCapture.Captured(AutoHarvestPair.TreasureTree, facts),
-                ownsActionFamily: true);
-            return AutoHarvestCycleCaptureDisposition.Captured;
-        }
-    }
-
     private sealed class CommittingActions : IAutoHarvestCycleActionPort
     {
         public int ExecutionCount { get; private set; }
 
         public ServiceActionResult TryExecute(
             in AutoHarvestCycleAction action,
-            in AutomataConfiguration config,
+            in SuiteRuntimeConfiguration config,
             in ServiceActionContext context)
         {
             ExecutionCount++;

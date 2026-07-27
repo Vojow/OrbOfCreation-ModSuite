@@ -1,4 +1,3 @@
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Format;
 using OrbModding.ServiceCycleTrace;
 using OrbModding.ServiceCycleTrace.IO;
 using OrbModding.ServiceCycleTrace.Journal;
@@ -11,8 +10,8 @@ using OrbModding.ServiceCycleTrace.Performance;
 if (!TraceCommandLine.TryParse(args, out var options))
 {
     Console.Error.WriteLine(
-        "Usage: OrbModding.ServiceCycleTrace [--full|--journal|--performance|--dashboard] --input <artifact-or-session> " +
-        "[--profile generic|auto-harvest] [--output <report.md>]");
+        "Usage: OrbModding.ServiceCycleTrace [--full|--journal|--performance|--dashboard] " +
+        "--input <artifact-or-session> [--output <report.md>]");
     return 2;
 }
 
@@ -22,7 +21,8 @@ try
 #if SERVICE_CYCLE_PROFILE
     if (options.InputKind == TraceInputKind.Dashboard)
     {
-        TraceDashboardWriter.Write(inputPath, Path.GetFullPath(options.OutputPath!));
+        var selection = Locate(inputPath);
+        TraceDashboardWriter.Write(selection, Path.GetFullPath(options.OutputPath!));
     }
     else if (options.InputKind == TraceInputKind.PerformanceProfile)
     {
@@ -45,9 +45,9 @@ try
             AtomicTextFile.Write(options.OutputPath, writer => DecisionJournalReport.Write(writer, report));
         }
     }
-    else if (options.InputKind == TraceInputKind.ManualFullTrace)
+    else
     {
-        var session = ManualFullTraceSessionReader.Read(inputPath);
+        var session = ManualFullTraceSessionReader.Read(Locate(inputPath).FullSessionDirectory);
         if (options.OutputPath is null)
             ManualFullTraceReport.Write(Console.Out, session);
         else
@@ -56,20 +56,19 @@ try
             AtomicTextFile.Write(options.OutputPath, writer => ManualFullTraceReport.Write(writer, session));
         }
     }
-    else
-    {
-        var artifact = ServiceCycleReplayArtifactCodec.Decode(BoundedBinaryFile.Read(
-            inputPath,
-            0,
-            ServiceCycleReplayArtifactFormat.MaximumArtifactBytes));
-        var report = ServiceCycleTraceReport.Render(Path.GetFileName(inputPath), artifact, options.Profile);
-        if (options.OutputPath is null) Console.Write(report);
-        else AtomicTextFile.Write(options.OutputPath, writer => writer.Write(report));
-    }
     return 0;
 }
 catch (Exception exception)
 {
     Console.Error.WriteLine(exception.Message);
     return 1;
+}
+
+// Reported rather than silent: when the caller named a trace root or a run folder, which capture
+// the report describes is part of reading it.
+static TraceCaptureSelection Locate(string inputPath)
+{
+    var selection = TraceCaptureLocator.Locate(inputPath);
+    foreach (var note in selection.Notes) Console.Error.WriteLine(note);
+    return selection;
 }

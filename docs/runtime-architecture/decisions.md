@@ -1,166 +1,225 @@
 # Runtime architecture engineering decisions
 
-> **Lifecycle: Accepted production foundation / live slice passed / observation products implemented.**
-> These decisions are normative for new architecture work. Common ServiceCycle is production-composed for
-> Auto Harvest, the superseded runtime is deleted, aggregate findings are closed, and the separately owned
-> observation products passed their portable gates. Release remains separate.
+> **Lifecycle: Accepted production foundation.** These decisions are normative for new architecture work.
 
 [Back to dossier](README.md) | [Service-cycle runtime](service-cycle-runtime.md) | [Goals and invariants](goals-and-invariants.md) | [Architecture](architecture.md)
 
+This is a register. Each entry states one durable choice and points at the document that specifies
+it; where an entry carries the specification itself, it says so. D16 and D17 are cited from source
+comments, so their numbers are fixed — no entry here is ever renumbered or reused.
+
 ## D1 - Feature services are explicit modules
 
-Each automation capability is a cohesive service module. It separates configuration, capture, state, evaluation, action execution, diagnostics projection, and native adapters. Tests mirror those responsibilities.
-
-New work does not accumulate as flat project-root files, partial-class state piles, or one central feature engine. Folder and dependency structure are part of correctness.
+Each automation capability is one cohesive module separating configuration, state, evaluation, action
+execution, diagnostics projection, and native adapters, with tests mirroring those responsibilities.
+Not flat project-root files, partial-class state piles, or one central feature engine: folder and
+dependency structure are part of correctness. See [modularity invariants](goals-and-invariants.md).
 
 ## D2 - Composition is explicit and deterministic
 
-Services register through one deliberate Common composition boundary in stable order. Assembly scanning, filesystem conventions, reflection autoloading, static-constructor discovery, and general service location are not used.
-
-Registration is transactional, rejects duplicate identities/capacity overflow, and unwinds all acquired resources after failure. Feature APIs remain typed; only complete service slots are erased for the Common pump.
+Services register through one deliberate Common composition boundary in stable order. Registration is
+transactional, rejects duplicate identities and capacity overflow, and unwinds acquired resources on
+failure; feature APIs stay typed and only complete service slots are erased for the pump. No assembly
+scanning, filesystem convention, reflection autoloading, static-constructor discovery, or service
+location. See [registration and composition](architecture.md).
 
 ## D3 - Native game access is a hexagonal main-thread boundary
 
-Unity objects, reflection members, native registries, mutation permits, and postcondition checks remain behind feature-owned main-thread adapters. Frames, configuration, strategy, state, actions, diagnostics, and traces use suite-owned neutral values.
+Unity objects, reflected members, native registries, mutation permits, and postcondition checks stay
+behind feature-owned main-thread adapters; everything crossing to a worker is a suite-owned neutral
+value. Actions carry typed intent, and the adapter re-resolves and revalidates immediately before
+mutating. See [action dispatch](architecture.md) and the [native boundary](service-cycle-runtime.md).
 
-Stable UUID plus expected native type establishes identity. Diagnostic names never do. Native metadata and lifecycle-bound object bindings are cached separately. Actions carry typed intent; the adapter re-resolves and revalidates immediately before mutation.
-
-When final policy and mutation verification require the same native state, the feature captures one immutable
-pre-mutation snapshot and shares it across both checks. A second native read is reserved for the
-post-mutation snapshot; repeating an unchanged preflight traversal is not an additional safety boundary.
-
-Temporary native global state remains adapter-owned and is restored with `try/finally` on every path.
+Identity is stable UUID plus expected native type. Diagnostic names never establish identity. Native
+metadata and lifecycle-bound object bindings are cached separately.
 
 ## D4 - Common owns a small service-cycle runtime
 
-Common owns the top-level frame pump, typed runners, ownership handoffs, lifecycle/emergency control, action rotation, clocks, generic diagnostics transport, and semantic trace transport.
-
-It does not own Auto Harvest pairs, game UUIDs, economy policy, reflection failure scopes, or feature diagnostics meaning.
-
-The pump, runner, registration, reusable action store, lifecycle replacement, diagnostics, and tracing are separate cohesive modules. A facade that accumulates every constructor and behavior is rejected even if tested.
+Common owns the frame pump, typed runners, ownership handoffs, lifecycle and emergency control,
+action rotation, clocks, and diagnostics/trace transport — not Auto Harvest pairs, game UUIDs,
+economy policy, reflection failure scopes, or feature diagnostics meaning. Each of those is a
+separate cohesive module; a facade accumulating every constructor and behavior is rejected even if
+tested. See [Common module structure](architecture.md).
 
 ## D5 - Ordinary services use strict half-duplex cycles
 
-The default service follows `Waiting -> Capturing -> Evaluating -> Executing -> Waiting` with one reusable frame, lifecycle-scoped state, reusable response/action buffer, and one sleeping thread.
+`Waiting -> Capturing -> Evaluating -> Executing -> Waiting`, with lifecycle-scoped state, one
+reusable response buffer, and one sleeping thread. There are two shapes and no third: the ordinary
+one consumes the published world and has no capture, the source produces it and is the only shape
+with one. Evaluation is synchronous and Unity-free, and the phases never overlap for one service.
+Specialized future work does not complicate this default API without a measured requirement. See
+[the two service shapes](architecture.md).
 
-Capture, evaluation, and action execution never overlap for that service. Evaluation is synchronous and Unity-free. The ordinary contract has no custom async task, shared worker lane, polling awaiter, checkpoint, incumbent, or cooperative continuation.
+## D6 - Configuration, world, and strategy are next-cycle snapshots
 
-Future specialized work does not complicate this default API without a measured feature requirement.
-
-## D6 - Configuration and strategy are next-cycle snapshots
-
-Only a successful Save publishes immutable runtime configuration. Draft, invalid, reverted, or failed changes remain invisible.
-
-Automata has one canonical composed configuration record, grouped by feature and cross-cutting concern. BepInEx entries are persistence and editing bindings at the composition edge: changing one rebuilds the complete immutable record atomically. Runtime services, ownership, health projection, and controls consume that record through narrow source/editor ports and never retain or inspect `ConfigEntry` objects.
-
-Each cycle pins its `TConfig`; capture copies the relevant facts from a separately typed immutable strategy publication into `TFrame` and records the exact generation used. Those policy inputs remain fixed through evaluation and complete batch drain. Later publications never cancel or partially alter current work. The next cycle consumes the latest snapshots and may skip intermediate versions.
-
-Pinned and latest versions remain visible in diagnostics.
+Three publications, all registry-owned, immutable, latest-wins and generation-stamped. A cycle pins
+one reading of each and names all three on its identity; the runtime hands the pinned snapshots to
+the worker as arguments, so no service holds a publisher and the two halves of a cycle cannot
+disagree about what the game looked like. Later publications never cancel or partially alter current
+work. See [three publications](architecture.md).
 
 ## D7 - Batches are finite but not suite-capped
 
-A service may return any finite number of actions. Common maintains one batch per service, grows/reuses storage, and imposes no gameplay count ceiling or truncation.
-
-Each frame attempts at most one action per active service from a rotating start. The first rejection or fault terminates the current batch, preserves earlier commits, and discards the untouched suffix. No deferred old-action retry exists.
-
-Native validation remains authoritative for every attempt.
+A service may return any finite number of actions; Common maintains one batch per service, reuses and
+grows its storage, and imposes no gameplay count ceiling or truncation. Each frame gives every active
+service one turn from a rotating start, bounded by its registered action limit, and every attempt is
+independently validated. The first rejection or fault terminates the batch and no deferred retry
+exists. See [action batches](service-cycle-runtime.md).
 
 ## D8 - Emergency stop is immediate Common control
 
-Emergency stop is not saved configuration. While active, Common performs no native action call, rejects every unattempted action in current and late-arriving batches as `Rejected(EmergencyStop)`, and pauses new capture.
-
-A running pure evaluator may finish. Its returned actions are rejected without execution. Clearing stop starts fresh work; it never resurrects a batch.
+Not saved configuration: while active, no native action call occurs, every unattempted action is
+`Rejected(EmergencyStop)`, and no new cycle starts. A running evaluator may finish and its actions are
+rejected without execution; clearing never resurrects a batch. See
+[emergency stop](service-cycle-runtime.md).
 
 ## D9 - Service state is private and diagnostics are projections
 
-`TState` may be mutable across cycles but belongs only to the service worker. UI, traces, Common, and other services never inspect the live state object.
-
-After successful evaluation, the worker produces an immutable semantic projection. Common publishes that projection atomically with exact cycle/context identity. Rich feature details use bounded main-owned copies.
-
-Persistence beyond a lifecycle requires a separate versioned save-safe design.
+`TState` may be mutable across cycles but belongs only to its worker; UI, traces, Common, and other
+services see an immutable semantic projection published atomically with exact cycle identity.
+Persistence beyond a lifecycle requires a separate versioned save-safe design. See
+[service state](service-cycle-runtime.md).
 
 ## D10 - Lifecycle replacement orphans instead of preempting
 
-Lifecycle replacement terminates old native work by generation, creates factory-fresh state/ownership for the newest safe generation, and lets an already-running evaluator finish in isolation. Its late response is discarded. A prior lifecycle's projection never seeds the replacement state.
-
-The runtime does not use `Thread.Abort`, checkpoints, mid-evaluation cancellation, or shared state transfer. Two physical runner positions are the hard per-service bound: normally current plus optional retiring, but both may retire during a storm while the service pauses. A stopping runner counts as live until its worker acknowledges stopped; only then may its position be reused for the newest coalesced generation.
+Replacement terminates old native work by generation and creates factory-fresh state for the newest
+safe generation while an already-running evaluator finishes in isolation and has its response
+discarded. No `Thread.Abort`, checkpoints, mid-evaluation cancellation, or shared state transfer. Two
+physical runner positions are the hard per-service bound. See
+[lifecycle retirement](service-cycle-runtime.md).
 
 ## D11 - Faults recover without crash loops
 
-Expected refusal is a normal decision or rejection. Exceptions are caught at capture, evaluator, and action boundaries and isolated to the service.
-
-A failed evaluation publishes no actions/state, retains the last successful projection, keeps its worker alive, safely recreates working state, and retries through monotonic debounced backoff. Stable categories and counters are public; raw private exception data is not exported.
+Expected refusal is a normal decision or rejection; exceptions are caught at the capture, evaluator,
+and action boundaries and isolated to the service. A failed evaluation publishes nothing, keeps its
+worker alive, recreates working state safely, and retries through monotonic debounced backoff. Public
+evidence is stable categories and counters, never raw exception data. See
+[fault recovery](service-cycle-runtime.md).
 
 ## D12 - One semantic model with separately owned observation products
 
-Common uses one causal service-cycle vocabulary for live diagnostics, bounded in-memory evidence, disk capture, and replay. It records exact context/cycle/state/batch/action/emergency/lifecycle/fault identities and outcomes.
-
-Manual full trace, compact decision journal, and performance profile are separate products rather than one
-universal file or sink. Each owns its block lanes, writer, format, controls, retention, status, and failure
-boundary. Every lane remains single-producer; any multi-thread merge occurs on the product's background
-writer. Products may reuse a format-neutral buffered-segment transport and atomic storage port, but never
-share mutable buffers or backpressure. Full-trace facts may feed several offline views; the journal coalesces
-decisions for long retention; profiling adds measurements only in builds compiled with its probes.
-
-The semantic vocabulary, bounded capture, schema-v5 codec, graph validation, snapshot exporter, strict
-detached-record contracts, replay registration/recording, `.oscr` Format, detached evaluator oracle, and
-production-shaped replay driver are implemented. Schema v5 preserves `ServiceCapacity` and explicit
-start/admission/resolved-wake evidence. Every accepted pump is retained for exact fairness rotation.
-
-Production replay deliberately requires a full contiguous topology matching schema-v5 `ServiceCapacity`
-header metadata, at least one detached cycle per slot for initial configuration hydration, gap-free
-configuration generations beginning at one, consistent pre-cycle `LifecycleActivated` evidence,
-lifecycle-unique clocks, same-pump capture/request publication, and independently coherent pump-phase
-timing. Exact response waits use the complete cycle identity and never impose global footer order. Sparse
-and zero-cycle artifacts remain detached-oracle-only; missing-cycle execution yields typed failure evidence.
-
-Lifecycle-construction evidence fails during callback-free preflight. Callback-issued lifecycle, emergency,
-configuration, and non-capture-derived external strategy mutations fail after typed preparation but before
-pumping, while capture-derived strategy publication remains supported evidence. Containable callback,
-comparison, and cleanup failures become stable outcomes without relabelling an earlier primary phase;
-`StackOverflowException`, `OutOfMemoryException`, and `AccessViolationException` remain outside
-containment.
-
-The ordinary four-generic runner contains no replay callback and pays no per-action replay overhead. Exact replay is a separate opt-in service registration whose feature adapter produces detached, recursively value-only readonly records or bounded fragments for cycle inputs, previous/next state, and actions. Replay enabled and disabled follow the same feature record-production path; only encoding/retention changes, and gameplay action append precedes action-record encoding. Codecs never receive live frames, mutable state, gameplay action storage, or native adapters. This keeps codec/storage faults observational while leaving the ordinary execution contract unchanged.
-
-Unity never waits for telemetry, replay payloads, or I/O. Opt-in exact replay encoding may add bounded, separately measured worker response latency. Drops are exact and make replay captures incomplete rather than altering gameplay. Replay uses explicit feature codecs and the real evaluator/pump; graph sorting alone is not called replay. Common structurally rejects reference-bearing replay records and isolates codec/storage faults. Feature parity tests, not a dishonest compiler claim, prove that record production is noninterfering and contains every decision-relevant value.
-
-Semantic snapshot export uses two preallocated handoff slots and accepts sources with at most 8,192
-resident events. The owner thread uses a zero-wait atomic admission handshake, copies only a coherent
-resident suffix, and never waits for the worker; a dedicated worker encodes and stores it. Retention is
-commit-before-delete during a successfully reconciled exporter lifecycle: the configured maximum is the
-steady-state retained target, while a later deletion failure may leave exactly one additional newly committed
-artifact before admission faults closed. Startup reconciliation failures also fault admission closed, but may
-leave an inherited namespace above the configured target because cleanup is deliberately not reported as
-complete. The previous good artifact is never deleted before its replacement is durable.
+One causal service-cycle vocabulary feeds live diagnostics, the bounded ring, and disk capture. Full
+trace, decision journal, and performance profile are separate products, each owning its lanes,
+writer, format, controls, retention, status, and failure boundary; they share only format-neutral
+transport and storage mechanics, never mutable buffers or backpressure. Unity never waits for
+telemetry or I/O, and a drop marks a capture incomplete rather than altering gameplay. See
+[observability](observability.md).
 
 ## D13 - Runtime UI is additive and purpose-built
 
-Runtime diagnostics use the dedicated Runtime page inside the Mods surface. It is not a fake plugin or configuration file. Ordinary settings retain staged editing, Save/Revert behavior, navigation, and scroll position. The page renders ServiceCycle implementation and capability health without retaining or fabricating a kernel-cycle identity.
-
-The feature bridge projects bounded capability health, including emergency, ownership, progression, native readiness, and contract failures. Rich ServiceCycle phase, context, batch, wake, and fault evidence remains available through its diagnostics and trace surfaces rather than being converted into the old runtime snapshot. The UI never reads worker state or Unity objects.
-
-Registry callbacks enqueue bounded typed transitions or mark a dirty latch. Projection and rendering occur on the coordinated main-thread UI pass.
+Runtime diagnostics live on the dedicated Runtime page inside the Mods surface — not a fake plugin or
+configuration file — and never read worker state or Unity objects. See
+[diagnostics and UI](architecture.md).
 
 ## D14 - Structure and evidence are delivery requirements
 
-Every checkpoint keeps dependency direction, narrow constructors, explicit ownership, focused tests, and buildable code. Portable evidence is reported honestly and never promoted to real-reference, interactive, package, or release approval.
+Every checkpoint keeps dependency direction, narrow constructors, explicit ownership, focused tests,
+and buildable code. Portable evidence is reported honestly and never promoted to real-reference,
+interactive, package, or release approval.
 
-Review is risk-based and bounded. A meaningful runtime milestone receives at most one independent review by
-default. Concrete findings are assessed and fixed or explicitly rejected once; ordinary tests and runtime
-evidence then decide acceptance. Re-review is reserved for a newly discovered gameplay-safety or correctness
-risk, not used as an open-ended search for more defensive behavior.
+Review is risk-based and bounded. A meaningful runtime milestone receives at most one independent
+review by default; concrete findings are assessed and fixed or explicitly rejected once, and ordinary
+tests plus runtime evidence then decide acceptance. Re-review is reserved for a newly discovered
+gameplay-safety or correctness risk, not used as an open-ended search for more defensive behavior.
 
-Developer-only observability has one containment invariant: it must not change gameplay behavior. Inside that
-boundary it uses one direct path and may fail or disable itself visibly. It does not need compatibility paths,
-automatic restart, speculative retries, or recovery layers merely to make a first live run succeed.
+Developer-only observability has one containment invariant: it must not change gameplay behavior.
+Inside that boundary it uses one direct path and may fail or disable itself visibly. It does not need
+compatibility paths, automatic restart, speculative retries, or recovery layers merely to make a first
+live run succeed.
 
 ## D15 - Adopted replacements delete obsolete paths
 
-The new runtime may exist source-adjacent while it is uncomposed and tested. A service is cut over atomically. No selector, compatibility branch, dual execution, or fallback remains afterward.
+A new runtime may exist source-adjacent while it is uncomposed and tested. A service is cut over
+atomically, and no selector, compatibility branch, dual execution, or fallback remains afterward. Git
+history is the rollback boundary.
 
-The Auto Harvest cutover atomically removed its old executor from composition. The now-unreachable Process,
-Lanes, Host, shared scheduler/kernel, live-view broker, duplicate trace/replay vocabulary, orchestration,
-and legacy-only tests were deleted. Git history is the rollback boundary.
+Do not advance a configuration schema merely to scrub a retired selector. Stop binding and displaying
+the obsolete value and leave old serialized text inert unless supported data needs a real migration.
 
-Do not advance a configuration schema merely to scrub a retired selector. Stop binding/displaying the obsolete value and leave old serialized text inert unless supported data needs a real migration.
+## D16 - The suite owns transcribed economy math, gated by an assembly hash
+
+**Specified here.** Asking the game to recompute a derived value is not cheap, and the cost is not the
+reflection. `StructureSO.GetNextCost()` chains four `ResourceCostList` transforms, each a LINQ
+projection into a fresh list, and caches nothing. Measured against the shipped macOS build, evaluating
+that chain from the same inputs in suite-owned code is roughly 11.5x faster per structure,
+bit-identical for every entity in a real save, and allocates nothing where the game allocates about
+six lists per call.
+
+Base values are a different matter. `GetQuantity()` returns a field. `ValueModifierRecord.GetValue()`
+is not ported so much as *reproduced*, because it is a branch before it is a computation:
+`calculationDirty ? Calculate() : calculatedValue`. The suite answers it the way the game would and
+never through the accessor, since `Calculate()` runs an allocating LINQ pass over both modifier
+dictionaries and then writes four fields of game state — the game recomputing and re-stamping its own
+observable at whatever point in the frame the suite's pump happens to run. An accessor that writes on
+read is a mutation however innocuous the write looks, and the suite does not mutate game state outside
+the action boundary.
+
+So the reading is the memo rule, and the dirty flag decides it: a clean record reads as its
+`calculatedValue`, a dirty one as `Adjust(baseValue)` over both modifier sets, computed and not
+stored. Neither half is the rule alone. Taking the memo raw publishes the `[NonSerialized]` zero of a
+record nothing has touched since load; folding unconditionally publishes a number for records the game
+will never recompute, since a record with no modifiers is never dirtied and charges from its memo for
+the rest of the session. Both were shipped alone and each cost a live failure in the opposite
+direction — see [W5](world-collection-decisions.md). **The number to publish is the number the game
+will act on**, which makes this an exact reading rather than a tolerated stale one.
+
+What makes owning the derived math tolerable is the gate, not the speed. The four conditions in
+[goals and invariants](goals-and-invariants.md) are load-bearing together, and the accepted cost is
+that any game patch disables the whole suite until re-audited. The mitigation is `script/re-audit`
+making re-auditing cheap, not softening the gate.
+
+Porting proceeds one layer at a time, each proven before the next begins. Two world-collector
+readings, `GetTrueRate()` and `IsAvailable()`, remain genuine game calls for exactly this reason:
+stacking a second unverified transcription on an unverified first would leave no way to attribute a
+differential failure to either.
+
+## D17 - World collection is derived from the runtime type, never from the save record
+
+**Specified here.** Every entity category has two shapes: the `ScriptableObject` it is at runtime, and
+the `SaveDataBase<T>` record it serialises into. They are not the same set of fields, and the
+difference is exactly the set of values this suite exists to read. A save record carries only what
+must survive a restart, so everything the game recomputes on load is absent from it by construction.
+Building a collector's field list from `SaveData`/`ApplyTo` therefore reads as a complete inventory
+while omitting the entire cached layer. It did: the first pass over twenty-five categories was derived
+that way and missed 165 scalars and 125 modifier records, including all six of `ResourceSO`'s rate
+terms and the cached `ConsumableSO.quantity` that answers "how many do I have". The save record stays
+useful as a shortlist of what the game considers *state*. It is a shortlist, not the list.
+
+**Enumerate the runtime type.** Walk the declared instance members of the `ScriptableObject` itself.
+Collect the value-typed ones and the `ValueModifierRecord`s. Justify each omission rather than each
+inclusion — the default is that a cached number the game keeps is a number some service will want,
+because the game keeps it for the same reason.
+
+**Private is not a signal.** `ConsumableSO.quantity`, `ResourceSO.inLossMode`,
+`StructureSO.currentBuildTime` and `DiscoveryTreeSO.totalDiscoveredCount` are all private, all cached,
+and all the exact number a consumer needs. Visibility describes the game's encapsulation, not the
+value's usefulness, and compiled field accessors do not care.
+
+**A count is a fixed-size fact about a variable-size thing.** An immutable publication cannot carry
+`List<RitualEffectInstance>`, and deferring the list is often right. It is never a reason to defer
+`ritualInstances.Count`, which is what "is this ritual currently running" actually means. Defer the
+elements; collect the cardinality, and any scalar the game itself derives from the collection. A
+single-valued reference to another entity is likewise collectable: a `Guid` is a value type, so
+`AlchemyTypeSO.selectedLevel` and every edge like it travels as an identity without needing a
+container. Collecting entities but no edges leaves the snapshot holding numbers it cannot attribute.
+
+**Do not sort members into runtime state and definition constants.** The tempting fourth rule is to
+skip fields the game never writes. It was measured and rejected: classifying the 270 members remaining
+after the first three rules by whether the declaring type assigns them put 186 in "runtime" and 84 in
+"definition", and the definition bucket contained `HarvestElementSO.harvestRate` and
+`AlchemyRecipeSO.cachedRequiredXp`, which are plainly caches written from other classes. A rule whose
+failure mode is silently dropping a cached value is the rule this decision exists to replace.
+
+So: every declared instance scalar and every `ValueModifierRecord` on a collected type is collected,
+without asking what writes it. The reads are compiled delegates over fields; the price is a wider row,
+and a wider row is the cheap side of this trade.
+
+**A record that distributes is not a record that holds.** `OrderedMultiplierRecord` and
+`MergingModifierRecord` derive from `ModifierRecord`, not from `ValueModifierRecord`, and have no
+cached value — they are plumbing that pushes modifiers, transformed, into the member records handed to
+them by `AddRecord`. The distributed effect therefore reaches the snapshot through those members,
+which are already collected under the memo rule. What the distributor alone knows is its own total,
+the `Adjust(100)` its tooltip prints as a percentage. `ModifierRecord.Adjust` is pure, so computing it
+would not breach D16; it is deferred because it needs the two variable-size modifier dictionaries, not
+because reading it would mutate. Until a named service wants that number, the row carries the
+active-modifier count.

@@ -102,45 +102,17 @@
       "Assembly-CSharp": {
         "type": "Project"
       },
-      "orbautomata": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.Common": "[0.4.0, )"
-        }
-      },
-      "orbmentor": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.Common": "[0.4.0, )"
-        }
-      },
-      "orbmodconfig": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.Common": "[0.4.0, )"
-        }
-      },
-      "orbmodding.common": {
-        "type": "Project"
-      },
       "orbmodding.performanceevidence": {
-        "type": "Project"
-      },
-      "orbmodding.replayconverter": {
-        "type": "Project",
-        "dependencies": {
-          "OrbModding.RuntimeReplay": "[1.0.0, )"
-        }
-      },
-      "orbmodding.runtimereplay": {
         "type": "Project"
       },
       "orbmodding.servicecycletrace": {
         "type": "Project",
         "dependencies": {
-          "OrbAutomata": "[0.9.0, )",
-          "OrbModding.Common": "[0.4.0, )"
+          "OrbModSuite": "[0.4.0, )"
         }
+      },
+      "orbmodsuite": {
+        "type": "Project"
       }
     }
   }

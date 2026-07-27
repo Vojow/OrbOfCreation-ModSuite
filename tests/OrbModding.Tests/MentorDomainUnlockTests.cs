@@ -206,7 +206,7 @@ public sealed class MentorDomainUnlockTests : IDisposable
         RegisterAll(masteriesAvailable: true);
         var registry = new FeatureStatusRegistry();
         using var existingArtifact = registry.Register(new FeatureStatusSnapshot(
-            new FeatureStatusKey(PluginIds.MentorGuid, MentorFeatureStatus.ArtifactsFeatureId),
+            new FeatureStatusKey(PluginIds.SuiteGuid, MentorFeatureStatus.ArtifactsFeatureId),
             "Existing artifact owner",
             false,
             FeatureStatusState.ConfigurationDisabled,
@@ -225,10 +225,10 @@ public sealed class MentorDomainUnlockTests : IDisposable
         Assert.Equal(MentorFeatureStatus.ArtifactsFeatureId, remaining.Key.FeatureId);
         Assert.Equal("Existing artifact owner", remaining.DisplayName);
         Assert.False(registry.TryGet(
-            new FeatureStatusKey(PluginIds.MentorGuid, MentorFeatureStatus.SpellsFeatureId),
+            new FeatureStatusKey(PluginIds.SuiteGuid, MentorFeatureStatus.SpellsFeatureId),
             out _));
         Assert.False(registry.TryGet(
-            new FeatureStatusKey(PluginIds.MentorGuid, MentorFeatureStatus.RootFeatureId),
+            new FeatureStatusKey(PluginIds.SuiteGuid, MentorFeatureStatus.RootFeatureId),
             out _));
     }
 
@@ -308,7 +308,7 @@ public sealed class MentorDomainUnlockTests : IDisposable
 
     private static FeatureStatusSnapshot Status(FeatureStatusRegistry registry, string featureId)
     {
-        Assert.True(registry.TryGet(new FeatureStatusKey(PluginIds.MentorGuid, featureId), out var status));
+        Assert.True(registry.TryGet(new FeatureStatusKey(PluginIds.SuiteGuid, featureId), out var status));
         return status;
     }
 

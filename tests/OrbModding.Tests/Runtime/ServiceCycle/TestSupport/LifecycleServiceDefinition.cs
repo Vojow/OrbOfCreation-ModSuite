@@ -4,23 +4,13 @@ using System.Collections.Generic;
 using System.Threading;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
-
-internal sealed class LifecycleFrame
-{
-    internal LifecycleFrame(int serial) => Serial = serial;
-    public int Serial { get; }
-    public ulong CapturedLifecycle { get; internal set; }
-}
-
-internal sealed class LifecycleConfig
-{
-    internal LifecycleConfig(int value) => Value = value;
-    public int Value { get; }
-}
 
 internal sealed class LifecycleState
 {
@@ -55,18 +45,15 @@ internal sealed class LifecyclePayload
     public int Value { get; }
 }
 
-/// <summary>Generation-safe fixture: every worker definition, frame, and state has a unique serial.</summary>
+/// <summary>Generation-safe fixture: every worker definition and state has a unique serial.</summary>
 internal sealed class LifecycleServiceDefinition :
-    IServiceCycleDefinition<LifecycleFrame, LifecycleConfig, LifecycleState, LifecycleAction>
+    IServiceCycleDefinition<LifecycleState, LifecycleAction>
 {
     private readonly ConcurrentDictionary<ulong, int> _executionCounts = new();
     private readonly List<object> _workerDefinitions = new();
-    private readonly List<LifecycleFrame> _frames = new();
     private readonly object _identityGate = new();
     private int _nextWorkerSerial;
-    private int _nextFrameSerial;
     private int _workerFactoryFailures;
-    private int _frameFactoryFailures;
     private readonly int _runtimeId;
 
     internal LifecycleServiceDefinition(string id)
@@ -82,28 +69,21 @@ internal sealed class LifecycleServiceDefinition :
     internal int ActionCount { get; set; } = 1;
     internal int RejectAtIndex { get; set; } = -1;
     internal int FaultAtIndex { get; set; } = -1;
-    internal bool ReuseFrame { get; set; }
     internal bool ReuseWorkerDefinition { get; set; }
-    internal LifecycleFrame? SharedFrame { get; set; }
     internal LifecycleState? SharedState { get; set; }
-    internal IServiceCycleWorkerDefinition<LifecycleFrame, LifecycleConfig, LifecycleState, LifecycleAction>?
+    internal IServiceCycleWorkerDefinition<LifecycleState, LifecycleAction>?
         SharedWorkerDefinition { get; set; }
-    internal LifecycleFrame? CaptureReplacementFrame { get; set; }
     internal StateReleaseGate? StateReleaseGate { get; set; }
     internal Action? WorkerDefinitionFactoryCallback { get; set; }
-    internal Action? FrameFactoryCallback { get; set; }
     internal Action? ShouldStartCallback { get; set; }
-    internal Action? CaptureCallback { get; set; }
     internal Action? ActionCallback { get; set; }
     internal int WorkerDefinitionCreateCount => Volatile.Read(ref _nextWorkerSerial);
-    internal int FrameCreateCount => Volatile.Read(ref _nextFrameSerial);
-    internal int FrameReleaseCount => LifecycleWorkerFixtureRuntime.FrameReleaseCount(_runtimeId);
+    internal int StateReleaseCount => LifecycleWorkerFixtureRuntime.StateReleaseCount(_runtimeId);
     internal int ActionExecutionCount => Sum(_executionCounts);
     internal bool IsPayloadAlive(ulong lifecycle) =>
         LifecycleWorkerFixtureRuntime.IsPayloadAlive(_runtimeId, lifecycle);
 
     internal void FailNextWorkerFactories(int count) => Volatile.Write(ref _workerFactoryFailures, count);
-    internal void FailNextFrameFactories(int count) => Volatile.Write(ref _frameFactoryFailures, count);
 
     internal EvaluationGate BlockEvaluation(ulong lifecycle)
     {
@@ -120,23 +100,7 @@ internal sealed class LifecycleServiceDefinition :
     internal int StateSerial(ulong lifecycle) =>
         LifecycleWorkerFixtureRuntime.StateSerial(_runtimeId, lifecycle);
 
-    public LifecycleFrame CreateFrame()
-    {
-        var serial = Interlocked.Increment(ref _nextFrameSerial);
-        FrameFactoryCallback?.Invoke();
-        if (ConsumeOne(ref _frameFactoryFailures))
-            throw new InvalidOperationException("synthetic frame construction failure");
-        lock (_identityGate)
-        {
-            if (SharedFrame is not null) return SharedFrame;
-            if (ReuseFrame && _frames.Count != 0) return _frames[0];
-            var frame = new LifecycleFrame(serial);
-            _frames.Add(frame);
-            return frame;
-        }
-    }
-
-    public IServiceCycleWorkerDefinition<LifecycleFrame, LifecycleConfig, LifecycleState, LifecycleAction>
+    public IServiceCycleWorkerDefinition<LifecycleState, LifecycleAction>
         CreateWorkerDefinition()
     {
         var serial = Interlocked.Increment(ref _nextWorkerSerial);
@@ -148,8 +112,7 @@ internal sealed class LifecycleServiceDefinition :
             if (SharedWorkerDefinition is not null) return SharedWorkerDefinition;
             if (ReuseWorkerDefinition && _workerDefinitions.Count != 0)
             {
-                return (IServiceCycleWorkerDefinition<
-                    LifecycleFrame, LifecycleConfig, LifecycleState, LifecycleAction>)_workerDefinitions[0];
+                return (IServiceCycleWorkerDefinition<LifecycleState, LifecycleAction>)_workerDefinitions[0];
             }
             var worker = new WorkerDefinition(
                 _runtimeId,
@@ -163,26 +126,15 @@ internal sealed class LifecycleServiceDefinition :
         }
     }
 
-    public ServiceStartDecision ShouldStart(in LifecycleConfig config, in ServiceCycleStartContext context)
+    public ServiceStartDecision ShouldStart(in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context)
     {
         ShouldStartCallback?.Invoke();
         return ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
     }
 
-    public ServiceCaptureResult Capture(
-        ref LifecycleFrame frame,
-        in LifecycleConfig config,
-        in ServiceCaptureContext context)
-    {
-        CaptureCallback?.Invoke();
-        if (CaptureReplacementFrame is not null) frame = CaptureReplacementFrame;
-        frame.CapturedLifecycle = context.Lifecycle.Value;
-        return ServiceCaptureResult.Captured(new StrategyGeneration(1), CommonServiceDecisionCodes.Captured);
-    }
-
     public ServiceActionResult TryExecute(
         in LifecycleAction action,
-        in LifecycleConfig config,
+        in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
     {
         ActionCallback?.Invoke();
@@ -224,7 +176,7 @@ internal sealed class LifecycleServiceDefinition :
     }
 
     private sealed class WorkerDefinition :
-        IServiceCycleWorkerDefinition<LifecycleFrame, LifecycleConfig, LifecycleState, LifecycleAction>
+        IServiceCycleWorkerDefinition<LifecycleState, LifecycleAction>
     {
         private readonly int _serial;
         private readonly int _actionCount;
@@ -252,6 +204,7 @@ internal sealed class LifecycleServiceDefinition :
 
         public void ReleaseState(ref LifecycleState state)
         {
+            LifecycleWorkerFixtureRuntime.RecordStateRelease(_runtimeId);
             if (LifecycleWorkerFixtureRuntime.TryGetStateReleaseGate(
                     _runtimeId, out var stateReleaseGate))
             {
@@ -260,21 +213,16 @@ internal sealed class LifecycleServiceDefinition :
             }
             state = null!;
         }
-        public void ReleaseFrame(ref LifecycleFrame frame)
-        {
-            LifecycleWorkerFixtureRuntime.RecordFrameRelease(_runtimeId);
-            frame = null!;
-        }
 
         public WakePolicy Evaluate(
-            in LifecycleFrame frame,
-            in LifecycleConfig config,
+            in SuiteRuntimeConfiguration config,
+            GameWorldState world,
+            SuiteStrategy strategy,
             in ServiceCycleContext context,
             ref LifecycleState state,
             ServiceActionWriter<LifecycleAction> actions)
         {
-            if (frame.CapturedLifecycle != context.Identity.Lifecycle.Value ||
-                (_sharedState is null && state.Lifecycle != context.Identity.Lifecycle.Value))
+            if (_sharedState is null && state.Lifecycle != context.Identity.Lifecycle.Value)
                 throw new InvalidOperationException("Generation stamps diverged in the evaluator fixture.");
             state.Evaluations++;
             LifecycleWorkerFixtureRuntime.RecordEvaluation(_runtimeId, context.Identity.Lifecycle.Value);
@@ -364,9 +312,9 @@ internal static class LifecycleWorkerFixtureRuntime
         Get(id).StateSerials.TryGetValue(lifecycle, out var serial) ? serial : 0;
     internal static void RecordPayload(int id, ulong lifecycle, LifecyclePayload payload) =>
         Get(id).Payloads[lifecycle] = new WeakReference<LifecyclePayload>(payload);
-    internal static void RecordFrameRelease(int id) =>
-        Interlocked.Increment(ref Get(id).FrameReleaseCount);
-    internal static int FrameReleaseCount(int id) => Volatile.Read(ref Get(id).FrameReleaseCount);
+    internal static void RecordStateRelease(int id) =>
+        Interlocked.Increment(ref Get(id).StateReleaseCount);
+    internal static int StateReleaseCount(int id) => Volatile.Read(ref Get(id).StateReleaseCount);
     internal static bool IsPayloadAlive(int id, ulong lifecycle) =>
         Get(id).Payloads.TryGetValue(lifecycle, out var reference) &&
         reference.TryGetTarget(out _);
@@ -390,6 +338,6 @@ internal static class LifecycleWorkerFixtureRuntime
         internal ConcurrentDictionary<ulong, int> StateSerials { get; } = new();
         internal ConcurrentDictionary<ulong, WeakReference<LifecyclePayload>> Payloads { get; } = new();
         internal StateReleaseGate? StateReleaseGate;
-        internal int FrameReleaseCount;
+        internal int StateReleaseCount;
     }
 }

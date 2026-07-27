@@ -1,6 +1,7 @@
 # Local reverse-engineering inputs and generated scratch output
 .analysis/
 artifacts/
+traces/
 
 # .NET build output
 bin/
@@ -32,3 +33,10 @@ lib/
 # Local release staging
 release-staging/
 *.nupkg
+
+# macOS Finder metadata
+.DS_Store
+
+# Runtime trace output and test-result files
+trace/
+*.trx

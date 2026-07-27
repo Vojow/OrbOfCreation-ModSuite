@@ -50,7 +50,7 @@ public sealed class ServiceCycleProfileRecordCodecTests
     [Fact]
     public void AggregateRoundTripsSummaryAndOperationSignature()
     {
-        var operations = new ServiceCycleProfileOperations(1, 0, 3, 4, 0, 2, 0, 1);
+        var operations = new ServiceCycleProfileOperations(1, 0, 3, 4, 0, 1);
         var expected = ServiceCycleProfileRecord.Aggregate(
             stageCode: 7,
             serviceOrdinal: 2,

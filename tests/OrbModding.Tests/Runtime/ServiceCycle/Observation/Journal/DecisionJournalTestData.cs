@@ -36,7 +36,6 @@ internal static class DecisionJournalTestData
             1,
             1,
             cycleValue,
-            cycleValue,
             new MonotonicTimestamp(timestamp),
             terminal.CompletedAt,
             CommonServiceDecisionCodes.Ready.Value,
@@ -62,7 +61,6 @@ internal static class DecisionJournalTestData
             cycle.Lifecycle.Value,
             cycle.Config.Value,
             cycle.Strategy.Value,
-            cycle.Capture.Value,
             cycle.Cycle.Value,
             new MonotonicTimestamp(timestamp),
             terminal.CompletedAt,
@@ -79,13 +77,14 @@ internal static class DecisionJournalTestData
     internal static ServiceCycleIdentity Identity(
         ulong cycleValue,
         ulong serviceValue = 1,
-        ulong lifecycleValue = 1) =>
+        ulong lifecycleValue = 1,
+        ulong strategyValue = 1) =>
         new(
             new ServiceId("test.service." + serviceValue),
             new LifecycleGeneration(lifecycleValue),
             new ConfigGeneration(1),
-            new StrategyGeneration(1),
-            new CaptureSequence(cycleValue),
+            new StrategyGeneration(strategyValue),
+            new WorldGeneration(1),
             new CycleId(cycleValue));
 
     internal static ServiceStateProjectionSnapshot Projection(long value)

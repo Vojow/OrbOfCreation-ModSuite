@@ -1,6 +1,13 @@
 # Auto Buy queue and completion model
 
-[Reverse-engineering index](README.md) · [Native purchase pipeline](auto-buy-native-pipeline.md) · [Simulation evidence](auto-buy-simulation-evidence.md) · [Runtime validation](../testing/runtime-validation.md)
+[Reverse-engineering index](README.md) · [Native purchase pipeline](auto-buy-native-pipeline.md) · [Runtime validation](../testing/runtime-validation.md)
+
+> **Scope.** This records the game's queue and completion behavior. The Automata side it describes is
+> the legacy Auto Buy runtime, which has been deleted: the queue-signal patches are gone, there is no
+> `AutoBuyEngine` and no incremental catalog, and Auto Buy no longer polls the queue — it reads
+> structure and upgrade levels off the world snapshot and paces on `AfterDecision`. The surviving
+> `CompleteAction` postfix now nudges unmigrated Spell Leveling, not Auto Buy. Read the native
+> observations as current and every Automata mechanism named below as history.
 
 ## Shared queue authority
 

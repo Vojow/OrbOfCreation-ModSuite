@@ -1,6 +1,6 @@
 # Orb Mod Config testing
 
-[Testing hub](README.md) · [Mod Config behavior reference](../../src/OrbModConfig/README.md) · [Runtime protocol](runtime-validation.md)
+[Testing hub](README.md) · [Mod Config behavior reference](../../src/ModConfig/README.md) · [Runtime protocol](runtime-validation.md)
 
 ## Risk contract
 
@@ -18,7 +18,7 @@ health, and remain usable before optional native progression UI exists.
 | Runtime health/status projection | [ModRuntimeStatusProjectionTests.cs](../../tests/OrbModding.Tests/ModRuntimeStatusProjectionTests.cs), [ConfigurationSchemaStatusProjectionTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaStatusProjectionTests.cs) |
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
 | Navigation cadence and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
-| Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationSchemaTests.cs) |
+| Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
 | Installed native navigation shape | `OrbModding.GameContractTests` Mod Config contract |
 
 ## Commands

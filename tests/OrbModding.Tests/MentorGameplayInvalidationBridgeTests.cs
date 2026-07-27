@@ -34,7 +34,7 @@ public sealed class MentorGameplayInvalidationBridgeTests
                 Assert.Equal(GameplayInvalidationDomains.MentorSpells, targeted.Domain);
                 Assert.Equal("a39a2748-2bc4-4ad0-9872-2a29f5c88c90", targeted.EntityId);
                 Assert.Equal("SpellRecipeSO", targeted.ExpectedTypeName);
-                Assert.Equal(PluginIds.MentorGuid, targeted.Source);
+                Assert.Equal(PluginIds.SuiteGuid, targeted.Source);
             },
             broad =>
             {
@@ -64,6 +64,6 @@ public sealed class MentorGameplayInvalidationBridgeTests
         Assert.Equal(GameplayInvalidationKind.Inventory, received.Kinds);
         Assert.Equal(GameplayInvalidationDomains.MentorSpellLoadout, received.Domain);
         Assert.True(received.IsBroad);
-        Assert.Equal(PluginIds.MentorGuid, received.Source);
+        Assert.Equal(PluginIds.SuiteGuid, received.Source);
     }
 }

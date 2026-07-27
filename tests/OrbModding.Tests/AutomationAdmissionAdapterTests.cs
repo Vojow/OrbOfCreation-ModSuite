@@ -11,29 +11,6 @@ namespace OrbModding.Tests;
 public sealed class AutomationAdmissionAdapterTests
 {
     [Fact]
-    public void AutoBuyAndAutoCastAdaptersProduceEquivalentCompletePolicyFacts()
-    {
-        var cost = new ResourceAdmissionCost(
-            "mana",
-            "Mana",
-            new BigAmount(2.0, 0),
-            new BigAmount(10.0, 0));
-
-        var buy = AutoBuyAdmissionAdapter.Capture(new BuyCandidate(cost));
-        var cast = AutoCastAdmissionAdapter.Capture(new CastCandidate(cost));
-
-        Assert.True(AutomationAdmissionPolicy.HasCompleteContract(buy, out var buyReason), buyReason);
-        Assert.True(AutomationAdmissionPolicy.HasCompleteContract(cast, out var castReason), castReason);
-        Assert.True(buy.IsAvailable);
-        Assert.True(cast.IsAvailable);
-        Assert.True(buy.NativeAdmissionAccepted);
-        Assert.True(cast.NativeAdmissionAccepted);
-        Assert.Equal(buy.ImmediateCosts, cast.ImmediateCosts);
-        Assert.Equal(1, buy.RequiredQueueSlots);
-        Assert.Equal(0, cast.RequiredQueueSlots);
-    }
-
-    [Fact]
     public void SharedPolicyFailsClosedWhenAnyAdapterFactIsUnknown()
     {
         var snapshot = new AutomationAdmissionSnapshot(
@@ -73,31 +50,14 @@ public sealed class AutomationAdmissionAdapterTests
     }
 
     [Fact]
-    public void AutoBuyAdapterDistinguishesUnknownAvailabilityFromLocked()
+    public void DerivedNativeSpellTypesFailClosed()
     {
-        var snapshot = AutoBuyAdmissionAdapter.Capture(new AvailabilityUnknownBuyCandidate(
-            new ResourceAdmissionCost("mana", "Mana", new BigAmount(1.0, 0), new BigAmount(10.0, 0))));
-
-        Assert.False(snapshot.AvailabilityKnown);
-        Assert.False(AutomationAdmissionPolicy.HasCompleteContract(snapshot, out var reason));
-        Assert.Equal("native availability is unknown", reason);
-    }
-
-    [Fact]
-    public void DerivedNativePurchaseAndSpellTypesFailClosed()
-    {
-        var snapshots = new AutoBuyResourceSnapshotCache(new EmptyResourceReader(), (_, _, _, _) => { });
-        var purchase = new ReflectionAutoBuyCandidate(
-            new DerivedStructureSO(),
-            AutoBuyCandidateKind.Structure,
-            snapshots);
         using var catalog = new ReflectionAutoCastCatalog();
         var cast = new ReflectionAutoCastCandidate(
             catalog,
             new DerivedSpell(new SpellRecipeSO { uuid = "33333333-3333-3333-3333-333333333333" }),
             0);
 
-        Assert.False(purchase.HasCompleteNativeContract);
         Assert.False(cast.TryGetIdentity(out _, out var reason));
         Assert.Contains("exact audited Spell type", reason, StringComparison.Ordinal);
     }
@@ -180,52 +140,13 @@ public sealed class AutomationAdmissionAdapterTests
             new AssemblyHashResult("main", GameAssemblyAudit.MacAssemblyCSharpSha256),
             new AssemblyHashResult("first", GameAssemblyAudit.WindowsFirstPassSha256));
 
-        Assert.True(Plugin.AssemblyAuditAllowsMutation(matching));
-        Assert.False(Plugin.AssemblyAuditAllowsMutation(mismatch));
+        Assert.True(global::OrbModding.Plugin.AssemblyAuditAllowsMutation(matching));
+        Assert.False(global::OrbModding.Plugin.AssemblyAuditAllowsMutation(mismatch));
     }
-
-    private class BuyCandidate : IAutoBuyCandidate, IAutoBuyDirtyCandidate
-    {
-        private readonly IReadOnlyList<ResourceAdmissionCost> _costs;
-        private readonly AutoBuyCandidateSnapshot _snapshot;
-
-        public BuyCandidate(ResourceAdmissionCost cost)
-        {
-            _costs = new[] { cost };
-            _snapshot = new AutoBuyCandidateSnapshot(this, "structure", "Structure", AutoBuyCandidateKind.Structure, "StructureSO");
-        }
-
-        public IReadOnlyList<string> ResourceDependencies => new[] { "mana" };
-        public bool HasResolvedCosts => true;
-        public AutoBuyCandidateSnapshot Snapshot() => _snapshot;
-        public bool IsAvailable() => true;
-        public bool CanPurchase(out string reason) { reason = string.Empty; return true; }
-        public IReadOnlyList<ResourceAdmissionCost> GetCosts() => _costs;
-        public bool TryPurchaseOne(out string reason) { reason = string.Empty; return true; }
-        public void MarkDirty(AutoBuyDirtyReason reasons) { }
-        public void SetLifecycleEvidence(AutoBuyLifecycleEvidence evidence) { }
-    }
-
-    private sealed class AvailabilityUnknownBuyCandidate : BuyCandidate, IAutoBuyAvailabilityEvidence
-    {
-        public AvailabilityUnknownBuyCandidate(ResourceAdmissionCost cost) : base(cost) { }
-        public bool TryReadAvailability(out bool available) { available = false; return false; }
-    }
-
-    private sealed class DerivedStructureSO : global::StructureSO { }
 
     private sealed class DerivedSpell : global::Spell
     {
         public DerivedSpell(SpellRecipeSO recipe) : base(recipe) { }
-    }
-
-    private sealed class EmptyResourceReader : IAutoBuyResourceSnapshotReader
-    {
-        public bool TryRead(AutoBuyResourceDefinition definition, long epoch, out AutoBuyResourceSnapshot snapshot)
-        {
-            snapshot = default;
-            return false;
-        }
     }
 
     private sealed class CastCandidate : IAutoCastCandidate

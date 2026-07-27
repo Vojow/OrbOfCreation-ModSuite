@@ -107,19 +107,20 @@ public sealed class MentorCoordinatorTests
     {
         var coordinator = Coordinator();
         long frame = 41;
+        var automataIdentity = SuitePerformanceWorkIdentities.AutoCastMutation;
         using var automata = coordinator.Register(
-            "OrbAutomata.AutoBuy",
-            "Submit one purchase",
-            SuiteBudgetClass.HardLimited,
-            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
+            automataIdentity.Subsystem,
+            automataIdentity.WorkName,
+            automataIdentity.BudgetClass,
+            automataIdentity.ExecutionKind);
         automata.SetPending(true);
         using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
         mentor.SetState(true, cooperativePending: false, mutationPending: true);
         var engine = new MentorEngine();
         engine.Consolidate(new MentorGrant("recipient", new MentorAmount(9, 3)));
 
-        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(automata, frame, out var purchase));
-        purchase.Complete();
+        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(automata, frame, out var automataMutation));
+        automataMutation.Complete();
         var grants = 0;
         Assert.False(mentor.TryRunMutation(() =>
         {

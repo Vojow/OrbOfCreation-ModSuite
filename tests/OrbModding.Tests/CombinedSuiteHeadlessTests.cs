@@ -40,10 +40,17 @@ public sealed class CombinedSuiteHeadlessTests
                 .Where(registration => registration.ExecutionKind == SuiteWorkExecutionKind.NonPreemptibleNativeMutation)
                 .ToArray();
             foreach (var registration in registrations) registration.SetPending(false);
-            registrations[0].SetPending(true);  // Auto Buy evaluation
-            registrations[9].SetPending(true);  // Mentor planning
-            registrations[10].SetPending(true); // Mod Config repair
-            registrations[11].SetPending(true); // Common invalidation delivery
+
+            // Keyed by work name so each line below arms the work it names, whatever position that
+            // identity holds in the table.
+            var byWorkName = registrations
+                .Select((registration, index) =>
+                    (registration, SuitePerformanceWorkIdentities.GetSupportedSuiteV1(index).WorkName))
+                .ToDictionary(item => item.WorkName, item => item.registration, StringComparer.Ordinal);
+            byWorkName[SuitePerformanceWorkIdentities.AutoCastEvaluate.WorkName].SetPending(true);
+            byWorkName[SuitePerformanceWorkIdentities.MentorEvaluate.WorkName].SetPending(true);
+            byWorkName[SuitePerformanceWorkIdentities.ModConfigWork.WorkName].SetPending(true);
+            byWorkName[SuitePerformanceWorkIdentities.GameplayInvalidationDelivery.WorkName].SetPending(true);
             var nextMutation = 0;
             mutations[nextMutation].SetPending(true);
 

@@ -1,8 +1,10 @@
 using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Registration;
+using OrbModding.Common.Runtime.Strategy;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -10,40 +12,37 @@ namespace OrbModding.Tests;
 public sealed class AutomataServiceDefinitionTests
 {
     [Fact]
-    public void DefinitionIsReplayFreeAndRegistryStillAuditsWorkerSeparation()
+    public void DefinitionExposesOnlyTheOrdinaryContractAndRegistryStillAuditsWorkerSeparation()
     {
         var metadata = Metadata();
-        var definition = AutomataService.Define<Frame, State, Action>(
+        var definition = AutomataService.Define<State, Action>(
             in metadata,
-            createFrame: () => default,
             createWorker: () => new WorkerDefinition(),
             shouldStart: (
-                in AutomataConfiguration _,
+                in SuiteRuntimeConfiguration _,
                 in ServiceCycleStartContext _) =>
                 ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready),
-            capture: (
-                ref Frame _,
-                in AutomataConfiguration _,
-                in ServiceCaptureContext _) =>
-                ServiceCaptureResult.Captured(
-                    new StrategyGeneration(1),
-                    CommonServiceDecisionCodes.Captured),
             execute: (
                 in Action _,
-                in AutomataConfiguration _,
+                in SuiteRuntimeConfiguration _,
                 in ServiceActionContext _) =>
                 ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected));
 
-        Assert.IsAssignableFrom<IAutomataServiceDefinition<Frame, State, Action>>(definition);
-        Assert.DoesNotContain(
-            definition.GetType().GetInterfaces(),
-            contract => contract.IsGenericType &&
-                contract.GetGenericTypeDefinition() == typeof(IServiceCycleReplayDefinition<,,,,,,>));
+        Assert.IsAssignableFrom<IAutomataServiceDefinition<State, Action>>(definition);
+        Assert.IsNotAssignableFrom<IServiceCycleSourceDefinition<State, Action>>(definition);
+        Assert.Equal(
+            new[]
+            {
+                typeof(IAutomataServiceDefinition<State, Action>),
+                typeof(IServiceCycleDefinition<State, Action>),
+                typeof(IServiceCycleMainThreadDefinition<Action>),
+            },
+            definition.GetType().GetInterfaces());
 
         using var registry = new OrbModding.Common.Runtime.ServiceCycle.Registration.ServiceCycleRegistry(
             1,
             new LifecycleGeneration(1));
-        using var registration = registry.Register(definition, new AutomataConfiguration());
+        using var registration = registry.Register(definition);
 
         Assert.Equal(0, registration.Ordinal);
     }
@@ -55,20 +54,19 @@ public sealed class AutomataServiceDefinitionTests
             new MonotonicDuration(1),
             new MonotonicDuration(2)));
 
-    private readonly struct Frame { }
     private readonly struct State { }
     private readonly struct Action { }
 
     private sealed class WorkerDefinition :
-        IServiceCycleWorkerDefinition<Frame, AutomataConfiguration, State, Action>
+        IServiceCycleWorkerDefinition<State, Action>
     {
         public State CreateState(LifecycleGeneration lifecycle) => default;
         public void ReleaseState(ref State state) => state = default;
-        public void ReleaseFrame(ref Frame frame) => frame = default;
 
         public WakePolicy Evaluate(
-            in Frame frame,
-            in AutomataConfiguration config,
+            in SuiteRuntimeConfiguration config,
+            GameWorldState world,
+            SuiteStrategy strategy,
             in ServiceCycleContext context,
             ref State state,
             ServiceActionWriter<Action> actions) =>

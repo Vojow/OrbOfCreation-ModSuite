@@ -20,7 +20,7 @@ public sealed class ServiceCycleProfileProbeTests
         probe.Attach(recorder);
         var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal: 4, frameIdentity: 91);
         var context = CreateContext(coordinates,
-            ServiceCycleProfileCommonStageCodes.DetachedInputBridgePublication,
+            ServiceCycleProfileSpan.SemanticPumpSummary,
             lifecycle: 7,
             cycle: 12,
             ServiceCycleProfileTemperature.LifecycleRebind);
@@ -40,7 +40,7 @@ public sealed class ServiceCycleProfileProbeTests
         Assert.Same(recorder, probe.Detach());
         Assert.True(recorder.Seal());
         var sample = recorder.GetSample(0, 0);
-        Assert.Equal(ServiceCycleProfileCommonStageCodes.DetachedInputBridgePublication, sample.StageCode);
+        Assert.Equal((int)ServiceCycleProfileSpan.SemanticPumpSummary, sample.StageCode);
         Assert.Equal(4, sample.ServiceOrdinal);
         Assert.Equal((ulong)7, sample.Lifecycle);
         Assert.Equal((ulong)12, sample.Cycle);
@@ -56,7 +56,7 @@ public sealed class ServiceCycleProfileProbeTests
         var probe = new ServiceCycleProfileProbe();
         var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal: 0, frameIdentity: 1);
         var context = CreateContext(coordinates,
-            ServiceCycleProfileCommonStageCodes.OverallPump,
+            ServiceCycleProfileSpan.OverallPump,
             lifecycle: 1,
             cycle: 0,
             ServiceCycleProfileTemperature.ColdProcess);
@@ -81,7 +81,7 @@ public sealed class ServiceCycleProfileProbeTests
 
         Assert.False(coordinates.IsValid);
         Assert.False(coordinates.TryCreateContext(
-            ServiceCycleProfileCommonStageCodes.OverallPump,
+            ServiceCycleProfileSpan.OverallPump,
             lifecycle: 1,
             cycle: 0,
             ServiceCycleProfileTemperature.ColdProcess,
@@ -93,7 +93,7 @@ public sealed class ServiceCycleProfileProbeTests
     {
         var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal: 0, frameIdentity: 1);
         var context = CreateContext(coordinates,
-            ServiceCycleProfileCommonStageCodes.OverallPump,
+            ServiceCycleProfileSpan.OverallPump,
             lifecycle: 1,
             cycle: 0,
             ServiceCycleProfileTemperature.Warm);
@@ -127,7 +127,7 @@ public sealed class ServiceCycleProfileProbeTests
         probe.Attach(port);
         var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal: 0, frameIdentity: 1);
         var context = CreateContext(coordinates,
-            ServiceCycleProfileCommonStageCodes.OverallPump,
+            ServiceCycleProfileSpan.OverallPump,
             lifecycle: 1,
             cycle: 0,
             ServiceCycleProfileTemperature.Warm);
@@ -153,7 +153,7 @@ public sealed class ServiceCycleProfileProbeTests
         probe.Attach(recorder);
         var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal: 0, frameIdentity: 1);
         var context = CreateContext(coordinates,
-            ServiceCycleProfileCommonStageCodes.DetachedInputConstruction,
+            ServiceCycleProfileSpan.SemanticStart,
             lifecycle: 1,
             cycle: 1,
             ServiceCycleProfileTemperature.Warm);
@@ -196,13 +196,13 @@ public sealed class ServiceCycleProfileProbeTests
 
     private static ServiceCycleProfileContext CreateContext(
         in ServiceCycleProfileCoordinates coordinates,
-        int stageCode,
+        ServiceCycleProfileSpan span,
         ulong lifecycle,
         ulong cycle,
         ServiceCycleProfileTemperature temperature)
     {
         Assert.True(coordinates.TryCreateContext(
-            stageCode,
+            span,
             lifecycle,
             cycle,
             temperature,

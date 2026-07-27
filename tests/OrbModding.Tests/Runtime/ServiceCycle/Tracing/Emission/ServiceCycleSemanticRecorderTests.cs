@@ -27,8 +27,8 @@ public sealed class ServiceCycleSemanticRecorderTests
     public void StableIdentitiesAndCausalHeadsFollowRegistrationAndSuiteDomains()
     {
         var recorder = NewRecorder(32, 3);
-        recorder.ConfigurationPublished(0, new ConfigGeneration(1), new MonotonicTimestamp(1));
-        recorder.StrategyPublished(1, new StrategyGeneration(1), new MonotonicTimestamp(2));
+        recorder.ConfigurationPublished(new ConfigGeneration(1), new MonotonicTimestamp(1));
+        recorder.StrategyPublished(new StrategyGeneration(1), new MonotonicTimestamp(2));
         recorder.LifecycleRequested(0, new LifecycleGeneration(2), new MonotonicTimestamp(3));
         var emergency = new EmergencyStopContext(
             new EmergencyStopEpisodeId(1),
@@ -47,12 +47,14 @@ public sealed class ServiceCycleSemanticRecorderTests
         var events = Drain(recorder);
 
         Assert.Equal(new ulong[] { 1, 2, 3, 4, 5, 6, 7 }, events.Select(value => value.Id.Sequence));
-        Assert.Equal(1UL, events[0].Payload.Service);
-        Assert.Equal(2UL, events[1].Payload.Service);
+        // Publications name the suite, not a service, so they join the suite chain the emergency and
+        // the pump summary are on rather than heading each service's own chain.
+        Assert.Equal(0UL, events[0].Payload.Service);
+        Assert.Equal(0UL, events[1].Payload.Service);
         Assert.False(events[0].HasParent);
-        Assert.False(events[1].HasParent);
-        Assert.Equal(events[0].Id, events[2].Parent);
-        Assert.False(events[3].HasParent);
+        Assert.Equal(events[0].Id, events[1].Parent);
+        Assert.False(events[2].HasParent);
+        Assert.Equal(events[1].Id, events[3].Parent);
         Assert.Equal(events[3].Id, events[4].Parent);
         Assert.Equal(events[3].Id, events[5].Parent);
         Assert.Equal(events[5].Id, events[6].Parent);
@@ -77,7 +79,7 @@ public sealed class ServiceCycleSemanticRecorderTests
             new LifecycleGeneration(2),
             new ConfigGeneration(3),
             new StrategyGeneration(4),
-            new CaptureSequence(5),
+            new WorldGeneration(1),
             new CycleId(6));
         Assert.Throws<ArgumentException>(() =>
             recorder.CycleStarted(0, in mismatched, new MonotonicTimestamp(1), default));
@@ -93,7 +95,7 @@ public sealed class ServiceCycleSemanticRecorderTests
         var fault = SemanticRecorderFixtures.Fault;
         var startContext = new ServiceCycleStartContext(
             new LifecycleGeneration(2), new ConfigGeneration(3), default, new MonotonicTimestamp(8));
-        var captured = ServiceCaptureResult.Captured(new StrategyGeneration(4), CommonServiceDecisionCodes.Captured);
+        var captured = ServiceCaptureResult.Captured(CommonServiceDecisionCodes.Captured);
         var unavailable = ServiceCaptureResult.Unavailable(
             CommonServiceDecisionCodes.CaptureUnavailable,
             WakePolicy.AfterDecision(new MonotonicDuration(5)));
@@ -107,8 +109,8 @@ public sealed class ServiceCycleSemanticRecorderTests
             new MonotonicTimestamp(130));
         var projection = SemanticRecorderFixtures.ProjectionPublication();
 
-        recorder.ConfigurationPublished(0, new ConfigGeneration(3), new MonotonicTimestamp(1));
-        recorder.StrategyPublished(0, new StrategyGeneration(4), new MonotonicTimestamp(2));
+        recorder.ConfigurationPublished(new ConfigGeneration(3), new MonotonicTimestamp(1));
+        recorder.StrategyPublished(new StrategyGeneration(4), new MonotonicTimestamp(2));
         recorder.LifecycleRequested(0, new LifecycleGeneration(2), new MonotonicTimestamp(3));
         recorder.LifecycleActivated(0, new LifecycleGeneration(2), new MonotonicTimestamp(4));
         recorder.LifecycleRetired(0, new LifecycleGeneration(1), new MonotonicTimestamp(5));
@@ -160,7 +162,7 @@ public sealed class ServiceCycleSemanticRecorderTests
 
         Assert.Equal(36, events.Length);
         Assert.Equal(ServiceCycleSemanticEventKind.ConfigurationPublished, events[0].Kind);
-        Assert.Equal(1UL, events[0].Payload.Service);
+        Assert.Equal(0UL, events[0].Payload.Service);
         Assert.Equal(3UL, events[0].Payload.Configuration);
         Assert.Equal(1L, events[0].Payload.TimestampTicks);
         Assert.Equal(ServiceCycleSemanticEventKind.StatePublished, events[24].Kind);
@@ -310,7 +312,7 @@ public sealed class ServiceCycleSemanticRecorderTests
     public void DisabledEmitsNothingAndEveryPumpRetainsRotationEvidence()
     {
         var disabled = new ServiceCycleSemanticRecorder(new ServiceCycleTraceSessionId(1), 4, 1, enabled: false);
-        disabled.ConfigurationPublished(-1, default, default);
+        disabled.ConfigurationPublished(default, default);
         var activePump = SemanticRecorderFixtures.Pump(accepted: true, actions: 1);
         disabled.PumpCompleted(in activePump, new MonotonicTimestamp(1));
         Assert.Equal(0, disabled.Count);
@@ -333,7 +335,7 @@ public sealed class ServiceCycleSemanticRecorderTests
     {
         var recorder = NewRecorder(3, 1);
         for (var generation = 1; generation <= 5; generation++)
-            recorder.ConfigurationPublished(0, new ConfigGeneration((ulong)generation), new MonotonicTimestamp(generation));
+            recorder.ConfigurationPublished(new ConfigGeneration((ulong)generation), new MonotonicTimestamp(generation));
 
         var capture = recorder.CreateCapture(3);
         var drain = recorder.PullCapture(capture, 3);
@@ -361,7 +363,7 @@ public sealed class ServiceCycleSemanticRecorderTests
         Exception? registrationFailure = null;
         var thread = new Thread(() =>
         {
-            try { recorder.ConfigurationPublished(0, new ConfigGeneration(1), default); }
+            try { recorder.ConfigurationPublished(new ConfigGeneration(1), default); }
             catch (Exception exception) { appendFailure = exception; }
             try { _ = recorder.Count; }
             catch (Exception exception) { readFailure = exception; }
@@ -389,14 +391,14 @@ public sealed class ServiceCycleSemanticRecorderTests
         var cursor = recorder.Cursor;
         for (var index = 0; index < 64; index++)
         {
-            recorder.ConfigurationPublished(0, new ConfigGeneration((ulong)index + 1), new MonotonicTimestamp(index));
+            recorder.ConfigurationPublished(new ConfigGeneration((ulong)index + 1), new MonotonicTimestamp(index));
             cursor = recorder.DrainSince(cursor, output).Cursor;
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var index = 0; index < 1_000; index++)
         {
-            recorder.ConfigurationPublished(0, new ConfigGeneration((ulong)index + 100), new MonotonicTimestamp(index));
+            recorder.ConfigurationPublished(new ConfigGeneration((ulong)index + 100), new MonotonicTimestamp(index));
             cursor = recorder.DrainSince(cursor, output).Cursor;
         }
 

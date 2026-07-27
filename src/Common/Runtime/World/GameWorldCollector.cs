@@ -1,0 +1,386 @@
+using System;
+using System.Collections.Generic;
+
+namespace OrbModding.Common.Runtime.World;
+
+/// <summary>
+/// Reads the whole game world once per collection, on the Unity thread, into per-category buffers,
+/// then derives those readings into one publishable snapshot off-thread.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the shared pass that replaces per-service collection. Roughly ten services are expected to
+/// want resource state every tick; each capturing its own copy costs the main thread once per service
+/// for readings that are identical by construction. One pass, published like configuration, makes that
+/// cost constant in the number of services instead of linear.
+/// </para>
+/// <para>
+/// <b>Read what the game reads, and never write.</b> Every accessor a binder installs reads state the
+/// game stores. Nothing in this type classifies or scales anything either; that all happens in
+/// <see cref="Build"/>, off the Unity thread.
+/// </para>
+/// <para>
+/// The read-only requirement is stricter than it sounds, because several of the game's accessors
+/// write on read. <c>ValueModifierRecord.GetValue()</c> recalculates and re-stamps its observable
+/// when its dirty flag is set, so it is reproduced rather than called — and reproducing it means
+/// reproducing the branch, not just the arithmetic. A clean record reads as its
+/// <c>calculatedValue</c>, because that memo is the number the game will act on; a dirty one reads as
+/// its fold over <c>baseValue</c> and the two modifier sets, because that is what the game would
+/// recompute. Each half alone shipped a live failure in the opposite direction. See
+/// <see cref="NativeModifierRecordAccess"/>.
+/// </para>
+/// <para>
+/// <b>Two readings still call the game, and both should stop.</b> <c>GetTrueRate()</c> composes
+/// several rate terms and <c>IsAvailable()</c> walks a prerequisite graph, and each reaches
+/// <c>GetValue()</c> underneath — so these are precisely the calls that can still make the game
+/// recompute on the suite's schedule. They are next in line for the same
+/// port-then-differentially-verify treatment the purchase-cost chain has had. Porting them one at a
+/// time is deliberate: two unverified transcriptions at once leave a differential failure
+/// unattributable to either.
+/// </para>
+/// <para>
+/// <b>Accessors bind once.</b> Each category compiles its readers at construction, so the warm path
+/// is a direct call returning an unboxed value. This is the technique that removed roughly 15 ms from
+/// Auto Buy's 23.7 ms collect; see <see cref="NativeAccessorBinder"/>.
+/// </para>
+/// <para>
+/// <b>Failure is per category, then per entity.</b> A build that renamed one research member still
+/// yields resources, structures, and upgrades, and a single unreadable entity costs one row rather
+/// than the pass. Every shortfall is reported through <see cref="WorldCollectionReport"/>, because a
+/// partial snapshot that reports itself as complete would have consumers read "no research" as a fact
+/// about the save rather than a fact about the read.
+/// </para>
+/// <para>
+/// <b>Adding a category is a binder, a row type, and one line here.</b> Traversal, identity claiming,
+/// failure capture, buffer growth, sorting, and table construction are all generic; see
+/// <see cref="WorldRowBinder{TSample, TRow}"/>. That is deliberate — the game persists per-entity
+/// state for roughly thirty categories, and a design that costs a hand-written traversal apiece would
+/// stall long before covering them.
+/// </para>
+/// </remarks>
+internal sealed class GameWorldCollector
+{
+    private readonly WorldCategoryReader<RawResourceSample, WorldResource> _resources;
+    private readonly WorldCategoryReader<RawStructureSample, WorldStructure> _structures;
+    private readonly WorldCategoryReader<RawUpgradeSample, WorldUpgrade> _upgrades;
+    private readonly WorldCategoryReader<WorldResearch, WorldResearch> _research;
+    private readonly WorldCategoryReader<WorldNumberVariable, WorldNumberVariable> _doubleVariables;
+    private readonly WorldCategoryReader<WorldNumberVariable, WorldNumberVariable> _intVariables;
+    private readonly WorldCategoryReader<WorldBoolVariable, WorldBoolVariable> _boolVariables;
+    private readonly WorldCategoryReader<WorldModifierVariable, WorldModifierVariable> _modifierVariables;
+    private readonly WorldPurchaseCostReader _purchaseCosts;
+    private readonly WorldUpgradeCostReader _upgradeCosts;
+    private readonly WorldPlotActionReader _plotActions;
+    private readonly WorldEntityEffectReader _entityEffects;
+    private readonly WorldActionQueueReader _actionQueues;
+    private readonly WorldPlotAuthoringReader _plotAuthoring;
+    private readonly WorldEffectBlockReader _effectBlocks;
+    private readonly WorldEntityRequirementReader _entityRequirements;
+    private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
+    private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
+    private readonly WorldCategoryReader<WorldSpellRecipe, WorldSpellRecipe> _spellRecipes;
+    private readonly WorldCategoryReader<WorldSpellType, WorldSpellType> _spellTypes;
+    private readonly WorldCategoryReader<WorldEquipment, WorldEquipment> _equipment;
+    private readonly WorldCategoryReader<WorldEquipmentType, WorldEquipmentType> _equipmentTypes;
+    private readonly WorldCategoryReader<WorldResourceType, WorldResourceType> _resourceTypes;
+    private readonly WorldCategoryReader<WorldCraftingRecipeType, WorldCraftingRecipeType> _craftingRecipeTypes;
+    private readonly WorldCategoryReader<WorldHarvestElement, WorldHarvestElement> _harvestElements;
+    private readonly WorldCategoryReader<RawHarvestResourceSample, WorldHarvestResource> _harvestResources;
+    private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
+    private readonly WorldCategoryReader<WorldGlyph, WorldGlyph> _glyphs;
+    private readonly WorldCategoryReader<WorldConsumable, WorldConsumable> _consumables;
+    private readonly WorldCategoryReader<WorldRitual, WorldRitual> _rituals;
+    private readonly WorldCategoryReader<WorldAchievement, WorldAchievement> _achievements;
+    private readonly WorldCategoryReader<WorldAdvancement, WorldAdvancement> _advancements;
+    private readonly WorldCategoryReader<WorldChallenge, WorldChallenge> _challenges;
+    private readonly WorldCategoryReader<WorldThoughtStream, WorldThoughtStream> _thoughtStreams;
+    private readonly WorldCategoryReader<WorldTutorial, WorldTutorial> _tutorials;
+    private readonly WorldCategoryReader<WorldView, WorldView> _views;
+    private readonly WorldCategoryReader<WorldPlotNodeAction, WorldPlotNodeAction> _plotNodeActions;
+    private readonly WorldCategoryReader<WorldPassiveAbility, WorldPassiveAbility> _passiveAbilities;
+    private readonly WorldCategoryReader<WorldCharacter, WorldCharacter> _characters;
+    private readonly WorldCategoryReader<WorldDiscoveryTree, WorldDiscoveryTree> _discoveryTrees;
+    private readonly WorldCategoryReader<RawPlotNodeSample, WorldPlotNode> _plotNodes;
+    private readonly WorldCategoryReader<WorldTreasurePool, WorldTreasurePool> _treasurePools;
+
+    /// <summary>Every reader in traversal order, so the pass itself is category-blind.</summary>
+    private readonly IWorldCategoryReader[] _readers;
+
+    /// <summary>
+    /// Identities already seen this pass, reused across collections. Claiming spans every category at
+    /// once: the game keys all entities in one UUID space, so a collision between categories is as
+    /// much an authoring error as one within a category — and a duplicate reaching table construction
+    /// would cost the whole snapshot rather than one row.
+    /// </summary>
+    private readonly HashSet<Guid> _claimed = new();
+
+    /// <summary>
+    /// Reads Unity's fixed timestep. Injected rather than called inline so the collector stays
+    /// constructible without a Unity player loop, which is the whole reason its category types are
+    /// injected too.
+    /// </summary>
+    private readonly Func<double> _readFixedDeltaTime;
+
+    /// <summary>
+    /// The frame used by the parameterless <see cref="Collect()"/>, for callers that are not a
+    /// service cycle and so have nowhere else to keep one.
+    /// </summary>
+    private readonly GameWorldCycleFrame _ownFrame = new();
+
+    /// <summary>Reads the frame-wide rate terms that belong to no category.</summary>
+    private readonly WorldFrameGlobalsReader _rateGlobals;
+
+    /// <summary>
+    /// Which entries of <see cref="_readers"/> read authored content rather than played state, and so
+    /// are read once per lifecycle epoch instead of once per pass.
+    /// </summary>
+    /// <remarks>
+    /// A parallel flag rather than a separate list, because the report is built in traversal order and
+    /// a skipped category still owes the operator its row. Marked by identity at construction, so
+    /// reordering <see cref="_readers"/> cannot silently re-classify one.
+    /// </remarks>
+    private readonly bool[] _isStructural;
+
+    /// <summary>
+    /// What the last epoch-scoped read of each structural category found, kept so a skipped pass can
+    /// report what is in the buffer rather than reporting nothing.
+    /// </summary>
+    private readonly WorldCategoryReport[] _structuralReports;
+
+    private GameWorldCycleFrame? _structuralFrame;
+    private long _structuralEpoch;
+
+    internal GameWorldCollector()
+        : this(WorldNativeTypes.Resolve, static () => UnityEngine.Time.fixedDeltaTime)
+    {
+    }
+
+    /// <summary>
+    /// Binds every category through <paramref name="resolveType"/>, which maps a game type name to the
+    /// loaded type or null. Taking the resolver rather than the types keeps this constructor from
+    /// growing a parameter per category, and lets tests answer for exactly the names they stub.
+    /// </summary>
+    internal GameWorldCollector(Func<string, Type?> resolveType)
+        : this(resolveType, static () => UnityEngine.Time.fixedDeltaTime)
+    {
+    }
+
+    /// <summary>As above, with the tick clock supplied too.</summary>
+    internal GameWorldCollector(Func<string, Type?> resolveType, Func<double> readFixedDeltaTime)
+    {
+        if (resolveType is null) throw new ArgumentNullException(nameof(resolveType));
+        if (readFixedDeltaTime is null) throw new ArgumentNullException(nameof(readFixedDeltaTime));
+
+        _readFixedDeltaTime = readFixedDeltaTime;
+        _rateGlobals = new WorldFrameGlobalsReader(resolveType);
+
+        _resources = Reader(new WorldResourceBinder(), resolveType, static frame => frame.Resources);
+        _structures = Reader(new WorldStructureBinder(), resolveType, static frame => frame.Structures);
+        _upgrades = Reader(new WorldUpgradeBinder(), resolveType, static frame => frame.Upgrades);
+        _research = Reader(new WorldResearchBinder(), resolveType, static frame => frame.Research);
+        _doubleVariables = Reader(new WorldDoubleVariableBinder(), resolveType, static frame => frame.DoubleVariables);
+        _intVariables = Reader(new WorldIntVariableBinder(), resolveType, static frame => frame.IntVariables);
+        _boolVariables = Reader(new WorldBoolVariableBinder(), resolveType, static frame => frame.BoolVariables);
+        _modifierVariables = Reader(new WorldModifierVariableBinder(), resolveType, static frame => frame.ModifierVariables);
+        _alchemyRecipes = Reader(new WorldAlchemyRecipeBinder(), resolveType, static frame => frame.AlchemyRecipes);
+        _alchemyTypes = Reader(new WorldAlchemyTypeBinder(), resolveType, static frame => frame.AlchemyTypes);
+        _spellRecipes = Reader(new WorldSpellRecipeBinder(), resolveType, static frame => frame.SpellRecipes);
+        _spellTypes = Reader(new WorldSpellTypeBinder(), resolveType, static frame => frame.SpellTypes);
+        _equipment = Reader(new WorldEquipmentBinder(), resolveType, static frame => frame.Equipment);
+        _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
+        _resourceTypes = Reader(new WorldResourceTypeBinder(), resolveType, static frame => frame.ResourceTypes);
+        _craftingRecipeTypes = Reader(new WorldCraftingRecipeTypeBinder(), resolveType, static frame => frame.CraftingRecipeTypes);
+        _harvestElements = Reader(new WorldHarvestElementBinder(), resolveType, static frame => frame.HarvestElements);
+        _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
+        _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
+        _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
+        _consumables = Reader(new WorldConsumableBinder(), resolveType, static frame => frame.Consumables);
+        _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
+        _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
+        _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);
+        _challenges = Reader(new WorldChallengeBinder(), resolveType, static frame => frame.Challenges);
+        _thoughtStreams = Reader(new WorldThoughtStreamBinder(), resolveType, static frame => frame.ThoughtStreams);
+        _tutorials = Reader(new WorldTutorialBinder(), resolveType, static frame => frame.Tutorials);
+        _views = Reader(new WorldViewBinder(), resolveType, static frame => frame.Views);
+        _plotNodeActions = Reader(new WorldPlotNodeActionBinder(), resolveType, static frame => frame.PlotNodeActions);
+        _passiveAbilities = Reader(new WorldPassiveAbilityBinder(), resolveType, static frame => frame.PassiveAbilities);
+        _characters = Reader(new WorldCharacterBinder(), resolveType, static frame => frame.Characters);
+        _discoveryTrees = Reader(new WorldDiscoveryTreeBinder(), resolveType, static frame => frame.DiscoveryTrees);
+        _plotNodes = Reader(new WorldPlotNodeBinder(), resolveType, static frame => frame.PlotNodes);
+        _treasurePools = Reader(new WorldTreasurePoolBinder(), resolveType, static frame => frame.TreasurePools);
+        _purchaseCosts = new WorldPurchaseCostReader(resolveType("StructureSO"), resolveType);
+        _upgradeCosts = new WorldUpgradeCostReader(resolveType("UpgradeSO"), resolveType);
+        _plotActions = new WorldPlotActionReader(resolveType("PlotNodeSO"));
+        _entityEffects = new WorldEntityEffectReader(resolveType("StructureSO"));
+        _actionQueues = new WorldActionQueueReader(
+            resolveType("IdScriptableObject"),
+            resolveType("PlotNodeActionInstanceListVariable"),
+            resolveType("ActionableListVariable"));
+        _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
+        _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
+        _entityRequirements = new WorldEntityRequirementReader(
+            resolveType("UpgradeSO"), resolveType("StructureSO"));
+
+        _readers = new IWorldCategoryReader[]
+        {
+            _resources, _structures, _upgrades, _research,
+            _doubleVariables, _intVariables, _boolVariables, _modifierVariables,
+            _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellTypes,
+            _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
+            _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
+            _rituals, _achievements, _advancements, _challenges,
+            _thoughtStreams, _tutorials, _views, _plotNodeActions,
+            _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
+            _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
+            _actionQueues, _plotAuthoring, _effectBlocks, _entityRequirements,
+        };
+
+        _isStructural = new bool[_readers.Length];
+        _structuralReports = new WorldCategoryReport[_readers.Length];
+        for (var index = 0; index < _readers.Length; index++)
+        {
+            _isStructural[index] =
+                ReferenceEquals(_readers[index], _plotAuthoring) ||
+                ReferenceEquals(_readers[index], _effectBlocks) ||
+                ReferenceEquals(_readers[index], _entityRequirements);
+        }
+    }
+
+    /// <summary>
+    /// Whether any category resolved at all. False means collection has nothing to offer on this
+    /// build and the service should not run; a partial collector still publishes what it can, with
+    /// the shortfall named in the report.
+    /// </summary>
+    internal bool IsAnyCategoryAvailable
+    {
+        get
+        {
+            foreach (var reader in _readers)
+            {
+                if (reader.IsAvailable) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>Whether every category resolved. False means the snapshot will be partial by design.</summary>
+    internal bool IsFullyAvailable
+    {
+        get
+        {
+            foreach (var reader in _readers)
+            {
+                if (!reader.IsAvailable) return false;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reads every category into <paramref name="frame"/>, replacing whatever the previous collection
+    /// left there. Unity thread only.
+    /// </summary>
+    /// <remarks>
+    /// The structural categories are the exception: they describe what the game's authors wrote rather
+    /// than what the player has done, so they are re-read only when the frame arrives under a lifecycle
+    /// epoch this collector has not already read for. See <see cref="IsStructuralReadingCurrent"/>.
+    /// </remarks>
+    internal WorldCollectionReport Collect(GameWorldCycleFrame frame)
+    {
+        if (frame is null) throw new ArgumentNullException(nameof(frame));
+
+        _claimed.Clear();
+        frame.FixedDeltaTime = _readFixedDeltaTime();
+        frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
+
+        // Two readers append here, so neither may reset it: whichever ran second would discard the
+        // other's rows, and which that is depends on traversal order rather than on anything stated.
+        frame.PurchaseCosts.Reset();
+
+        // One extra row when the modifier fold had to reconstruct an input. It is reported as an
+        // unavailable pseudo-category rather than logged, because it makes every folded number in the
+        // pass suspect and a report that still called itself complete would be lying about all of
+        // them. When nothing degraded the row is absent and the report is exactly as it was.
+        var degradation = _rateGlobals.Degradation;
+        var structuralIsCurrent = IsStructuralReadingCurrent(frame);
+        var reports = new WorldCategoryReport[_readers.Length + (degradation.Length == 0 ? 0 : 1)];
+        if (degradation.Length > 0)
+        {
+            reports[_readers.Length] = WorldCategoryReport.Missing("modifier folding", degradation);
+        }
+
+        for (var index = 0; index < _readers.Length; index++)
+        {
+            if (structuralIsCurrent && _isStructural[index])
+            {
+                // Not re-read and not reset, so the rows the last epoch's read left are still there.
+                // The report is the one that read them, because that is what is true of the buffer.
+                reports[index] = _structuralReports[index];
+                continue;
+            }
+
+            reports[index] = _readers[index].Collect(_claimed, frame);
+            if (_isStructural[index]) _structuralReports[index] = reports[index];
+        }
+
+        if (!structuralIsCurrent)
+        {
+            _structuralFrame = frame;
+            _structuralEpoch = frame.CollectedAtEpoch;
+        }
+
+        var report = new WorldCollectionReport(reports);
+        frame.Report = report;
+        return report;
+    }
+
+    /// <summary>
+    /// Whether the structural rows already in <paramref name="frame"/> describe the run of the game
+    /// this pass is reading.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Authored content changes at a lifecycle boundary and nowhere else, so reading it four times a
+    /// second is four hundred plot and action walks a minute for an answer that cannot have moved. The
+    /// epoch is exactly the fact that says when it can have: an unchanged epoch is the same run of the
+    /// game, and the same run has the same authors' work in it.
+    /// </para>
+    /// <para>
+    /// Skipping means skipping the <em>native reads</em>, not the derivation. The buffers are left
+    /// alone rather than reset, so the tables are rebuilt each cycle from unchanged samples — a few
+    /// hundred rows of arithmetic off the Unity thread, which is where the whole design wants that
+    /// work to be.
+    /// </para>
+    /// <para>
+    /// The frame is compared by identity as well as by epoch because a collector may be handed more
+    /// than one. Two frames under one epoch are two sets of buffers, and only one of them can be the
+    /// one that was filled; a skip decided on the epoch alone would hand the other an empty table and
+    /// call it collected.
+    /// </para>
+    /// </remarks>
+    private bool IsStructuralReadingCurrent(GameWorldCycleFrame frame) =>
+        ReferenceEquals(frame, _structuralFrame) && frame.CollectedAtEpoch == _structuralEpoch;
+
+    /// <summary>
+    /// Collects into a frame this collector owns, for callers outside a service cycle.
+    /// </summary>
+    /// <remarks>
+    /// Diagnostics and tests want a collection without standing up a runtime to own the frame for
+    /// them. The service path passes its own frame and never touches this one, so the two cannot
+    /// interfere.
+    /// </remarks>
+    internal WorldCollectionReport Collect() => Collect(_ownFrame);
+
+    /// <summary>Derives the collection made into this collector's own frame.</summary>
+    internal GameWorldState Build() => GameWorldFrameDeriver.Build(_ownFrame);
+
+    private static WorldCategoryReader<TSample, TRow> Reader<TSample, TRow>(
+        WorldRowBinder<TSample, TRow> binder,
+        Func<string, Type?> resolveType,
+        Func<GameWorldCycleFrame, WorldSampleBuffer<TSample, TRow>> buffer)
+        where TSample : struct, IWorldEntity
+        where TRow : struct, IWorldEntity =>
+        new(binder, resolveType(binder.TypeName), buffer);
+}

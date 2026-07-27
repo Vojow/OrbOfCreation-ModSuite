@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -26,16 +27,16 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.advancing-clock") { ActionCount = 0 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
 
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var source = Assert.IsType<ServiceCycleSemanticTraceSource>(pump.SemanticTrace);
         var events = new ServiceCycleSemanticEvent[source.Capacity];
@@ -69,13 +70,11 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.success") { ActionCount = 1 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
         registry.Seal();
         var recorder = Recorder(1);
         using var pump = new SuiteFramePump(registry, recorder);
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
 
         var initial = Drain(pump, ref cursor);
@@ -87,23 +86,27 @@ public sealed class SuiteFramePumpSemanticTracingTests
                 ServiceCycleSemanticEventKind.LifecycleActivated,
             },
             initial.Select(value => value.Kind));
-        Assert.All(initial, value => Assert.Equal(1UL, value.Payload.Service));
+        // The suite publishes one configuration record and one strategy bulletin, so those two name
+        // no service; only the lifecycle activation is this service's own.
+        Assert.Equal(0UL, initial[0].Payload.Service);
+        Assert.Equal(0UL, initial[1].Payload.Service);
+        Assert.Equal(1UL, initial[2].Payload.Service);
         Assert.Equal(1UL, initial[0].Payload.Configuration);
         Assert.Equal(1UL, initial[1].Payload.Strategy);
         Assert.Equal(1UL, initial[2].Payload.Lifecycle);
 
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
-        while (pump.PumpFrame(frame++).ActionsAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
+        ServiceCyclePumpTestWait.UntilAction(pump, ref frame);
 
         var events = Drain(pump, ref cursor);
         AssertOrderedSubsequence(
             events,
-            ServiceCycleSemanticEventKind.CaptureStarted,
-            ServiceCycleSemanticEventKind.CaptureCompleted,
+            ServiceCycleSemanticEventKind.StartAttempted,
+            ServiceCycleSemanticEventKind.StartReady,
             ServiceCycleSemanticEventKind.CycleQueued,
             ServiceCycleSemanticEventKind.CycleStarted,
             ServiceCycleSemanticEventKind.EvaluationStarted,
@@ -124,13 +127,51 @@ public sealed class SuiteFramePumpSemanticTracingTests
             {
                 Assert.Equal(cycle.Lifecycle, value.Payload.Lifecycle);
                 Assert.Equal(cycle.Configuration, value.Payload.Configuration);
-                Assert.Equal(cycle.Capture, value.Payload.Capture);
                 Assert.Equal(cycle.Cycle, value.Payload.Cycle);
             });
         Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.ActionAttempted);
         Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.ActionCommitted);
         Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.BatchCompleted);
         Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.CycleCompleted);
+    }
+
+    [Fact]
+    public void SkippedActionIsTracedAndDoesNotTerminateTheBatch()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("trace.runtime.skipped")
+        {
+            ActionCount = 2,
+            SkipAtIndex = 0,
+        };
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
+        var cursor = default(ServiceCycleTraceCursor);
+        var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
+        Drain(pump, ref cursor);
+
+        Assert.Equal(1, pump.PumpFrame(frame++).ActionsAttempted);
+        Assert.False(registration.Runner.Snapshot.PreviousReceipt.IsPresent);
+        Assert.Equal(1, pump.PumpFrame(frame).ActionsAttempted);
+
+        var events = Drain(pump, ref cursor);
+        AssertOrderedSubsequence(
+            events,
+            ServiceCycleSemanticEventKind.ActionAttempted,
+            ServiceCycleSemanticEventKind.ActionSkipped,
+            ServiceCycleSemanticEventKind.ActionAttempted,
+            ServiceCycleSemanticEventKind.ActionCommitted,
+            ServiceCycleSemanticEventKind.BatchCompleted,
+            ServiceCycleSemanticEventKind.CycleCompleted);
+        var skipped = Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.ActionSkipped);
+        Assert.Equal(1, skipped.Payload.MutationAttempts);
+        Assert.Equal(0, skipped.Payload.MutationsCommitted);
+        Assert.Equal(1, registration.Runner.Snapshot.PreviousReceipt.SkippedCount);
     }
 
     [Fact]
@@ -146,18 +187,15 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
-        strategy.Publish(new TraceStrategy(2));
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
         pump.PumpFrame(1);
 
         var events = Drain(pump, ref cursor);
@@ -172,8 +210,60 @@ public sealed class SuiteFramePumpSemanticTracingTests
         Assert.DoesNotContain(events, value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
     }
 
+    /// <summary>
+    /// A publication is one event however many services are registered.
+    /// </summary>
+    /// <remarks>
+    /// The suite has one configuration record and one strategy bulletin. Emitting per registered
+    /// service restated the same generation N times and implied a per-service publication the
+    /// runtime has never had.
+    /// </remarks>
     [Fact]
-    public void ConfigurationPinnedAfterFrameStartIsPublishedBeforeCaptureStarts()
+    public void OnePublicationIsOneEventWhateverTheServiceCount()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(3, clock);
+        using var first = registry.Register(
+            new ExecutionServiceDefinition("trace.runtime.publications.a"),
+            new LifecycleGeneration(1));
+        using var second = registry.Register(
+            new ExecutionServiceDefinition("trace.runtime.publications.b"),
+            new LifecycleGeneration(1));
+        using var third = registry.Register(
+            new ExecutionServiceDefinition("trace.runtime.publications.c"),
+            new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry, Recorder(3));
+        TestWorldCollector.CollectedAtActivation(registry);
+        var cursor = default(ServiceCycleTraceCursor);
+        var bound = Drain(pump, ref cursor);
+
+        Assert.Single(
+            bound,
+            value => value.Kind == ServiceCycleSemanticEventKind.ConfigurationPublished);
+        Assert.Single(
+            bound,
+            value => value.Kind == ServiceCycleSemanticEventKind.StrategyPublished);
+
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
+        pump.PumpFrame(1);
+
+        var events = Drain(pump, ref cursor);
+        var configuration = Assert.Single(
+            events,
+            value => value.Kind == ServiceCycleSemanticEventKind.ConfigurationPublished);
+        var strategy = Assert.Single(
+            events,
+            value => value.Kind == ServiceCycleSemanticEventKind.StrategyPublished);
+        Assert.Equal(2UL, configuration.Payload.Configuration);
+        Assert.Equal(2UL, strategy.Payload.Strategy);
+        Assert.Equal(0UL, configuration.Payload.Service);
+        Assert.Equal(0UL, strategy.Payload.Service);
+    }
+
+    [Fact]
+    public void ConfigurationPinnedAfterFrameStartIsPublishedBeforeTheCycleThatPinnedIt()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(2, clock);
@@ -181,19 +271,17 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var target = new ExecutionServiceDefinition("trace.runtime.config-target");
         using var publisherRegistration = registry.Register(
             publisher,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         using var targetRegistration = registry.Register(
             target,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(2));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
         publisher.ShouldStartCallback = () =>
-            Assert.True(targetRegistration.Configuration.CompleteSave(
-                ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
+            registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
 
         pump.PumpFrame(1);
 
@@ -201,40 +289,104 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var configuration = Assert.Single(
             events,
             value => value.Kind == ServiceCycleSemanticEventKind.ConfigurationPublished &&
-                value.Payload.Service == 2 && value.Payload.Configuration == 2);
-        var capture = Assert.Single(
+                value.Payload.Configuration == 2);
+        var queued = Assert.Single(
             events,
-            value => value.Kind == ServiceCycleSemanticEventKind.CaptureStarted &&
+            value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued &&
                 value.Payload.Service == 2);
-        Assert.Equal(configuration.Id, capture.Parent);
-        AssertBefore(
-            events,
-            ServiceCycleSemanticEventKind.ConfigurationPublished,
-            ServiceCycleSemanticEventKind.CaptureStarted,
-            service: 2);
+        // One publication for the suite rather than one per service, so the record it produces is
+        // not the target cycle's causal parent; what it must still be is earlier than that cycle.
+        Assert.Equal(0UL, configuration.Payload.Service);
+        Assert.True(
+            configuration.Id.Sequence < queued.Id.Sequence,
+            "The publication must be recorded before the cycle that pinned it.");
+        Assert.Equal(2UL, queued.Payload.Configuration);
     }
 
+    /// <summary>
+    /// The generation a cycle carries is the bound publisher's, not a number the service chose.
+    /// </summary>
+    /// <remarks>
+    /// Every service used to return a hardcoded one from its capture, which happened to be right only
+    /// because nothing published a bulletin yet. See W49.
+    /// </remarks>
     [Fact]
-    public void CapturedStrategyIsPublishedBeforeCaptureCompletesWhenQueuePublicationDefers()
+    public void ACycleIsStampedWithTheSuitesLatestStrategy()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.strategy-during-capture")
-        {
-            CaptureResult = ServiceCaptureResult.Captured(
-                new StrategyGeneration(2),
-                CommonServiceDecisionCodes.Captured),
-        };
+        var definition = new ExecutionServiceDefinition("trace.runtime.strategy-stamped");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
+        var cursor = default(ServiceCycleTraceCursor);
+        Drain(pump, ref cursor);
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(3));
+
+        pump.PumpFrame(1);
+
+        var cycle = Assert.Single(
+            Drain(pump, ref cursor),
+            value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
+        Assert.Equal(3UL, cycle.Payload.Strategy);
+    }
+
+    /// <summary>
+    /// A suite with no strategist runs against the neutral bulletin, and says so.
+    /// </summary>
+    /// <remarks>
+    /// There is nothing to bind and nothing to leave unbound: the registry constructs the
+    /// publication on the neutral bulletin, so generation one is what every cycle is stamped with
+    /// until something publishes.
+    /// </remarks>
+    [Fact]
+    public void ASuiteWithNoStrategistIsStampedWithTheNeutralGeneration()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        using var registration = registry.Register(
+            new ExecutionServiceDefinition("trace.runtime.strategy-unbound"),
+            new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
+        var cursor = default(ServiceCycleTraceCursor);
+        Drain(pump, ref cursor);
+
+        pump.PumpFrame(1);
+
+        var cycle = Assert.Single(
+            Drain(pump, ref cursor),
+            value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
+        Assert.Equal(StrategyGeneration.Initial.Value, cycle.Payload.Strategy);
+    }
+
+    /// <summary>
+    /// A bulletin published while a capture is running belongs to the next cycle, not this one.
+    /// </summary>
+    /// <remarks>
+    /// The runtime pins the strategy generation before it calls <c>Capture</c>, so the number the
+    /// cycle is stamped with is the one that was live when the cycle opened. Stamping it afterwards
+    /// would let a service publish during its own capture and have the runtime believe the cycle had
+    /// consulted a bulletin it never saw. See W49.
+    /// </remarks>
+    [Fact]
+    public void AStrategyPublishedDuringCaptureIsNotTheGenerationTheCycleIsStampedWith()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new SourceServiceDefinition("trace.runtime.strategy-during-capture");
+        using var registration = registry.RegisterSource(
+            definition,
+            new LifecycleGeneration(1));
         using var contention = new HandoffGateContention(registration.Runner);
         definition.CaptureCallback = () =>
         {
-            strategy.Publish(new TraceStrategy(2));
+            registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
             contention.Acquire();
         };
         registry.Seal();
@@ -242,25 +394,23 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
 
         var events = Drain(pump, ref cursor);
         var started = Assert.Single(
             events,
             value => value.Kind == ServiceCycleSemanticEventKind.CaptureStarted);
-        var publication = Assert.Single(
-            events,
-            value => value.Kind == ServiceCycleSemanticEventKind.StrategyPublished &&
-                value.Payload.Strategy == 2);
         var completed = Assert.Single(
             events,
             value => value.Kind == ServiceCycleSemanticEventKind.CaptureCompleted);
         Assert.Equal(started.Id, completed.Parent);
-        Assert.True(publication.Payload.TimestampTicks <= completed.Payload.TimestampTicks);
-        AssertBefore(
+        Assert.Equal(1L, started.Payload.FrameIdentity);
+        Assert.Equal(1L, completed.Payload.FrameIdentity);
+        Assert.Contains(
             events,
-            ServiceCycleSemanticEventKind.StrategyPublished,
-            ServiceCycleSemanticEventKind.CaptureCompleted);
+            value => value.Kind == ServiceCycleSemanticEventKind.StrategyPublished &&
+                value.Payload.Strategy == 2);
+        Assert.Equal(1UL, completed.Payload.Strategy);
         Assert.DoesNotContain(events, value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
 
         contention.Release();
@@ -272,30 +422,22 @@ public sealed class SuiteFramePumpSemanticTracingTests
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.deferred-old-context")
-        {
-            CaptureResult = ServiceCaptureResult.Captured(
-                new StrategyGeneration(1),
-                CommonServiceDecisionCodes.Captured),
-        };
+        var definition = new ExecutionServiceDefinition("trace.runtime.deferred-old-context");
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
         using var contention = new HandoffGateContention(registration.Runner);
-        definition.CaptureCallback = contention.Acquire;
+        definition.ShouldStartCallback = contention.Acquire;
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
         Drain(pump, ref cursor);
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
-        strategy.Publish(new TraceStrategy(2));
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
 
         pump.PumpFrame(2);
         var advanced = Drain(pump, ref cursor);
@@ -310,7 +452,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
         Assert.DoesNotContain(advanced, value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
 
         contention.Release();
-        definition.CaptureCallback = null;
+        definition.ShouldStartCallback = null;
         pump.PumpFrame(3);
 
         var queued = Drain(pump, ref cursor);
@@ -340,30 +482,27 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
-        using var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         Assert.True(evaluationEntered.Wait(TimeSpan.FromSeconds(2)));
         clock.AdvanceTo(new MonotonicTimestamp(200));
-        Assert.True(registration.Configuration.CompleteSave(
-            ConfigurationSaveResult<ExecutionConfig>.Saved(new ExecutionConfig(2))));
-        strategy.Publish(new TraceStrategy(2));
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        registry.StrategyPublication.Publish(TestSuiteStrategy.WithSetting(2));
         pump.PumpFrame(frame++);
         pump.SetEmergencyStop(true);
         clock.AdvanceTo(new MonotonicTimestamp(201));
         pump.SetEmergencyStop(false);
         evaluationRelease.Set();
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var events = Drain(pump, ref cursor);
         var queued = Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.CycleQueued);
@@ -382,7 +521,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
             events,
             value => value.Kind == ServiceCycleSemanticEventKind.BatchAborted);
         Assert.Equal(queued.Id, started.Parent);
-        Assert.Equal(queued.Id, configuration.Parent);
+        Assert.Equal(0UL, configuration.Payload.Service);
         Assert.Equal(configuration.Id, strategyEvent.Parent);
         Assert.Equal(emergency.Id, actionRejected.Parent);
         Assert.Equal(emergency.Id, batchAborted.Parent);
@@ -406,18 +545,18 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.zero") { ActionCount = 0 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var events = Drain(pump, ref cursor);
         AssertOrderedSubsequence(
@@ -442,10 +581,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.emergency") { ActionCount = 3 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
 
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
@@ -477,10 +616,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
@@ -501,10 +640,9 @@ public sealed class SuiteFramePumpSemanticTracingTests
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.deferred") { ActionCount = 0 };
-        using var registration = registry.Register(
+        var definition = new SourceServiceDefinition("trace.runtime.deferred");
+        using var registration = registry.RegisterSource(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         using var contention = new HandoffGateContention(registration.Runner);
         definition.CaptureCallback = contention.Acquire;
@@ -536,7 +674,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
     [Fact]
     public void ReentrantControlFactsFollowTheAttemptFactThatTriggeredTheirCallback()
     {
-        AssertCapturePrecedesLifecycleRequest();
+        AssertStartAttemptPrecedesLifecycleRequest();
         AssertActionPrecedesEmergencyEntry();
     }
 
@@ -552,10 +690,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
         Drain(pump, ref cursor);
@@ -598,10 +736,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
         Drain(pump, ref cursor);
@@ -616,7 +754,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
         definition.ActionCount = 0;
         var faultedHandoff = registration.Runner.ProbeHandoff();
         Assert.Equal(ServiceHandoffPhase.MainOwnedBatch, faultedHandoff.Phase);
-        Assert.Equal(0, pump.PumpFrame(frame++).CapturesAttempted);
+        Assert.Equal(0, pump.PumpFrame(frame++).CyclesStarted);
         var cleaned = ServiceRunnerTestWait.ForHandoff(
             registration.Runner,
             value => value.Phase == ServiceHandoffPhase.Empty &&
@@ -625,7 +763,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
                 value.WorkerWaitCount > faultedHandoff.WorkerWaitCount,
             "the action-fault cleanup handback");
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
-        Assert.Equal(1, pump.PumpFrame(frame++).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(frame++).CyclesStarted);
         ServiceRunnerTestWait.ForHandoff(
             registration.Runner,
             value => value.Phase == ServiceHandoffPhase.ResponseReady &&
@@ -642,11 +780,11 @@ public sealed class SuiteFramePumpSemanticTracingTests
             registration.Runner.Snapshot.Fault.Category);
 
         definition.ActionCount = 1;
-        Assert.Equal(0, pump.PumpFrame(frame++).CapturesAttempted);
+        Assert.Equal(0, pump.PumpFrame(frame++).CyclesStarted);
         var returned = registration.Runner.ProbeHandoff();
         Assert.Equal(ServiceHandoffPhase.Empty, returned.Phase);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
-        Assert.Equal(1, pump.PumpFrame(frame++).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(frame++).CyclesStarted);
         ServiceRunnerTestWait.ForHandoff(
             registration.Runner,
             value => value.Phase == ServiceHandoffPhase.ResponseReady &&
@@ -675,10 +813,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
         Drain(pump, ref cursor);
@@ -687,11 +825,11 @@ public sealed class SuiteFramePumpSemanticTracingTests
 
         definition.FaultAtIndex = -1;
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
         pump.SetEmergencyStop(true);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var rejected = Drain(pump, ref cursor);
         Assert.DoesNotContain(
@@ -704,26 +842,70 @@ public sealed class SuiteFramePumpSemanticTracingTests
     }
 
     [Fact]
+    public void BoundedActionTurnPublishesEveryActionUnderOnePumpFrame()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("trace.runtime.action-slice")
+        {
+            ActionCount = 3,
+        };
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(1),
+            ServiceActionDispatchPolicy.Bounded(16));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
+        var cursor = default(ServiceCycleTraceCursor);
+        var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
+        Drain(pump, ref cursor);
+
+        var report = pump.PumpFrame(frame);
+        Assert.Equal(3, report.ActionsAttempted);
+
+        var events = Drain(pump, ref cursor);
+        var attempts = events
+            .Where(value => value.Kind == ServiceCycleSemanticEventKind.ActionAttempted)
+            .ToArray();
+        var commits = events
+            .Where(value => value.Kind == ServiceCycleSemanticEventKind.ActionCommitted)
+            .ToArray();
+        Assert.Equal(3, attempts.Length);
+        Assert.Equal(3, commits.Length);
+        Assert.Equal(new ulong[] { 1, 2, 3 }, attempts.Select(value => value.Payload.Action));
+        Assert.All(attempts, value => Assert.NotEqual(0UL, value.Payload.World));
+        Assert.All(attempts, value => Assert.Equal(frame, value.Payload.FrameIdentity));
+        Assert.All(commits, value => Assert.Equal(frame, value.Payload.FrameIdentity));
+        Assert.Contains(
+            events,
+            value => value.Kind == ServiceCycleSemanticEventKind.PumpCompleted &&
+                value.Payload.FrameIdentity == frame &&
+                value.Payload.ActionsAttempted == 3 &&
+                value.Payload.CyclesStarted == report.CyclesStarted &&
+                value.Payload.WorldGateDeferrals == report.WorldGateDeferrals);
+    }
+
+    [Fact]
     public void UnavailableCapturePublishesAttemptAndUnavailableWithoutQueueing()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.capture-unavailable")
+        var definition = new SourceServiceDefinition("trace.runtime.capture-unavailable")
         {
             CaptureResult = ServiceCaptureResult.Unavailable(
                 CommonServiceDecisionCodes.CaptureUnavailable,
                 WakePolicy.AfterDecision(new MonotonicDuration(10))),
         };
-        using var registration = registry.Register(
+        using var registration = registry.RegisterSource(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
-        Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
 
         var events = Drain(pump, ref cursor);
         AssertOrderedSubsequence(
@@ -747,18 +929,18 @@ public sealed class SuiteFramePumpSemanticTracingTests
         definition.FailNextEvaluations(1);
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var failed = Drain(pump, ref cursor);
         AssertOrderedSubsequence(
@@ -772,10 +954,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
 
         pump.PumpFrame(frame++);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var recovered = Drain(pump, ref cursor);
         var recovery = Assert.Single(
@@ -799,18 +981,18 @@ public sealed class SuiteFramePumpSemanticTracingTests
         definition.FailNextProjections(1);
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
         var frame = 1L;
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-        while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+        ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
         var failed = Drain(pump, ref cursor);
         AssertOrderedSubsequence(
@@ -845,26 +1027,26 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.state-contention") { ActionCount = 0 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
             "_resourceClaims",
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(registry)!;
         Assert.Equal(
             ServiceResourceClaimResult.Claimed,
-            ledger.TryBeginFactory(ServiceResourceRole.Frame, out var blocker));
+            ledger.TryBeginFactory(ServiceResourceRole.WorkerDefinition, out var blocker));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
 
         try
         {
             var frame = 1L;
-            while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+            ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
             ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
             ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
-            while (pump.PumpFrame(frame++).ResponsesAcquired == 0) { }
+            ServiceCyclePumpTestWait.UntilResponse(pump, ref frame);
 
             var events = Drain(pump, ref cursor);
             AssertOrderedSubsequence(
@@ -894,10 +1076,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new LifecycleServiceDefinition("trace.runtime.lifecycle-contention");
         using var registration = registry.Register(
             definition,
-            new LifecycleConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
         var ledger = (ServiceResourceClaimLedger)typeof(ServiceCycleRegistry).GetField(
@@ -977,15 +1159,15 @@ public sealed class SuiteFramePumpSemanticTracingTests
         };
         using var registration = registry.Register(
             definition,
-            new LifecycleConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
         var frame = 1L;
 
-        while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }
+        ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);
         ServiceRunnerTestWait.ForPhase(registration.Runner, ServiceHandoffPhase.ResponseReady);
         clock.Advance(new MonotonicDuration(100));
@@ -1016,10 +1198,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new LifecycleServiceDefinition("trace.runtime.lifecycle-fault-coalescing");
         using var registration = registry.Register(
             definition,
-            new LifecycleConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         Drain(pump, ref cursor);
         definition.FailNextWorkerFactories(1);
@@ -1059,13 +1241,13 @@ public sealed class SuiteFramePumpSemanticTracingTests
         {
             using var registration = registry.Register(
                 new ExecutionServiceDefinition("trace.runtime.recorder-mismatch"),
-                new ExecutionConfig(1),
                 new LifecycleGeneration(1));
             registry.Seal();
 
             Assert.Throws<ArgumentException>(() =>
                 new SuiteFramePump(registry, Recorder(2)));
             using var validPump = new SuiteFramePump(registry, Recorder(1));
+            TestWorldCollector.CollectedAtActivation(registry);
             Assert.NotNull(validPump.SemanticTrace);
         }
 
@@ -1073,7 +1255,6 @@ public sealed class SuiteFramePumpSemanticTracingTests
         {
             using var registration = registry.Register(
                 new ExecutionServiceDefinition("trace.runtime.recorder-disabled"),
-                new ExecutionConfig(1),
                 new LifecycleGeneration(1));
             registry.Seal();
             var disabled = new ServiceCycleSemanticRecorder(
@@ -1082,38 +1263,12 @@ public sealed class SuiteFramePumpSemanticTracingTests
                 4,
                 enabled: false);
             using var pump = new SuiteFramePump(registry, disabled);
+            TestWorldCollector.CollectedAtActivation(registry);
 
             Assert.Null(pump.SemanticTrace);
             Assert.True(pump.PumpFrame(1).Accepted);
             Assert.Equal(0, disabled.Count);
         }
-    }
-
-    [Fact]
-    public void DisposedBoundStrategyCannotCrashPumpFrame()
-    {
-        var clock = new ThreadSafeTestClock(100);
-        using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.disposed-strategy")
-        {
-            StartDecision = ServiceStartDecision.Wait(
-                CommonServiceDecisionCodes.NotReady,
-                WakePolicy.AfterDecision(new MonotonicDuration(1))),
-        };
-        using var registration = registry.Register(
-            definition,
-            new ExecutionConfig(1),
-            new LifecycleGeneration(1));
-        var strategy = new ServiceStrategyPublisher<TraceStrategy>(new TraceStrategy(1));
-        registration.BindStrategy(strategy);
-        strategy.Dispose();
-        registry.Seal();
-        using var pump = new SuiteFramePump(registry, Recorder(1));
-
-        var report = pump.PumpFrame(1);
-
-        Assert.True(report.Accepted);
-        Assert.False(Assert.IsType<ServiceCycleSemanticTraceSource>(pump.SemanticTrace).EmissionFaulted);
     }
 
     private static ServiceCycleSemanticRecorder Recorder(int services) =>
@@ -1151,22 +1306,22 @@ public sealed class SuiteFramePumpSemanticTracingTests
         }
     }
 
-    private static void AssertCapturePrecedesLifecycleRequest()
+    private static void AssertStartAttemptPrecedesLifecycleRequest()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
-        var definition = new ExecutionServiceDefinition("trace.runtime.reentrant-capture") { ActionCount = 0 };
+        var definition = new ExecutionServiceDefinition("trace.runtime.reentrant-start") { ActionCount = 0 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         SuiteFramePump? pump = null;
         using (pump = new SuiteFramePump(registry, Recorder(1)))
         {
+            TestWorldCollector.CollectedAtActivation(registry);
             var cursor = default(ServiceCycleTraceCursor);
             Drain(pump, ref cursor);
-            definition.CaptureCallback = () =>
+            definition.ShouldStartCallback = () =>
                 pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
 
             pump.PumpFrame(1);
@@ -1174,7 +1329,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
             var events = Drain(pump, ref cursor);
             AssertBefore(
                 events,
-                ServiceCycleSemanticEventKind.CaptureStarted,
+                ServiceCycleSemanticEventKind.StartAttempted,
                 ServiceCycleSemanticEventKind.LifecycleRequested);
         }
     }
@@ -1186,10 +1341,10 @@ public sealed class SuiteFramePumpSemanticTracingTests
         var definition = new ExecutionServiceDefinition("trace.runtime.reentrant-action") { ActionCount = 2 };
         using var registration = registry.Register(
             definition,
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         using var pump = new SuiteFramePump(registry, Recorder(1));
+        TestWorldCollector.CollectedAtActivation(registry);
         var cursor = default(ServiceCycleTraceCursor);
         var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
         Drain(pump, ref cursor);
@@ -1207,21 +1362,12 @@ public sealed class SuiteFramePumpSemanticTracingTests
     private static void AssertBefore(
         IReadOnlyList<ServiceCycleSemanticEvent> events,
         ServiceCycleSemanticEventKind first,
-        ServiceCycleSemanticEventKind second,
-        ulong? service = null)
+        ServiceCycleSemanticEventKind second)
     {
-        var firstIndex = events.ToList().FindIndex(value =>
-            value.Kind == first && (!service.HasValue || value.Payload.Service == service.Value));
-        var secondIndex = events.ToList().FindIndex(value =>
-            value.Kind == second && (!service.HasValue || value.Payload.Service == service.Value));
+        var firstIndex = events.ToList().FindIndex(value => value.Kind == first);
+        var secondIndex = events.ToList().FindIndex(value => value.Kind == second);
         Assert.True(firstIndex >= 0, $"Missing {first}.");
         Assert.True(secondIndex >= 0, $"Missing {second}.");
         Assert.True(firstIndex < secondIndex, $"Expected {first} before {second}.");
-    }
-
-    private readonly struct TraceStrategy
-    {
-        internal TraceStrategy(int value) => Value = value;
-        internal int Value { get; }
     }
 }

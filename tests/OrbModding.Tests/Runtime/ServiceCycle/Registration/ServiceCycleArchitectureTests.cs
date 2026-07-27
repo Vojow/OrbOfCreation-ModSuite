@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
-using OrbModding.Common.Runtime.ServiceCycle.Replay.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
@@ -104,13 +104,13 @@ public sealed partial class ServiceCycleArchitectureTests
     }
 
     [Fact]
-    public void CustomAttributeMetadataScannerDetectsReplayTypeArguments()
+    public void CustomAttributeMetadataScannerDetectsForbiddenTypeArguments()
     {
         var violations = new List<string>();
         foreach (var methodName in new[]
                  {
-                     nameof(ReplayTypeAttributeFixture),
-                     nameof(ReplayJaggedTypeAttributeFixture),
+                     nameof(ForbiddenTypeAttributeFixture),
+                     nameof(ForbiddenJaggedTypeAttributeFixture),
                  })
         {
             var method = typeof(ServiceCycleArchitectureTests).GetMethod(
@@ -118,12 +118,12 @@ public sealed partial class ServiceCycleArchitectureTests
             AuditCustomAttributes(
                 method.GetCustomAttributesData(),
                 methodName,
-                new[] { "OrbModding.Common.Runtime.ServiceCycle.Replay" },
+                new[] { "OrbModding.Common.Runtime.ServiceCycle.Orchestration" },
                 violations);
         }
 
         Assert.Equal(2, violations.Count(violation =>
-            violation.Contains(nameof(IServiceCycleReplayRecord), StringComparison.Ordinal)));
+            violation.Contains(nameof(SuiteFramePump), StringComparison.Ordinal)));
     }
 
     private static Type[] ServiceCycleTypes(bool publicOnly) =>
@@ -437,16 +437,16 @@ public sealed partial class ServiceCycleArchitectureTests
     private static Type LegacyTypeToken() =>
         typeof(UnityEngine.Object);
 
-    [ReplayTypeDependency(typeof(IServiceCycleReplayRecord))]
-    private static void ReplayTypeAttributeFixture() { }
+    [ForbiddenTypeDependency(typeof(SuiteFramePump))]
+    private static void ForbiddenTypeAttributeFixture() { }
 
-    [ReplayTypeDependency(typeof(IServiceCycleReplayRecord[][]))]
-    private static void ReplayJaggedTypeAttributeFixture() { }
+    [ForbiddenTypeDependency(typeof(SuiteFramePump[][]))]
+    private static void ForbiddenJaggedTypeAttributeFixture() { }
 
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    private sealed class ReplayTypeDependencyAttribute : Attribute
+    private sealed class ForbiddenTypeDependencyAttribute : Attribute
     {
-        internal ReplayTypeDependencyAttribute(Type dependency) => Dependency = dependency;
+        internal ForbiddenTypeDependencyAttribute(Type dependency) => Dependency = dependency;
         internal Type Dependency { get; }
     }
 }

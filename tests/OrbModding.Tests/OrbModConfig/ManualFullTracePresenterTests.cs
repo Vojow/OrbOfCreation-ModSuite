@@ -68,6 +68,22 @@ public sealed class ManualFullTracePresenterTests
         Assert.Equal(ManualFullTraceCommand.Start, incomplete.Command);
     }
 
+    /// <summary>
+    /// A trace whose events all landed but whose settings stores did not is not the same artifact as
+    /// a whole one, and the body a reader acts on has to say so.
+    /// </summary>
+    [Fact]
+    public void CompleteStatusNamesLostPublicationStores()
+    {
+        var whole = ManualFullTracePresenter.Build(Complete(), ManualFullTraceCommand.None);
+        var lost = ManualFullTracePresenter.Build(
+            Complete(storesLost: true), ManualFullTraceCommand.None);
+
+        Assert.DoesNotContain("stores lost", whole.Body, StringComparison.Ordinal);
+        Assert.Contains("Manifest committed", lost.Body, StringComparison.Ordinal);
+        Assert.Contains("settings stores lost", lost.Body, StringComparison.Ordinal);
+    }
+
     private static ManualFullTraceStatus Status(ManualFullTraceState state) => new(
         state,
         new TimeSpan(1, 3, 4, 5),
@@ -78,9 +94,10 @@ public sealed class ManualFullTracePresenterTests
         0,
         false,
         ManualFullTraceResult.None,
-        "session-0000000000000001");
+        "session-0000000000000001",
+        storesLost: false);
 
-    private static ManualFullTraceStatus Complete() => new(
+    private static ManualFullTraceStatus Complete(bool storesLost = false) => new(
         ManualFullTraceState.Complete,
         TimeSpan.FromSeconds(3),
         1234,
@@ -90,7 +107,8 @@ public sealed class ManualFullTracePresenterTests
         0,
         true,
         ManualFullTraceResult.UserStopped,
-        "session-0000000000000001");
+        "session-0000000000000001",
+        storesLost: storesLost);
 
     private static ManualFullTraceStatus Incomplete() => new(
         ManualFullTraceState.Incomplete,
@@ -102,5 +120,6 @@ public sealed class ManualFullTracePresenterTests
         1201,
         false,
         ManualFullTraceResult.WriteFailed,
-        "session-0000000000000001");
+        "session-0000000000000001",
+        storesLost: false);
 }

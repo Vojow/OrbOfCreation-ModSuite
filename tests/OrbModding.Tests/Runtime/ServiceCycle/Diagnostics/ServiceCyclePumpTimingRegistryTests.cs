@@ -45,6 +45,8 @@ public sealed class ServiceCyclePumpTimingRegistryTests
         responsesAcquired: frame == 4 ? 1 : 0,
         actionsAttempted: frame == 5 ? 1 : 0,
         capturesAttempted: frame == 3 ? 1 : 0,
+        cyclesStarted: frame == 3 ? 1 : 0,
+        worldGateDeferrals: 0,
         emergencyBatchesRejected: 0,
         lifecyclePositionTransitions: 0,
         responseDuration: default,

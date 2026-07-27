@@ -1,6 +1,6 @@
 # Orb Mentor testing
 
-[Testing hub](README.md) · [Mentor behavior reference](../../src/OrbMentor/README.md) · [Interactive checklist](mentor-runtime-validation.md)
+[Testing hub](README.md) · [Mentor behavior reference](../../src/Mentor/README.md) · [Interactive checklist](mentor-runtime-validation.md)
 
 ## Risk contract
 
@@ -52,6 +52,6 @@ native mastery change, logs, and rollback result.
 ## Known next work
 
 - Add a stable `MentorReliability` lane rather than relying on name filters.
-- Grow sanitized replay coverage for ordering-sensitive XP/lifecycle failures.
+- Grow sanitized scenario-fixture coverage for ordering-sensitive XP/lifecycle failures.
 - Record desktop and Steam Deck allocation/timing profiles for sustained mixed
   domain activity.

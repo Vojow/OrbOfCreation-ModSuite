@@ -97,12 +97,16 @@ Enable one capability at a time on a disposable save. Exercise its normal action
 Observability is diagnostic and must not alter gameplay.
 
 - Start and stop manual full traces and performance profiles from the Runtime page; neither uses a fixed capture duration.
+- Profiler-enabled debug builds start both sessions automatically when the
+  ServiceCycle runtime is created. Closing the game stops them with a
+  runtime-shutdown terminal reason and flushes the accepted prefix; manual
+  controls remain available for deliberate mid-session windows.
 - Let the rolling decision journal run normally.
 - After the desired action occurs, stop finite sessions, wait for `Complete`, close the game, and copy the session directories.
 - Decode with `./script/trace --full`, `--performance`, `--journal`, or `--dashboard` as appropriate.
 - Treat missing manifests, incomplete status, invalid checksums, writer faults, gameplay changes, or main-thread stalls as failures of that diagnostic product.
 
-Manual traces may begin mid-session and therefore do not imply deterministic replay eligibility.
+Manual traces may begin mid-session, so they are not rooted at a known initial state and their manifest marks them `DiagnosticOnly`.
 
 ## Gate V5 — persistence and rollback
 

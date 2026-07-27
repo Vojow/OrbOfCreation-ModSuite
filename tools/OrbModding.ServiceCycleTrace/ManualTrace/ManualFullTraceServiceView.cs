@@ -1,4 +1,5 @@
 using System.Globalization;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 
 namespace OrbModding.ServiceCycleTrace.ManualTrace;
@@ -9,8 +10,10 @@ internal static class ManualFullTraceServiceView
     {
         writer.WriteLine("## Service view");
         writer.WriteLine();
-        writer.WriteLine(
-            "Format v1 carries numeric service identities only; this report does not infer feature names.");
+        var roster = Names(session);
+        writer.WriteLine(roster.Count == 0
+            ? "This capture carries no roster, so services appear under the numeric identities the records hold. Captures recorded by a newer runtime name them."
+            : "Service names come from the roster this capture recorded; the numeric identity is the one the records hold.");
         writer.WriteLine();
         var services = Summarize(session);
         if (services.Count == 0)
@@ -20,13 +23,13 @@ internal static class ManualFullTraceServiceView
             return;
         }
 
-        writer.WriteLine("| Service | Events | Cycles queued / completed / faulted-or-orphaned | Evaluations completed / deferred / faulted | Projection faults | Actions committed / rejected / faulted | Avg capture ms | Avg worker ms | Avg action ms |");
-        writer.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        writer.WriteLine("| Service | Events | Cycles queued / completed / faulted-or-orphaned | Evaluations completed / deferred / faulted | Projection faults | Actions committed / skipped / rejected / faulted | Avg capture ms | Avg worker ms | Avg action ms |");
+        writer.WriteLine("|:---|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var pair in services.OrderBy(item => item.Key))
         {
             var item = pair.Value;
             writer.Write("| ");
-            writer.Write(pair.Key.ToString(CultureInfo.InvariantCulture));
+            writer.Write(Label(roster, pair.Key));
             writer.Write(" | ");
             writer.Write(item.Events.ToString("N0", CultureInfo.InvariantCulture));
             writer.Write(" | ");
@@ -36,7 +39,7 @@ internal static class ManualFullTraceServiceView
             writer.Write(" | ");
             writer.Write(item.ProjectionFaults.ToString("N0", CultureInfo.InvariantCulture));
             writer.Write(" | ");
-            WriteTriple(writer, item.ActionsCommitted, item.ActionsRejected, item.ActionsFaulted);
+            WriteQuad(writer, item.ActionsCommitted, item.ActionsSkipped, item.ActionsRejected, item.ActionsFaulted);
             writer.Write(" | ");
             WriteAverage(writer, item.Capture.Freeze());
             writer.Write(" | ");
@@ -47,6 +50,28 @@ internal static class ManualFullTraceServiceView
         }
         writer.WriteLine();
     }
+
+    private static Dictionary<ulong, string> Names(ManualFullTraceSession session)
+    {
+        var names = new Dictionary<ulong, string>();
+        foreach (var entry in session.Roster().Entries)
+        {
+            if (!string.Equals(entry.Kind, ServiceCycleTraceRoster.ServiceKind, StringComparison.Ordinal))
+                continue;
+            names[entry.Identity] = entry.DisplayName.Length == 0 ? entry.MachineId : entry.DisplayName;
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// The name and the number together. The number is what every other view and the records
+    /// themselves say, so dropping it in favour of a name would break the reader's ability to follow
+    /// one service across the report.
+    /// </summary>
+    private static string Label(Dictionary<ulong, string> names, ulong service) =>
+        names.TryGetValue(service, out var name)
+            ? name + " (" + service.ToString(CultureInfo.InvariantCulture) + ")"
+            : service.ToString(CultureInfo.InvariantCulture);
 
     private static Dictionary<ulong, ServiceSummary> Summarize(ManualFullTraceSession session)
     {
@@ -69,6 +94,9 @@ internal static class ManualFullTraceServiceView
     private static void WriteTriple(TextWriter writer, long first, long second, long third) =>
         writer.Write($"{first.ToString("N0", CultureInfo.InvariantCulture)} / {second.ToString("N0", CultureInfo.InvariantCulture)} / {third.ToString("N0", CultureInfo.InvariantCulture)}");
 
+    private static void WriteQuad(TextWriter writer, long first, long second, long third, long fourth) =>
+        writer.Write($"{first.ToString("N0", CultureInfo.InvariantCulture)} / {second.ToString("N0", CultureInfo.InvariantCulture)} / {third.ToString("N0", CultureInfo.InvariantCulture)} / {fourth.ToString("N0", CultureInfo.InvariantCulture)}");
+
     private static void WriteAverage(TextWriter writer, TraceMetric metric) =>
         writer.Write(metric.Samples == 0
             ? "—"
@@ -85,6 +113,7 @@ internal static class ManualFullTraceServiceView
         internal long EvaluationsFaulted;
         internal long ProjectionFaults;
         internal long ActionsCommitted;
+        internal long ActionsSkipped;
         internal long ActionsRejected;
         internal long ActionsFaulted;
         internal TraceMetricBuilder Capture { get; } = new();
@@ -122,6 +151,10 @@ internal static class ManualFullTraceServiceView
                     break;
                 case ServiceCycleSemanticEventKind.ActionCommitted:
                     ActionsCommitted++;
+                    Action.AddTicks(item.Payload.DurationTicks);
+                    break;
+                case ServiceCycleSemanticEventKind.ActionSkipped:
+                    ActionsSkipped++;
                     Action.AddTicks(item.Payload.DurationTicks);
                     break;
                 case ServiceCycleSemanticEventKind.ActionRejected:

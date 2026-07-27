@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using OrbModding.Common;
 using Xunit;
@@ -283,12 +284,30 @@ public sealed class FeatureStatusTests
         Assert.Equal(2, received);
     }
 
+    /// <summary>
+    /// The registry belongs to the thread that built it, and says so from any other.
+    /// </summary>
+    /// <remarks>
+    /// A dedicated thread rather than <c>Task.Run</c>. The test itself runs on a pool thread, and a
+    /// work item queued from one can be picked up by that same thread once it yields — the ownership
+    /// check then sees its own thread id, there is no violation to observe, and the test fails on a
+    /// scheduling accident rather than on the behaviour it names.
+    /// </remarks>
     [Fact]
-    public async Task Registry_RejectsCrossThreadAccess()
+    public void Registry_RejectsCrossThreadAccess()
     {
         var registry = new FeatureStatusRegistry();
+        Exception? observed = null;
+        var thread = new Thread(() =>
+        {
+            try { registry.GetSnapshot(); }
+            catch (Exception ex) { observed = ex; }
+        });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => registry.GetSnapshot()));
+        thread.Start();
+        thread.Join();
+
+        Assert.IsType<InvalidOperationException>(observed);
     }
 
     [Fact]

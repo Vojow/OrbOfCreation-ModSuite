@@ -2,9 +2,6 @@
 
 [Back to testing hub](README.md) · [Headless E2E simulation](headless-e2e.md) · [Runtime UAT protocol](runtime-validation.md)
 
-Ordering-sensitive headless regressions may also use the
-[sanitized runtime replay format](runtime-replay.md).
-
 ## Supported baseline
 
 - Windows 64-bit
@@ -31,7 +28,7 @@ Concurrency tests synchronize on exact events or observable state and give every
 local failure deadline. A sleep interval is not evidence that work did not occur, and a multi-second test
 timeout is a failure bound rather than an expected test duration.
 
-The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status/ownership controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Experimental Chronomancer and Resonance tests are not present on this branch. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
+The portable tests use a source-only `OrbModding.GameStubs` project to compile the supported plugin seams. They validate Automata, Mentor, Mod Config, shared scheduling/status/ownership controls, policy, lifecycle behavior, safe defaults, timing, reflection fixtures, UUID uniqueness, entity type counts, and known mappings. Portable tests do not claim game API compatibility; production builds ignore the stubs and require `OOC_GAME_DIR`.
 
 Portable automation has three scopes:
 
@@ -39,7 +36,7 @@ Portable automation has three scopes:
 - headless integration tests connect production native adapters to focused game API stubs;
 - headless E2E runs the real mod engine against a deterministic simulated game boundary for complete queue, economy, lifecycle, and failure journeys.
 
-The production Common ServiceCycle engine is covered under `tests/OrbModding.Tests/Runtime/ServiceCycle`, with the Auto Harvest adapter and composition contracts under `tests/OrbModding.Tests/Services/AutoHarvest/Runtime/ServiceCycle`. Its portable gates prove ownership, half-duplex frame handoff, one-action-per-service frame rotation, lifecycle replacement, immediate emergency rejection, diagnostics coherence, bounded semantic tracing, replay validation, codec corruption handling, and allocation-free steady-state paths. They also exercise the opt-in exporter and real file storage in isolated temporary directories, including restart reconciliation, pruning, collision, stale-temporary cleanup, and ordinal exhaustion. Production path policy and composition have direct portable tests; installed-game behavior remains the separate UAT gate.
+The production Common ServiceCycle engine is covered under `tests/OrbModding.Tests/Runtime/ServiceCycle`, with the Auto Harvest adapter and composition contracts under `tests/OrbModding.Tests/Services/AutoHarvest/Runtime/ServiceCycle`. Its portable gates prove ownership, half-duplex frame handoff, fair per-service action turns with fixed registration limits, lifecycle replacement, immediate emergency rejection, diagnostics coherence, bounded semantic tracing, codec corruption handling, and allocation-free steady-state paths. They also exercise real file storage in isolated temporary directories, including restart reconciliation, pruning, collision, stale-temporary cleanup, and ordinal exhaustion. Production path policy and composition have direct portable tests; installed-game behavior remains the separate UAT gate.
 
 Run the headless E2E and deterministic performance scopes independently with:
 
@@ -47,7 +44,6 @@ Run the headless E2E and deterministic performance scopes independently with:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessIntegration"
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=HeadlessE2E"
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "Category=PerformanceSimulation"
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~RuntimeReplayTests"
 ```
 
 ### Focused and Windows test lanes
@@ -59,19 +55,15 @@ filter expressions and writes a TRX result under `artifacts/test-results/`:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyDecision
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyPerformance
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane All
 ```
 
 `Fast` runs every portable test except deterministic performance simulations
 and tests that launch an external process. CI runs those two exclusions as
 separate `PerformanceAll` and `ExternalProcess` partitions, so the union still
-executes the complete portable suite. `AutoBuyDecision`,
-`AutoBuyReliability`, and `AutoBuyPerformance` answer independent policy,
-safety, and deterministic-work questions; a test may carry multiple positive
-categories when it supplies more than one kind of evidence.
+executes the complete portable suite. `AutoBuyReliability` selects the focused
+native multi-buy safety contracts.
 
 Run the versioned configuration-schema scope independently with:
 
@@ -81,17 +73,8 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 
 This scope owns schema plan validation; missing/current/malformed/negative/future markers; ordered migration and typed-bind sequencing; Automata's exact mode, interval precedence, invariant conversion, clamping, and obsolete-key diagnostics; marker-only Mentor and Mod Config adoption; first-free non-overwriting backup suffixes and race collisions; all-or-nothing partial-write/flush cleanup with byte/length/hash verification; exact-byte and new-file rollback after bind/save plus first and repeated reload faults; `SaveOnConfigSet` restoration; subscriber fault isolation; sanitized failure reasons; atomic worker-thread-to-Unity-tick dirty handoff; exact-GUID status-only catalog entries; and schema projection. A path or serialized value appearing in published status is a test failure.
 
-Set `OOC_PERFORMANCE_REPORT` to an absolute JSON path to retain the deterministic
-Auto Buy measurements, then run
-`tools/check-performance-report.ps1 -ReportPath <path>` to compare them with the
-reviewed beta history. CI performs this comparison, adds its table to the job
-summary, and retains the raw report for 90 days. See
-[headless E2E simulation](headless-e2e.md#historical-reports) for metric
-definitions and the baseline-update policy.
-
 ### Suite coordinator performance evidence
 
-The Auto Buy history remains a separate deterministic operation-count report.
 Suite-wide runtime timing uses the strict profile in
 `data/suite-performance-profile-v1.json` and the separate
 `OrbModding.PerformanceEvidence` tool. A capture freezes every exact coordinator
@@ -100,7 +83,7 @@ window. The checker evaluates counter deltas; it never attributes a lifetime
 maximum that was already present at the start to the current capture.
 
 The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one
-mutation-owning feature admission per frame, twelve supported work identities,
+mutation-owning feature admission per frame, ten supported work identities,
 exact 10/12/30-frame wait
 limits, and a minimum of 30 samples. Cooperative p95, p99, and maximum targets,
 combined active-frame timing, wait limits, starvation, abandonment, and
@@ -114,10 +97,10 @@ or contaminated native window still makes the capture unusable and returns 3.
 The coordinator's combined active-frame distribution is evaluated separately:
 p95 uses the 0.75 ms soft target, while p99 and maximum use the 1.0 ms hard
 target. A per-work pass therefore cannot hide stacked suite work in one frame.
-The twelve active identity constants are consumed by the production registration
+The ten active identity constants are consumed by the production registration
 sites as well as a checked-profile audit, so renaming or reclassifying runtime
 work without updating the profile fails portable CI. The same audit compares all
-twelve compiled starvation thresholds with both JSON wait fields, preventing the
+ten compiled starvation thresholds with both JSON wait fields, preventing the
 runtime resolver and checked profile from drifting independently.
 Auto Harvest is absent because ServiceCycle owns its capture and action rotation;
 its main-thread and worker costs are recorded by the independent performance-profile
@@ -151,15 +134,6 @@ diagnostic action, never a scheduler hot-path call. Real captures are still UAT:
 run the same scenario on desktop and Deck, retain both evidence files, and record
 the exact game/build versions before closing the runtime performance gate.
 
-For a source-level A/B comparison with the last pre-beta `main` engine, run
-`tools/compare-autobuy-performance.ps1`. Its compatibility project compiles the
-same deterministic workload separately against the untouched reference and
-current production sources; it does not copy beta engine changes into the
-reference. Pull-request CI additionally compares the exact target SHA with the
-head SHA and updates one target/current performance comment. See
-[main versus beta compatibility run](headless-e2e.md#main-versus-beta-compatibility-run)
-and [pull-request target comparison comment](headless-e2e.md#pull-request-target-comparison-comment).
-
 Collect portable production coverage with the checked-in assembly allowlist:
 
 ```powershell
@@ -167,9 +141,11 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 ```
 
 Do not rely on the collector's implicit module selection. It can omit production
-plugins when they are loaded through the source-only game-stub graph. The
-runsettings file explicitly includes the four supported production assemblies
-and excludes the test and game-stub assemblies from the product baseline.
+code when it is loaded through the source-only game-stub graph. The runsettings
+file explicitly includes the one production assembly, `[OrbModSuite]*`, and so
+excludes the test and game-stub assemblies from the product baseline. It also
+drops compiler-generated, generated-code, and explicitly excluded members by
+attribute.
 
 See [headless E2E simulation](headless-e2e.md) for the modeled contracts, metrics, scenario rules, and non-goals.
 
@@ -189,7 +165,7 @@ equally valuable:
 5. UAT proves the remaining Unity wiring, Harmony application, save behavior,
    visual state, player control, and subjective responsiveness.
 
-A test-only PR may merge after its portable suites, coverage floors, repository
+A test-only PR may merge after its portable suites, the coverage floor, repository
 hygiene, installed contracts, and real-reference builds pass. It does not need
 new active-save UAT when it changes no packaged runtime behavior. A runtime PR
 must also pass the proportional UAT gate in
@@ -198,31 +174,34 @@ the full V0-V7 sequence from its exact archive.
 
 ### Coverage policy
 
-CI collects the four supported production assemblies in Release and rejects a
-regression below these current floors:
+The suite ships as one assembly, so there is one coverage package and one floor:
+**76.5% line coverage**, enforced by `tools/check-coverage.ps1`. CI runs the
+Release collection, excluding only the `ExternalProcess` category, and hands the
+resulting Cobertura report to that script.
 
-| Scope | Enforced line floor | Current Release line | Diagnostic branch |
-|---|---:|---:|---:|
-| Overall supported production code | 65% | 72.79% | 62.97% |
-| Orb Automata | 70% | 72.79% | 63.84% |
-| Orb Mentor | 64% | 72.11% | 58.20% |
-| Orb Mod Config | 24% | 28.96% | 31.59% |
-| Orb Modding Common | 83% | 88.64% | 76.35% |
+The script checks the same floor twice, because with a single package the two
+numbers are the same measurement: once against the report's overall line rate,
+and once against the `OrbModSuite` package's own rate. A missing `OrbModSuite`
+package is itself a failure, so a run that collected nothing cannot pass by
+reporting nothing. Any failure throws and fails the job.
 
-The coverage checker also prints overall and per-assembly branch rates as
-diagnostic evidence. Branch floors are not enforced until a reviewed Release
-baseline exists for the current tree.
+A second floor is impossible to state here rather than merely absent: one
+assembly means one package, so a per-assembly number could only ever disagree
+with itself. The floor is set two points under the rate measured when the suite
+merged into one DLL.
 
-These are regression floors, not completion targets. New or materially changed
+Branch coverage is printed — overall and for the package — as diagnostic evidence
+only. No branch floor is enforced.
+
+This is a regression floor, not a completion target. New or materially changed
 core engines and controllers should aim for at least 80% line and 70% branch
 coverage; reflection/native adapters should aim for at least 70% line and 60%
-branch coverage. Do not add low-value tests solely to cover Unity view assembly,
+branch coverage. Do not add low-value tests solely to cover Unity view code,
 plugin bootstrap, or defensive logging. Those paths require focused component
 seams, installed contracts, or UAT evidence instead.
 
-`tools/check-coverage.ps1` owns the enforced floors. Raising a floor requires a
-passing Release coverage run on the current tree. Lowering one requires an
-explicitly documented rationale in the PR.
+Raising the floor requires a passing Release coverage run on the current tree.
+Lowering it requires an explicitly documented rationale in the PR.
 
 ### Automated scope through P1
 
@@ -243,8 +222,9 @@ The current P0/P1 headless scope covers:
   cancellation;
 - Mod Config staged dependencies, atomic apply/rollback, external refresh,
   UI-work scheduling, listener cleanup, and shell repair policy;
-- shared versioned configuration transactions, exact Automata schema-zero
-  mappings, marker-only Mentor/Mod Config adoption, backup collision handling,
+- shared versioned configuration transactions over the suite's one configuration
+  file, ordered migration steps against fixture plans, marker-only adoption of an
+  unversioned file, backup collision handling,
   verified all-or-nothing backup creation, exact rollback, reload-failure
   containment, future-version refusal, reason privacy, atomic UI handoff, and
   exact-GUID editable or status-only schema projection;
@@ -264,25 +244,6 @@ The current P0/P1 headless scope covers:
 - reusable lifecycle state-machine journeys spanning no-save, load, registry
   readiness, unlock, action, completion, reset, stale callbacks, disable and
   re-enable, same-name scene recreation, and mixed Automata/Mentor isolation.
-- strict V1 structured replays for deterministic frame/time ordering,
-  completion-driven queue refill, chained progression invalidation, canonical
-  sanitized fixtures, and converter failure containment.
-
-The reusable lifecycle fixtures live under
-`tests/OrbModding.Tests/Scenarios/`. They use the production lifecycle monitor,
-gameplay invalidation bus, and shared coordinator, then drive real Auto Buy and
-Mentor engine/controller seams through portable native-world simulations. Run
-them independently with:
-
-```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~LifecycleStateMachineScenarioTests"
-```
-
-Runtime replay fixtures reuse that same kernel and production Auto Buy feature
-driver. Their schema contains no arbitrary payload or private save data; see
-[runtime replay fixtures](runtime-replay.md) for the event allowlist and reviewed
-conversion workflow.
-
 P2 remains runtime-focused: actual Unity layout and navigation, real save/cloud
 behavior, a combined-suite soak, real frame-time profiling, and Steam Deck or
 Proton validation. Keep these as UAT; reduce any reproducible defect to a
@@ -291,10 +252,10 @@ headless regression afterward.
 ### Time-bounded validation profiles
 
 Routine PR validation is fully automated: portable tests, the tagged headless
-and performance jobs, coverage floors, repository hygiene, installed contracts
+and performance jobs, the coverage floor, repository hygiene, installed contracts
 when a game installation is available, and real-reference builds.
 
-When weekend time is limited, use a 25-35 minute UAT smoke on a disposable save:
+When a full UAT pass is not affordable, use a 25-35 minute smoke on a disposable save:
 
 1. Install the exact packaged DLLs and confirm one clean load in the BepInEx log.
 2. Exercise multi-candidate and single-candidate Auto Buy queue filling, then add
@@ -388,15 +349,15 @@ In debug builds, detect and log:
 The supported suite archive follows the explicit package allowlist:
 
 ```text
-BepInEx/plugins/OrbAutomata/OrbAutomata.dll
-BepInEx/plugins/OrbMentor/OrbMentor.dll
-BepInEx/plugins/OrbMentor/OrbModding.Common.dll
-BepInEx/plugins/OrbModConfig/OrbModConfig.dll
+BepInEx/plugins/OrbModSuite/OrbModSuite.dll
 README.md
 CHANGELOG.md
 LICENSE
 THIRD_PARTY_NOTICES.md
 ```
+
+The suite ships as one assembly. `tools/package-supported-suite.sh` asserts this exact entry list, so it
+is the authority if this section drifts from it.
 
 Do not include experimental DLLs, game assemblies, BepInEx assemblies, Harmony, debug symbols unless intentionally published, or local configuration files containing user preferences.
 

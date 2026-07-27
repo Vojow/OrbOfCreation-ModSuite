@@ -37,8 +37,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
 
         var grant = Assert.Single(recipient.GrantedMasteryExperience);
-        Assert.Equal(1, grant.mantissa, 12);
-        Assert.Equal(1, grant.exponent);
+        Assert.Equal(1, grant.Mantissa, 12);
+        Assert.Equal(1, grant.Exponent);
         Assert.Empty(source.GrantedMasteryExperience);
         Assert.Equal(1, runtime.Diagnostics.CapturedEvents);
         Assert.Equal(1, runtime.Diagnostics.QualifiedEvents);
@@ -144,9 +144,9 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Drive(runtime, 200);
 
         var grant = Assert.Single(recipient.GetExperienceElement().Grants);
-        Assert.Equal(1, grant.mantissa, 12);
-        Assert.Equal(1, grant.exponent);
-        Assert.Equal(grant.mantissa, recipient.masteryXp.mantissa, 12);
+        Assert.Equal(1, grant.Mantissa, 12);
+        Assert.Equal(1, grant.Exponent);
+        Assert.Equal(grant.Mantissa, recipient.masteryXp.Mantissa, 12);
         Assert.Empty(source.GetExperienceElement().Grants);
         Assert.Equal(1, runtime.Diagnostics.QualifiedEvents);
     }
@@ -172,8 +172,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         Assert.Equal(83, recipient.masteryLevel);
         Assert.Equal(83, recipient.GetExperienceElement().GetLevel());
         var residual = recipient.GetExperienceElement().GetExperience();
-        Assert.Equal(20, residual.mantissa * Math.Pow(10, residual.exponent), 9);
-        Assert.Equal(20, recipient.masteryXp.mantissa * Math.Pow(10, recipient.masteryXp.exponent), 9);
+        Assert.Equal(20, residual.Mantissa * Math.Pow(10, residual.Exponent), 9);
+        Assert.Equal(20, recipient.masteryXp.Mantissa * Math.Pow(10, recipient.masteryXp.Exponent), 9);
         Assert.False(runtime.IsBlocked);
     }
 
@@ -233,8 +233,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
         DriveUntil(runtime, () => runtime.Diagnostics.NativeGrants == 1);
 
         var grant = Assert.Single(recipient.GrantedMasteryExperience);
-        Assert.Equal(1, grant.mantissa, 12);
-        Assert.Equal(1, grant.exponent);
+        Assert.Equal(1, grant.Mantissa, 12);
+        Assert.Equal(1, grant.Exponent);
         Assert.Empty(source.GrantedMasteryExperience);
         Assert.Equal(1, runtime.Diagnostics.CapturedEvents);
         Assert.Equal(1, runtime.Diagnostics.NativeGrants);
@@ -337,8 +337,8 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
 
             Assert.False(ownedLease.IsHeld);
             Assert.Single(recipient.GetExperienceElement().Grants);
-            Assert.Equal(1, recipient.masteryXp.mantissa, 12);
-            Assert.Equal(1, recipient.masteryXp.exponent);
+            Assert.Equal(1, recipient.masteryXp.Mantissa, 12);
+            Assert.Equal(1, recipient.masteryXp.Exponent);
         }
         finally
         {
@@ -383,7 +383,7 @@ public sealed class MentorRuntimeHeadlessTests : IDisposable
 
     private static FeatureStatusSnapshot Status(FeatureStatusRegistry registry, string featureId)
     {
-        Assert.True(registry.TryGet(new FeatureStatusKey(PluginIds.MentorGuid, featureId), out var status));
+        Assert.True(registry.TryGet(new FeatureStatusKey(PluginIds.SuiteGuid, featureId), out var status));
         return status;
     }
 

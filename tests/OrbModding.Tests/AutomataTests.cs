@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
@@ -70,76 +69,10 @@ public sealed class AutomataTests
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.False(config.EnableOperationalLogging.Value);
-        Assert.False(config.Replay.EnableAutoHarvestCapture.Value);
-        Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
         Assert.True(config.Current.CanStartAutoBuyActively);
         Assert.False(config.Current.CanStartAutoCastActively);
         Assert.False(config.Current.CanStartAutoConceptActively);
         Assert.False(config.Current.CanStartAutoHarvestActively);
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_MigratesLegacyBalanceMasteryModeToActive()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
-
-        var config = BepInExAutomataConfiguration.Bind(configFile);
-
-        Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
-        Assert.True(config.Current.CanStartAutoConceptActively);
-    }
-
-    [Theory]
-    [InlineData(0.1f, 10)]
-    [InlineData(1.0f, 60)]
-    [InlineData(2.5f, 150)]
-    [InlineData(30.0f, 1800)]
-    public void AutoConceptConfiguration_MigratesLegacyMinutesToSeconds(float legacyMinutes, int expectedSeconds)
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized(
-            "AutoConcept",
-            "RebalanceIntervalMinutes",
-            legacyMinutes.ToString(CultureInfo.InvariantCulture));
-
-        var config = BepInExAutomataConfiguration.Bind(configFile);
-
-        Assert.Equal(expectedSeconds, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalMinutes");
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_MigratesExistingRebalanceSecondsSetting()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
-
-        var config = BepInExAutomataConfiguration.Bind(configFile);
-
-        Assert.Equal(10, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalSeconds");
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_PreservesNewFallbackSettingOverLegacyValues()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "FallbackEvaluationIntervalSeconds", "45");
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalMinutes", "2.0");
-
-        var config = BepInExAutomataConfiguration.Bind(configFile);
-
-        Assert.Equal(45, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" &&
-                    (pair.Key.Key == "RebalanceIntervalSeconds" || pair.Key.Key == "RebalanceIntervalMinutes"));
     }
 
     [Fact]
@@ -337,8 +270,8 @@ public sealed class AutomataTests
         Assert.Equal(AutoSpellLevelCapability.Locked, runtime.ReadSnapshot(out var reason).Capability);
         Assert.Equal(string.Empty, reason);
 
-        recipe.levelingPrerequisites.unlocked = true;
-        upgrade.queuedPurchaseLevel = 1;
+        recipe.levelingPrerequisites.available = true;
+        upgrade.queuedLevels = 1;
         recipe.levelCost.affordable = false;
         var single = runtime.ReadSnapshot(out reason);
         Assert.Equal(AutoSpellLevelCapability.Single, single.Capability);
@@ -353,7 +286,7 @@ public sealed class AutomataTests
         Assert.Equal(1, recipe.levelCost.PerformCalls);
 
         recipe.readyToLevel = true;
-        upgrade.purchaseLevel = 1;
+        upgrade.level = 1;
         var all = runtime.ReadSnapshot(out reason);
         Assert.Equal(AutoSpellLevelCapability.All, all.Capability);
         Assert.True(runtime.TryLevelAll(out reason));
@@ -375,26 +308,6 @@ public sealed class AutomataTests
         Assert.True(ledger.TryGet("concept", out owned));
         Assert.Equal(7, owned.ManualBaseline);
         Assert.Equal(0, owned.AutomatedDelta);
-    }
-
-    [Theory]
-    [InlineData(-1.0, 0.1)]
-    [InlineData(0.5, 0.5)]
-    [InlineData(4.0, 1.0)]
-    public void AutoBuyCpuBudgetIsHardCappedForFrameSafety(double configured, double expected)
-    {
-        Assert.Equal(expected, AutoBuyEngine.EffectiveCpuBudget(configured), 6);
-    }
-
-    [Fact]
-    public void ReflectionAutoBuyCatalogCachesTheStaticRegistry()
-    {
-        using var catalog = new ReflectionAutoBuyCatalog();
-
-        var first = catalog.Discover();
-        var second = catalog.Discover();
-
-        Assert.Same(first, second);
     }
 
     [Fact]

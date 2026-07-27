@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
-using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 using static OrbModding.Tests.Runtime.ServiceCycle.TestSupport.ServiceCycleTypeSafetyFixtures;
@@ -11,19 +13,30 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Registration;
 public sealed class ServiceCycleStateSurfaceTypeSafetyTests
 {
     [Fact]
-    public void FrameAndStateMustBeSealedAndStateCannotRetainFrame()
+    public void AnUnsealedFrameIsRejected() => AssertFrameRejected(new UnsealedFrame());
+
+    /// <summary>
+    /// A worker's state may hold the scratch its evaluation fills.
+    /// </summary>
+    /// <remarks>
+    /// This used to be rejected, on the reasoning that a state holding the frame could read one
+    /// cycle's projection in the next. It cannot: state and projection are both the worker's, filled
+    /// and read on the same thread inside one evaluation, and every cycle overwrites the scratch
+    /// before reading it. What the rule actually forbade was reusing the row arrays underneath — the
+    /// whole reason a buffer is worth keeping. Actions still may not retain a frame; those do cross a
+    /// thread, and that rule stands.
+    /// </remarks>
+    [Fact]
+    public void WorkerStateMayHoldTheScratchItsEvaluationFills()
     {
         using var registry = new ServiceCycleRegistry(1);
-        Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<UnsealedFrame, ImmutableConfig, SafeState, ImmutableAction>(
-                new UnsealedFrame(), new SafeState()),
-            new ImmutableConfig(1),
-            new LifecycleGeneration(1)));
-        Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, StateWithFrame, ImmutableAction>(
-                new SafeFrame(), new StateWithFrame(new SafeFrame())),
-            new ImmutableConfig(1),
-            new LifecycleGeneration(1)));
+
+        using var registration = registry.Register(
+            new TypeSafetyDefinition<StateWithScratch, ImmutableAction>(
+                new StateWithScratch(new SafeFrame())),
+            new LifecycleGeneration(1));
+
+        Assert.NotNull(registration);
     }
 
     [Fact]
@@ -31,9 +44,8 @@ public sealed class ServiceCycleStateSurfaceTypeSafetyTests
     {
         using var registry = new ServiceCycleRegistry(1);
         using var registration = registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, StateWithAdapterName, ImmutableAction>(
-                new SafeFrame(), new StateWithAdapterName(new NeutralAdapter())),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<StateWithAdapterName, ImmutableAction>(
+                new StateWithAdapterName(new NeutralAdapter())),
             new LifecycleGeneration(1));
         Assert.NotNull(registration);
     }
@@ -42,11 +54,10 @@ public sealed class ServiceCycleStateSurfaceTypeSafetyTests
     public void FrameAndStateCannotExposeArraysOrCollectionProperties()
     {
         using var registry = new ServiceCycleRegistry(1);
-        AssertFrameRejected(registry, new FrameWithPublicArray());
+        AssertFrameRejected(new FrameWithPublicArray());
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, StateWithPublicCollection, ImmutableAction>(
-                new SafeFrame(), new StateWithPublicCollection()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<StateWithPublicCollection, ImmutableAction>(
+                new StateWithPublicCollection()),
             new LifecycleGeneration(1)));
     }
 
@@ -54,26 +65,24 @@ public sealed class ServiceCycleStateSurfaceTypeSafetyTests
     public void PublicAndProtectedBackingMemoryViewsAreRejected()
     {
         using var registry = new ServiceCycleRegistry(1);
-        AssertFrameRejected(registry, new FrameWithPublicSpan());
-        AssertFrameRejected(registry, new FrameWithProtectedReadOnlySpan());
-        AssertFrameRejected(registry, new FrameWithPublicMemory());
-        AssertFrameRejected(registry, new FrameWithPublicReadOnlyMemory());
+        AssertFrameRejected(new FrameWithPublicSpan());
+        AssertFrameRejected(new FrameWithProtectedReadOnlySpan());
+        AssertFrameRejected(new FrameWithPublicMemory());
+        AssertFrameRejected(new FrameWithPublicReadOnlyMemory());
     }
 
     [Fact]
     public void ComputedPropertiesCannotBypassGraphSafety()
     {
         using var registry = new ServiceCycleRegistry(1);
-        AssertConfigurationRejected(registry, new ComputedCollectionConfig());
+        AssertConfigurationRejected(new ComputedCollectionConfig());
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, ActionWithComputedFrame>(
-                new SafeFrame(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, ActionWithComputedCaptureBuffer>(
+                new SafeState()),
             new LifecycleGeneration(1)));
         Assert.Throws<InvalidOperationException>(() => registry.Register(
-            new TypeSafetyDefinition<SafeFrame, ImmutableConfig, SafeState, ActionWithComputedHandle>(
-                new SafeFrame(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, ActionWithComputedHandle>(
+                new SafeState()),
             new LifecycleGeneration(1)));
     }
 
@@ -81,21 +90,20 @@ public sealed class ServiceCycleStateSurfaceTypeSafetyTests
     public void PublicSettersAreRejectedWhileInternalMutationRemainsAllowed()
     {
         using var registry = new ServiceCycleRegistry(2);
-        AssertConfigurationRejected(registry, new ComputedMutableConfig());
-        AssertFrameRejected(registry, new FrameWithPublicSetter());
+        AssertConfigurationRejected(new ComputedMutableConfig());
+        AssertFrameRejected(new FrameWithPublicSetter());
+        AssertFrameAccepted(new FrameWithInternalSetter());
         using var registration = registry.Register(
-            new TypeSafetyDefinition<FrameWithInternalSetter, ImmutableConfig, SafeState, ImmutableAction>(
-                new FrameWithInternalSetter(), new SafeState()),
-            new ImmutableConfig(1),
+            new TypeSafetyDefinition<SafeState, ImmutableAction>(new SafeState()),
             new LifecycleGeneration(1));
         Assert.NotNull(registration);
     }
 
     private class UnsealedFrame { }
-    private sealed class StateWithFrame
+    private sealed class StateWithScratch
     {
-        private readonly SafeFrame _frame;
-        internal StateWithFrame(SafeFrame frame) => _frame = frame;
+        private readonly SafeFrame _scratch;
+        internal StateWithScratch(SafeFrame scratch) => _scratch = scratch;
     }
     private sealed class StateWithAdapterName
     {
@@ -142,9 +150,9 @@ public sealed class ServiceCycleStateSurfaceTypeSafetyTests
     {
         public int Value { get => 0; set { } }
     }
-    private readonly struct ActionWithComputedFrame
+    private readonly struct ActionWithComputedCaptureBuffer
     {
-        public SafeFrame Frame => new();
+        public GameWorldCycleFrame Frame => new();
     }
     private readonly struct ActionWithComputedHandle
     {

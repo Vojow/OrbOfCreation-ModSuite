@@ -4,6 +4,8 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 
+using OrbModding.Common.Runtime.World;
+
 namespace OrbModding.Tests.Runtime.ServiceCycle.Tracing.Emission;
 
 internal static class SemanticRecorderFixtures
@@ -13,7 +15,7 @@ internal static class SemanticRecorderFixtures
         new LifecycleGeneration(2),
         new ConfigGeneration(3),
         new StrategyGeneration(4),
-        new CaptureSequence(5),
+        new WorldGeneration(1),
         new CycleId(6));
 
     internal static readonly ServiceFault Fault = new(
@@ -26,8 +28,10 @@ internal static class SemanticRecorderFixtures
         Cycle.Service,
         Cycle.Lifecycle,
         Cycle.Config,
-        Cycle.Capture,
+        Cycle.Strategy,
+        new CaptureSequence(5),
         Cycle.Cycle,
+        GameWorldStateDefaults.Empty,
         new MonotonicTimestamp(10));
 
     internal static ServiceActionContext ActionContext(int index = 0) => new(
@@ -67,6 +71,8 @@ internal static class SemanticRecorderFixtures
             responsesAcquired: responses,
             actionsAttempted: actions,
             capturesAttempted: captures,
+            cyclesStarted: captures,
+            worldGateDeferrals: 0,
             emergencyBatchesRejected: 0,
             lifecyclePositionTransitions: 0,
             responseDuration: new MonotonicDuration(2),

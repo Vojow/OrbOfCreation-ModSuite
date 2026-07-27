@@ -12,7 +12,7 @@ public sealed class AutoHarvestMutationAdapterTests
     {
         var adapter = new AutoHarvestMutationAdapter(new ThrowingStatePort());
 
-        var result = adapter.Submit(ResolvedPair());
+        var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
 
         Assert.True(result.HasNativeMutationOutcome);
         Assert.Equal(NativeMutationOutcome.BeforeCaptureFailed, result.NativeMutationOutcome);
@@ -20,18 +20,113 @@ public sealed class AutoHarvestMutationAdapterTests
         Assert.Equal(AutoHarvestSubmissionFailureCode.None, result.FailureCode);
     }
 
+    /// <summary>
+    /// The facts the boundary judges are the ones the action carries; the reader is asked only for
+    /// the instance to submit into.
+    /// </summary>
+    /// <remarks>
+    /// A pair the world said was not ready is refused without a second opinion. The old boundary
+    /// re-derived these five off the live game — six reads including one that wrote, through
+    /// <c>PlotNodeActionInstance.IsVisible()</c> reaching <c>Prerequisites.Container.Check()</c>.
+    /// </remarks>
     [Fact]
-    public void FinalPolicyRevalidationReusesTheVerifierBeforeSnapshot()
+    public void CarriedFactsAreWhatTheSubmissionDecisionJudges()
     {
         var state = new RecordingStatePort();
         var adapter = new AutoHarvestMutationAdapter(state);
 
-        var result = adapter.Submit(ResolvedPair());
+        var result = adapter.Submit(
+            ResolvedPair(),
+            ReadyFacts(readiness: AutoHarvestEvidenceState.Rejected),
+            Preserving);
 
         Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
         Assert.Equal(1, state.CaptureCount);
-        Assert.Equal(1, state.ReadCount);
-        Assert.Equal(state.Captured, state.FactsActiveState);
+        Assert.Equal(1, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    /// <summary>
+    /// An action carrying no facts submits nothing.
+    /// </summary>
+    /// <remarks>
+    /// The evidence states default to unknown, and unknown is a rejection rather than a pass — so an
+    /// action that reached the boundary without a plan behind it cannot mutate the game.
+    /// </remarks>
+    [Fact]
+    public void AnActionWithoutFactsIsRefused()
+    {
+        var state = new RecordingStatePort();
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(), default, Preserving);
+
+        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
+        Assert.False(result.MutationAttempted);
+    }
+
+    /// <summary>
+    /// A plot whose one instance of the action cannot be resolved is refused, however good the facts.
+    /// </summary>
+    [Fact]
+    public void AMissingPrototypeIsRefusedEvenWhenEveryFactAgrees()
+    {
+        var state = new RecordingStatePort(resolvesPrototype: false);
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
+
+        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
+        Assert.Equal(1, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    /// <summary>
+    /// The queue snapshot the transition verifier will compare against is also the one the policy
+    /// judges, and it is captured once.
+    /// </summary>
+    /// <remarks>
+    /// Every world fact says go here; only the live queue says the pair is already running. An
+    /// adapter that judged without it would sail past the policy and reach the native submission,
+    /// which this fixture cannot perform — so the rejection is the evidence.
+    /// </remarks>
+    [Fact]
+    public void TheLiveQueueIsWhatTheFinalRevalidationAddsToTheWorldFacts()
+    {
+        var state = new RecordingStatePort(supported: 1);
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
+
+        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
+        Assert.Equal(1, state.CaptureCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    /// <summary>
+    /// The audited safety the adapter judges is the one the action carried, not an assumed one.
+    /// </summary>
+    /// <remarks>
+    /// The verdict is drawn on the worker, from the snapshot the plan was made against, and travels
+    /// with the action. An adapter that supplied a constant instead would pass every test about the
+    /// ordinary path and submit into an action the audit rejected.
+    /// </remarks>
+    [Theory]
+    [InlineData((int)AutoHarvestActionSafetyState.Unknown)]
+    [InlineData((int)AutoHarvestActionSafetyState.Destructive)]
+    [InlineData((int)AutoHarvestActionSafetyState.ResourceDrain)]
+    [InlineData((int)AutoHarvestActionSafetyState.UnsafeCompletionEffects)]
+    public void AnUnauditedActionIsRejectedOnTheSafetyItCarried(int safetyValue)
+    {
+        var state = new RecordingStatePort();
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(
+            ResolvedPair(),
+            ReadyFacts(),
+            (AutoHarvestActionSafetyState)safetyValue);
+
+        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
         Assert.False(result.MutationAttempted);
     }
 
@@ -155,6 +250,15 @@ public sealed class AutoHarvestMutationAdapterTests
         Assert.Equal((AutoHarvestSubmissionFailureCode)expectedFailure, result.FailureCode);
     }
 
+    private static AutoHarvestPairFacts ReadyFacts(
+        AutoHarvestEvidenceState readiness = AutoHarvestEvidenceState.Verified) =>
+        new(
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            readiness);
+
     private static AutoHarvestSubmissionState State(
         int used,
         int empty,
@@ -173,6 +277,9 @@ public sealed class AutoHarvestMutationAdapterTests
             pairQuantity: quantity,
             pairEngaged: engaged);
 
+    private const AutoHarvestActionSafetyState Preserving =
+        AutoHarvestActionSafetyState.NativePhaseCyclePreserving;
+
     private static ResolvedAutoHarvestPair ResolvedPair()
     {
         var target = new AutoHarvestPairBinding(
@@ -184,39 +291,41 @@ public sealed class AutoHarvestMutationAdapterTests
             new object(),
             null!,
             null!,
-            null!,
-            growthSeconds: 1,
-            restSeconds: 1,
-            actionSeconds: 1);
-        var shared = new AutoHarvestSharedBinding(new object(), new object(), null!, null!, 1);
+            null!);
+        var shared = new AutoHarvestSharedBinding(new object(), null!, null!, 1);
         return new ResolvedAutoHarvestPair(null!, shared, target, target, null);
     }
 
-    private sealed class ThrowingStatePort : IAutoHarvestStatePort
+    private sealed class ThrowingStatePort : IAutoHarvestSubmissionStatePort
     {
         public AutoHarvestSubmissionState CaptureSubmissionState(in ResolvedAutoHarvestPair resolved) =>
             throw new InvalidOperationException("capture failed");
 
-        public AutoHarvestActiveActionSnapshot CaptureActiveActions(
-            in ResolvedAutoHarvestPair resolved) =>
-            throw new NotSupportedException();
-
-        public void ReadFacts(
-            in ResolvedAutoHarvestPair resolved,
-            in AutoHarvestSubmissionState activeState,
-            out AutoHarvestPairFacts facts,
-            out object? prototype) =>
+        public object? ReadPrototype(in ResolvedAutoHarvestPair resolved) =>
             throw new NotSupportedException();
     }
 
-    private sealed class RecordingStatePort : IAutoHarvestStatePort
+    private sealed class RecordingStatePort : IAutoHarvestSubmissionStatePort
     {
-        public AutoHarvestSubmissionState Captured { get; } =
-            State(used: 2, empty: 1, nativeHasEmptyEntry: true, supported: 0, matches: 0, quantity: 0, engaged: false);
+        private readonly object? _prototype;
+
+        internal RecordingStatePort(int supported = 0, bool resolvesPrototype = true)
+        {
+            _prototype = resolvesPrototype ? new object() : null;
+            Captured = State(
+                used: 2,
+                empty: 1,
+                nativeHasEmptyEntry: true,
+                supported,
+                matches: 0,
+                quantity: 0,
+                engaged: false);
+        }
+
+        public AutoHarvestSubmissionState Captured { get; }
 
         public int CaptureCount { get; private set; }
-        public int ReadCount { get; private set; }
-        public AutoHarvestSubmissionState FactsActiveState { get; private set; }
+        public int PrototypeCount { get; private set; }
 
         public AutoHarvestSubmissionState CaptureSubmissionState(
             in ResolvedAutoHarvestPair resolved)
@@ -225,28 +334,10 @@ public sealed class AutoHarvestMutationAdapterTests
             return Captured;
         }
 
-        public AutoHarvestActiveActionSnapshot CaptureActiveActions(
-            in ResolvedAutoHarvestPair resolved) =>
-            throw new NotSupportedException();
-
-        public void ReadFacts(
-            in ResolvedAutoHarvestPair resolved,
-            in AutoHarvestSubmissionState activeState,
-            out AutoHarvestPairFacts facts,
-            out object? prototype)
+        public object? ReadPrototype(in ResolvedAutoHarvestPair resolved)
         {
-            ReadCount++;
-            FactsActiveState = activeState;
-            facts = new AutoHarvestPairFacts(
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Rejected,
-                AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified);
-            prototype = new object();
+            PrototypeCount++;
+            return _prototype;
         }
     }
 }

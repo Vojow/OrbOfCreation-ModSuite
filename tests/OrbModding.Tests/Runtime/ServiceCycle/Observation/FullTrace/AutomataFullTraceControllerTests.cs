@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.Tracing;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -17,7 +19,43 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.FullTrace;
 
 public sealed class AutomataFullTraceControllerTests
 {
-    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan Deadline = ServiceCycleTestDeadline.Value;
+
+    private static readonly ServiceCycleTraceRoster TestRoster = new(new[]
+    {
+        new ServiceCycleTraceRosterEntry(
+            ServiceCycleTraceRoster.ServiceKind,
+            1,
+            "orbautomata.auto-harvest",
+            "Auto Harvest"),
+    });
+
+    /// <summary>
+    /// The roster lands as soon as the session is recording, before any event and before the manifest
+    /// that seals the directory, so a capture stopped immediately still says what it was watching.
+    /// </summary>
+    [Fact]
+    public void AnArmedSessionRecordsWhatItCallsItsServices()
+    {
+        var clock = new VirtualMonotonicClock(new MonotonicTimestamp(100));
+        using var registry = Registry(clock);
+        using var pump = new SuiteFramePump(registry);
+        var control = new ManualFullTraceControlRegistry();
+        using var storage = new MemoryStorage();
+        var sessions = new SessionSource(storage);
+        var options = new AutomataFullTraceOptions(control, sessions);
+        using var controller = Assert.IsType<AutomataFullTraceController>(
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
+
+        Assert.Equal(ManualFullTraceCommandResult.Accepted, control.RequestStart());
+        AdvanceTo(controller, control, ManualFullTraceState.Recording);
+
+        Assert.True(storage.SideArtifacts.TryGetValue(TraceRosterFormat.FileName, out var written));
+        var decoded = TraceRosterFormat.Decode(Encoding.UTF8.GetString(written!));
+        Assert.Equal(1, decoded.Count);
+        Assert.Equal(1UL, decoded[0].Identity);
+        Assert.Equal("Auto Harvest", decoded[0].DisplayName);
+    }
 
     [Fact]
     public void IdleControllerAllocatesNoSessionAndStartStopPublishesExactStatus()
@@ -30,7 +68,7 @@ public sealed class AutomataFullTraceControllerTests
         var sessions = new SessionSource(storage);
         var options = new AutomataFullTraceOptions(control, sessions);
         using var controller = Assert.IsType<AutomataFullTraceController>(
-            AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
 
         Assert.Equal(0, sessions.CreateCount);
         Assert.Equal(ManualFullTraceState.Idle, control.Status.State);
@@ -59,6 +97,33 @@ public sealed class AutomataFullTraceControllerTests
     }
 
     [Fact]
+    public void AutomaticSessionStartsWithoutACommandAndShutdownFlushesItsManifest()
+    {
+        var clock = new VirtualMonotonicClock(new MonotonicTimestamp(100));
+        using var registry = Registry(clock);
+        using var pump = new SuiteFramePump(registry);
+        var control = new ManualFullTraceControlRegistry();
+        using var storage = new MemoryStorage();
+        var sessions = new SessionSource(storage);
+        var options = new AutomataFullTraceOptions(control, sessions);
+        var controller = Assert.IsType<AutomataFullTraceController>(
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
+
+        controller.StartAutomatically();
+        AdvanceTo(controller, control, ManualFullTraceState.Recording);
+        Assert.Equal(1, sessions.CreateCount);
+        pump.PumpFrame(1);
+        controller.AfterPump();
+
+        controller.Dispose();
+
+        Assert.True(storage.ManifestCommitted.Wait(Deadline));
+        var manifest = FullTraceManifestCodec.Decode(Assert.IsType<byte[]>(storage.Manifest));
+        Assert.Equal(FullTraceTerminalReason.RuntimeShutdown, manifest.Reason);
+        Assert.True(manifest.WrittenRecords > 0);
+    }
+
+    [Fact]
     public void PrePumpTickCapturesTheRealSameFrameEmergencyTransition()
     {
         var clock = new VirtualMonotonicClock(new MonotonicTimestamp(100));
@@ -69,7 +134,7 @@ public sealed class AutomataFullTraceControllerTests
         var sessions = new SessionSource(storage);
         var options = new AutomataFullTraceOptions(control, sessions);
         using var controller = Assert.IsType<AutomataFullTraceController>(
-            AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
         control.RequestStart();
         AdvanceTo(controller, control, ManualFullTraceState.Recording);
 
@@ -96,7 +161,7 @@ public sealed class AutomataFullTraceControllerTests
         var sessions = new SessionSource(storage, failFirst: true);
         var options = new AutomataFullTraceOptions(control, sessions);
         using var controller = Assert.IsType<AutomataFullTraceController>(
-            AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
 
         control.RequestStart();
         controller.BeforePump();
@@ -119,7 +184,7 @@ public sealed class AutomataFullTraceControllerTests
         using var storage = new MemoryStorage(failSegmentWrite: true, blockManifest: true);
         var options = new AutomataFullTraceOptions(control, new SessionSource(storage));
         using var controller = Assert.IsType<AutomataFullTraceController>(
-            AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
         control.RequestStart();
         AdvanceTo(controller, control, ManualFullTraceState.Recording);
 
@@ -150,12 +215,13 @@ public sealed class AutomataFullTraceControllerTests
         var clock = new VirtualMonotonicClock(new MonotonicTimestamp(100));
         using var registry = Registry(clock);
         using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
         var control = new ManualFullTraceControlRegistry();
         using var existing = control.Register();
         using var storage = new MemoryStorage();
         var options = new AutomataFullTraceOptions(control, new SessionSource(storage));
 
-        Assert.Null(AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+        Assert.Null(AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
         Assert.True(pump.PumpFrame(1).Accepted);
     }
 
@@ -169,7 +235,7 @@ public sealed class AutomataFullTraceControllerTests
         using var storage = new MemoryStorage();
         var options = new AutomataFullTraceOptions(control, new SessionSource(storage));
         using var controller = Assert.IsType<AutomataFullTraceController>(
-            AutomataFullTraceController.TryCreate(pump, 1, clock, in options));
+            AutomataFullTraceController.TryCreate(pump, 1, TestRoster, clock, in options));
         control.RequestStart();
         AdvanceTo(controller, control, ManualFullTraceState.Recording);
 
@@ -184,7 +250,8 @@ public sealed class AutomataFullTraceControllerTests
     public void RelativeArtifactPathNeverIncludesTheMachineRoot()
     {
         Assert.Equal(
-            "BepInEx/config/OrbOfCreation-ModSuite/trace/full/session-0000000000000001",
+            "BepInEx/config/OrbOfCreation-ModSuite/trace/" + AutomataTraceRunRoot.RunName +
+                "/full/session-0000000000000001",
             AutomataFullTracePathPolicy.FormatRelativeArtifactPath("session-0000000000000001"));
         Assert.Throws<ArgumentException>(() =>
             AutomataFullTracePathPolicy.FormatRelativeArtifactPath("private/session"));
@@ -215,7 +282,6 @@ public sealed class AutomataFullTraceControllerTests
                     CommonServiceDecisionCodes.NotReady,
                     WakePolicy.AfterDecision(new MonotonicDuration(1))),
             },
-            new ExecutionConfig(1),
             new LifecycleGeneration(1));
         registry.Seal();
         return registry;
@@ -248,7 +314,7 @@ public sealed class AutomataFullTraceControllerTests
         }
     }
 
-    private sealed class MemoryStorage : ISegmentSessionStorage, IDisposable
+    private sealed class MemoryStorage : ISegmentSessionStorage, ISessionSideArtifactSink, IDisposable
     {
         private readonly bool _blockManifest;
         private readonly bool _failSegmentWrite;
@@ -261,10 +327,27 @@ public sealed class AutomataFullTraceControllerTests
 
         internal ManualResetEventSlim ManifestEntered { get; } = new();
         internal ManualResetEventSlim ManifestRelease { get; } = new();
+
+        /// <summary>
+        /// Set once <see cref="Manifest"/> holds the committed bytes.
+        /// </summary>
+        /// <remarks>
+        /// Distinct from <see cref="ManifestEntered"/>, which fires on the way in so a test can catch
+        /// the commit while it is still blocked. A test that reads the bytes must wait for this one:
+        /// entering the callback says nothing about the field the test is about to read.
+        /// </remarks>
+        internal ManualResetEventSlim ManifestCommitted { get; } = new();
         internal List<byte[]> Segments { get; } = new();
         internal byte[]? Manifest { get; private set; }
+        internal Dictionary<string, byte[]> SideArtifacts { get; } = new(StringComparer.Ordinal);
 
         public void Initialize() { }
+
+        public void CommitSideArtifact(string name, ReadOnlySpan<byte> bytes)
+        {
+            Assert.Null(Manifest);
+            SideArtifacts[name] = bytes.ToArray();
+        }
 
         public void CommitSegment(long ordinal, ReadOnlySpan<byte> bytes)
         {
@@ -278,6 +361,7 @@ public sealed class AutomataFullTraceControllerTests
             ManifestEntered.Set();
             if (_blockManifest) ManifestRelease.Wait();
             Manifest = bytes.ToArray();
+            ManifestCommitted.Set();
         }
 
         public void Dispose()
@@ -285,6 +369,7 @@ public sealed class AutomataFullTraceControllerTests
             ManifestRelease.Set();
             ManifestEntered.Dispose();
             ManifestRelease.Dispose();
+            ManifestCommitted.Dispose();
         }
     }
 }

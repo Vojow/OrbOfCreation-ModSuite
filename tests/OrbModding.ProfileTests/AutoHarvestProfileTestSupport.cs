@@ -1,62 +1,103 @@
 using System;
 using System.Collections.Generic;
-using OrbAutomata;
 using OrbAutomata.Runtime.ServiceCycle.Profile;
-using OrbModding.Common;
-using OrbModding.Common.Runtime;
+using OrbAutomata;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Common.Runtime;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.ProfileTests;
 
 internal static class AutoHarvestProfileTestSupport
 {
-    internal static AutoHarvestCycleCaptureAdapter CreateAdapter(
+    internal static AutoHarvestCycleActionAdapter CreateActionAdapter(
         BindingPort bindings,
-        CaptureStatePort reader,
-        AutoHarvestProfileOperations operations) => new(
+        AutomataProfileOperations operations) => new(
             bindings,
-            reader,
+            new NoOpMutationPort(),
             new GatePort(),
             new ContractCircuit(),
+            () => true,
             () => true,
             operations,
             bindings);
 
-    internal static AutomataConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
+    /// <summary>
+    /// The two supported pairs, collected the way production collects them.
+    /// </summary>
+    /// <remarks>
+    /// The entities are put into the shared stub registries, collected once, and taken straight back
+    /// out. The snapshot is immutable and outlives them, so no other test class can see the
+    /// registries move — which matters here because these tests do not run alone.
+    /// </remarks>
+    internal sealed class StubbedHarvestWorld
+    {
+        internal StubbedHarvestWorld()
+        {
+            var plots = new List<PlotNodeSO>();
+            var actions = new List<PlotNodeActionSO>();
+            Fruit = Add(
+                plots,
+                actions,
+                AutoHarvestKnownIds.FruitTreePlot,
+                AutoHarvestKnownIds.FruitTreeCollect);
+            Treasure = Add(
+                plots,
+                actions,
+                AutoHarvestKnownIds.TreasureTreePlot,
+                AutoHarvestKnownIds.TreasureTreeCollect);
+
+            PlotNodeSO.All.AddRange(plots);
+            PlotNodeActionSO.All.AddRange(actions);
+            try
+            {
+                var collector = new GameWorldCollector();
+                collector.Collect();
+                Snapshot = collector.Build();
+            }
+            finally
+            {
+                foreach (var plot in plots) PlotNodeSO.All.Remove(plot);
+                foreach (var action in actions) PlotNodeActionSO.All.Remove(action);
+            }
+        }
+
+        internal (string Plot, string Action) Fruit { get; }
+        internal (string Plot, string Action) Treasure { get; }
+        internal GameWorldState Snapshot { get; }
+
+        private static (string Plot, string Action) Add(
+            List<PlotNodeSO> plots,
+            List<PlotNodeActionSO> actions,
+            string plotUuid,
+            string actionUuid)
+        {
+            var action = new PlotNodeActionSO { elementCost = 1 };
+            action.SetGuid(new Guid(actionUuid));
+            action.prerequisites.available = true;
+            var plot = new PlotNodeSO { visible = true };
+            plot.SetGuid(new Guid(plotUuid));
+            plot.phaseInstances.Add(new PlotNodePhaseInstance(PlotNodePhases.Idle, 4));
+            plot.availableActions.Add(action);
+            plot.GetActionInstances().Add(new PlotNodeActionInstance(action));
+            plots.Add(plot);
+            actions.Add(action);
+            return (plotUuid, actionUuid);
+        }
+    }
+
+    internal static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
         treasureSelected: true,
         MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
-
-    internal static ServiceCaptureContext CaptureContext(int serviceOrdinal, long frameIdentity)
-    {
-        var coordinates = new ServiceCycleProfileCoordinates(serviceOrdinal, frameIdentity);
-        return new ServiceCaptureContext(
-            AutoHarvestServicePolicies.ServiceId,
-            new LifecycleGeneration(1),
-            new ConfigGeneration(1),
-            new CaptureSequence(1),
-            new CycleId(5),
-            new MonotonicTimestamp(10),
-            in coordinates);
-    }
-
-    internal static ServiceCaptureContext CaptureContextWithoutProfileCoordinates()
-    {
-        var coordinates = default(ServiceCycleProfileCoordinates);
-        return new ServiceCaptureContext(
-            AutoHarvestServicePolicies.ServiceId,
-            new LifecycleGeneration(1),
-            new ConfigGeneration(1),
-            new CaptureSequence(1),
-            new CycleId(5),
-            new MonotonicTimestamp(10),
-            in coordinates);
-    }
 
     internal static ServiceActionContext ActionContext(int serviceOrdinal, long frameIdentity)
     {
@@ -66,7 +107,7 @@ internal static class AutoHarvestProfileTestSupport
             new LifecycleGeneration(1),
             new ConfigGeneration(1),
             new StrategyGeneration(1),
-            new CaptureSequence(1),
+            new WorldGeneration(1),
             new CycleId(5));
         return new ServiceActionContext(
             identity,
@@ -77,11 +118,11 @@ internal static class AutoHarvestProfileTestSupport
             in coordinates);
     }
 
-    internal static int[] StageCodes(List<CapturedMeasurement> measurements)
+    internal static ServiceCycleProfileSpan[] Spans(List<CapturedMeasurement> measurements)
     {
-        var result = new int[measurements.Count];
+        var result = new ServiceCycleProfileSpan[measurements.Count];
         for (var index = 0; index < measurements.Count; index++)
-            result[index] = measurements[index].Context.StageCode;
+            result[index] = (ServiceCycleProfileSpan)measurements[index].Context.StageCode;
         return result;
     }
 
@@ -89,14 +130,14 @@ internal static class AutoHarvestProfileTestSupport
         IAutoHarvestBindingPort,
         IAutoHarvestProfileBindingObservation
     {
-        private readonly AutoHarvestProfileOperations _operations;
+        private readonly AutomataProfileOperations _operations;
         private readonly bool _treasureAvailable;
         private bool _driftDuringNextResolve;
         private ServiceCycleProfileTemperature _temperature =
             ServiceCycleProfileTemperature.ColdProcess;
 
         internal BindingPort(
-            AutoHarvestProfileOperations operations,
+            AutomataProfileOperations operations,
             bool treasureAvailable = true,
             bool driftDuringNextResolve = false)
         {
@@ -104,6 +145,8 @@ internal static class AutoHarvestProfileTestSupport
             _treasureAvailable = treasureAvailable;
             _driftDuringNextResolve = driftDuringNextResolve;
         }
+
+        internal StubbedHarvestWorld World { get; } = new();
 
         public ServiceCycleProfileTemperature CurrentTemperature => _temperature;
 
@@ -119,7 +162,6 @@ internal static class AutoHarvestProfileTestSupport
             _operations.AddStableIdRead();
             _operations.AddStableIdRead();
             var shared = new AutoHarvestSharedBinding(
-                new object(),
                 new object(),
                 null!,
                 null!,
@@ -150,72 +192,22 @@ internal static class AutoHarvestProfileTestSupport
             return true;
         }
 
-        private static AutoHarvestPairBinding PairBinding(AutoHarvestPair pair) => new(
-            pair,
-            new object(),
-            new object(),
-            Guid.NewGuid().ToString("D"),
-            Guid.NewGuid().ToString("D"),
-            new object(),
-            null!,
-            null!,
-            null!,
-            growthSeconds: 1,
-            restSeconds: 1,
-            actionSeconds: 1);
-    }
-
-    internal sealed class CaptureStatePort : IAutoHarvestCaptureStatePort
-    {
-        private readonly AutoHarvestProfileOperations _operations;
-        private readonly Exception? _activeFailure;
-
-        internal CaptureStatePort(
-            AutoHarvestProfileOperations operations,
-            Exception? activeFailure = null)
+        private AutoHarvestPairBinding PairBinding(AutoHarvestPair pair)
         {
-            _operations = operations;
-            _activeFailure = activeFailure;
-        }
-
-        public AutoHarvestActiveActionSnapshot CaptureActiveActions(
-            in ResolvedAutoHarvestPair resolved)
-        {
-            _operations.AddReflectedFieldRead();
-            _operations.AddReflectedMethodCall();
-            _operations.AddListEntry();
-            if (_activeFailure is not null) throw _activeFailure;
-            return new AutoHarvestActiveActionSnapshot(
-                true,
-                usedEntryCount: 0,
-                emptyEntryCount: 1,
-                nativeHasEmptyEntry: true,
-                supportedCollectCount: 0,
-                default,
-                default);
-        }
-
-        public void ReadFacts(
-            in ResolvedAutoHarvestPair resolved,
-            in AutoHarvestSubmissionState activeState,
-            out AutoHarvestPairFacts facts,
-            out object? prototype)
-        {
-            _operations.AddReflectedMethodCall();
-            _operations.AddStableIdRead();
-            _operations.AddStableIdRead();
-            facts = new AutoHarvestPairFacts(
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestActionSafetyState.NativePhaseCyclePreserving,
-                AutoHarvestEvidenceState.Verified,
-                AutoHarvestEvidenceState.Verified);
-            prototype = null;
+            var (plot, action) = pair == AutoHarvestPair.FruitTree ? World.Fruit : World.Treasure;
+            return new AutoHarvestPairBinding(
+                pair,
+                new object(),
+                new object(),
+                plot,
+                action,
+                new object(),
+                null!,
+                null!,
+                null!);
         }
     }
+
 
     internal sealed class CapturingMeasurementPort : IServiceCycleProfileMeasurementPort
     {
@@ -272,6 +264,19 @@ internal static class AutoHarvestProfileTestSupport
         public void Block(AutoHarvestPair pair, AutoHarvestRuntimeFailureScope scope)
         {
         }
+    }
+
+    /// <summary>
+    /// Stops at the binding stage. These tests measure resolution, not submission.
+    /// </summary>
+    private sealed class NoOpMutationPort : IAutoHarvestMutationPort
+    {
+        public AutoHarvestSubmissionResult Submit(
+            in ResolvedAutoHarvestPair resolved,
+            in AutoHarvestPairFacts facts,
+            AutoHarvestActionSafetyState safety,
+            in ServiceActionContext context) =>
+            new(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected);
     }
 
     private sealed class ZeroClock : IPerformanceClock

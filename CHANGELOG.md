@@ -1,23 +1,31 @@
 # Changelog
 
+## Auto Buy per-level prerequisites — 2026-07-27
+
+- Stop Auto Buy planning purchases the game refuses because the level being bought has requirements of its own. An upgrade or structure whose next level waits on a research entry, another upgrade, a spell, a ritual, an alchemy recipe or a global count is now left alone until that requirement is met.
+- Read each entity's per-level conditions once per game session and publish them on the shared world snapshot, so the verdict is worked out in the background from facts the suite already holds rather than by asking the game about every candidate.
+- Refuse a purchase whose conditions the suite cannot evaluate, rather than assuming they hold.
+- Extend the differential verification diagnostic with two passes that compare the suite's verdict against the game's own per-level check for every upgrade and structure, and report an incomplete run naming any condition class the suite does not model.
+- Move differential verification to `Ctrl + Alt + Y`. Both earlier defaults were built on M, which is Mentor's toggle key: BepInEx fires a shortcut only when the keys held are exactly the ones bound, so `Ctrl + Shift + Alt + M` could never fire at all, and the plain `Alt + M` before it fired a Mentor toggle and a frame-freezing diagnostic together. A configuration file still carrying either default is rebound once, on the first launch that reads it; a chord you chose yourself is kept.
+
 ## Orb Of Creation Mod Suite 0.4.0 Beta 1 — 2026-07-23
 
+- **Breaking.** Consolidate Orb Automata, Orb Mentor, Orb Mod Config, and Orb Modding Common into one assembly, `OrbModSuite.dll`, under the new plugin GUID `dev.vojow.orbofcreation.modsuite`. The four retired GUIDs are gone.
+- **Breaking.** BepInEx derives a configuration file name from the plugin GUID, so the suite creates a new, empty configuration file on first start. **No settings are migrated from the retired per-plugin configuration files**; they are never read. Reapply your settings after upgrading, and delete the old `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, and `OrbModding.Common.dll` before starting the game.
+- Refuse to load against a game build that does not match an audited assembly baseline, and log the observed and expected hashes. The suite computes the game's economy math itself, so an unaudited build has no degraded mode; a game update disables the suite until the build is re-audited.
 - Add ServiceCycle, a shared engine that handles scheduling, background decisions, save and scene changes, diagnostics, and shutdown for automation features.
-- Move Fruit Tree and Treasure Tree Auto Harvest onto ServiceCycle. Auto Harvest keeps its existing settings and behavior and remains disabled by default.
+- Move Auto Harvest and Auto Buy onto ServiceCycle, and publish one shared world snapshot per frame that both read. Auto Harvest keeps its existing settings and behavior and remains disabled by default.
 - Add three separate diagnostics: a detailed full trace, a compact rolling decision journal, and an opt-in performance profile.
 - Add a command-line trace reader and an interactive HTML timeline that combines those three recordings.
-- Add a Runtime page to Orb Mod Config with service health, recording controls, journal status, and a graph of the last 1,200 frames.
+- Add a Runtime page to the configuration UI with service health, recording controls, journal status, and a graph of the last 1,200 frames.
 - Make the main build, test, packaging, and validation scripts work on macOS and Linux while keeping Windows Mono as the game target.
-- Read Automata settings into one consistent snapshot instead of letting individual features read live configuration entries at different times.
-- Update the suite versions to Automata 0.9.0, Mod Config 0.7.0, Common 0.4.0, Mentor 0.3.8, and package 0.4.0.
+- Read automation settings into one consistent snapshot instead of letting individual features read live configuration entries at different times.
 
 ## Auto Buy bounded purchase bursts — 2026-07-20
 
 - Allow one Auto Buy coordinator lease to submit up to 16 exact one-level native purchases when live queue room and the existing 1 ms purchase slice permit, while retaining one mutation-owning feature per suite frame.
 - Revalidate mode, emergency state, ownership, lifecycle generation, candidate admission, live costs, reserves, and queue capacity between every level; stop immediately on any boundary, failure, ambiguous result, or operation cap.
 - Add deterministic 1/2/4/8/16 burst-cost tests, Bulk-3 and finite-Upgrade fairness, per-Upgrade native multi-buy restoration, queue/reserve/capacity containment, lifecycle/ownership/emergency interruption, ambiguous-mutation quarantine, coordinator accounting, Auto Cast fairness, and eight-completion-per-frame throughput coverage.
-- Compare the exact pull-request target and head with stable-cost plus cheap-call burst workloads, retain both raw reports, and update one deterministic performance comment on same-repository pull requests.
-- Keep pull-request performance comparisons buildable across the classic legacy, intermediate queue-snapshot, and current Auto Buy APIs.
 - Bump Orb Automata to 0.8.10.
 
 ## Auto Buy grouped continuation and rejection fairness — 2026-07-20
@@ -25,17 +33,16 @@
 - Replace the overlapping `RespectActionMultiplier`, `RepeatWhileAffordable`, `StructureRepeatMode`, and `FixedStructureLevelsPerCandidate` controls with `PurchaseGrouping` (`Single`, `Fixed`, `BulkDevelopment`, or `ActionMultiplier`) plus `FixedGroupSize`.
 - Separate group size from continuation: give each ranked Structure its live configured group, give each Upgrade one level except in action-multiplier mode, advance through the prepared ranking, and repeat passes while live queue quota and admission permit. Every individual level still revalidates cost, reserves, completion, ownership, and queue room.
 - Migrate Automata configuration schema 1 to 2 with destination-first precedence, preservation of legacy action-multiplier intent, direct Structure-group mapping, and fail-closed malformed legacy values.
-- Close NF-03 starvation by advancing past definite pre-mutation rejection and retrying it on bounded 0.25-to-5-second exponential delay; attempted or ambiguous mutations retain lifecycle quarantine.
+- Close a starvation case by advancing past definite pre-mutation rejection and retrying it on bounded 0.25-to-5-second exponential delay; attempted or ambiguous mutations retain lifecycle quarantine.
 - Exercise Bulk Development 10/25/100/100 in the synthetic early/mid/late/endgame stages. The endgame model now submits 180,024 purchases in 180,408 frames (3,006.8 simulated seconds), reduces purchasable idle frames from 5,996 to 291, candidate evaluations from 360,072 to 183,645, and observed operations from 1,838,247 to 923,925.
 - Add runtime-derived Auto Buy simulations for endgame Bulk Development 1/3/10/100, staggered cost-read outages, Bulk-3 completion storms, exact partial-group reserve boundaries, indivisible heavy-tail reads, and live catalog growth from 28 to 137 candidates.
 - Bump Orb Automata to 0.8.9.
 
 ## Runtime validation corrections — 2026-07-20
 
-- Make Mentor Artifact XP postconditions level-aware by predicting the exact native `ExperienceContainer` transition on a clone, then verifying the live equipment mastery, container level, residual XP, and saved XP. Multi-level rollover no longer produces the false lifecycle fault introduced with #36's raw-XP verifier.
-- Complete #28's configured-versus-runtime presentation boundary: gameplay controls keep stable `ON`/`OFF` intent while waiting, blocking, degradation, and faults remain secondary structured health in tooltips, notices, and Orb Mod Config.
+- Make Mentor Artifact XP postconditions level-aware by predicting the exact native `ExperienceContainer` transition on a clone, then verifying the live equipment mastery, container level, residual XP, and saved XP. Multi-level rollover no longer produces the false lifecycle fault the earlier raw-XP verifier reported.
+- Complete the configured-versus-runtime presentation boundary: gameplay controls keep stable `ON`/`OFF` intent while waiting, blocking, degradation, and faults remain secondary structured health in tooltips, notices, and the configuration UI.
 - Format feature health and Auto Buy reserve evidence as bounded line-oriented tooltip rows, including deterministic per-resource required, available, cost, reserved, and shortfall fields. Every visible line owns a native tooltip node so wrapped reasons cannot collide with separators or later fields.
-- Keep the existing component versions unchanged for these unreleased next-beta corrections.
 
 ## Selectable test strategy lanes — 2026-07-20
 
@@ -242,7 +249,6 @@
 - Schedule Mentor reconciliation, evidence resolution, planning, and exact native grants through that same frame coordinator; denied or incomplete cooperative work blocks stale grants for that domain, final recipient progression is revalidated inside the mutation lease, and transiently ineligible UUIDs park with exact XP until a later authoritative refresh without retry churn or head-of-line blocking. The parked ledger is bounded and fails the domain closed on overflow. AutoBuy plus Mentor can start only one native mutation in a Unity frame.
 - Schedule Mod Config catalog discovery and logging, installation, repair, navigation-event maintenance, and slow integrity checks only when due through the shared cooperative budget.
 - Revalidate deferred Auto Cast slots by stable recipe and native identity, and remove Upgrade automation from admission and ranking if native multi-buy restoration cannot be verified while Structures continue independently.
-- Remove Orb Chronomancer and Orb Achievement Resonance source, tests, and design notes from the supported branch; supported builds and archives contain only the allowlisted suite modules.
 
 ## Orb Of Creation Mod Suite 0.1.0 Beta 1 — 2026-07-15
 

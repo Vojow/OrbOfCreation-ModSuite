@@ -6,6 +6,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.ServiceCycleTrace.Journal;
 using OrbModding.ServiceCycleTrace.ManualTrace;
@@ -17,15 +18,18 @@ internal static class TraceDashboardReader
 {
     private const double TicksPerMillisecond = TimeSpan.TicksPerMillisecond;
 
-    internal static TraceDashboardDocument Read(string captureDirectory)
+    /// <summary>
+    /// Reads whatever the capture actually holds. The full trace is the spine and is required; the
+    /// profile and the journal are recorded by separate, separately armed machinery, so a capture
+    /// without them is an ordinary release-build session rather than a broken input, and the
+    /// dashboard says which panes are empty instead of refusing to render at all.
+    /// </summary>
+    internal static TraceDashboardDocument Read(TraceCaptureSelection selection)
     {
-        var root = Path.GetFullPath(captureDirectory);
-        if (!Directory.Exists(root))
-            throw new DirectoryNotFoundException("The correlated capture directory does not exist.");
-
-        var full = ManualFullTraceSessionReader.Read(SingleSession(root, "full"));
-        var profile = ServiceCycleProfileSessionReader.Read(SingleSession(root, "profile"));
-        var journal = ReadLatestJournalRun(Path.Combine(root, "journal"));
+        var full = ManualFullTraceSessionReader.Read(selection.FullSessionDirectory);
+        var notes = new List<string>(selection.Notes);
+        var profile = ReadProfile(selection.RunDirectory, notes);
+        var journal = ReadJournal(selection.RunDirectory, notes);
         var firstTicks = full.Document.FirstTimestampTicks;
         var lastTicks = full.Document.LastTimestampTicks;
         if (lastTicks < firstTicks)
@@ -33,71 +37,131 @@ internal static class TraceDashboardReader
 
         var pumps = new List<TraceDashboardPump>();
         var events = new List<TraceDashboardEvent>();
+        var acceptedPumps = 0;
         foreach (var segment in full.Segments())
         {
             foreach (var item in segment.Events)
             {
                 var payload = item.Payload;
                 if (item.Kind == ServiceCycleSemanticEventKind.PumpCompleted)
-                    pumps.Add(Pump(in payload, firstTicks));
+                {
+                    if (payload.PumpAccepted) acceptedPumps++;
+                    pumps.Add(Pump(in payload, firstTicks, firstAccepted: payload.PumpAccepted && acceptedPumps == 1));
+                }
                 else
+                {
                     events.Add(Event(item.Kind, in payload, firstTicks));
+                }
             }
         }
 
-        var decisions = Decisions(journal.Records, firstTicks, lastTicks);
+        var decisions = Decisions(journal?.Records ?? Array.Empty<DecisionJournalRecord>(), events, firstTicks, lastTicks);
         var aggregates = new List<TraceDashboardStageAggregate>();
         var samples = new List<TraceDashboardStageSample>();
-        var calibration = profile.Manifest.Calibration;
-        foreach (var record in profile.Records)
+        if (profile is not null)
         {
-            if (record.Kind == ServiceCycleProfileRecordKind.Aggregate)
-                aggregates.Add(Aggregate(in record, in calibration));
-            else
-                samples.Add(Sample(in record, in calibration, firstTicks));
+            var calibration = profile.Manifest.Calibration;
+            foreach (var record in profile.Records)
+            {
+                if (record.Kind == ServiceCycleProfileRecordKind.Aggregate)
+                    aggregates.Add(Aggregate(in record, in calibration));
+                else
+                    samples.Add(Sample(in record, in calibration, firstTicks));
+            }
         }
+
+        var cycles = Cycles(events);
+        var services = Services(events, aggregates, cycles, full.Roster());
 
         var metadata = new TraceDashboardMetadata(
             full.Name,
             full.Document.State.ToString(),
             full.Document.TerminalReason?.ToString() ?? "Unavailable",
-            "session-" + profile.Manifest.Session.Value.ToString("x16", CultureInfo.InvariantCulture),
-            profile.Manifest.Completeness.ToString(),
-            profile.Manifest.Reason.ToString(),
-            journal.Run.ToString("x16", CultureInfo.InvariantCulture),
+            profile is null
+                ? "Unavailable"
+                : "session-" + profile.Manifest.Session.Value.ToString("x16", CultureInfo.InvariantCulture),
+            profile?.Manifest.Completeness.ToString() ?? "Unavailable",
+            profile?.Manifest.Reason.ToString() ?? "Unavailable",
+            journal is null
+                ? "Unavailable"
+                : journal.Value.Run.ToString("x16", CultureInfo.InvariantCulture),
             Milliseconds(lastTicks - firstTicks),
             full.Document.WrittenRecords,
-            profile.Manifest.WrittenRecords,
+            profile?.Manifest.WrittenRecords ?? 0,
             decisions.Length,
-            calibration.TraceActive,
-            calibration.AllocationAvailable);
+            profile?.Manifest.Calibration.TraceActive ?? false,
+            profile?.Manifest.Calibration.AllocationAvailable ?? false,
+            notes.ToArray());
         return new TraceDashboardDocument(
-            1,
+            2,
             metadata,
+            services,
             pumps.ToArray(),
+            cycles,
             events.ToArray(),
             decisions,
             aggregates.ToArray(),
             samples.ToArray());
     }
 
-    private static string SingleSession(string root, string child)
+    /// <summary>
+    /// The profile session recorded beside the full trace, or nothing when the profiler was never
+    /// armed — which is every release build, since the profiler is compiled out of one.
+    /// </summary>
+    private static ServiceCycleProfileSession? ReadProfile(string? runDirectory, List<string> notes)
     {
-        var directory = Path.Combine(root, child);
-        if (!Directory.Exists(directory))
-            throw new DirectoryNotFoundException($"The correlated capture has no '{child}' directory.");
-        var sessions = Directory.GetDirectories(directory, "session-*", SearchOption.TopDirectoryOnly);
+        var directory = runDirectory is null ? null : Path.Combine(runDirectory, "profile");
+        var sessions = directory is not null && Directory.Exists(directory)
+            ? Directory.GetDirectories(directory, "session-*", SearchOption.TopDirectoryOnly)
+            : Array.Empty<string>();
+        if (sessions.Length == 0)
+        {
+            notes.Add(
+                "No profiler capture in this session (release build): stage timings, allocation, and " +
+                "operation counts are unavailable.");
+            return null;
+        }
         if (sessions.Length != 1)
-            throw new InvalidDataException($"The correlated capture must contain exactly one '{child}' session.");
-        return sessions[0];
+            throw new InvalidDataException("The correlated capture must contain exactly one 'profile' session.");
+        return ServiceCycleProfileSessionReader.Read(sessions[0]);
     }
 
-    private static JournalRun ReadLatestJournalRun(string path)
+    /// <summary>
+    /// The always-on journal is one directory beside the run folders, not a per-run artifact, so a
+    /// capture root correlates against its parent. A root captured before that move keeps its own.
+    /// </summary>
+    private static JournalRun? ReadJournal(string? runDirectory, List<string> notes)
+    {
+        var path = JournalDirectory(runDirectory);
+        if (path is null)
+        {
+            notes.Add(
+                "No decision journal beside this capture: decision spans, wake policies, and service " +
+                "projections are unavailable.");
+            return null;
+        }
+        var run = ReadLatestJournalRun(path);
+        if (run is null)
+            notes.Add("The decision journal beside this capture holds no segments.");
+        return run;
+    }
+
+    private static string? JournalDirectory(string? root)
+    {
+        if (root is null) return null;
+        var owned = Path.Combine(root, "journal");
+        if (Directory.Exists(owned)) return owned;
+        var parent = Path.GetDirectoryName(root);
+        var shared = parent is null ? null : Path.Combine(parent, "journal");
+        if (shared is not null && Directory.Exists(shared)) return shared;
+        return null;
+    }
+
+    private static JournalRun? ReadLatestJournalRun(string path)
     {
         var directory = new DecisionJournalDirectory(path);
         var inventory = directory.Inventory();
-        if (!inventory.HasSegments)
-            throw new InvalidDataException("The correlated capture has no decision-journal segments.");
+        if (!inventory.HasSegments) return null;
         var latest = directory.ReadSegment(inventory.LastOrdinal, out _).Run.Value;
         var records = new List<DecisionJournalRecord>();
         var assembler = new DecisionJournalWindowAssembler();
@@ -113,7 +177,10 @@ internal static class TraceDashboardReader
         return new JournalRun(latest, records.ToArray());
     }
 
-    private static TraceDashboardPump Pump(in ServiceCycleSemanticPayload value, long origin) => new(
+    private static TraceDashboardPump Pump(
+        in ServiceCycleSemanticPayload value,
+        long origin,
+        bool firstAccepted) => new(
         Offset(value.TimestampTicks, origin),
         value.FrameIdentity,
         value.PumpAccepted,
@@ -124,7 +191,18 @@ internal static class TraceDashboardReader
         value.ResponsesAcquired,
         value.CapturesAttempted,
         value.ActionsAttempted,
-        value.LifecycleTransitions);
+        value.CyclesStarted,
+        value.WorldGateDeferrals,
+        value.LifecycleTransitions,
+        // The frame that carried the first full world pass also carried the JIT and the first touch
+        // of every buffer behind it, and a frame that moved a lifecycle position rebuilt what it
+        // moved. Neither is what a warm frame costs, and neither is dropped — both are named so an
+        // aggregate can exclude them and still say what it excluded.
+        firstAccepted
+            ? nameof(ServiceCycleProfileTemperature.ColdProcess)
+            : value.PumpAccepted && value.LifecycleTransitions > 0
+                ? nameof(ServiceCycleProfileTemperature.LifecycleRebind)
+                : nameof(ServiceCycleProfileTemperature.Warm));
 
     private static TraceDashboardEvent Event(
         ServiceCycleSemanticEventKind kind,
@@ -135,11 +213,13 @@ internal static class TraceDashboardReader
         Lane(kind),
         value.Service,
         value.Lifecycle,
+        value.World,
         value.Capture,
         value.Cycle,
         value.Batch,
         value.Action,
         value.FrameIdentity,
+        (value.Fields & ServiceCycleSemanticFields.FrameIdentity) != 0,
         Milliseconds(value.DurationTicks),
         value.Code,
         value.Disposition,
@@ -149,8 +229,272 @@ internal static class TraceDashboardReader
         value.MutationAttempts,
         value.MutationsCommitted);
 
+    /// <summary>
+    /// Splits every cycle in the window into its stages. Nothing here is new measurement: the worker
+    /// already reads the monotonic clock three times per cycle and all three readings already reach
+    /// the wire, they were simply never correlated back into one cycle.
+    /// </summary>
+    private static TraceDashboardCycle[] Cycles(List<TraceDashboardEvent> events)
+    {
+        var stages = new Dictionary<(ulong Service, ulong Cycle), CycleStages>();
+        foreach (var item in events)
+        {
+            if (item.Service == 0 || item.Cycle == 0) continue;
+            var key = (item.Service, item.Cycle);
+            if (!stages.TryGetValue(key, out var stage)) stages[key] = stage = new CycleStages();
+            stage.Observe(item);
+        }
+
+        var firstCycleByService = new Dictionary<ulong, ulong>();
+        var firstLifecycleByService = new Dictionary<ulong, ulong>();
+        var rebindCycles = new HashSet<(ulong Service, ulong Lifecycle)>();
+        foreach (var pair in stages.OrderBy(x => x.Value.StartMilliseconds))
+        {
+            var service = pair.Key.Service;
+            if (!firstCycleByService.ContainsKey(service))
+            {
+                firstCycleByService[service] = pair.Key.Cycle;
+                firstLifecycleByService[service] = pair.Value.Lifecycle;
+                continue;
+            }
+            if (pair.Value.Lifecycle != firstLifecycleByService[service])
+                rebindCycles.Add((service, pair.Value.Lifecycle));
+        }
+
+        var output = new List<TraceDashboardCycle>(stages.Count);
+        var rebindSeen = new HashSet<(ulong, ulong)>();
+        foreach (var pair in stages.OrderBy(x => x.Value.StartMilliseconds))
+        {
+            var stage = pair.Value;
+            var service = pair.Key.Service;
+            var temperature = firstCycleByService[service] == pair.Key.Cycle
+                ? nameof(ServiceCycleProfileTemperature.ColdProcess)
+                : rebindCycles.Contains((service, stage.Lifecycle)) && rebindSeen.Add((service, stage.Lifecycle))
+                    ? nameof(ServiceCycleProfileTemperature.LifecycleRebind)
+                    : nameof(ServiceCycleProfileTemperature.Warm);
+            output.Add(new TraceDashboardCycle(
+                stage.StartMilliseconds,
+                checked((int)service - 1),
+                service,
+                stage.Lifecycle,
+                pair.Key.Cycle,
+                stage.CaptureFrame,
+                stage.DispatchFrame,
+                temperature,
+                stage.CaptureMilliseconds,
+                stage.HandoffMilliseconds,
+                stage.DeriveMilliseconds,
+                stage.ProjectMilliseconds,
+                stage.DispatchMilliseconds,
+                stage.WorkerAtMilliseconds,
+                stage.DispatchAtMilliseconds,
+                stage.ActionCount,
+                stage.Committed,
+                stage.Skipped,
+                stage.Failed,
+                stage.HasCapture,
+                stage.HasWorker));
+        }
+        return output.ToArray();
+    }
+
+    private static TraceDashboardService[] Services(
+        List<TraceDashboardEvent> events,
+        List<TraceDashboardStageAggregate> aggregates,
+        TraceDashboardCycle[] cycles,
+        ServiceCycleTraceRoster roster)
+    {
+        var rostered = RosteredNames(roster);
+        var output = new List<TraceDashboardService>();
+        foreach (var service in events.Select(x => x.Service).Where(x => x != 0).Distinct().OrderBy(x => x))
+        {
+            var ordinal = checked((int)service - 1);
+            var commits = events
+                .Where(x => x.Service == service && x.Kind == nameof(ServiceCycleSemanticEventKind.ActionCommitted))
+                .ToArray();
+            // A commit is either a verified native mutation or a publication, and the publishing
+            // shape is unforgeable: ServiceActionResult refuses to build a native commit with no
+            // native evidence. So a service whose every commit carried none is the collector.
+            var role = commits.Length == 0
+                ? "Unobserved"
+                : commits.All(x => x.NativeCallsAttempted == 0 && x.MutationAttempts == 0)
+                    ? "Source"
+                    : "Execution";
+            // The recording's own answer first. Everything below it is inference kept for captures
+            // written before a roster was recorded, and inference is exactly what produced "Service 2"
+            // for a feature the suite has always had a name for.
+            rostered.TryGetValue(service, out var recorded);
+            var profiled = FeatureStageName(aggregates, ordinal);
+            var named = recorded is not null || profiled is not null || role == "Source";
+            output.Add(new TraceDashboardService(
+                ordinal,
+                service,
+                recorded ?? profiled ?? (role == "Source"
+                    ? "World collection"
+                    : "Service " + (ordinal + 1).ToString(CultureInfo.InvariantCulture)),
+                role,
+                cycles.Count(x => x.Service == service),
+                named));
+        }
+        return output.ToArray();
+    }
+
+    /// <summary>
+    /// The names the recording itself wrote down, keyed by the identity the records carry. A service
+    /// with an entry but no display name falls back to the identity it registered, which is still a
+    /// name rather than an ordinal.
+    /// </summary>
+    private static Dictionary<ulong, string> RosteredNames(ServiceCycleTraceRoster roster)
+    {
+        var output = new Dictionary<ulong, string>();
+        foreach (var entry in roster.Entries)
+        {
+            if (!string.Equals(entry.Kind, ServiceCycleTraceRoster.ServiceKind, StringComparison.Ordinal))
+                continue;
+            output[entry.Identity] = entry.DisplayName.Length == 0 ? entry.MachineId : entry.DisplayName;
+        }
+        return output;
+    }
+
+    /// <summary>
+    /// A service's name from the profile span block it owns. Suite spans are shared by every ordinal
+    /// and name none of them, so only a feature block answers.
+    /// </summary>
+    private static string? FeatureStageName(List<TraceDashboardStageAggregate> aggregates, int ordinal)
+    {
+        foreach (var row in aggregates)
+        {
+            if (row.Service != ordinal || row.StageCode < FirstFeatureStageCode) continue;
+            var words = row.Stage.Split(' ');
+            if (words.Length >= 2) return words[0] + " " + words[1];
+        }
+        return null;
+    }
+
+    private const int FirstFeatureStageCode = 1_000;
+
+    /// <summary>The frame a stage names when it ran outside any pump frame, or the wire never said.</summary>
+    private const long Unframed = -1;
+
+    /// <summary>
+    /// The stage timestamps of one cycle, folded in as its events arrive in any order.
+    /// </summary>
+    private sealed class CycleStages
+    {
+        private Stamp _captureStarted;
+        private Stamp _captureCompleted;
+        private Stamp _evaluationStarted;
+        private Stamp _statePublished;
+        private Stamp _evaluationCompleted;
+        private Stamp _dispatchFirst;
+
+        internal ulong Lifecycle { get; private set; }
+        internal long CaptureFrame { get; private set; } = Unframed;
+        internal long DispatchFrame { get; private set; } = Unframed;
+
+        internal double CaptureMilliseconds { get; private set; }
+        internal double DispatchMilliseconds { get; private set; }
+        internal int ActionCount { get; private set; }
+        internal int Committed { get; private set; }
+        internal int Skipped { get; private set; }
+        internal int Failed { get; private set; }
+        internal bool HasCapture => _captureCompleted.Present;
+        internal bool HasWorker => _evaluationStarted.Present && _evaluationCompleted.Present;
+
+        internal double StartMilliseconds =>
+            _captureStarted.Present ? _captureStarted.At :
+            _captureCompleted.Present ? _captureCompleted.At :
+            _evaluationStarted.Present ? _evaluationStarted.At : _dispatchFirst.At;
+
+        internal double WorkerAtMilliseconds => _evaluationStarted.At;
+        internal double DispatchAtMilliseconds => _dispatchFirst.At;
+
+        /// <summary>Queue latency, not CPU: the cycle waited here rather than working.</summary>
+        internal double HandoffMilliseconds => HasCapture && _evaluationStarted.Present
+            ? Positive(_evaluationStarted.At - _captureCompleted.At)
+            : 0;
+
+        /// <summary>
+        /// The evaluator's own work and the snapshot allocation together. A cycle that faulted before
+        /// publishing state has no split to make, so all of its worker time lands here.
+        /// </summary>
+        internal double DeriveMilliseconds => !HasWorker
+            ? 0
+            : _statePublished.Present
+                ? Positive(_statePublished.At - _evaluationStarted.At)
+                : Positive(_evaluationCompleted.At - _evaluationStarted.At);
+
+        internal double ProjectMilliseconds => HasWorker && _statePublished.Present
+            ? Positive(_evaluationCompleted.At - _statePublished.At)
+            : 0;
+
+        internal void Observe(TraceDashboardEvent item)
+        {
+            if (item.Lifecycle != 0) Lifecycle = item.Lifecycle;
+            switch (item.Kind)
+            {
+                case nameof(ServiceCycleSemanticEventKind.CaptureStarted):
+                    _captureStarted = new Stamp(item.OffsetMilliseconds);
+                    ObserveCaptureFrame(item);
+                    break;
+                case nameof(ServiceCycleSemanticEventKind.CaptureCompleted):
+                    _captureCompleted = new Stamp(item.OffsetMilliseconds);
+                    CaptureMilliseconds = item.DurationMilliseconds;
+                    ObserveCaptureFrame(item);
+                    break;
+                case nameof(ServiceCycleSemanticEventKind.EvaluationStarted):
+                    _evaluationStarted = new Stamp(item.OffsetMilliseconds);
+                    break;
+                case nameof(ServiceCycleSemanticEventKind.StatePublished):
+                    _statePublished = new Stamp(item.OffsetMilliseconds);
+                    break;
+                case nameof(ServiceCycleSemanticEventKind.EvaluationCompleted):
+                    _evaluationCompleted = new Stamp(item.OffsetMilliseconds);
+                    ActionCount = item.ActionCount;
+                    break;
+                case nameof(ServiceCycleSemanticEventKind.ActionCommitted):
+                case nameof(ServiceCycleSemanticEventKind.ActionSkipped):
+                case nameof(ServiceCycleSemanticEventKind.ActionRejected):
+                case nameof(ServiceCycleSemanticEventKind.ActionFaulted):
+                    ObserveAction(item);
+                    break;
+            }
+        }
+
+        private void ObserveCaptureFrame(TraceDashboardEvent item)
+        {
+            if (item.Framed) CaptureFrame = item.Frame;
+        }
+
+        private void ObserveAction(TraceDashboardEvent item)
+        {
+            DispatchMilliseconds += item.DurationMilliseconds;
+            if (!_dispatchFirst.Present || item.OffsetMilliseconds < _dispatchFirst.At)
+                _dispatchFirst = new Stamp(item.OffsetMilliseconds);
+            if (item.Framed) DispatchFrame = item.Frame;
+            switch (item.Kind)
+            {
+                case nameof(ServiceCycleSemanticEventKind.ActionCommitted): Committed++; break;
+                case nameof(ServiceCycleSemanticEventKind.ActionSkipped): Skipped++; break;
+                default: Failed++; break;
+            }
+        }
+
+        private static double Positive(double value) => value > 0 ? value : 0;
+
+        /// <summary>
+        /// A stage timestamp that knows whether it was ever set. Offsets are relative to the window,
+        /// so zero is a legal instant and cannot stand in for "did not happen".
+        /// </summary>
+        private readonly record struct Stamp(double At)
+        {
+            internal bool Present { get; } = true;
+        }
+    }
+
     private static TraceDashboardDecision[] Decisions(
         DecisionJournalRecord[] records,
+        List<TraceDashboardEvent> events,
         long firstTicks,
         long lastTicks)
     {
@@ -160,6 +504,7 @@ internal static class TraceDashboardReader
             if (record.Kind != DecisionJournalRecordKind.DecisionSpan ||
                 record.LastTimestampTicks < firstTicks || record.FirstTimestampTicks > lastTicks)
                 continue;
+            var worker = WorkerDecision(in record, events);
             output.Add(new TraceDashboardDecision(
                 Offset(Math.Max(record.FirstTimestampTicks, firstTicks), firstTicks),
                 Offset(Math.Min(record.LastTimestampTicks, lastTicks), firstTicks),
@@ -178,9 +523,55 @@ internal static class TraceDashboardReader
                 record.NativeCallsAttempted,
                 record.MutationAttempts,
                 record.MutationsCommitted,
+                worker.Samples,
+                worker.AverageMilliseconds,
+                worker.MicrosecondsPerCapturedCandidate,
+                worker.MicrosecondsPerPlannedAction,
                 Projection(in record)));
         }
         return output.ToArray();
+    }
+
+    private static WorkerDecisionMetrics WorkerDecision(
+        in DecisionJournalRecord record,
+        List<TraceDashboardEvent> events)
+    {
+        var samples = 0;
+        var totalMilliseconds = 0d;
+        foreach (var item in events)
+        {
+            if (item.Kind == nameof(ServiceCycleSemanticEventKind.EvaluationCompleted) &&
+                item.Service == record.Service.Value &&
+                item.Cycle >= record.FirstCycle &&
+                item.Cycle <= record.LastCycle)
+            {
+                samples++;
+                totalMilliseconds += item.DurationMilliseconds;
+            }
+        }
+
+        if (samples == 0)
+            return default;
+        var average = totalMilliseconds / samples;
+        var captured = ProjectionInteger(in record, AutoBuyServiceProjection.CapturedCandidatesKey);
+        var planned = ProjectionInteger(in record, AutoBuyServiceProjection.PlannedActionsKey);
+        return new WorkerDecisionMetrics(
+            samples,
+            average,
+            captured > 0 ? totalMilliseconds * 1_000d / (samples * captured) : null,
+            planned > 0 ? totalMilliseconds * 1_000d / (samples * planned) : null);
+    }
+
+    private static long ProjectionInteger(in DecisionJournalRecord record, int key)
+    {
+        if (!record.HasProjection) return 0;
+        for (var index = 0; index < record.Projection.Count; index++)
+        {
+            var entry = record.Projection.GetEntry(index);
+            if (entry.Key.Value == key && entry.Value.Kind == ServiceProjectionValueKind.Integer)
+                return entry.Value.Integer;
+        }
+        return 0;
     }
 
     private static TraceDashboardProjectionEntry[] Projection(in DecisionJournalRecord record)
@@ -210,6 +601,20 @@ internal static class TraceDashboardReader
         7 => "Treasure selected",
         8 => "Treasure health",
         9 => "Treasure feature-scoped",
+        AutoBuyServiceProjection.CapturedCandidatesKey => "Captured candidates",
+        AutoBuyServiceProjection.CapturedStructuresKey => "Captured structures",
+        AutoBuyServiceProjection.CapturedUpgradesKey => "Captured upgrades",
+        AutoBuyServiceProjection.EligibleCandidatesKey => "Eligible candidates",
+        AutoBuyServiceProjection.PlannedActionsKey => "Planned actions",
+        AutoBuyServiceProjection.RequestedLevelsKey => "Requested levels",
+        AutoBuyServiceProjection.ExcludedKindNotSelectedKey => "Excluded: kind not selected",
+        AutoBuyServiceProjection.ExcludedBlocklistedKey => "Excluded: blocklisted",
+        AutoBuyServiceProjection.ExcludedNotAllowlistedKey => "Excluded: not allowlisted",
+        AutoBuyServiceProjection.ExcludedUnavailableKey => "Excluded: unavailable",
+        AutoBuyServiceProjection.ExcludedRequirementsUnmetKey => "Excluded: requirements unmet",
+        AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
+        AutoBuyServiceProjection.ExcludedUnaffordableKey => "Excluded: unaffordable",
+        AutoBuyServiceProjection.ExcludedUnpriceableKey => "Excluded: unpriceable",
         _ => "Field " + key.ToString(CultureInfo.InvariantCulture),
     };
 
@@ -288,8 +693,6 @@ internal static class TraceDashboardReader
         value.ReflectedMethodCalls,
         value.StableIdReads,
         value.ListEntries,
-        value.SelectedPairs,
-        value.ReadyPairs,
         value.InvocationArgumentArrays,
         value.RecordCopies);
 
@@ -323,6 +726,7 @@ internal static class TraceDashboardReader
         ServiceCycleSemanticEventKind.BatchOrphaned => "Publication",
         ServiceCycleSemanticEventKind.ActionAttempted or
         ServiceCycleSemanticEventKind.ActionCommitted or
+        ServiceCycleSemanticEventKind.ActionSkipped or
         ServiceCycleSemanticEventKind.ActionRejected or
         ServiceCycleSemanticEventKind.ActionFaulted => "Action",
         ServiceCycleSemanticEventKind.LifecycleRequested or
@@ -340,5 +744,10 @@ internal static class TraceDashboardReader
     private static double Microseconds(double ticks, long frequency) => ticks * 1_000_000d / frequency;
 
     private readonly record struct JournalRun(ulong Run, DecisionJournalRecord[] Records);
+    private readonly record struct WorkerDecisionMetrics(
+        int Samples,
+        double AverageMilliseconds,
+        double? MicrosecondsPerCapturedCandidate,
+        double? MicrosecondsPerPlannedAction);
 }
 #endif

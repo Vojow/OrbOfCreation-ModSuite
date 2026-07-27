@@ -69,6 +69,28 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return members;
     }
 
+    /// <summary>
+    /// Every field a type declares itself, in metadata order. Inherited fields are not included,
+    /// which matches how a collector enumerates a category: what the type carries, not what its base
+    /// contributes.
+    /// </summary>
+    public IReadOnlyList<FieldContract> GetFields(string fullName)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        var fields = new List<FieldContract>();
+        foreach (var fieldHandle in definition.GetFields())
+        {
+            var field = Reader.GetFieldDefinition(fieldHandle);
+            fields.Add(new FieldContract(
+                Reader.GetString(field.Name),
+                GetFieldVisibility(field.Attributes),
+                (field.Attributes & FieldAttributes.Static) != 0,
+                field.DecodeSignature(_typeProvider, null)));
+        }
+
+        return fields;
+    }
+
     public FieldContract GetField(string fullName, string fieldName)
     {
         var definition = Reader.GetTypeDefinition(RequireType(fullName));

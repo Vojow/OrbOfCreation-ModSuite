@@ -5,6 +5,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -188,7 +189,7 @@ public sealed class AutoCastTests
         using var fixture = Create(spell);
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
         fixture.Config.EnableOperationalLogging.Value = true;
-        fixture.Config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Off;
+        fixture.Config.DecisionLogLevel.Value = SuiteDecisionLogLevel.Off;
 
         fixture.Engine.Tick(1.0f);
 
@@ -353,7 +354,7 @@ public sealed class AutoCastTests
         using var fixture = Create(rejected, empty);
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
         fixture.Config.EnableOperationalLogging.Value = true;
-        fixture.Config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Verbose;
+        fixture.Config.DecisionLogLevel.Value = SuiteDecisionLogLevel.Verbose;
 
         fixture.Engine.Tick(1.0f);
         fixture.Engine.Tick(1.0f);
@@ -444,7 +445,7 @@ public sealed class AutoCastTests
         fixture.Config.AutoCastMode.Value = AutoCastOperationMode.Active;
         fixture.Config.AutoCastStartResourcePercent.Value = 80.0f;
         fixture.Config.EnableOperationalLogging.Value = true;
-        fixture.Config.DecisionLogLevel.Value = AutomataDecisionLogLevel.Verbose;
+        fixture.Config.DecisionLogLevel.Value = SuiteDecisionLogLevel.Verbose;
 
         fixture.Engine.Tick(1.0f);
 
@@ -565,7 +566,6 @@ public sealed class AutoCastTests
             {
                 uuid = "adapter-resource",
                 quantity = new BigDouble(10.0, 0),
-                trueQuantity = new BigDouble(10.0, 0),
             },
             new BigDouble(2.0, 0)));
         manager.activeSpells.Add(spell);

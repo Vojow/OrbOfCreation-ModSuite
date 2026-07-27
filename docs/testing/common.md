@@ -10,7 +10,7 @@ unit test for the changed type.
 
 | Common contract | Primary tests | Required consumers |
 |---|---|---|
-| Lifecycle generation/readiness | [GameLifecycleMonitorTests.cs](../../tests/OrbModding.Tests/GameLifecycleMonitorTests.cs), [LifecycleStateMachineScenarioTests.cs](../../tests/OrbModding.Tests/LifecycleStateMachineScenarioTests.cs) | Automata, Mentor, Mod Config |
+| Lifecycle generation/readiness | [GameLifecycleMonitorTests.cs](../../tests/OrbModding.Tests/GameLifecycleMonitorTests.cs) | Automata, Mentor, Mod Config |
 | Gameplay invalidation bus | [GameplayInvalidationBusTests.cs](../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs) | Automata, Mentor, Mod Config bridges |
 | Shared performance coordinator | [PerformanceFoundationTests.cs](../../tests/OrbModding.Tests/PerformanceFoundationTests.cs), [SuitePerformanceEvidenceTests.cs](../../tests/OrbModding.Tests/SuitePerformanceEvidenceTests.cs) | Automata and Mentor coordinators, Mod Config recovery |
 | Action-family ownership | [ActionFamilyOwnershipTests.cs](../../tests/OrbModding.Tests/ActionFamilyOwnershipTests.cs), [ActionFamilyIntegrationTests.cs](../../tests/OrbModding.Tests/ActionFamilyIntegrationTests.cs) | all native mutation features |
@@ -22,8 +22,8 @@ unit test for the changed type.
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
 | ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | Auto Harvest production registration and frame pump |
-| ServiceCycle semantic trace and replay | [Runtime/ServiceCycle/Replay](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Replay), [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing) | Auto Harvest replay capture and offline verification |
-| Replay segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle exporters and future service capture adapters |
+| ServiceCycle semantic trace | [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing), [Runtime/ServiceCycle/Observation](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation) | Auto Harvest trace capture and offline verification |
+| Trace segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle observation products and future service capture adapters |
 | Runtime architecture boundaries | [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs), [ServiceCycleArchitectureTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Registration/ServiceCycleArchitectureTests.cs) | Common and every future ServiceCycle service |
 
 ## Selection

@@ -46,10 +46,14 @@ internal static class ServiceCycleTraceTimeline
         return string.Join("; ", parts);
     }
 
+    // A held frame counts: the gate declining to start a cycle is the one thing a stalled suite does,
+    // and dropping it here is what made a stall read as an idle window.
     internal static bool HasPumpActivity(ServiceCycleSemanticPayload payload) =>
         payload.ResponsesAcquired != 0 ||
         payload.CapturesAttempted != 0 ||
         payload.ActionsAttempted != 0 ||
+        payload.CyclesStarted != 0 ||
+        payload.WorldGateDeferrals != 0 ||
         payload.EmergencyBatchesRejected != 0 ||
         payload.LifecycleTransitions != 0;
 
