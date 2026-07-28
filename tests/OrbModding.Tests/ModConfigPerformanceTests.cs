@@ -61,12 +61,16 @@ public sealed class ModConfigPerformanceTests
         blocker.SetPending(true);
         using var ui = new ModConfigCoordinatorWork(coordinator, () => frame);
         ConfigCatalogSnapshot? catalog = null;
+        var generation = default(ConfigCatalogGeneration);
+        var currentGeneration = ConfigCatalogGeneration.Capture(Array.Empty<ConfigPluginSource>());
         var discoveryCalls = 0;
         var logCalls = 0;
         void DiscoverAndLog()
         {
             ModConfigCatalogSession.GetOrDiscover(
                 ref catalog,
+                ref generation,
+                currentGeneration,
                 () =>
                 {
                     discoveryCalls++;
@@ -93,6 +97,104 @@ public sealed class ModConfigPerformanceTests
         Assert.True(ui.TryRun(true, pending: true, DiscoverAndLog));
         Assert.Equal(1, discoveryCalls);
         Assert.Equal(1, logCalls);
+    }
+
+    [Fact]
+    public void CatalogGenerationRebuildsOnceForAddedAndRemovedDefinitionsButNotValues()
+    {
+        var config = new BepInEx.Configuration.ConfigFile();
+        var first = config.Bind("General", "First", 1, "First");
+        var sources = new List<ConfigPluginSource>
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        };
+        ConfigCatalogSnapshot? catalog = null;
+        var generation = default(ConfigCatalogGeneration);
+        var discoveries = 0;
+
+        ConfigCatalogSnapshot Discover()
+        {
+            discoveries++;
+            return ConfigCatalog.Build(sources);
+        }
+
+        var initial = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, initial, Discover, _ => { });
+        first.Value = 2;
+        var valueOnly = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, valueOnly, Discover, _ => { });
+        Assert.Equal(initial, valueOnly);
+        Assert.Equal(1, discoveries);
+
+        var second = config.Bind("General", "Second", true, "Second");
+        var added = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, added, Discover, _ => { });
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, added, Discover, _ => { });
+        Assert.Equal(2, discoveries);
+        Assert.Equal(2, catalog!.SettingCount);
+
+        Assert.True(config.Remove(second.Definition));
+        var removed = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, removed, Discover, _ => { });
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, removed, Discover, _ => { });
+        Assert.Equal(3, discoveries);
+        Assert.Equal(1, catalog!.SettingCount);
+
+        var lateConfig = new BepInEx.Configuration.ConfigFile();
+        lateConfig.Bind("General", "Enabled", true, "Enabled");
+        sources.Add(new ConfigPluginSource("late.plugin", "Late Plugin", "1.0.0", lateConfig));
+        var pluginAdded = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, pluginAdded, Discover, _ => { });
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, pluginAdded, Discover, _ => { });
+        Assert.Equal(4, discoveries);
+        Assert.Equal(2, catalog!.Mods.Count);
+
+        sources.RemoveAt(1);
+        var pluginRemoved = ConfigCatalogGeneration.Capture(sources);
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, pluginRemoved, Discover, _ => { });
+        ModConfigCatalogSession.GetOrDiscover(
+            ref catalog, ref generation, pluginRemoved, Discover, _ => { });
+        Assert.Equal(5, discoveries);
+        Assert.Single(catalog!.Mods);
+    }
+
+    [Fact]
+    public void CatalogNavigationBookmarkUsesStablePluginAndSectionIdentity()
+    {
+        var firstConfig = new BepInEx.Configuration.ConfigFile();
+        firstConfig.Bind("Section A", "Value", 1, "Value");
+        var selectedConfig = new BepInEx.Configuration.ConfigFile();
+        selectedConfig.Bind("Section B", "Value", 2, "Value");
+        var original = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("z.plugin", "Z Plugin", "1", selectedConfig),
+            new ConfigPluginSource("a.plugin", "A Plugin", "1", firstConfig),
+        });
+        var bookmark = new ModConfigNavigationBookmark("z.plugin", "Section B", 42f);
+        var rebuilt = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("z.plugin", "Z Plugin", "1", selectedConfig),
+        });
+
+        var pageIndex = ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(rebuilt, bookmark);
+        var selected = rebuilt.Mods[pageIndex - 1];
+
+        Assert.Equal("z.plugin", original.Mods[
+            ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(original, bookmark) - 1].Guid);
+        Assert.Equal("z.plugin", selected.Guid);
+        Assert.Equal(
+            "Section B",
+            selected.Sections[
+                ModConfigNavigationBookmarkPolicy.ResolveSectionIndex(selected, bookmark)].Name);
     }
 
     [Fact]
@@ -222,7 +324,100 @@ public sealed class ModConfigPerformanceTests
         Assert.False(refresh.IsPending);
     }
 
+    [Fact]
+    [Trait("Category", "PerformanceSimulation")]
+    public void StarvedFirstOpenRefreshIsAdmittedAtItsDeclaredBound()
+    {
+        var clock = new ControlledPerformanceClock();
+        var coordinator = new SuitePerformanceCoordinator(clock, 0.5, 1.0);
+        var blockers = new List<SuiteWorkRegistration>();
+        for (var index = 0; index < 5; index++)
+        {
+            var blocker = coordinator.RegisterWeighted(
+                "test",
+                "consume soft budget " + index,
+                SuiteBudgetClass.HardLimited,
+                SuiteWorkExecutionKind.Cooperative,
+                schedulingWeight: 8);
+            blocker.SetPending(true);
+            blockers.Add(blocker);
+        }
+        using var ui = new ModConfigCoordinatorWork(coordinator, () => clock.Frame);
+        try
+        {
+            for (clock.Frame = 0;
+                 clock.Frame < SuitePerformanceWorkIdentities.ModConfigWork.MaximumPendingWaitFrames;
+                 clock.Frame++)
+            {
+                ConsumeSoftBudget(coordinator, clock, blockers);
+                Assert.False(ui.TryRun(true, pending: true, () => { }));
+            }
+
+            ConsumeSoftBudget(coordinator, clock, blockers);
+            Assert.True(ui.TryRun(true, pending: true, () => { }));
+        }
+        finally
+        {
+            foreach (var blocker in blockers) blocker.Dispose();
+        }
+    }
+
+    [Fact]
+    public void RefreshDiagnosticsExposePendingAndLastCompletedAge()
+    {
+        var refresh = new ModConfigRefreshScheduler(0.1f);
+
+        refresh.Open();
+        Assert.True(refresh.ConsumeDiagnosticsDue());
+        refresh.Schedule(0.35f);
+        Assert.Contains(
+            "pending for 0.4s; last completed not yet",
+            ModConfigRefreshDiagnosticsPresentation.Build(refresh.Diagnostics));
+
+        refresh.Complete();
+        Assert.Contains(
+            "idle; last completed 0.0s ago",
+            ModConfigRefreshDiagnosticsPresentation.Build(refresh.Diagnostics));
+        refresh.Schedule(0.25f);
+        Assert.Contains(
+            "pending for 0.0s; last completed 0.3s ago",
+            ModConfigRefreshDiagnosticsPresentation.Build(refresh.Diagnostics));
+    }
+
     private sealed record FakeReference(bool Alive, string Name);
+
+    private static void ConsumeSoftBudget(
+        SuitePerformanceCoordinator coordinator,
+        ControlledPerformanceClock clock,
+        IReadOnlyList<SuiteWorkRegistration> blockers)
+    {
+        foreach (var blocker in blockers)
+        {
+            if (coordinator.RequestWork(blocker, clock.Frame, out var lease) !=
+                SuiteWorkAdmission.Granted)
+                continue;
+            clock.AdvanceMilliseconds(0.75);
+            lease.Complete();
+            return;
+        }
+
+        Assert.Fail("No hard-limited blocker was admitted.");
+    }
+
+    private sealed class ControlledPerformanceClock : IPerformanceClock
+    {
+        private long _microseconds;
+
+        public long Frame { get; set; }
+
+        public long GetTimestamp() => _microseconds;
+
+        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
+            (endTimestamp - startTimestamp) / 1000.0;
+
+        public void AdvanceMilliseconds(double milliseconds) =>
+            _microseconds += checked((long)(milliseconds * 1000.0));
+    }
 
     private sealed class FakeNativeView
     {

@@ -249,6 +249,8 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
             ? AutoConceptOperationMode.Disabled
             : AutoConceptOperationMode.Active;
 
+    public void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
+
     internal bool IsAutoCastTogglePressed() => AutoCastToggleShortcut.Value.IsDown();
 
     internal void RefreshCurrent() =>
@@ -338,7 +340,7 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
 
             var result = new BepInExAutomataConfiguration(
                 config,
-                Bind(config, "General", "Enabled", true, "Master switch for the whole suite: automation, mastery catch-up, and the in-game configuration browser. Disabled installs no patches and leaves the game untouched.", 0, 0),
+                Bind(config, "General", "Enabled", true, "Master switch for automation and mastery catch-up. The in-game configuration and safety controls remain available while this is off.", 0, 0),
                 autoBuyMode,
                 Bind(config, "AutoBuy", "AffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Affordability policy for structures. BuyAll accepts any affordable purchase; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 30, dependencies: AutoBuyStructuresActiveDependencies),
                 Bind(config, "AutoBuy", "UpgradeAffordabilityMode", AutoBuyAffordabilityMode.Excess100, "Independent affordability policy for upgrades. BuyAll accepts any affordable upgrade; excess modes require current resources to be at least 10x, 100x, or 1000x the true cost.", 10, 31, dependencies: AutoBuyUpgradesActiveDependencies),
@@ -356,7 +358,7 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
                 Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "BlockedUuids", string.Empty, "Comma-separated StructureSO or UpgradeSO UUIDs Automata must never buy.", 10, 130, dependencies: AutoBuyActiveDependencies),
                 autoCastMode,
-                Bind(config, "AutoCast", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.X, UnityEngine.KeyCode.LeftAlt), "Toggle Auto Cast between Disabled and Active. Default: Left Alt + X.", 15, 5),
+                Bind(config, "AutoCast", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.F8), "Toggle Auto Cast between Disabled and Active. Default: F8.", 15, 5),
                 Bind(config, "AutoCast", "ShowToggleButton", true, "Show the Auto Cast state button immediately left of the native Auto Buy queue switch.", 15, 6),
                 Bind(config, "AutoCast", "EvaluationIntervalSeconds", 0.25f, "Unscaled seconds between Auto Cast evaluations.", 15, 10, new AcceptableValueRange<float>(0.1f, 10.0f), AutoCastActiveDependencies),
                 Bind(config, "AutoCast", "StartResourcePercent", 0.0f, "Minimum fullness for every finite-cap resource used by a spell's immediate or drain cost. Fresh installs default to 0%.", 15, 20, new AcceptableValueRange<float>(0.0f, 100.0f), AutoCastActiveDependencies),
@@ -399,11 +401,12 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
         IReadOnlyList<ModConfigDependency>? dependencies = null,
         bool restartRequired = false)
     {
-        var hidden = section == "General" && key == "Enabled";
+        var hidden = false;
         var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids" || key == "MaxCandidatesPerScan");
         var advancedAutoConcept = section == "AutoConcept" && key == "FallbackEvaluationIntervalSeconds";
         var displaySection = section switch
         {
+            "General" when key == "Enabled" => "Safety",
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
             "AutoConcept" when !advancedAutoConcept => "Auto Concept",
@@ -412,6 +415,7 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
         };
         var displayName = key switch
         {
+            "Enabled" when section == "General" => "Automation enabled",
             "Mode" when section == "AutoBuy" => "Auto Buy",
             "Mode" when section == "AutoCast" => "Auto Cast",
             "Mode" when section == "AutoConcept" => "Auto Concept",
@@ -432,7 +436,7 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
+        var presentationOrder = displaySection == "Safety" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

@@ -34,7 +34,7 @@ internal sealed class AutoCastTooltip : ITooltipable
             new TooltipNode($"Charged spells: {(_control.Config.AutoCast.FullCharge ? "Full charge" : "Fire immediately")}"),
             new TooltipNode($"Evaluation interval: {_control.Config.AutoCast.EvaluationIntervalSeconds:0.##} seconds"),
             new TooltipNode($"Pause after manual cast: {_control.Config.AutoCast.ManualPauseSeconds:0.##} seconds"),
-            new TooltipNode("Click or press Left Alt + X to toggle."),
+            new TooltipNode("Click or press F8 to toggle."),
         });
         return nodes;
     }

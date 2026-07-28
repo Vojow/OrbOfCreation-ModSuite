@@ -44,13 +44,13 @@ Current builds reject a positive concept drain when its authoritative resource i
 
 ## Checking the suite against the live game
 
-`Ctrl + Alt + Y` runs the differential verification diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.
+**Run differential verification** on Mods -> Runtime runs the diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.
 
 A requirement pass that reports `INCOMPLETE` names a condition class the suite does not model. That is not a wrong answer — an unmodelled condition already stops the purchase being planned — but it is worth reporting, because it makes Auto Buy skip something the game would have allowed.
 
 It deliberately runs everything inside the single frame the key was pressed in, so **the game will visibly hitch** — that hitch is the acknowledgement that the run happened. Load a save first; with no structures or resources available the passes report as unavailable.
 
-The shortcut is `Diagnostics/VerifyGameMathShortcut` in the configuration file, and the default is the left-hand modifiers (`Left Ctrl + Left Alt + Y`). Mentor's toggle (`General/ToggleShortcut`) keeps `Left Alt + M`; differential verification is off M entirely, so nothing can fire both and a diagnostic that freezes a frame is not reachable by accident. BepInEx only fires a shortcut when the keys held are exactly the ones bound, so the earlier `Ctrl + Shift + Alt + M` default could never fire while the plain `Alt + M` it replaced fired Mentor as well. A configuration file still carrying either of those is rebound to the current default once, on the first launch that reads it; a chord you chose yourself is left alone. Either binding can be changed in the configuration UI.
+`Diagnostics/VerifyGameMathShortcut` remains hidden only to preserve a player-customized legacy value; the runtime does not listen to it. Schema 3 unbinds inherited `Left Ctrl + Left Alt + Y` and historical Alt+M defaults while preserving customized chords. Mentor's toggle (`General/ToggleShortcut`) remains `Left Alt + M`. Auto Cast defaults to `F8`; schema 3 migrates only the inherited `Left Alt + X` value and leaves a player-selected chord alone.
 
 ## Reporting a bug
 

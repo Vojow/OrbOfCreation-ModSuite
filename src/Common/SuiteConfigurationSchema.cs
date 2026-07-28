@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace OrbModding.Common;
 
@@ -7,12 +9,15 @@ namespace OrbModding.Common;
 /// plan. <see cref="ConfigurationSchemaTransaction"/> stores a single
 /// <c>[OrbModding] ConfigurationSchemaVersion</c> marker per file, so three plans binding into one
 /// file would fight over one number: the first writes its version and every later plan reads a
-/// version it does not recognise. There is nothing to migrate from — the retired per-plugin files
-/// carry different names and are never read — so version 1 is the first version this file ever had.
+/// version it does not recognise. Retired per-plugin files carry different names and are never read.
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 2;
+    internal const int CurrentVersion = 3;
+    internal static readonly ConfigurationKey AutoCastShortcut =
+        new("AutoCast", "ToggleShortcut");
+    internal static readonly ConfigurationKey DifferentialVerificationShortcut =
+        new("Diagnostics", "VerifyGameMathShortcut");
 
     internal static ConfigurationSchemaPlan Plan { get; } = new(CurrentVersion, new[]
     {
@@ -28,8 +33,78 @@ internal static class SuiteConfigurationSchema
         // transaction, and a migration step may only write keys the transaction itself binds.
         new ConfigurationMigrationStep(
             1,
-            CurrentVersion,
+            2,
             Array.Empty<ConfigurationKey>(),
             static _ => { }),
+        // Version 3 removes native input races. Values are rewritten only when they match a default
+        // inherited from an older schema. A player-selected chord is preserved even though the
+        // differential verifier no longer listens to any key.
+        new ConfigurationMigrationStep(
+            2,
+            CurrentVersion,
+            new[] { AutoCastShortcut, DifferentialVerificationShortcut },
+            MigrateInheritedShortcuts),
     });
+
+    private static void MigrateInheritedShortcuts(ConfigurationMigrationContext context)
+    {
+        if (context.TryGet(AutoCastShortcut, out var autoCast))
+        {
+            if (IsChord(autoCast, KeyCode.X, KeyCode.LeftAlt))
+            {
+                context.Map(
+                    AutoCastShortcut,
+                    AutoCastShortcut,
+                    KeyCode.F8.ToString(),
+                    "Rebound the inherited Auto Cast shortcut from native Inventory key X to F8.");
+            }
+            else
+            {
+                context.Preserve(AutoCastShortcut, autoCast);
+            }
+        }
+
+        if (!context.TryGet(DifferentialVerificationShortcut, out var verifier)) return;
+        if (IsInheritedVerifierDefault(verifier))
+        {
+            context.Map(
+                DifferentialVerificationShortcut,
+                DifferentialVerificationShortcut,
+                KeyCode.None.ToString(),
+                "Unbound the inherited differential-verification shortcut; use the Mods Runtime action.");
+            return;
+        }
+        context.Preserve(DifferentialVerificationShortcut, verifier);
+    }
+
+    private static bool IsInheritedVerifierDefault(string serialized) =>
+        IsChord(serialized, KeyCode.Y, KeyCode.LeftControl, KeyCode.LeftAlt) ||
+        IsChord(serialized, KeyCode.M, KeyCode.LeftAlt) ||
+        IsChord(
+            serialized,
+            KeyCode.M,
+            KeyCode.LeftControl,
+            KeyCode.LeftShift,
+            KeyCode.LeftAlt);
+
+    internal static bool IsChord(
+        string serialized,
+        KeyCode mainKey,
+        params KeyCode[] modifiers)
+    {
+        if (serialized is null) return false;
+        var parts = serialized.Split('+');
+        if (parts.Length != modifiers.Length + 1 ||
+            !Enum.TryParse(parts[0].Trim(), ignoreCase: true, out KeyCode parsedMain) ||
+            parsedMain != mainKey)
+            return false;
+        var remaining = new HashSet<KeyCode>(modifiers);
+        for (var index = 1; index < parts.Length; index++)
+        {
+            if (!Enum.TryParse(parts[index].Trim(), ignoreCase: true, out KeyCode modifier) ||
+                !remaining.Remove(modifier))
+                return false;
+        }
+        return remaining.Count == 0;
+    }
 }

@@ -48,7 +48,7 @@ public sealed class AutomataServiceCycleActivationTests
         Assert.Equal(1, attempts);
         Assert.Equal(2, capturedConfiguration);
         Assert.Equal(new[] { 0.25f, 0.5f }, runtime.TickDurations);
-        Assert.Equal(1, runtime.Publications);
+        Assert.Equal(2, runtime.Publications);
         Assert.Equal(1, runtime.Invalidations);
         Assert.Equal(1, runtime.Cancellations);
 
@@ -58,11 +58,11 @@ public sealed class AutomataServiceCycleActivationTests
 
         Assert.Equal(1, runtime.Disposals);
         Assert.Equal(2, runtime.TickDurations.Count);
-        Assert.Equal(1, runtime.Publications);
+        Assert.Equal(2, runtime.Publications);
     }
 
     [Fact]
-    public void FailedActivationIsAttemptedOnceAndDoesNotBlockFollowingServices()
+    public void FailedActivationRetriesOnceAndDoesNotBlockFollowingServices()
     {
         var attempts = 0;
         var sibling = new RecordingRuntime();
@@ -79,8 +79,72 @@ public sealed class AutomataServiceCycleActivationTests
         registry.Tick(0.25f);
         registry.Tick(0.5f);
 
-        Assert.Equal(1, attempts);
+        Assert.Equal(2, attempts);
         Assert.Equal(new[] { 0.25f, 0.5f }, sibling.TickDurations);
+    }
+
+    [Fact]
+    public void ConfigurationPublishedBeforeActivationIsReplayed()
+    {
+        var ready = false;
+        var runtime = new RecordingRuntime();
+        var activation = new AutomataServiceCycleActivation(
+            () => ready,
+            () => runtime);
+
+        activation.PublishSavedConfiguration(Configuration());
+        ready = true;
+        activation.Tick(0.25f);
+
+        Assert.Equal(1, runtime.Publications);
+    }
+
+    [Fact]
+    public void FailedActivationKeepsPublishingLatestConfigurationAfterBoundedRetry()
+    {
+        var attempts = 0;
+        var observations = 0;
+        var activation = new AutomataServiceCycleActivation(
+            () => true,
+            () =>
+            {
+                attempts++;
+                return null;
+            },
+            Configuration(),
+            _ => observations++);
+
+        activation.Tick(0.25f);
+        activation.PublishSavedConfiguration(Configuration());
+        activation.Tick(0.5f);
+        activation.PublishSavedConfiguration(Configuration());
+        activation.Tick(0.75f);
+
+        Assert.Equal(2, attempts);
+        Assert.Equal(4, observations);
+    }
+
+    [Fact]
+    public void RecoverableActivationFailureRetriesOnceAndReplaysLatestConfiguration()
+    {
+        var attempts = 0;
+        var unavailable = 0;
+        var runtime = new RecordingRuntime();
+        var activation = new AutomataServiceCycleActivation(
+            () => true,
+            () => ++attempts == 1 ? null : runtime,
+            Configuration(),
+            _ => unavailable++);
+
+        activation.Tick(0.25f);
+        activation.PublishSavedConfiguration(Configuration());
+        activation.Tick(0.5f);
+        activation.Tick(0.75f);
+
+        Assert.Equal(2, attempts);
+        Assert.Equal(2, unavailable);
+        Assert.Equal(1, runtime.Publications);
+        Assert.Equal(new[] { 0.5f, 0.75f }, runtime.TickDurations);
     }
 
     [Fact]

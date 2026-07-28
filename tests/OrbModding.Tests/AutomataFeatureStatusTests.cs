@@ -199,4 +199,88 @@ public sealed class AutomataFeatureStatusTests
         statuses.AutoCast.ObserveOperational();
         Assert.Equal(AutoCastToggleVisualState.On, control.State);
     }
+
+    [Fact]
+    public void ProductionWiredControlsPublishConfiguredIntentBeforeReturning()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
+        var autoBuy = new AutoBuyToggleControl(
+            config,
+            readStatus: () => statuses.AutoBuy.Current,
+            publishConfiguredIntent: statuses.ObserveConfiguration);
+        var autoCast = new AutoCastToggleControl(
+            config,
+            () => statuses.AutoCast.Current,
+            statuses.ObserveConfiguration);
+        var autoConcept = new AutoConceptToggleControl(
+            config,
+            () => statuses.AutoConcept.Current,
+            statuses.ObserveConfiguration);
+
+        Assert.Equal(AutoCastToggleVisualState.On, autoBuy.State);
+        Assert.Equal(AutoCastToggleVisualState.Off, autoCast.State);
+        Assert.Equal(AutoCastToggleVisualState.Off, autoConcept.State);
+
+        autoBuy.Toggle();
+        autoCast.Toggle();
+        autoConcept.Toggle();
+
+        Assert.Equal(AutoBuyOperationMode.Disabled, config.Current.AutoBuy.Mode);
+        Assert.Equal(AutoCastOperationMode.Active, config.Current.AutoCast.Mode);
+        Assert.Equal(AutoConceptOperationMode.Active, config.Current.AutoConcept.Mode);
+        Assert.Equal(AutoCastToggleVisualState.Off, autoBuy.State);
+        Assert.Equal(AutoCastToggleVisualState.On, autoCast.State);
+        Assert.Equal(AutoCastToggleVisualState.On, autoConcept.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, autoBuy.Status.State);
+        Assert.Equal(FeatureStatusState.NotReady, autoCast.Status.State);
+        Assert.Equal(FeatureStatusState.NotReady, autoConcept.Status.State);
+    }
+
+    [Fact]
+    public void ConfigurationPublicationPreservesUnchangedRuntimeHealth()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
+        statuses.AutoCast.Observe(
+            true,
+            FeatureStatusState.Faulted,
+            FeatureStatusReasonCode.RuntimeFailure,
+            "The worker is unavailable.");
+
+        config.AutoCastFullCharge.Value = false;
+        statuses.ObserveConfiguration(config.Current);
+
+        Assert.True(statuses.AutoCast.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.Faulted, statuses.AutoCast.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.RuntimeFailure, statuses.AutoCast.Current.Reason.Code);
+    }
+
+    [Fact]
+    public void MissingServiceCycleTracksDisabledEnabledDisabledIntent()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
+
+        statuses.ObserveServiceCycleUnavailable(config.Current);
+        Assert.False(statuses.AutoCast.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
+
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        statuses.ObserveConfiguration(config.Current);
+        statuses.ObserveServiceCycleUnavailable(config.Current);
+        Assert.True(statuses.AutoCast.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.Faulted, statuses.AutoCast.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.RuntimeFailure, statuses.AutoCast.Current.Reason.Code);
+
+        config.AutoCastMode.Value = AutoCastOperationMode.Disabled;
+        statuses.ObserveConfiguration(config.Current);
+        statuses.ObserveServiceCycleUnavailable(config.Current);
+        Assert.False(statuses.AutoCast.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
+    }
 }

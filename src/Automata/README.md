@@ -20,8 +20,8 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 ## Release defaults
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades; progression-aware spell leveling is enabled within Auto Buy and can be disabled separately.
-- Auto Cast starts `Disabled` and can be toggled with `Left Alt + X` or its queue-adjacent button.
-- Gameplay controls extend outward from the native Auto Buy queue switch with 12-pixel gaps: native Auto Buy, suite Auto Buy, Auto Cast, Auto Concept, then Mentor. The strip is outside the action queue and does not use the status-effects container.
+- Auto Cast starts `Disabled` and can be toggled with `F8` or its queue-adjacent button.
+- Gameplay controls extend outward from the native Auto Buy queue switch with 12-pixel gaps: native Auto Buy, emergency stop, suite Auto Buy, Auto Cast, Auto Concept, then Mentor. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - Auto Harvest starts `Disabled`; its fruit-tree and treasure-tree selectors default on behind that master switch, with no gameplay button or shortcut.
 - All four mode selectors expose only `Disabled` and `Active`.
@@ -37,7 +37,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 At runtime, those persisted settings are mapped once per change into one composed immutable configuration record with General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Safety, Performance, Diagnostics, and Reserves sections. Engines and controls consume that record rather than BepInEx entries or feature-specific configuration mirrors. A saved ServiceCycle cycle pins the complete record it began with; later changes apply to a later cycle.
 
-The former runtime-probe, per-session purchase-limit, DryRun, expert-override, Auto Research, and Auto Harvest runtime-selector settings are not part of the release configuration or the configuration UI. Automation has no configuration schema of its own: it binds into the suite's single configuration file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 2 — reached through two empty steps, because the retired per-plugin files carry different names and are never read and nothing in the file has ever changed shape. Version 2 exists only so the one launch that reads an older file can tell that a persisted differential-verification chord is an inherited default rather than a choice, and rebind it. Malformed, negative, or future schema data fails closed without starting the suite.
+The former runtime-probe, per-session purchase-limit, DryRun, expert-override, Auto Research, and Auto Harvest runtime-selector settings are not part of the release configuration or the configuration UI. Automation has no configuration schema of its own: it binds into the suite's single configuration file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 3. The 2-to-3 step moves only inherited defaults: Auto Cast's `Left Alt + X` becomes `F8`, and differential verification becomes unbound in favor of its Mods Runtime button. Player-customized chords are preserved. Malformed, negative, or future schema data fails closed without starting the suite.
 
 ## Auto Harvest
 
@@ -189,7 +189,7 @@ A cast deferred by the shared coordinator is treated as a short-lived plan. Befo
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 
-The button shows `OFF`, `ON`, or `!` when emergency disable blocks an active configuration. It uses the first equipped spell icon when available.
+The button shows desired intent as `AC OFF` or `AC ON`; emergency blocking preserves that intent and renders `AC ON / STOPPED`. Runtime readiness and fault detail remain in the same published status shown by the tooltip and Mods Runtime. It uses the first equipped spell icon when available.
 
 ## Auto Concept
 
@@ -203,7 +203,7 @@ Auto Concept uses the shared `OrbModding.Common.AlchemyGameplayDomainClassifier`
 
 Every newly assigned lower-mastery concept in `RotateAll` or `PreserveManual` receives a catch-up training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. `TimedCycle` uses the same timer but never applies the catch-up shortcut. The default is 300 seconds and the accepted range is 10 through 3600 seconds. Native setup time does not consume the period, and the controller schedules the exact next session deadline even when its idle fallback is longer.
 
-The `CN ON/OFF` gameplay button toggles Auto Concept and represents configured intent; emergency blocking and other runtime health remain secondary tooltip evidence. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the suite's Auto Buy tooltip instead.
+The `CN ON/OFF` gameplay button toggles Auto Concept and represents configured intent; emergency blocking renders `CN ON / STOPPED`, while other runtime health remains tooltip evidence. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the suite's Auto Buy tooltip instead.
 
 `FallbackEvaluationIntervalSeconds` is an Advanced setting, not a rotation delay. It defaults to 300 seconds and accepts 10 through 1800 as the maximum idle delay between full plan calculations; native changes can request earlier passes. Existing `RebalanceIntervalSeconds` and `RebalanceIntervalMinutes` values migrate automatically.
 

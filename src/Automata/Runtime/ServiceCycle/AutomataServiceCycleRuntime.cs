@@ -59,7 +59,12 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     {
         if (_disposed) return;
         if (!_host.EmergencyStopEngaged)
-            _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
+            // This cancellation is recoverable: the caller may be releasing ownership, disabling
+            // automation, or synchronously engaging the configured emergency stop. Marking it as a
+            // shutdown made the configuration pump correctly refuse to clear it, so RESUME could
+            // never restore this runtime. The next published false reading may clear a user episode;
+            // Dispose still creates the non-clearable shutdown episode below.
+            _host.SetEmergencyStop(true, EmergencyStopReason.UserRequested);
     }
 
     public void InvalidateLifecycle()

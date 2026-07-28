@@ -4,6 +4,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
+using OrbModding.Common.Runtime.Verification;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile.Control;
 #endif
@@ -22,6 +23,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly IManualFullTraceControl _traceControl;
     private readonly IHostTraceDumpControl _hostTraceDump;
+    private readonly IDifferentialVerificationControl _differentialVerification;
     private readonly IDecisionJournalStatusSource _decisionJournal;
     private readonly IServiceCyclePumpTimingSource _pumpTiming;
 #if SERVICE_CYCLE_PROFILE
@@ -39,6 +41,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private int _renderGeneration;
     private long _traceRevision = -1;
     private long _hostTraceDumpRevision = -1;
+    private long _differentialVerificationRevision = -1;
     private long _decisionJournalRevision = -1;
 #if SERVICE_CYCLE_PROFILE
     private long _performanceProfileRevision = -1;
@@ -51,6 +54,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         TextMeshProUGUI labelTemplate,
         IManualFullTraceControl traceControl,
         IHostTraceDumpControl hostTraceDump,
+        IDifferentialVerificationControl differentialVerification,
         IDecisionJournalStatusSource decisionJournal,
         IServiceCyclePumpTimingSource pumpTiming
 #if SERVICE_CYCLE_PROFILE
@@ -63,6 +67,8 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _labelTemplate = labelTemplate ?? throw new ArgumentNullException(nameof(labelTemplate));
         _traceControl = traceControl ?? throw new ArgumentNullException(nameof(traceControl));
         _hostTraceDump = hostTraceDump ?? throw new ArgumentNullException(nameof(hostTraceDump));
+        _differentialVerification = differentialVerification ??
+                                    throw new ArgumentNullException(nameof(differentialVerification));
         _decisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
         _pumpTiming = pumpTiming ?? throw new ArgumentNullException(nameof(pumpTiming));
 #if SERVICE_CYCLE_PROFILE
@@ -72,6 +78,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 
     public bool ObservabilityChanged => _traceRevision != _traceControl.Revision ||
         _hostTraceDumpRevision != _hostTraceDump.Revision ||
+        _differentialVerificationRevision != _differentialVerification.Revision ||
         _decisionJournalRevision != _decisionJournal.Revision
 #if SERVICE_CYCLE_PROFILE
         || _performanceProfileRevision != _performanceProfile.Revision
@@ -94,9 +101,14 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _traceView ??= new ManualFullTraceControlView(_content, _labelTemplate, _traceControl);
         top += _traceView.Layout(_content.rect.width, top, siblingIndex++);
         _traceRevision = _traceControl.Revision;
-        _hostTraceDumpView ??= new HostTraceDumpControlView(_content, _labelTemplate, _hostTraceDump);
+        _hostTraceDumpView ??= new HostTraceDumpControlView(
+            _content,
+            _labelTemplate,
+            _hostTraceDump,
+            _differentialVerification);
         top += _hostTraceDumpView.Layout(_content.rect.width, top, siblingIndex++);
         _hostTraceDumpRevision = _hostTraceDump.Revision;
+        _differentialVerificationRevision = _differentialVerification.Revision;
 #if SERVICE_CYCLE_PROFILE
         _performanceProfileView ??= new PerformanceProfileControlView(
             _content,

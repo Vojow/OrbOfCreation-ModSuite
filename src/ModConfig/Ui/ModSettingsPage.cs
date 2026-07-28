@@ -76,6 +76,31 @@ internal sealed class ModSettingsPage : IDisposable
 
     public bool IsVisible => _visible;
 
+    public ModConfigNavigationBookmark CaptureBookmark()
+    {
+        if (!_visible || _catalog.Mods.Count == 0) return ModConfigNavigationBookmark.Runtime;
+        CaptureNavigation();
+        var mod = _catalog.Mods[_selectedModIndex];
+        var sectionName = mod.Sections.Count == 0
+            ? string.Empty
+            : mod.Sections[_selectedSectionIndex].Name;
+        return new ModConfigNavigationBookmark(
+            mod.Guid,
+            sectionName,
+            Math.Max(0f, _content.anchoredPosition.y));
+    }
+
+    public void RestoreBookmark(ModConfigNavigationBookmark bookmark)
+    {
+        if (bookmark.IsRuntime) return;
+        var pluginIndex = ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(_catalog, bookmark) - 1;
+        if (pluginIndex < 0) return;
+        var mod = _catalog.Mods[pluginIndex];
+        _navigation[pluginIndex] = new ModSettingsNavigationState(
+            ModConfigNavigationBookmarkPolicy.ResolveSectionIndex(mod, bookmark),
+            Math.Max(0f, bookmark.ScrollOffset));
+    }
+
     public void ShowPlugin(int pluginIndex)
     {
         ThrowIfDisposed();
@@ -132,14 +157,19 @@ internal sealed class ModSettingsPage : IDisposable
             return;
         }
 
-        if (changed is not null && !changed.IsValid)
+        var conflict = _session.Values.FirstOrDefault(value =>
+            string.Equals(value.Setting.PluginGuid, mod.Guid, StringComparison.Ordinal) &&
+            value.HasExternalConflict);
+        if (conflict is not null)
+            SetStatus($"{conflict.Setting.Key}: changed outside this page; choose Keep mine or Take live.", invalid: true);
+        else if (changed is not null && !changed.IsValid)
             SetStatus($"{changed.Setting.Key}: {changed.Error}", invalid: true);
         else
-            SetStatus(_session.IsDirty ? "Unsaved changes" : "Ready", invalid: false);
+            SetStatus(_session.IsModDirty(mod) ? "Unsaved changes" : "Ready", invalid: false);
 
         SetFooterInteractable(
-            CanApplySelection(mod, _session.IsDirty, _session.IsValid),
-            _session.IsDirty);
+            CanApplySelection(mod, _session.IsModDirty(mod), _session.IsModValid(mod)),
+            _session.IsModDirty(mod) || _session.ModHasExternalConflicts(mod));
     }
 
     public void Dispose()
@@ -217,7 +247,8 @@ internal sealed class ModSettingsPage : IDisposable
             return;
         }
 
-        if (_applyCoordinator.TryApply(_session, out var error, out _))
+        var selectedMod = _catalog.Mods[_selectedModIndex];
+        if (_applyCoordinator.TryApply(_session, selectedMod, out var error, out _))
         {
             RebuildSettings();
             _statusText.text = ConfigurationSavedMessage;
@@ -236,7 +267,7 @@ internal sealed class ModSettingsPage : IDisposable
             RefreshStatus();
             return;
         }
-        _session.RevertAll();
+        _session.Revert(_catalog.Mods[_selectedModIndex]);
         _statusText.text = "Reverted staged changes.";
         RebuildSettings();
     }

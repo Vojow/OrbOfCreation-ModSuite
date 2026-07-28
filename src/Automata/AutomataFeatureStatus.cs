@@ -7,6 +7,7 @@ namespace OrbAutomata;
 internal sealed class AutomataFeatureStatusReporter : IDisposable
 {
     private readonly FeatureStatusRegistration _registration;
+    private bool _emergencyStopActive;
 
     public AutomataFeatureStatusReporter(
         FeatureStatusRegistry registry,
@@ -38,6 +39,7 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
         FeatureStatusReasonCode reasonCode,
         string summary)
     {
+        ApplyEmergencyStop(configuredEnabled, ref state, ref reasonCode, ref summary);
         if (Current.ConfiguredEnabled == configuredEnabled &&
             Current.State == state &&
             Current.Reason.Code == reasonCode)
@@ -63,6 +65,7 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
         string summary,
         long lifecycleGeneration)
     {
+        ApplyEmergencyStop(configuredEnabled, ref state, ref reasonCode, ref summary);
         if (Current.ConfiguredEnabled == configuredEnabled &&
             Current.State == state &&
             Current.Reason.Code == reasonCode &&
@@ -81,6 +84,32 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
     }
 
     public void Dispose() => _registration.Dispose();
+
+    internal void SetEmergencyStop(bool active)
+    {
+        if (_emergencyStopActive == active) return;
+        _emergencyStopActive = active;
+        if (active)
+        {
+            Observe(
+                Current.ConfiguredEnabled,
+                Current.State,
+                Current.Reason.Code,
+                Current.Reason.Summary);
+        }
+    }
+
+    private void ApplyEmergencyStop(
+        bool configuredEnabled,
+        ref FeatureStatusState state,
+        ref FeatureStatusReasonCode reasonCode,
+        ref string summary)
+    {
+        if (!configuredEnabled || !_emergencyStopActive) return;
+        state = FeatureStatusState.TemporarilyBlocked;
+        reasonCode = FeatureStatusReasonCode.EmergencyDisabled;
+        summary = "Suite emergency stop is active.";
+    }
 }
 
 internal sealed class AutomataFeatureStatuses : IDisposable
@@ -136,6 +165,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutoConcept = autoConcept!;
         SpellLevel = spellLevel!;
         AutoHarvest = autoHarvest!;
+        ObserveConfiguration(config);
     }
 
     public AutomataFeatureStatusReporter AutoBuy { get; }
@@ -143,6 +173,46 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatusReporter AutoConcept { get; }
     public AutomataFeatureStatusReporter SpellLevel { get; }
     public AutomataFeatureStatusReporter AutoHarvest { get; }
+
+    public void ObserveConfiguration(SuiteRuntimeConfiguration config)
+    {
+        if (config is null) throw new ArgumentNullException(nameof(config));
+        SetEmergencyStop(config.Safety.EmergencyDisable);
+        ObserveConfiguredIntent(
+            AutoBuy,
+            config.General.Enabled,
+            config.AutoBuy.Mode == AutoBuyOperationMode.Active,
+            parentEnabled: true);
+        ObserveConfiguredIntent(
+            AutoCast,
+            config.General.Enabled,
+            config.AutoCast.Mode == AutoCastOperationMode.Active,
+            parentEnabled: true);
+        ObserveConfiguredIntent(
+            AutoConcept,
+            config.General.Enabled,
+            config.AutoConcept.Mode == AutoConceptOperationMode.Active,
+            parentEnabled: true);
+        ObserveConfiguredIntent(
+            SpellLevel,
+            config.General.Enabled,
+            config.AutoBuy.AutoLevelSpells,
+            config.AutoBuy.Mode == AutoBuyOperationMode.Active);
+        ObserveConfiguredIntent(
+            AutoHarvest,
+            config.General.Enabled,
+            IsAutoHarvestConfigured(config),
+            parentEnabled: true);
+    }
+
+    private void SetEmergencyStop(bool active)
+    {
+        AutoBuy.SetEmergencyStop(active);
+        AutoCast.SetEmergencyStop(active);
+        AutoConcept.SetEmergencyStop(active);
+        SpellLevel.SetEmergencyStop(active);
+        AutoHarvest.SetEmergencyStop(active);
+    }
 
     public void ObserveContractUnavailable(SuiteRuntimeConfiguration config, long lifecycleGeneration, string summary)
     {
@@ -158,6 +228,42 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             lifecycleGeneration, summary);
         ObserveContractFeature(AutoHarvest, config.General.Enabled,
             IsAutoHarvestConfigured(config), true, lifecycleGeneration, summary);
+    }
+
+    public void ObserveServiceCycleUnavailable(SuiteRuntimeConfiguration config)
+    {
+        if (config is null) throw new ArgumentNullException(nameof(config));
+        const string summary = "The shared Automata ServiceCycle host is unavailable.";
+        ObserveUnavailableFeature(
+            AutoBuy,
+            config.General.Enabled,
+            config.AutoBuy.Mode == AutoBuyOperationMode.Active,
+            parentEnabled: true,
+            summary);
+        ObserveUnavailableFeature(
+            AutoCast,
+            config.General.Enabled,
+            config.AutoCast.Mode == AutoCastOperationMode.Active,
+            parentEnabled: true,
+            summary);
+        ObserveUnavailableFeature(
+            AutoConcept,
+            config.General.Enabled,
+            config.AutoConcept.Mode == AutoConceptOperationMode.Active,
+            parentEnabled: true,
+            summary);
+        ObserveUnavailableFeature(
+            SpellLevel,
+            config.General.Enabled,
+            config.AutoBuy.AutoLevelSpells,
+            config.AutoBuy.Mode == AutoBuyOperationMode.Active,
+            summary);
+        ObserveUnavailableFeature(
+            AutoHarvest,
+            config.General.Enabled,
+            IsAutoHarvestConfigured(config),
+            parentEnabled: true,
+            summary);
     }
 
     public void ObserveLifecycleNotReady(SuiteRuntimeConfiguration config, long lifecycleGeneration)
@@ -228,6 +334,36 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         ObserveGameplayNotReady(reporter, lifecycleGeneration);
     }
 
+    private static void ObserveConfiguredIntent(
+        AutomataFeatureStatusReporter reporter,
+        bool pluginEnabled,
+        bool featureEnabled,
+        bool parentEnabled)
+    {
+        var lifecycleGeneration = reporter.Current.LifecycleGeneration;
+        if (!featureEnabled)
+        {
+            ObserveConfigurationDisabled(reporter, lifecycleGeneration);
+            return;
+        }
+        if (!pluginEnabled || !parentEnabled)
+        {
+            reporter.ObserveLifecycle(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ParentFeatureDisabled,
+                !pluginEnabled
+                    ? "Automata is disabled by configuration."
+                    : "Auto Buy is disabled by configuration.",
+                lifecycleGeneration);
+            return;
+        }
+        if (!reporter.Current.ConfiguredEnabled ||
+            reporter.Current.Reason.Code is FeatureStatusReasonCode.ParentFeatureDisabled
+                or FeatureStatusReasonCode.EmergencyDisabled)
+            ObserveGameplayNotReady(reporter, lifecycleGeneration);
+    }
+
     private static void ObserveContractFeature(
         AutomataFeatureStatusReporter reporter,
         bool pluginEnabled,
@@ -257,6 +393,39 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             true,
             FeatureStatusState.ContractUnavailable,
             FeatureStatusReasonCode.ContractUnavailable,
+            summary,
+            lifecycleGeneration);
+    }
+
+    private static void ObserveUnavailableFeature(
+        AutomataFeatureStatusReporter reporter,
+        bool pluginEnabled,
+        bool featureEnabled,
+        bool parentEnabled,
+        string summary)
+    {
+        var lifecycleGeneration = reporter.Current.LifecycleGeneration;
+        if (!featureEnabled)
+        {
+            ObserveConfigurationDisabled(reporter, lifecycleGeneration);
+            return;
+        }
+        if (!pluginEnabled || !parentEnabled)
+        {
+            reporter.ObserveLifecycle(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ParentFeatureDisabled,
+                !pluginEnabled
+                    ? "Automata is disabled by configuration."
+                    : "The parent automation feature is disabled by configuration.",
+                lifecycleGeneration);
+            return;
+        }
+        reporter.ObserveLifecycle(
+            true,
+            FeatureStatusState.Faulted,
+            FeatureStatusReasonCode.RuntimeFailure,
             summary,
             lifecycleGeneration);
     }
@@ -353,4 +522,8 @@ internal static class AutomataFeatureStatusVisuals
         FeatureStatusPresenter.Present(status).ConfiguredState == FeatureConfiguredPresentationState.On
             ? AutoCastToggleVisualState.On
             : AutoCastToggleVisualState.Off;
+
+    public static bool IsEmergencyStopped(in FeatureStatusSnapshot status) =>
+        status.ConfiguredEnabled &&
+        status.Reason.Code == FeatureStatusReasonCode.EmergencyDisabled;
 }

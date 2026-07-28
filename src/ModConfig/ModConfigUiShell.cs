@@ -47,6 +47,7 @@ internal sealed class ModConfigUiShell : IDisposable
         ConfigCatalogSnapshot catalog,
         GameplayInvalidationBus invalidationBus,
         ModConfigRuntimeSources runtimeSources,
+        ModConfigNavigationBookmark navigationBookmark,
         Action maintenanceRequested,
         Action navigationMaintenanceRequested,
         out ModConfigUiShell? shell,
@@ -77,6 +78,7 @@ internal sealed class ModConfigUiShell : IDisposable
                 log,
                 invalidationBus,
                 runtimeSources);
+            panel.RestoreNavigation(navigationBookmark);
             shell = new ModConfigUiShell(log, navigation, panel, maintenanceRequested);
             navigation.Connect(shell.Toggle, shell.CloseFromNativeTab, navigationMaintenanceRequested);
             log.LogInfo(
@@ -98,6 +100,8 @@ internal sealed class ModConfigUiShell : IDisposable
 
     public void Toggle() => TrySetOpen(!_open, restorePreviousNativeView: _open);
 
+    public ModConfigNavigationBookmark CaptureNavigation() => _panel.CaptureNavigation();
+
     public void RefreshNavigation() => _navigation.RefreshNavigation();
 
     public bool ScheduleRefresh(float unscaledDeltaTime)
@@ -108,7 +112,9 @@ internal sealed class ModConfigUiShell : IDisposable
             return false;
         }
 
-        return _refresh.Schedule(unscaledDeltaTime);
+        var pending = _refresh.Schedule(unscaledDeltaTime);
+        RefreshDiagnosticsIfDue();
+        return pending;
     }
 
     public bool HasPendingRefresh => _refresh.IsPending;
@@ -120,6 +126,7 @@ internal sealed class ModConfigUiShell : IDisposable
         _panel.RefreshResponsiveLayout();
         _panel.RefreshRuntimeDashboardIfNeeded();
         _refresh.Complete();
+        RefreshDiagnosticsIfDue();
     }
 
     public void Close() => TrySetOpen(false, restorePreviousNativeView: true);
@@ -148,6 +155,7 @@ internal sealed class ModConfigUiShell : IDisposable
             // consuming runtime transitions, and rendering occur only after the
             // shared coordinator admits the pending maintenance work.
             _refresh.Open();
+            RefreshDiagnosticsIfDue();
             _maintenanceRequested();
             return;
         }
@@ -169,5 +177,11 @@ internal sealed class ModConfigUiShell : IDisposable
             _log.LogWarning(
                 $"Mod Config UI open/close failed; scheduling shell repair: {ex.GetBaseException().Message}");
         }
+    }
+
+    private void RefreshDiagnosticsIfDue()
+    {
+        if (_refresh.ConsumeDiagnosticsDue())
+            _panel.RefreshRefreshDiagnostics(_refresh.Diagnostics);
     }
 }

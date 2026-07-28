@@ -123,7 +123,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
+            new[] { "Safety", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -149,7 +149,7 @@ public sealed class ModConfigTests
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
             setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
-        Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
+        Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
 
@@ -356,26 +356,76 @@ public sealed class ModConfigTests
     }
 
     [Fact]
-    public void EditSession_RefreshesExternalChangesWithoutOverwritingStagedEdits()
+    public void EditSession_ExternalChangesConflictUntilExplicitlyResolved()
     {
         var config = new ConfigFile();
-        var mode = config.Bind("General", "Mode", SampleMode.Disabled, "Mode");
-        var enabled = config.Bind("General", "Enabled", true, "Enabled");
+        var count = config.Bind("General", "Count", 1, "Count");
         var catalog = ConfigCatalog.Build(new[]
         {
             new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
         });
         var session = new ConfigEditSession(catalog);
-        var settings = catalog.Mods.Single().Sections.Single().Settings.ToDictionary(setting => setting.Key);
+        var setting = catalog.Mods.Single().Sections.Single().Settings.Single();
 
-        mode.Value = SampleMode.Active;
-        session.Get(settings["Enabled"]).Stage("false");
-        enabled.Value = false;
+        session.Get(setting).Stage("2");
+        count.Value = 3;
 
         Assert.True(session.RefreshExternalValues());
-        Assert.Equal("Active", session.Get(settings["Mode"]).StagedSerialized);
-        Assert.Equal("false", session.Get(settings["Enabled"]).StagedSerialized, ignoreCase: true);
-        Assert.True(session.Get(settings["Enabled"]).IsDirty);
+        Assert.Equal("2", session.Get(setting).StagedSerialized);
+        Assert.Equal("3", session.Get(setting).ExternalSerialized);
+        Assert.True(session.Get(setting).HasExternalConflict);
+        Assert.False(session.Apply(out var conflict));
+        Assert.Contains("Keep mine or Take live", conflict);
+        Assert.Equal(3, count.Value);
+
+        session.Get(setting).KeepStagedValue();
+        Assert.True(session.Apply(out var error), error);
+        Assert.Equal(2, count.Value);
+
+        session.Get(setting).Stage("4");
+        count.Value = 5;
+        Assert.True(session.RefreshExternalValues());
+        session.Get(setting).TakeExternalValue();
+        Assert.False(session.Get(setting).IsDirty);
+        Assert.Equal("5", session.Get(setting).StagedSerialized);
+    }
+
+    [Fact]
+    public void EditSession_ApplyAndRevertAreScopedToTheSelectedMod()
+    {
+        var firstConfig = new ConfigFile();
+        var secondConfig = new ConfigFile();
+        var first = firstConfig.Bind("General", "Enabled", true, "Enabled");
+        var second = secondConfig.Bind("General", "Enabled", true, "Enabled");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("first", "First", "1.0.0", firstConfig),
+            new ConfigPluginSource("second", "Second", "1.0.0", secondConfig),
+        });
+        var session = new ConfigEditSession(catalog);
+        var firstMod = catalog.Mods.Single(mod => mod.Guid == "first");
+        var secondMod = catalog.Mods.Single(mod => mod.Guid == "second");
+        var firstEdit = session.Values.Single(value => value.Setting.PluginGuid == "first");
+        var secondEdit = session.Values.Single(value => value.Setting.PluginGuid == "second");
+        firstEdit.Stage("false");
+        secondEdit.Stage("not-a-boolean");
+
+        Assert.True(session.IsModDirty(firstMod));
+        Assert.True(session.IsModValid(firstMod));
+        Assert.False(session.IsModValid(secondMod));
+        Assert.True(session.Apply(firstMod, out var error, out var applied), error);
+        Assert.False(first.Value);
+        Assert.True(second.Value);
+        Assert.Single(applied);
+        Assert.False(session.IsModDirty(firstMod));
+        Assert.True(session.IsModDirty(secondMod));
+
+        firstEdit.Stage("true");
+        session.Revert(secondMod);
+        Assert.True(firstEdit.IsDirty);
+        Assert.False(secondEdit.IsDirty);
+        Assert.False(first.Value);
+        Assert.True(second.Value);
     }
 
     [Fact]
@@ -403,6 +453,37 @@ public sealed class ModConfigTests
         session.Get(settings["Count"]).Stage("12");
         Assert.False(session.IsValid);
         Assert.Contains("Range", session.Get(settings["Count"]).Error);
+    }
+
+    [Fact]
+    public void EditSession_ValidatesKeyboardShortcutsBeforeApply()
+    {
+        var config = new ConfigFile();
+        var shortcut = config.Bind(
+            "General",
+            "Shortcut",
+            new KeyboardShortcut(KeyCode.Equals, KeyCode.LeftAlt),
+            "Shortcut");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        var setting = catalog.Mods.Single().Sections.Single().Settings.Single();
+
+        session.Get(setting).Stage("DefinitelyNotAKey + LeftAlt");
+
+        Assert.False(session.Get(setting).IsValid);
+        Assert.False(session.Apply(out _));
+        Assert.Equal(KeyCode.Equals, shortcut.Value.MainKey);
+
+        session.Get(setting).Stage(ConfigCatalog.Serialize(
+            new KeyboardShortcut(KeyCode.Y, KeyCode.LeftControl)));
+
+        Assert.True(session.Get(setting).IsValid, session.Get(setting).Error);
+        Assert.True(session.Apply(out var error), error);
+        Assert.Equal(KeyCode.Y, shortcut.Value.MainKey);
+        Assert.Contains(KeyCode.LeftControl, shortcut.Value.Modifiers);
     }
 
     [Fact]

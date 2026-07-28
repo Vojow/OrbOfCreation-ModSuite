@@ -173,16 +173,18 @@ internal static class ConfigCatalog
         IConfigurationSchemaStatusSource schemaStatuses)
     {
         if (schemaStatuses is null) throw new ArgumentNullException(nameof(schemaStatuses));
-        var sources = Chainloader.PluginInfos.Values
+        return Build(CaptureLoadedSources(), schemaStatuses);
+    }
+
+    public static IReadOnlyList<ConfigPluginSource> CaptureLoadedSources() =>
+        Chainloader.PluginInfos.Values
             .Where(plugin => plugin.Instance is not null)
             .Select(plugin => new ConfigPluginSource(
                 plugin.Metadata.GUID,
                 plugin.Metadata.Name,
                 plugin.Metadata.Version.ToString(),
-                plugin.Instance!.Config));
-
-        return Build(sources, schemaStatuses);
-    }
+                plugin.Instance!.Config))
+            .ToArray();
 
     public static ConfigCatalogSnapshot Build(IEnumerable<ConfigPluginSource> sources) =>
         Build(sources, schemaStatuses: null);

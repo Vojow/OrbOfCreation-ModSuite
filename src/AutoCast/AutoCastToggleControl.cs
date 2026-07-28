@@ -13,11 +13,16 @@ internal sealed class AutoCastToggleControl
 {
     private readonly IAutomataConfigurationEditor _config;
     private readonly System.Func<FeatureStatusSnapshot>? _readStatus;
+    private readonly System.Action<SuiteRuntimeConfiguration>? _publishConfiguredIntent;
 
-    public AutoCastToggleControl(IAutomataConfigurationEditor config, System.Func<FeatureStatusSnapshot>? readStatus = null)
+    public AutoCastToggleControl(
+        IAutomataConfigurationEditor config,
+        System.Func<FeatureStatusSnapshot>? readStatus = null,
+        System.Action<SuiteRuntimeConfiguration>? publishConfiguredIntent = null)
     {
         _config = config;
         _readStatus = readStatus;
+        _publishConfiguredIntent = publishConfiguredIntent;
     }
 
     internal SuiteRuntimeConfiguration Config => _config.Current;
@@ -34,6 +39,7 @@ internal sealed class AutoCastToggleControl
     public void Toggle()
     {
         _config.ToggleAutoCast();
+        _publishConfiguredIntent?.Invoke(_config.Current);
     }
 
     private FeatureStatusSnapshot CreateFallbackStatus()

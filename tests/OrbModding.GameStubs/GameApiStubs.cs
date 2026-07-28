@@ -1748,9 +1748,34 @@ namespace BepInEx.Configuration
                 return;
             }
 
-            BoxedValue = SettingType.IsEnum
-                ? Enum.Parse(SettingType, value, true)
-                : Convert.ChangeType(value, SettingType, CultureInfo.InvariantCulture);
+            BoxedValue = TomlTypeConverter.ConvertToValue(value, SettingType);
+        }
+    }
+
+    internal static class TomlTypeConverter
+    {
+        internal static object ConvertToValue(string value, Type targetType)
+        {
+            if (targetType == typeof(KeyboardShortcut))
+            {
+                var keys = value
+                    .Split('+')
+                    .Select(part =>
+                    {
+                        var trimmed = part.Trim();
+                        if (trimmed.Length == 0)
+                            throw new FormatException("A keyboard shortcut key cannot be empty.");
+                        return Enum.Parse<UnityEngine.KeyCode>(trimmed, ignoreCase: true);
+                    })
+                    .ToArray();
+                if (keys.Length == 0)
+                    throw new FormatException("A keyboard shortcut requires a main key.");
+                return new KeyboardShortcut(keys[0], keys.Skip(1).ToArray());
+            }
+
+            return targetType.IsEnum
+                ? Enum.Parse(targetType, value, true)
+                : Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture)!;
         }
     }
 
@@ -2289,12 +2314,46 @@ namespace UnityEngine
         Equals = 61,
         Minus = 45,
         Alpha0 = 48,
+        Alpha1 = 49,
+        Alpha2 = 50,
+        Alpha3 = 51,
+        Alpha4 = 52,
+        Alpha5 = 53,
+        Alpha6 = 54,
+        Alpha7 = 55,
+        Alpha8 = 56,
+        Alpha9 = 57,
+        Space = 32,
+        Q = 113,
+        W = 119,
+        E = 101,
+        R = 114,
+        T = 116,
         X = 120,
         Y = 121,
+        Z = 122,
         J = 106,
         M = 109,
+        Keypad1 = 257,
+        Keypad2 = 258,
+        Keypad3 = 259,
+        Keypad4 = 260,
+        Keypad5 = 261,
+        Keypad6 = 262,
+        Keypad7 = 263,
+        Keypad8 = 264,
+        Keypad9 = 265,
+        UpArrow = 273,
+        DownArrow = 274,
+        RightArrow = 275,
+        LeftArrow = 276,
+        F7 = 288,
+        F8 = 289,
+        RightShift = 303,
         LeftShift = 304,
+        RightControl = 305,
         LeftControl = 306,
+        RightAlt = 307,
         LeftAlt = 308,
     }
 
@@ -2512,6 +2571,7 @@ namespace TMPro
           public LineType lineType { get; set; }
           public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
           public OnChangeEvent onSelect { get; } = new OnChangeEvent();
+          public OnChangeEvent onEndEdit { get; } = new OnChangeEvent();
 
         public sealed class OnChangeEvent
         {

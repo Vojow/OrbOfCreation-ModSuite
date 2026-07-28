@@ -48,6 +48,14 @@ public sealed class AutoCastTests
     }
 
     [Fact]
+    public void EmergencyStopDisplaysDesiredAndRuntimeAxes()
+    {
+        Assert.Equal(
+            "AC ON / STOPPED",
+            AutoCastToggleButton.FormatLabel(AutoCastToggleVisualState.On, stopped: true));
+    }
+
+    [Fact]
     public void ToggleSwitchesBetweenDisabledAndActive()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());

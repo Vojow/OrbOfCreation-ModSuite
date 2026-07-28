@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using OrbModding.Common;
 
 namespace OrbModConfig;
@@ -24,9 +25,27 @@ internal sealed class ModSettingsApplyCoordinator
         ConfigEditSession session,
         out string error,
         out int publishedInvalidations)
+        => TryApplyCore(session, selectedMod: null, out error, out publishedInvalidations);
+
+    public bool TryApply(
+        ConfigEditSession session,
+        ModConfigDescriptor selectedMod,
+        out string error,
+        out int publishedInvalidations)
+        => TryApplyCore(session, selectedMod, out error, out publishedInvalidations);
+
+    private bool TryApplyCore(
+        ConfigEditSession session,
+        ModConfigDescriptor? selectedMod,
+        out string error,
+        out int publishedInvalidations)
     {
         if (session is null) throw new ArgumentNullException(nameof(session));
-        if (!session.Apply(out error, out var appliedSettings))
+        IReadOnlyList<ConfigSettingDescriptor> appliedSettings;
+        var applied = selectedMod is null
+            ? session.Apply(out error, out appliedSettings)
+            : session.Apply(selectedMod, out error, out appliedSettings);
+        if (!applied)
         {
             publishedInvalidations = 0;
             return false;

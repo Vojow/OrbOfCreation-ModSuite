@@ -63,6 +63,14 @@ Keep emergency stop engaged. Verify:
 - queue, resource, registry, and feature-health views match visible game state; and
 - opening and closing Mod Config does not change gameplay or discard staged settings unexpectedly.
 
+### Control-surface regression checks
+
+Run these independently; they do not block the portable or installed-game gates.
+
+1. **Quick controls (Q):** with Auto Cast off and emergency clear, keep the AC control and Mods Runtime card visible. Click once and confirm the setting, button, and configured-status axis all become On without an intervening visible Off frame. Repeat with `F8`. Engage emergency stop and confirm desired state remains `ON / STOPPED` while healthy, lifecycle-not-ready, and host-fault status is simulated or observed. A stale button with a current Runtime card isolates Unity control lifetime/rendering; both stale while cycle evidence advances requires a host trace.
+2. **Mods refresh (M):** repeat ten unstaged external AC toggles while idle and ten under load. The row should normally follow near the 100 ms cadence; use Runtime pending/last-refresh age to distinguish bounded coordinator delay from shell failure. Verify staged external conflict actions, selected-mod Apply/Revert scope, invalid-shortcut rejection, one catalog rebuild for a late definition, and master off/on without losing Mods.
+3. **Input/tooltip differential (H):** confirm `F8` toggles Auto Cast without opening Inventory or changing native Max Buy/More Info state. Confirm the differential verifier runs only from its Runtime button. The historical Alt calculated-sum concern is closed: spell tooltips support the native Alt view with the suite installed, while time-rune tooltips do not provide an Alt view with or without the suite. Do not use suite quick-button or time-rune tooltips as a native Alt-view oracle.
+
 ## Gate V4 — isolated active gameplay tests
 
 Enable one capability at a time on a disposable save. Exercise its normal action, a native-not-ready state, an insufficient-resource or capacity state, emergency stop, and a lifecycle transition. Verify the visible game effect, native postcondition, quiet log, and absence of repeated stale actions.

@@ -266,6 +266,10 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         {
         }
 
+        public void SetEmergencyStop(bool stopped)
+        {
+        }
+
         private static SuiteRuntimeConfiguration Build(AutoBuyOperationMode mode) =>
             new SuiteRuntimeConfiguration
             {

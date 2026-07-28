@@ -5,6 +5,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbModding.Common.Runtime.Verification;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile.Control;
 #endif
@@ -20,6 +21,7 @@ internal sealed class ModConfigRuntimeSources
         IServiceCyclePumpTimingSource pumpTiming,
         IManualFullTraceControl manualFullTrace,
         IHostTraceDumpControl hostTraceDump,
+        IDifferentialVerificationControl differentialVerification,
         IDecisionJournalStatusSource decisionJournal
 #if SERVICE_CYCLE_PROFILE
         , IPerformanceProfileControl performanceProfile
@@ -32,6 +34,8 @@ internal sealed class ModConfigRuntimeSources
         PumpTiming = pumpTiming ?? throw new ArgumentNullException(nameof(pumpTiming));
         ManualFullTrace = manualFullTrace ?? throw new ArgumentNullException(nameof(manualFullTrace));
         HostTraceDump = hostTraceDump ?? throw new ArgumentNullException(nameof(hostTraceDump));
+        DifferentialVerification = differentialVerification ??
+                                   throw new ArgumentNullException(nameof(differentialVerification));
         DecisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
 #if SERVICE_CYCLE_PROFILE
         PerformanceProfile = performanceProfile ?? throw new ArgumentNullException(nameof(performanceProfile));
@@ -44,6 +48,7 @@ internal sealed class ModConfigRuntimeSources
     public IServiceCyclePumpTimingSource PumpTiming { get; }
     public IManualFullTraceControl ManualFullTrace { get; }
     public IHostTraceDumpControl HostTraceDump { get; }
+    public IDifferentialVerificationControl DifferentialVerification { get; }
     public IDecisionJournalStatusSource DecisionJournal { get; }
 #if SERVICE_CYCLE_PROFILE
     public IPerformanceProfileControl PerformanceProfile { get; }

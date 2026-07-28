@@ -36,6 +36,7 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly RuntimeDiagnosticsDirtyLatch _fullDashboardDirty = new();
     private readonly RuntimeDiagnosticsTransitionQueue _runtimeTransitions = new();
     private RuntimeDiagnosticsDashboard _dashboard;
+    private ModConfigRefreshDiagnostics? _refreshDiagnostics;
     private int _selectedTopPageIndex;
     private float _measuredRuntimeWidth;
     private bool _disposed;
@@ -78,6 +79,7 @@ internal sealed class ModConfigPanel : IDisposable
                 labelTemplate,
                 runtimeSources.ManualFullTrace,
                 runtimeSources.HostTraceDump,
+                runtimeSources.DifferentialVerification,
                 runtimeSources.DecisionJournal,
                 runtimeSources.PumpTiming
 #if SERVICE_CYCLE_PROFILE
@@ -126,6 +128,20 @@ internal sealed class ModConfigPanel : IDisposable
     }
 
     public GameObject Root { get; }
+
+    public ModConfigNavigationBookmark CaptureNavigation() =>
+        IsRuntimeSelected
+            ? ModConfigNavigationBookmark.Runtime
+            : _settingsPage.CaptureBookmark();
+
+    public void RestoreNavigation(ModConfigNavigationBookmark bookmark)
+    {
+        _settingsPage.RestoreBookmark(bookmark);
+        _selectedTopPageIndex =
+            ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(_catalog, bookmark);
+        RebuildTopTabs();
+        ShowSelectedPage();
+    }
 
     public static ModConfigPanel Create(
         Transform parent,
@@ -304,6 +320,13 @@ internal sealed class ModConfigPanel : IDisposable
         if (IsRuntimeSelected) _runtimePage.Render(_dashboard, resetScroll: false);
     }
 
+    public void RefreshRefreshDiagnostics(ModConfigRefreshDiagnostics diagnostics)
+    {
+        _refreshDiagnostics = diagnostics;
+        if (_disposed || !IsRuntimeSelected) return;
+        _statusText.text = ModConfigRefreshDiagnosticsPresentation.Build(diagnostics);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -372,12 +395,9 @@ internal sealed class ModConfigPanel : IDisposable
             _runtimePage.Render(_dashboard, resetScroll: false);
             _measuredRuntimeWidth = _settingsContent.rect.width;
             _statusText.color = _labelTemplate.color;
-#if SERVICE_CYCLE_PROFILE
-            _statusText.text =
-                "Runtime evidence updates live. Performance profiling and manual full-trace recording are controlled above.";
-#else
-            _statusText.text = "Runtime evidence updates live. Manual full-trace recording is controlled above.";
-#endif
+            _statusText.text = _refreshDiagnostics is { } refreshDiagnostics
+                ? ModConfigRefreshDiagnosticsPresentation.Build(refreshDiagnostics)
+                : "Runtime evidence updates live. Waiting for the first Mods refresh.";
             return;
         }
 

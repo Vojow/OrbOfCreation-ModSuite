@@ -20,4 +20,5 @@ internal interface IAutomataConfigurationEditor : IAutomataConfigurationSource
 
     void ToggleAutoCast();
     void ToggleAutoConcept();
+    void SetEmergencyStop(bool stopped);
 }

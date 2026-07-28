@@ -2,32 +2,28 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
-using BepInEx.Configuration;
-using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.GameMath;
+using OrbModding.Common.Runtime.Verification;
 using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
 /// <summary>
-/// The player-facing trigger for verification: press a key, the suite checks itself against the
+/// The player-facing trigger for verification: click the Runtime action, the suite checks itself against the
 /// running game, and reports one verdict per thing checked.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Bound directly on the plugin's <see cref="ConfigFile"/> rather than threaded through
-/// <c>SuiteRuntimeConfiguration</c>, because this is a diagnostic action, not runtime policy. Keeping it
-/// out of the canonical configuration record means the schema's steps and their tests stay about
-/// gameplay behaviour: the schema version says when this file was written, and this class decides what
-/// that means for its own key, because a migration step may only write keys the transaction binds.
+/// Requested explicitly from the Mods Runtime page rather than polled from a keyboard shortcut,
+/// because it is a rare, deliberately frame-stalling diagnostic action rather than runtime policy.
 /// </para>
 /// <para>
 /// Passes still report separately — "cost passed, rate failed" is immediately actionable where a
-/// single combined verdict would not be — but they all run to completion inside the frame the key was
+/// single combined verdict would not be — but they all run to completion inside the frame the action was
 /// pressed in. Spreading the work across ticks was the earlier design and was wrong for a manual
 /// diagnostic twice over: it left every pass reading a different frame's game state, and it hid the
-/// run. <b>The stall is the acknowledgement.</b> A player who presses the key and sees the game hitch
+/// run. <b>The stall is the acknowledgement.</b> A player who clicks the action and sees the game hitch
 /// knows it happened, without needing to go and read a log to find out.
 /// </para>
 /// <para>
@@ -35,123 +31,49 @@ namespace OrbAutomata;
 /// cap per-frame cost, and there is now exactly one frame. Every entity in every registry is checked.
 /// </para>
 /// <para>
-/// The default chord takes two modifiers and a main key nothing else in the suite uses, because
-/// pressing it costs the player a frozen frame and nobody should hit it by accident. Both earlier
-/// defaults were built on M, which is Mentor's toggle key: BepInEx vetoes a shortcut whenever any key
-/// outside it is held, so the three-modifier chord never fired at all, and the Left Alt + M it
-/// replaced fired Mentor and a frozen frame together.
+/// Earlier keyboard defaults either raced Mentor or held native gameplay modifiers. The permanent
+/// Runtime-page action removes that input surface entirely.
 /// </para>
 /// </remarks>
-internal sealed class AutomataDifferentialVerificationControl
+internal sealed class AutomataDifferentialVerificationControl : IDifferentialVerificationControl
 {
-    /// <summary>
-    /// The schema version this file gets once the chord has moved. A configuration written before it
-    /// may still carry a superseded default, and is the only one this rebinds.
-    /// </summary>
-    internal const int RechordSchemaVersion = 2;
-
-    private static readonly KeyboardShortcut DefaultShortcut = new(
-        UnityEngine.KeyCode.Y,
-        UnityEngine.KeyCode.LeftControl,
-        UnityEngine.KeyCode.LeftAlt);
-
-    /// <summary>
-    /// Every chord this diagnostic has ever defaulted to before the current one. A persisted value
-    /// matching one of these was never chosen, it was inherited, and both collide with Mentor's
-    /// toggle on M.
-    /// </summary>
-    private static readonly KeyboardShortcut[] SupersededDefaults =
-    {
-        new(UnityEngine.KeyCode.M, UnityEngine.KeyCode.LeftAlt),
-        new(
-            UnityEngine.KeyCode.M,
-            UnityEngine.KeyCode.LeftControl,
-            UnityEngine.KeyCode.LeftShift,
-            UnityEngine.KeyCode.LeftAlt),
-    };
-
-    private readonly ConfigEntry<KeyboardShortcut> _shortcut;
     private readonly Action<string> _report;
+    private readonly Action? _runOverride;
+    private bool _runRequested;
+    private long _revision;
 
-    /// <param name="rebindSupersededDefault">
-    /// Whether this launch read a configuration written before the chord moved. Changing a code
-    /// default does nothing to a file that already carries the old one, so the one launch that
-    /// migrates the file is also the one launch allowed to rewrite the value — and only if the value
-    /// is a default the player never chose.
-    /// </param>
     internal AutomataDifferentialVerificationControl(
-        ConfigFile config,
         Action<string> report,
-        bool rebindSupersededDefault)
+        Action? runOverride = null)
     {
-        if (config is null) throw new ArgumentNullException(nameof(config));
         _report = report ?? throw new ArgumentNullException(nameof(report));
-
-        _shortcut = config.Bind(
-            "Diagnostics",
-            "VerifyGameMathShortcut",
-            DefaultShortcut,
-            "Press to check the suite against the running game: its ported math against the game's " +
-            "own results, and its world collection against the game's own accessors. Runs everything " +
-            "in one frame, so the game will visibly hitch — that hitch is how you know it ran. " +
-            "Diagnostic only; it changes nothing in game. Default: Left Ctrl + Left Alt + Y.");
-        if (rebindSupersededDefault && IsSupersededDefault(_shortcut.Value)) RebindToDefault();
+        _runOverride = runOverride;
     }
 
-    /// <summary>
-    /// Whether the configuration this launch bound predates the chord move, and so may still carry a
-    /// default the player never chose.
-    /// </summary>
-    internal static bool ShouldRebindSupersededDefault(in ConfigurationSchemaStatus status) =>
-        status.State == ConfigurationSchemaState.Migrated &&
-        status.FromVersion < RechordSchemaVersion;
+    public bool RunRequested => _runRequested;
 
-    internal static bool IsSupersededDefault(KeyboardShortcut value)
+    public long Revision => _revision;
+
+    public bool RequestRun()
     {
-        for (var index = 0; index < SupersededDefaults.Length; index++)
-        {
-            if (SameChord(value, SupersededDefaults[index])) return true;
-        }
-        return false;
+        if (_runRequested) return false;
+        _runRequested = true;
+        _revision = checked(_revision + 1);
+        return true;
     }
 
-    private void RebindToDefault()
-    {
-        _shortcut.Value = DefaultShortcut;
-        _report(
-            "Differential verification was still bound to a superseded default built on M, which is " +
-            "Mentor's toggle key. It has been rebound to Left Ctrl + Left Alt + Y; change it in the " +
-            "configuration UI if you want it elsewhere.");
-    }
-
-    /// <summary>
-    /// Compares main key and modifier set without depending on how a shortcut orders its modifiers.
-    /// </summary>
-    private static bool SameChord(KeyboardShortcut left, KeyboardShortcut right)
-    {
-        if (left.MainKey != right.MainKey) return false;
-        var leftModifiers = 0;
-        foreach (var modifier in left.Modifiers)
-        {
-            leftModifiers++;
-            var found = false;
-            foreach (var candidate in right.Modifiers)
-            {
-                if (candidate != modifier) continue;
-                found = true;
-                break;
-            }
-            if (!found) return false;
-        }
-        var rightModifiers = 0;
-        foreach (var _ in right.Modifiers) rightModifiers++;
-        return leftModifiers == rightModifiers;
-    }
-
-    /// <summary>Drives one frame. Runs everything when the shortcut is pressed.</summary>
+    /// <summary>Runs a requested diagnostic in one frame on the Unity main thread.</summary>
     internal void Tick()
     {
-        if (_shortcut.Value.IsDown()) RunEverything();
+        if (!_runRequested) return;
+        _runRequested = false;
+        _revision = checked(_revision + 1);
+        if (_runOverride is not null)
+        {
+            _runOverride();
+            return;
+        }
+        RunEverything();
     }
 
     private void RunEverything()

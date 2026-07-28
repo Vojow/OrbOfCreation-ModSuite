@@ -101,6 +101,7 @@ public sealed class StatusControlGroupTests
             .Select(field => (int)field.GetRawConstantValue()!)
             .ToArray();
         Assert.Equal(orders.Length, orders.Distinct().Count());
+        Assert.True(StatusControlOrder.EmergencyStop < StatusControlOrder.AutoBuy);
         Assert.True(StatusControlOrder.AutoBuy < StatusControlOrder.AutoCast);
         Assert.True(StatusControlOrder.AutoCast < StatusControlOrder.AutoConcept);
         Assert.True(StatusControlOrder.AutoConcept < StatusControlOrder.Mentor);

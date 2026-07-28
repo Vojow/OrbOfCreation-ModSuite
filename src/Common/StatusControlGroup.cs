@@ -8,6 +8,7 @@ namespace OrbModding.Common;
 
 public static class StatusControlOrder
 {
+    public const int EmergencyStop = 50;
     public const int AutoBuy = 100;
     public const int AutoCast = 200;
     public const int AutoConcept = 300;

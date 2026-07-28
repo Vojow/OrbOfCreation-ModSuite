@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using BepInEx.Configuration;
 using OrbModding.Common;
+using UnityEngine;
 
 namespace OrbModConfig;
 
@@ -15,14 +16,17 @@ internal sealed class ConfigEditValue
         Setting = setting;
         OriginalSerialized = setting.Source.GetSerializedValue();
         StagedSerialized = OriginalSerialized;
+        ExternalSerialized = OriginalSerialized;
     }
 
     public ConfigSettingDescriptor Setting { get; }
     public string OriginalSerialized { get; private set; }
     public string StagedSerialized { get; private set; }
+    public string ExternalSerialized { get; private set; }
     public string Error { get; private set; } = string.Empty;
     public bool IsDirty => !string.Equals(OriginalSerialized, StagedSerialized, StringComparison.Ordinal);
-    public bool IsValid => Error.Length == 0;
+    public bool HasExternalConflict { get; private set; }
+    public bool IsValid => Error.Length == 0 && !HasExternalConflict;
     public bool IsEditable => Setting.Kind != ConfigEditorKind.Unsupported;
 
     public void Stage(string serialized)
@@ -35,6 +39,9 @@ internal sealed class ConfigEditValue
 
         StagedSerialized = serialized;
         Error = ConfigValueValidator.Validate(Setting, serialized);
+        if (HasExternalConflict &&
+            string.Equals(StagedSerialized, ExternalSerialized, StringComparison.Ordinal))
+            TakeExternalValue();
     }
 
     public void StageDefault()
@@ -46,33 +53,56 @@ internal sealed class ConfigEditValue
     {
         OriginalSerialized = Setting.Source.GetSerializedValue();
         StagedSerialized = OriginalSerialized;
+        ExternalSerialized = OriginalSerialized;
         Error = string.Empty;
+        HasExternalConflict = false;
     }
 
     public void AcceptAppliedValue()
     {
         OriginalSerialized = Setting.Source.GetSerializedValue();
         StagedSerialized = OriginalSerialized;
+        ExternalSerialized = OriginalSerialized;
         Error = string.Empty;
+        HasExternalConflict = false;
     }
 
     public bool RefreshExternalValue()
     {
-        if (IsDirty)
-        {
-            return false;
-        }
-
         var current = Setting.Source.GetSerializedValue();
-        if (string.Equals(current, OriginalSerialized, StringComparison.Ordinal))
+        if (string.Equals(current, ExternalSerialized, StringComparison.Ordinal))
         {
             return false;
         }
 
-        OriginalSerialized = current;
-        StagedSerialized = current;
-        Error = string.Empty;
+        ExternalSerialized = current;
+        if (!IsDirty || string.Equals(current, StagedSerialized, StringComparison.Ordinal))
+        {
+            OriginalSerialized = current;
+            StagedSerialized = current;
+            Error = ConfigValueValidator.Validate(Setting, current);
+            HasExternalConflict = false;
+        }
+        else
+        {
+            HasExternalConflict = !string.Equals(current, OriginalSerialized, StringComparison.Ordinal);
+        }
         return true;
+    }
+
+    public void KeepStagedValue()
+    {
+        if (!HasExternalConflict) return;
+        OriginalSerialized = ExternalSerialized;
+        HasExternalConflict = false;
+    }
+
+    public void TakeExternalValue()
+    {
+        OriginalSerialized = ExternalSerialized;
+        StagedSerialized = ExternalSerialized;
+        Error = ConfigValueValidator.Validate(Setting, ExternalSerialized);
+        HasExternalConflict = false;
     }
 }
 
@@ -91,6 +121,10 @@ internal sealed class ConfigEditSession
     public IEnumerable<ConfigEditValue> Values => _values.Values;
     public bool IsDirty => _values.Values.Any(value => value.IsDirty);
     public bool IsValid => _values.Values.All(value => value.IsValid);
+    public bool IsModDirty(ModConfigDescriptor mod) => ValuesFor(mod).Any(value => value.IsDirty);
+    public bool IsModValid(ModConfigDescriptor mod) => ValuesFor(mod).All(value => value.IsValid);
+    public bool ModHasExternalConflicts(ModConfigDescriptor mod) =>
+        ValuesFor(mod).Any(value => value.HasExternalConflict);
 
     public ConfigEditValue Get(ConfigSettingDescriptor setting) => _values[setting.Source];
 
@@ -141,6 +175,12 @@ internal sealed class ConfigEditSession
         }
     }
 
+    public void Revert(ModConfigDescriptor mod)
+    {
+        foreach (var value in ValuesFor(mod))
+            value.Revert();
+    }
+
     public bool RefreshExternalValues()
     {
         var changed = false;
@@ -157,17 +197,42 @@ internal sealed class ConfigEditSession
     public bool Apply(
         out string error,
         out IReadOnlyList<ConfigSettingDescriptor> appliedSettings)
+        => ApplyValues(_values.Values.ToArray(), out error, out appliedSettings);
+
+    public bool Apply(
+        ModConfigDescriptor mod,
+        out string error,
+        out IReadOnlyList<ConfigSettingDescriptor> appliedSettings) =>
+        ApplyValues(ValuesFor(mod).ToArray(), out error, out appliedSettings);
+
+    private static bool ApplyValues(
+        IReadOnlyList<ConfigEditValue> candidates,
+        out string error,
+        out IReadOnlyList<ConfigSettingDescriptor> appliedSettings)
     {
         error = string.Empty;
         appliedSettings = Array.Empty<ConfigSettingDescriptor>();
-        var invalid = _values.Values.FirstOrDefault(value => !value.IsValid);
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            if (candidates[index].IsDirty)
+                candidates[index].RefreshExternalValue();
+        }
+
+        var conflict = candidates.FirstOrDefault(value => value.HasExternalConflict);
+        if (conflict is not null)
+        {
+            error = $"{conflict.Setting.Section}.{conflict.Setting.Key} changed outside this edit session. Choose Keep mine or Take live.";
+            return false;
+        }
+
+        var invalid = candidates.FirstOrDefault(value => !value.IsValid);
         if (invalid is not null)
         {
             error = $"{invalid.Setting.Section}.{invalid.Setting.Key}: {invalid.Error}";
             return false;
         }
 
-        var dirty = _values.Values.Where(value => value.IsDirty).ToArray();
+        var dirty = candidates.Where(value => value.IsDirty).ToArray();
         if (dirty.Length == 0)
         {
             return true;
@@ -227,6 +292,13 @@ internal sealed class ConfigEditSession
             return false;
         }
     }
+
+    private IEnumerable<ConfigEditValue> ValuesFor(ModConfigDescriptor mod)
+    {
+        if (mod is null) throw new ArgumentNullException(nameof(mod));
+        return _values.Values.Where(value =>
+            string.Equals(value.Setting.PluginGuid, mod.Guid, StringComparison.Ordinal));
+    }
 }
 
 internal static class ConfigValueValidator
@@ -238,9 +310,16 @@ internal static class ConfigValueValidator
             return "This setting type is read-only.";
         }
 
-        if (setting.Kind == ConfigEditorKind.String || setting.Kind == ConfigEditorKind.KeyboardShortcut)
+        if (setting.Kind == ConfigEditorKind.String)
         {
             return string.Empty;
+        }
+
+        if (setting.Kind == ConfigEditorKind.KeyboardShortcut)
+        {
+            return TryParseKeyboardShortcut(serialized)
+                ? string.Empty
+                : "Expected a keyboard shortcut such as X + LeftAlt, or None.";
         }
 
         if (!TryParse(setting.SettingType, serialized, out var parsed))
@@ -271,6 +350,21 @@ internal static class ConfigValueValidator
         }
 
         return string.Empty;
+    }
+
+    private static bool TryParseKeyboardShortcut(string serialized)
+    {
+        var parts = serialized.Split('+');
+        if (parts.Length == 0) return false;
+        for (var index = 0; index < parts.Length; index++)
+        {
+            var part = parts[index].Trim();
+            if (part.Length == 0 ||
+                !Enum.TryParse(part, ignoreCase: true, out KeyCode key) ||
+                !Enum.IsDefined(typeof(KeyCode), key))
+                return false;
+        }
+        return true;
     }
 
     private static bool TryParse(Type type, string serialized, out object? value)

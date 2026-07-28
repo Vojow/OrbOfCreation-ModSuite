@@ -21,27 +21,47 @@ internal interface IAutomataServiceCycleRuntime : IAutomataService
 /// </summary>
 internal sealed class AutomataServiceCycleActivation : IAutomataService
 {
+    private const int MaximumActivationAttempts = 2;
+
     private readonly Func<bool> _canActivate;
     private readonly Func<IAutomataServiceCycleRuntime?> _tryCreate;
+    private readonly Action<SuiteRuntimeConfiguration>? _observeHostUnavailable;
     private IAutomataServiceCycleRuntime? _runtime;
-    private bool _activationAttempted;
+    private SuiteRuntimeConfiguration? _latestConfiguration;
+    private int _activationAttempts;
+    private bool _hasPendingConfiguration;
     private bool _disposed;
 
     public AutomataServiceCycleActivation(
         Func<bool> canActivate,
-        Func<IAutomataServiceCycleRuntime?> tryCreate)
+        Func<IAutomataServiceCycleRuntime?> tryCreate,
+        SuiteRuntimeConfiguration? initialConfiguration = null,
+        Action<SuiteRuntimeConfiguration>? observeHostUnavailable = null)
     {
         _canActivate = canActivate ?? throw new ArgumentNullException(nameof(canActivate));
         _tryCreate = tryCreate ?? throw new ArgumentNullException(nameof(tryCreate));
+        _latestConfiguration = initialConfiguration;
+        _observeHostUnavailable = observeHostUnavailable;
     }
 
     public void Tick(float unscaledDeltaTime)
     {
         if (_disposed) return;
-        if (!_activationAttempted && _canActivate())
+        if (_runtime is null &&
+            _activationAttempts < MaximumActivationAttempts &&
+            _canActivate())
         {
-            _activationAttempted = true;
+            _activationAttempts++;
             _runtime = _tryCreate();
+            if (_runtime is null)
+            {
+                ObserveHostUnavailable();
+            }
+            else if (_hasPendingConfiguration && _latestConfiguration is not null)
+            {
+                _runtime.PublishSavedConfiguration(_latestConfiguration);
+                _hasPendingConfiguration = false;
+            }
         }
         _runtime?.Tick(unscaledDeltaTime);
     }
@@ -50,7 +70,14 @@ internal sealed class AutomataServiceCycleActivation : IAutomataService
     {
         if (_disposed) return;
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        _runtime?.PublishSavedConfiguration(configuration);
+        _latestConfiguration = configuration;
+        if (_runtime is not null)
+        {
+            _runtime.PublishSavedConfiguration(configuration);
+            return;
+        }
+        _hasPendingConfiguration = true;
+        if (_activationAttempts != 0) ObserveHostUnavailable();
     }
 
     public void CancelPreparedWork()
@@ -71,5 +98,11 @@ internal sealed class AutomataServiceCycleActivation : IAutomataService
         _disposed = true;
         _runtime?.Dispose();
         _runtime = null;
+    }
+
+    private void ObserveHostUnavailable()
+    {
+        if (_latestConfiguration is not null)
+            _observeHostUnavailable?.Invoke(_latestConfiguration);
     }
 }

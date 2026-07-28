@@ -17,6 +17,7 @@ internal sealed class AutoConceptToggleButton : IDisposable
     private readonly TextMeshProUGUI? _text;
     private readonly AutoConceptToggleControl _control;
     private AutoCastToggleVisualState? _renderedState;
+    private bool _renderedStopped;
     private bool _disposed;
 
     private AutoConceptToggleButton(
@@ -122,16 +123,22 @@ internal sealed class AutoConceptToggleButton : IDisposable
     {
         if (!IsAlive) return;
         var state = _control.State;
-        if (!force && _renderedState == state) return;
+        var stopped = AutomataFeatureStatusVisuals.IsEmergencyStopped(_control.Status);
+        if (!force && _renderedState == state && _renderedStopped == stopped) return;
         _renderedState = state;
+        _renderedStopped = stopped;
         if (_text is null) return;
-        _text.text = FormatLabel(state);
-        _text.color = state == AutoCastToggleVisualState.On
+        _text.text = FormatLabel(state, stopped);
+        _text.color = stopped
+            ? new Color(1.0f, 0.45f, 0.25f)
+            : state == AutoCastToggleVisualState.On
             ? new Color(0.4f, 1.0f, 0.55f)
             : new Color(0.7f, 0.7f, 0.7f);
     }
 
-    internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
+    internal static string FormatLabel(AutoCastToggleVisualState state, bool stopped = false) => stopped
+        ? "CN ON / STOPPED"
+        : state switch
     {
         AutoCastToggleVisualState.On => "CN ON",
         _ => "CN OFF",

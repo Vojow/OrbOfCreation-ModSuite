@@ -82,6 +82,10 @@ public static class SuitePerformanceWorkIdentities
 
         return fallbackThresholdFrames;
     }
+
+    internal static bool HasEnforcedAdmissionBound(string subsystem, string workName) =>
+        string.Equals(subsystem, ModConfigWork.Subsystem, StringComparison.Ordinal) &&
+        string.Equals(workName, ModConfigWork.WorkName, StringComparison.Ordinal);
 }
 
 /// <summary>

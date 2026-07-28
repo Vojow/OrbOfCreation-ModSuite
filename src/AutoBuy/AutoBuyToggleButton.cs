@@ -58,9 +58,10 @@ internal sealed class AutoBuyToggleButton : IDisposable
     public void Render()
     {
         var state = _control.State;
+        var stopped = AutomataFeatureStatusVisuals.IsEmergencyStopped(_control.Status);
         var label = state == AutoCastToggleVisualState.On ? "ON" : "OFF";
         var color = state == AutoCastToggleVisualState.On ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
-        if (_text is not null) { _text.text = $"AB {label}"; _text.color = color; }
+        if (_text is not null) { _text.text = stopped ? "AB ON / STOPPED" : $"AB {label}"; _text.color = stopped ? new Color(1, .45f, .25f) : color; }
     }
     private void Toggle() { _control.Toggle(); Render(); }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }

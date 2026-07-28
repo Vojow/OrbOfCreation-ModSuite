@@ -320,7 +320,8 @@ public sealed class SuitePerformanceCoordinator
         }
 
         if (registration.BudgetClass == SuiteBudgetClass.SoftLimited &&
-            _frameElapsedMilliseconds >= SoftBudgetMilliseconds)
+            _frameElapsedMilliseconds >= SoftBudgetMilliseconds &&
+            !HasReachedStarvationThreshold(registration))
         {
             return RecordDeferral(registration, SuiteWorkAdmission.SoftBudgetExhausted);
         }
@@ -745,6 +746,9 @@ public sealed class SuitePerformanceCoordinator
 
     private int FindNextAdmissibleRegistration(SuiteWorkRegistration requester)
     {
+        if (HasReachedStarvationThreshold(requester))
+            return _registrations.IndexOf(requester);
+
         for (var offset = 0; offset < _registrations.Count; offset++)
         {
             var index = (_roundRobinIndex + offset) % _registrations.Count;
@@ -755,7 +759,8 @@ public sealed class SuitePerformanceCoordinator
             }
 
             if (candidate.BudgetClass == SuiteBudgetClass.SoftLimited &&
-                _frameElapsedMilliseconds >= SoftBudgetMilliseconds)
+                _frameElapsedMilliseconds >= SoftBudgetMilliseconds &&
+                !HasReachedStarvationThreshold(candidate))
             {
                 continue;
             }
@@ -804,6 +809,14 @@ public sealed class SuitePerformanceCoordinator
             registration.PendingSinceEpoch);
         return _frameEpoch - mostRecentInterest >= _missedRequestFrames;
     }
+
+    private bool HasReachedStarvationThreshold(SuiteWorkRegistration registration) =>
+        SuitePerformanceWorkIdentities.HasEnforcedAdmissionBound(
+            registration.Subsystem,
+            registration.WorkName) &&
+        registration.HasPendingFrameIdentity &&
+        ReadPendingWaitFrames(registration, _frameIdentity) >=
+        registration.PerformanceState.StarvationThresholdFrames;
 
     private double MeasureActiveLease()
     {

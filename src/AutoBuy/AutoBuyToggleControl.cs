@@ -9,23 +9,30 @@ internal sealed class AutoBuyToggleControl
     private readonly System.Func<AutoSpellLevelCapability> _readSpellLevelCapability;
     private readonly System.Func<FeatureStatusSnapshot>? _readStatus;
     private readonly System.Func<FeatureStatusSnapshot>? _readSpellLevelStatus;
+    private readonly System.Action<SuiteRuntimeConfiguration>? _publishConfiguredIntent;
     public AutoBuyToggleControl(
         IAutomataConfigurationEditor config,
         System.Func<AutoSpellLevelCapability>? readSpellLevelCapability = null,
         System.Func<FeatureStatusSnapshot>? readStatus = null,
-        System.Func<FeatureStatusSnapshot>? readSpellLevelStatus = null)
+        System.Func<FeatureStatusSnapshot>? readSpellLevelStatus = null,
+        System.Action<SuiteRuntimeConfiguration>? publishConfiguredIntent = null)
     {
         _config = config;
         _readSpellLevelCapability = readSpellLevelCapability ?? (() => AutoSpellLevelCapability.Locked);
         _readStatus = readStatus;
         _readSpellLevelStatus = readSpellLevelStatus;
+        _publishConfiguredIntent = publishConfiguredIntent;
     }
     internal SuiteRuntimeConfiguration Config => _config.Current;
     internal AutoSpellLevelCapability SpellLevelCapability => _readSpellLevelCapability();
     internal FeatureStatusSnapshot Status => _readStatus?.Invoke() ?? CreateFallbackStatus();
     internal FeatureStatusSnapshot SpellLevelStatus => _readSpellLevelStatus?.Invoke() ?? CreateFallbackSpellLevelStatus();
     public AutoCastToggleVisualState State => AutomataFeatureStatusVisuals.ToVisualState(Status);
-    public void Toggle() => _config.ToggleAutoBuy();
+    public void Toggle()
+    {
+        _config.ToggleAutoBuy();
+        _publishConfiguredIntent?.Invoke(_config.Current);
+    }
 
     private FeatureStatusSnapshot CreateFallbackStatus()
     {

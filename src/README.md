@@ -37,7 +37,7 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 
 ## Shared gameplay controls
 
-Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.
+Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are emergency stop `50`, Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. The emergency control is composed independently of the worker host and master automation switch. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.
 
 ## Shared alchemy gameplay-domain classifier
 

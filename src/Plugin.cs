@@ -73,7 +73,7 @@ public sealed class Plugin : BaseUnityPlugin
     private Harmony? _harmony;
 
     private BepInExAutomataConfiguration? _automataConfig;
-    private bool _rebindSupersededVerificationChord;
+    private string? _shortcutAuditSignature;
     private AutomataFeatureStatuses? _featureStatuses;
     private readonly AutomataServiceRegistry _services = new();
     private readonly SpellLevelCapabilityState _spellLevelCapability = new();
@@ -89,6 +89,8 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoBuyToggleButton? _autoBuyToggleButton;
     private AutoConceptToggleControl? _autoConceptToggleControl;
     private AutoConceptToggleButton? _autoConceptToggleButton;
+    private EmergencyStopControl? _emergencyStopControl;
+    private EmergencyStopButton? _emergencyStopButton;
     private AutomataDifferentialVerificationControl? _mathVerification;
     private float _autoCastUiRetrySeconds;
     private float _autoBuyUiRetrySeconds;
@@ -101,6 +103,9 @@ public sealed class Plugin : BaseUnityPlugin
     private string _autoConceptUiFailureReason = string.Empty;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
+    private bool _runtimeComposed;
+    private bool _runtimeCompositionAttempted;
+    private float _emergencyStopUiRetrySeconds;
 
     private MentorConfig? _mentorConfig;
     private MentorRuntime? _mentorRuntime;
@@ -120,6 +125,8 @@ public sealed class Plugin : BaseUnityPlugin
     private int _deferInstallUntilFrame;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
+    private ConfigCatalogGeneration _catalogGeneration;
+    private ModConfigNavigationBookmark _catalogNavigation = ModConfigNavigationBookmark.Runtime;
     private ModConfigCoordinatorWork? _uiWork;
     private ModConfigRuntimeSources? _runtimeSources;
     private Action? _runUiMaintenance;
@@ -156,8 +163,6 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
         var suite = configuration.Config!;
-        _rebindSupersededVerificationChord =
-            AutomataDifferentialVerificationControl.ShouldRebindSupersededDefault(configuration.Status);
         _automataConfig = suite.Automata;
         _mentorConfig = suite.Mentor;
         _modConfigSettings = suite.ModConfig;
@@ -166,6 +171,13 @@ public sealed class Plugin : BaseUnityPlugin
 
         _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
         _featureStatuses = new AutomataFeatureStatuses(_automataConfig.Current, _lifecycleGeneration);
+        _mathVerification = new AutomataDifferentialVerificationControl(
+            message => Log.LogAutomataInfo(message));
+        _emergencyStopControl = new EmergencyStopControl(
+            _automataConfig,
+            ReadEmergencyStopResumePreview,
+            OnEmergencyStopChanged);
+        ValidateSuiteShortcuts();
 
         // The load gate above already refused any build that does not match an audited baseline, so
         // reaching here means the native contracts are the ones the suite was built against.
@@ -175,33 +187,34 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
-        if (!_automataConfig.Current.General.Enabled)
+        ComposeModConfig();
+        if (_automataConfig.Current.General.Enabled)
+        {
+            EnsureRuntimeComposition();
+        }
+        else
         {
             Log.LogAutomataInfo(
-                "Orb Of Creation ModSuite is disabled by General/Enabled; no patches and no features were installed.");
-            return;
+                "Orb Of Creation automation is disabled by General/Enabled; configuration and emergency recovery remain available.");
         }
+    }
 
+    private void EnsureRuntimeComposition()
+    {
+        if (_runtimeComposed) return;
+        _runtimeCompositionAttempted = true;
         _harmony = new Harmony(PluginIds.SuiteGuid);
         foreach (var patchType in HarmonyPatchTypes)
             _harmony.CreateClassProcessor(patchType).Patch();
-
         ComposeAutomata();
         ComposeMentor();
-        ComposeModConfig();
+        _runtimeComposed = true;
     }
 
     private void ComposeAutomata()
     {
         var config = _automataConfig!;
         var featureStatuses = _featureStatuses!;
-
-        // Diagnostic only: checks the suite's ported cost math against the game's own results on
-        // demand. It reads and compares; it never mutates.
-        _mathVerification = new AutomataDifferentialVerificationControl(
-            Config,
-            message => Log.LogAutomataInfo(message),
-            _rebindSupersededVerificationChord);
 
         _automataActionFamilyOwnership = new AutomataActionFamilyOwnership();
         Log.LogAutomataWarning(
@@ -211,12 +224,14 @@ public sealed class Plugin : BaseUnityPlugin
             guid => Chainloader.PluginInfos.ContainsKey(guid));
         _autoCastToggleControl = new AutoCastToggleControl(
             config,
-            () => featureStatuses.AutoCast.Current);
+            () => featureStatuses.AutoCast.Current,
+            featureStatuses.ObserveConfiguration);
         _autoBuyToggleControl = new AutoBuyToggleControl(
             config,
             () => _spellLevelCapability.Current,
             () => featureStatuses.AutoBuy.Current,
-            () => featureStatuses.SpellLevel.Current);
+            () => featureStatuses.SpellLevel.Current,
+            featureStatuses.ObserveConfiguration);
         Func<long> readAutoHarvestLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
         var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
@@ -310,10 +325,13 @@ public sealed class Plugin : BaseUnityPlugin
                                         featureStatus: featureStatuses.AutoConcept)),
                             },
                             Log);
-                    }));
+                    },
+                    config.Current,
+                    featureStatuses.ObserveServiceCycleUnavailable));
         _autoConceptToggleControl = new AutoConceptToggleControl(
             config,
-            () => featureStatuses.AutoConcept.Current);
+            () => featureStatuses.AutoConcept.Current,
+            featureStatuses.ObserveConfiguration);
         foreach (var hook in LifecycleObservationHooks)
             PatchOptional(hook.Target, hook.Handler, hook.Postfix);
         var runtimeConfig = config.Current;
@@ -408,6 +426,8 @@ public sealed class Plugin : BaseUnityPlugin
             ServiceCyclePumpTimingRegistry.Shared,
             ManualFullTraceControlRegistry.Shared,
             HostTraceDumpRegistry.Shared,
+            _mathVerification ??
+            throw new InvalidOperationException("Differential verification control was not composed."),
             DecisionJournalStatusSources.Shared
 #if SERVICE_CYCLE_PROFILE
             , PerformanceProfileControlRegistry.Shared
@@ -423,11 +443,30 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         if (_automataConfig is null) return;
+        ValidateSuiteShortcuts();
+        UpdateEmergencyStopControl();
+        if (!_automataConfig.Current.General.Enabled)
+        {
+            _runtimeCompositionAttempted = false;
+        }
+        else if (!_runtimeComposed && !_runtimeCompositionAttempted)
+        {
+            try
+            {
+                EnsureRuntimeComposition();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Could not activate automation after the master switch was enabled: " +
+                                ex.GetBaseException().Message);
+                _featureStatuses?.ObserveServiceCycleUnavailable(_automataConfig.Current);
+            }
+        }
 
         // Not the only pump. Mentor's bridge pumps the same shared bus again from LateUpdate, so a
         // frame with Mod Config enabled and Mentor active hands out the per-frame operation budget
         // twice. Unifying the two needs Mentor off its own tick, so it waits for that migration.
-        if (_modConfigSettings?.Enabled.Value == true)
+        if (_modConfigSettings is not null)
         {
             _invalidationBus?.Pump(
                 Time.frameCount,
@@ -439,10 +478,56 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateModConfig();
     }
 
+    private void ValidateSuiteShortcuts()
+    {
+        if (_automataConfig is null || _mentorConfig is null) return;
+        var autoCast = _automataConfig.AutoCastToggleShortcut.Value;
+        var mentor = _mentorConfig.ToggleShortcut.Value;
+        var signature = autoCast + "\u001f" + mentor;
+        if (string.Equals(signature, _shortcutAuditSignature, StringComparison.Ordinal)) return;
+        _shortcutAuditSignature = signature;
+        var listeners = SuiteShortcutCollisionValidator.Inventory(autoCast, mentor);
+        var collisions = SuiteShortcutCollisionValidator.Validate(listeners);
+        foreach (var listener in listeners)
+        {
+            if (listener.Kind == SuiteShortcutListenerKind.RuntimePageButton)
+            {
+                Logger.LogInfo(listener.DisplayName + " uses a Mods Runtime button and has no key listener.");
+                continue;
+            }
+            if (!collisions.Any(collision =>
+                    string.Equals(collision.ListenerId, listener.Id, StringComparison.Ordinal)))
+            {
+                Logger.LogInfo(
+                    $"Shortcut audit: {listener.DisplayName} ({listener.Shortcut}) has no audited native default collision.");
+            }
+        }
+        foreach (var collision in collisions)
+        {
+            if (collision.IsSuiteListener)
+            {
+                Logger.LogWarning(
+                    $"Shortcut audit: {collision.ListenerDisplayName} and " +
+                    $"{collision.ConflictingBinding} are both bound to the exact chord " +
+                    $"{collision.Key}; one press will run both listeners.");
+                continue;
+            }
+            Logger.LogWarning(
+                $"Shortcut audit: {collision.ListenerDisplayName} uses {collision.Key} as " +
+                (collision.IsMainKey ? "its main key" : "a held modifier") +
+                $", which also drives the native {collision.ConflictingBinding} binding.");
+        }
+    }
+
     private void UpdateAutomata()
     {
         var config = _automataConfig!;
         PublishChangedConfiguration();
+        _mathVerification?.Tick();
+        var deltaTime = Time.unscaledDeltaTime;
+        UpdateAutoCastControls(deltaTime);
+        UpdateAutoBuyControl(deltaTime);
+        UpdateAutoConceptControl(deltaTime);
         if (!_nativeContractsAvailable)
         {
             _featureStatuses?.ObserveContractUnavailable(
@@ -457,7 +542,6 @@ public sealed class Plugin : BaseUnityPlugin
             _automataActionFamilyOwnership?.Refresh(config.Current, lifecycleReady: false, Time.frameCount);
             return;
         }
-        var deltaTime = Time.unscaledDeltaTime;
         var lifecycleReady = IsLifecycleReady();
         _automataActionFamilyOwnership?.RefreshLoadedPluginInventory(
             Chainloader.PluginInfos.Count,
@@ -470,10 +554,6 @@ public sealed class Plugin : BaseUnityPlugin
                 "AutobuyOrb is loaded. Automata will block Structure and Upgrade purchases because those native action families overlap; Auto Cast, Auto Concept, Spell Leveling, and Mentor remain independent.");
         }
         _automataActionFamilyOwnership?.Refresh(config.Current, lifecycleReady, Time.frameCount);
-        _mathVerification?.Tick();
-        UpdateAutoCastControls(deltaTime);
-        UpdateAutoBuyControl(deltaTime);
-        UpdateAutoConceptControl(deltaTime);
         if (lifecycleReady)
         {
             _services.Tick(deltaTime);
@@ -507,7 +587,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void UpdateModConfig()
     {
-        if (_modConfigSettings?.Enabled.Value != true)
+        if (_modConfigSettings is null)
         {
             DeactivateUiWork(disposeShell: true);
             return;
@@ -575,6 +655,9 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        _emergencyStopButton?.Dispose();
+        _emergencyStopButton = null;
+        _emergencyStopControl = null;
         _uiShell?.Dispose();
         _uiShell = null;
         _uiWork?.Dispose();
@@ -618,6 +701,64 @@ public sealed class Plugin : BaseUnityPlugin
     private void CancelPreparedAutomationForOwnershipRelease()
     {
         _services.CancelPreparedWork();
+    }
+
+    private void UpdateEmergencyStopControl()
+    {
+        if (_emergencyStopControl is null) return;
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _emergencyStopButton?.Dispose();
+            _emergencyStopButton = null;
+            return;
+        }
+        if (_emergencyStopButton is not null && !_emergencyStopButton.IsAlive)
+        {
+            _emergencyStopButton.Dispose();
+            _emergencyStopButton = null;
+        }
+        if (_emergencyStopButton is not null)
+        {
+            _emergencyStopButton.Render();
+            return;
+        }
+        _emergencyStopUiRetrySeconds -= Time.unscaledDeltaTime;
+        if (_emergencyStopUiRetrySeconds > 0) return;
+        _emergencyStopUiRetrySeconds = UiRetryIntervalSeconds;
+        EmergencyStopButton.TryCreate(_emergencyStopControl, out _emergencyStopButton);
+    }
+
+    private void OnEmergencyStopChanged(bool stopped)
+    {
+        CancelPreparedAutomationForOwnershipRelease();
+        if (_automataConfig is not null)
+            _featureStatuses?.ObserveConfiguration(_automataConfig.Current);
+        if (stopped)
+            _mentorRuntime?.Cancel(MentorDropReason.Disabled);
+        _mentorRuntime?.RefreshFeatureStatus();
+        _uiMaintenanceDue = true;
+        Logger.LogWarning(stopped
+            ? "Suite emergency stop engaged; prepared automation work was discarded."
+            : "Suite emergency stop cleared after resume confirmation.");
+    }
+
+    private System.Collections.Generic.IReadOnlyList<string> ReadEmergencyStopResumePreview()
+    {
+        var result = new System.Collections.Generic.List<string>();
+        var config = _automataConfig?.Current;
+        if (config is not null)
+        {
+            if (config.AutoBuy.Mode == AutoBuyOperationMode.Active) result.Add("Auto Buy");
+            if (config.AutoBuy.Mode == AutoBuyOperationMode.Active && config.AutoBuy.AutoLevelSpells)
+                result.Add("Spell Leveling");
+            if (config.AutoCast.Mode == AutoCastOperationMode.Active) result.Add("Auto Cast");
+            if (config.AutoConcept.Mode == AutoConceptOperationMode.Active) result.Add("Auto Concept");
+            if (config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
+                (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees))
+                result.Add("Auto Harvest");
+        }
+        if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
+        return result;
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)
@@ -675,6 +816,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (_automataConfig is null) return;
         if (!_automataConfig.TryTakeUnpublishedChange(out var configuration)) return;
+        _featureStatuses?.ObserveConfiguration(configuration);
         _serviceCycleActivation?.PublishSavedConfiguration(configuration);
     }
 
@@ -1006,6 +1148,27 @@ public sealed class Plugin : BaseUnityPlugin
             _uiShell.RunPendingRefresh();
             if (_uiIntegrityDue)
             {
+                var loadedSources = ConfigCatalog.CaptureLoadedSources();
+                var generation = ConfigCatalogGeneration.Capture(loadedSources);
+                if (!ModConfigCatalogSession.IsCurrent(
+                        _catalog,
+                        _catalogGeneration,
+                        generation))
+                {
+                    _catalogNavigation = _uiShell.CaptureNavigation();
+                    _uiShell.Dispose();
+                    _uiShell = null;
+                    _catalog = ModConfigCatalogSession.GetOrDiscover(
+                        ref _catalog,
+                        ref _catalogGeneration,
+                        generation,
+                        () => ConfigCatalog.Build(loadedSources, _runtimeSources!.SchemaStatuses),
+                        LogCatalog);
+                    _uiIntegrityDue = false;
+                    _uiRetrySeconds = 0f;
+                    _uiMaintenanceDue = true;
+                    return;
+                }
                 _uiShell.RefreshNavigation();
                 _uiIntegrityDue = false;
                 _uiIntegritySeconds = UiIntegrityIntervalSeconds;
@@ -1019,15 +1182,20 @@ public sealed class Plugin : BaseUnityPlugin
                               throw new InvalidOperationException("Mod Config invalidation bus was not composed.");
         var runtimeSources = _runtimeSources ??
                              throw new InvalidOperationException("Mod Config runtime sources were not composed.");
+        var loadedCatalogSources = ConfigCatalog.CaptureLoadedSources();
+        var currentCatalogGeneration = ConfigCatalogGeneration.Capture(loadedCatalogSources);
         var catalog = ModConfigCatalogSession.GetOrDiscover(
             ref _catalog,
-            () => ConfigCatalog.DiscoverLoaded(runtimeSources.SchemaStatuses),
+            ref _catalogGeneration,
+            currentCatalogGeneration,
+            () => ConfigCatalog.Build(loadedCatalogSources, runtimeSources.SchemaStatuses),
             LogCatalog);
         if (!ModConfigUiShell.TryCreate(
                 Logger,
                 catalog,
                 invalidationBus,
                 runtimeSources,
+                _catalogNavigation,
                 MarkUiMaintenanceDue,
                 MarkNavigationMaintenanceDue,
                 out _uiShell,

@@ -27,6 +27,7 @@ internal sealed class AutoCastToggleButton : IDisposable
     private readonly AutoCastToggleControl _control;
     private readonly ManualLogSource _log;
     private AutoCastToggleVisualState? _renderedState;
+    private bool _renderedStopped;
     private bool _noticeFailureLogged;
     private bool _disposed;
 
@@ -181,13 +182,15 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
 
         var state = _control.State;
-        if (!force && _renderedState == state)
+        var stopped = AutomataFeatureStatusVisuals.IsEmergencyStopped(_control.Status);
+        if (!force && _renderedState == state && _renderedStopped == stopped)
         {
             return;
         }
 
         var announce = _renderedState.HasValue && _renderedState.Value != state;
         _renderedState = state;
+        _renderedStopped = stopped;
         var active = state == AutoCastToggleVisualState.On;
         var color = state == AutoCastToggleVisualState.On ? OnColor : OffColor;
         if (_rootImage is not null)
@@ -203,8 +206,8 @@ internal sealed class AutoCastToggleButton : IDisposable
 
         if (_text is not null)
         {
-            _text.text = FormatLabel(state);
-            _text.color = color;
+            _text.text = FormatLabel(state, stopped);
+            _text.color = stopped ? new Color(1.0f, 0.45f, 0.25f) : color;
         }
 
         if (announce)
@@ -213,7 +216,9 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
     }
 
-    internal static string FormatLabel(AutoCastToggleVisualState state) => state switch
+    internal static string FormatLabel(AutoCastToggleVisualState state, bool stopped = false) => stopped
+        ? "AC ON / STOPPED"
+        : state switch
     {
         AutoCastToggleVisualState.On => "AC ON",
         _ => "AC OFF",

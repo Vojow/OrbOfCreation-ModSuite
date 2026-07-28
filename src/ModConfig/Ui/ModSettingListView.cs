@@ -138,6 +138,12 @@ internal sealed class ModSettingListView : IDisposable
             return rowHeight;
         }
 
+        if (edit.HasExternalConflict)
+        {
+            CreateConflictEditor(row.transform, edit);
+            return rowHeight;
+        }
+
         CreateEditor(row.transform, setting, edit);
         if (edit.IsEditable)
         {
@@ -155,6 +161,43 @@ internal sealed class ModSettingListView : IDisposable
                 });
         }
         return rowHeight;
+    }
+
+    private void CreateConflictEditor(Transform parent, ConfigEditValue edit)
+    {
+        ModConfigUiFactory.CreateText(
+            "Conflict",
+            parent,
+            new Vector2(0.56f, 0.12f),
+            new Vector2(0.77f, 0.88f),
+            _labelTemplate,
+            $"Mine: {edit.StagedSerialized}\nLive: {edit.ExternalSerialized}",
+            TextAlignmentOptions.MidlineLeft,
+            0.54f);
+        ModConfigUiFactory.CreateButton(
+            "KeepMine",
+            parent,
+            new Vector2(0.78f, 0.18f),
+            new Vector2(0.88f, 0.82f),
+            _labelTemplate,
+            "Keep mine",
+            () =>
+            {
+                edit.KeepStagedValue();
+                _rebuildRequested();
+            });
+        ModConfigUiFactory.CreateButton(
+            "TakeLive",
+            parent,
+            new Vector2(0.89f, 0.18f),
+            new Vector2(0.99f, 0.82f),
+            _labelTemplate,
+            "Take live",
+            () =>
+            {
+                edit.TakeExternalValue();
+                _rebuildRequested();
+            });
     }
 
     private void CreateEditor(
@@ -252,5 +295,6 @@ internal sealed class ModSettingListView : IDisposable
             edit.Stage(value);
             _statusChanged(edit);
         });
+        input.onEndEdit.AddListener(_ => _rebuildRequested());
     }
 }
