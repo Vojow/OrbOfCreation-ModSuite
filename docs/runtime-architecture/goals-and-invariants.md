@@ -123,6 +123,9 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 - Feature-grouped immutable records are the canonical runtime configuration; persistence-framework entries stay behind the composition adapter and services never retain a `ConfigEntry` or a feature-specific mirror.
 - The pump reads the emergency stop off the configuration publication every frame. Nothing pushes it in, so the state the pump is in cannot drift from what the suite is configured to do; a snapshot that says nothing about it leaves an explicitly engaged stop alone.
 - Diagnostics expose pinned and latest versions so delayed application is explicit.
+- Configured-intent status projection has its own application-boundary generation because it must order
+  controls before deferred ServiceCycle activation. Every feature bridge carries it; older status writes
+  are rejected, and registry transitions expose the replacement snapshot synchronously.
 - User configuration and hard safety policy outrank strategic advice.
 
 ## Action invariants

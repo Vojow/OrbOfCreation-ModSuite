@@ -14,16 +14,16 @@ internal sealed class AutoCastFeatureDependencies
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         AutoCastManualPauseState manualPause,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter featureStatus)
     {
         ReadLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         OwnsActionFamily = ownsActionFamily ?? throw new ArgumentNullException(nameof(ownsActionFamily));
         ManualPause = manualPause ?? throw new ArgumentNullException(nameof(manualPause));
-        FeatureStatus = featureStatus;
+        FeatureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
     }
 
     public Func<long> ReadLifecycleEpoch { get; }
     public Func<bool> OwnsActionFamily { get; }
     public AutoCastManualPauseState ManualPause { get; }
-    public AutomataFeatureStatusReporter? FeatureStatus { get; }
+    public AutomataFeatureStatusReporter FeatureStatus { get; }
 }

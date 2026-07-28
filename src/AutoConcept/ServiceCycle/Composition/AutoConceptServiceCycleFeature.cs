@@ -1,6 +1,5 @@
 using System;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -26,21 +25,9 @@ internal sealed class AutoConceptServiceCycleFeature : IAutomataServiceCycleFeat
             adapters.Natives,
             registration,
             context.LifecycleValue,
-            context.Configuration);
+            context.ConfigurationGeneration);
     }
 
-    public void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception)
-    {
-        if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        if (AutoConceptConfigurationPolicy.IsOperational(configuration))
-        {
-            _dependencies.FeatureStatus?.Observe(
-                true,
-                FeatureStatusState.Faulted,
-                FeatureStatusReasonCode.RuntimeFailure,
-                "Auto Concept could not initialize its ServiceCycle runtime.");
-        }
-    }
 }
 
 internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRuntime
@@ -49,7 +36,7 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
     private readonly AutoConceptNativeAdapter _natives;
     private readonly ServiceRegistration<AutoConceptCycleState, AutoConceptCycleAction> _registration;
     private readonly long _lifecycleValue;
-    private readonly SuiteRuntimeConfiguration _initialConfiguration;
+    private readonly ConfigGeneration _initialConfigurationGeneration;
     private AutoConceptServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoConceptFeatureRuntime(
@@ -57,20 +44,20 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
         AutoConceptNativeAdapter natives,
         ServiceRegistration<AutoConceptCycleState, AutoConceptCycleAction> registration,
         long lifecycleValue,
-        SuiteRuntimeConfiguration initialConfiguration)
+        ConfigGeneration initialConfigurationGeneration)
     {
         _dependencies = dependencies;
         _natives = natives;
         _registration = registration;
         _lifecycleValue = lifecycleValue;
-        _initialConfiguration = initialConfiguration;
+        _initialConfigurationGeneration = initialConfigurationGeneration;
     }
 
     public void ActivateDiagnostics()
     {
         _diagnostics = new AutoConceptServiceCycleDiagnosticsBridge(
             _lifecycleValue,
-            _initialConfiguration,
+            _initialConfigurationGeneration,
             _dependencies.OwnsActionFamily(),
             _dependencies.FeatureStatus);
     }
@@ -78,14 +65,18 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
     public void ObserveFrame(SuiteFramePump pump, in SuiteFramePumpReport report) =>
         _diagnostics?.Observe(pump, in report, _dependencies.OwnsActionFamily());
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration) =>
-        _diagnostics?.ObserveConfiguration(configuration, _dependencies.OwnsActionFamily());
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration) =>
+        _diagnostics?.ObserveConfiguration(configurationGeneration);
 
-    public void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration)
+    public void ObserveLifecycle(
+        long nativeLifecycle,
+        ConfigGeneration configurationGeneration)
     {
         _natives.InvalidateLifecycle();
         _diagnostics?.ObserveLifecycle(
-            nativeLifecycle, configuration, _dependencies.OwnsActionFamily());
+            nativeLifecycle,
+            configurationGeneration,
+            _dependencies.OwnsActionFamily());
     }
 
     public void DisposeDiagnostics() => _diagnostics = null;

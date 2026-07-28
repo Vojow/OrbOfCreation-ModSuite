@@ -11,6 +11,8 @@ using OrbMentor;
 using OrbModConfig;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
@@ -78,9 +80,9 @@ public sealed class Plugin : BaseUnityPlugin
     private Harmony? _harmony;
 
     private BepInExAutomataConfiguration? _automataConfig;
+    private AutomataConfigurationStore? _configurationStore;
     private string? _shortcutAuditSignature;
     private AutomataFeatureStatuses? _featureStatuses;
-    private readonly AutomataServiceRegistry _services = new();
     private readonly SpellLevelCapabilityState _spellLevelCapability = new();
 
     // Held by the plugin rather than by the feature because the Harmony patch that feeds it outlives
@@ -173,11 +175,17 @@ public sealed class Plugin : BaseUnityPlugin
             Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
 
         _lifecycleGeneration = GameLifecycleMonitor.Shared.Current.Generation;
-        _featureStatuses = new AutomataFeatureStatuses(_automataConfig.Current, _lifecycleGeneration);
+        _configurationStore = new AutomataConfigurationStore(
+            _automataConfig,
+            PublishConfiguration);
+        _featureStatuses = new AutomataFeatureStatuses(
+            _configurationStore.Current,
+            _lifecycleGeneration,
+            configurationGeneration: _configurationStore.CurrentGeneration);
         _mathVerification = new AutomataDifferentialVerificationControl(
             message => Log.LogAutomataInfo(message));
         _emergencyStopControl = new EmergencyStopControl(
-            _automataConfig,
+            _configurationStore,
             ReadEmergencyStopResumePreview,
             OnEmergencyStopChanged);
         ValidateSuiteShortcuts();
@@ -191,7 +199,7 @@ public sealed class Plugin : BaseUnityPlugin
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         ComposeModConfig();
-        if (_automataConfig.Current.General.Enabled)
+        if (_configurationStore.Current.General.Enabled)
         {
             EnsureRuntimeComposition();
         }
@@ -218,7 +226,6 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void ComposeAutomata()
     {
-        var config = _automataConfig!;
         var featureStatuses = _featureStatuses!;
 
         _automataActionFamilyOwnership = new AutomataActionFamilyOwnership();
@@ -229,132 +236,123 @@ public sealed class Plugin : BaseUnityPlugin
             Chainloader.PluginInfos.Count,
             guid => Chainloader.PluginInfos.ContainsKey(guid));
         _autoCastToggleControl = new AutoCastToggleControl(
-            config,
-            () => featureStatuses.AutoCast.Current,
-            featureStatuses.ObserveConfiguration);
+            _configurationStore!,
+            () => featureStatuses.AutoCast.Current);
         _autoBuyToggleControl = new AutoBuyToggleControl(
-            config,
+            _configurationStore!,
             () => _spellLevelCapability.Current,
             () => featureStatuses.AutoBuy.Current,
-            () => featureStatuses.SpellLevel.Current,
-            featureStatuses.ObserveConfiguration);
+            () => featureStatuses.SpellLevel.Current);
         Func<long> readAutoHarvestLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
         var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
-        AutomataProductionComposition.Register(
-            _services,
-            tryCreateServiceCycle: () => _serviceCycleActivation =
-                new AutomataServiceCycleActivation(
-                    IsLifecycleReady,
-                    () =>
+        _serviceCycleActivation = new AutomataServiceCycleActivation(
+            IsLifecycleReady,
+            (configuration, configurationGeneration) =>
+            {
+                // One frame counter shared by every feature below. Resolving it per feature
+                // would let two services disagree about what frame it is — a wiring mistake
+                // that compiles and looks like a quiet game. The world publication is not
+                // here at all: the registry owns it, because there is one game.
+                Func<long> readFrameIdentity = static () => Time.frameCount;
+                return AutomataServiceCycleComposition.TryCreate(
+                    configuration,
+                    configurationGeneration,
+                    new AutomataServiceCycleHostDependencies(
+                        readFrameIdentity,
+                        readAutoHarvestLifecycleEpoch,
+                        pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
+                        observability: new AutomataServiceCycleObservabilityOptions(
+                            AutomataFullTracePathPolicy.Create(
+                                ManualFullTraceControlRegistry.Shared),
+                            AutomataDecisionJournalPathPolicy.Create(
+                                DecisionJournalStatusRegistry.Shared),
+                            AutomataHostTraceDumpPathPolicy.Create(
+                                HostTraceDumpRegistry.Shared),
+                            AutoStartServiceCycleDiagnostics)),
+                    new IAutomataServiceCycleFeature[]
                     {
-                        // One frame counter shared by every feature below. Resolving it per feature
-                        // would let two services disagree about what frame it is — a wiring mistake
-                        // that compiles and looks like a quiet game. The world publication is not
-                        // here at all: the registry owns it, because there is one game.
-                        Func<long> readFrameIdentity = static () => Time.frameCount;
-                        return AutomataServiceCycleProductionComposition.TryCreate(
-                            config.Current,
-                            new AutomataServiceCycleHostDependencies(
-                                readFrameIdentity,
-                                readAutoHarvestLifecycleEpoch,
-                                pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
-                                observability: new AutomataServiceCycleObservabilityOptions(
-                                    AutomataFullTracePathPolicy.Create(
-                                        ManualFullTraceControlRegistry.Shared),
-                                    AutomataDecisionJournalPathPolicy.Create(
-                                        DecisionJournalStatusRegistry.Shared),
-                                    AutomataHostTraceDumpPathPolicy.Create(
-                                        HostTraceDumpRegistry.Shared),
-                                    AutoStartServiceCycleDiagnostics)),
-                            new IAutomataServiceCycleFeature[]
+                        // Registered first so the world is collected before the services that
+                        // read it evaluate. Ordering between services is not enforced and this
+                        // does not make it so — it only avoids every consumer's first cycle
+                        // reading the empty snapshot for no reason.
+                        new AutomataWorldCollectionFeature(
+                            readFrameIdentity,
+                            readAutoHarvestLifecycleEpoch,
+                            static report =>
                             {
-                                // Registered first so the world is collected before the services that
-                                // read it evaluate. Ordering between services is not enforced and this
-                                // does not make it so — it only avoids every consumer's first cycle
-                                // reading the empty snapshot for no reason.
-                                new AutomataWorldCollectionFeature(
-                                    readFrameIdentity,
-                                    readAutoHarvestLifecycleEpoch,
-                                    static report =>
-                                    {
-                                        if (report.IsComplete) Log.LogInfo(report.Describe());
-                                        else Log.LogWarning(report.Describe());
-                                    },
-                                    createCollector: () =>
-                                        new GameWorldCollector(_mentorMasteryJournal)),
-                                new AutoHarvestServiceCycleFeature(
-                                    new AutoHarvestFeatureDependencies(
-                                        autoHarvestRegistryResolver,
-                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsHarvest == true,
-                                        tryCaptureMutationPermit: () =>
-                                            _automataActionFamilyOwnership?.TryCaptureHarvestMutationPermit() == true,
-                                        runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
-                                        featureStatus: featureStatuses.AutoHarvest)),
-                                new AutoBuyServiceCycleFeature(
-                                    new AutoBuyFeatureDependencies(
-                                        readAutoHarvestLifecycleEpoch,
-                                        ownershipMask: () =>
-                                        {
-                                            var autoBuyOwnership = AutoBuyCandidateKinds.None;
-                                            if (_automataActionFamilyOwnership?.OwnsAutoBuy(AutoBuyCandidateKind.Structure) == true)
-                                                autoBuyOwnership |= AutoBuyCandidateKinds.Structures;
-                                            if (_automataActionFamilyOwnership?.OwnsAutoBuy(AutoBuyCandidateKind.Upgrade) == true)
-                                                autoBuyOwnership |= AutoBuyCandidateKinds.Upgrades;
-                                            return autoBuyOwnership;
-                                        },
-                                        runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
-                                        featureStatus: featureStatuses.AutoBuy,
-                                        // A purchase the game refuses is a planner bug, so Auto Buy
-                                        // writes down both halves of the disagreement and turns its
-                                        // own setting off rather than retrying into a livelock.
-                                        refusalResponse: new AutoBuyRefusalResponder(
-                                            config,
-                                            new AutoBuyRefusalBundleWriter(
-                                                () => AutomataTraceRunRoot.Stable("diagnostics")),
-                                            message => Log.LogAutomataError(message),
-                                            featureStatuses.AutoBuy))),
-                                new SpellLevelServiceCycleFeature(
-                                    new SpellLevelFeatureDependencies(
-                                        readAutoHarvestLifecycleEpoch,
-                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsSpellLevel == true,
-                                        capability: _spellLevelCapability,
-                                        featureStatus: featureStatuses.SpellLevel)),
-                                new AutoCastServiceCycleFeature(
-                                    new AutoCastFeatureDependencies(
-                                        readAutoHarvestLifecycleEpoch,
-                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsCast == true,
-                                        _autoCastManualPause,
-                                        featureStatus: featureStatuses.AutoCast)),
-                                new AutoConceptServiceCycleFeature(
-                                    new AutoConceptFeatureDependencies(
-                                        readAutoHarvestLifecycleEpoch,
-                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsConcept == true,
-                                        featureStatus: featureStatuses.AutoConcept)),
-                                new MentorServiceCycleFeature(
-                                    new MentorFeatureDependencies(
-                                        readAutoHarvestLifecycleEpoch,
-                                        captureMutationPermit: domain =>
-                                            _mentorActionFamilyOwnership?.TryCaptureMutationPermit(
-                                                domain switch
-                                                {
-                                                    MasteryExperienceDomain.Spell => MentorDomain.Spells,
-                                                    MasteryExperienceDomain.Artifact => MentorDomain.Artifacts,
-                                                    _ => MentorDomain.Alchemy,
-                                                }) == true,
-                                        featureStatus: featureStatuses.Mentor)),
+                                if (report.IsComplete) Log.LogInfo(report.Describe());
+                                else Log.LogWarning(report.Describe());
                             },
-                            Log);
+                            createCollector: () =>
+                                new GameWorldCollector(_mentorMasteryJournal)),
+                        new AutoHarvestServiceCycleFeature(
+                            new AutoHarvestFeatureDependencies(
+                                autoHarvestRegistryResolver,
+                                ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsHarvest,
+                                tryCaptureMutationPermit: () =>
+                                    _automataActionFamilyOwnership!.TryCaptureHarvestMutationPermit(),
+                                runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
+                                featureStatus: featureStatuses.AutoHarvest)),
+                        new AutoBuyServiceCycleFeature(
+                            new AutoBuyFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                ownershipMask: () =>
+                                    _automataActionFamilyOwnership!.EffectiveAutoBuyOwnership(
+                                        _configurationStore!.Current.AutoBuy),
+                                runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
+                                featureStatus: featureStatuses.AutoBuy,
+                                // A purchase the game refuses is a planner bug, so Auto Buy
+                                // writes down both halves of the disagreement and turns its
+                                // own setting off rather than retrying into a livelock.
+                                refusalResponse: new AutoBuyRefusalResponder(
+                                    () => _configurationStore!.Current.AutoBuy.Mode ==
+                                        AutoBuyOperationMode.Active,
+                                    StandDownAutoBuy,
+                                    new AutoBuyRefusalBundleWriter(
+                                        () => AutomataTraceRunRoot.Stable("diagnostics")),
+                                    message => Log.LogAutomataError(message)))),
+                        new SpellLevelServiceCycleFeature(
+                            new SpellLevelFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsSpellLevel,
+                                capability: _spellLevelCapability,
+                                featureStatus: featureStatuses.SpellLevel)),
+                        new AutoCastServiceCycleFeature(
+                            new AutoCastFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsCast,
+                                _autoCastManualPause,
+                                featureStatus: featureStatuses.AutoCast)),
+                        new AutoConceptServiceCycleFeature(
+                            new AutoConceptFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsConcept,
+                                featureStatus: featureStatuses.AutoConcept)),
+                        new MentorServiceCycleFeature(
+                            new MentorFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                captureMutationPermit: domain =>
+                                    _mentorActionFamilyOwnership!.TryCaptureMutationPermit(
+                                        domain switch
+                                        {
+                                            MasteryExperienceDomain.Spell => MentorDomain.Spells,
+                                            MasteryExperienceDomain.Artifact => MentorDomain.Artifacts,
+                                            _ => MentorDomain.Alchemy,
+                                        }) == true,
+                                featureStatus: featureStatuses.Mentor)),
                     },
-                    config.Current,
-                    featureStatuses.ObserveServiceCycleUnavailable));
+                    Log);
+            },
+            _configurationStore!.Current,
+            _configurationStore!.CurrentGeneration,
+            featureStatuses.ObserveServiceCycleUnavailable);
         _autoConceptToggleControl = new AutoConceptToggleControl(
-            config,
-            () => featureStatuses.AutoConcept.Current,
-            featureStatuses.ObserveConfiguration);
+            _configurationStore,
+            () => featureStatuses.AutoConcept.Current);
         foreach (var hook in LifecycleObservationHooks)
             PatchOptional(hook.Target, hook.Handler, hook.Postfix);
-        var runtimeConfig = config.Current;
+        var runtimeConfig = _configurationStore.Current;
         Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={runtimeConfig.AutoBuy.Mode}, " +
             $"StructureAffordability={runtimeConfig.AutoBuy.StructureAffordability}, " +
@@ -408,9 +406,10 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         if (_automataConfig is null) return;
+        PublishChangedConfiguration();
         ValidateSuiteShortcuts();
         UpdateEmergencyStopControl();
-        if (!_automataConfig.Current.General.Enabled)
+        if (!_configurationStore!.Current.General.Enabled)
         {
             _runtimeCompositionAttempted = false;
         }
@@ -424,7 +423,9 @@ public sealed class Plugin : BaseUnityPlugin
             {
                 Logger.LogError("Could not activate automation after the master switch was enabled: " +
                                 ex.GetBaseException().Message);
-                _featureStatuses?.ObserveServiceCycleUnavailable(_automataConfig.Current);
+                _featureStatuses?.ObserveServiceCycleUnavailable(
+                    _configurationStore.Current,
+                    _configurationStore.CurrentGeneration);
             }
         }
 
@@ -484,8 +485,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void UpdateAutomata()
     {
-        var config = _automataConfig!;
-        PublishChangedConfiguration();
+        var configuration = _configurationStore!.Current;
         _mathVerification?.Tick();
         var deltaTime = Time.unscaledDeltaTime;
         UpdateAutoCastControls(deltaTime);
@@ -494,15 +494,19 @@ public sealed class Plugin : BaseUnityPlugin
         if (!_nativeContractsAvailable)
         {
             _featureStatuses?.ObserveContractUnavailable(
-                config.Current,
+                configuration,
                 _lifecycleGeneration,
-                "Installed game assemblies do not match Automata's audited native contracts.");
+                "Installed game assemblies do not match Automata's audited native contracts.",
+                _configurationStore.CurrentGeneration);
             return;
         }
-        if (!config.Current.General.Enabled)
+        if (!configuration.General.Enabled)
         {
             CancelPreparedAutomationForOwnershipRelease();
-            _automataActionFamilyOwnership?.Refresh(config.Current, lifecycleReady: false, Time.frameCount);
+            _automataActionFamilyOwnership?.Refresh(
+                configuration,
+                lifecycleReady: false,
+                Time.frameCount);
             return;
         }
         var lifecycleReady = IsLifecycleReady();
@@ -516,14 +520,17 @@ public sealed class Plugin : BaseUnityPlugin
             Log.LogAutomataWarning(
                 "AutobuyOrb is loaded. Automata will block Structure and Upgrade purchases because those native action families overlap; Auto Cast, Auto Concept, Spell Leveling, and Mentor remain independent.");
         }
-        _automataActionFamilyOwnership?.Refresh(config.Current, lifecycleReady, Time.frameCount);
+        _automataActionFamilyOwnership?.Refresh(configuration, lifecycleReady, Time.frameCount);
         if (lifecycleReady)
         {
-            _services.Tick(deltaTime);
+            _serviceCycleActivation?.Tick(deltaTime);
         }
         else
         {
-            _featureStatuses?.ObserveLifecycleNotReady(config.Current, _lifecycleGeneration);
+            _featureStatuses?.ObserveLifecycleNotReady(
+                configuration,
+                _lifecycleGeneration,
+                _configurationStore.CurrentGeneration);
         }
     }
 
@@ -534,6 +541,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (SceneManager.GetActiveScene().name == "Main" && _mentorConfig.ToggleShortcut.Value.IsDown())
         {
             _mentorConfig.Mode.Value = _mentorConfig.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
+            PublishChangedConfiguration();
             Logger.LogInfo($"Orb Mentor is now {_mentorConfig.Mode.Value}.");
         }
         if (SceneManager.GetActiveScene().name != "Main") { _mentorButton?.Dispose(); _mentorButton = null; return; }
@@ -546,6 +554,7 @@ public sealed class Plugin : BaseUnityPlugin
             MentorToggleButton.TryCreate(
                 _mentorConfig,
                 () => _featureStatuses!.Mentor.Current,
+                PublishChangedConfiguration,
                 out _mentorButton);
         }
     }
@@ -625,6 +634,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork = null;
         _runUiMaintenance = null;
         _runtimeSources = null;
+        _configurationStore = null;
 
         _mentorButton?.Dispose();
         _mentorButton = null;
@@ -634,7 +644,7 @@ public sealed class Plugin : BaseUnityPlugin
         _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
-        _services.Dispose();
+        _serviceCycleActivation?.Dispose();
         _serviceCycleActivation = null;
         _automataActionFamilyOwnership?.Dispose();
         _automataActionFamilyOwnership = null;
@@ -658,7 +668,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void CancelPreparedAutomationForOwnershipRelease()
     {
-        _services.CancelPreparedWork();
+        _serviceCycleActivation?.CancelPreparedWork();
     }
 
     private void UpdateEmergencyStopControl()
@@ -689,8 +699,6 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnEmergencyStopChanged(bool stopped)
     {
         CancelPreparedAutomationForOwnershipRelease();
-        if (_automataConfig is not null)
-            _featureStatuses?.ObserveConfiguration(_automataConfig.Current);
         if (stopped)
             _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
         _uiMaintenanceDue = true;
@@ -702,7 +710,7 @@ public sealed class Plugin : BaseUnityPlugin
     private System.Collections.Generic.IReadOnlyList<string> ReadEmergencyStopResumePreview()
     {
         var result = new System.Collections.Generic.List<string>();
-        var config = _automataConfig?.Current;
+        var config = _configurationStore?.Current;
         if (config is not null)
         {
             if (config.AutoBuy.Mode == AutoBuyOperationMode.Active) result.Add("Auto Buy");
@@ -728,10 +736,13 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (transition.Current.Generation == _lifecycleGeneration) return;
         _lifecycleGeneration = transition.Current.Generation;
-        _services.InvalidateLifecycle();
+        _serviceCycleActivation?.InvalidateLifecycle();
         _automataActionFamilyOwnership?.ReleaseLifecycleClaims();
-        if (_automataConfig is not null)
-            _featureStatuses?.ObserveLifecycleNotReady(_automataConfig.Current, _lifecycleGeneration);
+        if (_configurationStore is not null)
+            _featureStatuses?.ObserveLifecycleNotReady(
+                _configurationStore.Current,
+                _lifecycleGeneration,
+                _configurationStore.CurrentGeneration);
         MentorMasteryPatchBridge.ResetLifecycle(_lifecycleGeneration);
         _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
@@ -761,7 +772,7 @@ public sealed class Plugin : BaseUnityPlugin
     }
 
     /// <summary>
-    /// Publishes the settings, once per frame, if anything changed them.
+    /// Commits a pending external or staged settings change at the start of the application frame.
     /// </summary>
     /// <remarks>
     /// Every source counts. This used to hang off the invalidation the suite's own settings panel
@@ -771,10 +782,25 @@ public sealed class Plugin : BaseUnityPlugin
     /// </remarks>
     private void PublishChangedConfiguration()
     {
-        if (_automataConfig is null) return;
-        if (!_automataConfig.TryTakeUnpublishedChange(out var configuration)) return;
-        _featureStatuses?.ObserveConfiguration(configuration);
-        _serviceCycleActivation?.PublishSavedConfiguration(configuration);
+        _configurationStore?.PublishPending();
+    }
+
+    private void PublishConfiguration(
+        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration)
+    {
+        _featureStatuses?.ObserveConfiguration(configuration, configurationGeneration);
+        _serviceCycleActivation?.PublishSavedConfiguration(
+            configuration,
+            configurationGeneration);
+    }
+
+    private void StandDownAutoBuy(string summary)
+    {
+        if (!_configurationStore!.DisableAutoBuy()) return;
+        _featureStatuses!.ObserveAutoBuyInvariantStandDown(
+            summary,
+            _configurationStore.CurrentGeneration);
     }
 
     private bool IsLifecycleReady() =>
@@ -797,7 +823,7 @@ public sealed class Plugin : BaseUnityPlugin
             _autoCastToggleControl.Toggle();
         }
 
-        if (!inGameplay || !_automataConfig.Current.AutoCast.ShowToggleButton)
+        if (!inGameplay || !_configurationStore!.Current.AutoCast.ShowToggleButton)
         {
             _autoCastToggleButton?.Dispose();
             _autoCastToggleButton = null;
@@ -880,7 +906,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (_automataConfig is null || _autoConceptToggleControl is null) return;
         var inGameplay = SceneManager.GetActiveScene().name == "Main";
-        if (!inGameplay || !_automataConfig.Current.AutoConcept.ShowToggleButton)
+        if (!inGameplay || !_configurationStore!.Current.AutoConcept.ShowToggleButton)
         {
             _autoConceptToggleButton?.Dispose();
             _autoConceptToggleButton = null;

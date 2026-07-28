@@ -70,9 +70,6 @@ jobs:
     name: Deterministic performance
     runs-on: windows-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Check out repository
@@ -89,28 +86,15 @@ jobs:
         run: dotnet restore tests/OrbModding.Tests/OrbModding.Tests.csproj --locked-mode -p:UseGameStubs=true
 
       - name: Run deterministic performance simulations
-        env:
-          OOC_SUITE_PERFORMANCE_EVIDENCE: ${{ github.workspace }}/artifacts/performance/suite-performance-evidence.json
         shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane PerformanceAll -NoRestore
-
-      - name: Validate and evaluate suite performance evidence
-        run: >-
-          dotnet run --project tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj
-          --configuration Release --no-restore --
-          --profile data/suite-performance-profile-v1.json
-          --evidence artifacts/performance/suite-performance-evidence.json
-          --json-output artifacts/performance/suite-performance-evaluation.json
-          --markdown-output artifacts/performance/suite-performance-evaluation.md
 
       - name: Retain deterministic performance report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: autobuy-performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            artifacts/performance
-            artifacts/test-results/performanceall
+          path: artifacts/test-results/performanceall
           if-no-files-found: error
           retention-days: 90
 

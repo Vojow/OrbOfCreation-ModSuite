@@ -22,22 +22,10 @@ internal readonly struct AutoConceptFeatureStatus
 internal static class AutoConceptFeatureStatusProjector
 {
     public static AutoConceptFeatureStatus Project(
-        bool pluginEnabled,
-        bool featureEnabled,
         bool emergencyDisabled,
         bool owned,
         bool cycleObserved)
     {
-        if (!featureEnabled)
-            return new AutoConceptFeatureStatus(
-                FeatureStatusState.ConfigurationDisabled,
-                FeatureStatusReasonCode.ConfigurationDisabled,
-                "Auto Concept is disabled by configuration.");
-        if (!pluginEnabled)
-            return new AutoConceptFeatureStatus(
-                FeatureStatusState.TemporarilyBlocked,
-                FeatureStatusReasonCode.ParentFeatureDisabled,
-                "Automata is disabled by configuration.");
         if (emergencyDisabled)
             return new AutoConceptFeatureStatus(
                 FeatureStatusState.TemporarilyBlocked,

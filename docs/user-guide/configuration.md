@@ -18,7 +18,18 @@ The Mods catalog is reused across ordinary refreshes and unchanged scene rebuild
 
 The Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
-The Auto Buy, Auto Cast, Auto Concept, and Mentor quick buttons publish and display the saved On/Off intent before the click returns. Runtime waiting, pauses, blockers, and failures remain a separate status axis in the button tooltip and Mods Runtime page; a configured-On feature does not pretend to be Off merely because it cannot currently run.
+The Auto Buy, Auto Cast, Auto Concept, and Mentor quick buttons publish the saved value through the
+same configuration store used by every other writer before the click returns, then render that committed
+intent. The button decides its next value from committed state, not from a raw file-watcher notification
+that the application has not accepted yet. Mods Apply and external edits join the same store at the start
+of the next main-thread frame.
+
+Runtime waiting, pauses, blockers, and failures remain a separate health axis in the button tooltip and
+Mods Runtime page; a configured-On feature does not pretend to be Off merely because it cannot currently
+run. Service diagnostics publish health only. One central presentation join combines it with committed
+intent, so a late lifecycle, host-fault, or completed-cycle update cannot repaint a saved setting. The
+suite renderer also exclusively owns each cloned button's configured-intent graphic; native hover, press,
+release, and selection transitions cannot repaint it as a second state.
 
 The native-sidebar safety control is always present in gameplay, including when the automation master switch is off or the worker host failed. **STOP ALL** engages the suite emergency stop with one click and discards prepared automation work. Desired-On quick controls then say `ON / STOPPED`. Clearing is deliberately two-step: click **STOPPED** to arm **RESUME?**, review the tooltip's exact desired-On service list, then click again. The Mods **Safety** section also exposes **Automation enabled**, so automation can be turned off and back on without editing the file; the Mods and safety surfaces remain installed while it is off.
 

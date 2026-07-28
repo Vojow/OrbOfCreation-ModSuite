@@ -56,6 +56,25 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
+    public void UnselectedAutoBuyKindsCountAsSatisfiedRuntimeOwnership()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyStructures.Value = true;
+        config.AutoBuyUpgrades.Value = false;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.RefreshLoadedPluginInventory(
+            1,
+            guid => guid == AutomataActionFamilyOwnership.KnownAutoBuyPluginGuid);
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.Equal(
+            AutoBuyCandidateKinds.Upgrades,
+            ownership.EffectiveAutoBuyOwnership(config.Current.AutoBuy));
+    }
+
+    [Fact]
     public void PersistentKnownConflictRetriesClaimsOnlyAtBoundedIntervals()
     {
         var registry = new ActionFamilyOwnershipRegistry();

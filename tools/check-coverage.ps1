@@ -3,8 +3,8 @@ param(
     [Parameter(Mandatory)][string]$CoveragePath,
     # One assembly, one coverlet package, one floor: the single package's rate is the overall rate,
     # so a second number here could only ever disagree with itself. Set two points under the rate
-    # measured when the suite merged into one DLL.
-    [double]$MinimumOverallLineRate = 0.765
+    # measured after the legacy runtime and its coordinator retired.
+    [double]$MinimumOverallLineRate = 0.734
 )
 
 $ErrorActionPreference = 'Stop'

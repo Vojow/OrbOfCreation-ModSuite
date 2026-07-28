@@ -32,12 +32,13 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
         using var pump = new SuiteFramePump(registry);
         TestWorldCollector.CollectedAt(registry, 2, AutoHarvestTestWorlds.Harvestable());
         var runtimeDiagnostics = new RuntimeDiagnosticsRegistry();
+        using var featureStatus = FeatureStatus();
         using var bridge = new AutoHarvestServiceCycleDiagnosticsBridge(
             1,
-            configuration,
+            new ConfigGeneration(1),
             ownsActionFamily: true,
-            runtimeDiagnostics,
-            featureStatus: null);
+            runtimeDiagnostics: runtimeDiagnostics,
+            featureStatus);
 
         pump.PumpFrame(1);
         Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
@@ -84,6 +85,21 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
                     new NativeMutationCallOutcome(1, 1, 1)));
     }
 
+    private static AutomataFeatureStatusReporter FeatureStatus() =>
+        new(
+            new FeatureStatusRegistry(),
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(
+                    PluginIds.SuiteGuid,
+                    AutomataFeatureStatuses.AutoHarvestFeatureId),
+                "Auto Harvest",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(
+                    FeatureStatusReasonCode.RegistryNotReady,
+                    "waiting"),
+                lifecycleGeneration: 1));
+
     /// <summary>
     /// The host registers world collection first, so Auto Harvest is never ordinal zero in the game.
     /// Reading one copied slot at index zero found the wrong service — and, because a one-slot copy of
@@ -124,7 +140,7 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
                 lifecycleGeneration: 1));
         using var bridge = new AutoHarvestServiceCycleDiagnosticsBridge(
             1,
-            configuration,
+            new ConfigGeneration(1),
             ownsActionFamily: true,
             runtimeDiagnostics: null,
             featureStatus);
@@ -172,7 +188,7 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
                 lifecycleGeneration: 1));
         using var bridge = new AutoHarvestServiceCycleDiagnosticsBridge(
             1,
-            configuration,
+            new ConfigGeneration(1),
             ownsActionFamily: true,
             runtimeDiagnostics: null,
             featureStatus);

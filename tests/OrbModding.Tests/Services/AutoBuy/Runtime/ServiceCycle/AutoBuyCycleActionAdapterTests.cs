@@ -771,7 +771,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             new FakeQueueRoom(remainingRoom, roomReadable),
             () => nativeEpoch,
             () => owned,
-            refusals);
+            refusals ?? IgnoreRefusals.Instance);
         return adapter.TryExecute(
             new AutoBuyCycleAction(kind, uuid, plannedEpoch, count: 1, belief),
             Config(structures, upgrades, leaveQueueSlots),
@@ -872,7 +872,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             new AutoBuyNativePurchaseAdapter(),
             new FakeQueueRoom(64, readable: true),
             () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All);
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
         var first = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
@@ -912,7 +913,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             new AutoBuyNativePurchaseAdapter(),
             new FakeQueueRoom(64, readable: true),
             () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All);
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
         var original = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
@@ -955,7 +957,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             new ThrowingPurchasePort(),
             new FakeQueueRoom(64, readable: true),
             () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All);
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
 
         var result = adapter.TryExecute(
             new AutoBuyCycleAction(AutoBuyCandidateKind.Upgrade, Guid.NewGuid(), PlannedEpoch),
@@ -980,7 +983,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             purchases,
             new FakeQueueRoom(5, readable: true),
             () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All);
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
 
         adapter.TryExecute(
             new AutoBuyCycleAction(AutoBuyCandidateKind.Upgrade, Guid.NewGuid(), PlannedEpoch, count: 4),
@@ -998,7 +1002,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             purchases,
             new FakeQueueRoom(10, readable: true),
             () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All);
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
 
         adapter.TryExecute(
             new AutoBuyCycleAction(AutoBuyCandidateKind.Upgrade, Guid.NewGuid(), PlannedEpoch, count: 4),
@@ -1016,6 +1021,14 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         {
             LastCount = count;
             return AutoBuyPurchaseSubmission.Rejected(AutoBuyPurchasePreflight.CandidateUnavailable);
+        }
+    }
+
+    private sealed class IgnoreRefusals : IAutoBuyRefusalResponsePort
+    {
+        internal static IgnoreRefusals Instance { get; } = new();
+        public void ObserveRefusal(in AutoBuyRefusalReport report)
+        {
         }
     }
 

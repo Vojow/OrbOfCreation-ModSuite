@@ -16,27 +16,21 @@ internal sealed class AutoBuyFeatureDependencies
     public AutoBuyFeatureDependencies(
         Func<long> readLifecycleEpoch,
         Func<AutoBuyCandidateKinds> ownershipMask,
-        RuntimeDiagnosticsRegistry? runtimeDiagnostics = null,
-        AutomataFeatureStatusReporter? featureStatus = null,
-        IAutoBuyRefusalResponsePort? refusalResponse = null)
+        RuntimeDiagnosticsRegistry? runtimeDiagnostics,
+        AutomataFeatureStatusReporter featureStatus,
+        IAutoBuyRefusalResponsePort refusalResponse)
     {
         ReadLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         OwnershipMask = ownershipMask ?? throw new ArgumentNullException(nameof(ownershipMask));
         RuntimeDiagnostics = runtimeDiagnostics;
-        FeatureStatus = featureStatus;
-        RefusalResponse = refusalResponse;
+        FeatureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
+        RefusalResponse = refusalResponse ?? throw new ArgumentNullException(nameof(refusalResponse));
     }
 
     public Func<long> ReadLifecycleEpoch { get; }
     public Func<AutoBuyCandidateKinds> OwnershipMask { get; }
 
     public RuntimeDiagnosticsRegistry? RuntimeDiagnostics { get; }
-    public AutomataFeatureStatusReporter? FeatureStatus { get; }
-
-    /// <summary>
-    /// What the suite does when the game refuses a purchase the worker planned. Absent in a
-    /// composition that owns no configuration to stand down — the boundary still narrates and still
-    /// rejects.
-    /// </summary>
-    public IAutoBuyRefusalResponsePort? RefusalResponse { get; }
+    public AutomataFeatureStatusReporter FeatureStatus { get; }
+    public IAutoBuyRefusalResponsePort RefusalResponse { get; }
 }

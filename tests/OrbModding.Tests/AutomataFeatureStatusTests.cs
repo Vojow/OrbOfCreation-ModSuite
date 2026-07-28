@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -77,6 +79,68 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(2, changes);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RuntimeHealthCannotRewriteConfiguredIntent(bool configuredEnabled)
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoCastMode.Value = configuredEnabled
+            ? AutoCastOperationMode.Active
+            : AutoCastOperationMode.Disabled;
+        var registry = new FeatureStatusRegistry();
+        var generation = new ConfigGeneration(1);
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            4,
+            registry,
+            generation);
+
+        statuses.AutoCast.ObserveRuntimeLifecycle(
+            configuredEnabled
+                ? FeatureStatusState.ConfigurationDisabled
+                : FeatureStatusState.Operational,
+            FeatureStatusReasonCode.RuntimeFailure,
+            "A runtime writer cannot change saved intent.",
+            4,
+            generation);
+
+        Assert.Equal(configuredEnabled, statuses.AutoCast.Current.ConfiguredEnabled);
+    }
+
+    [Fact]
+    public void AutoBuyWithNoSelectedPurchaseKindKeepsIntentOnAndRejectsRuntimeRepaint()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyStructures.Value = false;
+        config.AutoBuyUpgrades.Value = false;
+        var generation = new ConfigGeneration(1);
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            4,
+            new FeatureStatusRegistry(),
+            generation);
+
+        Assert.True(statuses.AutoBuy.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, statuses.AutoBuy.Current.State);
+        Assert.Equal(
+            FeatureStatusReasonCode.ConfigurationDisabled,
+            statuses.AutoBuy.Current.Reason.Code);
+
+        Assert.False(statuses.AutoBuy.ObserveRuntime(
+            FeatureStatusState.Operational,
+            FeatureStatusReasonCode.None,
+            string.Empty,
+            generation));
+
+        Assert.True(statuses.AutoBuy.Current.ConfiguredEnabled);
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, statuses.AutoBuy.Current.State);
+        Assert.Equal(
+            FeatureStatusReasonCode.ConfigurationDisabled,
+            statuses.AutoBuy.Current.Reason.Code);
+    }
+
     [Fact]
     public void AssemblyContractFailurePreservesConfigurationDisabledPrecedence()
     {
@@ -84,7 +148,11 @@ public sealed class AutomataFeatureStatusTests
         var registry = new FeatureStatusRegistry();
         using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
 
-        statuses.ObserveContractUnavailable(config.Current, 1, "Assembly contract mismatch.");
+        statuses.ObserveContractUnavailable(
+            config.Current,
+            1,
+            "Assembly contract mismatch.",
+            statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.Equal(FeatureStatusState.ContractUnavailable, statuses.AutoBuy.Current.State);
         Assert.Equal(FeatureStatusState.ContractUnavailable, statuses.SpellLevel.Current.State);
@@ -107,13 +175,19 @@ public sealed class AutomataFeatureStatusTests
             if (transition.Kind == FeatureStatusTransitionKind.Changed) changes++;
         };
 
-        statuses.ObserveLifecycleNotReady(config.Current, 9);
+        statuses.ObserveLifecycleNotReady(
+            config.Current,
+            9,
+            statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(9, status.LifecycleGeneration));
         Assert.Equal(6, changes);
 
         for (var index = 0; index < 10_000; index++)
-            statuses.ObserveLifecycleNotReady(config.Current, 9);
+            statuses.ObserveLifecycleNotReady(
+                config.Current,
+                9,
+                statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.Equal(6, changes);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.AutoBuy.Current.Reason.Code);
@@ -133,12 +207,18 @@ public sealed class AutomataFeatureStatusTests
         var autoCastSummary = statuses.AutoCast.ConfigurationDisabledSummary;
         var autoConceptSummary = statuses.AutoConcept.ConfigurationDisabledSummary;
 
-        statuses.ObserveLifecycleNotReady(config.Current, 2);
+        statuses.ObserveLifecycleNotReady(
+            config.Current,
+            2,
+            statuses.AutoBuy.ConfigurationGeneration);
         Assert.Same(autoCastSummary, statuses.AutoCast.Current.Reason.Summary);
         Assert.Same(autoConceptSummary, statuses.AutoConcept.Current.Reason.Summary);
 
         for (var index = 0; index < 10_000; index++)
-            statuses.ObserveLifecycleNotReady(config.Current, 2);
+            statuses.ObserveLifecycleNotReady(
+                config.Current,
+                2,
+                statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.Same(autoCastSummary, statuses.AutoCast.Current.Reason.Summary);
         Assert.Same(autoConceptSummary, statuses.AutoConcept.Current.Reason.Summary);
@@ -183,7 +263,8 @@ public sealed class AutomataFeatureStatusTests
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
         var registry = new FeatureStatusRegistry();
         using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
-        var control = new AutoCastToggleControl(config, () => statuses.AutoCast.Current);
+        var changes = new AutomataConfigurationStore(config, (_, _) => { });
+        var control = new AutoCastToggleControl(changes, () => statuses.AutoCast.Current);
 
         Assert.Equal(AutoCastToggleVisualState.On, control.State);
         Assert.True(control.Status.ConfiguredEnabled);
@@ -204,23 +285,48 @@ public sealed class AutomataFeatureStatusTests
     }
 
     [Fact]
+    public void ControlDesiredStateComesOnlyFromSavedConfiguration()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
+        var savedTransitions = 0;
+        config.AutoCastMode.SettingChanged += (_, _) => savedTransitions++;
+        var changes = new AutomataConfigurationStore(config, (_, _) => { });
+        var control = new AutoCastToggleControl(changes, () => statuses.AutoCast.Current);
+
+        Assert.True(control.Status.ConfiguredEnabled);
+        Assert.Equal(AutoCastToggleVisualState.On, control.State);
+
+        control.Toggle();
+
+        Assert.Equal(1, savedTransitions);
+        Assert.Equal(AutoCastOperationMode.Disabled, config.Current.AutoCast.Mode);
+        Assert.True(control.Status.ConfiguredEnabled);
+        Assert.Equal(AutoCastToggleVisualState.Off, control.State);
+    }
+
+    [Fact]
     public void ProductionWiredControlsPublishConfiguredIntentBeforeReturning()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var registry = new FeatureStatusRegistry();
         using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
+        var changes = new AutomataConfigurationStore(
+            config,
+            statuses.ObserveConfiguration);
         var autoBuy = new AutoBuyToggleControl(
-            config,
-            readStatus: () => statuses.AutoBuy.Current,
-            publishConfiguredIntent: statuses.ObserveConfiguration);
+            changes,
+            () => AutoSpellLevelCapability.Locked,
+            () => statuses.AutoBuy.Current,
+            () => statuses.SpellLevel.Current);
         var autoCast = new AutoCastToggleControl(
-            config,
-            () => statuses.AutoCast.Current,
-            statuses.ObserveConfiguration);
+            changes,
+            () => statuses.AutoCast.Current);
         var autoConcept = new AutoConceptToggleControl(
-            config,
-            () => statuses.AutoConcept.Current,
-            statuses.ObserveConfiguration);
+            changes,
+            () => statuses.AutoConcept.Current);
 
         Assert.Equal(AutoCastToggleVisualState.On, autoBuy.State);
         Assert.Equal(AutoCastToggleVisualState.Off, autoCast.State);
@@ -242,6 +348,109 @@ public sealed class AutomataFeatureStatusTests
     }
 
     [Fact]
+    public void OneClickPublishesOneSavedTransitionAndRejectsTheOlderStatusRepaint()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        config.TryTakeUnpublishedChange(out _);
+        var registry = new FeatureStatusRegistry();
+        var initialGeneration = new ConfigGeneration(1);
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            3,
+            registry,
+            initialGeneration);
+        var savedTransitions = 0;
+        config.AutoCastMode.SettingChanged += (_, _) => savedTransitions++;
+        var publications = 0;
+        var changes = new AutomataConfigurationStore(
+            config,
+            (snapshot, generation) =>
+            {
+                publications++;
+                statuses.ObserveConfiguration(snapshot, generation);
+            });
+        var control = new AutoCastToggleControl(
+            changes,
+            () => statuses.AutoCast.Current);
+        var renderedTransitions = new List<AutoCastToggleVisualState>();
+        registry.Transitioned += transition =>
+        {
+            if (transition.Kind == FeatureStatusTransitionKind.Changed &&
+                transition.Current?.Key.Equals(statuses.AutoCast.Key) == true)
+                renderedTransitions.Add(control.State);
+        };
+
+        control.Toggle();
+
+        Assert.Equal(1, savedTransitions);
+        Assert.Equal(1, publications);
+        Assert.Equal(AutoCastOperationMode.Disabled, config.Current.AutoCast.Mode);
+        Assert.Equal(AutoCastToggleVisualState.Off, control.State);
+        Assert.Equal(new[] { AutoCastToggleVisualState.Off }, renderedTransitions);
+
+        Assert.False(statuses.AutoCast.ObserveLifecycle(
+            true,
+            FeatureStatusState.Operational,
+            FeatureStatusReasonCode.None,
+            string.Empty,
+            3,
+            initialGeneration));
+
+        Assert.Equal(AutoCastToggleVisualState.Off, control.State);
+        Assert.Equal(new[] { AutoCastToggleVisualState.Off }, renderedTransitions);
+    }
+
+    [Fact]
+    public void EveryFeatureStatusRejectsAConfiguredIntentFromAnOlderGeneration()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var registry = new FeatureStatusRegistry();
+        var initialGeneration = new ConfigGeneration(1);
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            5,
+            registry,
+            initialGeneration);
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Disabled;
+        config.AutoLevelSpells.Value = false;
+        var currentGeneration = initialGeneration.Next();
+
+        statuses.ObserveConfiguration(config.Current, currentGeneration);
+
+        var reporters = new[]
+        {
+            statuses.AutoBuy,
+            statuses.AutoCast,
+            statuses.AutoConcept,
+            statuses.SpellLevel,
+            statuses.AutoHarvest,
+            statuses.Mentor,
+        };
+        Assert.All(reporters, reporter => Assert.False(reporter.Current.ConfiguredEnabled));
+
+        foreach (var reporter in reporters)
+        {
+            Assert.False(reporter.ObserveLifecycle(
+                true,
+                FeatureStatusState.Operational,
+                FeatureStatusReasonCode.None,
+                string.Empty,
+                5,
+                initialGeneration));
+        }
+
+        Assert.All(reporters, reporter =>
+        {
+            Assert.False(reporter.Current.ConfiguredEnabled);
+            Assert.Equal(
+                FeatureStatusState.ConfigurationDisabled,
+                reporter.Current.State);
+            Assert.Equal(currentGeneration, reporter.ConfigurationGeneration);
+        });
+    }
+
+    [Fact]
     public void ConfigurationPublicationPreservesUnchangedRuntimeHealth()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
@@ -255,7 +464,9 @@ public sealed class AutomataFeatureStatusTests
             "The worker is unavailable.");
 
         config.AutoCastFullCharge.Value = false;
-        statuses.ObserveConfiguration(config.Current);
+        statuses.ObserveConfiguration(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration.Next());
 
         Assert.True(statuses.AutoCast.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.Faulted, statuses.AutoCast.Current.State);
@@ -269,20 +480,30 @@ public sealed class AutomataFeatureStatusTests
         var registry = new FeatureStatusRegistry();
         using var statuses = new AutomataFeatureStatuses(config.Current, 3, registry);
 
-        statuses.ObserveServiceCycleUnavailable(config.Current);
+        statuses.ObserveServiceCycleUnavailable(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration);
         Assert.False(statuses.AutoCast.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
 
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
-        statuses.ObserveConfiguration(config.Current);
-        statuses.ObserveServiceCycleUnavailable(config.Current);
+        statuses.ObserveConfiguration(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration.Next());
+        statuses.ObserveServiceCycleUnavailable(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration);
         Assert.True(statuses.AutoCast.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.Faulted, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusReasonCode.RuntimeFailure, statuses.AutoCast.Current.Reason.Code);
 
         config.AutoCastMode.Value = AutoCastOperationMode.Disabled;
-        statuses.ObserveConfiguration(config.Current);
-        statuses.ObserveServiceCycleUnavailable(config.Current);
+        statuses.ObserveConfiguration(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration.Next());
+        statuses.ObserveServiceCycleUnavailable(
+            config.Current,
+            statuses.AutoBuy.ConfigurationGeneration);
         Assert.False(statuses.AutoCast.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
     }

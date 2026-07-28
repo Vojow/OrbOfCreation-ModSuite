@@ -18,22 +18,27 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly AutomataServiceCycleHost _host;
     private readonly IAutomataServiceCycleFeatureRuntime[] _features;
     private readonly ServiceConfigurationPublisher _configurationPublication;
+    private ConfigGeneration _configurationGeneration;
     private bool _disposed;
 
     internal AutomataServiceCycleRuntime(
         Func<long> readLifecycleEpoch,
         ServiceConfigurationPublisher configurationPublication,
         AutomataServiceCycleHost host,
-        IAutomataServiceCycleFeatureRuntime[] features)
+        IAutomataServiceCycleFeatureRuntime[] features,
+        ConfigGeneration configurationGeneration)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
             throw new ArgumentNullException(nameof(configurationPublication));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _features = features ?? throw new ArgumentNullException(nameof(features));
+        _configurationGeneration = configurationGeneration;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
+    internal ConfigGeneration CurrentConfigurationGeneration =>
+        _configurationPublication.ReadLatest().Generation;
     internal LifecycleGeneration CurrentLifecycle => _host.CurrentLifecycle;
     internal bool EmergencyStopEngaged => _host.EmergencyStopEngaged;
 
@@ -46,13 +51,23 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _features[index].ObserveFrame(pump, in report);
     }
 
-    public void PublishSavedConfiguration(SuiteRuntimeConfiguration configuration)
+    public void PublishSavedConfiguration(
+        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration)
     {
         if (_disposed) return;
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        _configurationPublication.Publish(configuration);
+        if (configurationGeneration.Value <= _configurationGeneration.Value) return;
+        if (configurationGeneration != _configurationGeneration.Next())
+            throw new InvalidOperationException(
+                "A saved configuration generation was skipped before ServiceCycle publication.");
+        var publishedGeneration = _configurationPublication.Publish(configuration);
+        if (publishedGeneration != configurationGeneration)
+            throw new InvalidOperationException(
+                "The configuration store and ServiceCycle publication generations diverged.");
+        _configurationGeneration = configurationGeneration;
         for (var index = 0; index < _features.Length; index++)
-            _features[index].ObserveConfiguration(configuration);
+            _features[index].ObserveConfiguration(configurationGeneration);
     }
 
     public void CancelPreparedWork()
@@ -73,7 +88,9 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var nativeLifecycle = _readLifecycleEpoch();
         if (!_host.TryReplaceLifecycle(nativeLifecycle)) return;
         for (var index = 0; index < _features.Length; index++)
-            _features[index].ObserveLifecycle(nativeLifecycle, CurrentConfiguration);
+            _features[index].ObserveLifecycle(
+                nativeLifecycle,
+                _configurationGeneration);
     }
 
     public void Dispose()

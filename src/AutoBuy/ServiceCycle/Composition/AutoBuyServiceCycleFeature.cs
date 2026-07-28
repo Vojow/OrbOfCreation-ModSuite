@@ -1,6 +1,4 @@
 using System;
-using OrbModding.Common.Runtime.Configuration;
-using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -41,21 +39,9 @@ internal sealed class AutoBuyServiceCycleFeature : IAutomataServiceCycleFeature
             _dependencies,
             registration,
             context.LifecycleValue,
-            context.Configuration);
+            context.ConfigurationGeneration);
     }
 
-    public void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception)
-    {
-        if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        if (AutoBuyConfigurationPolicy.IsOperational(configuration))
-        {
-            _dependencies.FeatureStatus?.Observe(
-                true,
-                FeatureStatusState.Faulted,
-                FeatureStatusReasonCode.RuntimeFailure,
-                "Auto Buy could not initialize its ServiceCycle runtime.");
-        }
-    }
 }
 
 /// <summary>
@@ -73,7 +59,7 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
         AutoBuyCycleState,
         AutoBuyCycleAction> _registration;
     private readonly long _lifecycleValue;
-    private readonly SuiteRuntimeConfiguration _initialConfiguration;
+    private readonly ConfigGeneration _initialConfigurationGeneration;
     private AutoBuyServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoBuyFeatureRuntime(
@@ -82,19 +68,19 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
             AutoBuyCycleState,
             AutoBuyCycleAction> registration,
         long lifecycleValue,
-        SuiteRuntimeConfiguration initialConfiguration)
+        ConfigGeneration initialConfigurationGeneration)
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
-        _initialConfiguration = initialConfiguration ?? throw new ArgumentNullException(nameof(initialConfiguration));
+        _initialConfigurationGeneration = initialConfigurationGeneration;
     }
 
     public void ActivateDiagnostics()
     {
         _diagnostics = new AutoBuyServiceCycleDiagnosticsBridge(
             _lifecycleValue,
-            _initialConfiguration,
+            _initialConfigurationGeneration,
             _dependencies.OwnershipMask(),
             _dependencies.FeatureStatus);
     }
@@ -104,16 +90,19 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
         _diagnostics?.Observe(pump, in report, _dependencies.OwnershipMask());
     }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration)
-    {
-        _diagnostics?.ObserveConfiguration(configuration, _dependencies.OwnershipMask());
-    }
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration) =>
+        _diagnostics?.ObserveConfiguration(configurationGeneration);
 
-    public void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration)
+    public void ObserveLifecycle(
+        long nativeLifecycle,
+        ConfigGeneration configurationGeneration)
     {
         // The native reader and purchase adapter cache only Type-keyed contracts, which are stable
         // across lifecycles, so there is nothing to invalidate on a lifecycle boundary.
-        _diagnostics?.ObserveLifecycle(nativeLifecycle, configuration, _dependencies.OwnershipMask());
+        _diagnostics?.ObserveLifecycle(
+            nativeLifecycle,
+            configurationGeneration,
+            _dependencies.OwnershipMask());
     }
 
     public void DisposeDiagnostics() => _diagnostics = null;

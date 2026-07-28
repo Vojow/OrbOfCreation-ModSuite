@@ -33,9 +33,12 @@ must run `PerformanceAll` and the checked suite performance evaluator.
 - Independent action families can stop, recover, and report health separately.
 - Known Auto Buy conflicts block only Structure/Upgrade ownership.
 - Lifecycle transitions cancel all prepared work before any new native mutation.
-- Shared budget denial delays work without dropping it or starving another
-  registered feature.
+- The one ServiceCycle pump rotates action turns without dropping work or starving another registered
+  feature.
 - Runtime status reports saved configuration separately from actual readiness.
+- Every control, ownership decision, host activation, and status join reads the configuration store's
+  committed snapshot; raw BepInEx state is persistence input only.
+- STOP/resume cancels prepared work before synchronously committing its one saved emergency state.
 
 ## Runtime handoff
 

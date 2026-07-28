@@ -26,8 +26,7 @@ public sealed partial class ServiceCycleRegistry : IDisposable
     private readonly ServiceResourceClaimLedger _resourceClaims;
     private readonly ServiceWorldPublisher<GameWorldState> _world =
         new(GameWorldStateDefaults.Empty);
-    private readonly ServiceConfigurationPublisher _configuration =
-        new(SuiteRuntimeConfigurationDefaults.Empty);
+    private readonly ServiceConfigurationPublisher _configuration;
     private readonly ServiceStrategyPublisher _strategy =
         new(SuiteStrategyDefaults.Neutral);
     private int _activeCount;
@@ -60,10 +59,31 @@ public sealed partial class ServiceCycleRegistry : IDisposable
 
     internal ServiceCycleRegistry(
         int capacity,
+        SuiteRuntimeConfiguration initialConfiguration,
+        ConfigGeneration initialConfigurationGeneration,
+        RuntimeLifecycleGeneration lifecycle,
+        IMonotonicClock? clock = null)
+        : this(
+            capacity,
+            clock,
+            false,
+            initialConfiguration: initialConfiguration,
+            initialConfigurationGeneration: initialConfigurationGeneration)
+    {
+        if (lifecycle.Value == 0)
+            throw new ArgumentException("A valid initial lifecycle generation is required.", nameof(lifecycle));
+        _lifecycle = lifecycle;
+        _hasLifecycle = true;
+    }
+
+    internal ServiceCycleRegistry(
+        int capacity,
         IMonotonicClock? clock,
         bool measureWorkerAllocations,
         IServiceCycleWorkerStarter? workerStarter = null,
-        IServiceCycleWorkerExitObserver? workerExitObserver = null)
+        IServiceCycleWorkerExitObserver? workerExitObserver = null,
+        SuiteRuntimeConfiguration? initialConfiguration = null,
+        ConfigGeneration? initialConfigurationGeneration = null)
     {
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
         _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -74,6 +94,9 @@ public sealed partial class ServiceCycleRegistry : IDisposable
         _slots = new IServiceCycleSlot[capacity];
         _byServiceId = new Dictionary<ServiceId, IServiceCycleSlot>(capacity);
         _resourceClaims = new ServiceResourceClaimLedger(capacity);
+        _configuration = new ServiceConfigurationPublisher(
+            initialConfiguration ?? SuiteRuntimeConfigurationDefaults.Empty,
+            initialConfigurationGeneration);
     }
 
     public int Capacity => _slots.Length;
@@ -111,8 +134,8 @@ public sealed partial class ServiceCycleRegistry : IDisposable
     /// Constructed with the registry rather than installed into it, exactly as the world is. There
     /// is one suite and therefore one shape of settings, so a type parameter here could only ever be
     /// closed one way — and an installation step meant a registry could be asked for a configuration
-    /// it did not have yet. It starts on the all-defaults snapshot, which is what a service reads
-    /// before the plugin has bound the configuration file.
+    /// it did not have yet. General-purpose registries start on the all-defaults snapshot; the
+    /// application composition seeds the saved snapshot and its existing generation directly.
     /// </remarks>
     internal ServiceConfigurationPublisher Configuration => _configuration;
 

@@ -1,29 +1,29 @@
+using System;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 
 namespace OrbAutomata;
 
 internal sealed class AutoConceptServiceCycleDiagnosticsBridge
 {
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly AutomataFeatureStatusReporter _featureStatus;
     private long _lifecycle;
-    private bool _pluginEnabled;
-    private bool _featureEnabled;
+    private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
     private bool _owned;
     private bool _cycleObserved;
 
     internal AutoConceptServiceCycleDiagnosticsBridge(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool owned,
-        AutomataFeatureStatusReporter? featureStatus)
+        AutomataFeatureStatusReporter featureStatus)
     {
-        _featureStatus = featureStatus;
+        _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
-        ReadConfiguration(configuration);
         Publish();
     }
 
@@ -43,46 +43,38 @@ internal sealed class AutoConceptServiceCycleDiagnosticsBridge
         }
     }
 
-    internal void ObserveConfiguration(SuiteRuntimeConfiguration configuration, bool owned)
+    internal void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _owned = owned;
-        ReadConfiguration(configuration);
-        Publish();
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
+        _cycleObserved = false;
     }
 
     internal void ObserveLifecycle(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool owned)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
         _cycleObserved = false;
-        ReadConfiguration(configuration);
         Publish();
     }
 
     private void Publish()
     {
-        if (_featureStatus is null) return;
         var status = AutoConceptFeatureStatusProjector.Project(
-            _pluginEnabled,
-            _featureEnabled,
             _emergencyDisabled,
             _owned,
             _cycleObserved);
-        _featureStatus.ObserveLifecycle(
-            status.State != FeatureStatusState.ConfigurationDisabled,
+        _featureStatus.ObserveRuntimeLifecycle(
             status.State,
             status.Reason,
             status.Summary,
-            _lifecycle);
+            _lifecycle,
+            _configurationGeneration);
     }
 
-    private void ReadConfiguration(SuiteRuntimeConfiguration configuration)
-    {
-        _pluginEnabled = configuration.General.Enabled;
-        _featureEnabled = configuration.AutoConcept.Mode == AutoConceptOperationMode.Active;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
-    }
 }

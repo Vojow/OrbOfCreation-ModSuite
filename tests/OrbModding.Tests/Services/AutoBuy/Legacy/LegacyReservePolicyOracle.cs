@@ -18,14 +18,14 @@ namespace OrbAutomata;
 /// </remarks>
 internal sealed class ReservePolicy
 {
-    private readonly IAutomataConfigurationSource _config;
+    private readonly Func<SuiteRuntimeConfiguration> _readConfig;
 
-    public ReservePolicy(IAutomataConfigurationSource config)
+    public ReservePolicy(Func<SuiteRuntimeConfiguration> readConfig)
     {
-        _config = config;
+        _readConfig = readConfig;
     }
 
-    private SuiteRuntimeConfiguration Config => _config.Current;
+    private SuiteRuntimeConfiguration Config => _readConfig();
 
     public ReserveDecision Evaluate(IReadOnlyList<ResourceAdmissionCost> costs)
     {

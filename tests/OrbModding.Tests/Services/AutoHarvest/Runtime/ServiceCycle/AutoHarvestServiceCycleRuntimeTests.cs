@@ -3,6 +3,7 @@ using System.Threading;
 using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime;
@@ -32,13 +33,30 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
                 resolver,
                 ownsActionFamily: () => true,
                 tryCaptureMutationPermit: () => true,
-                runtimeDiagnostics: runtimeDiagnostics));
+                runtimeDiagnostics: runtimeDiagnostics,
+                featureStatus: FeatureStatus()));
         return AutomataServiceCycleComposition.Create(
             configuration,
+            new ConfigGeneration(1),
             hostDependencies,
             new IAutomataServiceCycleFeature[] { feature },
             new ManualLogSource());
     }
+
+    private static AutomataFeatureStatusReporter FeatureStatus() =>
+        new(
+            new FeatureStatusRegistry(),
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(
+                    PluginIds.SuiteGuid,
+                    AutomataFeatureStatuses.AutoHarvestFeatureId),
+                "Auto Harvest",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(
+                    FeatureStatusReasonCode.RegistryNotReady,
+                    "waiting"),
+                lifecycleGeneration: 1));
 
     [Fact]
     public void ProductionRuntimePublishesConfigurationAndLifecycleWithoutDisabledNativeReads()
@@ -66,6 +84,7 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         Assert.Equal(
             AutoHarvestServiceCycleDiagnosticsBridge.ImplementationName,
             Assert.Single(runtimeDiagnostics.GetSnapshot()).Implementation);
+        Assert.Equal(new ConfigGeneration(1), runtime.CurrentConfigurationGeneration);
 
         runtime.Tick(0);
         configuration.EvaluationIntervalSeconds = 2;
@@ -73,7 +92,10 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         runtime.Tick(0);
 
         Assert.Equal(TimeSpan.FromSeconds(1).Ticks, runtime.CurrentConfiguration.AutoHarvest.EvaluationInterval.Ticks);
-        runtime.PublishSavedConfiguration(configuration.Snapshot());
+        runtime.PublishSavedConfiguration(
+            configuration.Snapshot(),
+            new ConfigGeneration(1).Next());
+        Assert.Equal(new ConfigGeneration(2), runtime.CurrentConfigurationGeneration);
         runtime.Tick(0);
         Assert.Equal(TimeSpan.FromSeconds(2).Ticks, runtime.CurrentConfiguration.AutoHarvest.EvaluationInterval.Ticks);
         Assert.True(runtime.EmergencyStopEngaged);
@@ -85,12 +107,39 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         Assert.Equal(new LifecycleGeneration(8), runtime.CurrentLifecycle);
 
         configuration.EmergencyDisabled = false;
-        runtime.PublishSavedConfiguration(configuration.Snapshot());
+        runtime.PublishSavedConfiguration(
+            configuration.Snapshot(),
+            new ConfigGeneration(3));
         runtime.Tick(0);
         Assert.False(runtime.EmergencyStopEngaged);
 
         runtime.Dispose();
         Assert.Empty(runtimeDiagnostics.GetSnapshot());
+    }
+
+    [Fact]
+    public void ConfigurationGenerationCannotSkipOrDoublePublish()
+    {
+        var lifecycle = 7L;
+        using var runtime = CreateRuntime(
+            new MutableConfiguration().Snapshot(),
+            () => 1,
+            () => lifecycle,
+            new TypedRegistryResolver(
+                () => lifecycle,
+                () => TypedRegistrySourceSnapshot.NotReady("disabled"),
+                _ => null));
+        var snapshot = new MutableConfiguration().Snapshot();
+
+        runtime.PublishSavedConfiguration(snapshot, new ConfigGeneration(1));
+        Assert.Equal(new ConfigGeneration(1), runtime.CurrentConfigurationGeneration);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            runtime.PublishSavedConfiguration(snapshot, new ConfigGeneration(3)));
+        Assert.Equal(new ConfigGeneration(1), runtime.CurrentConfigurationGeneration);
+
+        runtime.PublishSavedConfiguration(snapshot, new ConfigGeneration(2));
+        Assert.Equal(new ConfigGeneration(2), runtime.CurrentConfigurationGeneration);
     }
 
     [Theory]
@@ -218,7 +267,9 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         Assert.Empty(storage.ReadRecords());
 
         configuration.EmergencyDisabled = false;
-        runtime.PublishSavedConfiguration(configuration.Snapshot());
+        runtime.PublishSavedConfiguration(
+            configuration.Snapshot(),
+            new ConfigGeneration(1).Next());
         Assert.True(SpinWait.SpinUntil(() =>
         {
             runtime.Tick(0);

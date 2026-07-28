@@ -1,7 +1,7 @@
 using System;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
-using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 #endif
@@ -9,15 +9,14 @@ using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 namespace OrbAutomata;
 
 /// <summary>
-/// Host-provided context handed to a feature during shared-host composition. The
-/// feature performs its own typed registration against the shared registry, keeping
-/// its four service generics internal so the neutral host owner never sees them.
+/// Application context handed to a feature during composition. The feature performs
+/// its typed registration against the cycle registry and keeps its service generics local.
 /// </summary>
 internal readonly struct AutomataServiceCycleFeatureContext
 {
     internal AutomataServiceCycleFeatureContext(
         ServiceCycleRegistry registry,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         long lifecycleValue
 #if SERVICE_CYCLE_PROFILE
         , ServiceCycleProfileProbe profileProbe
@@ -25,7 +24,7 @@ internal readonly struct AutomataServiceCycleFeatureContext
         )
     {
         Registry = registry;
-        Configuration = configuration;
+        ConfigurationGeneration = configurationGeneration;
         LifecycleValue = lifecycleValue;
 #if SERVICE_CYCLE_PROFILE
         ProfileProbe = profileProbe;
@@ -33,7 +32,7 @@ internal readonly struct AutomataServiceCycleFeatureContext
     }
 
     internal ServiceCycleRegistry Registry { get; }
-    internal SuiteRuntimeConfiguration Configuration { get; }
+    internal ConfigGeneration ConfigurationGeneration { get; }
     internal long LifecycleValue { get; }
 #if SERVICE_CYCLE_PROFILE
     internal ServiceCycleProfileProbe ProfileProbe { get; }
@@ -41,29 +40,21 @@ internal readonly struct AutomataServiceCycleFeatureContext
 }
 
 /// <summary>
-/// A feature contribution to the one Automata-owned ServiceCycle host. It supplies
-/// its typed definition and native adapters but never the registry, pump, host, or
-/// observability.
+/// One feature in the Automata application. It supplies its typed service and native boundary.
 /// </summary>
 internal interface IAutomataServiceCycleFeature
 {
     /// <summary>
     /// Registers the feature's typed definition into the shared registry and returns a
-    /// non-generic runtime that the neutral owner drives per frame, per configuration
+    /// non-generic runtime that the application drives per frame, per configuration
     /// publication, and per lifecycle boundary.
     /// </summary>
     IAutomataServiceCycleFeatureRuntime Register(in AutomataServiceCycleFeatureContext context);
 
-    /// <summary>
-    /// Reports the feature's own faulted status when shared-host construction fails
-    /// before any runtime exists. The whole host is unavailable, so every feature is
-    /// given the chance to surface a feature-scoped status to the user.
-    /// </summary>
-    void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception);
 }
 
 /// <summary>
-/// The non-generic per-feature runtime driven by the neutral host owner. It owns the
+/// The non-generic per-feature runtime driven by the application. It owns the
 /// feature's typed registration handle, native binding cache, and diagnostics
 /// projection. Disposal is split so the owner can preserve the exact ordering of
 /// diagnostics teardown (before host shutdown) and registration/binding teardown
@@ -82,12 +73,14 @@ internal interface IAutomataServiceCycleFeatureRuntime
     void ObserveFrame(SuiteFramePump pump, in SuiteFramePumpReport report);
 
     /// <summary>
-    /// Notes a configuration publication the suite has already made. The snapshot itself lives in
-    /// the registry's one publication; this is only the hook features use to refresh diagnostics.
+    /// Invalidates runtime-health evidence produced against an older configuration. The snapshot
+    /// itself lives only in the registry publication and is never relayed through feature runtimes.
     /// </summary>
-    void ObserveConfiguration(SuiteRuntimeConfiguration configuration);
+    void ObserveConfiguration(ConfigGeneration configurationGeneration);
 
-    void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration);
+    void ObserveLifecycle(
+        long nativeLifecycle,
+        ConfigGeneration configurationGeneration);
 
     /// <summary>Tears down diagnostics before the shared host is shut down.</summary>
     void DisposeDiagnostics();

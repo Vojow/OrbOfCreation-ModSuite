@@ -20,53 +20,22 @@ internal readonly struct SpellLevelFeatureStatus
 }
 
 /// <summary>
-/// What Spell Leveling's health line says, given what the player configured, what the suite is allowed
-/// to do, and what the boundary has learned about the game's progression.
+/// What the running Spell Leveling service reports about ownership and progression.
 /// </summary>
 /// <remarks>
-/// The order of the terms is the order a player would ask them in: is the feature on, is its parent
-/// on, is anything blocking the whole suite, do we hold the action family, has the game unlocked
-/// leveling at all, and have we actually run yet. Reporting progression before ownership would tell a
-/// player their spells are locked when the truth is that another plugin holds the lease.
+/// Runtime terms are ordered from shared stop state through ownership to progression. Saved intent
+/// is deliberately absent because the central status join owns it.
 /// </remarks>
 internal static class SpellLevelFeatureStatusProjector
 {
-    internal const string ConfigurationDisabledSummary = "Spell leveling is disabled by configuration.";
     internal const string ProgressionLockedSummary = "Spell leveling has not been unlocked.";
 
     public static SpellLevelFeatureStatus Project(
-        bool pluginEnabled,
-        bool featureEnabled,
-        bool parentEnabled,
         bool emergencyDisabled,
         bool owned,
         bool cycleObserved,
         AutoSpellLevelCapability capability)
     {
-        if (!featureEnabled)
-        {
-            return new SpellLevelFeatureStatus(
-                FeatureStatusState.ConfigurationDisabled,
-                FeatureStatusReasonCode.ConfigurationDisabled,
-                ConfigurationDisabledSummary);
-        }
-
-        if (!pluginEnabled)
-        {
-            return new SpellLevelFeatureStatus(
-                FeatureStatusState.TemporarilyBlocked,
-                FeatureStatusReasonCode.ParentFeatureDisabled,
-                "Automata is disabled by configuration.");
-        }
-
-        if (!parentEnabled)
-        {
-            return new SpellLevelFeatureStatus(
-                FeatureStatusState.TemporarilyBlocked,
-                FeatureStatusReasonCode.ParentFeatureDisabled,
-                "Auto Buy is disabled by configuration.");
-        }
-
         if (emergencyDisabled)
         {
             return new SpellLevelFeatureStatus(

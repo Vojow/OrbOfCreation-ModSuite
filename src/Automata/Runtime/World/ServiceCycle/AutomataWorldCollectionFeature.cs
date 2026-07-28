@@ -1,6 +1,4 @@
 using System;
-using OrbModding.Common.Runtime.Configuration;
-using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -59,12 +57,6 @@ internal sealed class AutomataWorldCollectionFeature : IAutomataServiceCycleFeat
             context.Registry.RegisterSource(definition));
     }
 
-    public void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception)
-    {
-        // Collection has no feature status of its own. A host that failed to start has already
-        // disabled every feature that would have consumed the world, so reporting it twice would only
-        // add noise to a message the player has already been given.
-    }
 }
 
 /// <summary>The per-frame runtime for collection: a registration handle and nothing else.</summary>
@@ -88,7 +80,7 @@ internal sealed class AutomataWorldCollectionFeatureRuntime : IAutomataServiceCy
     {
     }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
     }
 
@@ -97,7 +89,9 @@ internal sealed class AutomataWorldCollectionFeatureRuntime : IAutomataServiceCy
     /// resolved against a type, not an instance, and every instance is re-read from its registry each
     /// pass, so a save load simply yields a different set of entities next cycle.
     /// </summary>
-    public void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration)
+    public void ObserveLifecycle(
+        long nativeLifecycle,
+        ConfigGeneration configurationGeneration)
     {
     }
 

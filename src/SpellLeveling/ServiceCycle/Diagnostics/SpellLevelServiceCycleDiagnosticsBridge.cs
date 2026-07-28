@@ -1,5 +1,6 @@
+using System;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 
 namespace OrbAutomata;
@@ -22,13 +23,11 @@ namespace OrbAutomata;
 /// </remarks>
 internal sealed class SpellLevelServiceCycleDiagnosticsBridge
 {
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly AutomataFeatureStatusReporter _featureStatus;
     private readonly SpellLevelCapabilityState _capability;
     private readonly ISpellLevelCapabilityPort _capabilityPort;
     private long _lifecycle;
-    private bool _pluginEnabled;
-    private bool _featureEnabled;
-    private bool _parentEnabled;
+    private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
     private bool _owned;
     private bool _cycleObserved;
@@ -37,18 +36,18 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
 
     public SpellLevelServiceCycleDiagnosticsBridge(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool owned,
         SpellLevelCapabilityState capability,
         ISpellLevelCapabilityPort capabilityPort,
-        AutomataFeatureStatusReporter? featureStatus)
+        AutomataFeatureStatusReporter featureStatus)
     {
-        _featureStatus = featureStatus;
+        _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
         _capability = capability;
         _capabilityPort = capabilityPort;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
@@ -73,23 +72,28 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
         if (conditionsChanged) PublishFeatureStatus();
     }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration, bool owned)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _owned = owned;
-        ReadConfiguration(configuration);
-        PublishFeatureStatus();
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
+        _cycleObserved = false;
+        _evaluationRefreshPending = false;
     }
 
-    public void ObserveLifecycle(long lifecycle, SuiteRuntimeConfiguration configuration, bool owned)
+    public void ObserveLifecycle(
+        long lifecycle,
+        ConfigGeneration configurationGeneration,
+        bool owned)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
         // Nothing survives a lifecycle boundary. The capability the last generation reached says
         // nothing about this one, and the worker has not evaluated against the new world yet.
         _capability.Reset();
         _cycleObserved = false;
         _evaluationRefreshPending = false;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
@@ -105,29 +109,18 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
 
     private void PublishFeatureStatus()
     {
-        if (_featureStatus is null) return;
         _reportedCapability = _capability.Current;
         var health = SpellLevelFeatureStatusProjector.Project(
-            _pluginEnabled,
-            _featureEnabled,
-            _parentEnabled,
             _emergencyDisabled,
             _owned,
             _cycleObserved,
             _reportedCapability);
-        _featureStatus.ObserveLifecycle(
-            health.State != FeatureStatusState.ConfigurationDisabled,
+        _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,
             health.Summary,
-            _lifecycle);
+            _lifecycle,
+            _configurationGeneration);
     }
 
-    private void ReadConfiguration(SuiteRuntimeConfiguration configuration)
-    {
-        _pluginEnabled = configuration.General.Enabled;
-        _featureEnabled = configuration.AutoBuy.AutoLevelSpells;
-        _parentEnabled = configuration.AutoBuy.Mode == AutoBuyOperationMode.Active;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
-    }
 }

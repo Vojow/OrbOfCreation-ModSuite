@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
@@ -21,20 +22,23 @@ public sealed class AutomataServiceCycleEmergencyStopTests
         var frame = 0L;
         using var runtime = AutomataServiceCycleComposition.Create(
             configuration.Current,
+            new ConfigGeneration(1),
             new AutomataServiceCycleHostDependencies(
                 () => ++frame,
                 () => 1),
             new IAutomataServiceCycleFeature[] { feature },
             new ManualLogSource());
-        var control = new EmergencyStopControl(
+        var store = new AutomataConfigurationStore(
             configuration,
+            runtime.PublishSavedConfiguration);
+        var control = new EmergencyStopControl(
+            store,
             () => new[] { "Test service" },
             _ => runtime.CancelPreparedWork());
 
         AssertDispatchesAfter(runtime, feature.Definition, 0);
 
         control.Activate();
-        PublishChangedConfiguration(configuration, runtime);
         var actionsAtStop = feature.Definition.ActionExecutionCount;
         for (var index = 0; index < 10; index++)
             runtime.Tick(0);
@@ -45,19 +49,10 @@ public sealed class AutomataServiceCycleEmergencyStopTests
         control.Activate();
         Assert.True(control.ResumeArmed);
         control.Activate();
-        PublishChangedConfiguration(configuration, runtime);
         feature.CollectAfterResume();
 
         AssertDispatchesAfter(runtime, feature.Definition, actionsAtStop);
         Assert.False(runtime.EmergencyStopEngaged);
-    }
-
-    private static void PublishChangedConfiguration(
-        BepInExAutomataConfiguration configuration,
-        AutomataServiceCycleRuntime runtime)
-    {
-        Assert.True(configuration.TryTakeUnpublishedChange(out var snapshot));
-        runtime.PublishSavedConfiguration(snapshot);
     }
 
     private static void AssertDispatchesAfter(
@@ -100,11 +95,6 @@ public sealed class AutomataServiceCycleEmergencyStopTests
             return new DispatchRuntime(registration);
         }
 
-        public void ObserveStartupFailure(
-            SuiteRuntimeConfiguration configuration,
-            Exception exception)
-        {
-        }
     }
 
     private sealed class DispatchRuntime : IAutomataServiceCycleFeatureRuntime
@@ -123,13 +113,13 @@ public sealed class AutomataServiceCycleEmergencyStopTests
         {
         }
 
-        public void ObserveConfiguration(SuiteRuntimeConfiguration configuration)
+        public void ObserveConfiguration(ConfigGeneration configurationGeneration)
         {
         }
 
         public void ObserveLifecycle(
             long nativeLifecycle,
-            SuiteRuntimeConfiguration configuration)
+            ConfigGeneration configurationGeneration)
         {
         }
 

@@ -8,7 +8,7 @@ using OrbMentor;
 
 namespace OrbAutomata;
 
-internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEditor
+internal sealed class BepInExAutomataConfiguration
 {
     private SuiteRuntimeConfiguration _current = null!;
     private MentorConfig? _mentor;
@@ -234,24 +234,13 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
 
     public SuiteRuntimeConfiguration Current => Volatile.Read(ref _current);
 
-    public void ToggleAutoBuy() =>
-        AutoBuyMode.Value = Current.AutoBuy.Mode == AutoBuyOperationMode.Active
-            ? AutoBuyOperationMode.Disabled
-            : AutoBuyOperationMode.Active;
+    internal void SetAutoBuyMode(AutoBuyOperationMode mode) => AutoBuyMode.Value = mode;
 
-    public void DisableAutoBuy() => AutoBuyMode.Value = AutoBuyOperationMode.Disabled;
+    internal void SetAutoCastMode(AutoCastOperationMode mode) => AutoCastMode.Value = mode;
 
-    public void ToggleAutoCast() =>
-        AutoCastMode.Value = Current.AutoCast.Mode == AutoCastOperationMode.Active
-            ? AutoCastOperationMode.Disabled
-            : AutoCastOperationMode.Active;
+    internal void SetAutoConceptMode(AutoConceptOperationMode mode) => AutoConceptMode.Value = mode;
 
-    public void ToggleAutoConcept() =>
-        AutoConceptMode.Value = Current.AutoConcept.Mode == AutoConceptOperationMode.Active
-            ? AutoConceptOperationMode.Disabled
-            : AutoConceptOperationMode.Active;
-
-    public void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
+    internal void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
 
     internal bool IsAutoCastTogglePressed() => AutoCastToggleShortcut.Value.IsDown();
 

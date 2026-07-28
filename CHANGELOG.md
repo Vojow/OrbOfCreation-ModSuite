@@ -1,5 +1,34 @@
 # Changelog
 
+## Configuration publication and application ownership — 2026-07-28
+
+- Route Auto Buy, Auto Cast, Auto Concept, Mentor, and emergency-stop quick controls through the
+  same saved-configuration publication as the ServiceCycle. The fresh configured intent now reaches
+  the cycle before the control returns instead of waiting beside stale per-service status.
+- Make status notifications expose the new joined snapshot synchronously instead of briefly
+  leaving subscribers to read the prior configured intent. Configured intent no longer travels
+  through feature, lifecycle, startup-fault, or deferred-activation status writers at all.
+- Give the suite renderer exclusive ownership of cloned quick-button graphics. Native Unity
+  hover, press, release, and selection transitions no longer have a second path that can repaint
+  Auto Buy, Auto Cast, Auto Concept, Mentor, or emergency-stop button state.
+- Remove the one-entry application service registry and its production-composition wrapper. The
+  plugin now owns the one deferred ServiceCycle activation directly; Common's typed registry remains
+  the sole seven-service ordering and pump boundary.
+- Replace the temporary UI generation and per-feature configuration relays with the ServiceCycle's
+  one `ConfigGeneration`. Feature bridges publish runtime health only; one status join combines it
+  with committed saved intent for every player-facing feature.
+- Make one configuration store the application source of truth. BepInEx entries only deserialize and
+  persist explicit values; controls, ownership, activation, resume previews, button visibility, status,
+  and services all read the store's committed snapshot.
+- Absorb binding-time notifications into generation 1, compute quick-control changes from committed
+  state even while an external edit is pending, and route STOP/resume and fail-closed Auto Buy
+  stand-down through the same synchronous store.
+- Centralize host-construction failure and unavailable projection, remove seven startup-failure
+  callbacks and the production-composition forwarding file, and require feature diagnostics/status
+  dependencies instead of silently running without presentation.
+- Preserve configuration schema 4, trace wire format, assembly shape, native-contract manifest
+  schema 3, and the `spell.get-icon` legacy allowlist.
+
 ## Mentor on the shared engine — 2026-07-28
 
 - Move Mentor onto ServiceCycle. Exact spell, artifact, and alchemy mastery gains remain deliberate bounded patch inputs, while recipient selection, source policy, unlocks, ordinary-alchemy classification, and sharing arithmetic now run in the background from the shared world snapshot.

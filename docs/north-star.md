@@ -41,7 +41,16 @@ main thread we barely touch.
    returns actions; the main thread applies them.
 
 Configuration is the same shape with a different source (the config file); strategy is the
-same shape with a neutral constant bulletin until a strategist exists.
+same shape with a neutral constant bulletin until a strategist exists. BepInEx entries are only
+the persistence boundary. One application store owns the committed immutable reading and its
+`ConfigGeneration`; runtime code and controls do not read an unpublished entry snapshot.
+
+Every configuration writer converges at that store. Quick buttons and shortcuts compute their
+next value from committed state and publish the fresh saved snapshot before returning, while
+Mods-page and external-file changes are coalesced and committed at the start of the next
+main-thread pass. The store sends the same `(snapshot, generation)` once to the registry and to
+the presentation join. Feature runtimes publish health only; status combines that health with
+committed intent centrally and is never a second configuration path.
 
 ## The three publications
 
@@ -125,6 +134,11 @@ Every seam must pay rent. Scheduled for deletion because they don't:
   mutation leases, and the coordinator evidence product are gone. The Mods UI keeps its
   one-maintenance-pass-per-frame guard and gameplay invalidation keeps its explicit
   per-frame operation cap because those are local delivery bounds, not another scheduler.
+- the application-level service registry that once hosted ServiceCycle beside legacy engines.
+  With those engines gone, `Plugin` owns one deferred ServiceCycle activation directly; Common's
+  typed seven-service registry remains the engine's ordering boundary.
+- per-feature configuration relays and cached mode/emergency facts. Feature diagnostics report
+  runtime health; one application status join supplies saved intent and emergency state.
 
 No compatibility concern may block a simplification: replay formats bump freely (recordings
 are disposable test artifacts), upstream's project layout is not a constraint, and an

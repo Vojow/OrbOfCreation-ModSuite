@@ -33,7 +33,6 @@ public sealed class AutoHarvestSemanticParityTests
         var input = CreateInput(scenario);
         var result = Evaluate(input, InitialState(scenario), Context(1));
         var health = AutoHarvestFeatureStatusProjector.Project(
-            featureEnabled: true,
             result.State.FruitHealth,
             result.State.TreasureHealth);
         var pair = result.HasAction ? (int)result.Action.Pair : -1;

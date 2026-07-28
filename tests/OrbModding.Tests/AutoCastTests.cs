@@ -1,6 +1,8 @@
 using BepInEx.Configuration;
 using OrbAutomata;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
+using UnityEngine.UI;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -59,7 +61,7 @@ public sealed class AutoCastTests
     public void ToggleSwitchesBetweenDisabledAndActive()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        var toggle = new AutoCastToggleControl(config);
+        var toggle = CreateToggle(config);
 
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
         toggle.Toggle();
@@ -77,10 +79,49 @@ public sealed class AutoCastTests
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AutoCastMode.Value = AutoCastOperationMode.Active;
-        var toggle = new AutoCastToggleControl(config);
+        var toggle = CreateToggle(config);
 
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
         config.EmergencyDisable.Value = true;
         Assert.Equal(AutoCastToggleVisualState.On, toggle.State);
+    }
+
+    [Fact]
+    public void OneClickChangesSavedModeOnceAndOwnsTheRenderedGraphic()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoCastMode.Value = AutoCastOperationMode.Active;
+        var savedTransitions = 0;
+        var publications = 0;
+        config.AutoCastMode.SettingChanged += (_, _) => savedTransitions++;
+        var changes = new AutomataConfigurationStore(config, (_, _) => publications++);
+        var control = new AutoCastToggleControl(changes, () => CreateStatus(config));
+        var inheritedGraphic = new Image();
+        var button = new Button { targetGraphic = inheritedGraphic };
+
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
+        control.Toggle();
+
+        Assert.Equal(1, savedTransitions);
+        Assert.Equal(1, publications);
+        Assert.Equal(AutoCastOperationMode.Disabled, config.Current.AutoCast.Mode);
+        Assert.Equal(AutoCastToggleVisualState.Off, control.State);
+        Assert.Null(button.targetGraphic);
+    }
+
+    private static AutoCastToggleControl CreateToggle(BepInExAutomataConfiguration configuration)
+    {
+        var changes = new AutomataConfigurationStore(configuration, (_, _) => { });
+        return new AutoCastToggleControl(changes, () => CreateStatus(configuration));
+    }
+
+    private static FeatureStatusSnapshot CreateStatus(BepInExAutomataConfiguration configuration)
+    {
+        var enabled = configuration.Current.AutoCast.Mode == AutoCastOperationMode.Active;
+        return new FeatureStatusSnapshot(
+            new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoCastFeatureId),
+            "Auto Cast",
+            enabled,
+            enabled ? FeatureStatusState.Operational : FeatureStatusState.ConfigurationDisabled);
     }
 }

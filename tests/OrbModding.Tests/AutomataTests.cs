@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 using UnityEngine;
 using Xunit;
 
@@ -58,7 +60,22 @@ public sealed class AutomataTests
     public void AutoConceptToggleSwitchesModeWithoutReplacingConfiguredIntent()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        var toggle = new AutoConceptToggleControl(config);
+        var changes = new AutomataConfigurationStore(config, (_, _) => { });
+        var toggle = new AutoConceptToggleControl(
+            changes,
+            () =>
+            {
+                var enabled = config.Current.AutoConcept.Mode == AutoConceptOperationMode.Active;
+                return new FeatureStatusSnapshot(
+                    new FeatureStatusKey(
+                        PluginIds.SuiteGuid,
+                        AutomataFeatureStatuses.AutoConceptFeatureId),
+                    "Auto Concept",
+                    enabled,
+                    enabled
+                        ? FeatureStatusState.Operational
+                        : FeatureStatusState.ConfigurationDisabled);
+            });
 
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
         toggle.Toggle();
@@ -255,7 +272,7 @@ public sealed class AutomataTests
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "100";
         config.RelativeReserveMultiplier.Value = 2.0f;
-        var policy = new ReservePolicy(config);
+        var policy = new ReservePolicy(() => config.Current);
 
         var accepted = policy.Evaluate(new[]
         {

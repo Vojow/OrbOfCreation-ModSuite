@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common;
 using OrbMentor;
 
@@ -12,7 +13,8 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
 
     public AutomataFeatureStatusReporter(
         FeatureStatusRegistry registry,
-        FeatureStatusSnapshot initialStatus)
+        FeatureStatusSnapshot initialStatus,
+        ConfigGeneration? configurationGeneration = null)
     {
         Key = initialStatus.Key;
         DisplayName = initialStatus.DisplayName;
@@ -20,6 +22,8 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
             ? initialStatus.Reason.Summary
             : DisplayName + " is disabled by configuration.";
         Current = initialStatus;
+        ConfigurationGeneration =
+            configurationGeneration ?? new ConfigGeneration(1);
         _registration = registry.Register(Current);
     }
 
@@ -27,6 +31,7 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
     public string DisplayName { get; }
     public string ConfigurationDisabledSummary { get; }
     public FeatureStatusSnapshot Current { get; private set; }
+    internal ConfigGeneration ConfigurationGeneration { get; private set; }
 
     public bool ObserveOperational() => Observe(
         true,
@@ -38,8 +43,23 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
         bool configuredEnabled,
         FeatureStatusState state,
         FeatureStatusReasonCode reasonCode,
-        string summary)
+        string summary) =>
+        Observe(
+            configuredEnabled,
+            state,
+            reasonCode,
+            summary,
+            ConfigurationGeneration);
+
+    internal bool Observe(
+        bool configuredEnabled,
+        FeatureStatusState state,
+        FeatureStatusReasonCode reasonCode,
+        string summary,
+        ConfigGeneration configurationGeneration)
     {
+        if (configurationGeneration.Value < ConfigurationGeneration.Value) return false;
+        ConfigurationGeneration = configurationGeneration;
         ApplyEmergencyStop(configuredEnabled, ref state, ref reasonCode, ref summary);
         if (Current.ConfiguredEnabled == configuredEnabled &&
             Current.State == state &&
@@ -54,9 +74,27 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
                 ? default
                 : new FeatureStatusReason(reasonCode, summary),
             Current.LifecycleGeneration);
-        if (!_registration.Update(status)) return false;
+        var prior = Current;
         Current = status;
-        return true;
+        if (_registration.Update(status)) return true;
+        Current = prior;
+        return false;
+    }
+
+    internal bool ObserveRuntime(
+        FeatureStatusState state,
+        FeatureStatusReasonCode reasonCode,
+        string summary,
+        ConfigGeneration configurationGeneration)
+    {
+        if (!RuntimeHealthMayReplaceCurrent(state))
+            return false;
+        return Observe(
+            true,
+            state,
+            reasonCode,
+            summary,
+            configurationGeneration);
     }
 
     public bool ObserveLifecycle(
@@ -64,8 +102,25 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
         FeatureStatusState state,
         FeatureStatusReasonCode reasonCode,
         string summary,
-        long lifecycleGeneration)
+        long lifecycleGeneration) =>
+        ObserveLifecycle(
+            configuredEnabled,
+            state,
+            reasonCode,
+            summary,
+            lifecycleGeneration,
+            ConfigurationGeneration);
+
+    internal bool ObserveLifecycle(
+        bool configuredEnabled,
+        FeatureStatusState state,
+        FeatureStatusReasonCode reasonCode,
+        string summary,
+        long lifecycleGeneration,
+        ConfigGeneration configurationGeneration)
     {
+        if (configurationGeneration.Value < ConfigurationGeneration.Value) return false;
+        ConfigurationGeneration = configurationGeneration;
         ApplyEmergencyStop(configuredEnabled, ref state, ref reasonCode, ref summary);
         if (Current.ConfiguredEnabled == configuredEnabled &&
             Current.State == state &&
@@ -79,15 +134,46 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
             state,
             new FeatureStatusReason(reasonCode, summary),
             lifecycleGeneration);
-        if (!_registration.Update(status)) return false;
+        var prior = Current;
         Current = status;
-        return true;
+        if (_registration.Update(status)) return true;
+        Current = prior;
+        return false;
     }
+
+    internal bool ObserveRuntimeLifecycle(
+        FeatureStatusState state,
+        FeatureStatusReasonCode reasonCode,
+        string summary,
+        long lifecycleGeneration,
+        ConfigGeneration configurationGeneration)
+    {
+        if (!RuntimeHealthMayReplaceCurrent(state))
+            return false;
+        return ObserveLifecycle(
+            true,
+            state,
+            reasonCode,
+            summary,
+            lifecycleGeneration,
+            configurationGeneration);
+    }
+
+    private bool RuntimeHealthMayReplaceCurrent(FeatureStatusState state) =>
+        Current.ConfiguredEnabled &&
+        state != FeatureStatusState.ConfigurationDisabled &&
+        !(Current.State == FeatureStatusState.TemporarilyBlocked &&
+          Current.Reason.Code is FeatureStatusReasonCode.ParentFeatureDisabled
+              or FeatureStatusReasonCode.ConfigurationDisabled);
 
     public void Dispose() => _registration.Dispose();
 
-    internal void SetEmergencyStop(bool active)
+    internal void SetEmergencyStop(
+        bool active,
+        ConfigGeneration configurationGeneration)
     {
+        if (configurationGeneration.Value < ConfigurationGeneration.Value) return;
+        ConfigurationGeneration = configurationGeneration;
         if (_emergencyStopActive == active) return;
         _emergencyStopActive = active;
         if (active)
@@ -96,7 +182,8 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
                 Current.ConfiguredEnabled,
                 Current.State,
                 Current.Reason.Code,
-                Current.Reason.Summary);
+                Current.Reason.Summary,
+                configurationGeneration);
         }
     }
 
@@ -125,8 +212,10 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatuses(
         SuiteRuntimeConfiguration config,
         long lifecycleGeneration,
-        FeatureStatusRegistry? registry = null)
+        FeatureStatusRegistry? registry = null,
+        ConfigGeneration? configurationGeneration = null)
     {
+        var initialGeneration = configurationGeneration ?? new ConfigGeneration(1);
         var target = registry ?? FeatureStatusRegistry.Shared;
         AutomataFeatureStatusReporter? autoBuy = null;
         AutomataFeatureStatusReporter? autoCast = null;
@@ -138,24 +227,25 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         {
             autoBuy = CreateInitialReporter(
                 target, AutoBuyFeatureId, "Auto Buy", config.General.Enabled,
-                config.AutoBuy.Mode == AutoBuyOperationMode.Active, true, lifecycleGeneration);
+                config.AutoBuy.Mode == AutoBuyOperationMode.Active, true, lifecycleGeneration, initialGeneration);
             autoCast = CreateInitialReporter(
                 target, AutoCastFeatureId, "Auto Cast", config.General.Enabled,
-                config.AutoCast.Mode == AutoCastOperationMode.Active, true, lifecycleGeneration);
+                config.AutoCast.Mode == AutoCastOperationMode.Active, true, lifecycleGeneration, initialGeneration);
             autoConcept = CreateInitialReporter(
                 target, AutoConceptFeatureId, "Auto Concept", config.General.Enabled,
-                config.AutoConcept.Mode == AutoConceptOperationMode.Active, true, lifecycleGeneration);
+                config.AutoConcept.Mode == AutoConceptOperationMode.Active, true, lifecycleGeneration, initialGeneration);
             spellLevel = CreateInitialReporter(
                 target, SpellLevelFeatureId, "Spell Leveling", config.General.Enabled,
                 config.AutoBuy.AutoLevelSpells,
                 config.AutoBuy.Mode == AutoBuyOperationMode.Active,
-                lifecycleGeneration);
+                lifecycleGeneration,
+                initialGeneration);
             autoHarvest = CreateInitialReporter(
                 target, AutoHarvestFeatureId, "Auto Harvest", config.General.Enabled,
-                IsAutoHarvestConfigured(config), true, lifecycleGeneration);
+                IsAutoHarvestConfigured(config), true, lifecycleGeneration, initialGeneration);
             mentor = CreateInitialReporter(
                 target, MentorFeatureId, "Orb Mentor", config.General.Enabled,
-                config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration);
+                config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, initialGeneration);
         }
         catch
         {
@@ -173,7 +263,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         SpellLevel = spellLevel!;
         AutoHarvest = autoHarvest!;
         Mentor = mentor!;
-        ObserveConfiguration(config);
+        ObserveConfiguration(config, initialGeneration);
     }
 
     public AutomataFeatureStatusReporter AutoBuy { get; }
@@ -183,53 +273,83 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatusReporter AutoHarvest { get; }
     public AutomataFeatureStatusReporter Mentor { get; }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration config)
+    internal void ObserveConfiguration(
+        SuiteRuntimeConfiguration config,
+        ConfigGeneration configurationGeneration)
     {
         if (config is null) throw new ArgumentNullException(nameof(config));
-        SetEmergencyStop(config.Safety.EmergencyDisable);
+        SetEmergencyStop(config.Safety.EmergencyDisable, configurationGeneration);
         ObserveConfiguredIntent(
             AutoBuy,
             config.General.Enabled,
             config.AutoBuy.Mode == AutoBuyOperationMode.Active,
-            parentEnabled: true);
+            parentEnabled: true,
+            configurationGeneration,
+            config.AutoBuy.IncludeStructures || config.AutoBuy.IncludeUpgrades
+                ? null
+                : "Auto Buy has neither structures nor upgrades selected to buy.");
         ObserveConfiguredIntent(
             AutoCast,
             config.General.Enabled,
             config.AutoCast.Mode == AutoCastOperationMode.Active,
-            parentEnabled: true);
+            parentEnabled: true,
+            configurationGeneration);
         ObserveConfiguredIntent(
             AutoConcept,
             config.General.Enabled,
             config.AutoConcept.Mode == AutoConceptOperationMode.Active,
-            parentEnabled: true);
+            parentEnabled: true,
+            configurationGeneration);
         ObserveConfiguredIntent(
             SpellLevel,
             config.General.Enabled,
             config.AutoBuy.AutoLevelSpells,
-            config.AutoBuy.Mode == AutoBuyOperationMode.Active);
+            config.AutoBuy.Mode == AutoBuyOperationMode.Active,
+            configurationGeneration);
         ObserveConfiguredIntent(
             AutoHarvest,
             config.General.Enabled,
             IsAutoHarvestConfigured(config),
-            parentEnabled: true);
+            parentEnabled: true,
+            configurationGeneration);
         ObserveConfiguredIntent(
             Mentor,
             config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active,
-            parentEnabled: true);
+            parentEnabled: true,
+            configurationGeneration);
     }
 
-    private void SetEmergencyStop(bool active)
+    internal bool ObserveAutoBuyInvariantStandDown(
+        string summary,
+        ConfigGeneration configurationGeneration)
     {
-        AutoBuy.SetEmergencyStop(active);
-        AutoCast.SetEmergencyStop(active);
-        AutoConcept.SetEmergencyStop(active);
-        SpellLevel.SetEmergencyStop(active);
-        AutoHarvest.SetEmergencyStop(active);
-        Mentor.SetEmergencyStop(active);
+        if (configurationGeneration.Value < AutoBuy.ConfigurationGeneration.Value)
+            return false;
+        return AutoBuy.Observe(
+            false,
+            FeatureStatusState.ConfigurationDisabled,
+            FeatureStatusReasonCode.InvariantViolation,
+            summary,
+            configurationGeneration);
     }
 
-    public void ObserveContractUnavailable(SuiteRuntimeConfiguration config, long lifecycleGeneration, string summary)
+    private void SetEmergencyStop(
+        bool active,
+        ConfigGeneration configurationGeneration)
+    {
+        AutoBuy.SetEmergencyStop(active, configurationGeneration);
+        AutoCast.SetEmergencyStop(active, configurationGeneration);
+        AutoConcept.SetEmergencyStop(active, configurationGeneration);
+        SpellLevel.SetEmergencyStop(active, configurationGeneration);
+        AutoHarvest.SetEmergencyStop(active, configurationGeneration);
+        Mentor.SetEmergencyStop(active, configurationGeneration);
+    }
+
+    private void ProjectContractUnavailable(
+        SuiteRuntimeConfiguration config,
+        long lifecycleGeneration,
+        string summary)
     {
         ObserveContractFeature(AutoBuy, config.General.Enabled,
             config.AutoBuy.Mode == AutoBuyOperationMode.Active, true, lifecycleGeneration, summary);
@@ -247,7 +367,18 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, summary);
     }
 
-    public void ObserveServiceCycleUnavailable(SuiteRuntimeConfiguration config)
+    internal void ObserveContractUnavailable(
+        SuiteRuntimeConfiguration config,
+        long lifecycleGeneration,
+        string summary,
+        ConfigGeneration configurationGeneration)
+    {
+        if (configurationGeneration.Value < AutoBuy.ConfigurationGeneration.Value) return;
+        ObserveConfiguration(config, configurationGeneration);
+        ProjectContractUnavailable(config, lifecycleGeneration, summary);
+    }
+
+    private void ProjectServiceCycleUnavailable(SuiteRuntimeConfiguration config)
     {
         if (config is null) throw new ArgumentNullException(nameof(config));
         const string summary = "The shared Automata ServiceCycle host is unavailable.";
@@ -289,7 +420,18 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             summary);
     }
 
-    public void ObserveLifecycleNotReady(SuiteRuntimeConfiguration config, long lifecycleGeneration)
+    internal void ObserveServiceCycleUnavailable(
+        SuiteRuntimeConfiguration config,
+        ConfigGeneration configurationGeneration)
+    {
+        if (configurationGeneration.Value < AutoBuy.ConfigurationGeneration.Value) return;
+        ObserveConfiguration(config, configurationGeneration);
+        ProjectServiceCycleUnavailable(config);
+    }
+
+    private void ProjectLifecycleNotReady(
+        SuiteRuntimeConfiguration config,
+        long lifecycleGeneration)
     {
         ObserveLifecycleFeature(
             AutoBuy,
@@ -338,6 +480,16 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         }
     }
 
+    internal void ObserveLifecycleNotReady(
+        SuiteRuntimeConfiguration config,
+        long lifecycleGeneration,
+        ConfigGeneration configurationGeneration)
+    {
+        if (configurationGeneration.Value < AutoBuy.ConfigurationGeneration.Value) return;
+        ObserveConfiguration(config, configurationGeneration);
+        ProjectLifecycleNotReady(config, lifecycleGeneration);
+    }
+
     private static void ObserveLifecycleFeature(
         AutomataFeatureStatusReporter reporter,
         bool pluginEnabled,
@@ -366,12 +518,17 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutomataFeatureStatusReporter reporter,
         bool pluginEnabled,
         bool featureEnabled,
-        bool parentEnabled)
+        bool parentEnabled,
+        ConfigGeneration configurationGeneration,
+        string? configuredConstraint = null)
     {
         var lifecycleGeneration = reporter.Current.LifecycleGeneration;
         if (!featureEnabled)
         {
-            ObserveConfigurationDisabled(reporter, lifecycleGeneration);
+            ObserveConfigurationDisabled(
+                reporter,
+                lifecycleGeneration,
+                configurationGeneration);
             return;
         }
         if (!pluginEnabled || !parentEnabled)
@@ -383,13 +540,37 @@ internal sealed class AutomataFeatureStatuses : IDisposable
                 !pluginEnabled
                     ? "Automata is disabled by configuration."
                     : "Auto Buy is disabled by configuration.",
-                lifecycleGeneration);
+                lifecycleGeneration,
+                configurationGeneration);
+            return;
+        }
+        if (configuredConstraint is not null)
+        {
+            reporter.ObserveLifecycle(
+                true,
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.ConfigurationDisabled,
+                configuredConstraint,
+                lifecycleGeneration,
+                configurationGeneration);
             return;
         }
         if (!reporter.Current.ConfiguredEnabled ||
             reporter.Current.Reason.Code is FeatureStatusReasonCode.ParentFeatureDisabled
                 or FeatureStatusReasonCode.EmergencyDisabled)
-            ObserveGameplayNotReady(reporter, lifecycleGeneration);
+            ObserveGameplayNotReady(
+                reporter,
+                lifecycleGeneration,
+                configurationGeneration);
+        else
+            // Even when the rendered status is unchanged, advance the rejection floor.
+            reporter.ObserveLifecycle(
+                reporter.Current.ConfiguredEnabled,
+                reporter.Current.State,
+                reporter.Current.Reason.Code,
+                reporter.Current.Reason.Summary,
+                reporter.Current.LifecycleGeneration,
+                configurationGeneration);
     }
 
     private static void ObserveContractFeature(
@@ -464,23 +645,27 @@ internal sealed class AutomataFeatureStatuses : IDisposable
 
     private static void ObserveConfigurationDisabled(
         AutomataFeatureStatusReporter reporter,
-        long lifecycleGeneration) =>
+        long lifecycleGeneration,
+        ConfigGeneration? configurationGeneration = null) =>
         reporter.ObserveLifecycle(
             false,
             FeatureStatusState.ConfigurationDisabled,
             FeatureStatusReasonCode.ConfigurationDisabled,
             reporter.ConfigurationDisabledSummary,
-            lifecycleGeneration);
+            lifecycleGeneration,
+            configurationGeneration ?? reporter.ConfigurationGeneration);
 
     private static void ObserveGameplayNotReady(
         AutomataFeatureStatusReporter reporter,
-        long lifecycleGeneration) =>
+        long lifecycleGeneration,
+        ConfigGeneration? configurationGeneration = null) =>
         reporter.ObserveLifecycle(
             true,
             FeatureStatusState.NotReady,
             FeatureStatusReasonCode.GameplayNotReady,
             "Gameplay lifecycle is not ready.",
-            lifecycleGeneration);
+            lifecycleGeneration,
+            configurationGeneration ?? reporter.ConfigurationGeneration);
 
     private static AutomataFeatureStatusReporter CreateInitialReporter(
         FeatureStatusRegistry registry,
@@ -489,7 +674,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         bool pluginEnabled,
         bool featureEnabled,
         bool parentEnabled,
-        long lifecycleGeneration)
+        long lifecycleGeneration,
+        ConfigGeneration configurationGeneration)
     {
         var key = new FeatureStatusKey(PluginIds.SuiteGuid, featureId);
         FeatureStatusSnapshot status;
@@ -531,7 +717,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
                     "Gameplay lifecycle is not ready."),
                 lifecycleGeneration);
         }
-        return new AutomataFeatureStatusReporter(registry, status);
+        return new AutomataFeatureStatusReporter(registry, status, configurationGeneration);
     }
 
     public void Dispose()
@@ -547,11 +733,6 @@ internal sealed class AutomataFeatureStatuses : IDisposable
 
 internal static class AutomataFeatureStatusVisuals
 {
-    public static AutoCastToggleVisualState ToVisualState(in FeatureStatusSnapshot status) =>
-        FeatureStatusPresenter.Present(status).ConfiguredState == FeatureConfiguredPresentationState.On
-            ? AutoCastToggleVisualState.On
-            : AutoCastToggleVisualState.Off;
-
     public static bool IsEmergencyStopped(in FeatureStatusSnapshot status) =>
         status.ConfiguredEnabled &&
         status.Reason.Code == FeatureStatusReasonCode.EmergencyDisabled;

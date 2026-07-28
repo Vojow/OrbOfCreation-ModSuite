@@ -1,16 +1,20 @@
 # Automata services
 
-This folder contains the explicit composition boundary for the independently owned automation
-services, which live in sibling feature folders under `src/`.
+This folder contains the remaining application-level service-cycle lifecycle contract. Feature
+implementations live in sibling feature folders under `src/`.
 
 ## Registration rules
 
-- `Plugin` registers one shared ServiceCycle activation with `AutomataServiceRegistry`; feature order is explicit inside `IAutomataServiceCycleFeature[]`: world collection first, then Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, and Auto Concept.
+- `Plugin` owns the one ServiceCycle activation directly; feature order is explicit inside
+  `IAutomataServiceCycleFeature[]`: world collection first, then Auto Harvest, Auto Buy, Spell
+  Leveling, Auto Cast, Auto Concept, and Mentor.
 - Registration is explicit. Do not discover services through reflection, filesystem conventions, or static constructors.
-- The activation implements `IAutomataService`; feature-specific APIs stay inside their typed ServiceCycle composition and diagnostics bridges.
-- Registration order is also tick, cancellation, lifecycle-invalidation, and disposal order. Changing it is a runtime behavior change and requires focused ordering tests.
-- The registry coordinates lifecycle only. It does not own feature policy, game objects, subscriptions, settings, or cross-feature service location.
-- New services need a cohesive feature folder under `src/`, an explicit registration site, a bounded lifecycle implementation, and tests that prove their position in the ordering contract. The registry uses a preallocated default capacity sized for the planned service portfolio rather than treating the current five services as a permanent ceiling.
+- The activation is the application lifecycle surface; feature-specific APIs stay inside their typed
+  ServiceCycle composition and diagnostics bridges.
+- The Common `ServiceCycleRegistry` owns typed feature registration and deterministic action order.
+  Changing that order is a runtime behavior change and requires focused ordering tests.
+- New services need a cohesive feature folder under `src/`, an explicit typed registration site, and
+  tests that prove their position in the cycle's ordering contract.
 
 ## Auto Harvest module
 

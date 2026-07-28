@@ -109,7 +109,8 @@ public sealed class AutoBuyProfileTests : IDisposable
             new AutoBuyNativeQueueRoomAdapter(),
             () => PlannedEpoch,
             () => AutoBuyCandidateKinds.All,
-            operations);
+            operations,
+            IgnoreRefusals.Instance);
         return adapter.TryExecute(
             new AutoBuyCycleAction(kind, uuid, PlannedEpoch),
             Configuration(),
@@ -147,6 +148,14 @@ public sealed class AutoBuyProfileTests : IDisposable
             EvaluationIntervalSeconds = 0.5f,
         },
     };
+
+    private sealed class IgnoreRefusals : IAutoBuyRefusalResponsePort
+    {
+        internal static IgnoreRefusals Instance { get; } = new();
+        public void ObserveRefusal(in AutoBuyRefusalReport report)
+        {
+        }
+    }
 
     private static void AssertStage(
         in CapturedMeasurement item,

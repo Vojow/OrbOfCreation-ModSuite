@@ -1,5 +1,5 @@
-using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
@@ -11,53 +11,24 @@ internal enum AutoCastToggleVisualState
 
 internal sealed class AutoCastToggleControl
 {
-    private readonly IAutomataConfigurationEditor _config;
-    private readonly System.Func<FeatureStatusSnapshot>? _readStatus;
-    private readonly System.Action<SuiteRuntimeConfiguration>? _publishConfiguredIntent;
+    private readonly AutomataConfigurationStore _configuration;
+    private readonly System.Func<FeatureStatusSnapshot> _readStatus;
 
     public AutoCastToggleControl(
-        IAutomataConfigurationEditor config,
-        System.Func<FeatureStatusSnapshot>? readStatus = null,
-        System.Action<SuiteRuntimeConfiguration>? publishConfiguredIntent = null)
+        AutomataConfigurationStore configuration,
+        System.Func<FeatureStatusSnapshot> readStatus)
     {
-        _config = config;
+        _configuration = configuration;
         _readStatus = readStatus;
-        _publishConfiguredIntent = publishConfiguredIntent;
     }
 
-    internal SuiteRuntimeConfiguration Config => _config.Current;
-    internal FeatureStatusSnapshot Status => _readStatus?.Invoke() ?? CreateFallbackStatus();
+    internal SuiteRuntimeConfiguration Config => _configuration.Current;
+    internal FeatureStatusSnapshot Status => _readStatus();
 
-    public AutoCastToggleVisualState State
-    {
-        get
-        {
-            return AutomataFeatureStatusVisuals.ToVisualState(Status);
-        }
-    }
+    public AutoCastToggleVisualState State =>
+        _configuration.Current.AutoCast.Mode == AutoCastOperationMode.Active
+            ? AutoCastToggleVisualState.On
+            : AutoCastToggleVisualState.Off;
 
-    public void Toggle()
-    {
-        _config.ToggleAutoCast();
-        _publishConfiguredIntent?.Invoke(_config.Current);
-    }
-
-    private FeatureStatusSnapshot CreateFallbackStatus()
-    {
-        var enabled = Config.AutoCast.Mode == AutoCastOperationMode.Active;
-        return new FeatureStatusSnapshot(
-            new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoCastFeatureId),
-            "Auto Cast",
-            enabled,
-            !enabled
-                ? FeatureStatusState.ConfigurationDisabled
-                : !Config.CanStartAutoCastActively
-                    ? FeatureStatusState.TemporarilyBlocked
-                    : FeatureStatusState.Operational,
-            !enabled
-                ? new FeatureStatusReason(FeatureStatusReasonCode.ConfigurationDisabled, "Auto Cast is disabled by configuration.")
-                : !Config.CanStartAutoCastActively
-                    ? new FeatureStatusReason(FeatureStatusReasonCode.EmergencyDisabled, "Automata Emergency Disable is active.")
-                    : default);
-    }
+    public void Toggle() => _configuration.ToggleAutoCast();
 }

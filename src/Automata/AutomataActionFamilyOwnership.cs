@@ -52,6 +52,16 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _ => false,
     };
 
+    public AutoBuyCandidateKinds EffectiveAutoBuyOwnership(AutoBuyConfiguration config)
+    {
+        var owned = AutoBuyCandidateKinds.None;
+        if (!config.IncludeStructures || OwnsAutoBuy(AutoBuyCandidateKind.Structure))
+            owned |= AutoBuyCandidateKinds.Structures;
+        if (!config.IncludeUpgrades || OwnsAutoBuy(AutoBuyCandidateKind.Upgrade))
+            owned |= AutoBuyCandidateKinds.Upgrades;
+        return owned;
+    }
+
     public bool OwnsCast => _cast?.IsHeld == true;
     public bool OwnsConcept => _concept?.IsHeld == true;
     public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;

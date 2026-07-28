@@ -17,20 +17,20 @@ internal sealed class AutoHarvestFeatureDependencies
         TypedRegistryResolver registryResolver,
         Func<bool> ownsActionFamily,
         Func<bool> tryCaptureMutationPermit,
-        RuntimeDiagnosticsRegistry? runtimeDiagnostics = null,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        RuntimeDiagnosticsRegistry? runtimeDiagnostics,
+        AutomataFeatureStatusReporter featureStatus)
     {
         RegistryResolver = registryResolver ?? throw new ArgumentNullException(nameof(registryResolver));
         OwnsActionFamily = ownsActionFamily ?? throw new ArgumentNullException(nameof(ownsActionFamily));
         TryCaptureMutationPermit = tryCaptureMutationPermit ??
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         RuntimeDiagnostics = runtimeDiagnostics;
-        FeatureStatus = featureStatus;
+        FeatureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
     }
 
     public TypedRegistryResolver RegistryResolver { get; }
     public Func<bool> OwnsActionFamily { get; }
     public Func<bool> TryCaptureMutationPermit { get; }
     public RuntimeDiagnosticsRegistry? RuntimeDiagnostics { get; }
-    public AutomataFeatureStatusReporter? FeatureStatus { get; }
+    public AutomataFeatureStatusReporter FeatureStatus { get; }
 }

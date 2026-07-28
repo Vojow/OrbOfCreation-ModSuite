@@ -1,5 +1,6 @@
+using System;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 
 namespace OrbAutomata;
@@ -17,11 +18,10 @@ namespace OrbAutomata;
 /// </remarks>
 internal sealed class AutoCastServiceCycleDiagnosticsBridge
 {
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly AutomataFeatureStatusReporter _featureStatus;
     private readonly AutoCastManualPauseState _manualPause;
     private long _lifecycle;
-    private bool _pluginEnabled;
-    private bool _featureEnabled;
+    private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
     private bool _owned;
     private bool _manualPaused;
@@ -29,16 +29,16 @@ internal sealed class AutoCastServiceCycleDiagnosticsBridge
 
     public AutoCastServiceCycleDiagnosticsBridge(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool owned,
         AutoCastManualPauseState manualPause,
-        AutomataFeatureStatusReporter? featureStatus)
+        AutomataFeatureStatusReporter featureStatus)
     {
-        _featureStatus = featureStatus;
+        _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
         _manualPause = manualPause;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
@@ -62,48 +62,43 @@ internal sealed class AutoCastServiceCycleDiagnosticsBridge
         if (conditionsChanged) PublishFeatureStatus();
     }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration, bool owned)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _owned = owned;
-        ReadConfiguration(configuration);
-        PublishFeatureStatus();
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
+        _cycleObserved = false;
     }
 
-    public void ObserveLifecycle(long lifecycle, SuiteRuntimeConfiguration configuration, bool owned)
+    public void ObserveLifecycle(
+        long lifecycle,
+        ConfigGeneration configurationGeneration,
+        bool owned)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
         // Nothing survives a lifecycle boundary. A pause earned in the previous run of the game is
         // not a fact about this one, and the worker has not evaluated against the new world yet.
         _manualPause.Reset();
         _manualPaused = false;
         _cycleObserved = false;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
     private void PublishFeatureStatus()
     {
-        if (_featureStatus is null) return;
         var health = AutoCastFeatureStatusProjector.Project(
-            _pluginEnabled,
-            _featureEnabled,
             _emergencyDisabled,
             _owned,
             _manualPaused,
             _cycleObserved);
-        _featureStatus.ObserveLifecycle(
-            health.State != FeatureStatusState.ConfigurationDisabled,
+        _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,
             health.Summary,
-            _lifecycle);
+            _lifecycle,
+            _configurationGeneration);
     }
 
-    private void ReadConfiguration(SuiteRuntimeConfiguration configuration)
-    {
-        _pluginEnabled = configuration.General.Enabled;
-        _featureEnabled = configuration.AutoCast.Mode == AutoCastOperationMode.Active;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
-    }
 }

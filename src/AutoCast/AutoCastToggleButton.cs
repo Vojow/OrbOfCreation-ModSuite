@@ -141,6 +141,7 @@ internal sealed class AutoCastToggleButton : IDisposable
             }
 
             button.onClick.RemoveAllListeners();
+            ConfiguredIntentButtonVisualOwnership.Claim(button);
             toggle = new AutoCastToggleButton(
                 root,
                 button,

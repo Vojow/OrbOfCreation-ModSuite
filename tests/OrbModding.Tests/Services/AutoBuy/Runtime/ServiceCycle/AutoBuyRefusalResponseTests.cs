@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using BepInEx.Configuration;
 using OrbAutomata;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using Xunit;
 
@@ -56,6 +58,48 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
     }
 
     [Fact]
+    public void ProductionStandDownPublishesConfigurationOnceThroughTheCentralJoin()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.TryTakeUnpublishedChange(out _);
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            lifecycleGeneration: 1,
+            new FeatureStatusRegistry());
+        var publications = 0;
+        var store = new AutomataConfigurationStore(
+            config,
+            (snapshot, generation) =>
+            {
+                publications++;
+                statuses.ObserveConfiguration(snapshot, generation);
+            });
+        var responder = new AutoBuyRefusalResponder(
+            () => store.Current.AutoBuy.Mode == AutoBuyOperationMode.Active,
+            summary =>
+            {
+                if (!store.DisableAutoBuy()) return;
+                statuses.ObserveAutoBuyInvariantStandDown(
+                    summary,
+                    store.CurrentGeneration);
+            },
+            new AutoBuyRefusalBundleWriter(() => _directory),
+            _ => { },
+            () => WrittenAt);
+
+        responder.ObserveRefusal(Report(RefusedOnTheQueuedLevelCap()));
+
+        Assert.Equal(1, publications);
+        Assert.Equal(AutoBuyOperationMode.Disabled, store.Current.AutoBuy.Mode);
+        Assert.False(statuses.AutoBuy.Current.ConfiguredEnabled);
+        Assert.Equal(
+            FeatureStatusReasonCode.InvariantViolation,
+            statuses.AutoBuy.Current.Reason.Code);
+        Assert.Equal(store.CurrentGeneration, statuses.AutoBuy.ConfigurationGeneration);
+    }
+
+    [Fact]
     public void TheLoudLineNamesTheBundleItWrote()
     {
         var config = new EditableConfig(AutoBuyOperationMode.Active);
@@ -78,7 +122,11 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         var config = new EditableConfig(AutoBuyOperationMode.Active);
         var logged = new List<string>();
         var responder = new AutoBuyRefusalResponder(
-            config, new FailingBundles(), logged.Add, featureStatus: null, () => WrittenAt);
+            config.IsActive,
+            _ => config.DisableAutoBuy(),
+            new FailingBundles(),
+            logged.Add,
+            () => WrittenAt);
 
         responder.ObserveRefusal(Report(RefusedOnTheQueuedLevelCap()));
 
@@ -194,10 +242,10 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         logged = messages;
         var directory = _directory;
         return new AutoBuyRefusalResponder(
-            config,
+            config.IsActive,
+            _ => config.DisableAutoBuy(),
             new AutoBuyRefusalBundleWriter(() => directory),
             messages.Add,
-            featureStatus: null,
             () => WrittenAt);
     }
 
@@ -244,31 +292,16 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         }
     }
 
-    private sealed class EditableConfig : IAutomataConfigurationEditor
+    private sealed class EditableConfig
     {
         public EditableConfig(AutoBuyOperationMode mode) => Current = Build(mode);
 
         public SuiteRuntimeConfiguration Current { get; private set; }
 
-        public void ToggleAutoBuy() =>
-            Current = Build(
-                Current.AutoBuy.Mode == AutoBuyOperationMode.Active
-                    ? AutoBuyOperationMode.Disabled
-                    : AutoBuyOperationMode.Active);
+        public bool IsActive() =>
+            Current.AutoBuy.Mode == AutoBuyOperationMode.Active;
 
         public void DisableAutoBuy() => Current = Build(AutoBuyOperationMode.Disabled);
-
-        public void ToggleAutoCast()
-        {
-        }
-
-        public void ToggleAutoConcept()
-        {
-        }
-
-        public void SetEmergencyStop(bool stopped)
-        {
-        }
 
         private static SuiteRuntimeConfiguration Build(AutoBuyOperationMode mode) =>
             new SuiteRuntimeConfiguration

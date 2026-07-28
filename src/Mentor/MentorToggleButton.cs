@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using OrbAutomata;
 using OrbModding;
 using OrbModding.Common;
 using TMPro;
@@ -18,6 +19,7 @@ internal sealed class MentorToggleButton : IDisposable
     private readonly Image? _icon;
     private readonly MentorConfig _config;
     private readonly Func<FeatureStatusSnapshot> _readStatus;
+    private readonly Action _publishConfiguration;
     private int _lastVisualState = -1;
 
     private MentorToggleButton(
@@ -26,13 +28,23 @@ internal sealed class MentorToggleButton : IDisposable
         TextMeshProUGUI? text,
         Image? icon,
         MentorConfig config,
-        Func<FeatureStatusSnapshot> readStatus)
-    { _root = root; _button = button; _text = text; _icon = icon; _config = config; _readStatus = readStatus; }
+        Func<FeatureStatusSnapshot> readStatus,
+        Action publishConfiguration)
+    {
+        _root = root;
+        _button = button;
+        _text = text;
+        _icon = icon;
+        _config = config;
+        _readStatus = readStatus;
+        _publishConfiguration = publishConfiguration;
+    }
     public bool IsAlive => _root != null;
 
     public static bool TryCreate(
         MentorConfig config,
         Func<FeatureStatusSnapshot> readStatus,
+        Action publishConfiguration,
         out MentorToggleButton? result)
     {
         result = null;
@@ -73,7 +85,15 @@ internal sealed class MentorToggleButton : IDisposable
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
-        result = new MentorToggleButton(root, button, text, icon, config, readStatus);
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
+        result = new MentorToggleButton(
+            root,
+            button,
+            text,
+            icon,
+            config,
+            readStatus,
+            publishConfiguration);
         button.onClick.AddListener(result.Toggle);
         result.Render();
         root.SetActive(true);
@@ -103,6 +123,7 @@ internal sealed class MentorToggleButton : IDisposable
         _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active
             ? MentorOperationMode.Disabled
             : MentorOperationMode.Active;
+        _publishConfiguration();
         Render();
         Plugin.ShowNotice(
             $"Orb Mentor. {FeatureStatusPresenter.Format(_readStatus())}.",

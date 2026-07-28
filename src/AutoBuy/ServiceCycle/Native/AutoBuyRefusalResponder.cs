@@ -1,5 +1,4 @@
 using System;
-using OrbModding.Common;
 
 namespace OrbAutomata;
 
@@ -32,23 +31,23 @@ internal interface IAutoBuyRefusalResponsePort
 /// </remarks>
 internal sealed class AutoBuyRefusalResponder : IAutoBuyRefusalResponsePort
 {
-    private readonly IAutomataConfigurationEditor _config;
+    private readonly Func<bool> _isActive;
+    private readonly Action<string> _standDown;
     private readonly IAutoBuyRefusalBundlePort _bundles;
     private readonly Action<string> _log;
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
     private readonly Func<DateTime> _utcNow;
 
     public AutoBuyRefusalResponder(
-        IAutomataConfigurationEditor config,
+        Func<bool> isActive,
+        Action<string> standDown,
         IAutoBuyRefusalBundlePort bundles,
         Action<string> log,
-        AutomataFeatureStatusReporter? featureStatus = null,
         Func<DateTime>? utcNow = null)
     {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _isActive = isActive ?? throw new ArgumentNullException(nameof(isActive));
+        _standDown = standDown ?? throw new ArgumentNullException(nameof(standDown));
         _bundles = bundles ?? throw new ArgumentNullException(nameof(bundles));
         _log = log ?? throw new ArgumentNullException(nameof(log));
-        _featureStatus = featureStatus;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
     }
 
@@ -57,7 +56,7 @@ internal sealed class AutoBuyRefusalResponder : IAutoBuyRefusalResponsePort
         // Already off: the batch that produced this refusal cascade-terminates anyway, and a second
         // bundle for the same stand-down would say the same thing twice. An operator who turns it
         // back on gets the full treatment again, which is what re-enabling means.
-        if (_config.Current.AutoBuy.Mode != AutoBuyOperationMode.Active) return;
+        if (!_isActive()) return;
 
         var now = _utcNow();
         var located = _bundles.TryWrite(AutoBuyRefusalBundle.Render(in report, now), now, out var path);
@@ -67,12 +66,7 @@ internal sealed class AutoBuyRefusalResponder : IAutoBuyRefusalResponsePort
             $"{report.Diagnosis.Describe()}. Diagnostic bundle: {where}. " +
             "Auto Buy disabled itself; re-enable in Mod Config after reviewing.";
 
-        _config.DisableAutoBuy();
+        _standDown(summary);
         _log(summary);
-        _featureStatus?.Observe(
-            false,
-            FeatureStatusState.ConfigurationDisabled,
-            FeatureStatusReasonCode.InvariantViolation,
-            summary);
     }
 }

@@ -7,25 +7,9 @@ namespace OrbModding.Tests.Services.AutoConcept.Diagnostics;
 public sealed class AutoConceptFeatureStatusProjectorTests
 {
     [Fact]
-    public void ConfigurationHasPrecedenceOverEveryRuntimeCondition()
-    {
-        var status = AutoConceptFeatureStatusProjector.Project(
-            pluginEnabled: false,
-            featureEnabled: false,
-            emergencyDisabled: true,
-            owned: false,
-            cycleObserved: false);
-
-        Assert.Equal(FeatureStatusState.ConfigurationDisabled, status.State);
-        Assert.Equal(FeatureStatusReasonCode.ConfigurationDisabled, status.Reason);
-    }
-
-    [Fact]
     public void OwnershipLossIsReportedBeforeFirstCycleReadiness()
     {
         var status = AutoConceptFeatureStatusProjector.Project(
-            pluginEnabled: true,
-            featureEnabled: true,
             emergencyDisabled: false,
             owned: false,
             cycleObserved: false);
@@ -38,8 +22,6 @@ public sealed class AutoConceptFeatureStatusProjectorTests
     public void AnObservedOwnedCycleIsOperational()
     {
         var status = AutoConceptFeatureStatusProjector.Project(
-            pluginEnabled: true,
-            featureEnabled: true,
             emergencyDisabled: false,
             owned: true,
             cycleObserved: true);

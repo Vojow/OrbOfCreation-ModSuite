@@ -5,38 +5,10 @@ using Xunit;
 namespace OrbModding.Tests.Services.AutoCast.Diagnostics;
 
 /// <summary>
-/// What Auto Cast's health line says, and — more to the point — which of several simultaneously true
-/// facts it chooses to say. The order of the terms is the whole subject here.
+/// What Auto Cast's running service says about runtime health. Saved intent is joined centrally.
 /// </summary>
 public sealed class AutoCastFeatureStatusProjectorTests
 {
-    [Fact]
-    public void AFeatureTheOperatorSwitchedOffSaysSoAndNothingElse()
-    {
-        // Every other term is true at once here. Reporting any of them would answer a question the
-        // player did not ask and hide the one they did.
-        var status = Project(
-            pluginEnabled: false,
-            featureEnabled: false,
-            emergencyDisabled: true,
-            owned: false,
-            manualPaused: true,
-            cycleObserved: false);
-
-        Assert.Equal(FeatureStatusState.ConfigurationDisabled, status.State);
-        Assert.Equal(FeatureStatusReasonCode.ConfigurationDisabled, status.Reason);
-        Assert.Equal(AutoCastFeatureStatusProjector.ConfigurationDisabledSummary, status.Summary);
-    }
-
-    [Fact]
-    public void ASuiteSwitchedOffBlocksBeforeAnythingItWouldHaveDone()
-    {
-        var status = Project(pluginEnabled: false, emergencyDisabled: true, owned: false);
-
-        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
-        Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, status.Reason);
-    }
-
     [Fact]
     public void TheEmergencyStopOutranksWhoOwnsTheActionFamily()
     {
@@ -86,15 +58,11 @@ public sealed class AutoCastFeatureStatusProjectorTests
     }
 
     private static AutoCastFeatureStatus Project(
-        bool pluginEnabled = true,
-        bool featureEnabled = true,
         bool emergencyDisabled = false,
         bool owned = true,
         bool manualPaused = false,
         bool cycleObserved = true) =>
         AutoCastFeatureStatusProjector.Project(
-            pluginEnabled,
-            featureEnabled,
             emergencyDisabled,
             owned,
             manualPaused,

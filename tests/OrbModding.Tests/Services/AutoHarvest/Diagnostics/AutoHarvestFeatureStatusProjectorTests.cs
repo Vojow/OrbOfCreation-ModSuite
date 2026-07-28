@@ -1,4 +1,3 @@
-using System;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -16,7 +15,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = AutoHarvestPairHealth.Eligible(AutoHarvestPair.FruitTree);
         var treasure = Selected(AutoHarvestPair.TreasureTree, (AutoHarvestPairHealthKind)siblingKind);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Operational, result.State);
         Assert.Equal(FeatureStatusReasonCode.None, result.Reason);
@@ -30,7 +29,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = AutoHarvestPairHealth.Eligible(AutoHarvestPair.FruitTree);
         var treasure = Selected(AutoHarvestPair.TreasureTree, (AutoHarvestPairHealthKind)siblingKind);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Degraded, result.State);
         Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, result.Reason);
@@ -42,7 +41,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.NativeBusy);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.ProgressionLocked);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.TemporarilyBlocked, result.State);
         Assert.Equal(FeatureStatusReasonCode.NativeBusy, result.Reason);
@@ -54,7 +53,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.ProgressionLocked);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.ProgressionLocked);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Locked, result.State);
         Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, result.Reason);
@@ -66,7 +65,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.ProgressionLocked);
         var treasure = AutoHarvestPairHealth.NotSelected(AutoHarvestPair.TreasureTree);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Locked, result.State);
         Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, result.Reason);
@@ -82,7 +81,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.ActionNotOffered);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.ProgressionLocked);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.TemporarilyBlocked, result.State);
         Assert.Equal(FeatureStatusReasonCode.NativeBusy, result.Reason);
@@ -98,7 +97,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.ActionNotOffered);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.ContractUnavailable);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Degraded, result.State);
         Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, result.Reason);
@@ -110,7 +109,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var fruit = Selected(AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.PlotNotVisible);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.PlotNotVisible);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Locked, result.State);
         Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, result.Reason);
@@ -129,7 +128,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var treasure = Selected(
             AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.PrerequisitesNotConfirmed);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.NotReady, result.State);
         Assert.Equal(FeatureStatusReasonCode.GameplayNotReady, result.Reason);
@@ -146,7 +145,7 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
             AutoHarvestPair.FruitTree, AutoHarvestPairHealthKind.PrerequisitesNotConfirmed);
         var treasure = Selected(AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.Faulted);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Faulted, result.State);
         Assert.Equal(FeatureStatusReasonCode.PostconditionFailed, result.Reason);
@@ -163,30 +162,10 @@ public sealed class AutoHarvestFeatureStatusProjectorTests
         var treasure = Selected(
             AutoHarvestPair.TreasureTree, AutoHarvestPairHealthKind.PrerequisitesNotConfirmed);
 
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: true, fruit, treasure);
+        var result = AutoHarvestFeatureStatusProjector.Project(fruit, treasure);
 
         Assert.Equal(FeatureStatusState.Operational, result.State);
         Assert.Equal(FeatureStatusReasonCode.None, result.Reason);
-    }
-
-    /// <summary>
-    /// The worker keeps publishing selected pairs while the mode is Disabled, because it marks
-    /// selection from the collect-pair settings alone. The status line still has to say disabled.
-    /// </summary>
-    [Theory]
-    [InlineData((int)AutoHarvestPairHealthKind.NotObserved)]
-    [InlineData((int)AutoHarvestPairHealthKind.RegistryNotReady)]
-    [InlineData((int)AutoHarvestPairHealthKind.Eligible)]
-    public void DisabledFeatureSaysDisabledWhateverItsPairsReport(int kind)
-    {
-        var fruit = Selected(AutoHarvestPair.FruitTree, (AutoHarvestPairHealthKind)kind);
-        var treasure = Selected(AutoHarvestPair.TreasureTree, (AutoHarvestPairHealthKind)kind);
-
-        var result = AutoHarvestFeatureStatusProjector.Project(featureEnabled: false, fruit, treasure);
-
-        Assert.Equal(FeatureStatusState.ConfigurationDisabled, result.State);
-        Assert.Equal(FeatureStatusReasonCode.ConfigurationDisabled, result.Reason);
-        Assert.Contains("disabled", result.Summary, StringComparison.Ordinal);
     }
 
     private static AutoHarvestPairHealth Selected(

@@ -46,6 +46,7 @@ internal sealed class AutoBuyToggleButton : IDisposable
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
         result = new AutoBuyToggleButton(root, button, text, control);
         button.onClick.AddListener(result.Toggle);
         result.Render();

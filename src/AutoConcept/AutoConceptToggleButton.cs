@@ -101,6 +101,7 @@ internal sealed class AutoConceptToggleButton : IDisposable
                 return false;
             }
             button.onClick.RemoveAllListeners();
+            ConfiguredIntentButtonVisualOwnership.Claim(button);
             result = new AutoConceptToggleButton(root, button, text, control);
             button.onClick.AddListener(result.Toggle);
             result.Render(force: true);

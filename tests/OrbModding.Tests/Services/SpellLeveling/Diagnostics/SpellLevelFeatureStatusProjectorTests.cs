@@ -12,32 +12,6 @@ namespace OrbModding.Tests.Services.SpellLeveling.Diagnostics;
 public sealed class SpellLevelFeatureStatusProjectorTests
 {
     [Fact]
-    public void ItsOwnSwitchOutranksEverythingElse()
-    {
-        var status = Project(featureEnabled: false, pluginEnabled: false, parentEnabled: false);
-
-        Assert.Equal(FeatureStatusState.ConfigurationDisabled, status.State);
-        Assert.Equal(FeatureStatusReasonCode.ConfigurationDisabled, status.Reason);
-        Assert.Equal(SpellLevelFeatureStatusProjector.ConfigurationDisabledSummary, status.Summary);
-    }
-
-    [Fact]
-    public void ADisabledParentIsNamedAsTheParentRatherThanAsThisFeature()
-    {
-        // Spell Leveling rides Auto Buy's switch, so "off" has two very different explanations and a
-        // player who turned Auto Buy off should be told that rather than that spell leveling broke.
-        var plugin = Project(pluginEnabled: false);
-        Assert.Equal(FeatureStatusState.TemporarilyBlocked, plugin.State);
-        Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, plugin.Reason);
-        Assert.Contains("Automata", plugin.Summary);
-
-        var parent = Project(parentEnabled: false);
-        Assert.Equal(FeatureStatusState.TemporarilyBlocked, parent.State);
-        Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, parent.Reason);
-        Assert.Contains("Auto Buy", parent.Summary);
-    }
-
-    [Fact]
     public void AnEmergencyStopOutranksOwnershipAndProgression()
     {
         var status = Project(emergencyDisabled: true, owned: false, cycleObserved: true);
@@ -92,13 +66,10 @@ public sealed class SpellLevelFeatureStatusProjectorTests
     }
 
     private static SpellLevelFeatureStatus Project(
-        bool pluginEnabled = true,
-        bool featureEnabled = true,
-        bool parentEnabled = true,
         bool emergencyDisabled = false,
         bool owned = true,
         bool cycleObserved = true,
         AutoSpellLevelCapability capability = AutoSpellLevelCapability.Single) =>
         SpellLevelFeatureStatusProjector.Project(
-            pluginEnabled, featureEnabled, parentEnabled, emergencyDisabled, owned, cycleObserved, capability);
+            emergencyDisabled, owned, cycleObserved, capability);
 }

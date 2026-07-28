@@ -100,12 +100,28 @@ Seven services are composed today — world collection, Auto Harvest, Auto Buy, 
 Auto Cast, Auto Concept, and Mentor — each through an explicit typed registration, and none of them
 introduces another registry abstraction, pump, or generic service locator.
 
-Orb Automata chooses one complete `SuiteRuntimeConfiguration` for every service. A single boundary reader
-copies the live BepInEx entries after load and after any change to them, whatever moved them; BepInEx types
-never enter the service graph. `ServiceCycleRegistry` constructs its own `ServiceConfigurationPublisher`, so
-there is nothing to install, and publishing once advances the one generation every service reads. Service
-definitions declare only state and action types: they do not select a configuration generic or build
-feature-specific configuration mirrors.
+Orb Automata chooses one complete `SuiteRuntimeConfiguration` for every service. BepInEx entries deserialize
+and persist values, but they are not application state. `AutomataConfigurationStore` owns the one committed
+immutable reading and the one `ConfigGeneration`; all runtime, ownership, control, and presentation reads use
+that store. A binding's initial change notification is absorbed into generation 1 instead of being replayed
+as a duplicate publication. `ServiceCycleRegistry` constructs its own `ServiceConfigurationPublisher`, and
+publishing once advances the same generation every service reads. Service definitions declare only state and
+action types: they do not select a configuration generic or build feature-specific configuration mirrors.
+
+`Plugin` owns the one deferred ServiceCycle activation directly; there is no application-level registry
+around it. Every saved-value writer feeds the store. Quick buttons and shortcuts compute their next value
+from its committed snapshot and drain the write synchronously. Mods-page apply/revert, BepInEx's configuration
+manager, and external-file changes coalesce behind the binding and commit at the start of the next application
+frame. A pending raw edit cannot affect ownership, button visibility, resume preview, or host activation before
+that commit.
+
+The store sends the same `(snapshot, ConfigGeneration)` to two consumers: the registry publication and one
+application presentation join. Feature runtimes publish only health facts such as operational, waiting,
+blocked, or faulted. They carry no configured mode, emergency flag, or second configuration generation.
+`AutomataFeatureStatuses` combines the latest committed intent with the latest health for the six
+player-facing feature rows; world collection has no row. A delayed cycle can therefore update health but
+cannot repaint configured intent. The reporter replaces its current snapshot before the registry emits a
+synchronous transition, so a transition-triggered repaint cannot reread the previous joined result.
 
 Profile builds carry the pump's exact service ordinal and frame identity through `ServiceActionContext`, so
 feature adapters may report native action substages. Ordinary builds compile that coordinate and probe path
@@ -146,11 +162,12 @@ hidden runner generic.
 - The next cycle consumes the latest publications; intermediate publications may coalesce.
 - The state projection exposes both pinned and latest generations so the UI can explain that a saved change applies next cycle.
 
-Editable UI values are not runtime configuration. A change to a persisted setting publishes a new immutable
-`SuiteRuntimeConfiguration` snapshot and generation, whatever changed it — the suite's own panel, BepInEx's
-configuration manager, or an edited file reloaded from disk. Draft edits, previews, validation failures, and
-failed persistence change no setting and are therefore invisible to services. Trace records name the
-configuration generation the recorded service actually consumed.
+Editable UI values and raw entry notifications are not runtime configuration. A committed persisted change
+publishes a new immutable `SuiteRuntimeConfiguration` snapshot and generation, whatever changed it — the
+suite's own panel, BepInEx's configuration manager, or an edited file reloaded from disk. Draft edits,
+previews, validation failures, failed persistence, and pending watcher notifications are invisible to
+services and controls. Trace records name the configuration generation the recorded service actually
+consumed.
 
 The world publication is produced by the source service, and becomes live on the main thread during the
 action pass rather than on the worker that derived it. Publishing services dispatch before mutating ones, so
@@ -249,7 +266,9 @@ A later cycle may replan from a fresh frame. The rejected batch is never resumed
 
 ## Emergency stop
 
-Emergency stop is an immediate Common control, not configuration. When engaged:
+Emergency stop has one persisted desired value and one immediate Common enforcement path. STOP/resume first
+cancels prepared work, then commits `Safety.EmergencyDisable` through the same store so clearing the saved
+value cannot race behind cancellation and leave the pump stopped. At the Common boundary:
 
 - no further native action is attempted;
 - every unattempted action in every current batch is terminally `Rejected(EmergencyStop)`;

@@ -1,46 +1,58 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
 /// <summary>
 /// The suite lifecycle surface of the one Automata-owned ServiceCycle runtime, plus its
-/// saved-configuration publication. Kept as an interface so the Tier-1 activation can be
+/// saved-configuration publication. Kept as an interface so deferred activation can be
 /// exercised without standing up a real host.
 /// </summary>
-internal interface IAutomataServiceCycleRuntime : IAutomataService
+internal interface IAutomataServiceCycleRuntime : IDisposable
 {
-    void PublishSavedConfiguration(SuiteRuntimeConfiguration configuration);
+    void Tick(float unscaledDeltaTime);
+    void PublishSavedConfiguration(
+        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration);
+    void CancelPreparedWork();
+    void InvalidateLifecycle();
 }
 
 /// <summary>
-/// Tier-1 participant that lazily brings the one Automata-owned ServiceCycle runtime
+/// Lazily brings the one Automata-owned ServiceCycle runtime
 /// online once the game lifecycle is ready, then forwards the suite lifecycle surface
-/// to it. It owns no host, feature, or typed service generic — only the deferred
-/// creation and the forwarding.
+/// to it. Creation receives the latest configuration directly, so activation never
+/// constructs from one snapshot and then replays another publication.
 /// </summary>
-internal sealed class AutomataServiceCycleActivation : IAutomataService
+internal sealed class AutomataServiceCycleActivation : IDisposable
 {
     private const int MaximumActivationAttempts = 2;
 
     private readonly Func<bool> _canActivate;
-    private readonly Func<IAutomataServiceCycleRuntime?> _tryCreate;
-    private readonly Action<SuiteRuntimeConfiguration>? _observeHostUnavailable;
+    private readonly Func<
+        SuiteRuntimeConfiguration,
+        ConfigGeneration,
+        IAutomataServiceCycleRuntime?> _tryCreate;
+    private readonly Action<SuiteRuntimeConfiguration, ConfigGeneration>? _observeHostUnavailable;
     private IAutomataServiceCycleRuntime? _runtime;
-    private SuiteRuntimeConfiguration? _latestConfiguration;
+    private SuiteRuntimeConfiguration _latestConfiguration;
+    private ConfigGeneration _latestConfigurationGeneration;
     private int _activationAttempts;
-    private bool _hasPendingConfiguration;
     private bool _disposed;
 
     public AutomataServiceCycleActivation(
         Func<bool> canActivate,
-        Func<IAutomataServiceCycleRuntime?> tryCreate,
-        SuiteRuntimeConfiguration? initialConfiguration = null,
-        Action<SuiteRuntimeConfiguration>? observeHostUnavailable = null)
+        Func<SuiteRuntimeConfiguration, ConfigGeneration, IAutomataServiceCycleRuntime?> tryCreate,
+        SuiteRuntimeConfiguration initialConfiguration,
+        ConfigGeneration initialConfigurationGeneration,
+        Action<SuiteRuntimeConfiguration, ConfigGeneration>? observeHostUnavailable = null)
     {
         _canActivate = canActivate ?? throw new ArgumentNullException(nameof(canActivate));
         _tryCreate = tryCreate ?? throw new ArgumentNullException(nameof(tryCreate));
-        _latestConfiguration = initialConfiguration;
+        _latestConfiguration = initialConfiguration ??
+            throw new ArgumentNullException(nameof(initialConfiguration));
+        _latestConfigurationGeneration = initialConfigurationGeneration;
         _observeHostUnavailable = observeHostUnavailable;
     }
 
@@ -52,31 +64,29 @@ internal sealed class AutomataServiceCycleActivation : IAutomataService
             _canActivate())
         {
             _activationAttempts++;
-            _runtime = _tryCreate();
+            _runtime = _tryCreate(
+                _latestConfiguration,
+                _latestConfigurationGeneration);
             if (_runtime is null)
-            {
                 ObserveHostUnavailable();
-            }
-            else if (_hasPendingConfiguration && _latestConfiguration is not null)
-            {
-                _runtime.PublishSavedConfiguration(_latestConfiguration);
-                _hasPendingConfiguration = false;
-            }
         }
         _runtime?.Tick(unscaledDeltaTime);
     }
 
-    public void PublishSavedConfiguration(SuiteRuntimeConfiguration configuration)
+    public void PublishSavedConfiguration(
+        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration)
     {
         if (_disposed) return;
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
+        if (configurationGeneration.Value <= _latestConfigurationGeneration.Value) return;
         _latestConfiguration = configuration;
+        _latestConfigurationGeneration = configurationGeneration;
         if (_runtime is not null)
         {
-            _runtime.PublishSavedConfiguration(configuration);
+            _runtime.PublishSavedConfiguration(configuration, configurationGeneration);
             return;
         }
-        _hasPendingConfiguration = true;
         if (_activationAttempts != 0) ObserveHostUnavailable();
     }
 
@@ -102,7 +112,8 @@ internal sealed class AutomataServiceCycleActivation : IAutomataService
 
     private void ObserveHostUnavailable()
     {
-        if (_latestConfiguration is not null)
-            _observeHostUnavailable?.Invoke(_latestConfiguration);
+        _observeHostUnavailable?.Invoke(
+            _latestConfiguration,
+            _latestConfigurationGeneration);
     }
 }

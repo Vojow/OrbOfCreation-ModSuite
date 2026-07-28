@@ -898,9 +898,9 @@ public sealed class AutoBuyCycleEvaluatorTests
         string absoluteReserve,
         double relativeMultiplier)
     {
-        var oracle = new ReservePolicy(new ConfigSource(Config(
+        var oracle = new ReservePolicy(() => Config(
             absoluteReserve: absoluteReserve,
-            relativeMultiplier: (float)relativeMultiplier)));
+            relativeMultiplier: (float)relativeMultiplier));
         var oracleDecision = oracle.Evaluate(new[]
         {
             new ResourceAdmissionCost(
@@ -932,7 +932,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         (double cost, double quantity) a = (100.0, 1_000.0); // ratio 0.1
         (double cost, double quantity) b = (10.0, 1_000.0);  // ratio 0.01
 
-        var oracle = new ReservePolicy(new ConfigSource(Config()));
+        var oracle = new ReservePolicy(() => Config());
         var ratioA = oracle.Evaluate(new[]
         {
             new ResourceAdmissionCost(StructureA.ToString(), "a", new BigAmount(a.cost, 0), new BigAmount(a.quantity, 0)),
@@ -1061,13 +1061,6 @@ public sealed class AutoBuyCycleEvaluatorTests
                 RelativeReserveMultiplier = relativeMultiplier,
             },
         };
-
-    private sealed class ConfigSource : IAutomataConfigurationSource
-    {
-        public ConfigSource(SuiteRuntimeConfiguration current) => Current = current;
-
-        public SuiteRuntimeConfiguration Current { get; }
-    }
 
     private sealed class FrameBuilder
     {

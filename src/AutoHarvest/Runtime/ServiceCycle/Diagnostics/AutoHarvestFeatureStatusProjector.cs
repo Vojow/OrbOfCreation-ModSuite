@@ -22,25 +22,18 @@ internal readonly struct AutoHarvestFeatureStatus
 internal static class AutoHarvestFeatureStatusProjector
 {
     /// <summary>
-    /// What the feature's health line says, given whether the player has the feature switched on and
-    /// what its pairs report.
+    /// What the running feature reports from its pair evidence.
     /// </summary>
     /// <remarks>
-    /// <paramref name="featureEnabled"/> is separate from pair selection because the two answer
-    /// different questions and the worker only knows one of them: its published pair health marks a
-    /// pair selected from the collect-fruit and collect-treasure settings alone, so a suite with
-    /// <c>AutoHarvest.Mode=Disabled</c> keeps publishing selected pairs that have never been observed.
-    /// Read without the mode, that is indistinguishable from a feature waiting on native evidence, and
-    /// the status line told players a switched-off feature was "not ready". A disabled feature says
-    /// disabled, whatever its pairs are doing.
+    /// A zero selected count is ignored by the runtime-status boundary; saved configuration owns
+    /// whether the feature is disabled.
     /// </remarks>
     public static AutoHarvestFeatureStatus Project(
-        bool featureEnabled,
         in AutoHarvestPairHealth fruit,
         in AutoHarvestPairHealth treasure)
     {
         var selectedCount = CountSelected(fruit) + CountSelected(treasure);
-        if (!featureEnabled || selectedCount == 0)
+        if (selectedCount == 0)
         {
             return new AutoHarvestFeatureStatus(
                 FeatureStatusState.ConfigurationDisabled,

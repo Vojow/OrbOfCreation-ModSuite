@@ -19,6 +19,7 @@ health, and remain usable before optional native progression UI exists.
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
 | Navigation cadence and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
+| One-path quick-control publication | [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs), [AutomataFeatureStatusTests.cs](../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) |
 | Installed native navigation shape | `OrbModding.GameContractTests` Mod Config contract |
 
 ## Commands
@@ -39,13 +40,19 @@ installation, recovery, or layout work changes.
   exact bytes on failures.
 - Subscriber exceptions do not stop other settings or plugins.
 - Runtime status never claims that a saved value is already active.
+- A quick control consumes exactly one pending saved snapshot synchronously; the next frame must
+  not publish an echo of the same change.
+- A quick control resolves its next value from committed state even if a raw external edit is pending.
+- Initial binding state becomes generation 1 without an identical startup publication.
+- Feature health cannot change configured intent; the central join is the only status projection that
+  combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
 - Disabled/absent plugins remain honest status-only or absent entries.
 
 ## Runtime handoff
 
 Portable layout tests cannot prove Unity text measurement, canvas clipping,
-navigation ordering, input focus, or actual config-file persistence. V3/V4 UAT
+navigation ordering, input focus, or actual config-file persistence. V4 UAT
 must cover early-progression UI, long descriptions, responsive resizing,
 staged edits, Apply/Revert/Default, external changes, save/reload, and removal.
 

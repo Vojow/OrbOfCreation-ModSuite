@@ -37,7 +37,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     private readonly IAutoBuyQueueRoomPort _queueRoom;
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<AutoBuyCandidateKinds> _ownershipMask;
-    private readonly IAutoBuyRefusalResponsePort? _refusals;
+    private readonly IAutoBuyRefusalResponsePort _refusals;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataProfileOperations _profileOperations;
 #endif
@@ -50,13 +50,13 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 #if SERVICE_CYCLE_PROFILE
         , AutomataProfileOperations profileOperations
 #endif
-        , IAutoBuyRefusalResponsePort? refusals = null)
+        , IAutoBuyRefusalResponsePort refusals)
     {
         _purchases = purchases ?? throw new ArgumentNullException(nameof(purchases));
         _queueRoom = queueRoom ?? throw new ArgumentNullException(nameof(queueRoom));
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _ownershipMask = ownershipMask ?? throw new ArgumentNullException(nameof(ownershipMask));
-        _refusals = refusals;
+        _refusals = refusals ?? throw new ArgumentNullException(nameof(refusals));
 #if SERVICE_CYCLE_PROFILE
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
@@ -156,8 +156,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     /// <remarks>
     /// A refusal is only interpretable against the readings the cycle was pinned to, so the report
     /// names them — the world generation and the epoch it was collected under, the configuration the
-    /// plan obeyed, and the cycle that produced it. The responder is optional: a composition without
-    /// one still narrates the refusal and still rejects, it just does not stand the service down.
+    /// plan obeyed, and the cycle that produced it.
     /// </remarks>
     private void ReportRefusal(
         in AutoBuyCycleAction action,
@@ -165,7 +164,6 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         in AutoBuyPurchaseSubmission submission,
         in ServiceActionContext context)
     {
-        if (_refusals is null) return;
         _refusals.ObserveRefusal(new AutoBuyRefusalReport(
             action.Kind,
             action.Uuid,

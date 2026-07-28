@@ -1,7 +1,8 @@
-using OrbModding.Common.Runtime.Configuration;
+using System;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -16,29 +17,27 @@ namespace OrbAutomata;
 /// </remarks>
 internal sealed class AutoBuyServiceCycleDiagnosticsBridge
 {
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly AutomataFeatureStatusReporter _featureStatus;
     // Sized for the Automata host's registered services so the ordinary frame copies nothing extra and
     // allocates nothing; a host that grows past it resizes once and carries on.
     private ServiceCycleServiceDiagnosticsSnapshot[] _services = new ServiceCycleServiceDiagnosticsSnapshot[4];
     private long _lifecycle;
-    private bool _pluginEnabled;
-    private bool _featureEnabled;
+    private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
-    private AutoBuyCandidateKinds _selected;
     private AutoBuyCandidateKinds _owned;
     private bool _cycleObserved;
     private bool _evaluationRefreshPending;
 
     public AutoBuyServiceCycleDiagnosticsBridge(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         AutoBuyCandidateKinds owned,
-        AutomataFeatureStatusReporter? featureStatus)
+        AutomataFeatureStatusReporter featureStatus)
     {
-        _featureStatus = featureStatus;
+        _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
@@ -63,73 +62,42 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         if (conditionsChanged) PublishFeatureStatus();
     }
 
-    public void ObserveConfiguration(
-        SuiteRuntimeConfiguration configuration,
-        AutoBuyCandidateKinds owned)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _owned = owned;
-        ReadConfiguration(configuration);
-        PublishFeatureStatus();
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
+        _cycleObserved = false;
+        _evaluationRefreshPending = false;
     }
 
     public void ObserveLifecycle(
         long lifecycle,
-        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         AutoBuyCandidateKinds owned)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = lifecycle;
+        _configurationGeneration = configurationGeneration;
         _owned = owned;
         // A lifecycle boundary retires the worker state the previous generation evaluated against, so
         // the feature is waiting on a first evaluation again.
         _cycleObserved = false;
         _evaluationRefreshPending = false;
-        ReadConfiguration(configuration);
         PublishFeatureStatus();
     }
 
     private void PublishFeatureStatus()
     {
-        if (_featureStatus is null) return;
         var health = AutoBuyFeatureStatusProjector.Project(
-            _pluginEnabled,
-            _featureEnabled,
             _emergencyDisabled,
-            _selected,
             _owned,
-            _cycleObserved,
-            RetainedStandDownSummary());
-        _featureStatus.ObserveLifecycle(
-            health.State != FeatureStatusState.ConfigurationDisabled,
+            _cycleObserved);
+        _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,
             health.Summary,
-            _lifecycle);
-    }
-
-    /// <summary>
-    /// The refusal responder's account of why it turned Auto Buy off, if that is why Auto Buy is off.
-    /// It is read back from the status it published rather than tracked separately, so there is one
-    /// record of the stand-down and no second one to disagree with it.
-    /// </summary>
-    private string? RetainedStandDownSummary()
-    {
-        if (_featureStatus is null) return null;
-        var current = _featureStatus.Current;
-        return !current.ConfiguredEnabled &&
-               current.Reason.Code == FeatureStatusReasonCode.InvariantViolation
-            ? current.Reason.Summary
-            : null;
-    }
-
-    private void ReadConfiguration(SuiteRuntimeConfiguration configuration)
-    {
-        _pluginEnabled = configuration.General.Enabled;
-        _featureEnabled = configuration.AutoBuy.Mode == AutoBuyOperationMode.Active;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
-        var selected = AutoBuyCandidateKinds.None;
-        if (configuration.AutoBuy.IncludeStructures) selected |= AutoBuyCandidateKinds.Structures;
-        if (configuration.AutoBuy.IncludeUpgrades) selected |= AutoBuyCandidateKinds.Upgrades;
-        _selected = selected;
+            _lifecycle,
+            _configurationGeneration);
     }
 
     private bool HasEvaluated(SuiteFramePump pump)

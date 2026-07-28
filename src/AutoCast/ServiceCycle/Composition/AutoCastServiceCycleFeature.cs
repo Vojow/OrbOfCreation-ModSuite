@@ -1,6 +1,5 @@
 using System;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -36,21 +35,9 @@ internal sealed class AutoCastServiceCycleFeature : IAutomataServiceCycleFeature
             adapters.Natives,
             registration,
             context.LifecycleValue,
-            context.Configuration);
+            context.ConfigurationGeneration);
     }
 
-    public void ObserveStartupFailure(SuiteRuntimeConfiguration configuration, Exception exception)
-    {
-        if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        if (AutoCastConfigurationPolicy.IsOperational(configuration))
-        {
-            _dependencies.FeatureStatus?.Observe(
-                true,
-                FeatureStatusState.Faulted,
-                FeatureStatusReasonCode.RuntimeFailure,
-                "Auto Cast could not initialize its ServiceCycle runtime.");
-        }
-    }
 }
 
 /// <summary>
@@ -70,7 +57,7 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
         AutoCastCycleState,
         AutoCastCycleAction> _registration;
     private readonly long _lifecycleValue;
-    private readonly SuiteRuntimeConfiguration _initialConfiguration;
+    private readonly ConfigGeneration _initialConfigurationGeneration;
     private AutoCastServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoCastFeatureRuntime(
@@ -80,20 +67,20 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
             AutoCastCycleState,
             AutoCastCycleAction> registration,
         long lifecycleValue,
-        SuiteRuntimeConfiguration initialConfiguration)
+        ConfigGeneration initialConfigurationGeneration)
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _natives = natives ?? throw new ArgumentNullException(nameof(natives));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
-        _initialConfiguration = initialConfiguration ?? throw new ArgumentNullException(nameof(initialConfiguration));
+        _initialConfigurationGeneration = initialConfigurationGeneration;
     }
 
     public void ActivateDiagnostics()
     {
         _diagnostics = new AutoCastServiceCycleDiagnosticsBridge(
             _lifecycleValue,
-            _initialConfiguration,
+            _initialConfigurationGeneration,
             _dependencies.OwnsActionFamily(),
             _dependencies.ManualPause,
             _dependencies.FeatureStatus);
@@ -102,14 +89,19 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
     public void ObserveFrame(SuiteFramePump pump, in SuiteFramePumpReport report) =>
         _diagnostics?.Observe(pump, in report, _dependencies.OwnsActionFamily());
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration) =>
-        _diagnostics?.ObserveConfiguration(configuration, _dependencies.OwnsActionFamily());
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration) =>
+        _diagnostics?.ObserveConfiguration(configurationGeneration);
 
-    public void ObserveLifecycle(long nativeLifecycle, SuiteRuntimeConfiguration configuration)
+    public void ObserveLifecycle(
+        long nativeLifecycle,
+        ConfigGeneration configurationGeneration)
     {
         _natives.InvalidateLifecycle();
         _dependencies.ManualPause.Reset();
-        _diagnostics?.ObserveLifecycle(nativeLifecycle, configuration, _dependencies.OwnsActionFamily());
+        _diagnostics?.ObserveLifecycle(
+            nativeLifecycle,
+            configurationGeneration,
+            _dependencies.OwnsActionFamily());
     }
 
     public void DisposeDiagnostics() => _diagnostics = null;

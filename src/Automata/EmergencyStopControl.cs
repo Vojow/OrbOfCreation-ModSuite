@@ -6,13 +6,13 @@ namespace OrbAutomata;
 
 internal sealed class EmergencyStopControl
 {
-    private readonly IAutomataConfigurationEditor _configuration;
+    private readonly AutomataConfigurationStore _configuration;
     private readonly Func<IReadOnlyList<string>> _readResumePreview;
     private readonly Action<bool> _changed;
     private bool _resumeArmed;
 
     public EmergencyStopControl(
-        IAutomataConfigurationEditor configuration,
+        AutomataConfigurationStore configuration,
         Func<IReadOnlyList<string>> readResumePreview,
         Action<bool> changed)
     {
@@ -42,8 +42,8 @@ internal sealed class EmergencyStopControl
         if (!IsStopped)
         {
             _resumeArmed = false;
-            _configuration.SetEmergencyStop(true);
             _changed(true);
+            _configuration.SetEmergencyStop(true);
             return;
         }
         if (!_resumeArmed)
@@ -52,8 +52,8 @@ internal sealed class EmergencyStopControl
             return;
         }
         _resumeArmed = false;
-        _configuration.SetEmergencyStop(false);
         _changed(false);
+        _configuration.SetEmergencyStop(false);
     }
 
     public void Synchronize()

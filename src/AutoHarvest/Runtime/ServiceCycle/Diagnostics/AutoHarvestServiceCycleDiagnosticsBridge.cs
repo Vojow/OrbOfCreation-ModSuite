@@ -1,5 +1,4 @@
 using System;
-using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
@@ -12,7 +11,7 @@ internal sealed class AutoHarvestServiceCycleDiagnosticsBridge : IDisposable
 {
     internal const string ImplementationName = "ServiceCycle";
 
-    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly AutomataFeatureStatusReporter _featureStatus;
     // Sized for the Automata host's registered services so the ordinary frame copies nothing extra and
     // allocates nothing; a host that grows past it resizes once and carries on.
     private ServiceCycleServiceDiagnosticsSnapshot[] _services = new ServiceCycleServiceDiagnosticsSnapshot[4];
@@ -20,23 +19,23 @@ internal sealed class AutoHarvestServiceCycleDiagnosticsBridge : IDisposable
     private AutoHarvestPairHealth _fruit;
     private AutoHarvestPairHealth _treasure;
     private long _lifecycle;
+    private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
     private bool _ownsActionFamily;
     private bool _projectionRefreshPending;
-    private bool _featureEnabled;
 
     public AutoHarvestServiceCycleDiagnosticsBridge(
         long lifecycle,
-        in SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool ownsActionFamily,
         RuntimeDiagnosticsRegistry? runtimeDiagnostics,
-        AutomataFeatureStatusReporter? featureStatus)
+        AutomataFeatureStatusReporter featureStatus)
     {
-        _featureStatus = featureStatus;
+        _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
         _lifecycle = lifecycle;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
+        _configurationGeneration = configurationGeneration;
         _ownsActionFamily = ownsActionFamily;
-        _featureEnabled = InitialHealth(configuration, out _fruit, out _treasure);
+        InitialHealth(featureStatus?.Current.ConfiguredEnabled == true, out _fruit, out _treasure);
         if (runtimeDiagnostics is not null)
         {
             _runtime = new AutoHarvestRuntimeDiagnosticsPublisher(
@@ -90,28 +89,26 @@ internal sealed class AutoHarvestServiceCycleDiagnosticsBridge : IDisposable
 
     public void ObserveLifecycle(
         long lifecycle,
-        in SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         bool ownsActionFamily)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = lifecycle;
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
+        _configurationGeneration = configurationGeneration;
         _ownsActionFamily = ownsActionFamily;
         _projectionRefreshPending = false;
-        _featureEnabled = InitialHealth(configuration, out _fruit, out _treasure);
+        InitialHealth(_featureStatus.Current.ConfiguredEnabled, out _fruit, out _treasure);
         _runtime?.PublishState(lifecycle, _fruit, _treasure);
         PublishFeatureStatus();
     }
 
-    public void ObserveConfiguration(
-        in SuiteRuntimeConfiguration configuration,
-        bool ownsActionFamily)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _emergencyDisabled = configuration.Safety.EmergencyDisable;
-        _ownsActionFamily = ownsActionFamily;
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
         _projectionRefreshPending = false;
-        _featureEnabled = InitialHealth(configuration, out _fruit, out _treasure);
+        InitialHealth(_featureStatus.Current.ConfiguredEnabled, out _fruit, out _treasure);
         _runtime?.PublishState(_lifecycle, _fruit, _treasure);
-        PublishFeatureStatus();
     }
 
     public void Dispose() => _runtime?.Dispose();
@@ -150,50 +147,46 @@ internal sealed class AutoHarvestServiceCycleDiagnosticsBridge : IDisposable
 
     private void PublishFeatureStatus()
     {
-        if (_featureStatus is null) return;
-        var health = AutoHarvestFeatureStatusProjector.Project(_featureEnabled, _fruit, _treasure);
+        var health = AutoHarvestFeatureStatusProjector.Project(_fruit, _treasure);
         if (health.State != FeatureStatusState.ConfigurationDisabled && _emergencyDisabled)
         {
-            _featureStatus.ObserveLifecycle(
-                true,
+            _featureStatus.ObserveRuntimeLifecycle(
                 FeatureStatusState.TemporarilyBlocked,
                 FeatureStatusReasonCode.EmergencyDisabled,
                 "Emergency disable blocks Auto Harvest.",
-                _lifecycle);
+                _lifecycle,
+                _configurationGeneration);
             return;
         }
         if (health.State != FeatureStatusState.ConfigurationDisabled && !_ownsActionFamily)
         {
-            _featureStatus.ObserveLifecycle(
-                true,
+            _featureStatus.ObserveRuntimeLifecycle(
                 FeatureStatusState.TemporarilyBlocked,
                 FeatureStatusReasonCode.ActionFamilyConflict,
                 "Harvest action-family ownership is unavailable.",
-                _lifecycle);
+                _lifecycle,
+                _configurationGeneration);
             return;
         }
-        _featureStatus.ObserveLifecycle(
-            health.State != FeatureStatusState.ConfigurationDisabled,
+        _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,
             health.Summary,
-            _lifecycle);
+            _lifecycle,
+            _configurationGeneration);
     }
 
-    /// <summary>Seeds the pair health and reports whether the player has the feature switched on.</summary>
-    private static bool InitialHealth(
-        in SuiteRuntimeConfiguration configuration,
+    private static void InitialHealth(
+        bool configuredEnabled,
         out AutoHarvestPairHealth fruit,
         out AutoHarvestPairHealth treasure)
     {
-        var configured = configuration.General.Enabled && configuration.AutoHarvest.Mode == AutoHarvestOperationMode.Active;
-        fruit = configured && configuration.AutoHarvest.CollectFruitTrees
+        fruit = configuredEnabled
             ? AutoHarvestPairHealth.NotObserved(AutoHarvestPair.FruitTree)
             : AutoHarvestPairHealth.NotSelected(AutoHarvestPair.FruitTree);
-        treasure = configured && configuration.AutoHarvest.CollectTreasureTrees
+        treasure = configuredEnabled
             ? AutoHarvestPairHealth.NotObserved(AutoHarvestPair.TreasureTree)
             : AutoHarvestPairHealth.NotSelected(AutoHarvestPair.TreasureTree);
-        return configured;
     }
 
     private static bool SameHealth(

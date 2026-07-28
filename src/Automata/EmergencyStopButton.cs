@@ -63,6 +63,7 @@ internal sealed class EmergencyStopButton : IDisposable
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
         result = new EmergencyStopButton(root, button, text, control);
         button.onClick.AddListener(result.Activate);
         result.Render(force: true);

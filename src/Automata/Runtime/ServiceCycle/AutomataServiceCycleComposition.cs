@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using BepInEx.Logging;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
@@ -9,15 +10,46 @@ using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 namespace OrbAutomata;
 
 /// <summary>
-/// Builds the one Automata-owned ServiceCycle host from a set of feature
-/// contributions. It owns the single registry, observability, and host; each feature
-/// owns only its typed registration, native adapters, and diagnostics. This is the
-/// neutral composition seam that both Auto Harvest and Auto Buy join.
+/// Builds the Automata application. The ServiceCycle owns its registry, configuration,
+/// observability, and host; each feature supplies only its typed service and native boundary.
 /// </summary>
 internal static class AutomataServiceCycleComposition
 {
+    internal static AutomataServiceCycleRuntime? TryCreate(
+        SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
+        AutomataServiceCycleHostDependencies hostDependencies,
+        IReadOnlyList<IAutomataServiceCycleFeature> features,
+        ManualLogSource log)
+    {
+        try
+        {
+            var runtime = Create(
+                configuration,
+                configurationGeneration,
+                hostDependencies,
+                features,
+                log);
+            log.LogAutomataInfo("Automata ServiceCycle runtime registered.");
+            return runtime;
+        }
+        catch (Exception exception) when (IsContainedStartupFailure(exception))
+        {
+            log.LogAutomataError(
+                "Automata ServiceCycle host initialization failed and its features are disabled: " +
+                exception.GetBaseException().Message);
+            return null;
+        }
+    }
+
+    internal static bool IsContainedStartupFailure(Exception exception) =>
+        exception is not StackOverflowException and
+        not OutOfMemoryException and
+        not AccessViolationException;
+
     public static AutomataServiceCycleRuntime Create(
         SuiteRuntimeConfiguration configuration,
+        ConfigGeneration configurationGeneration,
         AutomataServiceCycleHostDependencies hostDependencies,
         IReadOnlyList<IAutomataServiceCycleFeature> features,
         ManualLogSource log)
@@ -36,10 +68,11 @@ internal static class AutomataServiceCycleComposition
         var featureRuntimes = new List<IAutomataServiceCycleFeatureRuntime>(features.Count);
         try
         {
-            registry = new ServiceCycleRegistry(features.Count, lifecycle);
-            // The registry already owns the suite's one configuration publication, seeded with the
-            // all-defaults snapshot. This is the first reading of the settings file.
-            registry.ConfigurationPublication.Publish(configuration);
+            registry = new ServiceCycleRegistry(
+                features.Count,
+                configuration,
+                configurationGeneration,
+                lifecycle);
             var configurationPublication = registry.Configuration;
             observability = AutomataServiceCycleObservability.Create(
                 registry.Clock,
@@ -53,7 +86,7 @@ internal static class AutomataServiceCycleComposition
             {
                 var context = new AutomataServiceCycleFeatureContext(
                     registry,
-                    configuration,
+                    configurationGeneration,
                     checked((long)lifecycle.Value)
 #if SERVICE_CYCLE_PROFILE
                     , profileProbe
@@ -85,7 +118,8 @@ internal static class AutomataServiceCycleComposition
                 hostDependencies.ReadLifecycleEpoch,
                 configurationPublication,
                 host,
-                featureRuntimes.ToArray());
+                featureRuntimes.ToArray(),
+                configurationGeneration);
         }
         catch
         {

@@ -62,12 +62,25 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
                 pump,
                 in journalOptions,
                 new ManualLogSource()));
+        using var featureStatus = new AutomataFeatureStatusReporter(
+            new FeatureStatusRegistry(),
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(
+                    PluginIds.SuiteGuid,
+                    AutomataFeatureStatuses.AutoHarvestFeatureId),
+                "Auto Harvest",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(
+                    FeatureStatusReasonCode.RegistryNotReady,
+                    "waiting"),
+                lifecycleGeneration: 7));
         using var diagnostics = new AutoHarvestServiceCycleDiagnosticsBridge(
             7,
-            Configuration(),
+            new ConfigGeneration(1),
             ownsActionFamily: true,
-            new RuntimeDiagnosticsRegistry(),
-            featureStatus: null);
+            runtimeDiagnostics: new RuntimeDiagnosticsRegistry(),
+            featureStatus);
         // Past the world publication's own seed generation, as a real frame counter always is.
         var frame = 1L;
 

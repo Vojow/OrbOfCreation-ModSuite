@@ -8,14 +8,14 @@ internal sealed class AutoConceptFeatureDependencies
     public AutoConceptFeatureDependencies(
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter featureStatus)
     {
         ReadLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         OwnsActionFamily = ownsActionFamily ?? throw new ArgumentNullException(nameof(ownsActionFamily));
-        FeatureStatus = featureStatus;
+        FeatureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
     }
 
     public Func<long> ReadLifecycleEpoch { get; }
     public Func<bool> OwnsActionFamily { get; }
-    public AutomataFeatureStatusReporter? FeatureStatus { get; }
+    public AutomataFeatureStatusReporter FeatureStatus { get; }
 }

@@ -26,7 +26,7 @@ The suite computes the game's economy math itself, transcribed from one audited 
 
 ## Runtime foundation
 
-[ServiceCycle](docs/runtime-architecture/README.md) is the shared engine for automation features. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and world collection are registered services today; Mentor remains on the older per-feature path.
+[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. World collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor are its seven registered services.
 
 Three separate diagnostics help investigate different problems:
 

@@ -43,16 +43,16 @@ internal sealed class SpellLevelFeatureDependencies
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         SpellLevelCapabilityState capability,
-        AutomataFeatureStatusReporter? featureStatus = null)
+        AutomataFeatureStatusReporter featureStatus)
     {
         ReadLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         OwnsActionFamily = ownsActionFamily ?? throw new ArgumentNullException(nameof(ownsActionFamily));
         Capability = capability ?? throw new ArgumentNullException(nameof(capability));
-        FeatureStatus = featureStatus;
+        FeatureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
     }
 
     public Func<long> ReadLifecycleEpoch { get; }
     public Func<bool> OwnsActionFamily { get; }
     public SpellLevelCapabilityState Capability { get; }
-    public AutomataFeatureStatusReporter? FeatureStatus { get; }
+    public AutomataFeatureStatusReporter FeatureStatus { get; }
 }

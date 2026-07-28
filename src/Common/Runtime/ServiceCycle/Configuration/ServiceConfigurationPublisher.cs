@@ -43,10 +43,18 @@ public sealed class ServiceConfigurationPublisher :
     private ConfigurationPublication _latest;
     private bool _disposed;
 
-    internal ServiceConfigurationPublisher(SuiteRuntimeConfiguration initialSnapshot)
+    internal ServiceConfigurationPublisher(
+        SuiteRuntimeConfiguration initialSnapshot,
+        ConfigGeneration? initialGeneration = null)
     {
         if (initialSnapshot is null) throw new ArgumentNullException(nameof(initialSnapshot));
-        _latest = new ConfigurationPublication(new ConfigGeneration(1), initialSnapshot);
+        if (initialGeneration.HasValue && !initialGeneration.Value.IsValid)
+            throw new ArgumentException(
+                "A valid initial configuration generation is required.",
+                nameof(initialGeneration));
+        _latest = new ConfigurationPublication(
+            initialGeneration ?? new ConfigGeneration(1),
+            initialSnapshot);
     }
 
     public ConfigurationPublication ReadLatest()

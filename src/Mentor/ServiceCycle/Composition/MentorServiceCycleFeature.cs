@@ -1,7 +1,6 @@
 using System;
 using OrbAutomata;
 using OrbModding.Common;
-using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
@@ -27,20 +26,9 @@ internal sealed class MentorServiceCycleFeature : IAutomataServiceCycleFeature
             adapters.Natives,
             registration,
             context.LifecycleValue,
-            context.Configuration);
+            context.ConfigurationGeneration);
     }
 
-    public void ObserveStartupFailure(
-        SuiteRuntimeConfiguration configuration,
-        Exception exception)
-    {
-        if (MentorConfigurationPolicy.IsOperational(configuration))
-            _dependencies.FeatureStatus?.Observe(
-                true,
-                FeatureStatusState.Faulted,
-                FeatureStatusReasonCode.RuntimeFailure,
-                "Mentor could not initialize its ServiceCycle runtime.");
-    }
 }
 
 internal sealed class MentorFeatureRuntime : IAutomataServiceCycleFeatureRuntime
@@ -49,7 +37,7 @@ internal sealed class MentorFeatureRuntime : IAutomataServiceCycleFeatureRuntime
     private readonly MentorNativeAdapter _natives;
     private readonly ServiceRegistration<MentorCycleState, MentorCycleAction> _registration;
     private long _lifecycle;
-    private SuiteRuntimeConfiguration _configuration;
+    private ConfigGeneration _configurationGeneration;
     private bool _cycleObserved;
 
     internal MentorFeatureRuntime(
@@ -57,13 +45,13 @@ internal sealed class MentorFeatureRuntime : IAutomataServiceCycleFeatureRuntime
         MentorNativeAdapter natives,
         ServiceRegistration<MentorCycleState, MentorCycleAction> registration,
         long lifecycle,
-        SuiteRuntimeConfiguration configuration)
+        ConfigGeneration configurationGeneration)
     {
         _dependencies = dependencies;
         _natives = natives;
         _registration = registration;
         _lifecycle = lifecycle;
-        _configuration = configuration;
+        _configurationGeneration = configurationGeneration;
     }
 
     public void ActivateDiagnostics() => Publish();
@@ -77,18 +65,20 @@ internal sealed class MentorFeatureRuntime : IAutomataServiceCycleFeatureRuntime
         }
     }
 
-    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration)
+    public void ObserveConfiguration(ConfigGeneration configurationGeneration)
     {
-        _configuration = configuration;
-        Publish();
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
+        _configurationGeneration = configurationGeneration;
+        _cycleObserved = false;
     }
 
     public void ObserveLifecycle(
         long nativeLifecycle,
-        SuiteRuntimeConfiguration configuration)
+        ConfigGeneration configurationGeneration)
     {
+        if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _lifecycle = nativeLifecycle;
-        _configuration = configuration;
+        _configurationGeneration = configurationGeneration;
         _cycleObserved = false;
         _natives.InvalidateLifecycle();
         Publish();
@@ -106,24 +96,17 @@ internal sealed class MentorFeatureRuntime : IAutomataServiceCycleFeatureRuntime
 
     private void Publish()
     {
-        var configured = MentorConfigurationPolicy.IsOperational(_configuration);
-        _dependencies.FeatureStatus?.ObserveLifecycle(
-            configured,
-            !configured
-                ? FeatureStatusState.ConfigurationDisabled
-                : _cycleObserved
+        _dependencies.FeatureStatus.ObserveRuntimeLifecycle(
+            _cycleObserved
                     ? FeatureStatusState.Operational
                     : FeatureStatusState.NotReady,
-            !configured
-                ? FeatureStatusReasonCode.ConfigurationDisabled
-                : _cycleObserved
+            _cycleObserved
                     ? FeatureStatusReasonCode.None
                     : FeatureStatusReasonCode.Initializing,
-            !configured
-                ? "Mentor mode is disabled in configuration."
-                : _cycleObserved
+            _cycleObserved
                     ? string.Empty
                     : "Mentor is waiting for its first service cycle.",
-            _lifecycle);
+            _lifecycle,
+            _configurationGeneration);
     }
 }
