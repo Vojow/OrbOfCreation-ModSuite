@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbModding.ProfileTests" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Dashboard/trace-dashboard.html" CopyToOutputDirectory="PreserveNewest" TargetPath="trace-dashboard.html" />

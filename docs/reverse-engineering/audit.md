@@ -4,24 +4,27 @@
 
 ## Audited build
 
-This audit was repeated on 2026-07-13 against the assemblies currently installed with the game.
+The current audited baseline is `steam-macos-2026-07-28`, the macOS Steam managed build of Orb of Creation v1.0.5-2.
 
 | Item | Verified value |
 |---|---|
-| Unity | `6000.0.70` |
+| Baseline | `steam-macos-2026-07-28` |
+| Game build | Orb of Creation v1.0.5-2 |
+| Platform | macOS Steam managed build |
+| Unity | `6000.0.70f1` |
 | Runtime | 64-bit Mono / CLR 4.x |
 | Active mod loader | BepInEx `5.4.23.5` |
-| `Assembly-CSharp.dll` modified | 2026-07-11 08:19:58 |
-| `Assembly-CSharp.dll` SHA-256 | `5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F` |
-| `Assembly-CSharp-firstpass.dll` SHA-256 | `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A` |
+| Audit input | Read-only staged copy at `artifacts/game-v105` |
+| `Assembly-CSharp.dll` SHA-256 | `46B723AD8E3DF5ADF7186EC32B220C338E26C1CC79369E01213C091155073BDC` |
+| `Assembly-CSharp-firstpass.dll` SHA-256 | `CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891` |
 
-The copied analysis inputs and installed assemblies have identical lengths and hashes. ILSpyCmd `10.1.0.8386` decompiled the key types to C# and ILSpy GUI was opened on the installed main assembly; repeatable metadata and IL checks were also made with Mono.Cecil. No game files were changed.
+The staged assembly pair hashes exactly to this baseline. The audit uses read-only PE metadata and selected IL inspection; no game files are changed.
 
 The audited hashes and active runtime-resolved member contracts are mirrored in [`data/native-contracts.json`](../../data/native-contracts.json). Installed-game tests validate the manifest directly, including type/member visibility and staticness. The manifest hash baseline is also checked against the runtime `GameAssemblyAudit` constants so those fail-closed warnings cannot drift independently.
 
 ## Mind-map result
 
-The high-level map remains correct:
+The high-level map for the audited baseline is:
 
 ```mermaid
 flowchart TD
@@ -37,24 +40,24 @@ flowchart TD
     Saves --> Encoded["compressed JSON encoded as Base64"]
 ```
 
-### Reverified claims
+### Verified claims
 
 - `GameManager.FixedUpdate()` passes `Time.fixedDeltaTime` into the game-element increment loop and then updates managers.
-- The lifecycle phases and centralized iterators remain present.
-- `IdScriptableObject.RuntimeLookup` is still the central `Guid -> object` registry.
+- The lifecycle phases and centralized iterators are present.
+- `IdScriptableObject.RuntimeLookup` is the central `Guid -> object` registry.
 - `SaveStateManager.CollectJsonData()` collects registered `ISaveable` objects, calls `CollectSaveData()`, builds `SaveInfo`, compresses it, and serializes it.
 - `SaveStateManager.ImplementLoadedJson()` resolves each saved UUID through `IdScriptableObject.GetInstance(Guid)` before calling `ISaveable.LoadSaveData()`.
-- `ResourceSO.SetQuantity()` still clamps capped resources between zero and `maxQuantity`.
-- `ResourceSO.Gain()` still follows the normal gain-rate, lifetime-gain, observable, and reverberation path.
-- `AchievementSO.ApplyEffects()` still adds raw strength to `Player.GetAchievementLevel()` under the achievement UUID and applies completion effects.
+- `ResourceSO.SetQuantity()` clamps capped resources between zero and `maxQuantity`.
+- `ResourceSO.Gain()` follows the normal gain-rate, lifetime-gain, observable, and reverberation path.
+- `AchievementSO.ApplyEffects()` adds raw strength to `Player.GetAchievementLevel()` under the achievement UUID and applies completion effects.
 - `Player.ManagerStart()` builds observers before applying persistent effects; `ManagerUpdate()` reapplies them when observers update.
 - `AttributeGroupSO.BindAllMods()` binds serialized target records into one `MergingModifierRecord` with ratio, exponent ratio, and order-adjust delegates.
 
 ### Corrections and sharper boundaries
 
-1. The previous index called the examined build “dated 2026-07-09.” The current main gameplay assembly is dated 2026-07-11; 2026-07-09 is still the timestamp of the first-pass numeric assembly and the game build shown in the BepInEx banner.
-2. `ResourceSO.MakeVisible()` is **private** in the current assembly. It is not a supported public Toolbox call. Visibility should be changed only through a proven public gameplay path or a deliberately labeled reflection/Harmony operation.
-3. There are both BepInEx 5 and BepInEx 6-named binaries in `BepInEx/core`, but the runtime log proves that the active chainloader is BepInEx `5.4.23.5`. Plugins should continue targeting BepInEx 5.
+1. Assembly timestamps are diagnostics only; baseline admission matches the complete SHA-256 pair. The v1.0.5-2 main assembly differs from the preceding macOS baseline, while the first-pass numeric assembly is unchanged.
+2. `ResourceSO.MakeVisible()` is **private** in the audited assembly. It is not a supported public Toolbox call. Visibility should be changed only through a proven public gameplay path or a deliberately labeled reflection/Harmony operation.
+3. The suite targets BepInEx 5. The active chainloader banner, rather than the names of binaries present in the loader directory, establishes the runtime.
 4. Attribute-group membership is serialized asset data, not encoded in `Assembly-CSharp.dll`. ILSpy proves how groups propagate modifiers but cannot prove the membership of each group from code alone. The logging probe remains required before enabling overlapping groups.
 5. “Scaling” is not one stat. The code exposes beneficial power/effect scaling and harmful cost/time requirement scaling through different accessors. A blanket scaling modifier is not safe.
 

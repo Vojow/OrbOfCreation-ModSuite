@@ -1,5 +1,13 @@
 # Changelog
 
+## Auto Concept on the shared engine — 2026-07-28
+
+- Move Auto Concept onto ServiceCycle. It now ranks recipes, balances assignments, tracks training sessions, and owns automated quantities in the background from the shared world snapshot.
+- Publish Concept recipe membership and core types, active and queued quantities, drain ratios, and authored/current drain vectors. Retire the legacy controller, reflection planner scans, and all three Auto Concept signal patches.
+- Preserve the five-step decision order: unsafe owned-drain rollback, recent-rotation replacement, breadth, mastery or timed rebalance, then depth.
+- Keep the game's quantity-dependent prospective drain calculation at the native action boundary. Its halving search, rate reserve, quantity floor, live identity and settledness checks, and verified add/remove postconditions remain authoritative.
+- Remove Auto Concept's two legacy CPU-budget work identities and profile rules; the shared budget coordinator remains for Mentor, Mod Config, and gameplay-invalidation work.
+
 ## Auto Cast on the shared engine — 2026-07-28
 
 - Move Auto Cast onto ServiceCycle. It now decides which spell to cast in the background from the shared world snapshot, on its own schedule, instead of walking the live loadout on the main thread every time it looks.

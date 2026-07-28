@@ -1328,6 +1328,7 @@ public sealed class AlchemyInstance
     public int queuedQuantity;
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
+    public AlchemyRecipeSO get_reference() => reference;
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
@@ -1398,10 +1399,11 @@ public sealed class ConceptCostVector
 {
     public ConceptCostVector(params ConceptCostEntry[] entries)
     {
-        Entries = entries.ToList();
+        costs = entries.ToList();
     }
 
-    public List<ConceptCostEntry> Entries { get; }
+    public List<ConceptCostEntry> costs;
+    public List<ConceptCostEntry> Entries => costs;
     public IList GetEntries() => Entries;
 
     public ConceptCostVector Multiply(double multiplier) => new ConceptCostVector(
@@ -1429,9 +1431,11 @@ public sealed class ConceptCostEntry
     {
         this.resource = resource;
         Value = value;
+        valueBig = value;
     }
 
     public ConceptResource resource;
+    private BigDouble valueBig;
     public BigDouble Value { get; }
     public BigDouble GetValue() => Value;
 }
@@ -1453,6 +1457,7 @@ public sealed class ConceptResource
     public BigDouble GetQuantity() => Quantity;
     public BigDouble GetTrueSoftCap() => SoftCap;
     public string GetName() => name;
+    public Guid GetGuid() => Guid.TryParse(uuid, out var guid) ? guid : Guid.Empty;
 }
 
 public static class TargetingManager

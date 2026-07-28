@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 using UnityEngine;
 
 namespace OrbAutomata;
@@ -14,8 +15,6 @@ internal sealed class NativeConceptCandidate
         string displayName,
         object recipe,
         string slotTypeUuid,
-        int masteryLevel,
-        double masteryProgress,
         int maximumQuantity,
         object? instance,
         int quantity,
@@ -25,8 +24,6 @@ internal sealed class NativeConceptCandidate
         DisplayName = displayName;
         Recipe = recipe;
         SlotTypeUuid = slotTypeUuid;
-        MasteryLevel = masteryLevel;
-        MasteryProgress = masteryProgress;
         MaximumQuantity = maximumQuantity;
         Instance = instance;
         Quantity = quantity;
@@ -37,8 +34,6 @@ internal sealed class NativeConceptCandidate
     public string DisplayName { get; }
     public object Recipe { get; }
     public string SlotTypeUuid { get; }
-    public int MasteryLevel { get; }
-    public double MasteryProgress { get; }
     public int MaximumQuantity { get; }
     public object? Instance { get; }
     public int Quantity { get; }
@@ -46,7 +41,10 @@ internal sealed class NativeConceptCandidate
     public bool IsSettled => Quantity == QueuedQuantity;
 }
 
-internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOutcomeSource
+internal sealed class AutoConceptNativeAdapter :
+    IAutoConceptNativePort,
+    IDisposable,
+    INativeMutationOutcomeSource
 {
     internal static readonly string ActiveConceptsUuid = KnownEntities.ActiveConcepts.Uuid.ToString("D");
 
@@ -70,7 +68,6 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
     private string? _blockedReason;
     private NativeMutationEvidence<int>? _lastMutationEvidence;
     private NativeMutationCallOutcome _lastNativeMutationOutcome;
-    private int _activeConceptCount;
 
     public string? BlockedReason => _blockedReason;
     public bool IsReady =>
@@ -81,24 +78,9 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
         _registryResolver.IsCurrent(_conceptRecipesResolution) &&
         _blockedReason is null;
     public int ScopedRecipeCount => _recipes.Count;
-    public int ActiveConceptCount => _activeConceptCount;
     public NativeMutationCallOutcome LastNativeMutationOutcome => _lastNativeMutationOutcome;
 
-    public bool TryResolveInvalidationEntityId(object nativeRecipe, out string entityId)
-    {
-        if (nativeRecipe is not null &&
-            _recipeUuids.TryGetValue(nativeRecipe, out var uuid) &&
-            !string.IsNullOrWhiteSpace(uuid))
-        {
-            entityId = uuid;
-            return true;
-        }
-
-        entityId = string.Empty;
-        return false;
-    }
-
-    public ReflectionConceptRuntime(
+    public AutoConceptNativeAdapter(
         AlchemyGameplayDomainClassifier domainClassifier,
         TypedRegistryResolver? registryResolver = null)
     {
@@ -194,51 +176,45 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
         }
     }
 
-    public IReadOnlyList<NativeConceptCandidate> ReadCandidates(
-        ISet<string> allowed,
-        ISet<string> blocked,
+    private bool TryResolveCandidate(
+        Guid recipeId,
+        out NativeConceptCandidate? candidate,
         out string reason)
     {
-        if (!TryInitialize(out reason)) return Array.Empty<NativeConceptCandidate>();
-        var result = new List<NativeConceptCandidate>(_recipes.Count);
+        candidate = null;
+        if (!TryInitialize(out reason)) return false;
         try
         {
             var active = ReadActiveByRecipe();
-            _activeConceptCount = active.Count;
             foreach (var recipe in _recipes)
             {
                 var uuid = _recipeUuids[recipe];
-                if (blocked.Contains(uuid) || allowed.Count > 0 && !allowed.Contains(uuid)) continue;
-                if (ReflectionUtil.InvokeNoArgs(recipe, "IsDiscovered") is not true) continue;
-                var masteryLevel = ReadInt(recipe, "GetExperienceLevel", "masteryLevel");
-                var xp = ReadBig(recipe, "GetExperience");
-                var required = ReadBig(recipe, "GetRequiredExperience");
-                var progress = required.IsZero ? 1.0 : xp.DivideApprox(required);
+                if (!string.Equals(uuid, recipeId.ToString(), StringComparison.Ordinal)) continue;
                 var maximum = Math.Max(0, ReadInt(recipe, "GetMaxUsageSlots", "maxUsageSlots"));
                 var coreType = ReflectionUtil.InvokeNoArgs(recipe, "GetCoreType");
                 var slotTypeUuid = coreType is null ? string.Empty : ReflectionUtil.ReadStableId(coreType) ?? string.Empty;
                 active.TryGetValue(recipe, out var instance);
                 var quantity = instance is null ? 0 : Convert.ToInt32(_instanceQuantityField!.GetValue(instance) ?? 0);
                 var queued = instance is null ? 0 : Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(instance) ?? 0);
-                result.Add(new NativeConceptCandidate(
+                candidate = new NativeConceptCandidate(
                     uuid,
                     ReflectionUtil.ReadDisplayName(recipe) ?? uuid,
                     recipe,
                     slotTypeUuid,
-                    masteryLevel,
-                    progress,
                     maximum,
                     instance,
                     Math.Max(0, quantity),
-                    Math.Max(0, queued)));
+                    Math.Max(0, queued));
+                reason = string.Empty;
+                return true;
             }
-            reason = string.Empty;
-            return result;
+            reason = "the planned recipe is no longer in ConceptRecipes";
+            return false;
         }
         catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException || ex is FormatException || ex is OverflowException)
         {
             reason = ex.GetBaseException().Message;
-            return Array.Empty<NativeConceptCandidate>();
+            return false;
         }
     }
 
@@ -285,7 +261,129 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
         return false;
     }
 
-    public bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
+    public AutoConceptSubmission Submit(
+        in AutoConceptCycleAction action,
+        in AutoConceptConfiguration config)
+    {
+        _lastMutationEvidence = null;
+        _lastNativeMutationOutcome = default;
+        if (!TryResolveCandidate(action.RecipeId, out var candidate, out var reason) ||
+            candidate is null)
+            return AutoConceptSubmission.Rejected(
+                IsReady
+                    ? AutoConceptPreflight.RecipeIdentityChanged
+                    : AutoConceptPreflight.ContractUnavailable,
+                string.IsNullOrWhiteSpace(reason) ? "the planned recipe is no longer in ConceptRecipes" : reason);
+        if (!candidate.IsSettled)
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.AssignmentUnsettled,
+                "the live assignment has an in-flight quantity change");
+        if (candidate.Quantity != action.Belief.Quantity ||
+            candidate.QueuedQuantity != action.Belief.QueuedQuantity)
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.OwnershipChanged,
+                "the live quantity no longer matches the worker's ownership belief");
+
+        if (action.Kind == AutoConceptActionKind.Add)
+            return SubmitAdd(candidate, action.TargetOrDelta, in config);
+
+        if (action.Kind == AutoConceptActionKind.RotateOut)
+        {
+            if (candidate.Quantity != action.TargetOrDelta)
+                return AutoConceptSubmission.Rejected(
+                    AutoConceptPreflight.OwnershipChanged,
+                    "the rotation no longer owns the exact live assignment");
+            if (!TryValidateReplacement(action.ReplacementId, candidate, in config, out reason))
+                return AutoConceptSubmission.Rejected(AutoConceptPreflight.SlotUnavailable, reason);
+            return SubmitRemove(candidate, action.TargetOrDelta, exact: true);
+        }
+
+        if (action.TargetOrDelta > candidate.Quantity)
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.OwnershipChanged,
+                "the owned quantity is no longer available");
+        return SubmitRemove(candidate, action.TargetOrDelta, exact: false);
+    }
+
+    private AutoConceptSubmission SubmitAdd(
+        NativeConceptCandidate candidate,
+        int desiredTarget,
+        in AutoConceptConfiguration config)
+    {
+        if (candidate.MaximumQuantity != ReadInt(candidate.Recipe, "GetMaxUsageSlots", "maxUsageSlots"))
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.MasteryLimitChanged,
+                "the native mastery quantity limit changed");
+        if (!CanAdd(candidate))
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.SlotUnavailable,
+                "the native slot is no longer available");
+        if (!TryFindSafeTarget(
+                candidate,
+                desiredTarget,
+                config.RateReservePercent,
+                config.MinimumResourcePercent,
+                out var safeTarget,
+                out var reason))
+            return AutoConceptSubmission.Rejected(AutoConceptPreflight.ProjectionRefused, reason);
+        var delta = safeTarget - candidate.Quantity;
+        var succeeded = TryAdd(candidate, delta, out reason);
+        return _lastNativeMutationOutcome.MutationAttempts == 0
+            ? AutoConceptSubmission.Rejected(AutoConceptPreflight.SlotUnavailable, reason)
+            : AutoConceptSubmission.Attempted(
+                _lastNativeMutationOutcome,
+                _lastMutationEvidence?.Outcome ?? NativeMutationOutcome.PostconditionFailed,
+                reason,
+                delta);
+    }
+
+    private AutoConceptSubmission SubmitRemove(
+        NativeConceptCandidate candidate,
+        int delta,
+        bool exact)
+    {
+        var succeeded = exact
+            ? TryRemoveForRotation(candidate, delta, out var reason)
+            : TryRemoveOwned(candidate, delta, out reason);
+        _ = succeeded;
+        return _lastNativeMutationOutcome.MutationAttempts == 0
+            ? AutoConceptSubmission.Rejected(AutoConceptPreflight.OwnershipChanged, reason)
+            : AutoConceptSubmission.Attempted(
+                _lastNativeMutationOutcome,
+                _lastMutationEvidence?.Outcome ?? NativeMutationOutcome.PostconditionFailed,
+                reason,
+                -delta);
+    }
+
+    private bool TryValidateReplacement(
+        Guid replacementId,
+        NativeConceptCandidate active,
+        in AutoConceptConfiguration config,
+        out string reason)
+    {
+        if (replacementId == Guid.Empty)
+        {
+            reason = "the rotation no longer names a replacement";
+            return false;
+        }
+        if (!TryResolveCandidate(replacementId, out var replacement, out reason) ||
+            replacement is null || !replacement.IsSettled || replacement.Quantity != 0 ||
+            !string.Equals(replacement.SlotTypeUuid, active.SlotTypeUuid, StringComparison.Ordinal) ||
+            !CanAdd(replacement))
+        {
+            reason = "the replacement identity, slot, or quantity changed";
+            return false;
+        }
+        return TryFindSafeTarget(
+            replacement,
+            1,
+            config.RateReservePercent,
+            config.MinimumResourcePercent,
+            out _,
+            out reason);
+    }
+
+    private bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
     {
         _lastNativeMutationOutcome = default;
         if (_blockedReason is not null)
@@ -316,12 +414,12 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
             out reason);
     }
 
-    public bool TryRemoveOwned(NativeConceptCandidate candidate, int delta, out string reason)
+    private bool TryRemoveOwned(NativeConceptCandidate candidate, int delta, out string reason)
     {
         return TryRemove(candidate, delta, requireExactQuantity: false, "owned concept quantity", out reason);
     }
 
-    public bool TryRemoveForRotation(NativeConceptCandidate candidate, int expectedQuantity, out string reason)
+    private bool TryRemoveForRotation(NativeConceptCandidate candidate, int expectedQuantity, out string reason)
     {
         return TryRemove(candidate, expectedQuantity, requireExactQuantity: true, "rotation quantity", out reason);
     }
@@ -399,34 +497,6 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
             : Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(instance) ?? 0);
     }
 
-    public bool IsDrainSafe(NativeConceptCandidate candidate, float minimumDrainRatio)
-    {
-        if (candidate.Instance is null) return true;
-        try
-        {
-            var drain = _instanceDrainField!.GetValue(candidate.Instance);
-            if (drain is null) return false;
-            if (!BigAmount.TryRead(ReflectionUtil.InvokeNoArgs(drain, "GetRatio"), out var ratio)) return false;
-            if (ratio.CompareTo(new BigAmount(minimumDrainRatio, 0)) < 0) return false;
-            var currentDrain = ReflectionUtil.InvokeNoArgs(drain, "GetCurrentDrain");
-            if (currentDrain is null || ReflectionUtil.InvokeNoArgs(currentDrain, "GetEntries") is not IList entries)
-                return false;
-            for (var index = 0; index < entries.Count; index++)
-            {
-                var entry = entries[index];
-                var resource = entry is null ? null : ReflectionUtil.ReadMember(entry, "resource");
-                var amount = entry is null ? null : ReflectionUtil.InvokeNoArgs(entry, "GetValue");
-                if (resource is null || !BigAmount.TryRead(amount, out _) ||
-                    ReflectionUtil.InvokeNoArgs(resource, "IsAtZero") is true) return false;
-            }
-            return true;
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            return false;
-        }
-    }
-
     public void InvalidateLifecycle()
     {
         _domainClassifier.InvalidateLifecycle();
@@ -435,7 +505,6 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
         _conceptRecipesResolution = null;
         _recipes.Clear();
         _recipeUuids.Clear();
-        _activeConceptCount = 0;
         _blockedReason = null;
         _lastMutationEvidence = null;
         _lastNativeMutationOutcome = default;
@@ -584,11 +653,6 @@ internal sealed class ReflectionConceptRuntime : IDisposable, INativeMutationOut
     {
         var value = ReflectionUtil.InvokeNoArgs(instance, methodName) ?? FindField(instance.GetType(), fieldName, false)?.GetValue(instance);
         return Convert.ToInt32(value ?? 0);
-    }
-
-    private static BigAmount ReadBig(object instance, string methodName)
-    {
-        return BigAmount.TryRead(ReflectionUtil.InvokeNoArgs(instance, methodName), out var value) ? value : default;
     }
 
     private static FieldInfo? FindField(Type type, string name, bool isStatic)

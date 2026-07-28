@@ -21,7 +21,7 @@ codec versions and manifest totals quoted below were true when written and are n
 
 Every entry keeps its heading below; this roster says only which are still binding.
 
-**Live** — W1–W6, W8, W11, W16–W22, W24–W26, W28–W37, W39, W42–W46, W48–W61.
+**Live** — W1–W6, W8, W11, W16–W22, W24–W26, W28–W37, W39, W42–W46, W48–W62.
 
 **Historical** — W7, W9, W10, W12, W13, W14, W15, W23, W27, W38, W40, W41, W47.
 
@@ -1108,14 +1108,19 @@ one is collected, which is the same news arriving by the ordinary route, so both
 handler, and the two `CompleteAction` contracts went together. Nothing replaced them: the whole point
 of a generation gate is that a service woken by it needs no second way to be told.
 
-**What is left, and what each waits on.** Auto Concept's three patches wait on Auto Concept being
-migrated. `SpellFirePatch` waits on Auto Cast, and is also a differential-verifier probe:
-`AutoCastManualSignal.FireEpoch` is the before/after probe of `NativeMutationVerifier.Execute` for
-Auto Cast's fire, so it belongs to the north star's declared verifier exception in the letter and not
-only in the spirit — a verifier that may not observe the game cannot verify anything. The five
-lifecycle hooks wait on the experiment W55 defers, and the hooks registered from `ComposeMentor`
-retire with Mentor. Contracts went with the patches they served, on W39's rule that an audited member
-nobody reads is an audit of nothing.
+**Auto Concept's three signal patches retired with its migration.** The add/remove postfix, the
+rebuild/setup-max postfix, and the discovery/mastery postfix only woke the legacy controller.
+ServiceCycle sees assignments, quantities, discovery, and mastery in the next collected world, so
+keeping a second patch-fed generation would create two answers to the same question. Their
+`AutoConceptLifecycleSignal` state and the patch-only `RebuildCounts` and `SetupMaxSlotsValue`
+contracts were deleted together, on W39's rule that an audited member nobody reads is an audit of
+nothing.
+
+**What is left, and what each waits on.** `SpellFirePatch` now remains solely as the
+before/after probe of `NativeMutationVerifier.Execute` for Auto Cast's fire, so it belongs to the
+north star's declared verifier exception — a verifier that may not observe the game cannot verify
+anything. The five lifecycle hooks wait on the experiment W55 defers, and the hooks registered from
+`ComposeMentor` retire with Mentor.
 
 ## W57 — Lifecycle observation installs with Automata, not with Mentor
 
@@ -1331,3 +1336,32 @@ keep a commit-only cursor. The walk is unbounded reflective traversal of live sc
 equipped spell per frame — the precise shape of work the collection pass exists to keep off the
 capture path — and it would answer for the frame the snapshot was taken in, not the frame the cast
 lands in, so the boundary would still have to re-check it (M3).
+
+## W62 — Concept state publishes, while prospective drain remains a boundary preflight
+
+**Decision.** The world now publishes the native `ConceptRecipes` membership and core-type edge, the
+active assignment's current and queued quantities and drain ratio, and both the authored and current
+per-resource drain vectors. One `WorldAlchemyInstanceReader` fills the three tables from the two
+identity registries. The worker therefore ranks and rotates stable identities, observes settledness,
+owns its baseline ledger, and runs the unsafe-drain rollback watchdog without touching the game.
+
+**The prospective multiplier does not publish.** The native answer for quantity N exists only after
+constructing a throwaway `AlchemyInstance`, setting its quantity, and calling `GetDrainCostMod()`.
+That is not a stored world fact and the published recipe's drain-cost scalar is not evidence that it
+reproduces the instance method. The halving search, reserve test, quantity floor, and subtraction of
+the live current drain consequently stay together in the action adapter's preflight, immediately
+before any add or rotation removal. This is W59's licence applied to a quantity-dependent native
+answer: the boundary owns an unpublished gate; the worker does not invent it.
+
+**A preflight refusal does not latch.** The worker advances through its deterministic candidate order
+when it publishes an attempt, as W61's cast rotation does, so one prospect the game refuses cannot
+starve its siblings. After the sweep it returns to normal pacing and may consider the candidate again
+against a later world. Only an attempted add/remove whose queued-quantity postcondition is ambiguous
+blocks the native adapter for the lifecycle. This preserves the legacy distinction between an
+ordinary projection failure and an unverified mutation.
+
+**The captured vectors still pay rent.** Current drain plus the resource table is the rollback
+watchdog's evidence. The authored vector travels as the belief attached to an add or rotation action,
+so a refusal records which resources the published recipe said it could affect; it is not treated as
+authority for the prospective amount. An empty vector remains distinguishable from a missing recipe
+because registry membership has its own row.

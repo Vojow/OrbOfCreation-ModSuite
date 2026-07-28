@@ -78,6 +78,16 @@ internal sealed class GameWorldCycleFrame
     internal WorldSpellCostBuffer SpellCosts { get; } = new();
 
     /// <summary>
+    /// Concept registry membership, active assignments, and the authored/current drain rows read by
+    /// one registry pass.
+    /// </summary>
+    internal WorldConceptRecipeBuffer ConceptRecipes { get; } = new();
+
+    internal WorldAlchemyInstanceBuffer AlchemyInstances { get; } = new();
+
+    internal WorldAlchemyCostBuffer AlchemyCosts { get; } = new();
+
+    /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
     /// carrying its identity, so the plot is claimed once.
     /// </summary>
@@ -245,6 +255,9 @@ internal static class GameWorldFrameDeriver
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
             SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
             SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),
+            ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
+            AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
+            AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

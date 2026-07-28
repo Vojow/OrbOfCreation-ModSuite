@@ -204,6 +204,21 @@ public sealed record GameWorldState
     internal PublicationTable<WorldSpellCost> SpellCosts { get; init; } =
         PublicationTable<WorldSpellCost>.Empty;
 
+    /// <summary>The recipes in the native ConceptRecipes registry and their compatible slot types.</summary>
+    internal PublicationTable<WorldConceptRecipe> ConceptRecipes { get; init; } =
+        PublicationTable<WorldConceptRecipe>.Empty;
+
+    /// <summary>The currently active Concept assignments, keyed by their recipe identities.</summary>
+    internal PublicationTable<WorldAlchemyInstance> AlchemyInstances { get; init; } =
+        PublicationTable<WorldAlchemyInstance>.Empty;
+
+    /// <summary>
+    /// Authored and current Concept drains, keyed by recipe and resource. Prospective quantities are
+    /// deliberately absent: the game only answers those from a throwaway native instance.
+    /// </summary>
+    internal PublicationTable<WorldAlchemyCost> AlchemyCosts { get; init; } =
+        PublicationTable<WorldAlchemyCost>.Empty;
+
     /// <summary>
     /// What each plot's author decided about it. Keyed by plot rather than keyed <em>as</em> a plot,
     /// so the plot's identity stays claimed exactly once.

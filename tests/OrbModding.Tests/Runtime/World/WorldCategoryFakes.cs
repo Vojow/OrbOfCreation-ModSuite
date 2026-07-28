@@ -24,6 +24,8 @@ internal static class WorldCategoryFakes
     {
         ["AlchemyRecipeSO"] = typeof(FakeAlchemyRecipe),
         ["AlchemyTypeSO"] = typeof(FakeAlchemyType),
+        ["AlchemyInstanceListVariable"] = typeof(FakeAlchemyInstanceList),
+        ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
@@ -437,6 +439,44 @@ internal sealed class FakeAlchemyRecipe
     public FakeModifierRecord maxUsageSlots = new(0d);
     public BigDouble cachedCompletionTime;
     public BigDouble cachedRequiredXp;
+    public FakeSpellCostList drainCost = new();
+    public FakeAlchemyType coreType = new();
+
+    public FakeAlchemyType GetCoreType() => coreType;
+}
+
+internal sealed class FakeAlchemyRecipeList
+{
+    public List<FakeAlchemyRecipe> value = new();
+}
+
+internal sealed class FakeAlchemyInstanceList
+{
+    public List<FakeAlchemyInstance> value = new();
+}
+
+internal sealed class FakeAlchemyInstance
+{
+    public FakeAlchemyInstance(FakeAlchemyRecipe recipe)
+    {
+        reference = recipe;
+    }
+
+    public FakeAlchemyRecipe reference;
+    public int quantity;
+    public int queuedQuantity;
+    public FakeAlchemyDrain resourceDrain = new();
+
+    public FakeAlchemyRecipe get_reference() => reference;
+}
+
+internal sealed class FakeAlchemyDrain
+{
+    public BigDouble ratio = new(1d);
+    public FakeSpellCostList current = new();
+
+    public BigDouble GetRatio() => ratio;
+    public FakeSpellCostList GetCurrentDrain() => current;
 }
 
 internal sealed class FakeAlchemyType
@@ -1382,4 +1422,3 @@ internal sealed class FakeTreasurePool
     public int treasureLevel;
     public bool calculatedTreasureLevel;
 }
-

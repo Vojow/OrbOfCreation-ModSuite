@@ -108,6 +108,7 @@ public sealed class TraceRosterTests
         Assert.Equal("Auto Buy", AutomataServiceCycleTraceRoster.DisplayName(new ServiceId("orbautomata.auto-buy")));
         Assert.Equal("Spell Leveling", AutomataServiceCycleTraceRoster.DisplayName(new ServiceId("orbautomata.spell-level")));
         Assert.Equal("Auto Cast", AutomataServiceCycleTraceRoster.DisplayName(new ServiceId("orbautomata.auto-cast")));
+        Assert.Equal("Auto Concept", AutomataServiceCycleTraceRoster.DisplayName(new ServiceId("orbautomata.auto-concept")));
         Assert.Equal(string.Empty, AutomataServiceCycleTraceRoster.DisplayName(new ServiceId("orbautomata.unregistered")));
     }
 }

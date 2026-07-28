@@ -38,7 +38,6 @@ public sealed class Plugin : BaseUnityPlugin
     private const float UiRetryIntervalSeconds = 5.0f;
     private const float UiInstallDelaySeconds = 2.0f;
     private const float UiIntegrityIntervalSeconds = 5.0f;
-    private const string AlchemyRecipeTypeName = "AlchemyRecipeSO";
 
     /// <summary>
     /// Every patch class this plugin installs, named one by one. Scanning an assembly for
@@ -48,9 +47,6 @@ public sealed class Plugin : BaseUnityPlugin
     /// </summary>
     internal static readonly Type[] HarmonyPatchTypes =
     {
-        typeof(AutoConceptActiveListPatch),
-        typeof(AutoConceptActiveListBroadPatch),
-        typeof(AutoConceptProgressionPatch),
         typeof(SpellFirePatch),
     };
 
@@ -80,7 +76,6 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _rebindSupersededVerificationChord;
     private AutomataFeatureStatuses? _featureStatuses;
     private readonly AutomataServiceRegistry _services = new();
-    private AutoConceptController? _autoConceptController;
     private readonly SpellLevelCapabilityState _spellLevelCapability = new();
 
     // Held by the plugin rather than by the feature because the Harmony patch that feeds it outlives
@@ -104,8 +99,6 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _autoConceptUiFailureLogged;
     private string _autoCastUiFailureReason = string.Empty;
     private string _autoConceptUiFailureReason = string.Empty;
-    private IDisposable? _conceptInventorySubscription;
-    private IDisposable? _conceptProgressionSubscription;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
 
@@ -229,7 +222,7 @@ public sealed class Plugin : BaseUnityPlugin
         var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
         AutomataProductionComposition.Register(
             _services,
-            tryCreateAutoHarvest: () => _serviceCycleActivation =
+            tryCreateServiceCycle: () => _serviceCycleActivation =
                 new AutomataServiceCycleActivation(
                     IsLifecycleReady,
                     () =>
@@ -310,37 +303,19 @@ public sealed class Plugin : BaseUnityPlugin
                                         ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsCast == true,
                                         _autoCastManualPause,
                                         featureStatus: featureStatuses.AutoCast)),
+                                new AutoConceptServiceCycleFeature(
+                                    new AutoConceptFeatureDependencies(
+                                        readAutoHarvestLifecycleEpoch,
+                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsConcept == true,
+                                        featureStatus: featureStatuses.AutoConcept)),
                             },
                             Log);
-                    }),
-            createAutoConcept: () => _autoConceptController = new AutoConceptController(
-                config,
-                new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
-                Log,
-                SuitePerformanceCoordinator.Shared,
-                () => Time.frameCount,
-                featureStatuses.AutoConcept,
-                () => _automataActionFamilyOwnership?.OwnsConcept == true));
+                    }));
         _autoConceptToggleControl = new AutoConceptToggleControl(
             config,
             () => featureStatuses.AutoConcept.Current);
         foreach (var hook in LifecycleObservationHooks)
             PatchOptional(hook.Target, hook.Handler, hook.Postfix);
-        AutoConceptLifecycleSignal.InventoryChanged += OnAutoConceptInventoryChanged;
-        AutoConceptLifecycleSignal.ProgressionChanged += OnAutoConceptProgressionChanged;
-        _invalidationBus = GameplayInvalidationBus.Shared;
-        _conceptInventorySubscription = _invalidationBus.Subscribe(
-            new GameplayInvalidationFilter(
-                GameplayInvalidationKind.Inventory,
-                GameplayInvalidationDomains.AutomataConcepts),
-            OnAutoConceptInventoryInvalidated,
-            "OrbAutomata.AutoConcept.Inventory");
-        _conceptProgressionSubscription = _invalidationBus.Subscribe(
-            new GameplayInvalidationFilter(
-                GameplayInvalidationKind.Progression,
-                GameplayInvalidationDomains.AutomataConcepts),
-            OnAutoConceptProgressionInvalidated,
-            "OrbAutomata.AutoConcept.Progression");
         var runtimeConfig = config.Current;
         Log.LogAutomataInfo(
             $"Automata loaded. AutoBuyMode={runtimeConfig.AutoBuy.Mode}, " +
@@ -615,17 +590,10 @@ public sealed class Plugin : BaseUnityPlugin
         _mentorActionFamilyOwnership = null;
         _invalidationBridge = null;
 
-        AutoConceptLifecycleSignal.InventoryChanged -= OnAutoConceptInventoryChanged;
-        AutoConceptLifecycleSignal.ProgressionChanged -= OnAutoConceptProgressionChanged;
-        _conceptInventorySubscription?.Dispose();
-        _conceptInventorySubscription = null;
-        _conceptProgressionSubscription?.Dispose();
-        _conceptProgressionSubscription = null;
         _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _services.Dispose();
-        _autoConceptController = null;
         _serviceCycleActivation = null;
         _automataActionFamilyOwnership?.Dispose();
         _automataActionFamilyOwnership = null;
@@ -694,32 +662,6 @@ public sealed class Plugin : BaseUnityPlugin
             out _);
     }
 
-    private void OnAutoConceptInventoryChanged(object? nativeRecipe)
-    {
-        PublishAutoConceptInvalidation(
-            GameplayInvalidationKind.Inventory,
-            nativeRecipe,
-            "AlchemyInstanceListVariable");
-    }
-
-    private void OnAutoConceptProgressionChanged(object nativeRecipe)
-    {
-        PublishAutoConceptInvalidation(
-            GameplayInvalidationKind.Progression,
-            nativeRecipe,
-            "AlchemyRecipeSO.Progression");
-    }
-
-    private void OnAutoConceptInventoryInvalidated(GameplayInvalidation _)
-    {
-        _autoConceptController?.NotifyNativeChange();
-    }
-
-    private void OnAutoConceptProgressionInvalidated(GameplayInvalidation _)
-    {
-        _autoConceptController?.NotifyNativeChange();
-    }
-
     /// <summary>
     /// Publishes the settings, once per frame, if anything changed them.
     /// </summary>
@@ -734,33 +676,6 @@ public sealed class Plugin : BaseUnityPlugin
         if (_automataConfig is null) return;
         if (!_automataConfig.TryTakeUnpublishedChange(out var configuration)) return;
         _serviceCycleActivation?.PublishSavedConfiguration(configuration);
-    }
-
-    private void PublishAutoConceptInvalidation(
-        GameplayInvalidationKind kind,
-        object? nativeRecipe,
-        string source)
-    {
-        if (_invalidationBus is null) return;
-        if (nativeRecipe is not null &&
-            _autoConceptController is not null &&
-            _autoConceptController.TryResolveInvalidationEntityId(nativeRecipe, out var entityId))
-        {
-            _invalidationBus.Publish(
-                kind,
-                Time.frameCount,
-                GameplayInvalidationDomains.AutomataConcepts,
-                entityId,
-                AlchemyRecipeTypeName,
-                source);
-            return;
-        }
-
-        _invalidationBus.Publish(
-            kind,
-            Time.frameCount,
-            GameplayInvalidationDomains.AutomataConcepts,
-            source: source);
     }
 
     private bool IsLifecycleReady() =>

@@ -22,5 +22,7 @@
                       AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
     <ProjectReference Include="../../src/OrbModSuite.csproj"
                       AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
+    <ProjectReference Include="../../tools/OrbModding.ServiceCycleTrace/OrbModding.ServiceCycleTrace.csproj"
+                      AdditionalProperties="EnableServiceCycleProfiler=true;UseGameStubs=true" />
   </ItemGroup>
 </Project>

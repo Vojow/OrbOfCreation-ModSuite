@@ -61,8 +61,7 @@ Passing one boundary does not imply another. Current commands and runtime proced
 
 - **A strategist.** No service publishes a `SuiteStrategy` bulletin; the publisher, the stances, and
   the neutral default exist, and every consumer already reads a neutral one.
-- **The remaining migrations.** Auto Cast, Auto Concept and Mentor still run on the older
-  per-feature path.
+- **The remaining migration.** Mentor still runs on the older per-feature path.
 
 The [project roadmap](../plans/roadmap.md) sequences these; open decisions live in
 [active plans](../plans/README.md).

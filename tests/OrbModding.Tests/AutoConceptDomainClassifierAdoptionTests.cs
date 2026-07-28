@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using BepInEx.Configuration;
-using BepInEx.Logging;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -21,89 +19,49 @@ public sealed class AutoConceptDomainClassifierAdoptionTests : IDisposable
     }
 
     [Fact]
-    public void DisabledAutoConceptDoesNotInitializeOrScanSharedClassifier()
+    public void ConstructingTheNativeBoundaryDoesNotInitializeOrScanTheSharedClassifier()
     {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var classifier = new AlchemyGameplayDomainClassifier();
-        using var controller = Controller(config, classifier, new ManualLogSource(), () => 1);
-
-        controller.Tick(60.0f);
+        using var boundary = new AutoConceptNativeAdapter(classifier);
 
         Assert.Equal(AlchemyDomainClassifierStatus.Uninitialized, classifier.Status);
         Assert.Equal(0, classifier.CachedRecipeCount);
     }
 
     [Fact]
-    public void ActiveAutoConceptRetriesMissingClassifierEvidenceWithRateLimitedWarning()
+    public void NativeBoundaryReportsMissingClassifierEvidenceAsRetryable()
     {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         var classifier = new AlchemyGameplayDomainClassifier();
-        var log = new ManualLogSource();
-        long frame = 1;
-        using var controller = Controller(config, classifier, log, () => frame);
+        using var boundary = new AutoConceptNativeAdapter(classifier);
 
-        controller.Tick(0.0f);
-        frame++;
-        controller.Tick(10.0f);
-        frame++;
-        controller.Tick(10.0f);
+        Assert.False(boundary.TryInitialize(out var reason));
 
         Assert.Equal(AlchemyDomainClassifierStatus.Retryable, classifier.Status);
-        Assert.Single(
-            log.Entries,
-            entry => entry?.ToString()?.Contains(
-                "Auto Concept domain classifier is not ready: ConceptRecipes resolution failed.",
-                StringComparison.Ordinal) == true);
         Assert.Contains(
-            log.Entries,
-            entry => entry?.ToString()?.Contains("Status=NotFound", StringComparison.Ordinal) == true);
+            "Auto Concept domain classifier is not ready: ConceptRecipes resolution failed.",
+            reason,
+            StringComparison.Ordinal);
+        Assert.Contains("Status=NotFound", reason, StringComparison.Ordinal);
 
         var generation = classifier.ClassifierGeneration;
-        controller.InvalidateLifecycle();
+        boundary.InvalidateLifecycle();
         Assert.Equal(AlchemyDomainClassifierStatus.Uninitialized, classifier.Status);
         Assert.True(classifier.ClassifierGeneration > generation);
     }
 
     [Fact]
-    public void ContradictorySharedDomainEvidenceBlocksAutoConceptOncePerLifecycle()
+    public void ContradictorySharedDomainEvidenceBlocksTheNativeBoundary()
     {
         var conceptType = Type(AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid);
         var ordinaryType = Type(AlchemyGameplayDomainClassifier.AlchemyTypeUuid);
         RegisterConceptRecipes(Recipe(Guid.NewGuid(), conceptType, ordinaryType));
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.AutoConceptMode.Value = AutoConceptOperationMode.Active;
         var classifier = new AlchemyGameplayDomainClassifier();
-        var log = new ManualLogSource();
-        long frame = 1;
-        using var controller = Controller(config, classifier, log, () => frame);
+        using var boundary = new AutoConceptNativeAdapter(classifier);
 
-        controller.Tick(0.0f);
-        frame++;
-        controller.Tick(10.0f);
-        frame++;
-        controller.Tick(30.0f);
+        Assert.False(boundary.TryInitialize(out var reason));
 
         Assert.Equal(AlchemyDomainClassifierStatus.Blocked, classifier.Status);
-        Assert.Single(
-            log.Entries,
-            entry => entry?.ToString()?.Contains(
-                "Auto Concept domain classifier blocked:",
-                StringComparison.Ordinal) == true);
-    }
-
-    private static AutoConceptController Controller(
-        BepInExAutomataConfiguration config,
-        AlchemyGameplayDomainClassifier classifier,
-        ManualLogSource log,
-        Func<long> frameIdentity)
-    {
-        return new AutoConceptController(
-            config,
-            new ReflectionConceptRuntime(classifier),
-            log,
-            new SuitePerformanceCoordinator(StopwatchPerformanceClock.Instance, 1000.0, 1000.0),
-            frameIdentity);
+        Assert.Contains("Auto Concept domain classifier blocked:", reason, StringComparison.Ordinal);
     }
 
     private static AlchemyTypeSO Type(Guid uuid)

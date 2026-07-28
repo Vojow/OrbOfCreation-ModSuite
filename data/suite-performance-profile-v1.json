@@ -11,32 +11,6 @@
   },
   "rules": [
     {
-      "subsystem": "OrbAutomata.AutoConcept",
-      "workName": "Change Active Concept quantity",
-      "budgetClass": "hard-limited",
-      "executionKind": "non-preemptible-native-mutation",
-      "maximumPendingWaitFrames": 12,
-      "maximumConsecutiveDeferredFrames": 12,
-      "timingMode": "observe-only",
-      "minimumSamples": 30,
-      "p95Milliseconds": 0.5,
-      "p99Milliseconds": 0.75,
-      "maximumMilliseconds": 1
-    },
-    {
-      "subsystem": "OrbAutomata.AutoConcept",
-      "workName": "Reconcile and plan concept mastery",
-      "budgetClass": "soft-limited",
-      "executionKind": "cooperative",
-      "maximumPendingWaitFrames": 12,
-      "maximumConsecutiveDeferredFrames": 12,
-      "timingMode": "enforce",
-      "minimumSamples": 30,
-      "p95Milliseconds": 0.5,
-      "p99Milliseconds": 0.75,
-      "maximumMilliseconds": 1
-    },
-    {
       "subsystem": "OrbMentor",
       "workName": "Grant one mastery XP mutation",
       "budgetClass": "hard-limited",

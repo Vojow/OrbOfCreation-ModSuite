@@ -139,7 +139,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void Evaluator_AttributesSameSubsystemMetricsByCompositeIdentity()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Reconcile and plan concept mastery");
+        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Reconcile, resolve, and plan XP");
         var work = captured.Evidence.End.Work[index];
         var timing = work.WorkItemTiming with { P95Milliseconds = 0.6, P99Milliseconds = 0.8, MaximumMilliseconds = 1.1 };
         var changed = ReplaceEndWork(captured.Evidence, index, work with { WorkItemTiming = timing });
@@ -147,22 +147,22 @@ public sealed class SuitePerformanceEvidenceTests
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         var exceeded = Assert.Single(evaluation.Results, result =>
             result.Metric == "workItemTiming.p95Milliseconds" && result.Classification == "exceeded");
-        Assert.Contains("OrbAutomata.AutoConcept", exceeded.WorkIdentity, StringComparison.Ordinal);
-        Assert.Contains("Reconcile and plan concept mastery", exceeded.WorkIdentity, StringComparison.Ordinal);
+        Assert.Contains("OrbMentor", exceeded.WorkIdentity, StringComparison.Ordinal);
+        Assert.Contains("Reconcile, resolve, and plan XP", exceeded.WorkIdentity, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Evaluator_NativeTimingRemainsObserveOnlyEvenWhenSlow()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Change Active Concept quantity");
+        var index = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Grant one mastery XP mutation");
         var work = captured.Evidence.End.Work[index];
         var slow = work.WorkItemTiming with { AverageMilliseconds = 2, P95Milliseconds = 3, P99Milliseconds = 4, MaximumMilliseconds = 5 };
         var changed = ReplaceEndWork(captured.Evidence, index, work with { WorkItemTiming = slow });
 
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         Assert.Contains(evaluation.Results, result =>
-            result.WorkIdentity.Contains("Change Active Concept quantity", StringComparison.Ordinal) &&
+            result.WorkIdentity.Contains("Grant one mastery XP mutation", StringComparison.Ordinal) &&
             result.Metric == "workItemTiming.p99Milliseconds" &&
             result.Classification == "observe-only");
         Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
@@ -175,7 +175,7 @@ public sealed class SuitePerformanceEvidenceTests
         var passing = PerformanceEvidencePipeline.Evaluate(captured.Profile, captured.Evidence);
         Assert.Equal(PerformanceGateStatus.Passed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, passing));
 
-        var cooperativeIndex = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Reconcile and plan concept mastery");
+        var cooperativeIndex = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Reconcile, resolve, and plan XP");
         var cooperative = captured.Evidence.End.Work[cooperativeIndex];
         var slow = cooperative with
         {
@@ -212,7 +212,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void EnforcedGateRejectsUnqualifiedObserveOnlyNativeTiming()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var nativeIdentity = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Change Active Concept quantity");
+        var nativeIdentity = captured.Evidence.End.Work.FindIndex(item => item.WorkName == "Grant one mastery XP mutation");
         var nativeStart = captured.Evidence.Start.Work[nativeIdentity] with
         {
             WorkItemTiming = captured.Evidence.Start.Work[nativeIdentity].WorkItemTiming with
@@ -242,7 +242,7 @@ public sealed class SuitePerformanceEvidenceTests
         var contaminatedNative = ReplaceWork(captured.Evidence, nativeIdentity, nativeStart, nativeEnd);
         var evaluation = PerformanceEvidencePipeline.Evaluate(captured.Profile, contaminatedNative);
         Assert.Contains(evaluation.Results, result =>
-            result.WorkIdentity.Contains("Change Active Concept quantity", StringComparison.Ordinal) &&
+            result.WorkIdentity.Contains("Grant one mastery XP mutation", StringComparison.Ordinal) &&
             result.Classification == "insufficient-window");
         Assert.Equal(PerformanceGateStatus.TargetFailed, PerformanceEvidencePipeline.EvaluateGate(captured.Profile, evaluation));
     }
@@ -332,7 +332,7 @@ public sealed class SuitePerformanceEvidenceTests
     public void Evaluator_NativeTimingRejectsContaminatedWindowBeforeObserveOnlyFacts()
     {
         var captured = CaptureSupportedSuite(samplesPerWork: 30);
-        var index = captured.Evidence.Start.Work.FindIndex(item => item.WorkName == "Change Active Concept quantity");
+        var index = captured.Evidence.Start.Work.FindIndex(item => item.WorkName == "Grant one mastery XP mutation");
         var startWork = captured.Evidence.Start.Work[index];
         var contaminated = startWork with
         {
@@ -343,11 +343,11 @@ public sealed class SuitePerformanceEvidenceTests
 
         var result = PerformanceEvidencePipeline.Evaluate(captured.Profile, changed);
         Assert.Contains(result.Results, item =>
-            item.WorkIdentity.Contains("Change Active Concept quantity", StringComparison.Ordinal) &&
+            item.WorkIdentity.Contains("Grant one mastery XP mutation", StringComparison.Ordinal) &&
             item.Metric == "workItemTiming" &&
             item.Classification == "insufficient-window");
         Assert.DoesNotContain(result.Results, item =>
-            item.WorkIdentity.Contains("Change Active Concept quantity", StringComparison.Ordinal) &&
+            item.WorkIdentity.Contains("Grant one mastery XP mutation", StringComparison.Ordinal) &&
             item.Metric.StartsWith("workItemTiming.", StringComparison.Ordinal) &&
             item.Classification == "observe-only");
     }

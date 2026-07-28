@@ -5,9 +5,9 @@ services, which live in sibling feature folders under `src/`.
 
 ## Registration rules
 
-- `Plugin` constructs each supported service and registers it with `AutomataServiceRegistry` in the deliberate order: Auto Harvest, Auto Buy, Auto Cast, Auto Concept, then Spell Level.
+- `Plugin` registers one shared ServiceCycle activation with `AutomataServiceRegistry`; feature order is explicit inside `IAutomataServiceCycleFeature[]`: world collection first, then Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, and Auto Concept.
 - Registration is explicit. Do not discover services through reflection, filesystem conventions, or static constructors.
-- A runtime service implements `IAutomataService`; feature-specific APIs stay on its concrete type and may be retained by `Plugin` for signal handling.
+- The activation implements `IAutomataService`; feature-specific APIs stay inside their typed ServiceCycle composition and diagnostics bridges.
 - Registration order is also tick, cancellation, lifecycle-invalidation, and disposal order. Changing it is a runtime behavior change and requires focused ordering tests.
 - The registry coordinates lifecycle only. It does not own feature policy, game objects, subscriptions, settings, or cross-feature service location.
 - New services need a cohesive feature folder under `src/`, an explicit registration site, a bounded lifecycle implementation, and tests that prove their position in the ordering contract. The registry uses a preallocated default capacity sized for the planned service portfolio rather than treating the current five services as a permanent ceiling.

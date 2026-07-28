@@ -74,6 +74,7 @@ internal sealed class GameWorldCollector
     private readonly WorldEntityEffectReader _entityEffects;
     private readonly WorldActionQueueReader _actionQueues;
     private readonly WorldSpellSlotReader _spellSlots;
+    private readonly WorldAlchemyInstanceReader _alchemyInstances;
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
@@ -221,6 +222,11 @@ internal sealed class GameWorldCollector
             resolveType("IdScriptableObject"),
             resolveType("SpellListVariable"),
             resolveType);
+        _alchemyInstances = new WorldAlchemyInstanceReader(
+            resolveType("IdScriptableObject"),
+            resolveType(KnownEntities.ActiveConcepts.ManagedTypeName),
+            resolveType(KnownEntities.ConceptRecipes.ManagedTypeName),
+            resolveType);
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
@@ -237,7 +243,7 @@ internal sealed class GameWorldCollector
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
-            _actionQueues, _spellSlots, _plotAuthoring, _effectBlocks, _entityRequirements,
+            _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks, _entityRequirements,
         };
 
         _isStructural = new bool[_readers.Length];

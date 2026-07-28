@@ -65,8 +65,8 @@ Every service is handed all three and ignores what it doesn't need.
 
 Two places for a migrated service — a source service's capture, and action application — plus
 the one declared exception below, plus the declared legacy surface of the services nobody has
-migrated yet. The third bucket is still real but no longer the largest story: 57 of the manifest's
-768 contracts are marked `legacy`, against 645 capture, 61 action and 5 patch. It is not a permitted
+migrated yet. The third bucket is still real but no longer the largest story: 32 of the manifest's
+764 contracts are marked `legacy`, against 657 capture, 70 action and 5 patch. It is not a permitted
 place so much as a ratcheted debt, and it retires service by service as each migration lands. No worker, no
 evaluator, no policy code touches the game anywhere. This is enforced, not hoped for:
 
@@ -92,8 +92,9 @@ The **signal patches** die with the generation gate: the queue pair and the comp
 postfix are both gone, the latter with Spell Leveling's migration.
 The **five lifecycle hooks** die when the snapshot's collected epoch is proven to detect a
 save-load; until that is measured they are the intended "we are moving to a new game,
-trash everything" signal rather than a wart. The **mastery, concept, and fire hooks** are verifier
-probes and inputs to services nobody has migrated yet, and they retire with those services.
+trash everything" signal rather than a wart. The **mastery hooks** remain inputs to Mentor, while
+the **fire hook** is Auto Cast's mutation-verifier probe. Auto Concept's three signal patches
+retired with its legacy runtime.
 
 ## The simplicity doctrine
 

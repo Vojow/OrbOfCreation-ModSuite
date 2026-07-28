@@ -85,7 +85,6 @@
       "valueType": "System.Collections.Generic.List`1<!0>",
       "owners": [
         "Common Alchemy classifier",
-        "Automata Auto Concept",
         "Automata spell leveling",
         "Mentor equipped spells"
       ],
@@ -124,12 +123,12 @@
       "returnType": "!0",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept active instances"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy",
+      "place": "capture",
       "sourceTokens": [
         "reference"
       ]
@@ -430,12 +429,12 @@
       "static": false,
       "valueType": "ResourceDrain",
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-instance.get-drain-cost-mod",
@@ -449,12 +448,12 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-instance.quantity",
@@ -467,12 +466,12 @@
       "static": false,
       "valueType": "System.Int32",
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-instance.queued",
@@ -485,12 +484,12 @@
       "static": false,
       "valueType": "System.Int32",
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-instance.reference-owner",
@@ -500,12 +499,12 @@
       "kind": "type",
       "baseType": "AbstractRefInstance`1<AlchemyRecipeSO>",
       "owners": [
-        "Automata Auto Concept active instances"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-list.add",
@@ -522,13 +521,12 @@
         "System.Int32"
       ],
       "owners": [
-        "Automata Auto Concept"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
-        "reflection",
-        "harmony"
+        "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-list.can-add",
@@ -544,31 +542,12 @@
         "AlchemyRecipeSO"
       ],
       "owners": [
-        "Automata Auto Concept"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "alchemy-list.rebuild",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyInstanceListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "RebuildCounts",
-      "visibility": "private",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Concept"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-list.remove",
@@ -585,32 +564,12 @@
         "System.Int32"
       ],
       "owners": [
-        "Automata Auto Concept"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
-        "reflection",
-        "harmony"
+        "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "alchemy-list.setup-max",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyInstanceListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "SetupMaxSlotsValue",
-      "visibility": "private",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Concept"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-recipe-list.type",
@@ -620,12 +579,12 @@
       "kind": "type",
       "owners": [
         "Common Alchemy classifier",
-        "Automata Auto Concept catalog"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-recipe.advancement-level",
@@ -657,12 +616,12 @@
       "valueType": "System.Collections.Generic.List`1<AlchemyTypeSO>",
       "owners": [
         "Common Alchemy classifier",
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-recipe.all",
@@ -694,7 +653,6 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept",
         "Mentor alchemy"
       ],
       "usages": [
@@ -786,7 +744,6 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept",
         "Mentor alchemy"
       ],
       "usages": [
@@ -823,12 +780,12 @@
       "static": false,
       "valueType": "ResourceCostList",
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-recipe.drain-cost-mod",
@@ -938,50 +895,12 @@
       "returnType": "AlchemyTypeSO",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "alchemy-recipe.get-experience",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetExperience",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Concept"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
-    },
-    {
-      "id": "alchemy-recipe.get-experience-level",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetExperienceLevel",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Concept"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "alchemy-recipe.get-max-usage",
@@ -995,31 +914,12 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "alchemy-recipe.get-required-experience",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetRequiredExperience",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Concept"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-recipe.is-advancement-recipe",
@@ -1087,7 +987,6 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept",
         "Mentor alchemy"
       ],
       "usages": [
@@ -1124,7 +1023,6 @@
       "static": false,
       "valueType": "System.Int32",
       "owners": [
-        "Automata Auto Concept",
         "Mentor alchemy",
         "Automata world collection"
       ],
@@ -7754,12 +7652,12 @@
       "returnType": "ResourceCostList",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "resource-drain.ratio",
@@ -7773,12 +7671,12 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept"
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "resource-persistent-effect.modifier",
@@ -9032,12 +8930,12 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept drain"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "resource.get-true-spend",
@@ -9053,12 +8951,12 @@
         "BigDouble"
       ],
       "owners": [
-        "Automata Auto Concept drain"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "resource.has-active-rate",
@@ -9091,12 +8989,12 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept drain"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "resource.in-loss-mode",
@@ -9183,12 +9081,12 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept drain"
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "resource.is-visible",
@@ -14292,7 +14190,7 @@
       },
       {
         "path": "src/AutoConcept/AutoConceptToggleButton.cs",
-        "reason": "Reflects cloned Unity UI fields only; Auto Concept gameplay contracts are isolated in ReflectionConceptRuntime."
+        "reason": "Reflects cloned Unity UI fields only; Auto Concept gameplay reads use world capture and its audited action boundary."
       },
       {
         "path": "src/Mentor/MentorToggleButton.cs",

@@ -113,10 +113,8 @@ public sealed class NativeContractManifestTests
     /// removed. Nothing has to remember to prune it.
     /// </para>
     /// <para>
-    /// <c>legacy</c> outranks the structural places rather than sitting beside them: a Harmony
-    /// patch installed purely to feed Auto Concept is migration debt first and a patch second, and
-    /// recording it as <c>patch</c> would park it outside this ledger forever even though it is
-    /// deleted the day Auto Concept moves.
+    /// <c>legacy</c> outranks the structural places rather than sitting beside them: migration-only
+    /// Harmony patches remain migration debt until their owning service moves.
     /// </para>
     /// </remarks>
     private static readonly string[] UnmigratedServiceContracts =
@@ -126,33 +124,6 @@ public sealed class NativeContractManifestTests
         // access the feature makes outside its action boundary. It leaves this list when the button
         // stops reflecting, not when a runtime moves.
         "spell.get-icon",
-
-        // Auto Concept — the alchemy instance list, its recipes and the drain math.
-        "abstract-ref-instance.reference",
-        "alchemy-instance.drain",
-        "alchemy-instance.get-drain-cost-mod",
-        "alchemy-instance.quantity",
-        "alchemy-instance.queued",
-        "alchemy-instance.reference-owner",
-        "alchemy-list.add",
-        "alchemy-list.can-add",
-        "alchemy-list.rebuild",
-        "alchemy-list.remove",
-        "alchemy-list.setup-max",
-        "alchemy-recipe-list.type",
-        "alchemy-recipe.alchemy-types",
-        "alchemy-recipe.drain-cost",
-        "alchemy-recipe.get-core-type",
-        "alchemy-recipe.get-experience",
-        "alchemy-recipe.get-experience-level",
-        "alchemy-recipe.get-max-usage",
-        "alchemy-recipe.get-required-experience",
-        "resource-drain.current",
-        "resource-drain.ratio",
-        "resource.get-true-soft-cap",
-        "resource.get-true-spend",
-        "resource.has-max-quantity",
-        "resource.is-at-zero",
 
         // Mentor — every domain: alchemy, artifacts, spells and the equipped loadout.
         "alchemy-recipe.gain-mastery-runtime",
@@ -181,16 +152,13 @@ public sealed class NativeContractManifestTests
         "tooltipable-object.get-name",
         "view.is-available",
 
-        // Read by more than one service, so they leave only when the last unmigrated one does.
-        // Migrated Spell Leveling and Auto Cast between them name four of these — SpellManager and
-        // its two lists, and SpellRecipeSO.PurchaseLevel — but they name them at their action
-        // boundaries, so what keeps them legacy now is Auto Concept and Mentor alone.
+        // Read by more than one feature, so they leave only when the final legacy reader does.
         "spell-manager.active-spells", // Mentor
         "spell-manager.instance", // Mentor
-        "alchemy-recipe.apply-mastery", // AutoConcept + Mentor
-        "alchemy-recipe.discover", // AutoConcept + Mentor
-        "alchemy-recipe.is-discovered", // AutoConcept + Mentor
-        "abstract-list.value", // Common Alchemy classifier + AutoConcept + Mentor
+        "alchemy-recipe.apply-mastery", // Mentor
+        "alchemy-recipe.discover", // Mentor
+        "alchemy-recipe.is-discovered", // Mentor
+        "abstract-list.value", // Common Alchemy classifier + spell leveling + Mentor
     };
 
     /// <summary>The places a contract may sit in once its service is on ServiceCycle.</summary>

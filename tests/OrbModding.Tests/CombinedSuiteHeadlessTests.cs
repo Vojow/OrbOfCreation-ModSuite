@@ -47,7 +47,6 @@ public sealed class CombinedSuiteHeadlessTests
                 .Select((registration, index) =>
                     (registration, SuitePerformanceWorkIdentities.GetSupportedSuiteV1(index).WorkName))
                 .ToDictionary(item => item.WorkName, item => item.registration, StringComparer.Ordinal);
-            byWorkName[SuitePerformanceWorkIdentities.AutoConceptEvaluate.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.MentorEvaluate.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.ModConfigWork.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.GameplayInvalidationDelivery.WorkName].SetPending(true);
@@ -108,7 +107,7 @@ public sealed class CombinedSuiteHeadlessTests
                 producer.Registration.SetPending(true);
             }
 
-            for (var frame = 1L; frame <= 21; frame++)
+            for (var frame = 1L; frame <= producers.Length * 3; frame++)
             {
                 var grantsThisFrame = 0;
                 foreach (var producer in producers)
@@ -161,7 +160,7 @@ public sealed class CombinedSuiteHeadlessTests
                 producer.Registration.SetPending(true);
             }
 
-            for (var frame = 1L; frame <= 700; frame++)
+            for (var frame = 1L; frame <= producers.Length * 100; frame++)
             {
                 foreach (var producer in producers)
                 {
@@ -177,7 +176,7 @@ public sealed class CombinedSuiteHeadlessTests
                 }
             }
 
-            Assert.Equal(700, grantOrder.Count);
+            Assert.Equal(producers.Length * 100, grantOrder.Count);
             Assert.All(producers, producer => Assert.Equal(100, producer.Grants));
             for (var index = 0; index < grantOrder.Count; index++)
             {
@@ -208,7 +207,6 @@ public sealed class CombinedSuiteHeadlessTests
         {
             Create(coordinator, "OrbAutomata.AutoBuy", "Submit purchase"),
             Create(coordinator, "OrbAutomata.AutoCast", "Fire spell"),
-            Create(coordinator, "OrbAutomata.AutoConcept", "Change concept quantity"),
             Create(coordinator, "OrbAutomata.SpellLevel", "Purchase spell level"),
             Create(coordinator, "OrbMentor.Spells", "Grant spell XP"),
             Create(coordinator, "OrbMentor.Artifacts", "Grant artifact XP"),

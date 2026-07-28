@@ -55,7 +55,14 @@ internal static class TraceDashboardReader
             }
         }
 
-        var decisions = Decisions(journal?.Records ?? Array.Empty<DecisionJournalRecord>(), events, firstTicks, lastTicks);
+        var roster = full.Roster();
+        var serviceMachineIds = RosteredMachineIds(roster);
+        var decisions = Decisions(
+            journal?.Records ?? Array.Empty<DecisionJournalRecord>(),
+            events,
+            serviceMachineIds,
+            firstTicks,
+            lastTicks);
         var aggregates = new List<TraceDashboardStageAggregate>();
         var samples = new List<TraceDashboardStageSample>();
         if (profile is not null)
@@ -71,7 +78,7 @@ internal static class TraceDashboardReader
         }
 
         var cycles = Cycles(events);
-        var services = Services(events, aggregates, cycles, full.Roster());
+        var services = Services(events, aggregates, cycles, roster);
 
         var metadata = new TraceDashboardMetadata(
             full.Name,
@@ -357,6 +364,22 @@ internal static class TraceDashboardReader
     }
 
     /// <summary>
+    /// The registered identity is the schema key. Display names are presentation and ordinals are local
+    /// to one capture, so neither can safely decide what a projection field means.
+    /// </summary>
+    private static Dictionary<ulong, string> RosteredMachineIds(ServiceCycleTraceRoster roster)
+    {
+        var output = new Dictionary<ulong, string>();
+        foreach (var entry in roster.Entries)
+        {
+            if (!string.Equals(entry.Kind, ServiceCycleTraceRoster.ServiceKind, StringComparison.Ordinal))
+                continue;
+            output[entry.Identity] = entry.MachineId;
+        }
+        return output;
+    }
+
+    /// <summary>
     /// A service's name from the profile span block it owns. Suite spans are shared by every ordinal
     /// and name none of them, so only a feature block answers.
     /// </summary>
@@ -495,6 +518,7 @@ internal static class TraceDashboardReader
     private static TraceDashboardDecision[] Decisions(
         DecisionJournalRecord[] records,
         List<TraceDashboardEvent> events,
+        IReadOnlyDictionary<ulong, string> serviceMachineIds,
         long firstTicks,
         long lastTicks)
     {
@@ -527,7 +551,7 @@ internal static class TraceDashboardReader
                 worker.AverageMilliseconds,
                 worker.MicrosecondsPerCapturedCandidate,
                 worker.MicrosecondsPerPlannedAction,
-                Projection(in record)));
+                Projection(in record, serviceMachineIds)));
         }
         return output.ToArray();
     }
@@ -574,56 +598,145 @@ internal static class TraceDashboardReader
         return 0;
     }
 
-    private static TraceDashboardProjectionEntry[] Projection(in DecisionJournalRecord record)
+    private static TraceDashboardProjectionEntry[] Projection(
+        in DecisionJournalRecord record,
+        IReadOnlyDictionary<ulong, string> serviceMachineIds)
     {
         if (!record.HasProjection) return Array.Empty<TraceDashboardProjectionEntry>();
+        serviceMachineIds.TryGetValue(record.Service.Value, out var serviceMachineId);
         var output = new TraceDashboardProjectionEntry[record.Projection.Count];
         for (var index = 0; index < output.Length; index++)
         {
             var entry = record.Projection.GetEntry(index);
             output[index] = new TraceDashboardProjectionEntry(
                 entry.Key.Value,
-                ProjectionName(entry.Key.Value),
+                ProjectionName(serviceMachineId, entry.Key.Value),
                 entry.Value.Kind.ToString(),
-                ProjectionValue(entry.Key.Value, entry.Value));
+                ProjectionValue(serviceMachineId, entry.Key.Value, entry.Value));
         }
         return output;
     }
 
-    private static string ProjectionName(int key) => key switch
+    private static string ProjectionName(string? serviceMachineId, int key)
     {
-        1 => "Next pair",
-        2 => "Has planned action",
-        3 => "Planned pair",
-        4 => "Fruit selected",
-        5 => "Fruit health",
-        6 => "Fruit feature-scoped",
-        7 => "Treasure selected",
-        8 => "Treasure health",
-        9 => "Treasure feature-scoped",
-        AutoBuyServiceProjection.CapturedCandidatesKey => "Captured candidates",
-        AutoBuyServiceProjection.CapturedStructuresKey => "Captured structures",
-        AutoBuyServiceProjection.CapturedUpgradesKey => "Captured upgrades",
-        AutoBuyServiceProjection.EligibleCandidatesKey => "Eligible candidates",
-        AutoBuyServiceProjection.PlannedActionsKey => "Planned actions",
-        AutoBuyServiceProjection.RequestedLevelsKey => "Requested levels",
-        AutoBuyServiceProjection.ExcludedKindNotSelectedKey => "Excluded: kind not selected",
-        AutoBuyServiceProjection.ExcludedBlocklistedKey => "Excluded: blocklisted",
-        AutoBuyServiceProjection.ExcludedNotAllowlistedKey => "Excluded: not allowlisted",
-        AutoBuyServiceProjection.ExcludedUnavailableKey => "Excluded: unavailable",
-        AutoBuyServiceProjection.ExcludedRequirementsUnmetKey => "Excluded: requirements unmet",
-        AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
-        AutoBuyServiceProjection.ExcludedUnaffordableKey => "Excluded: unaffordable",
-        AutoBuyServiceProjection.ExcludedUnpriceableKey => "Excluded: unpriceable",
-        _ => "Field " + key.ToString(CultureInfo.InvariantCulture),
-    };
+        if (string.Equals(
+                serviceMachineId,
+                AutomataWorldCollectionPolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                1 => "Entities",
+                2 => "Complete",
+                3 => "Unavailable categories",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                AutoHarvestServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                1 => "Next pair",
+                2 => "Has planned action",
+                3 => "Planned pair",
+                4 => "Fruit selected",
+                5 => "Fruit health",
+                6 => "Fruit feature-scoped",
+                7 => "Treasure selected",
+                8 => "Treasure health",
+                9 => "Treasure feature-scoped",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                AutoBuyServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                AutoBuyServiceProjection.CapturedCandidatesKey => "Captured candidates",
+                AutoBuyServiceProjection.CapturedStructuresKey => "Captured structures",
+                AutoBuyServiceProjection.CapturedUpgradesKey => "Captured upgrades",
+                AutoBuyServiceProjection.EligibleCandidatesKey => "Eligible candidates",
+                AutoBuyServiceProjection.PlannedActionsKey => "Planned actions",
+                AutoBuyServiceProjection.RequestedLevelsKey => "Requested levels",
+                AutoBuyServiceProjection.ExcludedKindNotSelectedKey => "Excluded: kind not selected",
+                AutoBuyServiceProjection.ExcludedBlocklistedKey => "Excluded: blocklisted",
+                AutoBuyServiceProjection.ExcludedNotAllowlistedKey => "Excluded: not allowlisted",
+                AutoBuyServiceProjection.ExcludedUnavailableKey => "Excluded: unavailable",
+                AutoBuyServiceProjection.ExcludedRequirementsUnmetKey => "Excluded: requirements unmet",
+                AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
+                AutoBuyServiceProjection.ExcludedUnaffordableKey => "Excluded: unaffordable",
+                AutoBuyServiceProjection.ExcludedUnpriceableKey => "Excluded: unpriceable",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                SpellLevelServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                SpellLevelServiceProjection.CapturedSpellsKey => "Captured spells",
+                SpellLevelServiceProjection.ReadySpellsKey => "Ready spells",
+                SpellLevelServiceProjection.PlannedActionsKey => "Planned actions",
+                SpellLevelServiceProjection.CapabilityKey => "Capability",
+                SpellLevelServiceProjection.ExcludedUndiscoveredKey => "Excluded: undiscovered",
+                SpellLevelServiceProjection.ExcludedNotReadyKey => "Excluded: not ready",
+                SpellLevelServiceProjection.ExcludedOutrankedKey => "Excluded: outranked",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                AutoCastServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                AutoCastServiceProjection.CapturedSlotsKey => "Captured slots",
+                AutoCastServiceProjection.EligibleSlotsKey => "Eligible slots",
+                AutoCastServiceProjection.PlannedActionsKey => "Planned actions",
+                AutoCastServiceProjection.HoldingChargeKey => "Holding charge",
+                AutoCastServiceProjection.ChannelBlockedKey => "Channel blocked",
+                AutoCastServiceProjection.ExcludedEmptyKey => "Excluded: empty",
+                AutoCastServiceProjection.ExcludedBusyKey => "Excluded: busy",
+                AutoCastServiceProjection.ExcludedNotReadyKey => "Excluded: not ready",
+                AutoCastServiceProjection.ExcludedReserveFloorKey => "Excluded: reserve floor",
+                AutoCastServiceProjection.ExcludedBelowStartThresholdKey =>
+                    "Excluded: below start threshold",
+                AutoCastServiceProjection.ExcludedOutrankedKey => "Excluded: outranked",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                AutoConceptServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                AutoConceptServiceProjection.CapturedRecipesKey => "Captured recipes",
+                AutoConceptServiceProjection.EligibleRecipesKey => "Eligible recipes",
+                AutoConceptServiceProjection.ActiveRecipesKey => "Active recipes",
+                AutoConceptServiceProjection.OwnedRecipesKey => "Owned recipes",
+                AutoConceptServiceProjection.PlannedActionsKey => "Planned actions",
+                AutoConceptServiceProjection.DecisionKindKey => "Decision kind",
+                _ => NeutralProjectionName(key),
+            };
+        return NeutralProjectionName(key);
+    }
 
-    private static string ProjectionValue(int key, ServiceProjectionValue value)
+    private static string NeutralProjectionName(int key) =>
+        "Field " + key.ToString(CultureInfo.InvariantCulture);
+
+    private static string ProjectionValue(
+        string? serviceMachineId,
+        int key,
+        ServiceProjectionValue value)
     {
         if (value.Kind == ServiceProjectionValueKind.Boolean) return value.Boolean ? "true" : "false";
         if (value.Kind == ServiceProjectionValueKind.FloatingPoint)
             return value.FloatingPoint.ToString("0.###", CultureInfo.InvariantCulture);
-        if (value.Integer is >= int.MinValue and <= int.MaxValue)
+        if (string.Equals(
+                serviceMachineId,
+                AutoHarvestServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal) &&
+            value.Integer is >= int.MinValue and <= int.MaxValue)
         {
             var integer = (int)value.Integer;
             if (key is 1 or 3 && Enum.IsDefined(typeof(AutoHarvestPair), integer))

@@ -96,6 +96,12 @@
       "Assembly-CSharp": {
         "type": "Project"
       },
+      "orbmodding.servicecycletrace": {
+        "type": "Project",
+        "dependencies": {
+          "OrbModSuite": "[0.4.0, )"
+        }
+      },
       "orbmodsuite": {
         "type": "Project"
       }

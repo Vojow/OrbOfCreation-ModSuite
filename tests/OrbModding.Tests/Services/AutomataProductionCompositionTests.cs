@@ -8,41 +8,37 @@ namespace OrbModding.Tests;
 public sealed class AutomataProductionCompositionTests
 {
     [Fact]
-    public void ProductionFactoriesAndRuntimeLifecyclePutAutoHarvestBeforeSiblingMutationDemand()
+    public void ProductionCompositionRegistersOnlyTheSharedServiceCycleActivation()
     {
         var calls = new List<string>();
         using var registry = new AutomataServiceRegistry();
 
         AutomataProductionComposition.Register(
             registry,
-            () => Create("harvest", calls),
-            () => Create("concept", calls));
+            () => Create("cycle", calls));
         registry.Tick(0.25f);
 
         Assert.Equal(AutomataProductionComposition.FullServiceCount, registry.Count);
         Assert.Equal(new[]
         {
-            "harvest.create",
-            "concept.create",
-            "harvest.tick",
-            "concept.tick",
+            "cycle.create",
+            "cycle.tick",
         }, calls);
     }
 
     [Fact]
-    public void FailedOptionalAutoHarvestConstructionLeavesTheCoreServicesRunnable()
+    public void FailedOptionalServiceCycleConstructionLeavesNoLegacyServices()
     {
         var calls = new List<string>();
         using var registry = new AutomataServiceRegistry();
 
         AutomataProductionComposition.Register(
             registry,
-            () => null,
-            () => Create("concept", calls));
+            () => null);
         registry.Tick(0.25f);
 
         Assert.Equal(AutomataProductionComposition.CoreServiceCount, registry.Count);
-        Assert.DoesNotContain(calls, item => item.StartsWith("harvest", StringComparison.Ordinal));
+        Assert.Empty(calls);
     }
 
     [Fact]
@@ -53,8 +49,7 @@ public sealed class AutomataProductionCompositionTests
 
         Assert.Throws<InvalidOperationException>(() => AutomataProductionComposition.Register(
             registry,
-            () => Create("harvest", new List<string>()),
-            () => Create("concept", new List<string>())));
+            () => Create("cycle", new List<string>())));
     }
 
     [Fact]

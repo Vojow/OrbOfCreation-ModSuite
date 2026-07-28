@@ -18,6 +18,7 @@ lib/
 
 # IDE and user-specific files
 .vs/
+.playwright-mcp/
 *.user
 *.suo
 

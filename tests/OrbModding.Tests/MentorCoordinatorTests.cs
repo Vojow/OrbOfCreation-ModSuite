@@ -107,12 +107,11 @@ public sealed class MentorCoordinatorTests
     {
         var coordinator = Coordinator();
         long frame = 41;
-        var automataIdentity = SuitePerformanceWorkIdentities.AutoConceptMutation;
         using var automata = coordinator.Register(
-            automataIdentity.Subsystem,
-            automataIdentity.WorkName,
-            automataIdentity.BudgetClass,
-            automataIdentity.ExecutionKind);
+            "OrbAutomata",
+            "Synthetic mutation",
+            SuiteBudgetClass.HardLimited,
+            SuiteWorkExecutionKind.NonPreemptibleNativeMutation);
         automata.SetPending(true);
         using var mentor = new MentorCoordinatorWork(coordinator, () => frame);
         mentor.SetState(true, cooperativePending: false, mutationPending: true);

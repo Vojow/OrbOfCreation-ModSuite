@@ -41,10 +41,6 @@ public readonly struct SuitePerformanceWorkIdentity
 /// </summary>
 public static class SuitePerformanceWorkIdentities
 {
-    public static readonly SuitePerformanceWorkIdentity AutoConceptMutation = new(
-        "OrbAutomata.AutoConcept", "Change Active Concept quantity", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
-    public static readonly SuitePerformanceWorkIdentity AutoConceptEvaluate = new(
-        "OrbAutomata.AutoConcept", "Reconcile and plan concept mastery", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
     public static readonly SuitePerformanceWorkIdentity MentorMutation = new(
         "OrbMentor", "Grant one mastery XP mutation", SuiteBudgetClass.HardLimited, SuiteWorkExecutionKind.NonPreemptibleNativeMutation, 12);
     public static readonly SuitePerformanceWorkIdentity MentorEvaluate = new(
@@ -54,16 +50,14 @@ public static class SuitePerformanceWorkIdentities
     public static readonly SuitePerformanceWorkIdentity GameplayInvalidationDelivery = new(
         "OrbModding.Common", "Deliver gameplay invalidations", SuiteBudgetClass.SoftLimited, SuiteWorkExecutionKind.Cooperative, 12);
 
-    public const int SupportedSuiteV1Count = 6;
+    public const int SupportedSuiteV1Count = 4;
 
     public static SuitePerformanceWorkIdentity GetSupportedSuiteV1(int index) => index switch
     {
-        0 => AutoConceptMutation,
-        1 => AutoConceptEvaluate,
-        2 => MentorMutation,
-        3 => MentorEvaluate,
-        4 => ModConfigWork,
-        5 => GameplayInvalidationDelivery,
+        0 => MentorMutation,
+        1 => MentorEvaluate,
+        2 => ModConfigWork,
+        3 => GameplayInvalidationDelivery,
         _ => throw new ArgumentOutOfRangeException(nameof(index)),
     };
 
@@ -189,7 +183,7 @@ public sealed class SuitePerformanceEvidence
     public const int SchemaVersion = 1;
     public const string ProfileId = "supported-suite-beta-v1";
     public const int ProfileVersion = 1;
-    public const string ProfileSha256 = "35ede4048c858c3820ffb508e241bf43e570e39e571115c174e666d22fa1f7b7";
+    public const string ProfileSha256 = "dc47d076aba6a53c81eddb605355cda584cf8ae2fb79e699a542c1922a2f6bab";
 
     private readonly SuitePerformanceEvidencePoint _start;
     private readonly SuitePerformanceEvidencePoint _end;

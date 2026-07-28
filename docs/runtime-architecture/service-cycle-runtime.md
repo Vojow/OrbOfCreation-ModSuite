@@ -96,9 +96,9 @@ Feature runtimes do not tick, dispose, or select individual observation controll
 observability-options value when attaching the host. Sharing the host attachment point does not make the
 three observation products one sink. Feature-specific profiling stage codes remain at the native adapter edge.
 
-Three services are composed today — world collection, Auto Harvest, and Auto Buy — each through an
-explicit typed registration, and none of them introduces another registry abstraction, pump, or generic
-service locator.
+Six services are composed today — world collection, Auto Harvest, Auto Buy, Spell Leveling,
+Auto Cast, and Auto Concept — each through an explicit typed registration, and none of them
+introduces another registry abstraction, pump, or generic service locator.
 
 Orb Automata chooses one complete `SuiteRuntimeConfiguration` for every service. A single boundary reader
 copies the live BepInEx entries after load and after any change to them, whatever moved them; BepInEx types

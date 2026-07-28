@@ -151,7 +151,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-three passes: the four categories
+        // The scope claim, asserted rather than described. Forty-four passes: the four categories
         // the suite started with, four global-variable registries, twenty-five more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -159,17 +159,17 @@ public sealed class GameWorldCollectorTests : IDisposable
         // each purchasable entity's per-level conditions, which are second walks of registries rather
         // than registries of their own, the plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
-        // queues and the equipped spell loadout. A pass that quietly stopped covering one would show
+        // queues, the equipped spell loadout, and the paired Concept registries. A pass that quietly stopped covering one would show
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(43, report.Categories.Length);
+        Assert.Equal(44, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -251,6 +251,70 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
+    }
+
+    [Fact]
+    public void ConceptRecipesInstancesAndDrainVectorsArePublishedTogether()
+    {
+        var resource = Guid.NewGuid();
+        var coreType = new FakeAlchemyType { Identity = Guid.NewGuid() };
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = coreType,
+            drainCost = new FakeSpellCostList().With(resource, 7d),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.Add(recipe);
+        var instances = new FakeAlchemyInstanceList();
+        instances.value.Add(new FakeAlchemyInstance(recipe)
+        {
+            quantity = 2,
+            queuedQuantity = 3,
+            resourceDrain = new FakeAlchemyDrain
+            {
+                ratio = new BigDouble(0.75d),
+                current = new FakeSpellCostList().With(resource, 11d),
+            },
+        });
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] = instances;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldConceptRecipeLookup.TryFind(world.ConceptRecipes, recipe.Identity, out var concept));
+        Assert.Equal(coreType.Identity, concept.CoreTypeId);
+
+        Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
+        Assert.Equal(2, instance.Quantity);
+        Assert.Equal(3, instance.QueuedQuantity);
+        Assert.False(instance.IsSettled);
+        Assert.True(instance.DrainReadable);
+        Assert.Equal(0.75d, instance.DrainRatio.ToDouble());
+
+        Assert.True(WorldAlchemyCostLookup.TryFindRange(
+            world.AlchemyCosts,
+            recipe.Identity,
+            WorldAlchemyCostKind.RecipeDrain,
+            out var recipeStart,
+            out var recipeCount));
+        Assert.Equal(1, recipeCount);
+        Assert.Equal(resource, world.AlchemyCosts[recipeStart].ResourceId);
+        Assert.Equal(7d, world.AlchemyCosts[recipeStart].Amount.ToDouble());
+
+        Assert.True(WorldAlchemyCostLookup.TryFindRange(
+            world.AlchemyCosts,
+            recipe.Identity,
+            WorldAlchemyCostKind.CurrentDrain,
+            out var currentStart,
+            out var currentCount));
+        Assert.Equal(1, currentCount);
+        Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
     }
 
     [Fact]
