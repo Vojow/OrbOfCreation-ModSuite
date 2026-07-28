@@ -282,18 +282,13 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void OrbMentorDomainUnlocks_MatchNativeMasteryAndViewAvailabilityContracts()
+    public void OrbMentorWorldCollection_MatchesNativeViewAvailabilityContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
-        Assert.Equal(
-            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
-            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
-        AssertMethod(assembly, "IdScriptableObject", "GetInstance", true, "IdScriptableObject", "System.Guid");
         Assert.Equal("System.Collections.Generic.List`1<ViewSO>", assembly.GetFieldType("ViewSO", "All"));
         Assert.Equal("Prerequisites+Container", assembly.GetFieldType("ViewSO", "prerequisites"));
         AssertMethod(assembly, "ViewSO", "IsAvailable", false, "System.Boolean");
-        Assert.Equal("ViewSO", assembly.GetFieldType("UITooltip", "masteryEnabledView"));
     }
 
     [GameAssemblyFact]
@@ -304,11 +299,8 @@ public sealed class InstalledGameContractTests
         Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
         AssertMethod(assembly, "AlchemyRecipeSO", "GainMasteryXp", false, "System.Void", "BigDouble");
-        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscoveredRecipe", false, "System.Boolean");
-        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
-        AssertMethod(assembly, "AlchemyInstance", "CompleteRecipe", false, "System.Void");
         Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryLevel"));
     }
@@ -320,11 +312,11 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Collections.Generic.List`1<EquipmentSO>", assembly.GetFieldType("EquipmentSO", "All"));
         Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO", "masteryLevel"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("EquipmentSO", "isCreated"));
         Assert.Equal("ExperienceContainer", assembly.GetFieldType("EquipmentSO", "experienceContainer"));
         AssertMethod(assembly, "EquipmentSO", "IncrementActive", false, "System.Void", "System.Double");
         AssertMethod(assembly, "EquipmentSO", "GainMasteryLevels", false, "System.Void", "System.Int32");
         AssertMethod(assembly, "EquipmentSO", "GetExperienceElement", false, "IExperienceElement");
-        AssertMethod(assembly, "EquipmentSO", "IsCreated", false, "System.Boolean");
         AssertMethod(assembly, "ExperienceContainer", "GainExperience", false, "System.Void", "BigDouble");
         AssertMethod(assembly, "ExperienceContainer", "GetGainedLevels", false, "System.Int32");
         AssertMethod(assembly, "ExperienceContainer", "GetExperience", false, "BigDouble");

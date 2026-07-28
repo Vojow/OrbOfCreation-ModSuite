@@ -13,11 +13,15 @@ namespace OrbModding.Common;
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 3;
+    internal const int CurrentVersion = 4;
     internal static readonly ConfigurationKey AutoCastShortcut =
         new("AutoCast", "ToggleShortcut");
     internal static readonly ConfigurationKey DifferentialVerificationShortcut =
         new("Diagnostics", "VerifyGameMathShortcut");
+    internal static readonly ConfigurationKey MentorOperationsPerFrame =
+        new("Performance", "OperationsPerFrame");
+    internal static readonly ConfigurationKey CpuBudgetMilliseconds =
+        new("Performance", "CpuBudgetMilliseconds");
 
     internal static ConfigurationSchemaPlan Plan { get; } = new(CurrentVersion, new[]
     {
@@ -41,9 +45,25 @@ internal static class SuiteConfigurationSchema
         // differential verifier no longer listens to any key.
         new ConfigurationMigrationStep(
             2,
-            CurrentVersion,
+            3,
             new[] { AutoCastShortcut, DifferentialVerificationShortcut },
             MigrateInheritedShortcuts),
+        // Mentor was the last consumer of the legacy main-thread work admission and CPU-time
+        // budget. ServiceCycle owns bounded planning and action dispatch, so retaining these values
+        // would advertise controls that no runtime reads.
+        new ConfigurationMigrationStep(
+            3,
+            CurrentVersion,
+            new[] { MentorOperationsPerFrame, CpuBudgetMilliseconds },
+            static context =>
+            {
+                context.DiscardObsolete(
+                    MentorOperationsPerFrame,
+                    "Mentor service-cycle dispatch no longer uses operations-per-frame admission.");
+                context.DiscardObsolete(
+                    CpuBudgetMilliseconds,
+                    "ServiceCycle replaced the legacy shared CPU-time budget.");
+            }),
     });
 
     private static void MigrateInheritedShortcuts(ConfigurationMigrationContext context)

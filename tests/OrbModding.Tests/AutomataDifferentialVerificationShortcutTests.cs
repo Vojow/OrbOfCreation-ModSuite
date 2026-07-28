@@ -16,7 +16,7 @@ public sealed class AutomataDifferentialVerificationShortcutTests
     private const string VerificationKey = "VerifyGameMathShortcut";
 
     [Fact]
-    public void SchemaThreeMigratesOnlyInheritedShortcutDefaults()
+    public void CurrentSchemaMigratesOnlyInheritedShortcutDefaults()
     {
         var file = VersionTwoFile(
             "X + LeftAlt",
@@ -27,14 +27,14 @@ public sealed class AutomataDifferentialVerificationShortcutTests
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
         Assert.Equal(2, result.Status.FromVersion);
-        Assert.Equal(3, result.Status.ToVersion);
+        Assert.Equal(4, result.Status.ToVersion);
         Assert.Equal(KeyCode.F8, result.Config!.Automata.AutoCastToggleShortcut.Value.MainKey);
         Assert.Equal(KeyCode.None, ReadVerificationShortcut(file).MainKey);
         Assert.Equal(2, result.Diagnostics.Count);
     }
 
     [Fact]
-    public void SchemaThreePreservesPlayerCustomizedChords()
+    public void CurrentSchemaPreservesPlayerCustomizedChords()
     {
         var file = VersionTwoFile(
             "F7",
@@ -57,7 +57,7 @@ public sealed class AutomataDifferentialVerificationShortcutTests
         file.SeedSerialized(
             ConfigurationSchemaTransaction.MarkerSection,
             ConfigurationSchemaTransaction.MarkerKey,
-            "3");
+            "4");
         file.SeedSerialized(AutoCastSection, AutoCastKey, "X + LeftAlt");
         file.SeedSerialized(
             VerificationSection,

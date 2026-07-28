@@ -78,6 +78,7 @@ internal sealed class GameWorldCollector
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
+    private readonly IWorldMasteryExperienceSource _masteryExperience;
     private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
     private readonly WorldCategoryReader<WorldSpellRecipe, WorldSpellRecipe> _spellRecipes;
@@ -102,6 +103,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldPassiveAbility, WorldPassiveAbility> _passiveAbilities;
     private readonly WorldCategoryReader<WorldCharacter, WorldCharacter> _characters;
     private readonly WorldCategoryReader<WorldDiscoveryTree, WorldDiscoveryTree> _discoveryTrees;
+    private readonly WorldCategoryReader<WorldRecipeBook, WorldRecipeBook> _recipeBooks;
     private readonly WorldCategoryReader<RawPlotNodeSample, WorldPlotNode> _plotNodes;
     private readonly WorldCategoryReader<WorldTreasurePool, WorldTreasurePool> _treasurePools;
 
@@ -153,7 +155,18 @@ internal sealed class GameWorldCollector
     private long _structuralEpoch;
 
     internal GameWorldCollector()
-        : this(WorldNativeTypes.Resolve, static () => UnityEngine.Time.fixedDeltaTime)
+        : this(
+            WorldNativeTypes.Resolve,
+            static () => UnityEngine.Time.fixedDeltaTime,
+            EmptyWorldMasteryExperienceSource.Instance)
+    {
+    }
+
+    internal GameWorldCollector(IWorldMasteryExperienceSource masteryExperience)
+        : this(
+            WorldNativeTypes.Resolve,
+            static () => UnityEngine.Time.fixedDeltaTime,
+            masteryExperience)
     {
     }
 
@@ -163,17 +176,25 @@ internal sealed class GameWorldCollector
     /// growing a parameter per category, and lets tests answer for exactly the names they stub.
     /// </summary>
     internal GameWorldCollector(Func<string, Type?> resolveType)
-        : this(resolveType, static () => UnityEngine.Time.fixedDeltaTime)
+        : this(
+            resolveType,
+            static () => UnityEngine.Time.fixedDeltaTime,
+            EmptyWorldMasteryExperienceSource.Instance)
     {
     }
 
     /// <summary>As above, with the tick clock supplied too.</summary>
-    internal GameWorldCollector(Func<string, Type?> resolveType, Func<double> readFixedDeltaTime)
+    internal GameWorldCollector(
+        Func<string, Type?> resolveType,
+        Func<double> readFixedDeltaTime,
+        IWorldMasteryExperienceSource? masteryExperience = null)
     {
         if (resolveType is null) throw new ArgumentNullException(nameof(resolveType));
         if (readFixedDeltaTime is null) throw new ArgumentNullException(nameof(readFixedDeltaTime));
 
         _readFixedDeltaTime = readFixedDeltaTime;
+        _masteryExperience =
+            masteryExperience ?? EmptyWorldMasteryExperienceSource.Instance;
         _rateGlobals = new WorldFrameGlobalsReader(resolveType);
 
         _resources = Reader(new WorldResourceBinder(), resolveType, static frame => frame.Resources);
@@ -208,6 +229,7 @@ internal sealed class GameWorldCollector
         _passiveAbilities = Reader(new WorldPassiveAbilityBinder(), resolveType, static frame => frame.PassiveAbilities);
         _characters = Reader(new WorldCharacterBinder(), resolveType, static frame => frame.Characters);
         _discoveryTrees = Reader(new WorldDiscoveryTreeBinder(), resolveType, static frame => frame.DiscoveryTrees);
+        _recipeBooks = Reader(new WorldRecipeBookBinder(), resolveType, static frame => frame.RecipeBooks);
         _plotNodes = Reader(new WorldPlotNodeBinder(), resolveType, static frame => frame.PlotNodes);
         _treasurePools = Reader(new WorldTreasurePoolBinder(), resolveType, static frame => frame.TreasurePools);
         _purchaseCosts = new WorldPurchaseCostReader(resolveType("StructureSO"), resolveType);
@@ -242,7 +264,7 @@ internal sealed class GameWorldCollector
             _rituals, _achievements, _advancements, _challenges,
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
-            _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
+            _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
             _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks, _entityRequirements,
         };
 
@@ -305,6 +327,8 @@ internal sealed class GameWorldCollector
         _claimed.Clear();
         frame.FixedDeltaTime = _readFixedDeltaTime();
         frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
+        frame.MasteryExperience.Reset();
+        _masteryExperience.CopyTo(frame.CollectedAtEpoch, frame.MasteryExperience);
 
         // Two readers append here, so neither may reset it: whichever ran second would discard the
         // other's rows, and which that is depends on traversal order rather than on anything stated.

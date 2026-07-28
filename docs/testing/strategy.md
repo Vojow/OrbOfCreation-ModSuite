@@ -71,68 +71,21 @@ Run the versioned configuration-schema scope independently with:
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~ConfigurationSchema"
 ```
 
-This scope owns schema plan validation; missing/current/malformed/negative/future markers; ordered migration and typed-bind sequencing; Automata's exact mode, interval precedence, invariant conversion, clamping, and obsolete-key diagnostics; marker-only Mentor and Mod Config adoption; first-free non-overwriting backup suffixes and race collisions; all-or-nothing partial-write/flush cleanup with byte/length/hash verification; exact-byte and new-file rollback after bind/save plus first and repeated reload faults; `SaveOnConfigSet` restoration; subscriber fault isolation; sanitized failure reasons; atomic worker-thread-to-Unity-tick dirty handoff; exact-GUID status-only catalog entries; and schema projection. A path or serialized value appearing in published status is a test failure.
+This scope owns schema plan validation; missing/current/malformed/negative/future markers; ordered migration and typed-bind sequencing; Automata's exact mode, interval precedence, invariant conversion, clamping, and obsolete-key diagnostics; Mentor's schema-4 retirement of operations-per-frame and CPU-budget keys; marker-only Mod Config adoption; first-free non-overwriting backup suffixes and race collisions; all-or-nothing partial-write/flush cleanup with byte/length/hash verification; exact-byte and new-file rollback after bind/save plus first and repeated reload faults; `SaveOnConfigSet` restoration; subscriber fault isolation; sanitized failure reasons; atomic worker-thread-to-Unity-tick dirty handoff; exact-GUID status-only catalog entries; and schema projection. A path or serialized value appearing in published status is a test failure.
 
-### Suite coordinator performance evidence
+### ServiceCycle performance evidence
 
-Suite-wide runtime timing uses the strict profile in
-`data/suite-performance-profile-v1.json` and the separate
-`OrbModding.PerformanceEvidence` tool. A capture freezes every exact coordinator
-work identity at both the start and end of an explicitly requested measurement
-window. The checker evaluates counter deltas; it never attributes a lifetime
-maximum that was already present at the start to the current capture.
+Every automation feature is a ServiceCycle service. Portable simulations prove
+bounded action turns, worker handoff, allocation contracts, and local queue
+draining deterministically. Debug profile builds record pump and feature-stage
+durations; full traces and the dashboard join those timings to exact service,
+cycle, projection, and action evidence.
 
-The V1 profile pins the 0.75 ms soft budget, 1.0 ms hard budget, one
-mutation-owning feature admission per frame, ten supported work identities,
-exact 10/12/30-frame wait
-limits, and a minimum of 30 samples. Cooperative p95, p99, and maximum targets,
-combined active-frame timing, wait limits, starvation, abandonment, and
-work/measurement failures are enforced merge evidence. Exceeded or insufficient
-required results return CLI exit code 3. Invalid JSON, incompatible policy,
-profile-hash drift, missing/unknown work, or contradictory facts return exit code
-1. Usage errors return exit code 2. Native timing and native hard-budget overruns
-remain literal `observe-only` after a complete uncontaminated sample window until
-both Windows desktop and Steam Deck under Proton captures exist; an insufficient
-or contaminated native window still makes the capture unusable and returns 3.
-The coordinator's combined active-frame distribution is evaluated separately:
-p95 uses the 0.75 ms soft target, while p99 and maximum use the 1.0 ms hard
-target. A per-work pass therefore cannot hide stacked suite work in one frame.
-The ten active identity constants are consumed by the production registration
-sites as well as a checked-profile audit, so renaming or reclassifying runtime
-work without updating the profile fails portable CI. The same audit compares all
-ten compiled starvation thresholds with both JSON wait fields, preventing the
-runtime resolver and checked profile from drifting independently.
-Auto Harvest is absent because ServiceCycle owns its capture and action rotation;
-its main-thread and worker costs are recorded by the independent performance-profile
-product rather than attributed to the legacy coordinator.
-
-CI produces a fixed-clock synthetic start/end capture and runs:
-
-```powershell
-dotnet run --project tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj --configuration Release -- --profile data/suite-performance-profile-v1.json --evidence artifacts/performance/suite-performance-evidence.json --json-output artifacts/performance/suite-performance-evaluation.json --markdown-output artifacts/performance/suite-performance-evaluation.md
-```
-
-The retained JSON contains raw coordinator facts only; classifications belong
-to the checker. Rolling percentiles can be `within-target` only when the start
-window was empty or the capture added at least the complete rolling capacity.
-Otherwise the result is `insufficient-window`, preventing pre-capture samples
-from producing a false pass. Recurring isolated deferred frames remain a raw
-diagnostic; maximum pending wait and consecutive deferred-frame runs are the
-bounded wait gates.
-Native observe-only metrics follow the same sample/window qualification and do
-not emit comparable timing facts from a contaminated rolling window. Capture
-also retains registration ids internally across start/end to reject dispose-and-
-recreate churn, while deliberately omitting those process-local ids from JSON.
-Markdown reports render every non-alphanumeric character from captured metadata
-or metric labels as a numeric entity and normalize line breaks, so evidence text
-cannot introduce code spans, links, images, raw HTML, or table cells.
-
-Capture metadata is bounded to capture kind, source commit, suite/game version,
-scenario, duration, and UTC time. The production DTO has no host, OS user, save,
-or path field and performs no file I/O. Capture/export is a low-frequency
-diagnostic action, never a scheduler hot-path call. Real captures are still UAT:
-run the same scenario on desktop and Deck, retain both evidence files, and record
-the exact game/build versions before closing the runtime performance gate.
+There is no separate coordinator profile or evidence checker. Compare equivalent
+trace windows from the exact tested build when changing capture, evaluation, or
+action-drain behavior. Desktop and Steam Deck/Proton timings remain UAT evidence:
+retain both captures with the suite/game versions and scenario before closing a
+runtime performance gate.
 
 Collect portable production coverage with the checked-in assembly allowlist:
 
@@ -240,7 +193,7 @@ The current P0/P1 headless scope covers:
 - production reflection outcomes proving preflight rejection performs zero
   native calls, verifier execution/postcondition failures are attempted but
   uncommitted, unverified charge hold never claims a commit, exception cleanup
-  retains observed outcomes, and legacy per-lease operation totals remain stable;
+  retains observed outcomes, and rejected actions report zero committed mutations;
 - reusable lifecycle state-machine journeys spanning no-save, load, registry
   readiness, unlock, action, completion, reset, stale callbacks, disable and
   re-enable, same-name scene recreation, and mixed Automata/Mentor isolation.

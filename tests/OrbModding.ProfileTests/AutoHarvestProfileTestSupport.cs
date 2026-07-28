@@ -279,11 +279,6 @@ internal static class AutoHarvestProfileTestSupport
             new(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected);
     }
 
-    private sealed class ZeroClock : IPerformanceClock
-    {
-        public long GetTimestamp() => 0;
-        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) => 0;
-    }
 }
 
 internal readonly record struct CapturedMeasurement(

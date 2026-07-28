@@ -11,6 +11,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.ServiceCycleTrace.Journal;
 using OrbModding.ServiceCycleTrace.ManualTrace;
 using OrbModding.ServiceCycleTrace.Performance;
+using OrbMentor;
 
 namespace OrbModding.ServiceCycleTrace.Dashboard;
 
@@ -716,6 +717,18 @@ internal static class TraceDashboardReader
                 AutoConceptServiceProjection.OwnedRecipesKey => "Owned recipes",
                 AutoConceptServiceProjection.PlannedActionsKey => "Planned actions",
                 AutoConceptServiceProjection.DecisionKindKey => "Decision kind",
+                _ => NeutralProjectionName(key),
+            };
+        if (string.Equals(
+                serviceMachineId,
+                MentorServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal))
+            return key switch
+            {
+                MentorServiceProjection.LastInputSequenceKey => "Last input sequence",
+                MentorServiceProjection.TotalMissedInputsKey => "Missed inputs",
+                MentorServiceProjection.PlannedActionsKey => "Planned actions",
+                MentorServiceProjection.RecipientsKey => "Recipients",
                 _ => NeutralProjectionName(key),
             };
         return NeutralProjectionName(key);

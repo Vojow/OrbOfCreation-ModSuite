@@ -63,12 +63,11 @@ Every service is handed all three and ignores what it doesn't need.
 
 ## Where the game may be touched
 
-Two places for a migrated service — a source service's capture, and action application — plus
-the one declared exception below, plus the declared legacy surface of the services nobody has
-migrated yet. The third bucket is still real but no longer the largest story: 32 of the manifest's
-764 contracts are marked `legacy`, against 657 capture, 70 action and 5 patch. It is not a permitted
-place so much as a ratcheted debt, and it retires service by service as each migration lands. No worker, no
-evaluator, no policy code touches the game anywhere. This is enforced, not hoped for:
+Two places for a migrated service — a source service's capture and action application — plus
+the one declared exception below. Every feature now runs on ServiceCycle. The manifest contains
+661 capture, 84 action and 9 patch contracts; its one remaining `legacy` contract is a read-only
+UI icon lookup unrelated to a runtime engine. No worker, evaluator, or policy code touches the
+game anywhere. This is enforced, not hoped for:
 
 - the **native-contract manifest** is a closed audit of the game surface: every game member a
   source file names must be a declared, audited contract, and each contract declares the place
@@ -92,9 +91,10 @@ The **signal patches** die with the generation gate: the queue pair and the comp
 postfix are both gone, the latter with Spell Leveling's migration.
 The **five lifecycle hooks** die when the snapshot's collected epoch is proven to detect a
 save-load; until that is measured they are the intended "we are moving to a new game,
-trash everything" signal rather than a wart. The **mastery hooks** remain inputs to Mentor, while
-the **fire hook** is Auto Cast's mutation-verifier probe. Auto Concept's three signal patches
-retired with its legacy runtime.
+trash everything" signal rather than a wart. The **four Mentor mastery hooks** are deliberate
+exact-XP inputs published with the world, while the **fire hook** is Auto Cast's
+mutation-verifier probe. Discovery, loadout, reset, and other feature signal patches retired
+with their legacy runtimes.
 
 ## The simplicity doctrine
 
@@ -120,10 +120,11 @@ Every seam must pay rent. Scheduled for deletion because they don't:
   native-contract manifest stops naming hand-maintained source paths, never as a side
   effect of the merge commit itself. `sources[]` has been dropped, so that precondition is
   met;
-- the CPU-budget / resumable-work-across-frames regime. A migrated service does minimal
-  main-thread work per frame by design and needs no budget or slicing drama. The
-  `CpuBudgetMilliseconds` knob and its coordinator machinery survive only to serve the
-  not-yet-migrated services, and retire with them.
+- the CPU-budget / resumable-work-across-frames regime. Every feature now performs bounded
+  boundary work through ServiceCycle, so `CpuBudgetMilliseconds`, weighted admission,
+  mutation leases, and the coordinator evidence product are gone. The Mods UI keeps its
+  one-maintenance-pass-per-frame guard and gameplay invalidation keeps its explicit
+  per-frame operation cap because those are local delivery bounds, not another scheduler.
 
 No compatibility concern may block a simplification: replay formats bump freely (recordings
 are disposable test artifacts), upstream's project layout is not a constraint, and an
@@ -168,5 +169,5 @@ pays (profiler spans) — it is not a system-wide constraint.
 2. aggressive seam cleanup, including the one-DLL merge;
 3. game reads reduced to the two allowed places;
 4. one reviewed, squashed commit to the public fork;
-5. migrate the remaining services onto the runtime;
+5. migrate the remaining services onto the runtime (complete);
 6. build out strategy and new features.

@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 
+public sealed class StructureTypeSO : IdScriptableObject
+{
+}
+
 public sealed class SpellTypeSO : IdScriptableObject
 {
     public static List<SpellTypeSO> All = new List<SpellTypeSO>();
@@ -480,6 +484,14 @@ public sealed class DiscoveryTreeSO : IdScriptableObject
     private bool hasRequiredDiscovery;
     private bool hasRemainingDiscovery;
     private bool hasCompletedAllDiscoveries;
+}
+
+public sealed class RecipeBookSO : IdScriptableObject
+{
+    public static List<RecipeBookSO> All = new List<RecipeBookSO>();
+    public bool available;
+
+    public bool IsAvailable() => available;
 }
 
 public sealed class PlotNodeSO : IdScriptableObject

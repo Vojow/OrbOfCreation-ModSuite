@@ -70,6 +70,9 @@ internal static class BepInExAutomataConfigurationReader
                     source.AutoHarvestEvaluationIntervalSeconds.Value,
                     nameof(source.AutoHarvestEvaluationIntervalSeconds)),
             },
+            Mentor = source.Mentor is null
+                ? new OrbMentor.MentorConfiguration()
+                : OrbMentor.MentorConfiguration.Read(source.Mentor),
             Safety = new SuiteSafetyConfiguration
             {
                 EmergencyDisable = source.EmergencyDisable.Value,

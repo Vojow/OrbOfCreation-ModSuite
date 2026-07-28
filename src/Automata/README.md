@@ -37,7 +37,7 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 At runtime, those persisted settings are mapped once per change into one composed immutable configuration record with General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Safety, Performance, Diagnostics, and Reserves sections. Engines and controls consume that record rather than BepInEx entries or feature-specific configuration mirrors. A saved ServiceCycle cycle pins the complete record it began with; later changes apply to a later cycle.
 
-The former runtime-probe, per-session purchase-limit, DryRun, expert-override, Auto Research, and Auto Harvest runtime-selector settings are not part of the release configuration or the configuration UI. Automation has no configuration schema of its own: it binds into the suite's single configuration file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 3. The 2-to-3 step moves only inherited defaults: Auto Cast's `Left Alt + X` becomes `F8`, and differential verification becomes unbound in favor of its Mods Runtime button. Player-customized chords are preserved. Malformed, negative, or future schema data fails closed without starting the suite.
+The former runtime-probe, per-session purchase-limit, DryRun, expert-override, Auto Research, and Auto Harvest runtime-selector settings are not part of the release configuration or the configuration UI. Automation has no configuration schema of its own: it binds into the suite's single configuration file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 4. The 2-to-3 step moves only inherited defaults: Auto Cast's `Left Alt + X` becomes `F8`, and differential verification becomes unbound in favor of its Mods Runtime button. The 3-to-4 step discards Mentor's retired frame-operation and CPU-budget keys. Player-customized chords are preserved. Malformed, negative, or future schema data fails closed without starting the suite.
 
 ## Auto Harvest
 
@@ -185,7 +185,7 @@ Auto Cast follows equipped spell slot order and fires at most one new spell per 
 
 `FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Auto Cast owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
-A cast deferred by the shared coordinator is treated as a short-lived plan. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
+A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 

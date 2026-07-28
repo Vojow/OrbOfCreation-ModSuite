@@ -31,8 +31,9 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.NotReady, statuses.SpellLevel.Current.State);
         Assert.True(statuses.SpellLevel.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(7, status.LifecycleGeneration));
-        Assert.Equal(5, added);
+        Assert.Equal(6, added);
         Assert.Equal(0, changed);
     }
 
@@ -90,6 +91,7 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 
     [Fact]
@@ -108,17 +110,18 @@ public sealed class AutomataFeatureStatusTests
         statuses.ObserveLifecycleNotReady(config.Current, 9);
 
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(9, status.LifecycleGeneration));
-        Assert.Equal(5, changes);
+        Assert.Equal(6, changes);
 
         for (var index = 0; index < 10_000; index++)
             statuses.ObserveLifecycleNotReady(config.Current, 9);
 
-        Assert.Equal(5, changes);
+        Assert.Equal(6, changes);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.AutoBuy.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.SpellLevel.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 
     [Fact]

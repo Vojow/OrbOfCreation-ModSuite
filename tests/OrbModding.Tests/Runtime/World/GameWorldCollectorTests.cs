@@ -86,8 +86,10 @@ public sealed class GameWorldCollectorTests : IDisposable
     {
         var mana = Guid.NewGuid();
         var cauldron = Guid.NewGuid();
+        var scholar = Guid.NewGuid();
         var alchemy = Guid.NewGuid();
         var theory = Guid.NewGuid();
+        var grimoire = Guid.NewGuid();
 
         FakeResource.All.Add(new FakeResource
         {
@@ -97,16 +99,24 @@ public sealed class GameWorldCollectorTests : IDisposable
             Rate = 2.5d,
             Visible = true,
         });
-        FakeStructure.All.Add(new FakeStructure { Identity = cauldron, Level = 12, Queued = 3, Available = true });
+        FakeStructure.All.Add(new FakeStructure
+        {
+            Identity = cauldron,
+            structureType = new FakeReferencedEntity { Identity = scholar },
+            Level = 12,
+            Queued = 3,
+            Available = true,
+        });
         FakeUpgrade.All.Add(new FakeUpgrade { Identity = alchemy, Level = 1, maxLevel = 1, Available = false });
         FakeResearch.All.Add(new FakeResearch { Identity = theory, level = 4, isDeveloping = true, Available = true });
+        FakeRecipeBook.All.Add(new FakeRecipeBook { Identity = grimoire, Available = true });
 
         var collector = Collector();
         var report = collector.Collect();
         var world = collector.Build();
 
         Assert.True(report.IsComplete, report.Describe());
-        Assert.Equal(4, report.TotalSampled);
+        Assert.Equal(5, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -118,6 +128,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(12d, structure.Reading.Level.ToDouble());
         Assert.Equal(3d, structure.Reading.QueuedLevels.ToDouble());
         Assert.True(structure.Reading.Unlocked);
+        Assert.Equal(scholar, structure.Reading.StructureTypeId);
 
         Assert.True(WorldLookup.TryFind(world.Upgrades, alchemy, out var upgrade));
         Assert.Equal(1, upgrade.Reading.Level);
@@ -128,6 +139,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(4, research.Level);
         Assert.True(research.IsDeveloping);
         Assert.True(research.Available);
+
+        Assert.True(WorldLookup.TryFind(world.RecipeBooks, grimoire, out var recipeBook));
+        Assert.True(recipeBook.Available);
     }
 
     [Fact]
@@ -152,7 +166,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
         // The scope claim, asserted rather than described. Forty-four passes: the four categories
-        // the suite started with, four global-variable registries, twenty-five more the game persists
+        // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
         // lists, the authored effects, each plot's authoring and each action's completion blocks,
@@ -163,13 +177,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(44, report.Categories.Length);
+        Assert.Equal(45, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -289,6 +303,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(report.IsComplete, report.Describe());
         Assert.True(WorldConceptRecipeLookup.TryFind(world.ConceptRecipes, recipe.Identity, out var concept));
         Assert.Equal(coreType.Identity, concept.CoreTypeId);
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var alchemyRecipe));
+        Assert.Equal(coreType.Identity, alchemyRecipe.CoreTypeId);
 
         Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
         Assert.Equal(2, instance.Quantity);
@@ -315,6 +331,33 @@ public sealed class GameWorldCollectorTests : IDisposable
             out var currentCount));
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
+    }
+
+    [Fact]
+    public void AViewsComposedAvailabilityIsPublished()
+    {
+        var unlocked = Guid.NewGuid();
+        var locked = Guid.NewGuid();
+        FakeView.All.Add(new FakeView
+        {
+            Identity = unlocked,
+            active = true,
+        });
+        FakeView.All.Add(new FakeView
+        {
+            Identity = locked,
+            active = false,
+            alwaysActive = false,
+        });
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(WorldLookup.TryFind(world.Views, unlocked, out var unlockedView));
+        Assert.True(unlockedView.Available);
+        Assert.True(WorldLookup.TryFind(world.Views, locked, out var lockedView));
+        Assert.False(lockedView.Available);
     }
 
     [Fact]
@@ -753,6 +796,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public static readonly List<FakeStructure> All = new();
 
         public Guid Identity = Guid.NewGuid();
+        public FakeReferencedEntity structureType = new();
         public int Level;
         public int Queued;
         public bool Available = true;

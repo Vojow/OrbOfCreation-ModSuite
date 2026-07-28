@@ -10,30 +10,23 @@ public sealed class ModConfigPerformanceTests
 {
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
-    public void UiBudgetDenialRetainsDueRepairAndInstallsListenersExactlyOnce()
+    public void UiMaintenanceRunsAtMostOncePerFrameAndRetainsDueRepair()
     {
-        var coordinator = new SuitePerformanceCoordinator(
-            StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
         long frame = 12;
-        using var blocker = coordinator.Register("test", "earlier UI work");
-        blocker.SetPending(true);
-        using var ui = new ModConfigCoordinatorWork(coordinator, () => frame);
+        using var ui = new ModConfigFrameWork(() => frame);
         var listeners = new HashSet<string>(StringComparer.Ordinal);
         var runs = 0;
 
-        Assert.False(ui.TryRun(true, pending: true, () =>
+        Assert.True(ui.TryRun(true, pending: true, () =>
         {
             runs++;
             listeners.Add("magic");
             listeners.Add("time");
         }));
+        Assert.False(ui.TryRun(true, pending: true, () => runs++));
         Assert.True(ui.IsPending);
-        Assert.Equal(0, runs);
-        Assert.Empty(listeners);
-
-        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var blockLease));
-        blockLease.Complete();
-        blocker.SetPending(false);
+        Assert.Equal(1, runs);
+        Assert.Equal(2, listeners.Count);
         frame++;
         Assert.True(ui.TryRun(true, pending: true, () =>
         {
@@ -42,24 +35,20 @@ public sealed class ModConfigPerformanceTests
             listeners.Add("time");
         }));
         ui.SetState(true, pending: false);
-        Assert.Equal(1, runs);
+        Assert.Equal(2, runs);
         Assert.Equal(2, listeners.Count);
 
         ui.SetState(false, pending: true);
         Assert.False(ui.IsPending);
         Assert.False(ui.TryRun(false, pending: true, () => runs++));
-        Assert.Equal(1, runs);
+        Assert.Equal(2, runs);
     }
 
     [Fact]
-    public void CatalogDiscoveryAndLoggingRunOnceOnlyAfterUiLeaseAdmission()
+    public void CatalogDiscoveryAndLoggingRemainIdempotentAcrossMaintenanceFrames()
     {
-        var coordinator = new SuitePerformanceCoordinator(
-            StopwatchPerformanceClock.Instance, 1000.0, 1000.0);
         long frame = 31;
-        using var blocker = coordinator.Register("test", "earlier UI work");
-        blocker.SetPending(true);
-        using var ui = new ModConfigCoordinatorWork(coordinator, () => frame);
+        using var ui = new ModConfigFrameWork(() => frame);
         ConfigCatalogSnapshot? catalog = null;
         var generation = default(ConfigCatalogGeneration);
         var currentGeneration = ConfigCatalogGeneration.Capture(Array.Empty<ConfigPluginSource>());
@@ -79,15 +68,6 @@ public sealed class ModConfigPerformanceTests
                 _ => logCalls++);
         }
 
-        Assert.False(ui.TryRun(true, pending: true, DiscoverAndLog));
-        Assert.Null(catalog);
-        Assert.Equal(0, discoveryCalls);
-        Assert.Equal(0, logCalls);
-
-        Assert.Equal(SuiteWorkAdmission.Granted, coordinator.RequestWork(blocker, frame, out var lease));
-        lease.Complete();
-        blocker.SetPending(false);
-        frame++;
         Assert.True(ui.TryRun(true, pending: true, DiscoverAndLog));
         Assert.NotNull(catalog);
         Assert.Equal(1, discoveryCalls);
@@ -325,44 +305,6 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
-    [Trait("Category", "PerformanceSimulation")]
-    public void StarvedFirstOpenRefreshIsAdmittedAtItsDeclaredBound()
-    {
-        var clock = new ControlledPerformanceClock();
-        var coordinator = new SuitePerformanceCoordinator(clock, 0.5, 1.0);
-        var blockers = new List<SuiteWorkRegistration>();
-        for (var index = 0; index < 5; index++)
-        {
-            var blocker = coordinator.RegisterWeighted(
-                "test",
-                "consume soft budget " + index,
-                SuiteBudgetClass.HardLimited,
-                SuiteWorkExecutionKind.Cooperative,
-                schedulingWeight: 8);
-            blocker.SetPending(true);
-            blockers.Add(blocker);
-        }
-        using var ui = new ModConfigCoordinatorWork(coordinator, () => clock.Frame);
-        try
-        {
-            for (clock.Frame = 0;
-                 clock.Frame < SuitePerformanceWorkIdentities.ModConfigWork.MaximumPendingWaitFrames;
-                 clock.Frame++)
-            {
-                ConsumeSoftBudget(coordinator, clock, blockers);
-                Assert.False(ui.TryRun(true, pending: true, () => { }));
-            }
-
-            ConsumeSoftBudget(coordinator, clock, blockers);
-            Assert.True(ui.TryRun(true, pending: true, () => { }));
-        }
-        finally
-        {
-            foreach (var blocker in blockers) blocker.Dispose();
-        }
-    }
-
-    [Fact]
     public void RefreshDiagnosticsExposePendingAndLastCompletedAge()
     {
         var refresh = new ModConfigRefreshScheduler(0.1f);
@@ -385,39 +327,6 @@ public sealed class ModConfigPerformanceTests
     }
 
     private sealed record FakeReference(bool Alive, string Name);
-
-    private static void ConsumeSoftBudget(
-        SuitePerformanceCoordinator coordinator,
-        ControlledPerformanceClock clock,
-        IReadOnlyList<SuiteWorkRegistration> blockers)
-    {
-        foreach (var blocker in blockers)
-        {
-            if (coordinator.RequestWork(blocker, clock.Frame, out var lease) !=
-                SuiteWorkAdmission.Granted)
-                continue;
-            clock.AdvanceMilliseconds(0.75);
-            lease.Complete();
-            return;
-        }
-
-        Assert.Fail("No hard-limited blocker was admitted.");
-    }
-
-    private sealed class ControlledPerformanceClock : IPerformanceClock
-    {
-        private long _microseconds;
-
-        public long Frame { get; set; }
-
-        public long GetTimestamp() => _microseconds;
-
-        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
-            (endTimestamp - startTimestamp) / 1000.0;
-
-        public void AdvanceMilliseconds(double milliseconds) =>
-            _microseconds += checked((long)(milliseconds * 1000.0));
-    }
 
     private sealed class FakeNativeView
     {

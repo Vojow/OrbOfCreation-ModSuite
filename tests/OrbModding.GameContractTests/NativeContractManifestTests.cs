@@ -102,14 +102,14 @@ public sealed class NativeContractManifestTests
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
-    /// Contracts that exist only to serve a service the suite has not migrated onto ServiceCycle
-    /// yet, and which are therefore allowed to declare <c>"place": "legacy"</c>.
+    /// Contracts outside the service-cycle boundary model which are therefore still allowed to
+    /// declare <c>"place": "legacy"</c>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// This list only ever shrinks. Migrating a service deletes its native access, so every id in
     /// that service's block either disappears from the manifest or stops being legacy — and both
-    /// fail <see cref="EveryLegacyContractIsAnAllowlistedUnmigratedService"/> until the block is
+    /// fail <see cref="EveryLegacyContractIsAnAllowlistedBoundaryException"/> until the block is
     /// removed. Nothing has to remember to prune it.
     /// </para>
     /// <para>
@@ -117,48 +117,13 @@ public sealed class NativeContractManifestTests
     /// Harmony patches remain migration debt until their owning service moves.
     /// </para>
     /// </remarks>
-    private static readonly string[] UnmigratedServiceContracts =
+    private static readonly string[] LegacyBoundaryExceptions =
     {
         // Auto Cast's toggle button, which is not a service and did not migrate with one. It walks
         // live SpellManager state for the equipped spell's icon, and that read is the last native
         // access the feature makes outside its action boundary. It leaves this list when the button
         // stops reflecting, not when a runtime moves.
         "spell.get-icon",
-
-        // Mentor — every domain: alchemy, artifacts, spells and the equipped loadout.
-        "alchemy-recipe.gain-mastery-runtime",
-        "alchemy-recipe.gain-mastery-xp",
-        "alchemy-recipe.reset",
-        "equipment.create",
-        "equipment.discover",
-        "equipment.gain-levels",
-        "equipment.get-experience-element",
-        "equipment.increment-active",
-        "equipment.reset",
-        "experience-container.clone",
-        "experience-container.gain",
-        "experience-container.gain-runtime",
-        "experience-container.gained-levels",
-        "experience-container.get-experience",
-        "experience-container.get-level",
-        "spell-manager.add-spell",
-        "spell-manager.move-spell",
-        "spell-manager.remove-spell",
-        "spell-recipe.discover",
-        "spell-recipe.gain-mastery",
-        "spell-recipe.is-discovered",
-        "spell-recipe.purchase-level",
-        "spell-recipe.reset",
-        "tooltipable-object.get-name",
-        "view.is-available",
-
-        // Read by more than one feature, so they leave only when the final legacy reader does.
-        "spell-manager.active-spells", // Mentor
-        "spell-manager.instance", // Mentor
-        "alchemy-recipe.apply-mastery", // Mentor
-        "alchemy-recipe.discover", // Mentor
-        "alchemy-recipe.is-discovered", // Mentor
-        "abstract-list.value", // Common Alchemy classifier + spell leveling + Mentor
     };
 
     /// <summary>The places a contract may sit in once its service is on ServiceCycle.</summary>
@@ -175,16 +140,16 @@ public sealed class NativeContractManifestTests
     /// alike.
     /// </remarks>
     [Fact]
-    public void EveryLegacyContractIsAnAllowlistedUnmigratedService()
+    public void EveryLegacyContractIsAnAllowlistedBoundaryException()
     {
         var manifest = NativeContractManifest.Load();
-        var allowlist = UnmigratedServiceContracts.ToHashSet(StringComparer.Ordinal);
-        Assert.Equal(UnmigratedServiceContracts.Length, allowlist.Count);
+        var allowlist = LegacyBoundaryExceptions.ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(LegacyBoundaryExceptions.Length, allowlist.Count);
 
         var byId = manifest.Contracts.ToDictionary(contract => contract.Id, StringComparer.Ordinal);
         var failures = new List<string>();
 
-        foreach (var id in UnmigratedServiceContracts)
+        foreach (var id in LegacyBoundaryExceptions)
         {
             if (!byId.TryGetValue(id, out var contract))
             {
@@ -576,7 +541,7 @@ public sealed class NativeContractManifestTests
         // top-level, so it matched three variable binders, found their contracts, and passed — while
         // twenty-nine categories went unchecked. NotEmpty cannot tell "everything is declared" from
         // "almost nothing was looked at". Update the number when a category is added or removed.
-        Assert.Equal(33, collected.Length);
+        Assert.Equal(34, collected.Length);
 
         var declared = manifest.Contracts
             .Where(contract => contract.Assembly == "assembly-csharp")

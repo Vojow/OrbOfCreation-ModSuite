@@ -77,6 +77,9 @@ internal sealed class GameWorldCycleFrame
 
     internal WorldSpellCostBuffer SpellCosts { get; } = new();
 
+    /// <summary>Exact mastery-XP inputs observed since the current lifecycle began.</summary>
+    internal WorldMasteryExperienceBuffer MasteryExperience { get; } = new();
+
     /// <summary>
     /// Concept registry membership, active assignments, and the authored/current drain rows read by
     /// one registry pass.
@@ -127,6 +130,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldPassiveAbility, WorldPassiveAbility> PassiveAbilities { get; } = new();
     internal WorldSampleBuffer<WorldCharacter, WorldCharacter> Characters { get; } = new();
     internal WorldSampleBuffer<WorldDiscoveryTree, WorldDiscoveryTree> DiscoveryTrees { get; } = new();
+    internal WorldSampleBuffer<WorldRecipeBook, WorldRecipeBook> RecipeBooks { get; } = new();
     internal WorldSampleBuffer<RawPlotNodeSample, WorldPlotNode> PlotNodes { get; } = new();
     internal WorldSampleBuffer<WorldTreasurePool, WorldTreasurePool> TreasurePools { get; } = new();
 
@@ -248,6 +252,7 @@ internal static class GameWorldFrameDeriver
             PassiveAbilities = frame.PassiveAbilities.Build(WorldIdentityDeriver<WorldPassiveAbility>.Shared),
             Characters = frame.Characters.Build(WorldIdentityDeriver<WorldCharacter>.Shared),
             DiscoveryTrees = frame.DiscoveryTrees.Build(WorldIdentityDeriver<WorldDiscoveryTree>.Shared),
+            RecipeBooks = frame.RecipeBooks.Build(WorldIdentityDeriver<WorldRecipeBook>.Shared),
             PlotNodes = plotNodes,
             PlotActions = plotActions,
             PlotActionInstances = WorldPlotActionInstanceDeriver.Build(frame.PlotActionInstances),
@@ -255,6 +260,7 @@ internal static class GameWorldFrameDeriver
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
             SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
             SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),
+            MasteryExperience = WorldMasteryExperienceDeriver.Build(frame.MasteryExperience),
             ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
             AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),

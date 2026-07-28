@@ -153,37 +153,6 @@ public sealed class ActionFamilyIntegrationTests
         Assert.True(alchemyReplacement.IsHeld);
     }
 
-    [Fact]
-    public void MentorRootDegradesWhenLockedDomainPrecedesConflictAndHealthySibling()
-    {
-        var domains = new[]
-        {
-            new FeatureStatusSnapshot(
-                MentorFeatureStatus.Key(MentorDomain.Spells), "Mentor spells", true,
-                FeatureStatusState.Locked,
-                new FeatureStatusReason(FeatureStatusReasonCode.ProgressionLocked, "spells locked"), 1),
-            new FeatureStatusSnapshot(
-                MentorFeatureStatus.Key(MentorDomain.Artifacts), "Mentor artifacts", true,
-                FeatureStatusState.TemporarilyBlocked,
-                new FeatureStatusReason(FeatureStatusReasonCode.ActionFamilyConflict, "artifact conflict"), 1),
-            new FeatureStatusSnapshot(
-                MentorFeatureStatus.Key(MentorDomain.Alchemy), "Mentor alchemy", true,
-                FeatureStatusState.Operational, lifecycleGeneration: 1),
-        };
-
-        var root = MentorFeatureStatus.ProjectRoot(
-            configured: true,
-            emergencyDisabled: false,
-            globalFailure: MentorFeatureFailureKind.None,
-            globalFailureReason: null,
-            globalFailureCause: AutomationDecisionCode.None,
-            domains: domains,
-            lifecycleGeneration: 1);
-
-        Assert.Equal(FeatureStatusState.Degraded, root.State);
-        Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, root.Reason.Code);
-    }
-
     private static ActionFamilyLeaseSet Claim(
         ActionFamilyOwnershipRegistry registry,
         FeatureStatusKey key,

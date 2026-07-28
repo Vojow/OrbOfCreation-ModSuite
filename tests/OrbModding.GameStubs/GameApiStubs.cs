@@ -479,6 +479,7 @@ public class UpgradeSO : IdScriptableObject
 public class StructureSO : UpgradeableObject
 {
     public static List<StructureSO> All = new List<StructureSO>();
+    public StructureTypeSO structureType = new StructureTypeSO();
 
     /// <summary>The standing effects the structure applies once built.</summary>
     public List<PersistentEffectDeprecated.Property> structureProperties =
@@ -1221,7 +1222,7 @@ public sealed class SpellListVariable : AbstractListVariable<Spell>, IEnumerable
 public sealed class EquipmentSO : IdScriptableObject
 {
     public static List<EquipmentSO> All = new List<EquipmentSO>();
-    private readonly ExperienceElement experienceContainer = new ExperienceElement();
+    private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
     private string stableUuid = Guid.NewGuid().ToString();
     public new string uuid
     {
@@ -1241,7 +1242,10 @@ public sealed class EquipmentSO : IdScriptableObject
     public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
-    public ExperienceElement GetExperienceElement() => experienceContainer;
+    public ExperienceContainer GetExperienceElement() => experienceContainer;
+    public void IncrementActive(double deltaTime)
+    {
+    }
     public void SetMasteryState(int level, BigDouble experience, BigDouble experiencePerLevel)
     {
         masteryLevel = level;
@@ -1259,7 +1263,7 @@ public sealed class EquipmentSO : IdScriptableObject
     private BigDouble baseXpRate;
 }
 
-public sealed class ExperienceElement
+public sealed class ExperienceContainer
 {
     private BigDouble experience;
     private int currentLevel;
@@ -1298,9 +1302,9 @@ public sealed class ExperienceElement
 
     public int GetLevel() => currentLevel;
 
-    public ExperienceElement Clone()
+    public ExperienceContainer Clone()
     {
-        var clone = new ExperienceElement();
+        var clone = new ExperienceContainer();
         clone.SetState(currentLevel, experience, experiencePerLevel);
         return clone;
     }

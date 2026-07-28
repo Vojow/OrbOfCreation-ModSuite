@@ -49,9 +49,12 @@ internal sealed class SuiteConfiguration
 
     private static SuiteConfiguration BindCurrent(ConfigFile file)
     {
+        var automata = BepInExAutomataConfiguration.BindCurrent(file);
+        var mentor = MentorConfig.BindCurrent(file);
+        automata.AttachMentor(mentor);
         var configuration = new SuiteConfiguration(
-            BepInExAutomataConfiguration.BindCurrent(file),
-            MentorConfig.BindCurrent(file),
+            automata,
+            mentor,
             ModConfigSettings.BindCurrent(file));
         file.Bind(
             SuiteConfigurationSchema.DifferentialVerificationShortcut.Section,

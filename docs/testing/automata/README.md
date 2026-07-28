@@ -33,7 +33,7 @@ For an isolated feature change:
    UUID/type assumption, or mutation postcondition changed.
 6. Complete proportional Automata V3/V4 UAT for packaged runtime behavior.
 
-Changes to the shared coordinator, lifecycle generation, queue capacity,
+Changes to ServiceCycle scheduling, lifecycle generation, queue capacity,
 invalidation bus, or action ownership are not isolated feature changes. They
 also require [suite integration](../suite-integration.md).
 

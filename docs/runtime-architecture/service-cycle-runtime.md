@@ -96,8 +96,8 @@ Feature runtimes do not tick, dispose, or select individual observation controll
 observability-options value when attaching the host. Sharing the host attachment point does not make the
 three observation products one sink. Feature-specific profiling stage codes remain at the native adapter edge.
 
-Six services are composed today — world collection, Auto Harvest, Auto Buy, Spell Leveling,
-Auto Cast, and Auto Concept — each through an explicit typed registration, and none of them
+Seven services are composed today — world collection, Auto Harvest, Auto Buy, Spell Leveling,
+Auto Cast, Auto Concept, and Mentor — each through an explicit typed registration, and none of them
 introduces another registry abstraction, pump, or generic service locator.
 
 Orb Automata chooses one complete `SuiteRuntimeConfiguration` for every service. A single boundary reader
@@ -225,13 +225,16 @@ The dispatch policy is exactly:
 - advance rotation so registration order cannot dominate;
 - use no additional action time budget until measurement demonstrates a need.
 
-With five default-policy services, up to five native actions may be attempted in one Unity frame. A burst-capable service may explicitly raise its own fixed limit without taking another service's turn. A batch larger than that limit drains over multiple frames while the game processes previously committed work.
+With six default-policy feature services, up to six native actions may be attempted in one Unity frame. A burst-capable service may explicitly raise its own fixed limit without taking another service's turn. A batch larger than that limit drains over multiple frames while the game processes previously committed work.
 
 Every attempted action receives fresh main-thread identity resolution, current native safety and ownership admission under the cycle's pinned configuration and strategy, native validation, mutation, and postcondition evidence. Queue reservations and similar execution policies live at this native boundary. Planning information is advisory.
 
 Validation boundaries are intentionally non-overlapping. Common rotation selects an action; it does not make a gameplay decision. The feature action callback maps pinned configuration and ownership to a terminal result, then resolves one lifecycle-coherent native binding set. The native submission boundary captures current stable identities and policy facts from one pre-mutation snapshot, and only the separate post-mutation snapshot proves the exact native transition; an unchanged preflight traversal is not repeated as a second safety boundary.
 
-The Automata definition surface exposes no scheduler-admission callback: Common owns the rotation and invokes each selected action directly. While unmigrated features still run on the legacy coordinator, a ServiceCycle action may share a Unity frame with a legacy lease. That stacked frame cost is accepted and does not turn legacy fairness or budget denial into a ServiceCycle retry.
+The Automata definition surface exposes no scheduler-admission callback: Common owns the
+rotation and invokes each selected action directly. There is no legacy coordinator or
+cross-runtime lease. Local frame guards for Mods maintenance and gameplay-invalidation delivery
+do not admit feature actions and are not another scheduler.
 
 ### Terminal outcomes
 

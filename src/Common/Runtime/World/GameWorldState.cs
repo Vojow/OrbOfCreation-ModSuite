@@ -159,6 +159,9 @@ public sealed record GameWorldState
     internal PublicationTable<WorldDiscoveryTree> DiscoveryTrees { get; init; } =
         PublicationTable<WorldDiscoveryTree>.Empty;
 
+    internal PublicationTable<WorldRecipeBook> RecipeBooks { get; init; } =
+        PublicationTable<WorldRecipeBook>.Empty;
+
     internal PublicationTable<WorldPlotNode> PlotNodes { get; init; } =
         PublicationTable<WorldPlotNode>.Empty;
 
@@ -203,6 +206,13 @@ public sealed record GameWorldState
     /// </summary>
     internal PublicationTable<WorldSpellCost> SpellCosts { get; init; } =
         PublicationTable<WorldSpellCost>.Empty;
+
+    /// <summary>
+    /// Exact native mastery-XP inputs retained for this lifecycle. Consumers use the monotonic
+    /// sequence to process each observation once even when several world generations repeat it.
+    /// </summary>
+    internal PublicationTable<WorldMasteryExperience> MasteryExperience { get; init; } =
+        PublicationTable<WorldMasteryExperience>.Empty;
 
     /// <summary>The recipes in the native ConceptRecipes registry and their compatible slot types.</summary>
     internal PublicationTable<WorldConceptRecipe> ConceptRecipes { get; init; } =

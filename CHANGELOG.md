@@ -1,5 +1,13 @@
 # Changelog
 
+## Mentor on the shared engine — 2026-07-28
+
+- Move Mentor onto ServiceCycle. Exact spell, artifact, and alchemy mastery gains remain deliberate bounded patch inputs, while recipient selection, source policy, unlocks, ordinary-alchemy classification, and sharing arithmetic now run in the background from the shared world snapshot.
+- Preserve `EquippedSpells` and `HighestDiscovered`, Shared Pool and Per Recipient economies, opt-in artifact/alchemy sharing, exact mastery ceilings, native postcondition verification, recursion suppression, Alt+M, and the `M ON/OFF` dual-axis status control.
+- Retire Mentor's legacy controller, live configuration reads, catalog/reconciliation ledgers, redundant discovery/loadout/reset hooks, and every Mentor legacy native contract. Configuration schema 4 discards its obsolete operations-per-frame and CPU-budget settings.
+- Remove the now-vacuous shared performance coordinator, its weighted admission and mutation leases, coordinator evidence tool/profile, and synthetic coordinator fixtures. Mods maintenance keeps one pass per frame; gameplay invalidation keeps its local fixed drain cap.
+- Name Mentor in trace rosters and add stable dashboard labels for its input sequence, missed inputs, planned actions, and recipients without changing the trace wire format.
+
 ## Auto Concept on the shared engine — 2026-07-28
 
 - Move Auto Concept onto ServiceCycle. It now ranks recipes, balances assignments, tracks training sessions, and owns automated quantities in the background from the shared world snapshot.

@@ -12,13 +12,6 @@ The directory also contains `native-contracts.json`, the audited machine-readabl
   [Display names](#display-names).
 - `entity-types.tsv` — mapping count grouped by managed type.
 - `known-entities.tsv` — explicit supported-domain subset used to generate production identity declarations.
-- `suite-performance-profile-v1.json` — the SHA-256-bound observational policy
-  for the twelve work identities still owned by the shared coordinator that
-  serves the unmigrated features. It is an input contract for sanitized
-  start/end evidence, not captured test output or runtime configuration.
-  ServiceCycle services are measured through their independent profile product
-  and do not appear here. See
-  [suite coordinator performance evidence](../docs/testing/strategy.md#suite-coordinator-performance-evidence).
 - `source/message.txt` — preserved UTF-8 source used for the current import.
 
 The TSV format is used because it is simple to diff, search, and consume from scripts without quoting the entity names unnecessarily.

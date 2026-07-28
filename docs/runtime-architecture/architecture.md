@@ -188,8 +188,8 @@ SuiteFramePump
 World collection registers first so the world is published before the services that read it
 evaluate. That ordering is a convenience, not a guarantee: nothing enforces order between
 services, and a consumer whose first cycle beat the first collection would simply wait a
-frame. Mentor is not registered here — it remains on the older per-feature path and joins
-this list when it migrates.
+frame. Mentor is the seventh registration and uses the same ordinary-service path as the other
+feature services. This list is the complete production runtime roster.
 
 Registration:
 

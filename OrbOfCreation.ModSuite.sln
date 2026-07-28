@@ -11,8 +11,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.Tests", "tests\O
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.GameContractTests", "tests\OrbModding.GameContractTests\OrbModding.GameContractTests.csproj", "{86EF7605-08AE-45EC-833C-A7A11DC054F7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.PerformanceEvidence", "tools\OrbModding.PerformanceEvidence\OrbModding.PerformanceEvidence.csproj", "{A315C0C8-419F-41CB-9C89-E43C8D7479D0}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.ProfileTests", "tests\OrbModding.ProfileTests\OrbModding.ProfileTests.csproj", "{2F6B1C84-7A5E-4D3B-9C21-5E8A0B4D7C13}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrbModding.ServiceCycleTrace", "tools\OrbModding.ServiceCycleTrace\OrbModding.ServiceCycleTrace.csproj", "{6D2E9A17-B34C-4F58-8E70-1C9D5A2B6F04}"
@@ -75,18 +73,6 @@ Global
 		{86EF7605-08AE-45EC-833C-A7A11DC054F7}.Release|x64.Build.0 = Release|Any CPU
 		{86EF7605-08AE-45EC-833C-A7A11DC054F7}.Release|x86.ActiveCfg = Release|Any CPU
 		{86EF7605-08AE-45EC-833C-A7A11DC054F7}.Release|x86.Build.0 = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x64.Build.0 = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Debug|x86.Build.0 = Debug|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x64.ActiveCfg = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x64.Build.0 = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x86.ActiveCfg = Release|Any CPU
-		{A315C0C8-419F-41CB-9C89-E43C8D7479D0}.Release|x86.Build.0 = Release|Any CPU
 		{2F6B1C84-7A5E-4D3B-9C21-5E8A0B4D7C13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{2F6B1C84-7A5E-4D3B-9C21-5E8A0B4D7C13}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F6B1C84-7A5E-4D3B-9C21-5E8A0B4D7C13}.Debug|x64.ActiveCfg = Debug|Any CPU

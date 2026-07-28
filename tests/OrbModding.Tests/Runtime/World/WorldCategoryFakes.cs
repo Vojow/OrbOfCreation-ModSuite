@@ -47,6 +47,7 @@ internal static class WorldCategoryFakes
         ["PassiveAbilitySO"] = typeof(FakePassiveAbility),
         ["CharacterSO"] = typeof(FakeCharacter),
         ["DiscoveryTreeSO"] = typeof(FakeDiscoveryTree),
+        ["RecipeBookSO"] = typeof(FakeRecipeBook),
         ["PlotNodeSO"] = typeof(FakePlotNode),
         ["TreasurePoolSO"] = typeof(FakeTreasurePool),
         ["ValueModifierVariable"] = typeof(FakeModifierVariable),
@@ -94,6 +95,7 @@ internal static class WorldCategoryFakes
         FakePassiveAbility.All.Clear();
         FakeCharacter.All.Clear();
         FakeDiscoveryTree.All.Clear();
+        FakeRecipeBook.All.Clear();
         FakePlotNode.All.Clear();
         FakeTreasurePool.All.Clear();
         FakeModifierVariable.All.Clear();
@@ -1080,6 +1082,7 @@ internal sealed class FakeView
     public bool alwaysActive;
 
     public Guid GetGuid() => Identity;
+    public bool IsAvailable() => active || alwaysActive;
 }
 
 internal sealed class FakePlotNodeAction
@@ -1238,6 +1241,17 @@ internal sealed class FakeDiscoveryTree
     public bool hasRequiredDiscovery;
     public bool hasRemainingDiscovery;
     public bool hasCompletedAllDiscoveries;
+}
+
+internal sealed class FakeRecipeBook
+{
+    public static readonly List<FakeRecipeBook> All = new();
+
+    public Guid Identity = Guid.NewGuid();
+    public bool Available;
+
+    public Guid GetGuid() => Identity;
+    public bool IsAvailable() => Available;
 }
 
 internal sealed class FakePlotNode

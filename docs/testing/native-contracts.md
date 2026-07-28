@@ -9,7 +9,7 @@
 - member kind, name, visibility, staticness, return/value type, and ordered parameter types;
 - the owning feature and whether use is reflection or Harmony;
 - `place` — where the contract sits: `capture` (collected once into the world snapshot), `action` (read at
-  an action boundary), `patch` (Harmony), or `legacy` (debt of a service not yet on ServiceCycle);
+  an action boundary), `patch` (Harmony), or `legacy` (explicit residual debt outside those places);
 - `sourceTokens`, the literal type and member strings a selector may name, which is how the audit
   recognizes a call site;
 - source-only aliases where runtime helpers use a property name while metadata exposes its accessor.
@@ -37,7 +37,7 @@ and [queue/completion model](../reverse-engineering/auto-buy-queue-and-completio
 
 The source audit scans the supported C# trees named in `sourceAudit.roots` for reflection and Harmony use. Every literal native selector it finds must be declared by *some* contract; the check is on the native shape, not on which file names it, so moving a file cannot break an audit of the game's surface. `sourceAudit.exemptions` carries exact-path exemptions with a non-empty reason: generic BepInEx validation, Steamworks compatibility, and tolerant UI-cloning/navigation reflection are exempted because treating those implementation details as exact game-progression contracts would create brittle false positives.
 
-A separate check keeps `place` honest: every contract is `capture`, `action`, or `patch` unless its id is on the shrinking `UnmigratedServiceContracts` allowlist, which is the only way to declare `legacy`. This is what makes "capture once, then decide" measurable rather than asserted.
+A separate check keeps `place` honest: every contract is `capture`, `action`, or `patch` unless its id is on the shrinking `UnmigratedServiceContracts` allowlist, which is the only way to declare `legacy`. All service-runtime debt is gone; the lone residual entry is a read-only UI icon lookup. This is what makes "capture once, then decide" measurable rather than asserted.
 
 CI runs the game-contract test project without game references. Installed metadata validation is skipped there, but manifest structure, `place`, and source coverage remain mandatory.
 

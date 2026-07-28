@@ -169,9 +169,11 @@ internal static class WorldSamples
         bool insufficientReqPenaltyActive = false,
         int bufferDevelopedQuantity = 0,
         Guid costPerQuantityId = default,
-        bool disabled = false) =>
+        bool disabled = false,
+        Guid structureTypeId = default) =>
         new(
             structureId,
+            structureTypeId,
             new BigDouble(level),
             new BigDouble(queuedLevels),
             unlocked,

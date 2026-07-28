@@ -6,6 +6,7 @@ namespace OrbMentor;
 
 internal enum MentorOperationMode { Disabled, Active }
 internal enum MentorSpellSourcePolicy { EquippedSpells, HighestDiscovered }
+public enum MentorEconomyMode { SharedPool, PerRecipient }
 
 internal sealed class MentorConfig
 {
@@ -30,15 +31,14 @@ internal sealed class MentorConfig
         ConfigEntry<double> sharePercent,
         ConfigEntry<bool> artifactsEnabled, ConfigEntry<double> artifactSharePercent,
         ConfigEntry<bool> alchemyEnabled, ConfigEntry<double> alchemySharePercent,
-        ConfigEntry<int> operationsPerFrame, ConfigEntry<float> cpuBudgetMilliseconds,
         ConfigEntry<bool> detailedLogging, ConfigEntry<bool>? developmentProbe)
     {
         Enabled = enabled; Mode = mode; ToggleShortcut = shortcut; EmergencyDisable = emergencyDisable;
-        EconomyMode = economyMode; SharePercent = sharePercent; OperationsPerFrame = operationsPerFrame;
+        EconomyMode = economyMode; SharePercent = sharePercent;
         SpellSourcePolicy = spellSourcePolicy;
         ArtifactsEnabled = artifactsEnabled; ArtifactSharePercent = artifactSharePercent;
         AlchemyEnabled = alchemyEnabled; AlchemySharePercent = alchemySharePercent;
-        CpuBudgetMilliseconds = cpuBudgetMilliseconds; DetailedLogging = detailedLogging; DevelopmentProbe = developmentProbe;
+        DetailedLogging = detailedLogging; DevelopmentProbe = developmentProbe;
     }
 
     public ConfigEntry<bool> Enabled { get; }
@@ -52,8 +52,6 @@ internal sealed class MentorConfig
     public ConfigEntry<double> ArtifactSharePercent { get; }
     public ConfigEntry<bool> AlchemyEnabled { get; }
     public ConfigEntry<double> AlchemySharePercent { get; }
-    public ConfigEntry<int> OperationsPerFrame { get; }
-    public ConfigEntry<float> CpuBudgetMilliseconds { get; }
     public ConfigEntry<bool> DetailedLogging { get; }
     public ConfigEntry<bool>? DevelopmentProbe { get; }
     public bool DevelopmentProbeEnabled => DevelopmentProbe?.Value == true;
@@ -85,10 +83,6 @@ internal sealed class MentorConfig
         Bind(file, "Artifacts", "SharePercent", 10.0, "Artifact mastery XP percentage, clamped to 0-100.", 10, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Artifacts", displayName: "Artifact share percent", dependencies: ActiveArtifactDependencies),
         Bind(file, "Alchemy", "Enabled", false, "Share alchemy mastery XP with lower-mastery discovered recipes.", 20, 0, displaySection: "Alchemy", displayName: "Alchemy sharing", dependencies: ActiveDependencies),
         Bind(file, "Alchemy", "SharePercent", 10.0, "Alchemy mastery XP percentage, clamped to 0-100.", 20, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Alchemy", displayName: "Alchemy share percent", dependencies: ActiveAlchemyDependencies),
-        Bind(file, "Performance", "OperationsPerFrame", 2, "Maximum successful native recipient grants per frame. Capture qualification and plan expansion use a separate bounded work limit and the same CPU budget.", 30, 30, new AcceptableValueRange<int>(1, 8), displaySection: "Advanced", displayName: "Operations per frame", dependencies: ActiveDependencies),
-        // Shared with Automata: the suite binds one Performance/CpuBudgetMilliseconds, and the
-        // first binder's float type, default and range are what this entry already is.
-        Bind(file, "Performance", "CpuBudgetMilliseconds", 1.0f, "Soft unscaled CPU-time budget per frame, capped at 1 ms.", 30, 40, new AcceptableValueRange<float>(0.1f, 1.0f), displaySection: "Advanced", displayName: "CPU budget (ms)", dependencies: ActiveDependencies),
         Bind(file, "Diagnostics", "DetailedLogging", false, "Log mentor events, batches, recipients, and amounts.", 30, 50, displaySection: "Advanced", displayName: "Detailed logging"),
         BindDevelopmentProbe(file));
 

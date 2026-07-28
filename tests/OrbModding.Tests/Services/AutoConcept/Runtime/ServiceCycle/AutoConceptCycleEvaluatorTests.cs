@@ -154,7 +154,7 @@ public sealed class AutoConceptCycleEvaluatorTests
         double requiredXp = 100,
         int maximum = 4) =>
         new(
-            id, true, 0, 0, 0, new BigDouble(masteryXp), masteryLevel, default,
+            id, Core, true, 0, 0, 0, new BigDouble(masteryXp), masteryLevel, default,
             false, false, false, 0, false,
             default, default, default, default, default, default, default, default,
             default, default, default, default, default, new BigDouble(maximum), default,

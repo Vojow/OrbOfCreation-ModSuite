@@ -30,6 +30,7 @@ internal static class AutomataServiceCycleTraceRoster
     private const string SpellLevelId = "orbautomata.spell-level";
     private const string AutoCastId = "orbautomata.auto-cast";
     private const string AutoConceptId = "orbautomata.auto-concept";
+    private const string MentorId = "orbmentor.mastery-sharing";
 
     /// <summary>
     /// The roster for a registry whose registrations are complete. Trace identity is the registration
@@ -63,6 +64,7 @@ internal static class AutomataServiceCycleTraceRoster
         SpellLevelId => "Spell Leveling",
         AutoCastId => "Auto Cast",
         AutoConceptId => "Auto Concept",
+        MentorId => "Mentor",
         _ => string.Empty,
     };
 }

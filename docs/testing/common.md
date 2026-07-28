@@ -11,19 +11,18 @@ unit test for the changed type.
 | Common contract | Primary tests | Required consumers |
 |---|---|---|
 | Lifecycle generation/readiness | [GameLifecycleMonitorTests.cs](../../tests/OrbModding.Tests/GameLifecycleMonitorTests.cs) | Automata, Mentor, Mod Config |
-| Gameplay invalidation bus | [GameplayInvalidationBusTests.cs](../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs) | Automata, Mentor, Mod Config bridges |
-| Shared performance coordinator | [PerformanceFoundationTests.cs](../../tests/OrbModding.Tests/PerformanceFoundationTests.cs), [SuitePerformanceEvidenceTests.cs](../../tests/OrbModding.Tests/SuitePerformanceEvidenceTests.cs) | Automata and Mentor coordinators, Mod Config recovery |
+| Local frame-bounded delivery | [GameplayInvalidationBusTests.cs](../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs), [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) | gameplay invalidation and Mods maintenance |
 | Action-family ownership | [ActionFamilyOwnershipTests.cs](../../tests/OrbModding.Tests/ActionFamilyOwnershipTests.cs), [ActionFamilyIntegrationTests.cs](../../tests/OrbModding.Tests/ActionFamilyIntegrationTests.cs) | all native mutation features |
 | Native mutation verification | [NativeMutationVerifierTests.cs](../../tests/OrbModding.Tests/NativeMutationVerifierTests.cs) | Auto Buy, Auto Cast, Auto Concept, spell leveling, Mentor |
 | Queue-capacity arithmetic | [QueueCapacitySnapshotTests.cs](../../tests/OrbModding.Tests/QueueCapacitySnapshotTests.cs) | Auto Buy |
-| Typed registry resolution | [TypedRegistryResolverTests.cs](../../tests/OrbModding.Tests/TypedRegistryResolverTests.cs) | Automata and Mentor classifiers/catalogs |
-| Structured decisions/status | [AutomationDecisionTests.cs](../../tests/OrbModding.Tests/AutomationDecisionTests.cs), [FeatureStatusTests.cs](../../tests/OrbModding.Tests/FeatureStatusTests.cs) | Automata and Mod Config projections |
-| Failure circuits | [AutomationCircuitBreakerTests.cs](../../tests/OrbModding.Tests/AutomationCircuitBreakerTests.cs) | Automata and Mentor adapters |
+| Typed registry resolution | [TypedRegistryResolverTests.cs](../../tests/OrbModding.Tests/TypedRegistryResolverTests.cs) | native feature adapters |
+| Structured decisions/status | [AutomationDecisionTests.cs](../../tests/OrbModding.Tests/AutomationDecisionTests.cs), [FeatureStatusTests.cs](../../tests/OrbModding.Tests/FeatureStatusTests.cs) | Automata, Mentor, and Mod Config projections |
+| Failure circuits | [AutomationCircuitBreakerTests.cs](../../tests/OrbModding.Tests/AutomationCircuitBreakerTests.cs) | native feature adapters |
 | Audited-build mutation gate | [AssemblyAuditGateTests.cs](../../tests/OrbModding.Tests/AssemblyAuditGateTests.cs) | every native mutation in the suite |
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
-| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | Auto Harvest production registration and frame pump |
-| ServiceCycle semantic trace | [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing), [Runtime/ServiceCycle/Observation](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation) | Auto Harvest trace capture and offline verification |
+| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | all seven production registrations and the frame pump |
+| ServiceCycle semantic trace | [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing), [Runtime/ServiceCycle/Observation](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation) | all services, trace capture, and offline verification |
 | Trace segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle observation products and future service capture adapters |
 | Runtime architecture boundaries | [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs), [ServiceCycleArchitectureTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Registration/ServiceCycleArchitectureTests.cs) | Common and every future ServiceCycle service |
 
@@ -38,7 +37,7 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true 
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
 ```
 
-Run `PerformanceAll` for coordinator, invalidation, caching, registry, queue,
+Run `PerformanceAll` for invalidation, caching, registry, queue,
 decision-publication, or failure-circuit hot-path changes. Run installed
 contracts when Common owns or normalizes a native/reflected fact.
 
@@ -47,8 +46,8 @@ contracts when Common owns or normalizes a native/reflected fact.
 - Lifecycle observations are main-thread, generation-stamped, and idempotent
   where equivalent callbacks overlap.
 - Bounded queues coalesce conservatively rather than dropping safety work.
-- Budget deferral preserves work and fairness; disable/dispose retains correct
-  final evidence.
+- Local bounded delivery resumes its remaining work on later frames;
+  disable/dispose retains correct final state.
 - Identity is stable UUID plus exact expected native type.
 - Unknown, contradictory, or stale native facts fail closed.
 - Mutation verification never turns an exception, no-op, or partial result into
@@ -68,5 +67,4 @@ evidence.
 - Categorize Common contracts into stable `CommonDecision`,
   `CommonReliability`, and `CommonPerformance` lanes.
 - Enforce reviewed branch floors for core state machines and failure paths.
-- Split the largest shared performance fixtures by coordinator, evidence, and
-  admission responsibility.
+- Keep local frame guards distinct from ServiceCycle scheduling.

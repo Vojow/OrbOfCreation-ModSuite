@@ -53,7 +53,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
 | Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
 | Orb Modding Common | [Common](common.md) | select the changed Common contract |
-| Cross-mod scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~CombinedSuite|FullyQualifiedName~ActionFamilyIntegration` |
+| Cross-feature scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~ServiceCycle|FullyQualifiedName~ActionFamilyIntegration` |
 
 The fully qualified name filters are navigation aids, not complete merge gates.
 After the focused scope passes, use the guide’s required portable, contract, and

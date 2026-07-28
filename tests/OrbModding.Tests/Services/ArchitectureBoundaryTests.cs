@@ -20,7 +20,7 @@ namespace OrbModding.Tests.Services;
 /// </summary>
 public sealed class ArchitectureBoundaryTests
 {
-    private static readonly Assembly CommonAssembly = typeof(SuitePerformanceCoordinator).Assembly;
+    private static readonly Assembly CommonAssembly = typeof(GameplayInvalidationBus).Assembly;
     private static readonly Assembly AutomataAssembly = typeof(OrbAutomata.BepInExAutomataConfiguration).Assembly;
 
     private static readonly string[] SupersededRuntimeNamespaces =
@@ -166,51 +166,19 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
-    public void AutoHarvestServiceCycleDoesNotReferenceTheLegacyPerformanceCoordinator()
+    public void LegacyPerformanceCoordinatorSubstrateIsAbsent()
     {
         var forbidden = new[]
         {
-            typeof(SuitePerformanceCoordinator),
-            typeof(SuiteWorkRegistration),
-            typeof(SuiteWorkLease),
-            typeof(SuiteWorkAdmission),
-            typeof(SuitePerformanceWorkIdentity),
+            "OrbModding.Common.SuitePerformanceCoordinator",
+            "OrbModding.Common.SuiteWorkRegistration",
+            "OrbModding.Common.SuiteWorkLease",
+            "OrbModding.Common.SuiteWorkAdmission",
+            "OrbModding.Common.SuitePerformanceWorkIdentity",
+            "OrbModding.Common.SuitePerformanceEvidence",
         };
-        var offenders = AutomataAssembly.GetTypes()
-            .Where(type => type.Name.IndexOf("AutoHarvest", StringComparison.Ordinal) >= 0)
-            .SelectMany(type => ReferencedMemberTypes(type)
-                .Where(reference => ContainsAny(reference, forbidden))
-                .Select(reference => $"{type.FullName} -> {reference.FullName}"))
-            .Distinct()
-            .ToArray();
 
-        Assert.Empty(offenders);
+        Assert.All(forbidden, name => Assert.Null(CommonAssembly.GetType(name, throwOnError: false)));
     }
 
-    private static Type[] ReferencedMemberTypes(Type type) =>
-        type.GetFields(BindingFlags.Instance | BindingFlags.Static |
-                       BindingFlags.Public | BindingFlags.NonPublic)
-            .Select(field => field.FieldType)
-            .Concat(type.GetConstructors(BindingFlags.Instance |
-                                         BindingFlags.Public | BindingFlags.NonPublic)
-                .SelectMany(constructor => constructor.GetParameters())
-                .Select(parameter => parameter.ParameterType))
-            .Concat(type.GetMethods(BindingFlags.Instance | BindingFlags.Static |
-                                    BindingFlags.Public | BindingFlags.NonPublic |
-                                    BindingFlags.DeclaredOnly)
-                .SelectMany(method => method.GetParameters()
-                    .Select(parameter => parameter.ParameterType)
-                    .Append(method.ReturnType)))
-            .ToArray();
-
-    private static bool ContainsAny(Type candidate, Type[] forbidden)
-    {
-        if (forbidden.Contains(candidate) ||
-            candidate.IsGenericType && forbidden.Contains(candidate.GetGenericTypeDefinition()))
-            return true;
-        if (candidate.HasElementType)
-            return ContainsAny(candidate.GetElementType()!, forbidden);
-        return candidate.IsGenericType &&
-               candidate.GetGenericArguments().Any(argument => ContainsAny(argument, forbidden));
-    }
 }

@@ -1,6 +1,6 @@
 # Runtime architecture dossier
 
-> **Lifecycle: Accepted production foundation.** ServiceCycle is the production Auto Harvest runtime and the intended host for migrated automation services.
+> **Lifecycle: Accepted production foundation.** ServiceCycle is the production runtime for every automation feature in the suite.
 
 [Back to documentation](../README.md) · [Active plans](../plans/README.md)
 
@@ -33,7 +33,8 @@ Read the maintained contracts in this order:
 - Returned actions are advisory until the main thread revalidates current native facts.
 - Lifecycle replacement retires stale workers without blocking the Unity thread.
 - The game remains authoritative for availability, cost, quantity, queue room, completion, and mutation results.
-- Auto Harvest and Auto Buy are both production ServiceCycle services; world collection is the third, and the only one that reads for everyone rather than for itself.
+- World collection is the only source service. Auto Harvest, Auto Buy, Spell
+  Leveling, Auto Cast, Auto Concept, and Mentor are ordinary services.
 
 There is one production path, no runtime selector, and no fallback implementation.
 
@@ -61,7 +62,6 @@ Passing one boundary does not imply another. Current commands and runtime proced
 
 - **A strategist.** No service publishes a `SuiteStrategy` bulletin; the publisher, the stances, and
   the neutral default exist, and every consumer already reads a neutral one.
-- **The remaining migration.** Mentor still runs on the older per-feature path.
 
 The [project roadmap](../plans/roadmap.md) sequences these; open decisions live in
 [active plans](../plans/README.md).

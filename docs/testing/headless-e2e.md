@@ -13,8 +13,8 @@ assembly deliberately identifies itself as `Assembly-CSharp`, so production
 assembly-qualified lookups are exercised rather than bypassed. These fixtures
 currently cover:
 
-- Mentor spell, artifact, and alchemy registry reconciliation, capture, native
-  XP grants, recursion prevention, domain isolation, and lifecycle cancellation;
+- Mentor spell, artifact, and alchemy world-based evaluation, exact-XP input,
+  native grants, recursion prevention, and lifecycle cancellation;
 - Auto Buy ServiceCycle frame projection, worker policy, final native revalidation,
   queue-room enforcement, and verified Structure/Upgrade mutations;
 - automatic spell leveling before and after the native level-all upgrade, its

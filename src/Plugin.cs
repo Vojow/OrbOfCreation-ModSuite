@@ -15,6 +15,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbModding.Common.Runtime.World;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile.Control;
 #endif
@@ -48,6 +49,10 @@ public sealed class Plugin : BaseUnityPlugin
     internal static readonly Type[] HarmonyPatchTypes =
     {
         typeof(SpellFirePatch),
+        typeof(MentorSpellMasteryPatch),
+        typeof(MentorAlchemyMasteryPatch),
+        typeof(MentorArtifactTickPatch),
+        typeof(MentorArtifactExperiencePatch),
     };
 
     /// <summary>
@@ -81,6 +86,7 @@ public sealed class Plugin : BaseUnityPlugin
     // Held by the plugin rather than by the feature because the Harmony patch that feeds it outlives
     // any one registration: the hook is installed once and the service is registered per lifecycle.
     private readonly AutoCastManualPauseState _autoCastManualPause = new();
+    private readonly MentorMasteryEventJournal _mentorMasteryJournal = new();
     private AutomataActionFamilyOwnership? _automataActionFamilyOwnership;
     private AutomataServiceCycleActivation? _serviceCycleActivation;
     private AutoCastToggleControl? _autoCastToggleControl;
@@ -108,12 +114,9 @@ public sealed class Plugin : BaseUnityPlugin
     private float _emergencyStopUiRetrySeconds;
 
     private MentorConfig? _mentorConfig;
-    private MentorRuntime? _mentorRuntime;
     private MentorActionFamilyOwnership? _mentorActionFamilyOwnership;
-    private MentorGameplayInvalidationBridge? _invalidationBridge;
     private MentorToggleButton? _mentorButton;
     private float _mentorUiRetrySeconds;
-    private bool _mentorWasActive;
 
     private ModConfigSettings? _modConfigSettings;
     private float _mainSceneElapsed;
@@ -127,7 +130,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ConfigCatalogSnapshot? _catalog;
     private ConfigCatalogGeneration _catalogGeneration;
     private ModConfigNavigationBookmark _catalogNavigation = ModConfigNavigationBookmark.Runtime;
-    private ModConfigCoordinatorWork? _uiWork;
+    private ModConfigFrameWork? _uiWork;
     private ModConfigRuntimeSources? _runtimeSources;
     private Action? _runUiMaintenance;
 
@@ -204,10 +207,12 @@ public sealed class Plugin : BaseUnityPlugin
         if (_runtimeComposed) return;
         _runtimeCompositionAttempted = true;
         _harmony = new Harmony(PluginIds.SuiteGuid);
+        MentorMasteryPatchBridge.Install(
+            _mentorMasteryJournal,
+            () => GameLifecycleMonitor.Shared.Current.Generation);
         foreach (var patchType in HarmonyPatchTypes)
             _harmony.CreateClassProcessor(patchType).Patch();
         ComposeAutomata();
-        ComposeMentor();
         _runtimeComposed = true;
     }
 
@@ -217,6 +222,7 @@ public sealed class Plugin : BaseUnityPlugin
         var featureStatuses = _featureStatuses!;
 
         _automataActionFamilyOwnership = new AutomataActionFamilyOwnership();
+        _mentorActionFamilyOwnership = new MentorActionFamilyOwnership();
         Log.LogAutomataWarning(
             "Action-family ownership is best-effort: exact known conflicts and cooperative suite owners are isolated, but unknown plugins that invoke native actions without registering cannot be proven absent and are not disabled.");
         _automataActionFamilyOwnership.RefreshLoadedPluginInventory(
@@ -274,7 +280,9 @@ public sealed class Plugin : BaseUnityPlugin
                                     {
                                         if (report.IsComplete) Log.LogInfo(report.Describe());
                                         else Log.LogWarning(report.Describe());
-                                    }),
+                                    },
+                                    createCollector: () =>
+                                        new GameWorldCollector(_mentorMasteryJournal)),
                                 new AutoHarvestServiceCycleFeature(
                                     new AutoHarvestFeatureDependencies(
                                         autoHarvestRegistryResolver,
@@ -323,6 +331,18 @@ public sealed class Plugin : BaseUnityPlugin
                                         readAutoHarvestLifecycleEpoch,
                                         ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsConcept == true,
                                         featureStatus: featureStatuses.AutoConcept)),
+                                new MentorServiceCycleFeature(
+                                    new MentorFeatureDependencies(
+                                        readAutoHarvestLifecycleEpoch,
+                                        captureMutationPermit: domain =>
+                                            _mentorActionFamilyOwnership?.TryCaptureMutationPermit(
+                                                domain switch
+                                                {
+                                                    MasteryExperienceDomain.Spell => MentorDomain.Spells,
+                                                    MasteryExperienceDomain.Artifact => MentorDomain.Artifacts,
+                                                    _ => MentorDomain.Alchemy,
+                                                }) == true,
+                                        featureStatus: featureStatuses.Mentor)),
                             },
                             Log);
                     },
@@ -360,59 +380,6 @@ public sealed class Plugin : BaseUnityPlugin
     }
 
     /// <summary>
-    /// Mentor installs its hooks imperatively, and the helpers report every failure into the runtime
-    /// they guard, so its patching cannot be hoisted out of its composition: the ownership record,
-    /// then the runtime, then the one load-bearing mastery hook, then everything else. A missing
-    /// mastery hook skips the rest of Mentor and nothing else — what is left behind that early
-    /// return is Mentor's own, the spell-loadout hooks included. The suite-wide hooks that used to
-    /// sit here, native completion and lifecycle observation alike, are installed with Automata.
-    /// </summary>
-    private void ComposeMentor()
-    {
-        var config = _mentorConfig!;
-        _mentorActionFamilyOwnership = new MentorActionFamilyOwnership();
-        Logger.LogWarning(
-            "Mentor action-family ownership is best-effort; unknown unregistered automation cannot be proven absent and is not disabled.");
-        _mentorRuntime = new MentorRuntime(
-            config,
-            Logger,
-            SuitePerformanceCoordinator.Shared,
-            () => Time.frameCount,
-            featureStatusRegistry: FeatureStatusRegistry.Shared,
-            ownsActionFamily: domain => _mentorActionFamilyOwnership?.IsHeld(domain) == true,
-            captureActionFamilyMutation: domain =>
-                _mentorActionFamilyOwnership?.TryCaptureMutationPermit(domain) == true);
-        _invalidationBridge = new MentorGameplayInvalidationBridge(GameplayInvalidationBus.Shared);
-        _mentorWasActive = config.Active;
-        var target = AccessTools.Method("SpellRecipeSO:GainMasteryExp");
-        if (target is null) { _mentorRuntime.BlockPermanent("native GainMasteryExp hook unavailable"); return; }
-        try { _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterMasteryGain))); }
-        catch (Exception ex)
-        {
-            _mentorRuntime.BlockPermanent($"native GainMasteryExp hook failed: {ex.GetBaseException().Message}");
-            return;
-        }
-        PatchDomainRequired("AlchemyRecipeSO:GainMasteryXp", nameof(AfterAlchemyMasteryGain), MentorDomain.Alchemy, postfix: true);
-        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(BeforeArtifactTick), MentorDomain.Artifacts, postfix: false);
-        PatchDomainRequired("EquipmentSO:IncrementActive", nameof(FinalizeArtifactTick), MentorDomain.Artifacts, postfix: false, finalizer: true);
-        PatchDomainRequired("ExperienceContainer:GainExperience", nameof(BeforeContainerGain), MentorDomain.Artifacts, postfix: false);
-        PatchRequired("SpellRecipeSO:Discover", nameof(AfterSpellProgression));
-        PatchRequired("SpellRecipeSO:PurchaseLevel", nameof(AfterSpellProgression));
-        PatchDomainRequired("AlchemyRecipeSO:Discover", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
-        PatchDomainRequired("AlchemyRecipeSO:ApplyMastery", nameof(AfterAlchemyProgression), MentorDomain.Alchemy, postfix: true);
-        PatchDomainRequired("EquipmentSO:Discover", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
-        PatchDomainRequired("EquipmentSO:Create", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
-        PatchDomainRequired("EquipmentSO:GainMasteryLevels", nameof(AfterArtifactProgression), MentorDomain.Artifacts, postfix: true);
-        PatchRequired("SpellRecipeSO:ResetData", nameof(AfterNativeProgressionReset));
-        PatchDomainRequired("AlchemyRecipeSO:ResetData", nameof(AfterAlchemyNativeReset), MentorDomain.Alchemy, postfix: true);
-        PatchDomainRequired("EquipmentSO:ResetData", nameof(AfterArtifactNativeReset), MentorDomain.Artifacts, postfix: true);
-        PatchOptional("SpellManager:AddSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
-        PatchOptional("SpellManager:RemoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
-        PatchOptional("SpellManager:MoveSpell", nameof(AfterSpellLoadoutChanged), postfix: true);
-        Logger.LogInfo($"Orb Mentor loaded. Mode={config.Mode.Value}, Sources={config.SpellSourcePolicy.Value}, Economy={config.EconomyMode.Value}, Share={config.SharePercent.Value:0.##}%.");
-    }
-
-    /// <summary>
     /// Composed last so the catalog the browser later discovers already sees the automation and
     /// mastery feature statuses published above it.
     /// </summary>
@@ -434,9 +401,7 @@ public sealed class Plugin : BaseUnityPlugin
 #endif
             );
         _runUiMaintenance = RunUiMaintenance;
-        _uiWork = new ModConfigCoordinatorWork(
-            SuitePerformanceCoordinator.Shared,
-            () => Time.frameCount);
+        _uiWork = new ModConfigFrameWork(() => Time.frameCount);
         ResetSceneState(SceneManager.GetActiveScene());
     }
 
@@ -463,9 +428,7 @@ public sealed class Plugin : BaseUnityPlugin
             }
         }
 
-        // Not the only pump. Mentor's bridge pumps the same shared bus again from LateUpdate, so a
-        // frame with Mod Config enabled and Mentor active hands out the per-frame operation budget
-        // twice. Unifying the two needs Mentor off its own tick, so it waits for that migration.
+        // The shared bus owns one process-wide operation cap and sequence cutoff per Unity frame.
         if (_modConfigSettings is not null)
         {
             _invalidationBus?.Pump(
@@ -566,23 +529,25 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void UpdateMentor()
     {
-        if (_mentorConfig is null || _mentorRuntime is null) return;
+        if (_mentorConfig is null) return;
         _mentorActionFamilyOwnership?.Refresh(_mentorConfig, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _mentorConfig.ToggleShortcut.Value.IsDown())
         {
             _mentorConfig.Mode.Value = _mentorConfig.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-            _mentorRuntime.Cancel(MentorDropReason.Disabled);
-            _mentorRuntime.RefreshFeatureStatus();
             Logger.LogInfo($"Orb Mentor is now {_mentorConfig.Mode.Value}.");
         }
-        var active = _mentorConfig.Active;
-        if (_mentorWasActive && !active) _mentorRuntime.Cancel(MentorDropReason.Disabled);
-        _mentorWasActive = active;
         if (SceneManager.GetActiveScene().name != "Main") { _mentorButton?.Dispose(); _mentorButton = null; return; }
         if (_mentorButton is not null && !_mentorButton.IsAlive) { _mentorButton.Dispose(); _mentorButton = null; }
         if (_mentorButton is not null) { _mentorButton.Render(); return; }
         _mentorUiRetrySeconds -= Time.unscaledDeltaTime;
-        if (_mentorUiRetrySeconds <= 0) { _mentorUiRetrySeconds = UiRetryIntervalSeconds; MentorToggleButton.TryCreate(_mentorConfig, _mentorRuntime, out _mentorButton); }
+        if (_mentorUiRetrySeconds <= 0)
+        {
+            _mentorUiRetrySeconds = UiRetryIntervalSeconds;
+            MentorToggleButton.TryCreate(
+                _mentorConfig,
+                () => _featureStatuses!.Mentor.Current,
+                out _mentorButton);
+        }
     }
 
     private void UpdateModConfig()
@@ -640,16 +605,12 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void LateUpdate()
     {
-        if (_mentorConfig?.Active == true && _mentorRuntime?.IsBlocked != true)
-            _invalidationBridge?.Pump(Time.frameCount);
-        if (IsGameplayScene()) _mentorRuntime?.LateTick();
     }
 
     private void OnDisable()
     {
         CancelPreparedAutomationForOwnershipRelease();
         _automataActionFamilyOwnership?.ReleaseLifecycleClaims();
-        _mentorRuntime?.Cancel(MentorDropReason.Disabled);
         _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
     }
 
@@ -667,11 +628,8 @@ public sealed class Plugin : BaseUnityPlugin
 
         _mentorButton?.Dispose();
         _mentorButton = null;
-        _mentorRuntime?.Dispose();
-        _mentorRuntime = null;
         _mentorActionFamilyOwnership?.Dispose();
         _mentorActionFamilyOwnership = null;
-        _invalidationBridge = null;
 
         _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
@@ -734,8 +692,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (_automataConfig is not null)
             _featureStatuses?.ObserveConfiguration(_automataConfig.Current);
         if (stopped)
-            _mentorRuntime?.Cancel(MentorDropReason.Disabled);
-        _mentorRuntime?.RefreshFeatureStatus();
+            _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
         _uiMaintenanceDue = true;
         Logger.LogWarning(stopped
             ? "Suite emergency stop engaged; prepared automation work was discarded."
@@ -775,7 +732,7 @@ public sealed class Plugin : BaseUnityPlugin
         _automataActionFamilyOwnership?.ReleaseLifecycleClaims();
         if (_automataConfig is not null)
             _featureStatuses?.ObserveLifecycleNotReady(_automataConfig.Current, _lifecycleGeneration);
-        _mentorRuntime?.ResetLifecycle();
+        MentorMasteryPatchBridge.ResetLifecycle(_lifecycleGeneration);
         _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
@@ -986,23 +943,6 @@ public sealed class Plugin : BaseUnityPlugin
             .Count();
     }
 
-    private static void AfterMasteryGain(SpellRecipeSO __instance, BigDouble exp)
-    {
-        if (IsGameplayScene()) Instance?._mentorRuntime?.Observe(__instance, exp);
-    }
-    private static void AfterAlchemyMasteryGain(object __instance, BigDouble exp)
-    {
-        if (IsGameplayScene()) Instance?._mentorRuntime?.ObserveAlchemy(__instance, exp);
-    }
-    private static void BeforeArtifactTick(object __instance)
-    {
-        if (IsGameplayScene()) Instance?._mentorRuntime?.BeginArtifactTick(__instance);
-    }
-    private static Exception? FinalizeArtifactTick(Exception? __exception) { Instance?._mentorRuntime?.EndArtifactTick(__exception is null); return __exception; }
-    private static void BeforeContainerGain(object __instance, BigDouble __0)
-    {
-        if (IsGameplayScene()) Instance?._mentorRuntime?.ObserveExperienceContainer(__instance, __0);
-    }
     private static void BeforeSaveLoad(object __instance) =>
         ObserveLifecycle(GameLifecycleTransitionKind.SaveLoadStarted, SceneManager.GetActiveScene().name, __instance);
     private static void AfterSaveLoaded(object __instance) =>
@@ -1016,47 +956,6 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.NewGamePlusStarted, SceneManager.GetActiveScene().name, __instance);
     private static void BeforeRuntimeReset() =>
         ObserveLifecycle(GameLifecycleTransitionKind.ResetStarted, SceneManager.GetActiveScene().name);
-
-    private static void AfterSpellLoadoutChanged()
-    {
-        var plugin = Instance;
-        plugin?._mentorRuntime?.NotifyEquippedLoadoutChanged();
-        plugin?._invalidationBridge?.PublishSpellLoadout(Time.frameCount);
-    }
-    private static void AfterSpellProgression(object __instance) =>
-        PublishProgression(MentorDomain.Spells, __instance);
-    private static void AfterAlchemyProgression(object __instance) =>
-        PublishProgression(MentorDomain.Alchemy, __instance);
-    private static void AfterArtifactProgression(object __instance) =>
-        PublishProgression(MentorDomain.Artifacts, __instance);
-    private static void AfterNativeProgressionReset()
-    {
-        var plugin = Instance;
-        plugin?._mentorRuntime?.RequestLifecycleReset();
-        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Spells, Time.frameCount, null);
-    }
-    private static void AfterAlchemyNativeReset()
-    {
-        var plugin = Instance;
-        plugin?._mentorRuntime?.RequestDomainReset(MentorDomain.Alchemy);
-        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Alchemy, Time.frameCount, null);
-    }
-    private static void AfterArtifactNativeReset()
-    {
-        var plugin = Instance;
-        plugin?._mentorRuntime?.RequestDomainReset(MentorDomain.Artifacts);
-        plugin?._invalidationBridge?.PublishProgression(MentorDomain.Artifacts, Time.frameCount, null);
-    }
-
-    private static void PublishProgression(MentorDomain domain, object changedSource)
-    {
-        var plugin = Instance;
-        plugin?._mentorRuntime?.MarkRelationshipDirty(domain, changedSource);
-        var entityId = plugin?._mentorRuntime?.TryGetStableProgressionEntityId(domain, changedSource, out var stableId) == true
-            ? stableId
-            : null;
-        plugin?._invalidationBridge?.PublishProgression(domain, Time.frameCount, entityId);
-    }
 
     private static bool IsGameplayScene() => Instance is { } plugin && plugin.IsLifecycleReady();
 
@@ -1072,47 +971,6 @@ public sealed class Plugin : BaseUnityPlugin
         catch (Exception ex)
         {
             Logger.LogWarning($"Optional native hook failed: {targetName}: {ex.GetBaseException().Message}");
-        }
-    }
-
-    private void PatchRequired(string targetName, string patchName)
-    {
-        var target = AccessTools.Method(targetName);
-        if (target is null)
-        {
-            _mentorRuntime?.BlockPermanent($"required lifecycle hook unavailable: {targetName}");
-            return;
-        }
-        try { _harmony!.Patch(target, postfix: new HarmonyMethod(typeof(Plugin), patchName)); }
-        catch (Exception ex)
-        {
-            _mentorRuntime?.BlockPermanent($"required lifecycle hook failed: {targetName}: {ex.GetBaseException().Message}");
-        }
-    }
-
-    private void PatchDomainRequired(
-        string targetName,
-        string patchName,
-        MentorDomain domain,
-        bool postfix,
-        bool finalizer = false)
-    {
-        var target = AccessTools.Method(targetName);
-        if (target is null)
-        {
-            _mentorRuntime?.QuarantineDomain(domain, $"required {domain} hook unavailable: {targetName}");
-            return;
-        }
-        var patch = new HarmonyMethod(typeof(Plugin), patchName);
-        try
-        {
-            if (finalizer) _harmony!.Patch(target, finalizer: patch);
-            else if (postfix) _harmony!.Patch(target, postfix: patch);
-            else _harmony!.Patch(target, prefix: patch);
-        }
-        catch (Exception ex)
-        {
-            _mentorRuntime?.QuarantineDomain(domain, $"required {domain} hook failed: {targetName}: {ex.GetBaseException().Message}");
         }
     }
 

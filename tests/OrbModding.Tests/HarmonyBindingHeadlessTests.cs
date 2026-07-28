@@ -12,6 +12,26 @@ public sealed class HarmonyBindingHeadlessTests
     public void AutomataHarmonyTargets_ResolveExactNativeShapedMethods()
     {
         AssertTarget("OrbAutomata.SpellFirePatch", "Fire", typeof(Spell));
+        AssertTarget(
+            "OrbMentor.MentorSpellMasteryPatch",
+            "GainMasteryExp",
+            typeof(SpellRecipeSO),
+            typeof(BigDouble));
+        AssertTarget(
+            "OrbMentor.MentorAlchemyMasteryPatch",
+            "GainMasteryXp",
+            typeof(AlchemyRecipeSO),
+            typeof(BigDouble));
+        AssertTarget(
+            "OrbMentor.MentorArtifactTickPatch",
+            "IncrementActive",
+            typeof(EquipmentSO),
+            typeof(double));
+        AssertTarget(
+            "OrbMentor.MentorArtifactExperiencePatch",
+            "GainExperience",
+            typeof(ExperienceContainer),
+            typeof(BigDouble));
     }
 
     [Fact]

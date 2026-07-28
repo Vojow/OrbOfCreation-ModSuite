@@ -49,7 +49,7 @@ public sealed class AutoConceptServiceCompositionTests
         var recipes = new[]
         {
             new WorldAlchemyRecipe(
-                Recipe, true, 0, 0, 0, default, 0, default,
+                Recipe, Core, true, 0, 0, 0, default, 0, default,
                 false, false, false, 0, false,
                 default, default, default, default, default, default, default, default,
                 default, default, default, default, default, new BigDouble(2), default,

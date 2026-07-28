@@ -9,10 +9,15 @@ to state, not this file's.
 
 ## What remains
 
-1. Migrate Mentor, the remaining legacy feature, onto ServiceCycle. Retire its declared legacy native surface and any CPU-budget machinery left with no live consumer; Auto Concept's two work identities and profile rules are already gone.
-2. Compare Auto Buy and Auto Harvest traces to identify measured runtime costs, and act only on material findings.
-3. Complete combined-suite runtime and package validation, then prepare a reviewed beta release.
-4. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
+1. Compare Auto Buy, Auto Harvest, and Mentor traces to identify measured runtime costs, and act only on material findings.
+2. Complete combined-suite runtime and package validation, then prepare a reviewed beta release.
+3. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
+
+## Completed
+
+- Roadmap item 1: Mentor is an ordinary ServiceCycle service. Its legacy engine,
+  legacy native-contract surface, operations-per-frame and CPU-budget settings,
+  shared performance coordinator, and coordinator evidence product are retired.
 
 ## Later modules
 

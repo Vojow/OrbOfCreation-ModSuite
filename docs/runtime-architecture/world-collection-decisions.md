@@ -1365,3 +1365,87 @@ watchdog's evidence. The authored vector travels as the belief attached to an ad
 so a refusal records which resources the published recipe said it could affect; it is not treated as
 authority for the prospective amount. An empty vector remains distinguishable from a missing recipe
 because registry membership has its own row.
+
+## W63 — Attributes publish their primary tab as an identity edge
+
+Scholar attributes are not a new runtime shape. The game stores them in the same
+`StructureSO.All` registry and gives them the same quantity, queue, modifier, cost, and
+effect fields as Wizardry attributes. Their durable distinction is
+`StructureSO.structureType`, an ordinary `StructureTypeSO` reference.
+
+The structure row therefore publishes that primary type's UUID beside the existing
+state. It does not copy display names or introduce a Scholar-only registry, and it does
+not flatten `structureSubTypes`: the requested tab ownership is the single primary
+edge. An unset reference publishes `Guid.Empty`; a build without the field or its
+identity contract fails the category binding. This makes every Scholar attribute
+already collected by the generic registry walk identifiable without a main-thread hook
+or a consumer-owned name table.
+
+## W64 — Recipe-book unlocks publish as their own registry
+
+Discovery trees refer to a `RecipeBookListVariable`, but availability belongs to each
+`RecipeBookSO`: its prerequisites are evaluated by `IsAvailable()`, and the static
+`RecipeBookSO.All` registry is the complete identity inventory. The world therefore
+publishes one identity-keyed recipe-book row with the game's own availability answer.
+
+This keeps “the book is unlocked” distinct from “a recipe from it was discovered” and
+from a discovery tree's current offers. The capture calls no discovery mutation and
+does not infer unlocks from display state. Current offers and their one-to-many price
+vectors remain separate collection shapes rather than being collapsed into this row.
+
+## W65 — Exact mastery gains are patch inputs published with the world
+
+Mentor cannot derive earned mastery XP by subtracting two world snapshots. A native
+mastery rollover may consume saved XP, and Mentor's own grant is another writer of the
+same value. The three domain observations therefore remain deliberate patch inputs:
+spell and alchemy publish their exact native method argument, while the artifact pair
+associates the `ExperienceContainer` gain made during one successful equipped-artifact
+tick.
+
+The input is still consumed as world data. A bounded main-thread journal retains
+sequence-stamped value rows for the current lifecycle; collection copies them onto the
+frame, and worker state processes each sequence once even when later world generations
+repeat the row. The journal resets its sequence when the collected epoch changes. If a
+consumer falls more than the fixed history behind, the missing sequence is explicit
+overflow evidence rather than silently reconstructed XP.
+
+Everything surrounding the delta is an ordinary published fact. Recipe discovery,
+creation, mastery, equipped spell identity, alchemy core type and Concept membership
+already publish. `WorldView.Available` now carries the game's composed progression
+answer on W59's licence, and `WorldAlchemyRecipe.CoreTypeId` carries the exact identity
+edge the classifier previously re-read. The worker selects recipients from those facts;
+the action boundary re-resolves and revalidates the one recipient it is about to mutate.
+
+## W66 — Mentor is an ordinary service with exact-XP patch inputs
+
+Mentor consumes the world, configuration, and strategy publications through the ordinary
+service shape. Recipient qualification, source policy, economy arithmetic, ordering, and
+action construction are worker decisions. Current UUID/type identity, lifecycle coherence,
+ownership, recipient eligibility, the exclusive mastery ceiling, native execution, and the
+postcondition remain action-boundary facts.
+
+The mastery hooks from W65 are inputs, not a parallel runtime. They append value-only rows;
+world collection publishes them; one worker sequence consumes them. Discovery, creation,
+apply-mastery, reset, and loadout hooks retired because their only purpose was to invalidate
+Mentor-owned catalogs that no longer exist. This preserves the exact deltas that snapshots
+cannot derive without preserving signal patches for facts the world already publishes.
+
+The fixed ServiceCycle turn is the complete execution bound. Mentor's operations-per-frame
+and CPU-budget configuration therefore retired with its legacy controller. The Alt+M control
+remains a configuration mutation on the main thread and publishes the resulting immutable
+suite configuration like every other migrated quick control.
+
+## W67 — Local delivery bounds do not justify a shared CPU coordinator
+
+After Mentor migrated, the shared performance coordinator's only remaining clients were Mods
+UI maintenance and gameplay-invalidation delivery. Neither selects a gameplay mutation or
+competes for a feature action turn. Each already has the bound its work requires: Mods admits
+at most one maintenance pass per frame, and invalidation drains at most its fixed operation
+count before continuing next frame.
+
+Weighted admission, soft and hard elapsed-time budgets, mutation leases, starvation
+thresholds, work-identity registration, and their separate evidence profile consequently
+described contention that no longer existed. They are deleted rather than retained as a
+second scheduler. The two local guards remain because they bound their own delivery queues.
+ServiceCycle's debug profiler, full trace, decision journal, and dashboard remain the
+performance and causal evidence for feature work; their formats did not change.

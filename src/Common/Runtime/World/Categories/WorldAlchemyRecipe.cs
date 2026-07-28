@@ -7,6 +7,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
 {
     internal WorldAlchemyRecipe(
         Guid recipeId,
+        Guid coreTypeId,
         bool discovered,
         int maxLevel,
         int advancementLevel,
@@ -37,6 +38,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         BigDouble cachedRequiredXp)
     {
         RecipeId = recipeId;
+        CoreTypeId = coreTypeId;
         Discovered = discovered;
         MaxLevel = maxLevel;
         AdvancementLevel = advancementLevel;
@@ -70,6 +72,9 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
     internal Guid RecipeId { get; }
 
     public Guid EntityId => RecipeId;
+
+    /// <summary>The exact native alchemy family this recipe belongs to.</summary>
+    internal Guid CoreTypeId { get; }
 
     internal bool Discovered { get; }
 
@@ -142,6 +147,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
 internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRecipe>
 {
     private Func<object, Guid>? _id;
+    private Func<object, Guid>? _coreTypeId;
     private Func<object, bool>? _discovered;
     private Func<object, int>? _maxLevel;
     private Func<object, int>? _advancementLevel;
@@ -179,6 +185,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
     {
         var bind = new WorldMemberBinding(type, TypeName);
         _id = bind.Call<Guid>("GetGuid");
+        _coreTypeId = bind.CallReferenceGuid("GetCoreType");
         _discovered = bind.Field<bool>("discovered");
         _maxLevel = bind.Field<int>("maxLevel");
         _advancementLevel = bind.Field<int>("advancementLevel");
@@ -213,6 +220,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
     internal override WorldAlchemyRecipe Read(object entity) =>
         new(
             _id!(entity),
+            _coreTypeId!(entity),
             _discovered!(entity),
             _maxLevel!(entity),
             _advancementLevel!(entity),

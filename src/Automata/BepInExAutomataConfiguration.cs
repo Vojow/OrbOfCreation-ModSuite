@@ -4,12 +4,14 @@ using System.Threading;
 using BepInEx.Configuration;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
+using OrbMentor;
 
 namespace OrbAutomata;
 
 internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEditor
 {
     private SuiteRuntimeConfiguration _current = null!;
+    private MentorConfig? _mentor;
     private int _unpublishedChange;
     private static readonly IReadOnlyList<ModConfigDependency> AutoBuyActiveDependencies = new[]
     {
@@ -255,6 +257,14 @@ internal sealed class BepInExAutomataConfiguration : IAutomataConfigurationEdito
 
     internal void RefreshCurrent() =>
         Volatile.Write(ref _current, BepInExAutomataConfigurationReader.Read(this));
+
+    internal void AttachMentor(MentorConfig mentor)
+    {
+        _mentor = mentor ?? throw new ArgumentNullException(nameof(mentor));
+        RefreshCurrent();
+    }
+
+    internal MentorConfig? Mentor => _mentor;
 
     /// <summary>
     /// The reading to publish, if the settings have changed since this was last asked.

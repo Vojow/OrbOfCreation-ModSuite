@@ -10,6 +10,7 @@ internal readonly struct RawStructureSample : IWorldEntity
 {
     internal RawStructureSample(
         Guid structureId,
+        Guid structureTypeId,
         BigDouble level,
         BigDouble queuedLevels,
         bool unlocked,
@@ -31,6 +32,7 @@ internal readonly struct RawStructureSample : IWorldEntity
         in RawStructureModifiers modifiers)
     {
         StructureId = structureId;
+        StructureTypeId = structureTypeId;
         Level = level;
         QueuedLevels = queuedLevels;
         Unlocked = unlocked;
@@ -56,6 +58,12 @@ internal readonly struct RawStructureSample : IWorldEntity
 
     /// <summary>The identity every category-generic lookup and traversal reads.</summary>
     public Guid EntityId => StructureId;
+
+    /// <summary>
+    /// The attribute tab that owns this structure. Scholar uses the same <c>StructureSO</c> shape as
+    /// Wizardry; this edge is what lets a consumer distinguish the two without a name table.
+    /// </summary>
+    internal Guid StructureTypeId { get; }
 
     /// <summary>Levels already owned. The game persists this as the structure's <c>quantity</c>.</summary>
     internal BigDouble Level { get; }
@@ -251,6 +259,7 @@ internal readonly struct WorldStructure : IWorldEntity
 internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, WorldStructure>
 {
     private Func<object, Guid>? _id;
+    private Func<object, Guid>? _structureTypeId;
     private Func<object, int>? _level;
     private Func<object, int>? _queued;
     private Func<object, bool>? _unlocked;
@@ -291,6 +300,7 @@ internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, 
     {
         var bind = new WorldMemberBinding(type, TypeName);
         _id = bind.Call<Guid>("GetGuid");
+        _structureTypeId = bind.ReferenceGuid("structureType");
 
         // GetPurchaseLevel forwards to GetBaseLevel, which returns the persisted quantity — the same
         // number the purchase-cost chain scales by, and deliberately excluding every granted level.
@@ -338,6 +348,7 @@ internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, 
     internal override RawStructureSample Read(object entity) =>
         new(
             _id!(entity),
+            _structureTypeId!(entity),
             new BigDouble(_level!(entity)),
             new BigDouble(_queued!(entity)),
             _unlocked!(entity),

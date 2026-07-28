@@ -17,14 +17,23 @@ internal sealed class MentorToggleButton : IDisposable
     private readonly TextMeshProUGUI? _text;
     private readonly Image? _icon;
     private readonly MentorConfig _config;
-    private readonly MentorRuntime _runtime;
+    private readonly Func<FeatureStatusSnapshot> _readStatus;
     private int _lastVisualState = -1;
 
-    private MentorToggleButton(GameObject root, Button button, TextMeshProUGUI? text, Image? icon, MentorConfig config, MentorRuntime runtime)
-    { _root = root; _button = button; _text = text; _icon = icon; _config = config; _runtime = runtime; }
+    private MentorToggleButton(
+        GameObject root,
+        Button button,
+        TextMeshProUGUI? text,
+        Image? icon,
+        MentorConfig config,
+        Func<FeatureStatusSnapshot> readStatus)
+    { _root = root; _button = button; _text = text; _icon = icon; _config = config; _readStatus = readStatus; }
     public bool IsAlive => _root != null;
 
-    public static bool TryCreate(MentorConfig config, MentorRuntime runtime, out MentorToggleButton? result)
+    public static bool TryCreate(
+        MentorConfig config,
+        Func<FeatureStatusSnapshot> readStatus,
+        out MentorToggleButton? result)
     {
         result = null;
         var toggleType = Type.GetType("UIToggleButton, Assembly-CSharp", false);
@@ -60,11 +69,11 @@ internal sealed class MentorToggleButton : IDisposable
             UnityEngine.Object.Destroy(clonedHoverTooltip);
         }
         var hoverTooltip = root.AddComponent<HoverTooltip>();
-        hoverTooltip.Setup(new MentorTooltip(config, runtime));
+        hoverTooltip.Setup(new MentorTooltip(config, readStatus));
         var button = root.GetComponent<Button>();
         if (button is null) { UnityEngine.Object.Destroy(root); return false; }
         button.onClick.RemoveAllListeners();
-        result = new MentorToggleButton(root, button, text, icon, config, runtime);
+        result = new MentorToggleButton(root, button, text, icon, config, readStatus);
         button.onClick.AddListener(result.Toggle);
         result.Render();
         root.SetActive(true);
@@ -76,7 +85,7 @@ internal sealed class MentorToggleButton : IDisposable
 
     public void Render()
     {
-        var status = _runtime.RootFeatureStatus;
+        var status = _readStatus();
         var presentation = FeatureStatusPresenter.Present(status);
         var visualState = (int)presentation.ConfiguredState;
         if (_lastVisualState == visualState) return;
@@ -94,11 +103,9 @@ internal sealed class MentorToggleButton : IDisposable
         _config.Mode.Value = _config.Mode.Value == MentorOperationMode.Active
             ? MentorOperationMode.Disabled
             : MentorOperationMode.Active;
-        _runtime.Cancel(MentorDropReason.Disabled);
-        _runtime.RefreshFeatureStatus();
         Render();
         Plugin.ShowNotice(
-            $"Orb Mentor. {FeatureStatusPresenter.Format(_runtime.RootFeatureStatus)}. {_runtime.StatusText()}",
+            $"Orb Mentor. {FeatureStatusPresenter.Format(_readStatus())}.",
             _root.transform as RectTransform);
     }
     public void Dispose() { _button.onClick.RemoveListener(Toggle); if (_root != null) UnityEngine.Object.Destroy(_root); }

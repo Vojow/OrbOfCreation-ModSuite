@@ -8,11 +8,13 @@ internal readonly struct WorldView : IWorldEntity
     internal WorldView(
         Guid viewId,
         bool active,
-        bool alwaysActive)
+        bool alwaysActive,
+        bool available)
     {
         ViewId = viewId;
         Active = active;
         AlwaysActive = alwaysActive;
+        Available = available;
     }
 
     internal Guid ViewId { get; }
@@ -22,6 +24,9 @@ internal readonly struct WorldView : IWorldEntity
     internal bool Active { get; }
 
     internal bool AlwaysActive { get; }
+
+    /// <summary>The game's composed progression answer for this view.</summary>
+    internal bool Available { get; }
 }
 
 internal sealed class WorldViewBinder : WorldPlainBinder<WorldView>
@@ -29,6 +34,7 @@ internal sealed class WorldViewBinder : WorldPlainBinder<WorldView>
     private Func<object, Guid>? _id;
     private Func<object, bool>? _active;
     private Func<object, bool>? _alwaysActive;
+    private Func<object, bool>? _available;
 
     internal override string Category => "views";
 
@@ -40,6 +46,7 @@ internal sealed class WorldViewBinder : WorldPlainBinder<WorldView>
         _id = bind.Call<Guid>("GetGuid");
         _active = bind.Field<bool>("active");
         _alwaysActive = bind.Field<bool>("alwaysActive");
+        _available = bind.Call<bool>("IsAvailable");
         return bind.Failure;
     }
 
@@ -47,5 +54,6 @@ internal sealed class WorldViewBinder : WorldPlainBinder<WorldView>
         new(
             _id!(entity),
             _active!(entity),
-            _alwaysActive!(entity));
+            _alwaysActive!(entity),
+            _available!(entity));
 }

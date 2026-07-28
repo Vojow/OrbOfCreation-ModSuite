@@ -224,6 +224,9 @@ public sealed class ModConfigTests
         Assert.Equal(2, artifactShare.Dependencies.Count);
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active");
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "Artifacts" && dependency.Key == "Enabled" && dependency.ExpectedValue == "true");
+        Assert.DoesNotContain(
+            mod.Sections.SelectMany(section => section.Settings),
+            setting => setting.SourceSection == "Performance");
 
         var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
         var spellSection = mod.Sections.Single(section => section.Name == "Spells");
@@ -232,7 +235,7 @@ public sealed class ModConfigTests
         var artifactEnabled = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "Enabled");
         Assert.All(
             mod.Sections.SelectMany(section => section.Settings).Where(setting =>
-                setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy" or "Performance"),
+                setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.False(session.DependencySatisfied(artifactShare));

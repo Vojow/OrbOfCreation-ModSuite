@@ -68,6 +68,24 @@ public sealed class TraceDashboardReaderTests
     }
 
     [Fact]
+    public void MentorProjectionUsesItsRecordedServiceSchema()
+    {
+        using var fixture = new DashboardTraceFixture(
+            service: 7,
+            machineId: "orbmentor.mastery-sharing",
+            Projection((10, 42), (11, 2), (12, 3), (13, 2)));
+
+        var decision = fixture.ReadDecision();
+
+        Assert.Collection(
+            decision.Projection,
+            entry => Assert.Equal("Last input sequence", entry.Name),
+            entry => Assert.Equal("Missed inputs", entry.Name),
+            entry => Assert.Equal("Planned actions", entry.Name),
+            entry => Assert.Equal("Recipients", entry.Name));
+    }
+
+    [Fact]
     public void UnknownServiceProjectionFallsBackToTheRawFieldNumber()
     {
         using var fixture = new DashboardTraceFixture(

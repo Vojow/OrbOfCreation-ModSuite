@@ -26,9 +26,10 @@ The findings come from assembly metadata and selected IL method bodies read with
 6. [Evidence strength](evidence-strength.md)
 7. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
 8. [Resources and large numbers](resources-and-bigdouble.md)
-9. [Save system](save-system.md)
-10. [Modding hooks](modding-hooks.md)
-11. [Reverse-engineering audit](audit.md)
+9. [Economy mechanics](economy-mechanics.md)
+10. [Save system](save-system.md)
+11. [Modding hooks](modding-hooks.md)
+12. [Reverse-engineering audit](audit.md)
 
 ## Auto Buy dossier
 

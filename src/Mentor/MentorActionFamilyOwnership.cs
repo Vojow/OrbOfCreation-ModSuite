@@ -1,7 +1,10 @@
 using System;
+using OrbAutomata;
 using OrbModding.Common;
 
 namespace OrbMentor;
+
+internal enum MentorDomain { Spells, Artifacts, Alchemy }
 
 internal sealed class MentorActionFamilyOwnership : IDisposable
 {
@@ -62,7 +65,11 @@ internal sealed class MentorActionFamilyOwnership : IDisposable
         }
         if (lease is not null || frame < _nextRetryFrame[index]) return;
         if (_registry.TryClaimSet(
-                new ActionFamilyOwner(MentorFeatureStatus.Key(domain), MentorFeatureStatus.DisplayName(domain)),
+                new ActionFamilyOwner(
+                    new FeatureStatusKey(
+                        PluginIds.SuiteGuid,
+                        AutomataFeatureStatuses.MentorFeatureId),
+                    "Orb Mentor"),
                 Families[index],
                 out lease,
                 out _))

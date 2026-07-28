@@ -1,33 +1,93 @@
 # Mentor
 
-This folder is the Mentor feature area of the suite. It is not a separate plugin and carries no version of its own; everything here compiles into `OrbModSuite.dll` and loads under the suite's single plugin GUID.
+Mentor is a feature area inside `OrbModSuite.dll`, not a separate plugin. It
+shares a configurable percentage of earned native mastery XP with
+lower-mastery recipients without subtracting XP from the source.
 
-Mentor shares configurable percentages of native mastery XP with lower-mastery recipients in three independent domains: discovered spells, created artifacts, and ordinary available alchemy recipes. `EquippedSpells` is the default spell policy: every equipped source can share with discovered spells below that source's own mastery. `HighestDiscovered` preserves the original highest-mastery-only behavior. Artifact and alchemy sharing remain opt-in and keep their existing highest-mastery rule. Scholar concepts are excluded from the Alchemy catalog, cannot become Alchemy mentors or recipients, and their XP callbacks are ignored.
+## Sharing policy
 
-Mentor has no configuration file of its own: it binds into the suite's single file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 2, and the retired Mentor file is never read. Malformed, negative, or future schema markers fail closed before gameplay hooks start. Spell, artifact, and alchemy mastery-XP mutation families stay independent, and Mentor clamps coordinated planning to the shared soft CPU budget still available in the current frame. When another suite work item consumes that budget, Mentor performs no planning and resumes the exact pending plans and XP next frame. The legacy uncoordinated path is unchanged. Losing an ownership claim still cancels only that domain's captured and pending bonus XP, prevents replay after reacquisition, and leaves healthy siblings operational. Ownership is advisory; unknown unregistered automation remains visible as an explicit uncertainty rather than being controlled.
+Mentor handles three independent domains:
 
-Fresh installs start in `General.Mode=Disabled`. Set it to `Active`, press `Left Alt + M`, or use the compact `M ON/OFF` gameplay control. `Left Alt + M` is Mentor's alone: the differential-verification diagnostic moved off M entirely, to `Left Ctrl + Left Alt + Y`, and either binding can still be changed in the configuration UI. The primary label and green/gray styling represent only saved user intent; waiting, blocking, degradation, unavailable contracts, and faults remain secondary structured status in the tooltip and the configuration UI's runtime band. The control occupies the outermost slot of the native Auto Buy-anchored strip, after the suite's Auto Buy, Auto Cast, and Auto Concept controls, with 12-pixel gaps. `SharedPool` (default, 10%) bounds each domain's total bonus to the configured percentage. `PerRecipient` grants that percentage to each eligible recipient in the domain and scales with collection size.
+- Spells are enabled with Mentor. `EquippedSpells` (the default) lets each
+  equipped spell share with discovered spells below that source's mastery.
+  `HighestDiscovered` instead accepts only sources at the highest discovered
+  spell mastery.
+- Artifacts are opt-in. A highest-mastery created artifact may share XP earned
+  through its equipped `IncrementActive` path with lower-mastery created
+  artifacts.
+- Alchemy is opt-in. A highest-mastery discovered ordinary recipe may share
+  with lower-mastery discovered ordinary recipes. Scholar Concepts are excluded
+  by exact recipe/type identity and Concept membership.
 
-Mentor follows the game's progression unlocks independently for spells, artifacts, and alchemy. A domain starts only after the exact native `MasteriesEnabled` view and that domain's `MagicSpellbook`, `WorkshopArtifact`, or `ScreenAlchemy` view are both available. While locked, the enabled control remains `M ON` and the tooltip shows a non-error waiting reason; the domain does not discover a catalog, rank mentors, plan or grant XP, or inspect the equipped spell loadout. The saved Mentor configuration is left unchanged. Unlocks are noticed without a restart, while save/load, reset, scene, and NG+ lifecycle signals cancel stale work and re-evaluate all gates. A missing registration waits fail-closed; an exact UUID/type or accessor contradiction blocks only the affected domain with the contract reason.
+`SharedPool` (the default) divides the configured percentage across the eligible
+recipients. `PerRecipient` gives that percentage to every recipient, so the
+total bonus scales with collection size. Every grant carries the source's
+exclusive mastery ceiling; no recipient at or above that mastery is eligible.
 
-Mentor consumes the same Common lifecycle generation as the automation and configuration-UI feature areas. A shared transition cancels or defers capture, relationship, plan, parked-grant, and native-grant work under the old generation; domain progression locks remain separate from global game readiness.
+Fresh installs start with `General.Mode=Disabled`. Set it to `Active`, press
+`Left Alt + M`, or use the `M ON/OFF` gameplay control. The button's label and
+colour show saved intent. Waiting, unavailable contracts, emergency blocking,
+degradation, and faults are a separate runtime-health axis in its tooltip and
+the Mods Runtime page.
 
-After Mentor records progression evidence synchronously, it mirrors stable spell, artifact, and ordinary-alchemy UUID/type invalidations through Common's bounded completed-frame bus; an uncached identity widens to its family. Spell-loadout membership changes publish broad inventory invalidation. These notifications never contain XP amounts and never replace Mentor's capture-time relationship, lifecycle cancellation, or native grant validation.
+## Service-cycle shape
 
-Progression unlock assets resolve through Common's lifecycle-aware typed registry resolver. `MasteriesEnabled` and each domain `ViewSO` require exact UUID/type/`GetGuid()` evidence before the live native `IsAvailable()` check; late registration waits, while wrong type or contradictory identity blocks only the affected domain with structured diagnostics.
+Mentor is an ordinary ServiceCycle service. It never reads BepInEx
+`ConfigEntry` values or Unity objects on its worker:
 
-The configuration UI keeps the toggle shortcut, emergency disable, and diagnostics editable while Mentor is disabled. Spell, artifact, alchemy, economy, and performance tuning unlock when Mentor becomes Active; artifact and alchemy percentages additionally require their own domain switch.
+1. Four deliberate Harmony patch contracts record exact spell, artifact, and
+   alchemy XP inputs into a bounded, lifecycle-scoped journal.
+2. World collection publishes those value-only inputs together with discovery,
+   creation, mastery, equipped-spell, alchemy-type, Concept-membership, and
+   progression-view facts.
+3. The Mentor worker consumes each sequence once, selects and orders recipients
+   from the immutable world, applies the configured economy, and returns typed
+   grant actions.
+4. The Unity-thread action boundary resolves the recipient again, revalidates
+   lifecycle, UUID/type, ownership, eligibility, and mastery ceiling, invokes
+   the native mastery path, and verifies the exact postcondition.
 
-Feature health publishes Mentor plus its spell, artifact, and alchemy domains independently through Common. The gameplay control and tooltip separate saved configuration, progression locks, lifecycle/catalog readiness, ordinary operation, emergency blocking, unavailable contracts, degradation, and native faults. One unavailable optional domain degrades the root while operational siblings remain healthy; lifecycle reset and recovery replace stale reasons without changing the XP scheduler.
+The spell and alchemy postfixes retain the exact native XP argument.
+`EquipmentSO.IncrementActive` prefix/finalizer plus the
+`ExperienceContainer.GainExperience` prefix associate an artifact's exact gain
+with one successful equipped tick. Discovery, creation, reset, loadout, and
+apply-mastery signal patches are gone because the next world publication already
+contains those facts. Mentor suppresses observations caused by its own grants.
 
-The plugin uses each domain's native mastery path and suppresses its own grant callbacks. Every native grant captures authoritative state immediately before and after execution. Spell and Alchemy require the exact expected saved-XP delta. Artifact grants clone the initialized native `ExperienceContainer`, predict its threshold consumption and level rollover, then require the live equipment mastery, container level, residual container XP, and saved `masteryXp` to match that prediction. A no-op, partial, unexpectedly large, throwing, unsaved, or unobservable grant records structured evidence, cancels pending bonus work, and blocks that domain until an explicit scene, save-load, reset, or NG+ lifecycle recovery. After the spell domain unlocks, the equipped-spell snapshot is refreshed from `SpellManager.activeSpells` outside the Harmony XP callback; capture remains a constant-time UUID membership check. Each planned spell grant carries its source's exclusive mastery ceiling through consolidation, parking, and final native validation, so XP from a lower equipped source cannot reach an equal- or higher-mastery recipient. Alchemy uses the shared UUID-and-native-type domain classifier during catalog reconciliation, event capture, and immediately before every grant; only mutation-grade results with every required static, serialized, runtime, identity, registry, and relationship source are accepted. Unknown, insufficient, or contradictory Alchemy evidence blocks only that optional domain for the lifecycle; save/load, reset/NG+, and scene lifecycle invalidation discard its cached evidence. The classifier is not initialized while Alchemy sharing is disabled. Mentor never subtracts source XP or changes loadouts, recipe activity, costs, or discovery state. A native contract failure blocks the affected sharing domain and discards its pending bonus work.
+ServiceCycle owns scheduling, lifecycle retirement, fair action turns, status,
+and trace projection. There are no Mentor operations-per-frame or CPU-budget
+settings. Configuration schema 4 discards those obsolete keys. The remaining
+controls are mode, shortcut, emergency disable, economy, spell source policy,
+the three sharing percentages, artifact/alchemy enablement, and diagnostics.
 
-Performance scheduling keeps Harmony callbacks bounded: callbacks only capture cached source identity, equipped membership, mastery/discovery evidence, an immutable relationship-evidence node, XP, or a coalesced lifecycle signal; they never request coordinator work. The finite 256-entry capture queue, 256-entry unroutable ledger, 256-recipient parked-grant ledger, 64-version relationship-evidence buffer, and snapshot-batched qualified-source map are pre-sized so their normal hot path does not resize; distinct captures still allocate a bounded event record, while active grant and slow reconciliation storage grow amortized with the discovered catalog. Registry reconciliation, relationship refresh, historical relationship resolution, and recipient planning resume under one cooperative registration shared with the suite's other unmigrated work. Its configured 0.1-1.0 ms clamp is reduced again to the coordinator's non-negative remaining soft budget; zero remaining time starts no work and does not reapply the 0.1 ms configuration floor. Denied or incomplete cooperative work makes that domain ineligible for mutation and does not consume or rewrite pending XP. Exact native UUID, object identity, discovery, and capture-specific mastery-ceiling checks run inside a separate mutation lease immediately before at most one grant. Transiently ineligible recipients move out of the active mutation queue with their exact coalesced amount and ceiling, so later recipients can proceed. They are reconsidered cooperatively only after another authoritative refresh completes; unchanged recipients park again without an immediate refresh or mutation retry. Parked-ledger overflow blocks and cancels that domain fail-closed for the lifecycle. Mentor and the automation features never own mutation leases in the same Unity frame; Mentor performs at most one grant inside its lease. Repeated latest deltas for one UUID and ceiling coalesce only when no capture retains that immutable head. Active refresh passes finish under sustained invalidation instead of restarting; a newer request schedules an immediate follow-up pass.
+## Safety and lifecycle
 
-Recipient UUID indices are built incrementally with relationship snapshots. Excluding a source that crosses the old highest mastery therefore creates an O(1) indexed view instead of copying or rehashing the full catalog; the existing one-recipient-per-step planner remains responsible for expanding that view.
+The game remains authoritative at the action boundary. Spell and alchemy grants
+must produce the expected saved-XP transition. Artifact grants predict the
+native `ExperienceContainer` level and residual-XP transition on a clone, then
+verify mastery, container, and saved XP together. A throw, no-op, partial,
+unexpected, unsaved, or unobservable mutation faults the action rather than
+claiming success.
 
-An event that is ineligible in its resolved capture-time relationship, overflows bounded capture storage, or loses its validated native identity is deliberately rejected and counted. Unorderable captures are not guessed or redirected; their amounts remain in the bounded unroutable ledger until lifecycle or identity cancellation. If evidence reaches its hard cap, unresolved captures backed by that domain's history move into the same ledger, unsafe heads are invalidated, and a controlled authoritative follow-up publishes the next basis. Only ledger overflow is counted as dropped; other domains keep their independent histories and work. If reconciliation finds any added, removed, destroyed, or same-UUID replacement object, all older pending work in that domain is counted and cancelled before replacement references become active. Save/scene lifecycle resets likewise cancel evidence-backed work. The required spell contract can quarantine Mentor globally; Artifact and Alchemy hook, schema, and grant failures quarantine only their optional domain, including when that domain is disabled. Permanent native-contract quarantine survives scene and save lifecycle resets; transient grant failures may retry only after a lifecycle reset.
+Mastery plus the relevant spellbook, artifact-workshop, or alchemy view must be
+available before that domain plans work. Scene, save-load, reset, NG+, and
+registry replacement retire stale cycles and native references. Exact stable
+UUID plus expected native type owns identity; names are diagnostics only.
+Mentor never changes source XP, loadouts, recipe activity, costs, quantities,
+discovery state, or action queues.
 
-These failure boundaries are represented by fixed global and per-domain circuits. Optional domain faults do not prevent healthy siblings from being scheduled; successful work resets the bounded failure streak, while exact native-contract contradictions remain blocked for the process.
+The mastery-input journal is bounded. If the worker falls behind its retained
+history, the missed sequence is projected explicitly instead of reconstructing
+XP from snapshots. Traces name the service `Mentor` and expose last input
+sequence, missed inputs, planned actions, and recipient count without changing
+the trace wire format.
 
-Automated and static installed-game validation is complete. Interactive gameplay/save validation remains required before a production-ready release; see the [runtime checklist](../../docs/testing/mentor-runtime-validation.md).
+## Verification
+
+Portable evaluator, action adapter, native adapter, composition, status, patch,
+and trace-schema coverage lives under
+`tests/OrbModding.Tests/Services/Mentor/Runtime/ServiceCycle` and the shared
+ServiceCycle suites. Installed-game tests audit every capture, action, and patch
+contract against the supported assembly. Real Unity/Harmony wiring, visible
+controls, recursion suppression, save transitions, and exact in-game XP remain
+the interactive gates in `docs/testing/mentor-runtime-validation.md`.

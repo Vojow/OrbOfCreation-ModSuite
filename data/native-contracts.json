@@ -85,13 +85,14 @@
       "valueType": "System.Collections.Generic.List`1<!0>",
       "owners": [
         "Common Alchemy classifier",
-        "Automata spell leveling",
-        "Mentor equipped spells"
+        "Automata Auto Cast",
+        "Automata Auto Concept",
+        "Automata spell leveling"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "abstract-ref-instance.ref-obj",
@@ -642,25 +643,6 @@
       "place": "capture"
     },
     {
-      "id": "alchemy-recipe.apply-mastery",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "ApplyMastery",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor alchemy"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "alchemy-recipe.cached-completion-time",
       "assembly": "assembly-csharp",
       "type": "AlchemyRecipeSO",
@@ -731,25 +713,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "alchemy-recipe.discover",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Discover",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor alchemy"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
     },
     {
       "id": "alchemy-recipe.discovered",
@@ -860,7 +823,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "alchemy-recipe.gain-mastery-xp",
@@ -881,7 +844,7 @@
       "usages": [
         "harmony"
       ],
-      "place": "legacy"
+      "place": "patch"
     },
     {
       "id": "alchemy-recipe.get-core-type",
@@ -974,25 +937,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "alchemy-recipe.is-discovered",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "IsDiscovered",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": [
-        "Mentor alchemy"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
     },
     {
       "id": "alchemy-recipe.is-required-discovery",
@@ -1211,25 +1155,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "alchemy-recipe.reset",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "ResetData",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor alchemy"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
     },
     {
       "id": "alchemy-recipe.special",
@@ -4126,25 +4051,6 @@
       "place": "capture"
     },
     {
-      "id": "equipment.create",
-      "assembly": "assembly-csharp",
-      "type": "EquipmentSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Create",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor artifacts"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "equipment.disc-rarity-level",
       "assembly": "assembly-csharp",
       "type": "EquipmentSO",
@@ -4161,25 +4067,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "equipment.discover",
-      "assembly": "assembly-csharp",
-      "type": "EquipmentSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Discover",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor artifacts"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
     },
     {
       "id": "equipment.equipped-level",
@@ -4234,10 +4121,9 @@
         "Mentor artifacts"
       ],
       "usages": [
-        "reflection",
-        "harmony"
+        "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "equipment.get-experience-element",
@@ -4256,7 +4142,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "equipment.increment-active",
@@ -4277,7 +4163,7 @@
       "usages": [
         "harmony"
       ],
-      "place": "legacy"
+      "place": "patch"
     },
     {
       "id": "equipment.is-created",
@@ -4372,25 +4258,6 @@
       "place": "capture"
     },
     {
-      "id": "equipment.reset",
-      "assembly": "assembly-csharp",
-      "type": "EquipmentSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "ResetData",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor artifacts"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "experience-container.clone",
       "assembly": "assembly-csharp",
       "type": "ExperienceContainer",
@@ -4407,7 +4274,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "experience-container.gain",
@@ -4428,7 +4295,7 @@
       "usages": [
         "harmony"
       ],
-      "place": "legacy"
+      "place": "patch"
     },
     {
       "id": "experience-container.gain-runtime",
@@ -4449,7 +4316,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "experience-container.gained-levels",
@@ -4468,7 +4335,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "experience-container.get-experience",
@@ -4487,7 +4354,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "experience-container.get-level",
@@ -4506,7 +4373,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "game-manager.init-game",
@@ -6932,6 +6799,43 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "recipe-book.all",
+      "assembly": "assembly-csharp",
+      "type": "RecipeBookSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<RecipeBookSO>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "recipe-book.is-available",
+      "assembly": "assembly-csharp",
+      "type": "RecipeBookSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsAvailable",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     },
     {
       "id": "requirement-condition-info.type",
@@ -10426,34 +10330,12 @@
       "static": false,
       "valueType": "SpellListVariable",
       "owners": [
-        "Automata Auto Cast",
-        "Mentor equipped spells"
+        "Automata Auto Cast"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "spell-manager.add-spell",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "AddSpell",
-      "visibility": "private",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [
-        "Spell"
-      ],
-      "owners": [
-        "Mentor equipped spells"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-manager.available-recipes",
@@ -10525,55 +10407,12 @@
       "valueType": "SpellManager",
       "owners": [
         "Automata Auto Cast",
-        "Automata spell leveling",
-        "Mentor equipped spells"
+        "Automata spell leveling"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
-    },
-    {
-      "id": "spell-manager.move-spell",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "MoveSpell",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [
-        "Spell"
-      ],
-      "owners": [
-        "Mentor equipped spells"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
-      "id": "spell-manager.remove-spell",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "RemoveSpell",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [
-        "Spell"
-      ],
-      "owners": [
-        "Mentor equipped spells"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-manager.try-level-all",
@@ -10667,25 +10506,6 @@
       "place": "capture"
     },
     {
-      "id": "spell-recipe.discover",
-      "assembly": "assembly-csharp",
-      "type": "SpellRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Discover",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor spells"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "spell-recipe.discovered",
       "assembly": "assembly-csharp",
       "type": "SpellRecipeSO",
@@ -10722,7 +10542,7 @@
       "usages": [
         "harmony"
       ],
-      "place": "legacy"
+      "place": "patch"
     },
     {
       "id": "spell-recipe.get-level-cost",
@@ -10797,7 +10617,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-recipe.is-ready",
@@ -10925,14 +10745,12 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata spell leveling",
-        "Mentor spells"
+        "Automata spell leveling"
       ],
       "usages": [
-        "reflection",
-        "harmony"
+        "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-recipe.repeat-instant-effects",
@@ -10951,25 +10769,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "spell-recipe.reset",
-      "assembly": "assembly-csharp",
-      "type": "SpellRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "ResetData",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Mentor spells"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
     },
     {
       "id": "spell-recipe.spell-cd-speed-mod",
@@ -12822,6 +12621,24 @@
       "place": "capture"
     },
     {
+      "id": "structure.structure-type",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "structureType",
+      "visibility": "public",
+      "static": false,
+      "valueType": "StructureTypeSO",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "target-link.get-random",
       "assembly": "assembly-csharp",
       "type": "TargetingManager+TargetLink",
@@ -13220,13 +13037,12 @@
       "returnType": "System.String",
       "parameters": [],
       "owners": [
-        "Automata diagnostics",
-        "Mentor diagnostics"
+        "Automata action diagnostics"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "treasure-pool.all",
@@ -14158,12 +13974,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Mentor progression unlocks"
+        "Mentor progression unlocks",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     }
   ],
   "sourceAudit": {

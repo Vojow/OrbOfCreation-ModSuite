@@ -32,8 +32,6 @@ public readonly struct NativeMutationCallOutcome
             MutationAttempts + other.MutationAttempts,
             MutationsCommitted + other.MutationsCommitted);
 
-    public SuiteWorkCompletion ToWorkCompletion(int operations = 1) =>
-        new(operations, NativeCallsAttempted, MutationAttempts, MutationsCommitted);
 }
 
 /// <summary>
