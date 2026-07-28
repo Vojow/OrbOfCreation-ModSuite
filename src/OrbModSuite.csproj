@@ -23,7 +23,7 @@
     0Harmony, UnityEngine, UnityEngine.CoreModule, Assembly-CSharp and Assembly-CSharp-firstpass
     continue to come from Directory.Build.props.
   -->
-  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(GameRoot)' != ''">
+  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(ManagedDir)' != ''">
     <Reference Include="UnityEngine.UI">
       <HintPath>$(ManagedDir)/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>

@@ -21,7 +21,7 @@ codec versions and manifest totals quoted below were true when written and are n
 
 Every entry keeps its heading below; this roster says only which are still binding.
 
-**Live** — W1–W6, W8, W11, W16–W22, W24–W26, W28–W37, W39, W42–W46, W48–W58.
+**Live** — W1–W6, W8, W11, W16–W22, W24–W26, W28–W37, W39, W42–W46, W48–W61.
 
 **Historical** — W7, W9, W10, W12, W13, W14, W15, W23, W27, W38, W40, W41, W47.
 
@@ -1098,15 +1098,15 @@ the campaign's goal statement and is true of a minority of the patches.
 upgrades off the snapshot, so the patches that announced them had nothing left to tell it. The two
 queue postfixes turned out to publish onto an invalidation bus with no subscriber at all.
 
-**One completion postfix survives as an imperative nudge, not as a signal.** `AfterNativeCompletion`
-is a single static handler with two registrations — `StructureSO:CompleteAction` and
-`UpgradeSO:CompleteAction`, enumerated in `Plugin.NativeCompletionHookTargets` — feeding Spell
-Leveling's `NotifyNativeChange()`. One handler because the two patch classes did the same thing; two
-registrations because dropping either silently stops the nudge for half the completions, which is a
-behaviour change dressed as a deletion. It is installed from `ComposeAutomata` and deliberately not
-beside Mentor's optional hooks: that composition returns early when Mentor's own mastery hook is
-unavailable, and a blocked Mentor must not take Spell Leveling's signal down with it. It retires when
-Spell Leveling migrates and has a generation to gate on.
+**The completion postfix retired with Spell Leveling, as this record said it would.**
+`AfterNativeCompletion` was a single static handler with two registrations —
+`StructureSO:CompleteAction` and `UpgradeSO:CompleteAction`, enumerated in
+`Plugin.NativeCompletionHookTargets` — feeding Spell Leveling's `NotifyNativeChange()`. It existed
+because an unmigrated Spell Leveling had no generation to gate on, and a completed build or purchase
+could be the one that unlocked leveling. A migrated Spell Leveling is handed a fresh world whenever
+one is collected, which is the same news arriving by the ordinary route, so both registrations, the
+handler, and the two `CompleteAction` contracts went together. Nothing replaced them: the whole point
+of a generation gate is that a service woken by it needs no second way to be told.
 
 **What is left, and what each waits on.** Auto Concept's three patches wait on Auto Concept being
 migrated. `SpellFirePatch` waits on Auto Cast, and is also a differential-verifier probe:
@@ -1122,7 +1122,7 @@ nobody reads is an audit of nothing.
 **Live.** The five optional lifecycle hooks — `SaveStateManager:ImplementLoadedJson` prefix and
 postfix, `GameManager:InitGame`, `GameManager:ResetGameState` and
 `PersistentResetManager:PersistentResetLogic` — are installed from `ComposeAutomata`, enumerated in
-`Plugin.LifecycleObservationHooks` beside `NativeCompletionHookTargets`.
+`Plugin.LifecycleObservationHooks`.
 
 **Why.** In `ComposeMentor` they sat after Mentor's two early returns: a mastery hook that is
 unavailable, or one whose patch throws, blocks the Mentor runtime and returns before them. So a
@@ -1133,8 +1133,8 @@ compares one stale epoch against another and admits. A degraded mastery feature 
 frozen epoch is migrated services deciding against a world that is no longer the game. The three
 `SpellManager` loadout postfixes stay Mentor's own signal and remain behind that early return.
 
-**Quirk.** The list is a `(Target, Handler, Postfix)` tuple table rather than the plain string array
-`NativeCompletionHookTargets` uses, because one target carries both a prefix and a postfix.
+**Quirk.** The list is a `(Target, Handler, Postfix)` tuple table rather than a plain string array,
+because one target carries both a prefix and a postfix.
 `PluginLifecycleObservationHookTests` pins the set and the handler shapes, not the call site:
 composition wants a bound configuration, a Harmony instance and a live Chainloader, so "a blocked
 Mentor still installs these" is not a fact a headless test can assert.
@@ -1203,3 +1203,131 @@ nowhere else, so the reader joins `WorldPlotAuthoringReader` and `WorldEffectBlo
 existing skip. The epoch it rides is the world capture port's own — `AutomataWorldCapturePort` stamps
 `frame.CollectedAtEpoch` from the host's lifecycle counter for the whole collection — not any one
 service's.
+
+## W59 — Mastery readiness is the game's own answer, because the threshold is not published
+
+**Live.** `WorldSpellRecipe.MasteryLevelReady` is `SpellRecipeSO.IsReadyToLevelMastery()`, bound with
+`Call<bool>` beside the fields the rest of the row reads. W58 named this fact as the one thing
+`SpellRequirement.MasteryLevelReady` wanted and nobody had collected; Spell Leveling's migration is the
+reason to collect it, and this is that decision.
+
+**Why a call and not a comparison.** Every other mastery track publishes both halves and lets the
+worker subtract: `WorldAlchemyRecipe` carries `MasteryXp` and `CachedRequiredXp`, and readiness is
+arithmetic. A spell has no such pair. The threshold lives in a `masteryXpContainer` the snapshot does
+not publish and whose members are not in the manifest at all, so `MasteryXp` has nothing to be
+compared against. Publishing the composed boolean is not a shortcut around a number that exists; it is
+the only readable form of the fact.
+
+**It is a read.** W58 already recorded that `IsReadyToLevel()` "is not a write and not a gap in
+principle", which is what separates it from the `Check()` family W36 refused: those stamp a game id and
+latch `available`, and collection does not write. A parameterless predicate that composes published and
+unpublished state and returns is the same shape as `UpgradeSO.IsAvailable()` and
+`ResearchSO.IsAvailable()`, both of which capture has called since the first pass.
+
+**The prerequisite half deliberately did not follow it.** `SpellRecipeSO.levelingPrerequisites` is
+reachable only through the no-argument `Prerequisites.Container.Check()`, which is one of the latching
+writes, so it stays off the snapshot and is re-read at the action boundary instead. That is not a
+shortfall: the boundary is the authority on whether an action may run, and a planner that cannot see
+the gate plans a level the boundary refuses penalty-free. What the snapshot buys is that the planner
+does not propose a spell with no banked experience — the common case, and the one a refusal loop would
+otherwise be made of.
+
+**Rejected:** publishing a spell-level cost table beside the readiness flag, mirroring W31/W32.
+`SpellRecipeSO` declares no authored cost member — the only handle is `GetLevelCost()`, a call
+returning a `ResourceCostList` — so a cost table would have to either call it during collection or port
+arithmetic from fields nobody has audited. Affordability is re-read at the boundary with the game's own
+`HasEnough()`, which is already an action contract.
+
+## W60 — The equipped loadout is a category, reached by uuid and keyed by position
+
+**Live.** `GameWorldState.SpellSlots` publishes one row per readable position in the player's spell
+loadout, and `GameWorldState.SpellCosts` publishes what casting out of each position costs. Both come
+from one reader, `WorldSpellSlotReader`. Auto Cast's migration is the reason to collect them, and this
+is that decision.
+
+**Reached by uuid, not through the singleton.** The loadout hangs off `SpellManager.instance`, and
+`Spell` has no per-type `All` registry to walk. Rather than read the manager, the reader takes the
+route W-era action queues already take: `SpellManager.activeSpells` is an ordinary list variable with a
+uuid of its own — `ActiveSpells`, now in `data/known-entities.tsv` — so it is fetched from
+`IdScriptableObject.RuntimeLookup` and its `value` is walked. Nothing in collection touches the spell
+manager, which keeps the one singleton read in the suite at the action boundary where it belongs.
+
+**Not a `WorldPlainBinder`, deliberately.** A plain binder declares `TypeName => "Spell"`, and that
+declaration is what `EveryValueMemberOfACollectedTypeIsDeclared` keys on: every scalar and
+modifier-record field on the named type would then have to be declared, including the many `Spell`
+fields nobody reads and nobody has audited. `Spell` is a runtime instance rather than an authored
+asset, and the suite wants sixteen answers from it, not its serialized shape. A bespoke
+`IWorldCategoryReader` asks for exactly those sixteen and declares each one, which is the honest
+scope. The W17 category count stays at 33 because no new collected *type* was declared.
+
+**The position is the key, and the holes are real.** A slot is not an entity: the player may leave a
+position unfilled, and two positions may hold the same spell, so neither a guid nor a dense row index
+names a slot. `SlotIndex` is the game's own index — the number `SpellManager.FireSpellIndex` takes —
+counting the unfilled positions exactly as the game counts them. A hole publishes no row at all; an
+empty-but-present slot publishes a row with `Occupied` false. Both read as "nothing to cast here",
+which is the direction a missed reading should fail in, and neither can be mistaken for the other by a
+consumer that asks `WorldSpellSlotLookup` for a position rather than indexing the table.
+
+**Readiness is the game's own answer, on W59's licence.** `CastReady` is `Spell.CanCast()`, and the
+three terms under it — `ChargeAvailable`, `ResourcesCovered`, `Attuning` — are the game's own
+classification of why a refusal happened. These are parameterless predicates that compose published
+and unpublished state and return; they neither stamp an id nor latch, which is what separates them from
+the `Check()` family W36 refused. Publishing the composite *and* its terms is what lets a planner both
+rank and explain, and the boundary re-reads all of it live before the game is touched (M3).
+
+**The cost table W59 rejected is not this one.** W59 declined a spell-*level* cost table: the price of
+buying a mastery level, reachable only through `SpellRecipeSO.GetLevelCost()`, wanted by a boundary
+that already asks the game `HasEnough()` one candidate at a time. This is the price of *casting*,
+reachable through `Spell.GetCost()` and `Spell.GetDrainCost()` on the equipped instance, and its
+consumer is a planner that must compare every position in one pass to pick which to cast. Without it
+the worker cannot apply a reserve floor or a fullness threshold at all, and would propose the same
+refused slot every cycle — the refusal loop W59's reasoning exists to avoid. The entry-reading half is
+already precedented: `resource-cost-list.costs`, `resource-tuple.resource` and `resource-tuple.value-big`
+have been capture contracts since the first pass, and this reader binds them the same way
+`WorldUpgradeCostReader` does.
+
+**Priced per position, not per recipe.** A spell's cost is its recipe's authored cost after the
+equipped instance's own modifier chain, and the recipe alone does not answer it. A table keyed by
+recipe would have to pick one of the two answers for a spell equipped twice and be wrong about the
+other, so the rows carry `SlotIndex` and `Kind` and let the same recipe be priced differently in two
+places.
+
+**Rejected:** publishing the loadout as an identity-keyed table of the recipes equipped, which is what
+Mentor's `EquippedSpells` policy actually wants. It is a strictly weaker fact — it cannot say which
+position a spell sits in, and a cast is addressed by position — so Auto Cast could not have used it.
+Mentor can derive its set from these rows when it migrates.
+
+**Rejected:** reading `SpellManager.instance` during collection, which would have been fewer moving
+parts than a known-entity uuid. It puts a singleton read on the capture path for a list the identity
+registry already holds, and `WorldActionQueueReader` recorded the same refusal for the action manager.
+
+## W61 — The cast rotation advances on the plan, not on the cast
+
+**Decision.** Auto Cast's round-robin cursor moves the moment a slot is chosen, whether or not the
+cast the boundary was handed actually commits. The legacy engine advanced it only on a successful
+fire.
+
+**Why the difference is forced.** The legacy engine could afford a commit-only cursor because its
+admission scan and its cast ran on the same thread in the same pass: the target preflight — a
+reflective walk of the recipe's effect graph asking each target request whether anything is in range —
+was inside the scan, so a spell with nothing to aim at was skipped *within* the pass and never became
+the pending candidate. That walk is main-thread work over live objects with no snapshot form (W60), so
+the worker cannot see it. A cursor that waited for a commit would therefore re-pick the same
+targetless spell every cycle and starve every other slot, forever.
+
+**What is preserved.** Advancing on the plan keeps the behaviour the legacy scan produced: a slot that
+cannot cast costs *itself* its turn rather than costing every other slot theirs. The observable
+difference is confined to the case the legacy engine handled inside its scan and this one handles at
+the boundary — a refused cast now yields its turn to the next slot and comes round again on its own
+next turn, one rotation later.
+
+**Rejected:** feeding the boundary's refusal back into worker state so the cursor could stay put on a
+commit and only advance on a live refusal. It would make the worker's rotation depend on action
+results, which is a channel the runtime does not have and should not grow for one feature's cursor;
+and it would reintroduce the starvation the moment a refusal was ever dropped.
+
+**Rejected:** publishing a target-availability fact so the planner could skip targetless spells and
+keep a commit-only cursor. The walk is unbounded reflective traversal of live scene objects per
+equipped spell per frame — the precise shape of work the collection pass exists to keep off the
+capture path — and it would answer for the frame the snapshot was taken in, not the frame the cast
+lands in, so the boundary would still have to re-check it (M3).

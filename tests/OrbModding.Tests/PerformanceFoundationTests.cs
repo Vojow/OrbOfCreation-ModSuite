@@ -12,12 +12,8 @@ public sealed class PerformanceFoundationTests
     [InlineData(1, 12)]
     [InlineData(2, 12)]
     [InlineData(3, 12)]
-    [InlineData(4, 12)]
+    [InlineData(4, 30)]
     [InlineData(5, 12)]
-    [InlineData(6, 12)]
-    [InlineData(7, 12)]
-    [InlineData(8, 30)]
-    [InlineData(9, 12)]
     public void SupportedProfileIdentityAppliesExactStarvationThreshold(int identityIndex, int expected)
     {
         var identity = SuitePerformanceWorkIdentities.GetSupportedSuiteV1(identityIndex);
@@ -38,7 +34,7 @@ public sealed class PerformanceFoundationTests
     [Fact]
     public void SupportedProfileMatchingIsExactAndConstructorFallbackCanBeTighter()
     {
-        var expected = SuitePerformanceWorkIdentities.AutoCastMutation;
+        var expected = SuitePerformanceWorkIdentities.AutoConceptMutation;
         var fallback = new SuitePerformanceCoordinator(
             new ManualPerformanceClock(),
             starvationThresholdFrames: 77);

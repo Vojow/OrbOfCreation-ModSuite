@@ -9,15 +9,13 @@ namespace OrbAutomata;
 /// </summary>
 internal static class AutomataProductionComposition
 {
-    internal const int CoreServiceCount = 3;
-    internal const int FullServiceCount = 4;
+    internal const int CoreServiceCount = 1;
+    internal const int FullServiceCount = 2;
 
     public static void Register(
         AutomataServiceRegistry registry,
         Func<IAutomataService?> tryCreateAutoHarvest,
-        Func<IAutomataService> createAutoCast,
-        Func<IAutomataService> createAutoConcept,
-        Func<IAutomataService> createSpellLevel)
+        Func<IAutomataService> createAutoConcept)
     {
         if (registry is null) throw new ArgumentNullException(nameof(registry));
         if (registry.Count != 0)
@@ -26,9 +24,7 @@ internal static class AutomataProductionComposition
         if (tryCreateAutoHarvest is null) throw new ArgumentNullException(nameof(tryCreateAutoHarvest));
         var autoHarvest = tryCreateAutoHarvest();
         if (autoHarvest is not null) registry.Register(autoHarvest);
-        RegisterCreated(registry, createAutoCast, nameof(createAutoCast));
         RegisterCreated(registry, createAutoConcept, nameof(createAutoConcept));
-        RegisterCreated(registry, createSpellLevel, nameof(createSpellLevel));
     }
 
     private static void RegisterCreated(

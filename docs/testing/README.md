@@ -48,7 +48,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
 | Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
 | Auto Concept | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
-| Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~AutoSpellLevel` |
+| Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
 | Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
 | Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |

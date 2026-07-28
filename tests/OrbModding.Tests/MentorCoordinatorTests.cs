@@ -107,7 +107,7 @@ public sealed class MentorCoordinatorTests
     {
         var coordinator = Coordinator();
         long frame = 41;
-        var automataIdentity = SuitePerformanceWorkIdentities.AutoCastMutation;
+        var automataIdentity = SuitePerformanceWorkIdentities.AutoConceptMutation;
         using var automata = coordinator.Register(
             automataIdentity.Subsystem,
             automataIdentity.WorkName,

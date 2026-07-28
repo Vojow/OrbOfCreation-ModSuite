@@ -11,27 +11,6 @@ namespace OrbModding.Tests;
 public sealed class AutomataTests
 {
     [Fact]
-    public void SpellCostReaderUsesTrueMaxQuantityInsteadOfEffectSoftCap()
-    {
-        var resource = new TestResourceSO
-        {
-            uuid = "mana",
-            name = "Mana",
-            quantity = new TestBigDouble(8.0, 5),
-            maxQuantity = new TestValueModifierRecord(new TestBigDouble(5.0, 5)),
-            trueAmountMultiplier = 2.0,
-        };
-        Assert.True(ReflectionCostReader.TryRead(new[]
-        {
-            new TestCostEntry(resource, new TestBigDouble(1.0, 3)),
-        }, out var decoded, out var reason), reason);
-        var result = Assert.Single(decoded);
-
-        Assert.Equal("8e5", result.CurrentQuantity.ToString());
-        Assert.Equal("1e6", result.Capacity?.ToString());
-    }
-
-    [Fact]
     public void DecisionLogGate_ThrottlesRepeatedStateButLogsTransitions()
     {
         var gate = new DecisionLogGate(TimeSpan.FromSeconds(30));
@@ -255,46 +234,6 @@ public sealed class AutomataTests
     }
 
     [Fact]
-    [Trait("Category", "HeadlessIntegration")]
-    public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
-    {
-        var upgrade = new UpgradeSO();
-        upgrade.uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid;
-        IdScriptableObject.RuntimeLookup.Clear();
-        IdScriptableObject.RuntimeLookup[new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
-        var recipe = new SpellRecipeSO { discovered = true, readyToLevel = true };
-        SpellManager.instance = new SpellManager();
-        SpellManager.instance.availableSpellRecipes.value.Add(recipe);
-        using var runtime = new ReflectionSpellLevelRuntime();
-
-        Assert.Equal(AutoSpellLevelCapability.Locked, runtime.ReadSnapshot(out var reason).Capability);
-        Assert.Equal(string.Empty, reason);
-
-        recipe.levelingPrerequisites.available = true;
-        upgrade.queuedLevels = 1;
-        recipe.levelCost.affordable = false;
-        var single = runtime.ReadSnapshot(out reason);
-        Assert.Equal(AutoSpellLevelCapability.Single, single.Capability);
-        Assert.Null(single.Candidate);
-        Assert.Equal(0, recipe.levelCost.PerformCalls);
-
-        recipe.levelCost.affordable = true;
-        single = runtime.ReadSnapshot(out reason);
-        Assert.NotNull(single.Candidate);
-        Assert.True(runtime.TryLevelSingle(single.Candidate!, out reason));
-        Assert.Equal(1, recipe.masteryLevel);
-        Assert.Equal(1, recipe.levelCost.PerformCalls);
-
-        recipe.readyToLevel = true;
-        upgrade.level = 1;
-        var all = runtime.ReadSnapshot(out reason);
-        Assert.Equal(AutoSpellLevelCapability.All, all.Capability);
-        Assert.True(runtime.TryLevelAll(out reason));
-        Assert.Equal(2, recipe.masteryLevel);
-        Assert.Equal(2, recipe.levelCost.PerformCalls);
-    }
-
-    [Fact]
     public void AutoConceptOwnershipNeverClaimsUnexpectedManualQuantity()
     {
         var ledger = new ConceptOwnershipLedger();
@@ -329,54 +268,5 @@ public sealed class AutomataTests
 
         Assert.True(accepted.Passed);
         Assert.False(rejected.Passed);
-    }
-
-    private sealed class TestCostEntry
-    {
-        public TestCostEntry(TestResourceSO resource, TestBigDouble amount)
-        {
-            this.resource = resource;
-            this.amount = amount;
-        }
-
-        public readonly TestResourceSO resource;
-        public readonly TestBigDouble amount;
-    }
-
-    private sealed class TestResourceSO : ScriptableObject
-    {
-        public string uuid = string.Empty;
-        public TestBigDouble quantity = new TestBigDouble(0.0, 0);
-        public TestValueModifierRecord maxQuantity = new TestValueModifierRecord(new TestBigDouble(-1.0, 0));
-        public double trueAmountMultiplier = 1.0;
-
-        public TestBigDouble GetTrueQuantity() => quantity;
-
-        public TestBigDouble GetTrueAmount(TestBigDouble amount) =>
-            new TestBigDouble(amount.mantissa * trueAmountMultiplier, amount.exponent);
-    }
-
-    private sealed class TestValueModifierRecord
-    {
-        private readonly TestBigDouble _value;
-
-        public TestValueModifierRecord(TestBigDouble value)
-        {
-            _value = value;
-        }
-
-        public TestBigDouble GetValue() => _value;
-    }
-
-    private sealed class TestBigDouble
-    {
-        public TestBigDouble(double mantissa, long exponent)
-        {
-            this.mantissa = mantissa;
-            this.exponent = exponent;
-        }
-
-        public readonly double mantissa;
-        public readonly long exponent;
     }
 }

@@ -11,6 +11,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         int discRarityLevel,
         BigDouble masteryXp,
         int masteryLevel,
+        bool masteryLevelReady,
         bool hiddenDiscovery,
         bool isRequiredDiscovery,
         int penaltyUsageCost,
@@ -30,6 +31,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         DiscRarityLevel = discRarityLevel;
         MasteryXp = masteryXp;
         MasteryLevel = masteryLevel;
+        MasteryLevelReady = masteryLevelReady;
         HiddenDiscovery = hiddenDiscovery;
         IsRequiredDiscovery = isRequiredDiscovery;
         PenaltyUsageCost = penaltyUsageCost;
@@ -56,6 +58,17 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
     internal BigDouble MasteryXp { get; }
 
     internal int MasteryLevel { get; }
+
+    /// <summary>
+    /// Whether the mastery track has banked enough experience for the next level to be bought.
+    /// </summary>
+    /// <remarks>
+    /// The game's own answer, <c>IsReadyToLevelMastery()</c>, rather than a comparison this suite
+    /// makes: the experience threshold lives inside a container the snapshot does not publish, so
+    /// there is nothing to compare <see cref="MasteryXp"/> against. W58 named the shortfall and W59
+    /// closes it. The call reads and writes nothing, which is what lets capture make it.
+    /// </remarks>
+    internal bool MasteryLevelReady { get; }
 
     internal bool HiddenDiscovery { get; }
 
@@ -91,6 +104,7 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
     private Func<object, int>? _discRarityLevel;
     private Func<object, BigDouble>? _masteryXp;
     private Func<object, int>? _masteryLevel;
+    private Func<object, bool>? _masteryLevelReady;
     private Func<object, bool>? _hiddenDiscovery;
     private Func<object, bool>? _isRequiredDiscovery;
     private Func<object, int>? _penaltyUsageCost;
@@ -117,6 +131,7 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         _discRarityLevel = bind.Field<int>("discRarityLevel");
         _masteryXp = bind.Field<BigDouble>("masteryExperience");
         _masteryLevel = bind.Field<int>("masteryLevel");
+        _masteryLevelReady = bind.Call<bool>("IsReadyToLevelMastery");
         _hiddenDiscovery = bind.Field<bool>("hiddenDiscovery");
         _isRequiredDiscovery = bind.Field<bool>("isRequiredDiscovery");
         _penaltyUsageCost = bind.Field<int>("penaltyUsageCost");
@@ -140,6 +155,7 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
             _discRarityLevel!(entity),
             _masteryXp!(entity),
             _masteryLevel!(entity),
+            _masteryLevelReady!(entity),
             _hiddenDiscovery!(entity),
             _isRequiredDiscovery!(entity),
             _penaltyUsageCost!(entity),

@@ -4,41 +4,57 @@
 
 ## Risk contract
 
-Auto Cast must discover the active native loadout, respect charge and resource
-requirements, reject undecodable cost vectors, preserve manual interruption,
-verify the audited native fire boundary, and isolate failures from other
-Automata action families.
+Auto Cast must take turns across the equipped loadout, respect the reserve floor
+and the resource start threshold, hold and release charged spells exactly once,
+pause for manual casting, verify the audited native fire boundary, and isolate
+failures from other Automata action families.
+
+The split between the two halves is itself part of the contract. The worker sees
+the published loadout, its readiness, and its prices, and nothing else; whether a
+target request is already open, whether the caster is free, whether the slot
+still holds the spell that was planned, and whether the spell has anything to aim
+at are all read live at the action boundary, because none of them is on the
+snapshot (W60). A test that lets the planner decide any of those is testing a
+design the suite does not have.
 
 ## Primary ownership
 
-- [AutoCastTests.cs](../../../tests/OrbModding.Tests/AutoCastTests.cs) owns defaults, policy, resource thresholds, charge modes,
-  target resolution, native failure behavior, lifecycle blocking, and hot-path
-  contract caching.
-- [AutomationAdmissionAdapterTests.cs](../../../tests/OrbModding.Tests/AutomationAdmissionAdapterTests.cs) owns normalized cost and readiness facts.
+- [AutoCastCycleEvaluatorTests.cs](../../../tests/OrbModding.Tests/Services/AutoCast/Runtime/ServiceCycle/AutoCastCycleEvaluatorTests.cs) owns
+  the configuration gate, the admission ladder, the rotation cursor, the channel
+  pause, and the full-charge hold's whole lifetime.
+- [AutoCastCycleActionAdapterTests.cs](../../../tests/OrbModding.Tests/Services/AutoCast/Runtime/ServiceCycle/AutoCastCycleActionAdapterTests.cs) owns
+  slot re-identification, the live refusals, the epoch, ownership and
+  manual-pause guards, the verified one-fire delta, and the block-until-lifecycle
+  rule.
+- [AutoCastFeatureStatusProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoCast/Diagnostics/AutoCastFeatureStatusProjectorTests.cs) owns
+  the order of the terms in the health line.
+- [AutoCastTests.cs](../../../tests/OrbModding.Tests/AutoCastTests.cs) owns the
+  configuration defaults and the toggle button.
 - [NativeMutationVerifierTests.cs](../../../tests/OrbModding.Tests/NativeMutationVerifierTests.cs) owns capture/execute/capture failure semantics.
-- [AutoCastCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutoCastCoordinatorTests.cs) owns coordinator scheduling and mutation-lease behavior.
 - Game contract tests own exact loadout, cast, resource, target, and Harmony
   members from the installed assemblies.
 
 ## Focused command
 
 ```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~AutoCastTests"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~AutoCast"
 ```
 
-Also run `Fast` for any production change. Run `PerformanceAll` when polling,
-candidate discovery, reflection caching, or coordinator cadence changes.
+Then run `Fast`; include installed contracts for any reflected/native change.
 
 ## Required cases for behavior changes
 
-- Disabled/default behavior performs no cast mutation.
-- Partial or malformed cost vectors reject the entire cast.
-- Charged and instant spells use their correct readiness contract.
-- Target/loadout changes invalidate prepared work.
-- Fire exceptions or unverified results block only Auto Cast for the supported
-  recovery boundary.
-- Emergency disable and manual interruption stop future automation without
-  altering already accepted native work.
+- Disabled or emergency-stopped configuration plans no cast and still reschedules.
+- A spell the reserve floor or the start threshold refuses is attributed to that
+  term rather than silently dropped.
+- A charged spell is held for exactly one cast and released once, including when
+  the setting is turned off or the loadout is rearranged underneath the hold.
+- A channel in progress pauses the whole rotation rather than its own slot.
+- The boundary re-resolves the slot by position and identity, and refuses rather
+  than casting whatever is in the position.
+- Fire exceptions or unverified results block only that spell, and only until the
+  next lifecycle.
+- Manual casting pauses future automation without stranding a live charge hold.
 
 ## Runtime handoff
 

@@ -23,6 +23,7 @@ internal readonly struct RawStructureSample : IWorldEntity
         float queueTimeTotal,
         int quantity,
         bool debugStructure,
+        bool disabled,
         int observableId,
         bool insufficientReqPenaltyActive,
         int bufferDevelopedQuantity,
@@ -43,6 +44,7 @@ internal readonly struct RawStructureSample : IWorldEntity
         QueueTimeTotal = queueTimeTotal;
         Quantity = quantity;
         DebugStructure = debugStructure;
+        Disabled = disabled;
         ObservableId = observableId;
         InsufficientReqPenaltyActive = insufficientReqPenaltyActive;
         BufferDevelopedQuantity = bufferDevelopedQuantity;
@@ -99,6 +101,9 @@ internal readonly struct RawStructureSample : IWorldEntity
 
     /// <summary>The game's own debug flag for this entry.</summary>
     internal bool DebugStructure { get; }
+
+    /// <summary>Whether the player disabled this structure's effect.</summary>
+    internal bool Disabled { get; }
 
     /// <summary>The observable stamp the game bumps when this structure's value moves.</summary>
     internal int ObservableId { get; }
@@ -253,6 +258,7 @@ internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, 
     private Func<object, float>? _queueTimeTotal;
     private Func<object, int>? _quantity;
     private Func<object, bool>? _debugStructure;
+    private Func<object, bool>? _disabled;
     private Func<object, int>? _observableId;
     private Func<object, bool>? _insufficientReqPenalty;
     private Func<object, int>? _bufferDeveloped;
@@ -295,6 +301,7 @@ internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, 
         _queueTimeTotal = bind.Field<float>("queueTimeTotal");
         _quantity = bind.Field<int>("quantity");
         _debugStructure = bind.Field<bool>("debugStructure");
+        _disabled = bind.Field<bool>("disabled");
         _observableId = bind.Field<int>("observableId");
         _insufficientReqPenalty = bind.Field<bool>("insufficientReqPenaltyActive");
         _bufferDeveloped = bind.Field<int>("bufferDevelopedQuantity");
@@ -344,6 +351,7 @@ internal sealed class WorldStructureBinder : WorldRowBinder<RawStructureSample, 
             _queueTimeTotal!(entity),
             _quantity!(entity),
             _debugStructure!(entity),
+            _disabled!(entity),
             _observableId!(entity),
             _insufficientReqPenalty!(entity),
             _bufferDeveloped!(entity),

@@ -1,0 +1,33 @@
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+
+namespace OrbAutomata;
+
+/// <summary>Why a Spell Leveling action ended the way it did. Codes are append-only.</summary>
+internal static class SpellLevelActionResultCodes
+{
+    /// <summary>Another plugin holds the spell-level action family.</summary>
+    /// <remarks>
+    /// A rejection rather than a fault: standing down for a plugin that owns the family is the
+    /// arbitration working, and the lease can come back at any time.
+    /// </remarks>
+    public static ServiceActionResultCode ActionFamilyUnavailable => new(2048);
+
+    /// <summary>
+    /// The game says spell leveling is not unlocked yet — no discovered spell's leveling prerequisite
+    /// passes.
+    /// </summary>
+    /// <remarks>
+    /// A rejection, and the one refusal the planner cannot avoid: prerequisites are not published, so
+    /// the worker plans optimistically and learns the answer here. It is also what tells the feature
+    /// status to read <c>Locked</c>, which is why it is its own code rather than a generic native
+    /// rejection.
+    /// </remarks>
+    public static ServiceActionResultCode ProgressionLocked => new(2049);
+
+    /// <summary>The level's cost is no longer affordable, or the spell is no longer ready.</summary>
+    /// <remarks>
+    /// Penalty-free: affordability is deliberately a boundary fact (W59), so a plan the holdings no
+    /// longer cover is the design working rather than a planner bug.
+    /// </remarks>
+    public static ServiceActionResultCode LevelNotAffordable => new(2050);
+}

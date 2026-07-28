@@ -51,6 +51,25 @@
           "provenance": "Contents/Resources/Data/Managed/Assembly-CSharp-firstpass.dll"
         }
       ]
+    },
+    {
+      "id": "steam-macos-2026-07-28",
+      "platform": "macos",
+      "auditedAt": "2026-07-28",
+      "gameBuild": "Orb of Creation v1.0.5-2 / Unity / macOS Steam managed build installed 2026-07-28",
+      "provenance": "Stages 1-4 verified against the read-only staged copy at artifacts/game-v105; the installed game was not modified.",
+      "assemblies": [
+        {
+          "assembly": "assembly-csharp",
+          "sha256": "46B723AD8E3DF5ADF7186EC32B220C338E26C1CC79369E01213C091155073BDC",
+          "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/Assembly-CSharp.dll"
+        },
+        {
+          "assembly": "assembly-csharp-firstpass",
+          "sha256": "CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891",
+          "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll"
+        }
+      ]
     }
   ],
   "contracts": [
@@ -6993,7 +7012,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "prerequisites.check-at-level",
@@ -7721,7 +7740,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "resource-drain.current",
@@ -8961,28 +8980,6 @@
       "place": "action"
     },
     {
-      "id": "resource.get-true-amount",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetTrueAmount",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [
-        "BigDouble"
-      ],
-      "owners": [
-        "Automata resource snapshots",
-        "Automata cast costs"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "resource.get-true-quantity",
       "assembly": "assembly-csharp",
       "type": "ResourceSO",
@@ -9306,27 +9303,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "resource.max-quantity-cost-reader-alias",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "maxQuantity",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ValueModifierRecord",
-      "owners": [
-        "Automata cast cost capacity"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy",
-      "sourceTokens": [
-        "MaxQuantity"
-      ]
     },
     {
       "id": "resource.max-quantity-functional",
@@ -10528,6 +10504,20 @@
       "place": "patch"
     },
     {
+      "id": "spell-list-variable.type",
+      "assembly": "assembly-csharp",
+      "type": "SpellListVariable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "spell-manager.active-spells",
       "assembly": "assembly-csharp",
       "type": "SpellManager",
@@ -10583,7 +10573,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-manager.can-cast-a-spell",
@@ -10602,7 +10592,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-manager.fire-spell-index",
@@ -10623,7 +10613,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-manager.instance",
@@ -10704,7 +10694,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-recipe.all",
@@ -10853,7 +10843,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-recipe.has-alerted-this-mastery",
@@ -10924,12 +10914,13 @@
       "parameters": [],
       "owners": [
         "Automata spell leveling",
-        "Mentor spells"
+        "Mentor spells",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell-recipe.is-required-discovery",
@@ -10965,7 +10956,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell-recipe.mastery-experience",
@@ -11797,12 +11788,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.can-charge",
@@ -11816,12 +11808,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.current-charges",
@@ -11835,12 +11828,13 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.fire",
@@ -11859,7 +11853,7 @@
       "usages": [
         "harmony"
       ],
-      "place": "legacy"
+      "place": "patch"
     },
     {
       "id": "spell.get-cooldown",
@@ -11873,12 +11867,13 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.get-cost",
@@ -11892,12 +11887,13 @@
       "returnType": "ResourceCostList",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.get-drain-cost",
@@ -11911,12 +11907,13 @@
       "returnType": "ResourceCostList",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.get-icon",
@@ -11949,12 +11946,13 @@
       "returnType": "SpellRecipeSO",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast identity"
+        "Automata Auto Cast identity",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy",
+      "place": "capture",
       "sourceTokens": [
         "reference"
       ]
@@ -11976,7 +11974,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "spell.has-enough-resources",
@@ -11990,12 +11988,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-attuning",
@@ -12009,12 +12008,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-casting",
@@ -12028,12 +12028,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-channeled",
@@ -12047,12 +12048,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-charge-available",
@@ -12066,12 +12068,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-empty",
@@ -12085,12 +12088,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-readying-cast",
@@ -12104,12 +12108,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.is-toggled",
@@ -12123,12 +12128,13 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.max-charges",
@@ -12142,12 +12148,13 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast"
+        "Automata Auto Cast",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "capture"
     },
     {
       "id": "spell.set-charge-input",
@@ -12169,7 +12176,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "structure.active-cost-mod",
@@ -12340,25 +12347,6 @@
       "place": "action"
     },
     {
-      "id": "structure.complete-action",
-      "assembly": "assembly-csharp",
-      "type": "StructureSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "CompleteAction",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy completion"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "structure.completed-echos",
       "assembly": "assembly-csharp",
       "type": "StructureSO",
@@ -12439,6 +12427,24 @@
       "typeVisibility": "public",
       "kind": "field",
       "member": "debugStructure",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "structure.disabled",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "disabled",
       "visibility": "public",
       "static": false,
       "valueType": "System.Boolean",
@@ -12934,7 +12940,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "target-options.has-valid",
@@ -12955,7 +12961,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "target-request.options",
@@ -12973,7 +12979,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "targeting-manager.get-link",
@@ -12992,7 +12998,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "targeting-manager.is-targeting",
@@ -13011,7 +13017,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "targeting-manager.submit-target",
@@ -13032,7 +13038,7 @@
       "usages": [
         "reflection"
       ],
-      "place": "legacy"
+      "place": "action"
     },
     {
       "id": "thought-stream.all",
@@ -13616,25 +13622,6 @@
       "place": "action"
     },
     {
-      "id": "upgrade.complete-action",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "CompleteAction",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy completion"
-      ],
-      "usages": [
-        "harmony"
-      ],
-      "place": "legacy"
-    },
-    {
       "id": "upgrade.development-time",
       "assembly": "assembly-csharp",
       "type": "UpgradeSO",
@@ -13955,25 +13942,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "value-modifier-record.as-big-double",
-      "assembly": "assembly-csharp",
-      "type": "ValueModifierRecord",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "AsBigDouble",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
-      "owners": [
-        "Automata cast cost capacity"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
     },
     {
       "id": "value-modifier-record.as-percent",

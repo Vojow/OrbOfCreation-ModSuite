@@ -131,27 +131,45 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void AStructuresDisabledEffectFlagIsPublished()
+    {
+        var active = Guid.NewGuid();
+        var disabled = Guid.NewGuid();
+        FakeStructure.All.Add(new FakeStructure { Identity = active, disabled = false });
+        FakeStructure.All.Add(new FakeStructure { Identity = disabled, disabled = true });
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(WorldLookup.TryFind(world.Structures, active, out var activeRow));
+        Assert.False(activeRow.Reading.Disabled);
+        Assert.True(WorldLookup.TryFind(world.Structures, disabled, out var disabledRow));
+        Assert.True(disabledRow.Reading.Disabled);
+    }
+
+    [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-two passes: the four categories the
-        // suite started with, four global-variable registries, twenty-five more the game persists
+        // The scope claim, asserted rather than described. Forty-three passes: the four categories
+        // the suite started with, four global-variable registries, twenty-five more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
         // lists, the authored effects, each plot's authoring and each action's completion blocks,
         // each purchasable entity's per-level conditions, which are second walks of registries rather
         // than registries of their own, the plot-and-action pairs, which belong to neither side, and
-        // the action queues, which belong to no per-type registry at all and are reached by uuid. A
-        // pass that quietly stopped covering one would show up only as a consumer finding nothing
-        // where there was something.
+        // the two that belong to no per-type registry at all and are reached by uuid: the action
+        // queues and the equipped spell loadout. A pass that quietly stopped covering one would show
+        // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(42, report.Categories.Length);
+        Assert.Equal(43, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -197,6 +215,42 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(3, row.Level);
         Assert.True(row.Seen);
         Assert.True(row.RewardQueued);
+    }
+
+    [Fact]
+    public void ASpellsMasteryReadinessIsCollectedFromTheGamesOwnAnswer()
+    {
+        // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
+        // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
+        // own predicate is the only readable form of "this level can be bought". See W59.
+        var ready = Guid.NewGuid();
+        var banking = Guid.NewGuid();
+        FakeSpellRecipe.All.Add(new FakeSpellRecipe
+        {
+            Identity = ready,
+            discovered = true,
+            masteryLevel = 4,
+            readyToLevel = true,
+        });
+        FakeSpellRecipe.All.Add(new FakeSpellRecipe
+        {
+            Identity = banking,
+            discovered = true,
+            masteryLevel = 4,
+            readyToLevel = false,
+        });
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(WorldLookup.TryFind(world.SpellRecipes, ready, out var readyRow));
+        Assert.True(readyRow.MasteryLevelReady);
+        Assert.True(WorldLookup.TryFind(world.SpellRecipes, banking, out var bankingRow));
+        Assert.False(bankingRow.MasteryLevelReady);
+
+        // Same mastery level on both: readiness is its own fact, not one the level implies.
+        Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
     }
 
     [Fact]
@@ -648,6 +702,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public float queueTimeTotal = 1f;
         public int quantity;
         public bool debugStructure;
+        public bool disabled;
         public int observableId;
         public bool insufficientReqPenaltyActive;
         public int bufferDevelopedQuantity;
@@ -2226,6 +2281,144 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.False(WorldActionQueueSlotLookup.TryFindRange(
             world.ActionQueueSlots, Guid.NewGuid(), out _, out _));
+    }
+
+    /// <summary>
+    /// The equipped loadout publishes one row per readable position, keyed by the game's own index.
+    /// </summary>
+    /// <remarks>
+    /// The index is the whole point. It is what a cast is addressed by, so it has to count the holes
+    /// the player leaves in the loadout — a table that renumbered its rows densely would still look
+    /// right in every assertion about occupancy and would fire the wrong spell.
+    /// </remarks>
+    [Fact]
+    public void TheEquippedLoadoutIsPublishedByThePositionACastIsAddressedBy()
+    {
+        var fireball = new FakeSpellRecipe { discovered = true };
+        FakeSpellRecipe.All.Add(fireball);
+
+        var water = Guid.NewGuid();
+        var mana = Guid.NewGuid();
+
+        var equipped = new FakeSpell
+        {
+            spellReference = fireball,
+            chargeable = true,
+            castReady = true,
+            currentCharges = 2,
+            maximumCharges = 3,
+            cooldownRemaining = new BigDouble(4d, 0),
+            cost = new FakeSpellCostList().With(water, 50d),
+            drainCost = new FakeSpellCostList().With(mana, 7d),
+        };
+
+        var loadout = new FakeSpellLoadout();
+        loadout.value.Add(equipped);
+        loadout.value.Add(null);
+        loadout.value.Add(new FakeSpell { empty = true });
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveSpells.Uuid] = loadout;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+
+        // The hole publishes nothing at all, so two rows for three positions.
+        Assert.Equal(2, world.SpellSlots.Count);
+
+        Assert.True(WorldSpellSlotLookup.TryFind(world.SpellSlots, 0, out var first));
+        Assert.True(first.Occupied);
+        Assert.Equal(fireball.Identity, first.SpellRecipeId);
+        Assert.True(first.Chargeable);
+        Assert.True(first.CastReady);
+        Assert.Equal(2, first.CurrentCharges);
+        Assert.Equal(3, first.MaximumCharges);
+        Assert.Equal(4d, first.CooldownRemaining.ToDouble());
+
+        // The empty position keeps its index rather than sliding down into the hole's place.
+        Assert.False(WorldSpellSlotLookup.TryFind(world.SpellSlots, 1, out _));
+        Assert.True(WorldSpellSlotLookup.TryFind(world.SpellSlots, 2, out var third));
+        Assert.False(third.Occupied);
+        Assert.Equal(Guid.Empty, third.SpellRecipeId);
+
+        // Both prices are published against the same position, and they do not run together.
+        Assert.True(WorldSpellCostLookup.TryFindRange(
+            world.SpellCosts, 0, WorldSpellCostKind.Immediate, out var start, out var count));
+        Assert.Equal(1, count);
+        Assert.Equal(water, world.SpellCosts[start].ResourceId);
+        Assert.Equal(50d, world.SpellCosts[start].Amount.ToDouble());
+
+        Assert.True(WorldSpellCostLookup.TryFindRange(
+            world.SpellCosts, 0, WorldSpellCostKind.Drain, out var drainStart, out var drainCount));
+        Assert.Equal(1, drainCount);
+        Assert.Equal(mana, world.SpellCosts[drainStart].ResourceId);
+        Assert.Equal(7d, world.SpellCosts[drainStart].Amount.ToDouble());
+
+        // An empty position is priced at nothing rather than at whatever the last one cost.
+        Assert.False(WorldSpellCostLookup.TryFindRange(
+            world.SpellCosts, 2, WorldSpellCostKind.Immediate, out _, out _));
+    }
+
+    /// <summary>
+    /// Every per-slot state the game distinguishes is published, one field per question.
+    /// </summary>
+    /// <remarks>
+    /// These are the terms a planner skips on, and the game answers them separately because they mean
+    /// different things — a channelling spell occupies the caster, a toggled one is already up, and an
+    /// attuning one is neither. Folding them into one "busy" flag would lose the reason, and the
+    /// reason is what a refusal has to be explained by.
+    /// </remarks>
+    [Fact]
+    public void EachSlotCarriesTheGamesOwnAnswerForEveryStateItDistinguishes()
+    {
+        var loadout = new FakeSpellLoadout();
+        loadout.value.Add(new FakeSpell
+        {
+            spellReference = null,
+            casting = true,
+            readyingCast = true,
+            attuning = true,
+            channeled = true,
+            toggled = true,
+            chargeable = true,
+            castReady = false,
+            chargeAvailable = false,
+            resourcesCovered = false,
+        });
+        loadout.value.Add(new FakeSpell());
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveSpells.Uuid] = loadout;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+
+        Assert.True(WorldSpellSlotLookup.TryFind(world.SpellSlots, 0, out var busy));
+        Assert.True(busy.Casting);
+        Assert.True(busy.ReadyingCast);
+        Assert.True(busy.Attuning);
+        Assert.True(busy.Channeled);
+        Assert.True(busy.Toggled);
+        Assert.True(busy.Chargeable);
+        Assert.False(busy.CastReady);
+        Assert.False(busy.ChargeAvailable);
+        Assert.False(busy.ResourcesCovered);
+
+        // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
+        // consumer that cannot name what is in it should see that rather than see nothing.
+        Assert.True(busy.Occupied);
+        Assert.Equal(Guid.Empty, busy.SpellRecipeId);
+
+        // The neighbouring slot is the negative of all of it, from the same pass.
+        Assert.True(WorldSpellSlotLookup.TryFind(world.SpellSlots, 1, out var idle));
+        Assert.False(idle.Casting);
+        Assert.False(idle.ReadyingCast);
+        Assert.False(idle.Attuning);
+        Assert.False(idle.Channeled);
+        Assert.False(idle.Toggled);
+        Assert.True(idle.CastReady);
     }
 
     /// <summary>

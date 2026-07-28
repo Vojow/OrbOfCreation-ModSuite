@@ -180,13 +180,14 @@ SuiteFramePump
   -> Register world collection definition and adapters   (source shape)
   -> Register Auto Harvest definition and adapters       (ordinary)
   -> Register Auto Buy definition and adapters           (ordinary)
+  -> Register Spell Leveling definition and adapters     (ordinary)
 ```
 
 World collection registers first so the world is published before the services that read it
 evaluate. That ordering is a convenience, not a guarantee: nothing enforces order between
 services, and a consumer whose first cycle beat the first collection would simply wait a
-frame. Auto Cast, Auto Concept, Spell Leveling and Mentor are not registered here — they
-still run on the older per-feature path and join this list as they migrate.
+frame. Auto Cast, Auto Concept and Mentor are not registered here — they still run on the
+older per-feature path and join this list as they migrate.
 
 Registration:
 

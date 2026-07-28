@@ -55,6 +55,10 @@ internal static class WorldCategoryFakes
         ["PlotNodeActionInstanceListVariable"] = typeof(FakeActionQueue),
         ["ActionableListVariable"] = typeof(FakeAttributeQueue),
 
+        // Nor is the equipped loadout: Spell belongs to no per-type registry either, so the list
+        // holding it is reached by uuid the same way and the slots are read out of that list.
+        ["SpellListVariable"] = typeof(FakeSpellLoadout),
+
         // Not categories either: an effect block's one modifier and one script are read past their
         // counts, and the lists holding them are typed as interfaces, so the two kinds the suite
         // knows how to read are reached by name.
@@ -482,6 +486,84 @@ internal sealed class FakeGuidContainer
     internal FakeGuidContainer(Guid guid) => _guid = guid;
 }
 
+/// <summary>
+/// The equipped loadout, as a list variable with a uuid. Holes are real: the game lets a player leave
+/// a position unfilled, and the position still counts toward the index a cast is addressed by.
+/// </summary>
+internal sealed class FakeSpellLoadout
+{
+    public Guid Identity = Guid.NewGuid();
+    public List<FakeSpell?> value = new();
+
+    public Guid GetGuid() => Identity;
+}
+
+/// <summary>One equipped spell, answering exactly what the loadout reader asks it.</summary>
+internal sealed class FakeSpell
+{
+    public FakeSpellRecipe? spellReference;
+    public bool empty;
+    public bool casting;
+    public bool readyingCast;
+    public bool attuning;
+    public bool channeled;
+    public bool toggled;
+    public bool chargeable;
+    public bool castReady = true;
+    public bool chargeAvailable = true;
+    public bool resourcesCovered = true;
+    public int currentCharges;
+    public int maximumCharges;
+    public BigDouble cooldownRemaining;
+    public FakeSpellCostList cost = new();
+    public FakeSpellCostList drainCost = new();
+
+    public FakeSpellRecipe? get_reference() => spellReference;
+
+    public bool IsEmpty() => empty;
+    public bool IsCasting() => casting;
+    public bool IsReadyingCast() => readyingCast;
+    public bool IsAttuning() => attuning;
+    public bool IsChanneled() => channeled;
+    public bool IsToggledSpell() => toggled;
+    public bool CanCharge() => chargeable;
+    public bool CanCast() => castReady;
+    public bool IsChargeAvailable() => chargeAvailable;
+    public bool HasEnoughResources() => resourcesCovered;
+    public int GetCurrSpellCharges() => currentCharges;
+    public int GetMaxSpellCharges() => maximumCharges;
+    public BigDouble GetCooldownTimeRemaining() => cooldownRemaining;
+    public FakeSpellCostList GetCost() => cost;
+    public FakeSpellCostList GetDrainCost() => drainCost;
+}
+
+/// <summary>What a spell answers when asked its price, in the game's own cost-list shape.</summary>
+internal sealed class FakeSpellCostList
+{
+    public List<FakeSpellCostEntry> costs = new();
+
+    internal FakeSpellCostList With(Guid resource, double amount)
+    {
+        costs.Add(new FakeSpellCostEntry(resource, amount));
+        return this;
+    }
+}
+
+/// <summary>
+/// One priced resource. The magnitude is the BigDouble field, not the serialized double beside it.
+/// </summary>
+internal struct FakeSpellCostEntry
+{
+    public FakeReferencedEntity resource;
+    public BigDouble valueBig;
+
+    internal FakeSpellCostEntry(Guid resourceId, double amount)
+    {
+        resource = new FakeReferencedEntity { Identity = resourceId };
+        valueBig = new BigDouble(amount, 0);
+    }
+}
+
 internal sealed class FakeSpellRecipe
 {
     public static readonly List<FakeSpellRecipe> All = new();
@@ -491,6 +573,7 @@ internal sealed class FakeSpellRecipe
     public int discRarityLevel;
     public BigDouble masteryExperience;
     public int masteryLevel;
+    public bool readyToLevel;
     public bool hiddenDiscovery;
     public bool isRequiredDiscovery;
     public int penaltyUsageCost;
@@ -506,6 +589,8 @@ internal sealed class FakeSpellRecipe
     public bool hasAlertedThisMastery;
 
     public Guid GetGuid() => Identity;
+
+    public bool IsReadyToLevelMastery() => readyToLevel;
 }
 
 internal sealed class FakeSpellType

@@ -16,27 +16,21 @@ public sealed class AutomataProductionCompositionTests
         AutomataProductionComposition.Register(
             registry,
             () => Create("harvest", calls),
-            () => Create("cast", calls),
-            () => Create("concept", calls),
-            () => Create("spell-level", calls));
+            () => Create("concept", calls));
         registry.Tick(0.25f);
 
         Assert.Equal(AutomataProductionComposition.FullServiceCount, registry.Count);
         Assert.Equal(new[]
         {
             "harvest.create",
-            "cast.create",
             "concept.create",
-            "spell-level.create",
             "harvest.tick",
-            "cast.tick",
             "concept.tick",
-            "spell-level.tick",
         }, calls);
     }
 
     [Fact]
-    public void FailedOptionalAutoHarvestConstructionLeavesTheThreeCoreServicesRunnable()
+    public void FailedOptionalAutoHarvestConstructionLeavesTheCoreServicesRunnable()
     {
         var calls = new List<string>();
         using var registry = new AutomataServiceRegistry();
@@ -44,9 +38,7 @@ public sealed class AutomataProductionCompositionTests
         AutomataProductionComposition.Register(
             registry,
             () => null,
-            () => Create("cast", calls),
-            () => Create("concept", calls),
-            () => Create("spell-level", calls));
+            () => Create("concept", calls));
         registry.Tick(0.25f);
 
         Assert.Equal(AutomataProductionComposition.CoreServiceCount, registry.Count);
@@ -62,9 +54,7 @@ public sealed class AutomataProductionCompositionTests
         Assert.Throws<InvalidOperationException>(() => AutomataProductionComposition.Register(
             registry,
             () => Create("harvest", new List<string>()),
-            () => Create("cast", new List<string>()),
-            () => Create("concept", new List<string>()),
-            () => Create("spell-level", new List<string>())));
+            () => Create("concept", new List<string>())));
     }
 
     [Fact]

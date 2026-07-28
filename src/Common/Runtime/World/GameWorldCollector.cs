@@ -73,6 +73,7 @@ internal sealed class GameWorldCollector
     private readonly WorldPlotActionReader _plotActions;
     private readonly WorldEntityEffectReader _entityEffects;
     private readonly WorldActionQueueReader _actionQueues;
+    private readonly WorldSpellSlotReader _spellSlots;
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
@@ -216,6 +217,10 @@ internal sealed class GameWorldCollector
             resolveType("IdScriptableObject"),
             resolveType("PlotNodeActionInstanceListVariable"),
             resolveType("ActionableListVariable"));
+        _spellSlots = new WorldSpellSlotReader(
+            resolveType("IdScriptableObject"),
+            resolveType("SpellListVariable"),
+            resolveType);
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
@@ -232,7 +237,7 @@ internal sealed class GameWorldCollector
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
-            _actionQueues, _plotAuthoring, _effectBlocks, _entityRequirements,
+            _actionQueues, _spellSlots, _plotAuthoring, _effectBlocks, _entityRequirements,
         };
 
         _isStructural = new bool[_readers.Length];

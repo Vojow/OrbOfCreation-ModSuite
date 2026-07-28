@@ -27,6 +27,8 @@ internal static class AutomataServiceCycleTraceRoster
     private const string WorldCollectionId = "orbautomata.world-collection";
     private const string AutoHarvestId = "orbautomata.auto-harvest";
     private const string AutoBuyId = "orbautomata.auto-buy";
+    private const string SpellLevelId = "orbautomata.spell-level";
+    private const string AutoCastId = "orbautomata.auto-cast";
 
     /// <summary>
     /// The roster for a registry whose registrations are complete. Trace identity is the registration
@@ -57,6 +59,8 @@ internal static class AutomataServiceCycleTraceRoster
         WorldCollectionId => "World collection",
         AutoHarvestId => "Auto Harvest",
         AutoBuyId => "Auto Buy",
+        SpellLevelId => "Spell Leveling",
+        AutoCastId => "Auto Cast",
         _ => string.Empty,
     };
 }

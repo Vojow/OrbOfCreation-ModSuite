@@ -47,7 +47,7 @@ public sealed class CombinedSuiteHeadlessTests
                 .Select((registration, index) =>
                     (registration, SuitePerformanceWorkIdentities.GetSupportedSuiteV1(index).WorkName))
                 .ToDictionary(item => item.WorkName, item => item.registration, StringComparer.Ordinal);
-            byWorkName[SuitePerformanceWorkIdentities.AutoCastEvaluate.WorkName].SetPending(true);
+            byWorkName[SuitePerformanceWorkIdentities.AutoConceptEvaluate.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.MentorEvaluate.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.ModConfigWork.WorkName].SetPending(true);
             byWorkName[SuitePerformanceWorkIdentities.GameplayInvalidationDelivery.WorkName].SetPending(true);

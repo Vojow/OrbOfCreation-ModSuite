@@ -18,7 +18,8 @@ unit test for the changed type.
 | Queue-capacity arithmetic | [QueueCapacitySnapshotTests.cs](../../tests/OrbModding.Tests/QueueCapacitySnapshotTests.cs) | Auto Buy |
 | Typed registry resolution | [TypedRegistryResolverTests.cs](../../tests/OrbModding.Tests/TypedRegistryResolverTests.cs) | Automata and Mentor classifiers/catalogs |
 | Structured decisions/status | [AutomationDecisionTests.cs](../../tests/OrbModding.Tests/AutomationDecisionTests.cs), [FeatureStatusTests.cs](../../tests/OrbModding.Tests/FeatureStatusTests.cs) | Automata and Mod Config projections |
-| Failure circuits/admission | [AutomationCircuitBreakerTests.cs](../../tests/OrbModding.Tests/AutomationCircuitBreakerTests.cs), [AutomationAdmissionAdapterTests.cs](../../tests/OrbModding.Tests/AutomationAdmissionAdapterTests.cs) | Automata and Mentor adapters |
+| Failure circuits | [AutomationCircuitBreakerTests.cs](../../tests/OrbModding.Tests/AutomationCircuitBreakerTests.cs) | Automata and Mentor adapters |
+| Audited-build mutation gate | [AssemblyAuditGateTests.cs](../../tests/OrbModding.Tests/AssemblyAuditGateTests.cs) | every native mutation in the suite |
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
 | ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | Auto Harvest production registration and frame pump |

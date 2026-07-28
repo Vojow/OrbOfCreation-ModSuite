@@ -5,8 +5,9 @@
 > **Scope.** This records the game's queue and completion behavior. The Automata side it describes is
 > the legacy Auto Buy runtime, which has been deleted: the queue-signal patches are gone, there is no
 > `AutoBuyEngine` and no incremental catalog, and Auto Buy no longer polls the queue — it reads
-> structure and upgrade levels off the world snapshot and paces on `AfterDecision`. The surviving
-> `CompleteAction` postfix now nudges unmigrated Spell Leveling, not Auto Buy. Read the native
+> structure and upgrade levels off the world snapshot and paces on `AfterDecision`. The
+> `CompleteAction` postfix is gone too: it nudged unmigrated Spell Leveling, which now gates on the
+> world generation like every other migrated service. Read the native
 > observations as current and every Automata mechanism named below as history.
 
 ## Shared queue authority

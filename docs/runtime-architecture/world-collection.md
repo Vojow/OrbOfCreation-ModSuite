@@ -196,7 +196,7 @@ category's row struct and its binder. The machinery they plug into lives one dir
 `WorldCategoryMachinery.cs` (buffers, readers, derivers), `NativeAccessorBinder.cs` (member binding),
 `GameWorldCollector.cs` (the pass), `GameWorldStateDeriver.cs` (the five derived categories).
 
-Four categories are exceptions to one-row-per-entity. Which *tables* the identity walk skips is a
+Five categories are exceptions to one-row-per-entity. Which *tables* the identity walk skips is a
 longer list, and it is stated in exactly one place — `NotIdentityTables` in
 `tests/OrbModding.Tests/Runtime/Verification/WorldIdentityWalkTests.cs` — because every second
 reading of an entity another table already claims lands there.
@@ -222,6 +222,17 @@ queue and its index and is exempt beside the costs and the pairs. Neither is rea
 walk. A list variable's `All` is declared on its generic base and the member binder does not walk
 base types, so both queues are resolved by uuid through the identity registry every other lookup
 already goes through — which also avoids the action-manager singleton entirely.
+
+Spell slots are the fifth, and are the only category keyed by a position rather than by a guid.
+`Categories/WorldSpellSlot.cs` publishes the equipped loadout and `Categories/WorldSpellCost.cs`
+publishes what casting out of it costs, both filled by one reader — a slot's price is only answerable
+from the same equipped instance the slot was read from, so a second walk would ask the game the same
+question twice. Neither table is identity-keyed: a position may be unfilled and two positions may
+hold the same spell, so `SlotIndex` is the key and it counts the unfilled positions exactly as the
+game does, because it is the number a cast is addressed by. Like the queues, the loadout is reached
+by uuid through the identity registry rather than through the spell-manager singleton, and it is a
+bespoke reader rather than a plain binder so that `Spell`'s unread serialized fields are not dragged
+into the declared surface ([W60](world-collection-decisions.md)).
 
 Entity requirements are the fourth. `Categories/WorldEntityRequirement.cs` reads every upgrade's and
 every structure's per-level prerequisite container, so a row is one condition and an entity has as

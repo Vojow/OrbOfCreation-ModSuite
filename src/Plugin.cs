@@ -55,19 +55,6 @@ public sealed class Plugin : BaseUnityPlugin
     };
 
     /// <summary>
-    /// The native completions Spell Leveling still has to be told about by hand. Auto Buy reads
-    /// structure and upgrade levels off the world snapshot and needs no signal, but Spell Leveling is
-    /// unmigrated and has no generation to gate on, so a finished build or purchase still has to nudge
-    /// it directly. Named here rather than written inline so that losing one of the two is a diff
-    /// rather than an omission; both retire when Spell Leveling moves onto the service cycle.
-    /// </summary>
-    internal static readonly string[] NativeCompletionHookTargets =
-    {
-        "StructureSO:CompleteAction",
-        "UpgradeSO:CompleteAction",
-    };
-
-    /// <summary>
     /// The native transitions the whole suite watches: a save loading, the game initialising, a
     /// runtime reset, a New Game+. They are what moves <see cref="GameLifecycleMonitor"/>'s
     /// generation, and with it the collected epoch that the world collector's structural-fact skip
@@ -93,9 +80,12 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _rebindSupersededVerificationChord;
     private AutomataFeatureStatuses? _featureStatuses;
     private readonly AutomataServiceRegistry _services = new();
-    private AutoCastEngine? _autoCastEngine;
     private AutoConceptController? _autoConceptController;
-    private AutoSpellLevelController? _autoSpellLevelController;
+    private readonly SpellLevelCapabilityState _spellLevelCapability = new();
+
+    // Held by the plugin rather than by the feature because the Harmony patch that feeds it outlives
+    // any one registration: the hook is installed once and the service is registered per lifecycle.
+    private readonly AutoCastManualPauseState _autoCastManualPause = new();
     private AutomataActionFamilyOwnership? _automataActionFamilyOwnership;
     private AutomataServiceCycleActivation? _serviceCycleActivation;
     private AutoCastToggleControl? _autoCastToggleControl;
@@ -220,7 +210,6 @@ public sealed class Plugin : BaseUnityPlugin
             message => Log.LogAutomataInfo(message),
             _rebindSupersededVerificationChord);
 
-        var reservePolicy = new ReservePolicy(config);
         _automataActionFamilyOwnership = new AutomataActionFamilyOwnership();
         Log.LogAutomataWarning(
             "Action-family ownership is best-effort: exact known conflicts and cooperative suite owners are isolated, but unknown plugins that invoke native actions without registering cannot be proven absent and are not disabled.");
@@ -232,7 +221,7 @@ public sealed class Plugin : BaseUnityPlugin
             () => featureStatuses.AutoCast.Current);
         _autoBuyToggleControl = new AutoBuyToggleControl(
             config,
-            () => _autoSpellLevelController?.Capability ?? AutoSpellLevelCapability.Locked,
+            () => _spellLevelCapability.Current,
             () => featureStatuses.AutoBuy.Current,
             () => featureStatuses.SpellLevel.Current);
         Func<long> readAutoHarvestLifecycleEpoch =
@@ -309,19 +298,21 @@ public sealed class Plugin : BaseUnityPlugin
                                                 () => AutomataTraceRunRoot.Stable("diagnostics")),
                                             message => Log.LogAutomataError(message),
                                             featureStatuses.AutoBuy))),
+                                new SpellLevelServiceCycleFeature(
+                                    new SpellLevelFeatureDependencies(
+                                        readAutoHarvestLifecycleEpoch,
+                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsSpellLevel == true,
+                                        capability: _spellLevelCapability,
+                                        featureStatus: featureStatuses.SpellLevel)),
+                                new AutoCastServiceCycleFeature(
+                                    new AutoCastFeatureDependencies(
+                                        readAutoHarvestLifecycleEpoch,
+                                        ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsCast == true,
+                                        _autoCastManualPause,
+                                        featureStatus: featureStatuses.AutoCast)),
                             },
                             Log);
                     }),
-            createAutoCast: () => _autoCastEngine = new AutoCastEngine(
-                config,
-                new ReflectionAutoCastCatalog(),
-                reservePolicy,
-                new ResourceFullnessPolicy(),
-                Log,
-                coordinator: SuitePerformanceCoordinator.Shared,
-                readFrameIdentity: () => Time.frameCount,
-                featureStatus: featureStatuses.AutoCast,
-                ownsActionFamily: () => _automataActionFamilyOwnership?.OwnsCast == true),
             createAutoConcept: () => _autoConceptController = new AutoConceptController(
                 config,
                 new ReflectionConceptRuntime(new AlchemyGameplayDomainClassifier()),
@@ -329,20 +320,10 @@ public sealed class Plugin : BaseUnityPlugin
                 SuitePerformanceCoordinator.Shared,
                 () => Time.frameCount,
                 featureStatuses.AutoConcept,
-                () => _automataActionFamilyOwnership?.OwnsConcept == true),
-            createSpellLevel: () => _autoSpellLevelController = new AutoSpellLevelController(
-                config,
-                new ReflectionSpellLevelRuntime(),
-                Log,
-                SuitePerformanceCoordinator.Shared,
-                () => Time.frameCount,
-                featureStatuses.SpellLevel,
-                () => _automataActionFamilyOwnership?.OwnsSpellLevel == true));
+                () => _automataActionFamilyOwnership?.OwnsConcept == true));
         _autoConceptToggleControl = new AutoConceptToggleControl(
             config,
             () => featureStatuses.AutoConcept.Current);
-        foreach (var target in NativeCompletionHookTargets)
-            PatchOptional(target, nameof(AfterNativeCompletion), postfix: true);
         foreach (var hook in LifecycleObservationHooks)
             PatchOptional(hook.Target, hook.Handler, hook.Postfix);
         AutoConceptLifecycleSignal.InventoryChanged += OnAutoConceptInventoryChanged;
@@ -644,9 +625,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         _services.Dispose();
-        _autoCastEngine = null;
         _autoConceptController = null;
-        _autoSpellLevelController = null;
         _serviceCycleActivation = null;
         _automataActionFamilyOwnership?.Dispose();
         _automataActionFamilyOwnership = null;
@@ -739,7 +718,6 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnAutoConceptProgressionInvalidated(GameplayInvalidation _)
     {
         _autoConceptController?.NotifyNativeChange();
-        _autoSpellLevelController?.NotifyNativeChange();
     }
 
     /// <summary>
@@ -981,16 +959,6 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.NewGamePlusStarted, SceneManager.GetActiveScene().name, __instance);
     private static void BeforeRuntimeReset() =>
         ObserveLifecycle(GameLifecycleTransitionKind.ResetStarted, SceneManager.GetActiveScene().name);
-
-    /// <summary>
-    /// A structure finished building or an upgrade finished purchasing, so the spells it may have
-    /// unlocked are worth another look right away rather than at the next idle interval.
-    /// </summary>
-    private static void AfterNativeCompletion()
-    {
-        if (!IsGameplayScene()) return;
-        Instance?._autoSpellLevelController?.NotifyNativeChange();
-    }
 
     private static void AfterSpellLoadoutChanged()
     {

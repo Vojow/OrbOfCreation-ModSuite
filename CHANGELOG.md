@@ -1,5 +1,22 @@
 # Changelog
 
+## Auto Cast on the shared engine — 2026-07-28
+
+- Move Auto Cast onto ServiceCycle. It now decides which spell to cast in the background from the shared world snapshot, on its own schedule, instead of walking the live loadout on the main thread every time it looks.
+- Publish the equipped loadout and what each slot costs to cast, so the rotation is chosen from collected facts rather than by questioning the game about every equipped spell.
+- Keep the rotation, the reserve floor, the resource start threshold, the full-charge hold, the channel pause, and the manual-cast pause exactly as they were. One spell per cycle, first eligible slot from where the last cast left off.
+- Change one thing you may notice: a slot now gives up its turn when Auto Cast picks it and the game then refuses the cast — most often because the spell has nothing to aim at. Previously that slot was re-picked on the next look and could hold up the rotation; now the next slot goes instead and the refused one comes round again on its next turn.
+- Expire the manual-cast pause on a clock rather than by counting down each frame, so a pause taken just before the game is paused or the plugin stops ticking no longer outlives the moment that earned it.
+- Auto Cast keeps its settings, its toggle button, its shortcut, and its status line.
+
+## Spell Leveling on the shared engine — 2026-07-28
+
+- Move Spell Leveling onto ServiceCycle. It now picks its spell in the background from the shared world snapshot on its own schedule, instead of waking only when an Auto Buy purchase happened to finish, so a spell that becomes ready while nothing is being bought is levelled within about a second rather than waiting for the next completed purchase.
+- Publish each spell's own answer to whether it can buy its next mastery level, so the choice of which spell to level is made from collected facts rather than by questioning the game about every spell.
+- Level the lowest-mastery ready spell first, as before. Two spells tied at the same mastery level now resolve in a stable identity order rather than by the text of their internal identifier; which of the two goes first can differ from previous builds.
+- Remove the last Harmony hook on the game's purchase-completion path. It existed only to nudge spell leveling, which no longer needs one.
+- Spell leveling keeps its settings, its place under Auto Buy's switch, and its Locked, Single and level-all progression exactly as before.
+
 ## Auto Buy per-level prerequisites — 2026-07-27
 
 - Stop Auto Buy planning purchases the game refuses because the level being bought has requirements of its own. An upgrade or structure whose next level waits on a research entry, another upgrade, a spell, a ritual, an alchemy recipe or a global count is now left alone until that requirement is met.

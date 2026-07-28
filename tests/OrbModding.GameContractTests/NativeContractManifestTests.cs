@@ -121,38 +121,11 @@ public sealed class NativeContractManifestTests
     /// </remarks>
     private static readonly string[] UnmigratedServiceContracts =
     {
-        // Auto Cast — the catalog, the spell surface and the targeting manager.
-        "resource.get-true-amount",
-        "resource.max-quantity-cost-reader-alias",
-        "spell-manager.can-cast-a-spell",
-        "spell-manager.fire-spell-index",
-        "spell.can-cast",
-        "spell.can-charge",
-        "spell.current-charges",
-        "spell.fire",
-        "spell.get-cooldown",
-        "spell.get-cost",
-        "spell.get-drain-cost",
+        // Auto Cast's toggle button, which is not a service and did not migrate with one. It walks
+        // live SpellManager state for the equipped spell's icon, and that read is the last native
+        // access the feature makes outside its action boundary. It leaves this list when the button
+        // stops reflecting, not when a runtime moves.
         "spell.get-icon",
-        "spell.get-reference",
-        "spell.get-scaling-info",
-        "spell.has-enough-resources",
-        "spell.is-attuning",
-        "spell.is-casting",
-        "spell.is-channeled",
-        "spell.is-charge-available",
-        "spell.is-empty",
-        "spell.is-readying-cast",
-        "spell.is-toggled",
-        "spell.max-charges",
-        "spell.set-charge-input",
-        "target-link.get-random",
-        "target-options.has-valid",
-        "target-request.options",
-        "targeting-manager.get-link",
-        "targeting-manager.is-targeting",
-        "targeting-manager.submit-target",
-        "value-modifier-record.as-big-double",
 
         // Auto Concept — the alchemy instance list, its recipes and the drain math.
         "abstract-ref-instance.reference",
@@ -202,33 +175,22 @@ public sealed class NativeContractManifestTests
         "spell-manager.remove-spell",
         "spell-recipe.discover",
         "spell-recipe.gain-mastery",
+        "spell-recipe.is-discovered",
+        "spell-recipe.purchase-level",
         "spell-recipe.reset",
         "tooltipable-object.get-name",
         "view.is-available",
 
-        // Spell Leveling — native level purchase, its prerequisites, and the structure and upgrade
-        // completion postfix, whose only consumer is NotifyNativeChange. ResourceCostList.HasEnough()
-        // is no longer here: Auto Buy reads it at its action boundary to name which admission term
-        // refused a purchase, so the member is a live action contract that Spell Leveling also uses.
-        "prerequisites.check",
-        "resource-cost-list.perform-cost",
-        "spell-manager.available-recipes",
-        "spell-manager.try-level-all",
-        "spell-recipe.get-level-cost",
-        "spell-recipe.leveling-prerequisites",
-        "structure.complete-action",
-        "upgrade.complete-action",
-
-        // Read by more than one unmigrated service, so they leave only when the last of them does.
-        "spell-manager.active-spells", // AutoCast + Mentor
-        "spell-manager.instance", // AutoCast + Mentor + SpellLevel
+        // Read by more than one service, so they leave only when the last unmigrated one does.
+        // Migrated Spell Leveling and Auto Cast between them name four of these — SpellManager and
+        // its two lists, and SpellRecipeSO.PurchaseLevel — but they name them at their action
+        // boundaries, so what keeps them legacy now is Auto Concept and Mentor alone.
+        "spell-manager.active-spells", // Mentor
+        "spell-manager.instance", // Mentor
         "alchemy-recipe.apply-mastery", // AutoConcept + Mentor
         "alchemy-recipe.discover", // AutoConcept + Mentor
         "alchemy-recipe.is-discovered", // AutoConcept + Mentor
-        "abstract-list.value", // AutoConcept + Mentor + SpellLevel
-        "spell-recipe.is-discovered", // Mentor + SpellLevel
-        "spell-recipe.is-ready", // Mentor + SpellLevel
-        "spell-recipe.purchase-level", // Mentor + SpellLevel
+        "abstract-list.value", // Common Alchemy classifier + AutoConcept + Mentor
     };
 
     /// <summary>The places a contract may sit in once its service is on ServiceCycle.</summary>
@@ -426,9 +388,10 @@ public sealed class NativeContractManifestTests
     {
         var manifest = NativeContractManifest.Load();
 
-        Assert.Equal(2, manifest.Baselines.Count);
+        Assert.Equal(3, manifest.Baselines.Count);
         AssertRuntimeBaseline(manifest, GameAssemblyAudit.WindowsSteamBaseline);
         AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacSteamBaseline);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacV1052SteamBaseline);
     }
 
     /// <summary>

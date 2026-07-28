@@ -70,6 +70,14 @@ internal sealed class GameWorldCycleFrame
     internal WorldActionQueueSlotBuffer ActionQueueSlots { get; } = new();
 
     /// <summary>
+    /// The equipped spell loadout, and what casting out of it costs. One reader fills both, because
+    /// a slot's price is only answerable from the same equipped instance the slot was read from.
+    /// </summary>
+    internal WorldSpellSlotBuffer SpellSlots { get; } = new();
+
+    internal WorldSpellCostBuffer SpellCosts { get; } = new();
+
+    /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
     /// carrying its identity, so the plot is claimed once.
     /// </summary>
@@ -235,6 +243,8 @@ internal static class GameWorldFrameDeriver
             PlotActionInstances = WorldPlotActionInstanceDeriver.Build(frame.PlotActionInstances),
             ActionQueues = frame.ActionQueues.Build(WorldIdentityDeriver<WorldActionQueue>.Shared),
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
+            SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
+            SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

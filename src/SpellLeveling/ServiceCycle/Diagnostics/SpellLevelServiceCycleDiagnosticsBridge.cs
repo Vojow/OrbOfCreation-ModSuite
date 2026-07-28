@@ -1,0 +1,133 @@
+using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+
+namespace OrbAutomata;
+
+/// <summary>
+/// Keeps the Spell Leveling feature-status line describing the running feature, and seeds the
+/// capability the toggle-button tooltip reads.
+/// </summary>
+/// <remarks>
+/// Spell Leveling has no button of its own; Auto Buy's tooltip carries its line. That makes the status
+/// registry the only thing standing between the player and a stale claim, and it is written here
+/// rather than by the worker because everything it reports — ownership, emergency stop, progression —
+/// is main-thread state.
+/// <para>
+/// The capability probe runs once per lifecycle, on the first cycle the service completes, and never
+/// per frame. Before it runs the capability reads <see cref="AutoSpellLevelCapability.Locked"/>, which
+/// is why the projector will not report progression until a cycle has been observed: unknown and
+/// locked must not look alike.
+/// </para>
+/// </remarks>
+internal sealed class SpellLevelServiceCycleDiagnosticsBridge
+{
+    private readonly AutomataFeatureStatusReporter? _featureStatus;
+    private readonly SpellLevelCapabilityState _capability;
+    private readonly ISpellLevelCapabilityPort _capabilityPort;
+    private long _lifecycle;
+    private bool _pluginEnabled;
+    private bool _featureEnabled;
+    private bool _parentEnabled;
+    private bool _emergencyDisabled;
+    private bool _owned;
+    private bool _cycleObserved;
+    private bool _evaluationRefreshPending;
+    private AutoSpellLevelCapability _reportedCapability;
+
+    public SpellLevelServiceCycleDiagnosticsBridge(
+        long lifecycle,
+        SuiteRuntimeConfiguration configuration,
+        bool owned,
+        SpellLevelCapabilityState capability,
+        ISpellLevelCapabilityPort capabilityPort,
+        AutomataFeatureStatusReporter? featureStatus)
+    {
+        _featureStatus = featureStatus;
+        _capability = capability;
+        _capabilityPort = capabilityPort;
+        _lifecycle = lifecycle;
+        _owned = owned;
+        ReadConfiguration(configuration);
+        PublishFeatureStatus();
+    }
+
+    public void Observe(SuiteFramePump pump, in SuiteFramePumpReport report, bool owned)
+    {
+        var conditionsChanged =
+            _emergencyDisabled != pump.IsEmergencyStopEngaged ||
+            _owned != owned ||
+            _reportedCapability != _capability.Current;
+        _emergencyDisabled = pump.IsEmergencyStopEngaged;
+        _owned = owned;
+        if (report.ResponsesAcquired != 0) _evaluationRefreshPending = true;
+        if (!_cycleObserved && _evaluationRefreshPending)
+        {
+            _evaluationRefreshPending = false;
+            _cycleObserved = true;
+            SeedCapability();
+            PublishFeatureStatus();
+            return;
+        }
+
+        if (conditionsChanged) PublishFeatureStatus();
+    }
+
+    public void ObserveConfiguration(SuiteRuntimeConfiguration configuration, bool owned)
+    {
+        _owned = owned;
+        ReadConfiguration(configuration);
+        PublishFeatureStatus();
+    }
+
+    public void ObserveLifecycle(long lifecycle, SuiteRuntimeConfiguration configuration, bool owned)
+    {
+        _lifecycle = lifecycle;
+        _owned = owned;
+        // Nothing survives a lifecycle boundary. The capability the last generation reached says
+        // nothing about this one, and the worker has not evaluated against the new world yet.
+        _capability.Reset();
+        _cycleObserved = false;
+        _evaluationRefreshPending = false;
+        ReadConfiguration(configuration);
+        PublishFeatureStatus();
+    }
+
+    /// <summary>
+    /// Asks the game what the feature can do, once, so the tooltip is right before the first action
+    /// rather than after it. An unreadable contract leaves the capability where it was — the status
+    /// line already reports a contract that will not bind.
+    /// </summary>
+    private void SeedCapability()
+    {
+        if (_capabilityPort.TryReadCapability(out var capability)) _capability.Observe(capability);
+    }
+
+    private void PublishFeatureStatus()
+    {
+        if (_featureStatus is null) return;
+        _reportedCapability = _capability.Current;
+        var health = SpellLevelFeatureStatusProjector.Project(
+            _pluginEnabled,
+            _featureEnabled,
+            _parentEnabled,
+            _emergencyDisabled,
+            _owned,
+            _cycleObserved,
+            _reportedCapability);
+        _featureStatus.ObserveLifecycle(
+            health.State != FeatureStatusState.ConfigurationDisabled,
+            health.State,
+            health.Reason,
+            health.Summary,
+            _lifecycle);
+    }
+
+    private void ReadConfiguration(SuiteRuntimeConfiguration configuration)
+    {
+        _pluginEnabled = configuration.General.Enabled;
+        _featureEnabled = configuration.AutoBuy.AutoLevelSpells;
+        _parentEnabled = configuration.AutoBuy.Mode == AutoBuyOperationMode.Active;
+        _emergencyDisabled = configuration.Safety.EmergencyDisable;
+    }
+}

@@ -90,6 +90,8 @@ public sealed class WorldIdentityWalkTests
         "PlotActionInstances",
         "EntityEffects",
         "ActionQueueSlots",
+        "SpellSlots",
+        "SpellCosts",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",

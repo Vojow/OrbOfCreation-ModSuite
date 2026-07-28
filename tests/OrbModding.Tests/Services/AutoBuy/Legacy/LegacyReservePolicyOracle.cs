@@ -5,6 +5,17 @@ using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
+/// <summary>
+/// The reserve arithmetic the retired legacy runtimes shared, kept verbatim as a numeric oracle.
+/// </summary>
+/// <remarks>
+/// This is no longer production code. Auto Buy and Auto Cast each compute their own reserve floor
+/// against the published world in <c>BigDouble</c>, and this <c>BigAmount</c> original is what those
+/// ports were checked against. It lives in the test assembly because a type whose only remaining
+/// consumer is a parity test belongs with the test rather than shipping inside the plugin — and it is
+/// kept rather than deleted because "the new arithmetic still agrees with the old" is a claim worth
+/// being able to re-check after any change to either.
+/// </remarks>
 internal sealed class ReservePolicy
 {
     private readonly IAutomataConfigurationSource _config;

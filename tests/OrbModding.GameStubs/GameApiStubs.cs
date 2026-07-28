@@ -508,6 +508,7 @@ public class StructureSO : UpgradeableObject
     public int baseLevel;
     public float queueTimeTotal = 1f;
     public bool debugStructure;
+    public bool disabled;
     private int observableId;
     private bool insufficientReqPenaltyActive;
     private int bufferDevelopedQuantity;
@@ -635,6 +636,9 @@ public class Spell
     public bool EmitFireSignal { get; set; } = true;
     public bool HoldingCharge { get; private set; }
     public int FireCalls { get; private set; }
+    public int CurrentCharges { get; set; }
+    public int MaximumCharges { get; set; }
+    public BigDouble CooldownRemaining { get; set; }
     public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
@@ -655,19 +659,33 @@ public class Spell
     public bool CanCharge() => true;
     public bool IsCasting() => false;
     public bool IsReadyingCast() => false;
-    public bool CanCast() => true;
+
+    /// <summary>
+    /// The game's own composite readiness answer, settable so a boundary can be shown refusing a cast
+    /// the plan believed was ready — which is the ordinary case for a planner working off a snapshot.
+    /// </summary>
+    public bool NativeCanCast { get; set; } = true;
+
+    public bool CanCast() => NativeCanCast;
     public bool IsAttuning() => false;
     public bool IsChargeAvailable() => true;
     public bool HasEnoughResources() => true;
+    public int GetCurrSpellCharges() => CurrentCharges;
+    public int GetMaxSpellCharges() => MaximumCharges;
+    public BigDouble GetCooldownTimeRemaining() => CooldownRemaining;
     public ResourceCostList GetCost() => Cost;
     public ResourceCostList GetDrainCost() => new ResourceCostList();
     public object GetScalingInfo() => new object();
     public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
 
+    /// <summary>How many target requests this spell's effects open when it fires.</summary>
+    public int RequestsOnFire { get; set; }
+
     public void Fire()
     {
         if (EmitFireSignal) FireSignal?.Invoke();
         FireCalls++;
+        TargetingManager.OpenRequests += RequestsOnFire;
     }
 }
 
@@ -1187,13 +1205,15 @@ public class SpellManager
     }
 }
 
-public sealed class SpellListVariable : IEnumerable
+/// <summary>
+/// The equipped loadout. A list variable like every other, which is what lets world collection reach
+/// it by uuid through the identity registry rather than through the spell manager singleton.
+/// </summary>
+public sealed class SpellListVariable : AbstractListVariable<Spell>, IEnumerable
 {
-    public List<object> value = new List<object>();
+    public Spell this[int index] => value[index];
 
-    public object this[int index] => value[index];
-
-    public void Add(object spell) => value.Add(spell);
+    public void Add(Spell spell) => value.Add(spell);
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }
@@ -1437,9 +1457,49 @@ public sealed class ConceptResource
 
 public static class TargetingManager
 {
-    public static bool Targeting { get; set; }
+    /// <summary>
+    /// How many target requests are open. The game opens one per targeted effect a cast triggers and
+    /// closes one per target submitted, which is why resolving a cast is a loop and not a single call.
+    /// </summary>
+    public static int OpenRequests { get; set; }
 
-    public static bool IsTargeting() => Targeting;
+    /// <summary>What the selector will offer, or null for a request nothing can satisfy.</summary>
+    public static object? AvailableTarget { get; set; }
+
+    public static List<object> SubmittedTargets { get; } = new List<object>();
+
+    public static bool Targeting
+    {
+        get => OpenRequests > 0;
+        set => OpenRequests = value ? 1 : 0;
+    }
+
+    public static bool IsTargeting() => OpenRequests > 0;
+
+    public static TargetLink? GetTargetingLink() =>
+        AvailableTarget is null ? null : new TargetLink(AvailableTarget);
+
+    public static void SubmitTarget(object target)
+    {
+        SubmittedTargets.Add(target);
+        if (OpenRequests > 0) OpenRequests--;
+    }
+
+    public static void Reset()
+    {
+        OpenRequests = 0;
+        AvailableTarget = null;
+        SubmittedTargets.Clear();
+    }
+
+    public sealed class TargetLink
+    {
+        private readonly object _target;
+
+        public TargetLink(object target) => _target = target;
+
+        public object GetRandom() => _target;
+    }
 }
 
 public interface ITooltipable

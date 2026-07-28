@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Threading;
 using HarmonyLib;
 using OrbModding.Common;
 
@@ -11,10 +12,25 @@ internal static class AutoCastManualSignal
     private static int _automatedDepth;
 
     private static long _fireEpoch;
+    private static long _manualFireEpoch;
 
     public static event Action? ManualSpellFired;
 
-    public static long FireEpoch => _fireEpoch;
+    /// <summary>
+    /// Every cast the game has made, ours included. The mutation verifier's postcondition reads this:
+    /// a submitted cast must advance it by exactly one.
+    /// </summary>
+    public static long FireEpoch => Volatile.Read(ref _fireEpoch);
+
+    /// <summary>
+    /// Only the casts that were not ours.
+    /// </summary>
+    /// <remarks>
+    /// A counter rather than the event, because the pause it arms is a timestamp and the patch runs
+    /// inside the game's own call stack with no clock to hand and no business taking one. Counting is
+    /// all a prefix can honestly do; the main thread polls this and stamps the deadline itself.
+    /// </remarks>
+    public static long ManualFireEpoch => Volatile.Read(ref _manualFireEpoch);
 
     public static IDisposable EnterAutomatedFire()
     {
@@ -24,11 +40,10 @@ internal static class AutoCastManualSignal
 
     public static void NotifySpellFire()
     {
-        _fireEpoch++;
-        if (_automatedDepth == 0)
-        {
-            ManualSpellFired?.Invoke();
-        }
+        Interlocked.Increment(ref _fireEpoch);
+        if (_automatedDepth != 0) return;
+        Interlocked.Increment(ref _manualFireEpoch);
+        ManualSpellFired?.Invoke();
     }
 
     private sealed class Scope : IDisposable

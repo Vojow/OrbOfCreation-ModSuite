@@ -191,6 +191,20 @@ public sealed record GameWorldState
         PublicationTable<WorldActionQueueSlot>.Empty;
 
     /// <summary>
+    /// The player's equipped spell loadout, sorted by position. Reached by
+    /// <see cref="WorldSpellSlotLookup"/>, because a slot is a position rather than an entity.
+    /// </summary>
+    internal PublicationTable<WorldSpellSlot> SpellSlots { get; init; } =
+        PublicationTable<WorldSpellSlot>.Empty;
+
+    /// <summary>
+    /// What each equipped spell costs to cast and to sustain, sorted by slot, then kind, then
+    /// resource. Reached by <see cref="WorldSpellCostLookup"/>.
+    /// </summary>
+    internal PublicationTable<WorldSpellCost> SpellCosts { get; init; } =
+        PublicationTable<WorldSpellCost>.Empty;
+
+    /// <summary>
     /// What each plot's author decided about it. Keyed by plot rather than keyed <em>as</em> a plot,
     /// so the plot's identity stays claimed exactly once.
     /// </summary>

@@ -12,6 +12,8 @@
 # Usage:
 #   script/re-audit --game-dir /path/to/game            # verify only, report what changed
 #   script/re-audit --game-dir /path/to/game --stamp    # verify, then write the new baseline
+#
+# Compilation stages also require BepInEx/core under the game root passed to --game-dir.
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

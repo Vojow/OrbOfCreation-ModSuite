@@ -15,6 +15,7 @@ internal readonly struct PlotNodeActionInstanceListVariableContract { }
 internal readonly struct PlotNodeActionSOContract { }
 internal readonly struct PlotNodeSOContract { }
 internal readonly struct ScalingWeightSOContract { }
+internal readonly struct SpellListVariableContract { }
 internal readonly struct TreasurePoolSOContract { }
 internal readonly struct UpgradeSOContract { }
 internal readonly struct ViewSOContract { }
@@ -38,6 +39,7 @@ internal static class KnownEntities
     public static readonly KnownEntity<ActionableListVariableContract> ActiveActionables = new(new Guid("2c4825f4-9869-41fc-84df-301638a097a5"), "ActionableListVariable", "ActiveActionables");
     public static readonly KnownEntity<AlchemyInstanceListVariableContract> ActiveConcepts = new(new Guid("9121924d-2692-428b-9599-165224ccd899"), "AlchemyInstanceListVariable", "ActiveConcepts");
     public static readonly KnownEntity<PlotNodeActionInstanceListVariableContract> ActivePlotNodeActions = new(new Guid("70871e86-100b-4ae0-ba9b-fc96e09b7e1f"), "PlotNodeActionInstanceListVariable", "ActivePlotNodeActions");
+    public static readonly KnownEntity<SpellListVariableContract> ActiveSpells = new(new Guid("1614158d-6485-4995-90d0-79cc6b4dced4"), "SpellListVariable", "ActiveSpells");
     public static readonly KnownEntity<AlchemyTypeSOContract> Alchemy = new(new Guid("f9c93e42-e9e8-4fe3-a1f3-5aec5430b5c2"), "AlchemyTypeSO", "Alchemy");
     public static readonly KnownEntity<ViewSOContract> AlchemyScreen = new(new Guid("3ae45ec0-4449-4903-b3d0-b5182e03dca3"), "ViewSO", "ScreenAlchemy");
     public static readonly KnownEntity<AlchemyTypeSOContract> Brewing = new(new Guid("d2947f69-d989-465d-8159-204285ed57be"), "AlchemyTypeSO", "Brewing");

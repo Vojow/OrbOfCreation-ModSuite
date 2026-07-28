@@ -168,7 +168,8 @@ internal static class WorldSamples
         int observableId = 0,
         bool insufficientReqPenaltyActive = false,
         int bufferDevelopedQuantity = 0,
-        Guid costPerQuantityId = default) =>
+        Guid costPerQuantityId = default,
+        bool disabled = false) =>
         new(
             structureId,
             new BigDouble(level),
@@ -184,6 +185,7 @@ internal static class WorldSamples
             queueTimeTotal,
             quantity,
             debugStructure,
+            disabled,
             observableId,
             insufficientReqPenaltyActive,
             bufferDevelopedQuantity,

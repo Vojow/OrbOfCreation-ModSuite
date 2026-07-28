@@ -10,7 +10,6 @@ This page owns Automata behavior that is broader than one feature.
   feature composition.
 - [ConfigurationSchemaTests.cs](../../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) — schema-zero migration, rollback, and
   safe typed binding.
-- [AutoCastCoordinatorTests.cs](../../../tests/OrbModding.Tests/AutoCastCoordinatorTests.cs) — remaining legacy-coordinator mutation-lease behavior for Auto Cast.
 - [AutomataFeatureStatusTests.cs](../../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) and [AutomataRuntimeEvidenceTests.cs](../../../tests/OrbModding.Tests/AutomataRuntimeEvidenceTests.cs) — health
   projection and runtime evidence.
 - [HarmonyBindingHeadlessTests.cs](../../../tests/OrbModding.Tests/HarmonyBindingHeadlessTests.cs) — patched target binding against game-shaped

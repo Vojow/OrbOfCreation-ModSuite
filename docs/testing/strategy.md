@@ -215,7 +215,7 @@ The current P0/P1 headless scope covers:
 - Auto Concept assignment, lifecycle recovery, resource safety, ownership, and
   exact Harmony targets;
 - automatic spell leveling in Locked, Single, and native level-all capability
-  states, including lifecycle cancellation;
+  states, including refusal of a plan collected under a superseded lifecycle;
 - Mentor spell, artifact, and alchemy capture-to-native-grant journeys,
 - atomic action-family claims, exact known conflicts, final mutation gates, lifecycle/configuration release, and independent Mentor-domain cancellation,
   recursion prevention, domain isolation, registry identity, and lifecycle

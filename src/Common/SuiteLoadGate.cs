@@ -78,6 +78,8 @@ public static class SuiteLoadGate
             .Append(GameAssemblyAudit.WindowsBaselineId)
             .Append(", ")
             .Append(GameAssemblyAudit.MacBaselineId)
+            .Append(", ")
+            .Append(GameAssemblyAudit.MacV1052BaselineId)
             .Append(". The suite computes the game's economy math itself, so it will not run against ")
             .Append("an unverified build; re-audit this build to restore it.");
 

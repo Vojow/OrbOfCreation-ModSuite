@@ -38,6 +38,7 @@ public sealed class SuiteLoadGateTests
         Assert.Contains("Refusing to load", decision.Message, StringComparison.Ordinal);
         Assert.Contains(GameAssemblyAudit.WindowsBaselineId, decision.Message, StringComparison.Ordinal);
         Assert.Contains(GameAssemblyAudit.MacBaselineId, decision.Message, StringComparison.Ordinal);
+        Assert.Contains(GameAssemblyAudit.MacV1052BaselineId, decision.Message, StringComparison.Ordinal);
         Assert.Contains("Observed Assembly-CSharp=", decision.Message, StringComparison.Ordinal);
     }
 

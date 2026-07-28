@@ -17,8 +17,9 @@ currently cover:
   XP grants, recursion prevention, domain isolation, and lifecycle cancellation;
 - Auto Buy ServiceCycle frame projection, worker policy, final native revalidation,
   queue-room enforcement, and verified Structure/Upgrade mutations;
-- automatic spell leveling before and after the native level-all upgrade, plus
-  cancellation of a pending mutation during lifecycle invalidation.
+- automatic spell leveling before and after the native level-all upgrade, its
+  boundary refusals for a locked or unaffordable level, and its refusal of a plan
+  collected under a superseded lifecycle.
 
 ## Test layers and ownership
 

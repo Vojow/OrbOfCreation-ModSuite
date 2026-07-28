@@ -9,6 +9,7 @@ public static class GameAssemblyAudit
 {
     public const string WindowsBaselineId = "steam-windows-2026-07-11";
     public const string MacBaselineId = "steam-macos-2026-07-13";
+    public const string MacV1052BaselineId = "steam-macos-2026-07-28";
 
     public const string WindowsAssemblyCSharpSha256 =
         "5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F";
@@ -17,6 +18,10 @@ public static class GameAssemblyAudit
     public const string MacAssemblyCSharpSha256 =
         "5652EBE35A4B87223A014EAA7B364AE921477D2E016789CB4E13C8C892055DE4";
     public const string MacFirstPassSha256 =
+        "CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891";
+    public const string MacV1052AssemblyCSharpSha256 =
+        "46B723AD8E3DF5ADF7186EC32B220C338E26C1CC79369E01213C091155073BDC";
+    public const string MacV1052FirstPassSha256 =
         "CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891";
 
     // Retained for source compatibility. These names identify the original Windows baseline only;
@@ -33,6 +38,11 @@ public static class GameAssemblyAudit
         MacBaselineId,
         MacAssemblyCSharpSha256,
         MacFirstPassSha256);
+
+    public static GameAssemblyBaseline MacV1052SteamBaseline => new(
+        MacV1052BaselineId,
+        MacV1052AssemblyCSharpSha256,
+        MacV1052FirstPassSha256);
 
     public static AssemblyAuditResult Check(string gameRoot)
     {
@@ -119,7 +129,9 @@ public static class GameAssemblyAudit
         var windows = WindowsSteamBaseline;
         if (windows.Matches(assemblyCSharpSha256, firstPassSha256)) return windows;
         var mac = MacSteamBaseline;
-        return mac.Matches(assemblyCSharpSha256, firstPassSha256) ? mac : null;
+        if (mac.Matches(assemblyCSharpSha256, firstPassSha256)) return mac;
+        var macV1052 = MacV1052SteamBaseline;
+        return macV1052.Matches(assemblyCSharpSha256, firstPassSha256) ? macV1052 : null;
     }
 
     private static AssemblyAuditResult CreateResult(string managedDirectory, string discoveryFailure)

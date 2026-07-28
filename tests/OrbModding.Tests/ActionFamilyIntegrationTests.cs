@@ -154,27 +154,6 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
-    public void AutoCastFinalGateRejectsOwnershipLostDuringAdmission()
-    {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.AutoCastMode.Value = AutoCastOperationMode.Active;
-        var owned = true;
-        var candidate = new OwnershipChangingCastCandidate(() => owned = false);
-        using var engine = new AutoCastEngine(
-            config,
-            new SingleCastCatalog(candidate),
-            new ReservePolicy(config),
-            new ResourceFullnessPolicy(),
-            new ManualLogSource(),
-            isGameplayScene: () => true,
-            ownsActionFamily: () => owned);
-
-        engine.Tick(config.AutoCastIntervalSeconds.Value);
-
-        Assert.Equal(0, candidate.FireCalls);
-    }
-
-    [Fact]
     public void MentorRootDegradesWhenLockedDomainPrecedesConflictAndHealthySibling()
     {
         var domains = new[]
@@ -216,47 +195,5 @@ public sealed class ActionFamilyIntegrationTests
             out var lease,
             out _));
         return lease!;
-    }
-
-    private sealed class SingleCastCatalog : IAutoCastCatalog
-    {
-        private readonly IAutoCastCandidate _candidate;
-        public SingleCastCatalog(IAutoCastCandidate candidate) => _candidate = candidate;
-        public IReadOnlyList<IAutoCastCandidate> DiscoverActiveLoadout() => new[] { _candidate };
-        public bool IsNativeCastBusy() => false;
-        public bool IsTargeting() => false;
-        public void Dispose() { }
-    }
-
-    private sealed class OwnershipChangingCastCandidate : IAutoCastCandidate
-    {
-        private readonly Action _loseOwnership;
-        private readonly object _native = new();
-        public OwnershipChangingCastCandidate(Action loseOwnership) => _loseOwnership = loseOwnership;
-        public int FireCalls { get; private set; }
-        public int SlotIndex => 0;
-        public string DisplayName => "Spell";
-        public AutoCastSpellKind Kind => AutoCastSpellKind.Instant;
-        public bool IsEmpty => false;
-        public bool IsCharged => false;
-        public bool IsCasting => false;
-        public bool IsReadyingCast => false;
-        public bool CanCast(out string reason) { reason = string.Empty; return true; }
-        public bool TryGetImmediateCosts(out IReadOnlyList<ResourceAdmissionCost> costs)
-        {
-            _loseOwnership();
-            costs = Array.Empty<ResourceAdmissionCost>();
-            return true;
-        }
-        public bool TryGetDrainCosts(out IReadOnlyList<ResourceAdmissionCost> costs) { costs = Array.Empty<ResourceAdmissionCost>(); return true; }
-        public bool HasValidTargets(out string reason) { reason = string.Empty; return true; }
-        public bool TryFireAndResolveTargets(out string reason) { FireCalls++; reason = string.Empty; return true; }
-        public bool TryGetIdentity(out AutoCastCandidateIdentity identity, out string reason)
-        {
-            identity = new AutoCastCandidateIdentity("spell", _native, _native.GetType(), 0);
-            reason = string.Empty;
-            return true;
-        }
-        public bool TrySetChargeHold(bool isHolding, out string reason) { reason = string.Empty; return true; }
     }
 }

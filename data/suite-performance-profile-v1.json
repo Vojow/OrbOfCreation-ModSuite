@@ -1,1 +1,92 @@
-{"schemaId":"orb-modsuite-suite-performance-profile","schemaVersion":1,"profileId":"supported-suite-beta-v1","profileVersion":1,"scope":"full-supported-suite","policy":{"softBudgetMilliseconds":0.75,"hardBudgetMilliseconds":1,"nativeMutationAdmissionsPerFrame":1},"rules":[{"subsystem":"OrbAutomata.AutoCast","workName":"Evaluate loadout","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbAutomata.AutoCast","workName":"Fire spell or release charge hold","budgetClass":"hard-limited","executionKind":"non-preemptible-native-mutation","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"observe-only","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbAutomata.AutoConcept","workName":"Change Active Concept quantity","budgetClass":"hard-limited","executionKind":"non-preemptible-native-mutation","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"observe-only","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbAutomata.AutoConcept","workName":"Reconcile and plan concept mastery","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbAutomata.AutoSpellLevel","workName":"Evaluate native spell leveling","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbAutomata.AutoSpellLevel","workName":"Level native spells","budgetClass":"hard-limited","executionKind":"non-preemptible-native-mutation","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"observe-only","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbMentor","workName":"Grant one mastery XP mutation","budgetClass":"hard-limited","executionKind":"non-preemptible-native-mutation","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"observe-only","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbMentor","workName":"Reconcile, resolve, and plan XP","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbModConfig","workName":"Install or repair UI","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":30,"maximumConsecutiveDeferredFrames":30,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1},{"subsystem":"OrbModding.Common","workName":"Deliver gameplay invalidations","budgetClass":"soft-limited","executionKind":"cooperative","maximumPendingWaitFrames":12,"maximumConsecutiveDeferredFrames":12,"timingMode":"enforce","minimumSamples":30,"p95Milliseconds":0.5,"p99Milliseconds":0.75,"maximumMilliseconds":1}]}
+{
+  "schemaId": "orb-modsuite-suite-performance-profile",
+  "schemaVersion": 1,
+  "profileId": "supported-suite-beta-v1",
+  "profileVersion": 1,
+  "scope": "full-supported-suite",
+  "policy": {
+    "softBudgetMilliseconds": 0.75,
+    "hardBudgetMilliseconds": 1,
+    "nativeMutationAdmissionsPerFrame": 1
+  },
+  "rules": [
+    {
+      "subsystem": "OrbAutomata.AutoConcept",
+      "workName": "Change Active Concept quantity",
+      "budgetClass": "hard-limited",
+      "executionKind": "non-preemptible-native-mutation",
+      "maximumPendingWaitFrames": 12,
+      "maximumConsecutiveDeferredFrames": 12,
+      "timingMode": "observe-only",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    },
+    {
+      "subsystem": "OrbAutomata.AutoConcept",
+      "workName": "Reconcile and plan concept mastery",
+      "budgetClass": "soft-limited",
+      "executionKind": "cooperative",
+      "maximumPendingWaitFrames": 12,
+      "maximumConsecutiveDeferredFrames": 12,
+      "timingMode": "enforce",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    },
+    {
+      "subsystem": "OrbMentor",
+      "workName": "Grant one mastery XP mutation",
+      "budgetClass": "hard-limited",
+      "executionKind": "non-preemptible-native-mutation",
+      "maximumPendingWaitFrames": 12,
+      "maximumConsecutiveDeferredFrames": 12,
+      "timingMode": "observe-only",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    },
+    {
+      "subsystem": "OrbMentor",
+      "workName": "Reconcile, resolve, and plan XP",
+      "budgetClass": "soft-limited",
+      "executionKind": "cooperative",
+      "maximumPendingWaitFrames": 12,
+      "maximumConsecutiveDeferredFrames": 12,
+      "timingMode": "enforce",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    },
+    {
+      "subsystem": "OrbModConfig",
+      "workName": "Install or repair UI",
+      "budgetClass": "soft-limited",
+      "executionKind": "cooperative",
+      "maximumPendingWaitFrames": 30,
+      "maximumConsecutiveDeferredFrames": 30,
+      "timingMode": "enforce",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    },
+    {
+      "subsystem": "OrbModding.Common",
+      "workName": "Deliver gameplay invalidations",
+      "budgetClass": "soft-limited",
+      "executionKind": "cooperative",
+      "maximumPendingWaitFrames": 12,
+      "maximumConsecutiveDeferredFrames": 12,
+      "timingMode": "enforce",
+      "minimumSamples": 30,
+      "p95Milliseconds": 0.5,
+      "p99Milliseconds": 0.75,
+      "maximumMilliseconds": 1
+    }
+  ]
+}

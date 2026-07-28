@@ -16,6 +16,9 @@ public sealed class GameAssemblyAuditTests
         Assert.True(Result(
             GameAssemblyAudit.MacAssemblyCSharpSha256,
             GameAssemblyAudit.MacFirstPassSha256).MatchesExpected);
+        Assert.True(Result(
+            GameAssemblyAudit.MacV1052AssemblyCSharpSha256,
+            GameAssemblyAudit.MacV1052FirstPassSha256).MatchesExpected);
 
         Assert.False(Result(
             GameAssemblyAudit.WindowsAssemblyCSharpSha256,
