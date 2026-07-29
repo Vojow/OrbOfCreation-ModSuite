@@ -118,8 +118,8 @@ internal static class SuiteConfigurationSchema
                     DifferentialVerificationShortcut,
                     "Differential verification is an explicit Mods Runtime action.");
             }),
-        // Schema 6 shortens Auto Concept's inherited idle fallback. A player-selected interval is
-        // preserved; only the previous default is rewritten.
+        // Schema 6 rewrites every serialized Auto Concept idle fallback equal to the former
+        // 300-second default to 10 seconds, whether that value was inherited or deliberately saved.
         new ConfigurationMigrationStep(
             5,
             CurrentVersion,
@@ -140,7 +140,7 @@ internal static class SuiteConfigurationSchema
                         AutoConceptFallbackEvaluationIntervalSeconds,
                         AutoConceptFallbackEvaluationIntervalSeconds,
                         "10",
-                        "Shortened the inherited Auto Concept idle fallback from 300 seconds to 10 seconds.");
+                        "Rewrote the serialized Auto Concept idle fallback from 300 seconds to 10 seconds.");
                 }
                 else
                 {
