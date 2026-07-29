@@ -14,6 +14,8 @@
   files, and reset that choice automatically after another game update.
 - Reduce Auto Concept's maximum idle fallback from five minutes to 10 seconds. Configuration schema
   6 migrates the inherited 300-second value while preserving customized intervals.
+- Reduce Auto Concept's default settled training period from five minutes to 30 seconds.
+  Configuration schema 7 migrates the inherited value while preserving customized periods.
 
 ## Game-native UI overhaul — 2026-07-28
 

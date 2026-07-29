@@ -4,53 +4,53 @@ using Xunit;
 
 namespace OrbModding.Tests;
 
-public sealed class SuiteConfigurationSchemaSixTests
+public sealed class SuiteConfigurationSchemaSevenTests
 {
     [Fact]
-    public void SchemaSixMovesInheritedAutoConceptFallbackToTenSeconds()
+    public void SchemaSevenMovesInheritedAutoConceptTrainingPeriodToThirtySeconds()
     {
-        var file = VersionFiveFile("300");
+        var file = VersionSixFile("300");
 
         var result = SuiteConfiguration.TryBind(file);
 
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
-        Assert.Equal(5, result.Status.FromVersion);
+        Assert.Equal(6, result.Status.FromVersion);
         Assert.Equal(7, result.Status.ToVersion);
-        Assert.Equal(10, result.Config!.Automata.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.Equal(30, result.Config!.Automata.AutoConceptTrainingPeriodSeconds.Value);
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Equal(ConfigurationMigrationDiagnosticKind.Mapped, diagnostic.Kind);
         Assert.True(file.TryGetPersisted(
             "AutoConcept",
-            "FallbackEvaluationIntervalSeconds",
+            "TrainingPeriodSeconds",
             out var persisted));
-        Assert.Equal("10", persisted);
+        Assert.Equal("30", persisted);
     }
 
     [Fact]
-    public void SchemaSixPreservesCustomizedAutoConceptFallback()
+    public void SchemaSevenPreservesCustomizedAutoConceptTrainingPeriod()
     {
-        var file = VersionFiveFile("60");
+        var file = VersionSixFile("60");
 
         var result = SuiteConfiguration.TryBind(file);
 
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
-        Assert.Equal(60, result.Config!.Automata.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.Equal(60, result.Config!.Automata.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Empty(result.Diagnostics);
     }
 
-    private static ConfigFile VersionFiveFile(string fallbackSeconds)
+    private static ConfigFile VersionSixFile(string trainingPeriodSeconds)
     {
         var file = new ConfigFile();
         file.SeedSerialized(
             ConfigurationSchemaTransaction.MarkerSection,
             ConfigurationSchemaTransaction.MarkerKey,
-            "5");
+            "6");
         file.SeedSerialized(
             "AutoConcept",
-            "FallbackEvaluationIntervalSeconds",
-            fallbackSeconds);
+            "TrainingPeriodSeconds",
+            trainingPeriodSeconds);
         return file;
     }
 }
