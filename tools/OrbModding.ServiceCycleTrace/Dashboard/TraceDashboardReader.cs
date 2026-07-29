@@ -661,8 +661,6 @@ internal static class TraceDashboardReader
                 AutoBuyServiceProjection.PlannedActionsKey => "Planned actions",
                 AutoBuyServiceProjection.RequestedLevelsKey => "Requested levels",
                 AutoBuyServiceProjection.ExcludedKindNotSelectedKey => "Excluded: kind not selected",
-                AutoBuyServiceProjection.ExcludedBlocklistedKey => "Excluded: blocklisted",
-                AutoBuyServiceProjection.ExcludedNotAllowlistedKey => "Excluded: not allowlisted",
                 AutoBuyServiceProjection.ExcludedUnavailableKey => "Excluded: unavailable",
                 AutoBuyServiceProjection.ExcludedRequirementsUnmetKey => "Excluded: requirements unmet",
                 AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
