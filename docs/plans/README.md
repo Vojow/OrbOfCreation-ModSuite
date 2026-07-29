@@ -9,6 +9,7 @@ than marked done.
 | Plan | Status | Scope |
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio direction and sequencing. |
+| [Auto Agromancy migration](auto-agromancy-migration.md) | Active | Port the preserved level-balancing core into the current typed ServiceCycle architecture. |
 | [Orb Insights](insights.md) | Planned | Read-only gameplay and diagnostic views. |
 | [Orb Toolbox](toolbox.md) | Planned | Explicit advanced player tools. |
 | [Auto Buy MVP deferrals](autobuy-servicecycle-mvp-deferrals.md) | Active | What the Auto Buy port deliberately left out, and what has to come back. |

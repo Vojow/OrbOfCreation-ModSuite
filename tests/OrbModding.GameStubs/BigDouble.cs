@@ -22,7 +22,7 @@ using UnityEngine;
 // global::BigDouble matches the real game type in behavior (normalization, arithmetic,
 // comparison). Only two faithful adaptations were made: (1) the `namespace BreakInfinity`
 // wrapper was removed so the type is global; (2) the game's additive accessors
-// (Ma/Ex get+set, ToInt/ToLong/ToFloat) were appended near the properties. The
+// (Ma/Ex get+set, ToInt/ToLong/ToFloat, AsPercent) were appended near the properties. The
 // arithmetic and normalization are unmodified upstream code — never reimplemented.
 // ---------------------------------------------------------------------------
 
@@ -135,6 +135,8 @@ using UnityEngine;
         public long Ex { get => exponent; set => exponent = value; }
 
         public int ToInt() => (int)ToDouble();
+
+        public BigDouble AsPercent() => new BigDouble(mantissa / 100.0, exponent);
 
         public long ToLong() => (long)ToDouble();
 

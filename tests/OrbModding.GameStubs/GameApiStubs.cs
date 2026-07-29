@@ -793,6 +793,7 @@ public class ResourceCostList
     public int AffordableLevels = int.MaxValue;
     public int PerformCalls { get; private set; }
     public bool HasEnough() => affordable && AffordableLevels > 0;
+    public List<ResourceTuple> GetEntries() => costs;
     public void PerformCost()
     {
         PerformCalls++;
@@ -836,7 +837,9 @@ public class ResourceSO : UpgradeableObject
     public static List<ResourceSO> All = new List<ResourceSO>();
     public string name = "Resource";
     public BigDouble quantity = new BigDouble(1.0, 3);
+    public BigDouble baseRate = new BigDouble(0.0, 0);
     public BigDouble trueRate = new BigDouble(0.0, 0);
+    public double qualitySpendMultiplier = 1.0;
     public bool available = true;
     public bool visible = true;
     public ValueModifierRecord quality = new ValueModifierRecord(new BigDouble(1.0, 2));
@@ -925,6 +928,10 @@ public class ResourceSO : UpgradeableObject
     public bool IsVisible() => visible;
     public bool IsBandwidthResource() => bandwidthResource;
     public BigDouble GetTrueAmount(BigDouble amount) => amount;
+    public BigDouble GetTrueSpend(BigDouble amount) =>
+        new BigDouble(
+            amount.Mantissa * qualitySpendMultiplier,
+            amount.Exponent);
 }
 
 /// <summary>
