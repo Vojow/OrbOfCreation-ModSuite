@@ -10,6 +10,10 @@ BulkDevelopment	0ed119bf-0449-4d64-9989-1a3f68c7b8a2	BulkDevelopment	IntVariable
 CompletionScalingWeight	be446180-242f-40d2-910e-91e735fc20ad	SpecialScaling	ScalingWeightSO
 ConceptRecipes	c8ff8e01-c042-49c2-86a2-e374f82c280c	ConceptRecipes	AlchemyRecipeListVariable
 Conceptualization	69842862-dfce-4a9e-a73b-f757c72e49dc	Conceptualization	AlchemyTypeSO
+ConsumableFruitType	46e0ab83-df7c-4f35-8012-3d9a3c97b753	Fruit	ConsumableTypeSO
+ConsumablePotionType	8103dae4-6945-4d18-b562-d2ffcd7ef49e	Potion	ConsumableTypeSO
+ConsumableRelicType	5d27b76e-eed3-49cc-a069-b9106000ede4	Relic	ConsumableTypeSO
+ConsumableScrollType	70b36536-64e5-4f70-ad6f-af5787d719cc	ScrollConsumable	ConsumableTypeSO
 Dismantle	7b89d22c-75ae-4945-9356-833382c9a167	Dismantle	AlchemyTypeSO
 Enchantment	2ffcbbc4-49a7-45db-b3ae-4a3c57362255	Enchantment	AlchemyTypeSO
 FruitTreeCollect	60ea60a2-44e9-41c2-86d6-3935fae0b647	PNAFruitTreeCollect	PlotNodeActionSO
@@ -18,6 +22,7 @@ FruitTreeRewardPool	b3ab80f0-80c7-41d4-b4c7-f34c3e909104	FruitTreasurePool	Treas
 MagicSpellbook	ca934900-0253-4f71-93e9-733fb91132b7	MagicSpellbook	ViewSO
 MasteriesEnabled	07dfae7e-76b9-4b38-bf81-38abc40b9ed7	MasteriesEnabled	ViewSO
 MultiBuy	37a84399-98b5-463c-b858-c1ecf2f9bf34	MultiBuy	IntVariable
+PotionToxicity	4dd4e062-2015-4809-a50f-f37647bda339	PotionToxicity	ResourceSO
 Reductive	47b787b9-d4cd-43c8-a7e3-63a1e4e0ae94	Reductive	AlchemyTypeSO
 Refinement	32b6b099-19f2-4470-b47b-6c2a8b0388e1	Refinement	AlchemyTypeSO
 Reflective	8f258dcc-c39a-4d64-b915-4239e746c49d	Reflective	AlchemyTypeSO

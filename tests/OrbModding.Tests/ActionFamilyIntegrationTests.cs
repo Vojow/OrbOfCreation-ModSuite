@@ -140,6 +140,44 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
+    public void AutoItemsClaimsAndRevokesTheCompleteConsumableTransaction()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Disabled;
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.True(ownership.OwnsItems);
+        Assert.True(ownership.TryCaptureItemMutationPermit());
+
+        using var external = registry.RegisterKnownExternal(
+            new ActionFamilyOwner(
+                new FeatureStatusKey("tests.external", "Consumables"),
+                "External Consumables"),
+            new[] { AutomationActionFamily.ConsumableUse });
+
+        Assert.False(ownership.OwnsItems);
+        Assert.False(ownership.TryCaptureItemMutationPermit());
+    }
+
+    [Fact]
+    public void AutoItemsAndSuiteAutoBuyShareTheScopedMultiBuyLease()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.True(ownership.OwnsAutoBuy(AutoBuyCandidateKind.Upgrade));
+        Assert.True(ownership.OwnsItems);
+        Assert.True(ownership.TryCaptureItemMutationPermit());
+    }
+
+    [Fact]
     public void MentorDomainClaimsAreIndependentAndReleaseOnLifecycleTeardown()
     {
         var registry = new ActionFamilyOwnershipRegistry();

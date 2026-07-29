@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using OrbAutomata;
 using Xunit;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.World;
@@ -1312,6 +1315,698 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(3, row.GainedSince);
         Assert.Equal(4, row.MaxCreatedLevel);
         Assert.Equal(150d, row.Modifiers.PrepSpeed.ToDouble());
+    }
+
+    [Fact]
+    public void AConsumablePublishesEveryNativeFamilyAndBothCostVectors()
+    {
+        var item = Guid.NewGuid();
+        var extraFamily = Guid.NewGuid();
+        var toxicity = KnownEntities.PotionToxicity.Uuid;
+        var durationResource = Guid.NewGuid();
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableScrollType.Uuid });
+        consumable.consumableTypes.Add(new FakeConsumableType { Identity = extraFamily });
+        consumable.consumeCost.costs.Add(new FakeConsumableCost(toxicity, 2d));
+        consumable.usageCost.costs.Add(new FakeConsumableCost(durationResource, 3d));
+        var pendingUsage = new FakeConsumableUsage
+        {
+            en = false,
+            dr = new BigDouble(11d),
+            maxDr = new BigDouble(12d),
+        };
+        var engagedUsage = new FakeConsumableUsage
+        {
+            en = true,
+            dr = new BigDouble(7d),
+            maxDr = new BigDouble(10d),
+        };
+        consumable.consumableUsages.Add(engagedUsage);
+        consumable.consumableUsages.Add(pendingUsage);
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldConsumableTypeLookup.TryFindRange(
+            world.ConsumableTypes, item, out var typeStart, out var typeCount));
+        Assert.Equal(2, typeCount);
+        var publishedTypes = new HashSet<Guid>();
+        for (var index = 0; index < typeCount; index++)
+            publishedTypes.Add(world.ConsumableTypes[typeStart + index].TypeId);
+        Assert.Contains(KnownEntities.ConsumableScrollType.Uuid, publishedTypes);
+        Assert.Contains(extraFamily, publishedTypes);
+
+        Assert.True(WorldConsumableCostLookup.TryFindRange(
+            world.ConsumableCosts,
+            item,
+            WorldConsumableCostKind.Consume,
+            out var consumeStart,
+            out var consumeCount));
+        Assert.Equal(1, consumeCount);
+        Assert.Equal(toxicity, world.ConsumableCosts[consumeStart].ResourceId);
+        Assert.Equal(2d, world.ConsumableCosts[consumeStart].Amount.ToDouble());
+
+        Assert.True(WorldConsumableCostLookup.TryFindRange(
+            world.ConsumableCosts,
+            item,
+            WorldConsumableCostKind.Usage,
+            out var usageStart,
+            out var usageCount));
+        Assert.Equal(1, usageCount);
+        Assert.Equal(durationResource, world.ConsumableCosts[usageStart].ResourceId);
+        Assert.Equal(3d, world.ConsumableCosts[usageStart].Amount.ToDouble());
+
+        Assert.True(WorldConsumableUsageLookup.TryFindRange(
+            world.ConsumableUsages, item, out var activeStart, out var activeCount));
+        Assert.Equal(2, activeCount);
+        var published = new Dictionary<Guid, WorldConsumableUsage>();
+        for (var index = 0; index < activeCount; index++)
+        {
+            var usage = world.ConsumableUsages[activeStart + index];
+            published.Add(usage.UsageId, usage);
+        }
+        Assert.True(published[pendingUsage.Identity].Pending);
+        Assert.Equal(11d, published[pendingUsage.Identity].RemainingDuration.ToDouble());
+        Assert.True(published[engagedUsage.Identity].Engaged);
+        Assert.Equal(10d, published[engagedUsage.Identity].MaximumDuration.ToDouble());
+    }
+
+    [Fact]
+    public void AnUnreadableConsumableRelationSkipsTheWholeItem()
+    {
+        var item = Guid.NewGuid();
+        FakeConsumable.All.Add(new FakeConsumable
+        {
+            Identity = item,
+            quantity = 1,
+            consumableTypes = null!,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.False(report.IsComplete);
+        Assert.Contains("type list was null", report.For("consumables").FirstFailure);
+        Assert.False(WorldLookup.TryFind(world.Consumables, item, out _));
+        Assert.Equal(0, world.ConsumableTypes.Count);
+        Assert.Equal(0, world.ConsumableCosts.Count);
+        Assert.Equal(0, world.ConsumableUsages.Count);
+    }
+
+    [Fact]
+    public void AnUnreadableConsumableUsageSkipsTheWholeItem()
+    {
+        var item = Guid.NewGuid();
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableUsages.Add(new FakeConsumableUsage { Identity = Guid.Empty });
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.False(report.IsComplete);
+        Assert.Contains("usage at position 0 had an empty identity",
+            report.For("consumables").FirstFailure);
+        Assert.False(WorldLookup.TryFind(world.Consumables, item, out _));
+        Assert.Equal(0, world.ConsumableUsages.Count);
+    }
+
+    [Fact]
+    public void ConsumableProfileRequiresOneKnownFamilyAndPreservesOtherCosts()
+    {
+        var item = Guid.NewGuid();
+        var otherFamily = Guid.NewGuid();
+        var otherImmediate = Guid.NewGuid();
+        var otherHeld = Guid.NewGuid();
+        FakeResource.All.Add(new FakeResource
+        {
+            Identity = KnownEntities.PotionToxicity.Uuid,
+            Quantity = new BigDouble(100d),
+            maxQuantity = new FakeModifierRecord(100d),
+            invertedResource = true,
+        });
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(new FakeConsumableType { Identity = otherFamily });
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableScrollType.Uuid });
+        consumable.consumeCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, 2d));
+        consumable.consumeCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, 3d));
+        consumable.consumeCost.costs.Add(new FakeConsumableCost(otherImmediate, 4d));
+        consumable.usageCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, 5d));
+        consumable.usageCost.costs.Add(new FakeConsumableCost(otherHeld, 6d));
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+
+        Assert.True(profile.IsReady);
+        Assert.Equal(AutoItemsConsumableFamily.Scroll, profile.Family);
+        Assert.Equal(5d, profile.ImmediateToxicityCost.ToDouble());
+        Assert.Equal(5d, profile.HeldToxicityCost.ToDouble());
+        Assert.True(profile.HasHeldToxicityCost);
+        Assert.True(profile.HasAdditionalImmediateCosts);
+        Assert.True(profile.HasAdditionalHeldCosts);
+    }
+
+    [Fact]
+    public void ConsumableProfileRejectsAmbiguousSupportedFamilies()
+    {
+        var item = Guid.NewGuid();
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableRelicType.Uuid });
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableScrollType.Uuid });
+        consumable.consumeCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, 1d));
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        collector.Collect();
+        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+
+        Assert.Equal(
+            AutoItemsConsumableProfileStatus.AmbiguousSupportedFamily,
+            profile.Status);
+        Assert.Equal(AutoItemsConsumableFamily.Unknown, profile.Family);
+    }
+
+    [Fact]
+    public void ConsumableProfileRejectsMissingToxicityCost()
+    {
+        var item = Guid.NewGuid();
+        FakeResource.All.Add(new FakeResource
+        {
+            Identity = KnownEntities.PotionToxicity.Uuid,
+            Quantity = new BigDouble(100d),
+            maxQuantity = new FakeModifierRecord(100d),
+            invertedResource = true,
+        });
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableFruitType.Uuid });
+        consumable.consumeCost.costs.Add(new FakeConsumableCost(Guid.NewGuid(), 1d));
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        collector.Collect();
+        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+
+        Assert.Equal(AutoItemsConsumableProfileStatus.ToxicityCostMissing, profile.Status);
+        Assert.Equal(AutoItemsConsumableFamily.Fruit, profile.Family);
+    }
+
+    [Fact]
+    public void ConsumableProfileRequiresTheNativeInvertedCappedToxicityShape()
+    {
+        var item = Guid.NewGuid();
+        FakeResource.All.Add(new FakeResource
+        {
+            Identity = KnownEntities.PotionToxicity.Uuid,
+            Quantity = new BigDouble(10d),
+            maxQuantity = new FakeModifierRecord(100d),
+            invertedResource = false,
+        });
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumablePotionType.Uuid });
+        consumable.consumeCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, 1d));
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        collector.Collect();
+        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+
+        Assert.Equal(
+            AutoItemsConsumableProfileStatus.ToxicityResourceNotInverted,
+            profile.Status);
+    }
+
+    [Fact]
+    public void AutoItemsPrioritizesARelicWheneverHeadroomPermits()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        var relic = AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(collector.Build(), out var metrics));
+
+        Assert.Equal(relic.Identity, action.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Relic, metrics.Kind);
+        Assert.Equal(1, metrics.EligibleRelics);
+    }
+
+    [Fact]
+    public void AutoItemsUsesACheaperScrollWhenARelicDoesNotFit()
+    {
+        AddToxicity(rawHeadroom: 10d);
+        AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false,
+            toxicityCost: 20d);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            toxicityCost: 1d);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(collector.Build(), out var metrics));
+
+        Assert.Equal(scroll.Identity, action.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Scroll, metrics.Kind);
+        Assert.Equal(0, metrics.EligibleRelics);
+        Assert.Equal(1, metrics.EligibleScrolls);
+    }
+
+    [Fact]
+    public void AutoItemsWaitsFromSaturationUntilToxicityReturnsToZero()
+    {
+        var toxicity = AddToxicity(rawHeadroom: 0d);
+        var relic = AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var tracker = new AutoItemsTemporaryActivationTracker();
+
+        var saturatedActions = PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            tracker,
+            out var saturatedMetrics);
+
+        Assert.Empty(saturatedActions);
+        Assert.True(state.RecoveryWaitActive);
+        Assert.Equal(
+            AutoItemsDecisionKind.WaitingForToxicityRecovery,
+            saturatedMetrics.Kind);
+
+        toxicity.Quantity = new BigDouble(50d);
+        Assert.True(collector.Collect().IsComplete);
+        var recoveringActions = PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            tracker,
+            out var recoveringMetrics);
+
+        Assert.Empty(recoveringActions);
+        Assert.True(state.RecoveryWaitActive);
+        Assert.Equal(
+            AutoItemsDecisionKind.WaitingForToxicityRecovery,
+            recoveringMetrics.Kind);
+
+        toxicity.Quantity = new BigDouble(100d);
+        Assert.True(collector.Collect().IsComplete);
+        var recoveredAction = Assert.Single(PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            tracker,
+            out var recoveredMetrics));
+
+        Assert.False(state.RecoveryWaitActive);
+        Assert.Equal(relic.Identity, recoveredAction.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Relic, recoveredMetrics.Kind);
+    }
+
+    [Fact]
+    public void AutoItemsUsesARelicFirstWhenToxicityIsExactlyZero()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var relic = AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(collector.Build(), out var metrics));
+
+        Assert.Equal(relic.Identity, action.ItemId);
+        Assert.Equal(AutoItemsConsumableFamily.Relic, action.Family);
+        Assert.Equal(AutoItemsDecisionKind.Relic, metrics.Kind);
+    }
+
+    [Fact]
+    public void AutoItemsUsesOnlyRandomizableScrollsAndNeverTemporaryItems()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumablePotionType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: false);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(collector.Build(), out var metrics));
+
+        Assert.Equal(scroll.Identity, action.ItemId);
+        Assert.Equal(AutoItemsConsumableFamily.Scroll, action.Family);
+        Assert.True(action.Belief.CanBeRandomized);
+        Assert.Equal(2, metrics.TemporaryItems);
+    }
+
+    [Fact]
+    public void AutoItemsDoesNotPlanWhileDisabled()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var actions = PlanAutoItems(
+            collector.Build(),
+            out var metrics,
+            AutoItemsOperationMode.Disabled);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.Disabled, metrics.Kind);
+    }
+
+    [Fact]
+    public void AutoItemsStartsRecoveryWaitWhenNoScrollFitsCurrentHeadroom()
+    {
+        AddToxicity(rawHeadroom: 0d);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var actions = PlanAutoItems(collector.Build(), out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.WaitingForToxicityRecovery, metrics.Kind);
+        Assert.Equal(0, metrics.EligibleScrolls);
+    }
+
+    [Fact]
+    public void AutoItemsOrdersSameFamilyCandidatesByStableIdentity()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var later = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        var first = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            identity: later);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            identity: first);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(collector.Build(), out _));
+
+        Assert.Equal(first, action.ItemId);
+    }
+
+    [Fact]
+    public void AutoItemsUsesOnlyAnExactlyAllowlistedTemporaryItemAtZeroToxicity()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var fruit = AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(
+            collector.Build(),
+            out var metrics,
+            useFruits: true,
+            temporaryAllowlist: fruit.Identity.ToString("D")));
+
+        Assert.Equal(fruit.Identity, action.ItemId);
+        Assert.Equal(AutoItemsConsumableFamily.Fruit, action.Family);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryItem, metrics.Kind);
+    }
+
+    [Fact]
+    public void AutoItemsDoesNotTreatAFamilySwitchAsATemporaryAllowlist()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(
+            collector.Build(),
+            out var metrics,
+            useFruits: true));
+
+        Assert.Equal(scroll.Identity, action.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Scroll, metrics.Kind);
+    }
+
+    [Fact]
+    public void AnEligibleTemporaryItemUsesAvailableHeadroomBeforeRecovery()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        var potion = AddConsumable(
+            KnownEntities.ConsumablePotionType.Uuid,
+            canBeRandomized: false);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(
+            collector.Build(),
+            out var metrics,
+            usePotions: true,
+            temporaryAllowlist: potion.Identity.ToString("D")));
+
+        Assert.Equal(potion.Identity, action.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryItem, metrics.Kind);
+    }
+
+    [Fact]
+    public void AnActiveTemporaryUsageBlocksEveryFurtherAutoItem()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var fruit = AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        fruit.consumableUsages.Add(new FakeConsumableUsage
+        {
+            en = true,
+            dr = new BigDouble(30d),
+            maxDr = new BigDouble(60d),
+        });
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var actions = PlanAutoItems(collector.Build(), out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryEffectActive, metrics.Kind);
+    }
+
+    [Fact]
+    public void TemporaryActivationTrackerConfirmsEngagementAndExpiry()
+    {
+        var item = AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        var usage = new FakeConsumableUsage
+        {
+            en = false,
+            dr = new BigDouble(60d),
+            maxDr = new BigDouble(60d),
+        };
+        item.consumableUsages.Add(usage);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var tracker = new AutoItemsTemporaryActivationTracker();
+        tracker.RecordSubmitted(item.Identity, 1);
+
+        Assert.Equal(
+            AutoItemsTemporaryActivationState.AwaitingActivation,
+            tracker.Observe(collector.Build() with { CollectedAtFrame = 2 }, out _));
+
+        usage.en = true;
+        Assert.True(collector.Collect().IsComplete);
+        Assert.Equal(
+            AutoItemsTemporaryActivationState.Active,
+            tracker.Observe(collector.Build() with { CollectedAtFrame = 3 }, out _));
+
+        item.consumableUsages.Clear();
+        Assert.True(collector.Collect().IsComplete);
+        Assert.Equal(
+            AutoItemsTemporaryActivationState.Completed,
+            tracker.Observe(collector.Build() with { CollectedAtFrame = 4 }, out _));
+    }
+
+    [Fact]
+    public void MissingTemporaryActivationQuarantinesOnlyThatItem()
+    {
+        var missing = AddConsumable(
+            KnownEntities.ConsumablePotionType.Uuid,
+            canBeRandomized: false);
+        var other = AddConsumable(
+            KnownEntities.ConsumablePotionType.Uuid,
+            canBeRandomized: false);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var tracker = new AutoItemsTemporaryActivationTracker();
+        tracker.RecordSubmitted(missing.Identity, 1);
+
+        Assert.Equal(
+            AutoItemsTemporaryActivationState.Quarantined,
+            tracker.Observe(collector.Build() with { CollectedAtFrame = 2 }, out var itemId));
+        Assert.Equal(missing.Identity, itemId);
+        Assert.True(tracker.IsQuarantined(missing.Identity));
+        Assert.False(tracker.IsQuarantined(other.Identity));
+    }
+
+    private static FakeResource AddToxicity(double rawHeadroom)
+    {
+        var resource = new FakeResource
+        {
+            Identity = KnownEntities.PotionToxicity.Uuid,
+            Quantity = new BigDouble(rawHeadroom),
+            maxQuantity = new FakeModifierRecord(100d),
+            invertedResource = true,
+        };
+        FakeResource.All.Add(resource);
+        return resource;
+    }
+
+    private static FakeConsumable AddConsumable(
+        Guid family,
+        bool canBeRandomized,
+        double toxicityCost = 1d,
+        Guid? identity = null)
+    {
+        var consumable = new FakeConsumable
+        {
+            Identity = identity ?? Guid.NewGuid(),
+            visible = true,
+            quantity = 1,
+            canBeRandomized = canBeRandomized,
+            hasDuration =
+                family == KnownEntities.ConsumableFruitType.Uuid ||
+                family == KnownEntities.ConsumablePotionType.Uuid,
+            durationBase =
+                family == KnownEntities.ConsumableFruitType.Uuid ||
+                family == KnownEntities.ConsumablePotionType.Uuid
+                    ? 60d
+                    : 0d,
+        };
+        consumable.consumableTypes.Add(new FakeConsumableType { Identity = family });
+        consumable.consumeCost.costs.Add(
+            new FakeConsumableCost(KnownEntities.PotionToxicity.Uuid, toxicityCost));
+        FakeConsumable.All.Add(consumable);
+        return consumable;
+    }
+
+    private static IReadOnlyList<AutoItemsCycleAction> PlanAutoItems(
+        GameWorldState world,
+        out AutoItemsDecisionMetrics metrics,
+        AutoItemsOperationMode mode = AutoItemsOperationMode.Active,
+        bool useFruits = false,
+        bool usePotions = false,
+        string temporaryAllowlist = "")
+    {
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        return PlanAutoItemsWithState(
+            world,
+            ref state,
+            new AutoItemsTemporaryActivationTracker(),
+            out metrics,
+            mode,
+            useFruits,
+            usePotions,
+            temporaryAllowlist);
+    }
+
+    private static IReadOnlyList<AutoItemsCycleAction> PlanAutoItemsWithState(
+        GameWorldState world,
+        ref AutoItemsCycleState state,
+        AutoItemsTemporaryActivationTracker tracker,
+        out AutoItemsDecisionMetrics metrics,
+        AutoItemsOperationMode mode = AutoItemsOperationMode.Active,
+        bool useFruits = false,
+        bool usePotions = false,
+        string temporaryAllowlist = "")
+    {
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = mode,
+                UseScrolls = true,
+                UseRelics = true,
+                UseFruits = useFruits,
+                UsePotions = usePotions,
+                TemporaryItemAllowlist = temporaryAllowlist,
+                EvaluationInterval = MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)),
+            },
+        };
+        var store = new ReusableActionStore<AutoItemsCycleAction>();
+        store.BeginWrite();
+        AutoItemsCycleEvaluator.Evaluate(
+            world,
+            in config,
+            ref state,
+            new ServiceActionWriter<AutoItemsCycleAction>(store),
+            tracker,
+            out metrics);
+        var actions = new List<AutoItemsCycleAction>(store.Count);
+        while (!store.IsComplete)
+        {
+            actions.Add(store.GetCurrent());
+            store.CommitCurrentAndClear();
+        }
+        return actions;
     }
 
     /// <summary>

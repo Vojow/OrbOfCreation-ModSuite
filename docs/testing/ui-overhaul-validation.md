@@ -29,11 +29,11 @@ icons.
 1. Open Mods from each unlocked top-level native view. Confirm Mods remains last and returning to
    Magic, Scholar, or Time restores the previously selected native view.
 2. Confirm the title is exactly **Orb Of Creation ModSuite** and the left rail is Runtime,
-   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Advanced.
+   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Mentor, Advanced.
 3. Confirm no old Safety/Spells/Artifacts/Alchemy row and no per-feature Mode row remains.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
    At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
-   the eight rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
+   the nine rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
 5. With the maximum unlocked native spell-slot count, confirm the five feature icons plus separated
    STOP remain in their compact 2×3 tray inside the left lane of `RightSidebar/AttributeBar`.
    Confirm the tray stays between the main-content boundary and native queue cells, never joins the
@@ -80,6 +80,15 @@ quick icons, and STOP:
    conflict, and the footer reports the remaining conflict/staged count.
 5. Exercise invalid numeric text and Default. Confirm validation blocks Apply and no invalidation
    publication or partial save occurs.
+6. On Auto Items, open **Temporary items** and confirm **Items** discovers only visible Fruit and
+   Potion entries. Check family, owned count, toxicity cost, duration, and selection state at the
+   minimum and maximum supported UI scales.
+7. Cycle **Filter** through All, Fruit, Potion, Owned, and Selected. Toggle several items, Apply,
+   close and reopen Mods, and confirm the same exact selections return. Verify a selected UUID that
+   is absent from the current catalog remains visible as unavailable and can be removed explicitly.
+8. Open **Raw**, stage a valid UUID list, and confirm switching editors never creates competing
+   panels. Exercise Default, Revert, external conflict resolution, and a native-catalog failure;
+   the latter must retain the staged UUID value while explaining why discovery is unavailable.
 
 ## Emergency stop and scene rebuild
 
@@ -90,7 +99,7 @@ quick icons, and STOP:
    STOP stays engaged until the ordinary two-click resume. Change either test hash and confirm the
    acknowledgement resets on next launch.
 1. Configure a resume set containing Auto Buy/Spell Leveling, Auto Cast, Auto Concept, Auto Harvest,
-   and Mentor. Hover STOP and confirm its tooltip lists that exact desired-On set.
+   Auto Items, and Mentor. Hover STOP and confirm its tooltip lists that exact desired-On set.
 2. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On
    quick icon reads stopped, and feature headers/Runtime agree.
 3. Click STOP once to arm resume. Confirm automation remains stopped and the tooltip still lists the
@@ -101,7 +110,7 @@ quick icons, and STOP:
 
 ## Runtime actions
 
-1. Confirm the six-feature grid appears first and orders failure/attention before waiting/healthy
+1. Confirm the seven-feature grid appears first and orders failure/attention before waiting/healthy
    states, with configured intent, runtime state, and one readable reason.
 2. Confirm the **Suite UI** diagnostic card contains healthy **Quick strip native visuals** and
    **Mods rail native visuals** capabilities. If either failed, confirm the exact BepInEx error

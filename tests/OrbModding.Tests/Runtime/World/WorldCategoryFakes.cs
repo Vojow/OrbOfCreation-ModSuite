@@ -952,6 +952,10 @@ internal sealed class FakeConsumable
     public ValueModifierRecord special = new(new BigDouble(0.0, 0));
     public ValueModifierRecord prepSpeed = new(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new(new BigDouble(0.0, 0));
+    public List<FakeConsumableType> consumableTypes = new();
+    public FakeConsumableCostList consumeCost = new();
+    public FakeConsumableCostList usageCost = new();
+    public List<FakeConsumableUsage> consumableUsages = new();
 
     public Guid GetGuid() => Identity;
     public double preparationTime;
@@ -959,6 +963,40 @@ internal sealed class FakeConsumable
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+}
+
+internal sealed class FakeConsumableUsage
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool en;
+    public BigDouble dr;
+    public BigDouble maxDr;
+
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableType
+{
+    public Guid Identity = Guid.NewGuid();
+
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableCostList
+{
+    public List<FakeConsumableCost> costs = new();
+}
+
+internal sealed class FakeConsumableCost
+{
+    public FakeReferencedEntity resource = new();
+    public BigDouble valueBig;
+
+    internal FakeConsumableCost(Guid resourceId, double amount)
+    {
+        resource = new FakeReferencedEntity { Identity = resourceId };
+        valueBig = new BigDouble(amount);
+    }
 }
 
 internal sealed class FakeRitual

@@ -1,10 +1,29 @@
 # Automation
 
-This folder is the automation feature area of the suite: Auto Buy, Auto Cast, Auto Concept, Spell Leveling, and Auto Harvest. It is not a separate plugin and carries no version of its own; everything here compiles into `OrbModSuite.dll` and loads under the suite's single plugin GUID.
+This folder is the automation feature area of the suite: Auto Buy, Auto Cast, Auto Concept, Spell
+Leveling, Auto Harvest, and Auto Items. Auto Items is implemented and disabled by default while its
+interactive validation remains open. This is not a separate plugin and carries no version of its
+own; everything here compiles into
+`OrbModSuite.dll` and loads under the suite's single plugin GUID.
 
-Auto Buy, Auto Harvest, Spell Leveling, Auto Cast, and Auto Concept are registered ServiceCycle services and share the frame pump with world collection. Auto Buy receives a fixed 16-action turn per Unity frame; the other feature services retain a bounded one-action turn. Fruit and treasure capabilities cannot mask an eligible sibling. A feature-neutral host owns the ServiceCycle registry, frame pump, lifecycle, emergency control, timing publication, and pump-shutdown lease. That host also owns the observation products — the optional manual full-trace session, the normally-on compact decision journal, and the profiling build's performance profile — so no feature owns them and gameplay is independent of all three. Every native operation passes through fail-closed family adapters, normalized admission facts, lifecycle isolation, and capture-execute-capture postconditions.
+Auto Buy, Auto Harvest, Auto Items, Spell Leveling, Auto Cast, and Auto Concept are registered
+ServiceCycle services and share the frame pump with world collection. Auto Buy receives a fixed
+16-action turn per Unity frame; the other feature services retain a bounded one-action turn. Fruit
+and treasure capabilities cannot mask an eligible sibling. A feature-neutral host owns the
+ServiceCycle registry, frame pump, lifecycle, emergency control, timing publication, and
+pump-shutdown lease. That host also owns the observation products — the optional manual full-trace
+session, the normally-on compact decision journal, and the profiling build's performance profile —
+so no feature owns them and gameplay is independent of all three. Every native operation passes
+through fail-closed family adapters, normalized admission facts, lifecycle isolation, and
+capture-execute-capture postconditions.
 
-Automation claims Structure, Upgrade plus native multi-buy override, Spell Cast, Concept Assignment, Spell Level Purchase, and Harvest Action independently. The exact AutobuyOrb GUID blocks only Structure and Upgrade automation. Claims are released on configuration/lifecycle teardown, prepared work is cancelled on loss, and ownership is rechecked after live native validation immediately before mutation. Unknown unregistered automation is not disabled and cannot be proven absent.
+Automation claims Structure, Upgrade, Consumable Use, Spell Cast, Concept Assignment, Spell Level
+Purchase, and Harvest Action independently. Auto Buy upgrades and Auto Items share the suite's one
+native multi-buy-override lease while retaining separate feature-family claims. The exact
+AutobuyOrb GUID blocks only Structure and Upgrade automation. Claims are released on
+configuration/lifecycle teardown, prepared work is cancelled on loss, and ownership is rechecked
+after live native validation immediately before mutation. Unknown unregistered automation is not
+disabled and cannot be proven absent.
 
 ## Build
 
@@ -24,7 +43,8 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Gameplay controls extend outward from the native Auto Buy queue switch as icon-only native spell frames: emergency stop, suite Auto Buy, Auto Cast, Auto Concept, Auto Harvest, then Mentor. STOP has one additional gap. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - Auto Harvest starts `Disabled`; its fruit-tree and treasure-tree selectors default on behind that master switch, and its native harvest-speed quick icon toggles the mode.
-- Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor expose only `Disabled` and `Active`.
+- Auto Items starts `Disabled`; Scroll and Relic allows default on behind that switch. Scrolls use native random targeting, and Relics have first priority whenever native toxicity headroom permits them. Fruit/Potion controls default off and require selection in the Mods temporary-item picker, enough native toxicity headroom, and no other temporary usage. The picker shows native names, family, stock, toxicity cost, and duration while persisting exact UUIDs. Eligible items fill toxicity before a recovery latch waits to exact zero.
+- Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, and Mentor expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - `PurchaseGrouping=BulkDevelopment` gives each ranked Structure one live Bulk Development-sized group and each Upgrade one level before the ranked pass repeats. Every submitted level is independently revalidated.
 - Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.
@@ -32,11 +52,15 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Native action-multiplier grouping is available as an explicit `PurchaseGrouping` mode and is off by default.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Startup, warning, and error records remain enabled; explicit Runtime actions own deeper trace and journal evidence.
-- `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, and harvest submissions.
+- `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, harvest submissions, and item submissions.
 - An unknown complete game assembly pair starts with the General `EmergencyDisable` switch engaged and only the Mods control plane available. Explicitly clearing that switch accepts the exact observed pair and permits runtime composition in the same action. `Compatibility.AllowUnverifiedGameBuild` remains a separate Advanced acknowledgement path that leaves STOP engaged. Changing either assembly returns the suite to quarantine. Removing acknowledgement during a running session re-engages STOP immediately, and a restart is required to unload patches already installed for that session.
 - Each Mods feature header and its matching gameplay quick button issue the same immediate mode command through the committed store. Mode is not repeated in the staged settings list. Toggle shortcuts, quick-control visibility, emergency control, and diagnostics remain editable while inactive feature tuning stays locked. Nested Auto Buy fields also require their applicable include, batch, or grouping policy.
 
-At runtime, those persisted settings are mapped once per change into one composed immutable configuration record with General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Safety, and Reserves sections. Engines and controls consume that record rather than BepInEx entries or feature-specific configuration mirrors. A saved ServiceCycle cycle pins the complete record it began with; later changes apply to a later cycle.
+At runtime, those persisted settings are mapped once per change into one composed immutable
+configuration record with General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items,
+Mentor, Safety, and Reserves sections. Engines and controls consume that record rather than BepInEx
+entries or feature-specific configuration mirrors. A saved ServiceCycle cycle pins the complete
+record it began with; later changes apply to a later cycle.
 
 The former runtime-probe, per-session purchase-limit, DryRun, expert-override, Auto Research, and Auto Harvest runtime-selector settings are not part of the release configuration or the configuration UI. Automation has no configuration schema of its own: it binds into the suite's single configuration file, which the shared pre-bind transaction marks at `ConfigurationSchemaVersion` 5. The 2-to-3 step moves only Auto Cast's inherited `Left Alt + X` default to `F8`; the 3-to-4 step discards Mentor's retired frame-operation and CPU-budget keys; the 4-to-5 step discards the retired scan, logging, event-probe, and verifier controls. Player-customized active shortcuts are preserved. Malformed, negative, or future schema data fails closed without starting the suite.
 
@@ -70,7 +94,13 @@ Submission always requests quantity one through `ActivePlotNodeActions.AddInstan
 
 The Common ServiceCycle engine is the only Auto Harvest driver. The suite registers a feature-owned activation service during plugin startup, but does not construct the lifecycle-bound runtime until the first playable `Main` frame. Generation zero remains invalid rather than being converted into a synthetic native lifecycle. Construction is attempted once; an ordinary failure disables Auto Harvest alone without selecting an alternate path or affecting sibling services. Fatal process failures are never relabeled as an isolated feature fault.
 
-The neutral host seals an explicitly populated typed registry and polls every registered service once per Unity frame. A mixed-type composition test registers unrelated frame/config/state/action graphs in the same host; no host type references Auto Harvest or Auto Buy. Production explicitly registers world collection, Auto Harvest, and Auto Buy rather than creating another pump. Main-thread capture copies only native-free facts; sleeping workers evaluate feature policy; and every advisory action returns to the Unity thread for fresh native validation.
+The neutral host seals an explicitly populated typed registry and polls every registered service
+once per Unity frame. A mixed-type composition test registers unrelated
+frame/config/state/action graphs in the same host; no host type references Auto Harvest, Auto Items,
+or Auto Buy. Production explicitly registers world collection, Auto Harvest, Auto Items, and Auto
+Buy rather than creating another pump. Main-thread capture copies only native-free facts; sleeping
+workers evaluate feature policy; and every advisory action returns to the Unity thread for fresh
+native validation.
 
 Auto Buy audits each exact candidate type and native convenience signature once, then binds typed read delegates for live availability, admission, levels, and cost. Stable UUID, exact type name, and optional Structure-priority metadata are cached only by native object reference within the current lifecycle and are discarded on lifecycle replacement. Resource quantities, costs, queue room, and every other mutable gameplay fact remain fresh per capture.
 

@@ -234,6 +234,48 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoItems_MatchesReadOnlyWorldPublicationContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableSO>",
+            assembly.GetFieldType("ConsumableSO", "All"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableTypeSO>",
+            assembly.GetFieldType("ConsumableSO", "consumableTypes"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("ConsumableSO", "consumeCost"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("ConsumableSO", "usageCost"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableUsage>",
+            assembly.GetFieldType("ConsumableSO", "consumableUsages"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ResourceTuple>",
+            assembly.GetFieldType("ResourceCostList", "costs"));
+        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ResourceTuple", "valueBig"));
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "ConsumableSO", "CanFire", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "SelectAndFire", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "SetRandomization",
+            false,
+            "System.Void",
+            "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "IsRandomized", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "IsVisible", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "GetQuantity", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableSO", "GetQueued", false, "System.Int32");
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "dr"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "maxDr"));
+        AssertMethod(assembly, "ConsumableUsage", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "Inventory", "CanUseConsumable", true, "System.Boolean");
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

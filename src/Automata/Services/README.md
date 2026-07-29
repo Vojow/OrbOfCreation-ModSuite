@@ -6,8 +6,8 @@ implementations live in sibling feature folders under `src/`.
 ## Registration rules
 
 - `Plugin` owns the one ServiceCycle activation directly; feature order is explicit inside
-  `IAutomataServiceCycleFeature[]`: world collection first, then Auto Harvest, Auto Buy, Spell
-  Leveling, Auto Cast, Auto Concept, and Mentor.
+  `IAutomataServiceCycleFeature[]`: world collection first, then Auto Harvest, Auto Items, Auto Buy,
+  Spell Leveling, Auto Cast, Auto Concept, and Mentor.
 - Registration is explicit. Do not discover services through reflection, filesystem conventions, or static constructors.
 - The activation is the application lifecycle surface; feature-specific APIs stay inside their typed
   ServiceCycle composition and diagnostics bridges.

@@ -43,6 +43,13 @@ public sealed class AutomataTests
         Assert.True(config.AutoHarvestFruitTrees.Value);
         Assert.True(config.AutoHarvestTreasureTrees.Value);
         Assert.Equal(1.0f, config.AutoHarvestEvaluationIntervalSeconds.Value);
+        Assert.Equal(AutoItemsOperationMode.Disabled, config.AutoItemsMode.Value);
+        Assert.True(config.AutoItemsScrolls.Value);
+        Assert.True(config.AutoItemsRelics.Value);
+        Assert.False(config.AutoItemsFruits.Value);
+        Assert.False(config.AutoItemsPotions.Value);
+        Assert.Empty(config.AutoItemsTemporaryItemAllowlist.Value);
+        Assert.Equal(1.0f, config.AutoItemsEvaluationIntervalSeconds.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
@@ -52,6 +59,7 @@ public sealed class AutomataTests
         Assert.False(config.Current.CanStartAutoCastActively);
         Assert.False(config.Current.CanStartAutoConceptActively);
         Assert.False(config.Current.CanStartAutoHarvestActively);
+        Assert.False(config.Current.CanStartAutoItemsActively);
     }
 
     [Fact]

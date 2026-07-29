@@ -43,6 +43,12 @@ The findings come from assembly metadata and selected IL method bodies read with
   synthetic stress workloads, and the still-missing observed progression
   profiles.
 
+## Auto Items dossier
+
+- [Native item pipeline](auto-items-native-pipeline.md) - Consumable taxonomy, toxicity and rest
+  mechanics, asynchronous item submission, native random targeting, and the evidence still required
+  before Scroll or Relic mutation can ship.
+
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 
 ## Important discovered identifier

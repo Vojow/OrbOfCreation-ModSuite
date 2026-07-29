@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbAutomata;
 using OrbModding.Common;
 using TMPro;
 using UnityEngine;
@@ -27,6 +28,7 @@ internal sealed class ModSettingListView : IDisposable
     private readonly Action _rebuildRequested;
     private readonly Action<ConfigEditValue?> _statusChanged;
     private readonly List<GameObject> _rows = new();
+    private readonly AutoItemsTemporaryItemPickerView _temporaryItemPicker;
 
     public ModSettingListView(
         ConfigEditSession session,
@@ -38,8 +40,13 @@ internal sealed class ModSettingListView : IDisposable
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _content = content ?? throw new ArgumentNullException(nameof(content));
         _labelTemplate = labelTemplate ?? throw new ArgumentNullException(nameof(labelTemplate));
-        _rebuildRequested = rebuildRequested ?? throw new ArgumentNullException(nameof(rebuildRequested));
+        _rebuildRequested =
+            rebuildRequested ?? throw new ArgumentNullException(nameof(rebuildRequested));
         _statusChanged = statusChanged ?? throw new ArgumentNullException(nameof(statusChanged));
+        _temporaryItemPicker = new AutoItemsTemporaryItemPickerView(
+            _labelTemplate,
+            _rebuildRequested,
+            _statusChanged);
     }
 
     public float MeasuredDescriptionWidth { get; private set; }
@@ -172,14 +179,30 @@ internal sealed class ModSettingListView : IDisposable
             TextAlignmentOptions.TopLeft,
             0.55f,
             TextOverflowModes.Overflow);
-        var preferredDescriptionHeight = descriptionText.GetPreferredValues(description, descriptionWidth, 0f).y;
+        var preferredDescriptionHeight =
+            descriptionText.GetPreferredValues(description, descriptionWidth, 0f).y;
         var rowHeight = ModSettingsLayout.CalculateSettingRowHeight(preferredDescriptionHeight);
+        AutoItemsTemporaryItemCatalogSnapshot? temporaryCatalog = null;
+        if (AutoItemsTemporaryItemPickerView.AppliesTo(setting) &&
+            _session.DependencySatisfied(setting) &&
+            !edit.HasExternalConflict)
+        {
+            temporaryCatalog = _temporaryItemPicker.CaptureCatalog();
+            rowHeight = Math.Max(
+                rowHeight,
+                _temporaryItemPicker.Measure(
+                    edit,
+                    temporaryCatalog,
+                    MinimumSettingRowHeight));
+        }
         var visibleRowHeight = rowHeight - SettingRowGap;
         rowRect.sizeDelta = new Vector2(0f, visibleRowHeight);
         ModConfigUiFactory.SetTopAnchoredHeight(
             (RectTransform)descriptionText.transform,
             SettingDescriptionTopInset,
-            Math.Max(1f, visibleRowHeight - SettingDescriptionTopInset - SettingDescriptionBottomInset));
+            Math.Max(
+                1f,
+                visibleRowHeight - SettingDescriptionTopInset - SettingDescriptionBottomInset));
 
         if (!_session.DependencySatisfied(setting))
         {
@@ -201,8 +224,8 @@ internal sealed class ModSettingListView : IDisposable
             return rowHeight;
         }
 
-        CreateEditor(row.transform, setting, edit);
-        if (edit.IsEditable)
+        CreateEditor(row.transform, setting, edit, temporaryCatalog);
+        if (edit.IsEditable && !AutoItemsTemporaryItemPickerView.AppliesTo(setting))
         {
             ModConfigUiFactory.CreateButton(
                 "Default",
@@ -260,8 +283,14 @@ internal sealed class ModSettingListView : IDisposable
     private void CreateEditor(
         Transform parent,
         ConfigSettingDescriptor setting,
-        ConfigEditValue edit)
+        ConfigEditValue edit,
+        AutoItemsTemporaryItemCatalogSnapshot? temporaryCatalog)
     {
+        if (AutoItemsTemporaryItemPickerView.AppliesTo(setting))
+        {
+            _temporaryItemPicker.Render(parent, edit, temporaryCatalog);
+            return;
+        }
         switch (setting.Kind)
         {
             case ConfigEditorKind.Boolean:
@@ -274,7 +303,8 @@ internal sealed class ModSettingListView : IDisposable
                     edit.StagedSerialized,
                     () =>
                     {
-                        var current = bool.TryParse(edit.StagedSerialized, out var parsed) && parsed;
+                        var current =
+                            bool.TryParse(edit.StagedSerialized, out var parsed) && parsed;
                         edit.Stage((!current).ToString());
                         _rebuildRequested();
                     });
@@ -316,7 +346,10 @@ internal sealed class ModSettingListView : IDisposable
             {
                 var current = Array.FindIndex(
                     names,
-                    name => string.Equals(name, edit.StagedSerialized, StringComparison.OrdinalIgnoreCase));
+                    name => string.Equals(
+                        name,
+                        edit.StagedSerialized,
+                        StringComparison.OrdinalIgnoreCase));
                 edit.Stage(names[(current + 1 + names.Length) % names.Length]);
                 _rebuildRequested();
             });

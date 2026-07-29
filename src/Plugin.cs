@@ -342,6 +342,15 @@ public sealed class Plugin : BaseUnityPlugin
                                     _automataActionFamilyOwnership!.TryCaptureHarvestMutationPermit(),
                                 runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
                                 featureStatus: featureStatuses.AutoHarvest)),
+                        new AutoItemsServiceCycleFeature(
+                            new AutoItemsFeatureDependencies(
+                                autoHarvestRegistryResolver,
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () =>
+                                    _automataActionFamilyOwnership!.OwnsItems,
+                                captureMutationPermit: () =>
+                                    _automataActionFamilyOwnership!.TryCaptureItemMutationPermit(),
+                                featureStatus: featureStatuses.AutoItems)),
                         new AutoBuyServiceCycleFeature(
                             new AutoBuyFeatureDependencies(
                                 readAutoHarvestLifecycleEpoch,

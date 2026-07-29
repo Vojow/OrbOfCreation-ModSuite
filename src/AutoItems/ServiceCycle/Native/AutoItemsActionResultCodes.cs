@@ -1,0 +1,15 @@
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+
+namespace OrbAutomata;
+
+internal static class AutoItemsActionResultCodes
+{
+    internal static ServiceActionResultCode ActionFamilyUnavailable => new(1100);
+    internal static ServiceActionResultCode ItemUnavailable => new(1101);
+    internal static ServiceActionResultCode FamilyChanged => new(1102);
+    internal static ServiceActionResultCode NativeBusy => new(1103);
+    internal static ServiceActionResultCode NotAdmissible => new(1104);
+    internal static ServiceActionResultCode RandomizationUnavailable => new(1105);
+    internal static ServiceActionResultCode MutationPermitUnavailable => new(1107);
+    internal static ServiceActionResultCode TemporaryEffectPresent => new(1108);
+}

@@ -301,5 +301,6 @@ internal sealed class ModSettingsPage : IDisposable
 
     internal static bool IsImmediateModeSetting(ConfigSettingDescriptor setting) =>
         string.Equals(setting.Key, "Mode", StringComparison.Ordinal) &&
-        setting.SourceSection is "AutoBuy" or "AutoCast" or "AutoConcept" or "AutoHarvest" or "General";
+        setting.SourceSection is
+            "AutoBuy" or "AutoCast" or "AutoConcept" or "AutoHarvest" or "AutoItems" or "General";
 }

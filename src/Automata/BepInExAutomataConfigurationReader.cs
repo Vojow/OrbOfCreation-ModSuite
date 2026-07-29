@@ -69,6 +69,18 @@ internal static class BepInExAutomataConfigurationReader
                     source.AutoHarvestEvaluationIntervalSeconds.Value,
                     nameof(source.AutoHarvestEvaluationIntervalSeconds)),
             },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = source.AutoItemsMode.Value,
+                UseScrolls = source.AutoItemsScrolls.Value,
+                UseRelics = source.AutoItemsRelics.Value,
+                UseFruits = source.AutoItemsFruits.Value,
+                UsePotions = source.AutoItemsPotions.Value,
+                TemporaryItemAllowlist = source.AutoItemsTemporaryItemAllowlist.Value,
+                EvaluationInterval = ToDuration(
+                    source.AutoItemsEvaluationIntervalSeconds.Value,
+                    nameof(source.AutoItemsEvaluationIntervalSeconds)),
+            },
             Mentor = source.Mentor is null
                 ? new OrbMentor.MentorConfiguration()
                 : OrbMentor.MentorConfiguration.Read(source.Mentor),

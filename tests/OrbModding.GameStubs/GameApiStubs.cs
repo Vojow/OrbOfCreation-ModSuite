@@ -914,6 +914,8 @@ public class ResourceSO : UpgradeableObject
     private bool inRallyMode;
     public string GetName() => name;
     public BigDouble GetQuantity() => quantity;
+    public BigDouble GetDisplayQuantity() =>
+        invertedResource ? maxQuantity.GetValue() - quantity : quantity;
     // The game's own formula. A settable field here would let the stub's GetTrueQuantity()
     // disagree with its own quantity and quality, which is precisely the drift that makes a
     // passing test mean nothing.
@@ -1528,7 +1530,11 @@ public interface ITooltipable
     List<TooltipNode> GetAltTooltipNodes();
 }
 
-public class TooltipableObject : UnityEngine.ScriptableObject { }
+public class TooltipableObject : IdScriptableObject
+{
+    public string displayName = string.Empty;
+    public virtual string GetName() => displayName;
+}
 
 public class TooltipNode
 {

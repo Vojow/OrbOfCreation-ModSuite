@@ -98,14 +98,23 @@ collected and the list half is not:
 | Plot node | `sizeMods` |
 | Discovery tree | the discovered-identity list |
 
-This is stated rather than silently omitted because a consumer that assumed a consumable row
-described the consumable completely would be wrong about exactly the part that says how many are in
-stock.
+This is stated rather than silently omitted because a consumer that assumed a scalar row described
+an entity completely would be wrong about exactly the authored relations the table does not carry.
 
 Three cases that look like they belong on that list do not:
 
 - **A consumable's stock count.** The save record stores a `consumableCounts` list and derives the
   total on load; the runtime keeps that total in a plain cached int, and `Quantity` carries it.
+- **A consumable's families and costs.** `ConsumableTypes` carries every UUID-backed
+  `ConsumableTypeSO` membership as a one-to-many relation. `ConsumableCosts` carries every
+  `ResourceTuple` from both the immediate `consumeCost` and held `usageCost` vectors. They remain
+  raw authored facts: collection does not guess one family, drop unknown families, or reduce a
+  multi-resource vector to toxicity alone. If any of those relations is unreadable, the item and
+  its relations are skipped together and the consumable category reports the shortfall.
+- **A consumable's live usages.** `ConsumableUsages` carries every usage under its owning
+  consumable UUID, with the usage UUID, pending/engaged state, and remaining/maximum native
+  duration. An unreadable, duplicate, or empty usage identity skips the scalar item and all of its
+  relations atomically, so consumers never see an apparently inactive partial item.
 - **A plot node's phase quantities.** `IdleQuantity` and `TotalQuantity` are summed out of
   `phaseInstances` during collection and `RemainingQuantity` is derived from them on the worker, so
   the numbers travel while the instances do not. The game's own `GetQuantity()` and
@@ -196,7 +205,7 @@ category's row struct and its binder. The machinery they plug into lives one dir
 `WorldCategoryMachinery.cs` (buffers, readers, derivers), `NativeAccessorBinder.cs` (member binding),
 `GameWorldCollector.cs` (the pass), `GameWorldStateDeriver.cs` (the five derived categories).
 
-Five categories are exceptions to one-row-per-entity. Which *tables* the identity walk skips is a
+Six categories are exceptions to one-row-per-entity. Which *tables* the identity walk skips is a
 longer list, and it is stated in exactly one place — `NotIdentityTables` in
 `tests/OrbModding.Tests/Runtime/Verification/WorldIdentityWalkTests.cs` — because every second
 reading of an entity another table already claims lands there.

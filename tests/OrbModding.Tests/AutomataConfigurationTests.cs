@@ -128,6 +128,11 @@ public sealed class AutomataConfigurationTests
         config.AutoCastStartResourcePercent.Value = 37;
         config.AutoConceptQuantityCap.Value = 19;
         config.AutoHarvestTreasureTrees.Value = false;
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoItemsScrolls.Value = false;
+        config.AutoItemsFruits.Value = true;
+        config.AutoItemsTemporaryItemAllowlist.Value =
+            "4ee6b1e1-1e7f-4a3b-9b3f-9ebc5a9339f1";
         config.EmergencyDisable.Value = true;
         config.AbsoluteReserve.Value = "42";
 
@@ -138,6 +143,14 @@ public sealed class AutomataConfigurationTests
         Assert.Equal(37, snapshot.AutoCast.StartResourcePercent);
         Assert.Equal(19, snapshot.AutoConcept.QuantityCap);
         Assert.False(snapshot.AutoHarvest.CollectTreasureTrees);
+        Assert.Equal(AutoItemsOperationMode.Active, snapshot.AutoItems.Mode);
+        Assert.False(snapshot.AutoItems.UseScrolls);
+        Assert.True(snapshot.AutoItems.UseRelics);
+        Assert.True(snapshot.AutoItems.UseFruits);
+        Assert.False(snapshot.AutoItems.UsePotions);
+        Assert.Equal(
+            "4ee6b1e1-1e7f-4a3b-9b3f-9ebc5a9339f1",
+            snapshot.AutoItems.TemporaryItemAllowlist);
         Assert.True(snapshot.Safety.EmergencyDisable);
         Assert.Equal("42", snapshot.Reserves.AbsoluteReserve);
 

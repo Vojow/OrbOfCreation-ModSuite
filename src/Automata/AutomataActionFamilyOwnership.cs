@@ -11,7 +11,9 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private static readonly AutomationActionFamily[] StructureFamilies =
         { AutomationActionFamily.StructurePurchase };
     private static readonly AutomationActionFamily[] UpgradeFamilies =
-        { AutomationActionFamily.UpgradePurchase, AutomationActionFamily.NativeMultiBuyOverride };
+        { AutomationActionFamily.UpgradePurchase };
+    private static readonly AutomationActionFamily[] MultiBuyFamilies =
+        { AutomationActionFamily.NativeMultiBuyOverride };
     private static readonly AutomationActionFamily[] CastFamilies =
         { AutomationActionFamily.SpellCast };
     private static readonly AutomationActionFamily[] ConceptFamilies =
@@ -20,24 +22,30 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.SpellLevelPurchase };
     private static readonly AutomationActionFamily[] HarvestFamilies =
         { AutomationActionFamily.HarvestAction };
+    private static readonly AutomationActionFamily[] ItemFamilies =
+        { AutomationActionFamily.ConsumableUse };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
     private readonly ActionFamilyOwnershipRegistry _registry;
     private ActionFamilyLeaseSet? _structures;
     private ActionFamilyLeaseSet? _upgrades;
+    private ActionFamilyLeaseSet? _multiBuy;
     private ActionFamilyLeaseSet? _cast;
     private ActionFamilyLeaseSet? _concept;
     private ActionFamilyLeaseSet? _spellLevel;
     private ActionFamilyLeaseSet? _harvest;
+    private ActionFamilyLeaseSet? _items;
     private IDisposable? _knownExternal;
     private int _pluginInventoryCount = -1;
     private long _structuresRetryFrame;
     private long _upgradesRetryFrame;
+    private long _multiBuyRetryFrame;
     private long _castRetryFrame;
     private long _conceptRetryFrame;
     private long _spellLevelRetryFrame;
     private long _harvestRetryFrame;
+    private long _itemsRetryFrame;
 
     internal int ClaimAttempts { get; private set; }
     public bool KnownAutoBuyLoaded { get; private set; }
@@ -48,7 +56,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     public bool OwnsAutoBuy(AutoBuyCandidateKind kind) => kind switch
     {
         AutoBuyCandidateKind.Structure => _structures?.IsHeld == true,
-        AutoBuyCandidateKind.Upgrade => _upgrades?.IsHeld == true,
+        AutoBuyCandidateKind.Upgrade =>
+            _upgrades?.IsHeld == true && _multiBuy?.IsHeld == true,
         _ => false,
     };
 
@@ -66,7 +75,11 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     public bool OwnsConcept => _concept?.IsHeld == true;
     public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;
     public bool OwnsHarvest => _harvest?.IsHeld == true;
+    public bool OwnsItems => _items?.IsHeld == true && _multiBuy?.IsHeld == true;
     public bool TryCaptureHarvestMutationPermit() => _harvest?.TryCaptureMutationPermit() == true;
+    public bool TryCaptureItemMutationPermit() =>
+        _items?.TryCaptureMutationPermit() == true &&
+        _multiBuy?.TryCaptureMutationPermit() == true;
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -99,6 +112,12 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         RefreshLease(ref _upgrades, ref _upgradesRetryFrame, frame,
             suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades,
             "AutoBuy.Upgrades", "Automata Auto Buy Upgrades", UpgradeFamilies);
+        RefreshLease(ref _multiBuy, ref _multiBuyRetryFrame, frame,
+            suiteReady &&
+            (config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades ||
+             config.CanStartAutoItemsActively &&
+             (config.AutoItems.UseScrolls || config.AutoItems.UseRelics)),
+            "NativeMultiBuy", "Automata Native Multi-Buy Scope", MultiBuyFamilies);
         RefreshLease(ref _cast, ref _castRetryFrame, frame,
             suiteReady && config.CanStartAutoCastActively,
             "AutoCast", "Automata Auto Cast", CastFamilies);
@@ -112,15 +131,21 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             suiteReady && config.CanStartAutoHarvestActively &&
             (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees),
             "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
+        RefreshLease(ref _items, ref _itemsRetryFrame, frame,
+            suiteReady && config.CanStartAutoItemsActively &&
+            (config.AutoItems.UseScrolls || config.AutoItems.UseRelics),
+            "AutoItems", "Automata Auto Items", ItemFamilies);
     }
 
     public void ReleaseLifecycleClaims()
     {
+        Release(ref _items);
         Release(ref _harvest);
         Release(ref _spellLevel);
         Release(ref _concept);
         Release(ref _cast);
         Release(ref _upgrades);
+        Release(ref _multiBuy);
         Release(ref _structures);
     }
 
@@ -173,9 +198,11 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     {
         _structuresRetryFrame = 0;
         _upgradesRetryFrame = 0;
+        _multiBuyRetryFrame = 0;
         _castRetryFrame = 0;
         _conceptRetryFrame = 0;
         _spellLevelRetryFrame = 0;
         _harvestRetryFrame = 0;
+        _itemsRetryFrame = 0;
     }
 }

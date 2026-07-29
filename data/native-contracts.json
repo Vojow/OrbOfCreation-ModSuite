@@ -2872,7 +2872,8 @@
       "valueType": "System.Collections.Generic.List`1<ConsumableSO>",
       "owners": [
         "Automata world collection",
-        "Automata world-collection verification"
+        "Automata world-collection verification",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -2908,12 +2909,90 @@
       "static": false,
       "valueType": "System.Boolean",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items mutation"
       ],
       "usages": [
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "consumable.consumable-types",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumableTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ConsumableTypeSO>",
+      "owners": [
+        "Auto Items world publication",
+        "Automata world collection",
+        "Auto Items configuration picker"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.consumable-usages",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumableUsages",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ConsumableUsage>",
+      "owners": [
+        "Auto Items temporary-effect publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.consume-cost",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumeCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Auto Items world publication",
+        "Automata world collection",
+        "Auto Items configuration picker"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.can-fire",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanFire",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "consumable.current-cooldown",
@@ -2980,7 +3059,8 @@
       "static": false,
       "valueType": "System.Double",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -3024,6 +3104,45 @@
       "place": "capture"
     },
     {
+      "id": "consumable.get-quantity",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation verification",
+        "Auto Items configuration picker"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.get-queued",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQueued",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation verification"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "consumable.has-duration",
       "assembly": "assembly-csharp",
       "type": "ConsumableSO",
@@ -3058,6 +3177,45 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "consumable.is-randomized",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsRandomized",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation verification"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation",
+        "Auto Items configuration picker"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "consumable.power",
@@ -3204,6 +3362,138 @@
       "place": "capture"
     },
     {
+      "id": "consumable.select-and-fire",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SelectAndFire",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.set-randomization",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SetRandomization",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Boolean"
+      ],
+      "owners": [
+        "Auto Items mutation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.usage-cost",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "usageCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Auto Items world publication",
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.engaged",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "en",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Auto Items temporary-effect publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.get-guid",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Auto Items temporary-effect publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.maximum-duration",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxDr",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Auto Items temporary-effect publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.remaining-duration",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "dr",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Auto Items temporary-effect publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "consumable.visible",
       "assembly": "assembly-csharp",
       "type": "ConsumableSO",
@@ -3215,6 +3505,20 @@
       "valueType": "System.Boolean",
       "owners": [
         "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-type.type",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableTypeSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -4503,7 +4807,8 @@
       "returnType": "IntVariable",
       "parameters": [],
       "owners": [
-        "Automata Auto Buy mutation"
+        "Automata Auto Buy mutation",
+        "Auto Items mutation"
       ],
       "usages": [
         "reflection"
@@ -5213,7 +5518,9 @@
         "Automata cost-math verification",
         "Automata world collection",
         "Automata world-collection verification",
-        "Common world collection"
+        "Common world collection",
+        "Auto Items mutation",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -5269,7 +5576,8 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Buy mutation"
+        "Automata Auto Buy mutation",
+        "Auto Items mutation"
       ],
       "usages": [
         "reflection"
@@ -5290,7 +5598,27 @@
         "System.Int32"
       ],
       "owners": [
-        "Automata Auto Buy mutation"
+        "Automata Auto Buy mutation",
+        "Auto Items mutation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "inventory.can-use-consumable",
+      "assembly": "assembly-csharp",
+      "type": "Inventory",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanUseConsumable",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Auto Items mutation"
       ],
       "usages": [
         "reflection"
@@ -7553,7 +7881,8 @@
       "owners": [
         "Automata world-collection verification",
         "Automata resource-cost decoding",
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -7746,7 +8075,8 @@
       "valueType": "ResourceSO",
       "owners": [
         "Automata resource-cost decoding",
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -7784,7 +8114,8 @@
       "static": false,
       "valueType": "BigDouble",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -13151,7 +13482,8 @@
       "returnType": "System.String",
       "parameters": [],
       "owners": [
-        "Automata action diagnostics"
+        "Automata action diagnostics",
+        "Auto Items configuration picker"
       ],
       "usages": [
         "reflection"
@@ -14302,6 +14634,7 @@
       "src/AutoCast",
       "src/AutoConcept",
       "src/AutoHarvest",
+      "src/AutoItems",
       "src/Automata",
       "src/Common",
       "src/Mentor",

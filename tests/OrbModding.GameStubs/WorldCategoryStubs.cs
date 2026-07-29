@@ -178,7 +178,11 @@ public sealed class GlyphSO : IdScriptableObject
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
 }
 
-public sealed class ConsumableSO : IdScriptableObject
+public sealed class ConsumableTypeSO : IdScriptableObject
+{
+}
+
+public sealed class ConsumableSO : TooltipableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();
     public bool visible;
@@ -192,11 +196,17 @@ public sealed class ConsumableSO : IdScriptableObject
     public ValueModifierRecord special = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord prepSpeed = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public List<ConsumableTypeSO> consumableTypes = new List<ConsumableTypeSO>();
+    public ResourceCostList consumeCost = new ResourceCostList();
+    public ResourceCostList usageCost = new ResourceCostList();
+    public List<ConsumableUsage> consumableUsages = new List<ConsumableUsage>();
 
     /// <summary>Private in the game too, which is exactly why the save record hid the stock count.</summary>
     private int quantity;
     private int queuedQuantity;
     private int gainedSince;
+    public bool FireAllowed = true;
+    public bool SelectionNoOp;
 
     public void SetStock(int quantityN, int queuedN, int gainedSinceN)
     {
@@ -204,11 +214,59 @@ public sealed class ConsumableSO : IdScriptableObject
         queuedQuantity = queuedN;
         gainedSince = gainedSinceN;
     }
+
+    public bool CanFire() =>
+        FireAllowed && quantity > 0 && currentCooldown <= BigDouble.Zero;
+
+    public bool IsVisible() => visible;
+
+    public void SelectAndFire()
+    {
+        if (!CanFire() || !Inventory.CanUseConsumable()) return;
+        if (SelectionNoOp) return;
+        queuedQuantity++;
+        quantity--;
+        if (hasDuration)
+            consumableUsages.Add(new ConsumableUsage
+            {
+                en = false,
+                dr = new BigDouble(durationBase),
+                maxDr = new BigDouble(durationBase),
+            });
+        Inventory.BeginPreparing();
+    }
+
+    public void SetRandomization(bool randomizationN) => randomized = randomizationN;
+
+    public bool IsRandomized() => canBeRandomized && randomized;
+
+    public int GetQuantity() => quantity;
+
+    public int GetQueued() => queuedQuantity;
     public double preparationTime;
     public bool canBeRandomized;
     public bool hasDuration;
     public double durationBase;
     private bool queueOnStart;
+}
+
+public sealed class ConsumableUsage
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool en;
+    public BigDouble dr;
+    public BigDouble maxDr;
+
+    public Guid GetGuid() => Identity;
+}
+
+public sealed class Inventory
+{
+    public static bool Preparing { get; set; }
+
+    public static bool CanUseConsumable() => !Preparing;
+
+    public static void BeginPreparing() => Preparing = true;
 }
 
 public sealed class RitualSO : IdScriptableObject
