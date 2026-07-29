@@ -8,7 +8,7 @@ namespace OrbAutomata;
 /// It never calls the planner or scans unrelated gameplay categories; the
 /// resulting facts are used only for fingerprint and postcondition checks.
 /// </summary>
-internal sealed class AutoAgromancyLiveWorldReader
+internal sealed class AutoAgromancyLiveWorldReader : IAutoAgromancyLiveWorldReader
 {
     private readonly GameWorldCollector _collector;
     private readonly GameWorldCycleFrame _frame = new();
@@ -16,7 +16,7 @@ internal sealed class AutoAgromancyLiveWorldReader
     internal AutoAgromancyLiveWorldReader(GameWorldCollector? collector = null) =>
         _collector = collector ?? new GameWorldCollector();
 
-    internal bool TryRead(long lifecycleEpoch, out GameWorldState world)
+    public bool TryRead(long lifecycleEpoch, out GameWorldState world)
     {
         world = GameWorldStateDefaults.Empty;
         if (lifecycleEpoch <= 0) return false;

@@ -23,7 +23,6 @@ internal sealed class AutoAgromancyServiceAdapterComposition
         if (dependencies is null) throw new ArgumentNullException(nameof(dependencies));
         var actions = new AutoAgromancyCycleActionAdapter(
             new AutoAgromancyNativeAdapter(
-                dependencies.ReadLifecycleEpoch,
                 dependencies.TryCaptureMutationPermit),
             new AutoAgromancyLiveWorldReader(dependencies.CreateLiveCollector()),
             dependencies.ReadLifecycleEpoch,

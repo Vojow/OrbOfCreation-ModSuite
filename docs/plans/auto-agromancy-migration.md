@@ -1,16 +1,17 @@
 # Auto Agromancy migration
 
-Status: **Automated and installed validation complete — interactive runtime validation pending**
+Status: **Automated quality revalidation complete — interactive runtime validation pending**
 
 ## Goal
 
 Bring Auto Agromancy's native level-balancing behavior onto the current ModSuite
 architecture without restoring the retired monolithic Automata service registry.
 The feature is integrated as a disabled-by-default ServiceCycle service. The
-current installed assembly pair is admitted by current `main`, and the Release
-candidate has passed the portable, real-reference, and installed-contract gates.
-Auto Agromancy-specific Unity runtime evidence remains tracked separately in
-AA-020c/AA-100.
+current installed assembly pair is admitted by current `main`. A prior Release
+candidate passed the portable, real-reference, and installed-contract gates,
+but the quality-hardening changes now supersede that DLL. The new candidate
+must pass those gates again and remains uninstalled. Auto Agromancy-specific
+Unity runtime evidence remains tracked separately in AA-020c/AA-100.
 
 ## Preserved behavior contract
 
@@ -31,8 +32,9 @@ AA-020c/AA-100.
 
 - `src/AutoAgromancy/Policy/AutoAgromancyLevelPlanner.cs` is the native-free,
   bounded planner.
-- `src/AutoAgromancy/Native/AutoAgromancyNativeAdapter.cs` retains the audited
-  reflection contract and verified main-thread mutation boundary.
+- `src/AutoAgromancy/Native/AutoAgromancyNativeAdapter.cs` owns only the
+  audited exact main-thread mutation boundary; the carried native-call
+  compatibility oracle is isolated in `AutoAgromancyCompatibilityOracle.cs`.
 - Portable planner and native-adapter tests were carried forward under
   `tests/OrbModding.Tests/Services/AutoAgromancy/`.
 - The sources keep the existing `OrbAutomata` namespace, matching the other
@@ -93,7 +95,8 @@ log in the same change as implementation:
 | AA-070 Implement trigger producers | Done | AA-040, AA-050 | Exact authoritative plot-list increases and verified Auto Harvest commits publish monotonic epochs; no-op, wrong-list, and decrease paths are covered. |
 | AA-080 Compose runtime and diagnostics | Done | AA-050, AA-060, AA-070 | Independent ownership, bounded-one registration, lifecycle invalidation, feature status, diagnostics bridge, ordering, and shutdown composition are active. |
 | AA-090 Activate configuration and docs | Done | AA-080 | Disabled-default setting is reachable through Mods/BepInEx without a schema bump or Auto Harvest mode change; behavior/testing docs are linked. |
-| AA-100 Validate installed runtime | In progress | AA-090, admitted native build | Final Release candidate `37A7363D…12D1F2` is installed with verified backups; startup and Auto Agromancy-specific Unity scenarios remain pending because the game was deliberately not launched unattended. |
+| AA-095 Quality hardening | Done | AA-090 | Production exact-mutation contract isolated, direct action-boundary tests added, planning projection extracted, coverage floor restored, and complete gates pass. |
+| AA-100 Validate installed runtime | In progress | AA-095, admitted native build | The prior installed candidate `37A7363D…12D1F2` is superseded by AA-095. Install and interactive startup/Unity scenarios remain pending for the new exact candidate. |
 
 ### Progress log
 
@@ -223,11 +226,24 @@ log in the same change as implementation:
   installed the sole `OrbModSuite.dll` with SHA-256
   `37A7363D750B32D07F1E08B7E60D7812FFF7B5295393CFC6060E5864B012D1F2`.
   The built and installed hashes match exactly and the game remains closed.
+- **2026-07-29 — AA-095 quality hardening complete.** The production exact
+  mutator now binds only the identity, visibility, maximum-level, and mutation
+  members it needs; the broader native-call compatibility oracle is isolated
+  from runtime availability. Planning projection/fingerprinting is separated
+  from evaluator state transitions. Twelve direct action-boundary cases cover
+  every preflight guard, verified commit, rollback success/failure,
+  attempted-unverified quarantine, lifecycle recovery, evidence counts, and
+  unavailable-contract behavior. The focused suite passes 68/68; production
+  line coverage is 73.69% against the 73.40% floor; and the exact tree passes
+  1,962 portable tests, 90 profile tests, 24/24 installed-game contracts, and
+  a zero-warning real-reference Release build. The uninstalled candidate
+  SHA-256 is
+  `C63E8CC0662DFC4AD9FD6CD4FA13DD1B2FA6F630CF417669B146BCB1D52FD087`.
 
-**Next runnable slice:** when the user is present, launch the game with a
-disposable validation save, run **Mods > Runtime > Run differential
-verification**, then execute the ten documented Auto Agromancy Unity scenarios.
-The game was intentionally not launched or driven unattended.
+**Next runnable slice:** when the user is present, install the exact AA-095
+candidate, launch the game with a disposable validation save, run **Mods >
+Runtime > Run differential verification**, then execute the ten documented
+Auto Agromancy Unity scenarios.
 
 ### Runnable task slices
 

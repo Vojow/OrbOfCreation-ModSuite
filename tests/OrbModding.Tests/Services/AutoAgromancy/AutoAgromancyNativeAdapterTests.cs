@@ -13,7 +13,7 @@ public sealed class AutoAgromancyNativeAdapterTests
     {
         var fixture = new Fixture(baseRate: 3.0, maximumLevel: 5);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Applied, result.Disposition);
         Assert.Equal(3, result.TargetLevel);
@@ -31,7 +31,7 @@ public sealed class AutoAgromancyNativeAdapterTests
             item = fixture.Selected,
         };
 
-        var result = fixture.Adapter.Balance(row, fixture.Selected);
+        var result = fixture.Oracle.Balance(row, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Applied, result.Disposition);
         Assert.Equal(3, result.TargetLevel);
@@ -46,7 +46,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         fixture.List.AddInstance(fixture.Selected, 2);
         Assert.Equal(3.0, fixture.Resource.trueRate.Mantissa);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Applied, result.Disposition);
         Assert.Equal(2, result.PreviousLevel);
@@ -60,7 +60,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
         fixture.Resource.qualitySpendMultiplier = 2.0;
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(2, result.TargetLevel);
         Assert.Equal(2, fixture.ActiveLevel);
@@ -71,7 +71,7 @@ public sealed class AutoAgromancyNativeAdapterTests
     {
         var fixture = new Fixture(baseRate: 0.5, maximumLevel: 5);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Rejected, result.Disposition);
         Assert.Equal(0, fixture.ActiveLevel);
@@ -84,7 +84,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
         fixture.Resource.trueRate = new global::BigDouble(double.NaN, 0);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Rejected, result.Disposition);
         Assert.Empty(fixture.List.value);
@@ -96,7 +96,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
         fixture.List.capacity = 0;
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Rejected, result.Disposition);
         Assert.Contains("slot", result.Reason, StringComparison.OrdinalIgnoreCase);
@@ -109,7 +109,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
         fixture.Ui.actionListVariable = null;
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.NotApplicable, result.Disposition);
         Assert.Empty(fixture.List.value);
@@ -120,7 +120,7 @@ public sealed class AutoAgromancyNativeAdapterTests
     {
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5, permit: false);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Rejected, result.Disposition);
         Assert.Empty(fixture.List.value);
@@ -135,7 +135,7 @@ public sealed class AutoAgromancyNativeAdapterTests
             if (level > 0) fixture.Resource.trueRate = new global::BigDouble(-1, 0);
         };
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(
             AutoAgromancyBalanceDisposition.MutationUnverified,
@@ -153,7 +153,7 @@ public sealed class AutoAgromancyNativeAdapterTests
             maximumLevel: 5,
             readLifecycle: () => ++reads < 2 ? lifecycle : lifecycle + 1);
 
-        var result = fixture.Adapter.Balance(fixture.Ui, fixture.Selected);
+        var result = fixture.Oracle.Balance(fixture.Ui, fixture.Selected);
 
         Assert.Equal(AutoAgromancyBalanceDisposition.Rejected, result.Disposition);
         Assert.Empty(fixture.List.value);
@@ -173,7 +173,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var second = new global::HarvestActionInstance(secondElement, secondAction);
         fixture.List.AddInstance(second, 1);
 
-        var results = fixture.Adapter.BalanceActive();
+        var results = fixture.Oracle.BalanceActive();
 
         Assert.Equal(2, results.Count);
         Assert.All(
@@ -191,7 +191,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
         fixture.List.AddInstance(fixture.Selected, 2);
 
-        var result = fixture.Adapter.ApplyExactTarget(
+        var result = fixture.Mutator.ApplyExactTarget(
             fixture.Action.GetGuid(),
             fixture.Element.GetGuid(),
             expectedCurrentLevel: 2,
@@ -240,11 +240,15 @@ public sealed class AutoAgromancyNativeAdapterTests
                 value => value is global::IdScriptableObject identified
                     ? identified.GetGuid()
                     : null);
-            Adapter = new AutoAgromancyNativeAdapter(
+            Oracle = new AutoAgromancyCompatibilityOracle(
                 readLifecycle ?? (() => 1),
                 () => permit,
                 resolver);
-            Assert.True(Adapter.ContractAvailable, Adapter.ContractFailure);
+            Mutator = new AutoAgromancyNativeAdapter(
+                () => permit,
+                resolver);
+            Assert.True(Oracle.ContractAvailable, Oracle.ContractFailure);
+            Assert.True(Mutator.ContractAvailable, Mutator.ContractFailure);
         }
 
         internal global::ResourceSO Resource { get; }
@@ -253,7 +257,8 @@ public sealed class AutoAgromancyNativeAdapterTests
         internal global::HarvestActionInstance Selected { get; }
         internal global::HarvestActionInstanceListVariable List { get; }
         internal global::UIHarvestActionList Ui { get; }
-        internal AutoAgromancyNativeAdapter Adapter { get; }
+        internal AutoAgromancyCompatibilityOracle Oracle { get; }
+        internal AutoAgromancyNativeAdapter Mutator { get; }
         internal int ActiveLevel => List.FindInstance(Selected)?.instances ?? 0;
     }
 }

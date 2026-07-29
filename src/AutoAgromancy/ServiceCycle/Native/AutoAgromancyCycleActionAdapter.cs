@@ -13,8 +13,8 @@ namespace OrbAutomata;
 /// </summary>
 internal sealed class AutoAgromancyCycleActionAdapter : IAutoAgromancyCycleActionPort
 {
-    private readonly AutoAgromancyNativeAdapter _native;
-    private readonly AutoAgromancyLiveWorldReader _world;
+    private readonly IAutoAgromancyExactNativeMutator _native;
+    private readonly IAutoAgromancyLiveWorldReader _world;
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<bool> _ownsActionFamily;
     private readonly Func<bool> _tryCaptureMutationPermit;
@@ -23,8 +23,8 @@ internal sealed class AutoAgromancyCycleActionAdapter : IAutoAgromancyCycleActio
     private bool _mutationQuarantined;
 
     internal AutoAgromancyCycleActionAdapter(
-        AutoAgromancyNativeAdapter native,
-        AutoAgromancyLiveWorldReader world,
+        IAutoAgromancyExactNativeMutator native,
+        IAutoAgromancyLiveWorldReader world,
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         Func<bool> tryCaptureMutationPermit,
@@ -93,7 +93,7 @@ internal sealed class AutoAgromancyCycleActionAdapter : IAutoAgromancyCycleActio
         if (pair.CurrentLevel != action.ObservedLevel ||
             pair.MaximumLevel != action.MaximumLevel ||
             !pair.Visible ||
-            !AutoAgromancyCycleEvaluator.TryBuildFingerprint(
+            !AutoAgromancyPlanningProjection.TryBuildFingerprint(
                 before, in pair, out var fingerprint) ||
             !fingerprint.Equals(action.Fingerprint))
             return ServiceActionResult.Rejected(
