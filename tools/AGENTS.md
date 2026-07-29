@@ -5,8 +5,7 @@ This file supplements the repository-root `AGENTS.md` for scripts under `tools/`
 ## Packaging invariants
 
 - Public archives use an explicit supported-plugin allowlist.
-- `OrbChronomancer.dll` and `OrbAchievementResonance.dll` are forbidden until separately promoted and explicitly approved for the target release.
-- Package creation must fail when a forbidden or unexpected DLL appears.
+- Package creation must fail when an unexpected DLL appears.
 - Never infer package scope from projects that happen to build or exist on `main`.
 - Keep archives portable: relative forward-slash paths, no rooted entries, and expected `BepInEx/plugins/` destinations.
 - Output release rehearsals only under `artifacts/`.

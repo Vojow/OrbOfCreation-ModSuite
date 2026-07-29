@@ -4,47 +4,63 @@
 [![Latest release](https://img.shields.io/github/v/release/Vojow/OrbOfCreation-ModSuite?include_prereleases)](https://github.com/Vojow/OrbOfCreation-ModSuite/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Unofficial BepInEx mods, tests, and reproducible reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
+Unofficial BepInEx mods, tests, and reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current beta centers on Orb Automata: queue-aware Auto Buy with progression-aware spell leveling, safe Auto Cast, opt-in Auto Concept rotation, and a native-styled configuration screen. Back up your save before using beta automation.
+The current beta provides grouped queue-aware Auto Buy, progression-aware Spell Leveling, Auto Cast, opt-in Auto Concept, disabled-by-default Auto Harvest, Mentor progression sharing, and an optional native-styled configuration UI. Back up your save before using beta automation.
 
 ## Project status
 
-| Component | Status | Description |
+The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.vojow.orbofcreation.modsuite`, version `0.4.0` beta — with one configuration file. The earlier separately versioned Orb Automata, Orb Mod Config, Orb Mentor, and Orb Modding Common plugins are retired and no longer exist as loadable identities.
+
+| Feature area | Status | Description |
 |---|---|---|
-| **Orb Automata 0.8.10** | Beta | Adaptive bounded-burst, grouped, continuously repeating and rejection-aware Auto Buy with fail-closed native-family admission, shared lifecycle generations, bounded invalidation, action-family conflict isolation, coordinated Auto Cast, Concept rotation, spell leveling, and per-feature runtime health. |
-| **Orb Mod Config 0.6.3** | Beta | Mods tab with readable variable-height descriptions, separate exact-plugin configuration-schema and runtime-status bands, stable same-page scrolling, responsive resize/UI-scale remeasurement, Steam Deck keyboard support, and coordinated UI recovery. |
-| **Orb Mentor 0.3.8** | Beta | Progression-gated mastery sharing with versioned configuration ownership, shared remaining-budget enforcement, bounded domain failure circuits, independent action-family ownership, shared lifecycle/invalidation, verified XP deltas, optional artifact/alchemy support, and equipped-spell sources. |
+| **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, and Auto Harvest. |
+| **Mentor** | Beta | Progression-gated mastery sharing for spells, artifacts, and alchemy. |
+| **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and recent pump timing. |
+| **Shared runtime** | Bundled | ServiceCycle, world collection, diagnostics, and tracing behind every feature. |
 | **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
-Supported baseline: Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton with BepInEx 5, but ModSuite 0.3.0 Beta 1 still requires post-release Proton validation.
+The supported baseline is Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton and requires separate runtime validation.
 
-Experimental Orb Chronomancer and Orb Achievement Resonance work is isolated on the `codex/experimental-chronomancer-resonance` branch and is not part of supported `main` builds or packages.
+The suite computes the game's economy math itself, transcribed from one audited pair of game assemblies, so it refuses to load against a game build it has not audited. A game update therefore disables the suite until that build is re-audited; this is deliberate and has no bypass.
 
-The next beta's Auto Buy diagnostics use stable Common decision codes and immutable evidence across telemetry, logs, and the gameplay tooltip. Future Orb Insights consumers can observe condition transitions without referencing Automata internals; broader module adoption remains planned rather than implied as released behavior.
+## Runtime foundation
 
-The same next-beta line reports saved-off, locked, initializing, operational, temporarily blocked, unavailable-contract, degraded, and faulted feature health through one Common contract. Gameplay controls and Orb Mod Config consume those transition-only snapshots without turning an optional-domain failure into a suite-wide failure.
+[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. World collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor are its seven registered services.
+
+Three separate diagnostics help investigate different problems:
+
+- manual full traces show exactly what happened and in what order;
+- the rolling decision journal summarizes what services decided; and
+- opt-in performance profiles show where time was spent.
+
+Decode sessions with `./script/trace --full`, `--journal`, `--performance`, or `--dashboard`. Diagnostic failure does not change gameplay behavior.
 
 ## Get started
 
 - Players: [install the supported suite](docs/user-guide/installation.md), then review [configuration and safety](docs/user-guide/configuration.md).
 - Contributors: read the [development setup](docs/development/setup.md) and [contributing guidelines](CONTRIBUTING.md).
 - Researchers: start with the [reverse-engineering knowledge map](docs/reverse-engineering/README.md).
-- Maintainers: use the [testing hub](docs/testing/README.md), [runtime validation](docs/testing/runtime-validation.md), and [release](docs/development/releases.md) guides.
+- Maintainers: use the [testing](docs/testing/README.md), [runtime validation](docs/testing/runtime-validation.md), and [release](docs/development/releases.md) guides.
 
-The [documentation hub](docs/README.md) indexes all player, contributor, research, and planning material.
+The [documentation hub](docs/README.md) indexes the remaining player, contributor, architecture, research, and planning material.
 
-## Quick build and test
+## Build and test
 
 Production builds use assemblies from a local game installation; those binaries are never stored here.
 
 ```powershell
 $env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
-dotnet build src/OrbAutomata/OrbAutomata.csproj -c Release
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
+dotnet build src/OrbModSuite.csproj -c Release
 ```
 
-See [development setup](docs/development/setup.md) for the complete workflow.
+Run the complete portable development suite with:
+
+```sh
+./script/test
+```
+
+The portable gate runs on Windows, Linux, and macOS with .NET SDK 10 and has a hard 60-second deadline. See [development setup](docs/development/setup.md) for real-reference and packaging workflows.
 
 ## Contributing, security, and licensing
 

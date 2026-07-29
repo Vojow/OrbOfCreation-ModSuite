@@ -1,4 +1,6 @@
 using OrbModConfig;
+using UnityEngine;
+using UnityEngine.UI;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -58,5 +60,18 @@ public sealed class ModConfigPanelLayoutTests
     {
         Assert.Equal("Saved setting; runtime effect is reported separately.", ModConfigPanel.SavedRuntimeMessage);
         Assert.Equal("Configuration saved.", ModConfigPanel.ConfigurationSavedMessage);
+    }
+
+    [Fact]
+    public void ClonedModsNavigationHasNoUnityTransitionPixelWriter()
+    {
+        var root = new GameObject("Mods");
+        var frame = root.AddComponent<Image>();
+        var button = root.AddComponent<Button>();
+        button.targetGraphic = frame;
+
+        ModConfigNativeNavigationInstaller.ClaimVisualOwnership(button);
+
+        Assert.Null(button.targetGraphic);
     }
 }

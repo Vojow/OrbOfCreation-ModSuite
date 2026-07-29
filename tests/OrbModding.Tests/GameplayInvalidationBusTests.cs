@@ -7,6 +7,13 @@ namespace OrbModding.Tests;
 
 public sealed class GameplayInvalidationBusTests
 {
+    /// <summary>
+    /// The bus routes by domain without interpreting it, so these tests name one of their own
+    /// rather than borrowing a feature's — a domain retiring with its feature must not take the
+    /// coalescing and budget coverage with it.
+    /// </summary>
+    private const string TestDomain = "test.domain";
+
     [Fact]
     public void ChangeKindsCoverRequiredSuiteDependencies()
     {
@@ -31,7 +38,7 @@ public sealed class GameplayInvalidationBusTests
         using var subscription = bus.Subscribe(
             new GameplayInvalidationFilter(
                 GameplayInvalidationKind.Queue | GameplayInvalidationKind.Progression,
-                GameplayInvalidationDomains.AutomataStructures),
+                TestDomain),
             received.Add);
 
         for (var index = 0; index < 10_000; index++)
@@ -42,7 +49,7 @@ public sealed class GameplayInvalidationBusTests
             Assert.True(bus.Publish(
                 kind,
                 burst: 5,
-                GameplayInvalidationDomains.AutomataStructures,
+                TestDomain,
                 "structure-uuid",
                 "StructureSO",
                 source: "burst-" + index));
@@ -121,9 +128,9 @@ public sealed class GameplayInvalidationBusTests
             new GameplayInvalidationFilter(GameplayInvalidationKind.All),
             received.Add);
 
-        bus.Publish(GameplayInvalidationKind.Queue, 4, GameplayInvalidationDomains.AutomataStructures, "one", "StructureSO");
+        bus.Publish(GameplayInvalidationKind.Queue, 4, TestDomain, "one", "StructureSO");
         bus.Publish(GameplayInvalidationKind.Inventory, 4, GameplayInvalidationDomains.AutomataConcepts, source: "between");
-        bus.Publish(GameplayInvalidationKind.Progression, 4, GameplayInvalidationDomains.AutomataStructures, source: "broad");
+        bus.Publish(GameplayInvalidationKind.Progression, 4, TestDomain, source: "broad");
         bus.Pump(5, 16);
 
         Assert.Equal(2, received.Count);
@@ -147,19 +154,19 @@ public sealed class GameplayInvalidationBusTests
         using var broadSubscription = bus.Subscribe(
             new GameplayInvalidationFilter(
                 GameplayInvalidationKind.ResourceQuantity,
-                GameplayInvalidationDomains.AutomataStructures),
+                TestDomain),
             _ => broad++);
         using var matchingSubscription = bus.Subscribe(
             new GameplayInvalidationFilter(
                 GameplayInvalidationKind.ResourceQuantity,
-                GameplayInvalidationDomains.AutomataStructures,
+                TestDomain,
                 "mana",
                 "ResourceSO"),
             _ => matching++);
         using var unrelatedSubscription = bus.Subscribe(
             new GameplayInvalidationFilter(
                 GameplayInvalidationKind.ResourceQuantity,
-                GameplayInvalidationDomains.AutomataStructures,
+                TestDomain,
                 "knowledge",
                 "ResourceSO"),
             _ => unrelated++);
@@ -167,7 +174,7 @@ public sealed class GameplayInvalidationBusTests
         bus.Publish(
             GameplayInvalidationKind.ResourceQuantity,
             2,
-            GameplayInvalidationDomains.AutomataStructures,
+            TestDomain,
             "mana",
             "ResourceSO");
         bus.Pump(3, 32);
@@ -227,7 +234,7 @@ public sealed class GameplayInvalidationBusTests
         using var second = bus.Subscribe(
             new GameplayInvalidationFilter(GameplayInvalidationKind.All),
             received.Add);
-        bus.Publish(GameplayInvalidationKind.Queue, 0, GameplayInvalidationDomains.AutomataStructures, "old", "StructureSO");
+        bus.Publish(GameplayInvalidationKind.Queue, 0, TestDomain, "old", "StructureSO");
         bus.Pump(1, 2);
         Assert.Single(received);
 
@@ -244,7 +251,7 @@ public sealed class GameplayInvalidationBusTests
                 GameplayInvalidationKind.Queue,
                 lifecycleGeneration: 0,
                 burst: 1,
-                GameplayInvalidationDomains.AutomataStructures,
+                TestDomain,
                 "late",
                 "StructureSO"),
             out var reason));
@@ -346,7 +353,7 @@ public sealed class GameplayInvalidationBusTests
                     bus.Publish(
                         GameplayInvalidationKind.Queue,
                         burst: 0,
-                        GameplayInvalidationDomains.AutomataStructures,
+                        TestDomain,
                         "second",
                         "StructureSO",
                         source: "callback-coalesced");
@@ -355,14 +362,14 @@ public sealed class GameplayInvalidationBusTests
         bus.Publish(
             GameplayInvalidationKind.Queue,
             burst: 0,
-            GameplayInvalidationDomains.AutomataStructures,
+            TestDomain,
             "first",
             "StructureSO",
             source: "first");
         bus.Publish(
             GameplayInvalidationKind.Queue,
             burst: 0,
-            GameplayInvalidationDomains.AutomataStructures,
+            TestDomain,
             "second",
             "StructureSO",
             source: "second-pending");
@@ -420,28 +427,23 @@ public sealed class GameplayInvalidationBusTests
     }
 
     [Fact]
-    public void CoordinatorAccountsBurstDeliveryStopsAtSharedBudgetAndResumesLosslessly()
+    public void PerFrameOperationCapStopsBurstDeliveryAndResumesLosslessly()
     {
-        var clock = new ManualPerformanceClock();
-        var coordinator = new SuitePerformanceCoordinator(clock, 0.5, 1.0, 256);
         var monitor = new GameLifecycleMonitor(() => 1);
         using var bus = new GameplayInvalidationBus(
             monitor,
             capacity: 256,
-            readThreadId: () => 1,
-            coordinator: coordinator,
-            coordinatorSliceOperations: 8);
+            readThreadId: () => 1);
         var observed = new List<string>();
         var secondMatchingCalls = 0;
         var nonMatchingCalls = 0;
         using var firstMatching = bus.Subscribe(
             new GameplayInvalidationFilter(
                 GameplayInvalidationKind.Queue,
-                GameplayInvalidationDomains.AutomataStructures),
+                TestDomain),
             change =>
             {
                 observed.Add(change.EntityId);
-                clock.Advance(0.2);
             },
             "first-matching");
         using var secondMatching = bus.Subscribe(
@@ -452,44 +454,27 @@ public sealed class GameplayInvalidationBusTests
             new GameplayInvalidationFilter(GameplayInvalidationKind.Inventory),
             _ => nonMatchingCalls++,
             "non-matching");
-        using var competing = coordinator.Register(
-            "Automata",
-            "Competing hard work",
-            SuiteBudgetClass.HardLimited);
-        competing.SetPending(true);
-
         for (var index = 0; index < 128; index++)
         {
             bus.Publish(
                 GameplayInvalidationKind.Queue,
                 burst: 0,
-                GameplayInvalidationDomains.AutomataStructures,
+                TestDomain,
                 $"entity-{index:D3}",
                 "StructureSO");
         }
 
-        var firstSlice = bus.Pump(1, GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        var firstSlice = bus.Pump(1, 8);
         Assert.Equal(8, firstSlice.Operations);
         Assert.Equal(1, firstSlice.CompletedEvents);
         Assert.True(firstSlice.BudgetExhausted);
         Assert.True(firstSlice.PendingCount > 0);
-        Assert.Equal(0.4, coordinator.CurrentFrameElapsedMilliseconds, 6);
-
-        Assert.Equal(
-            SuiteWorkAdmission.Granted,
-            coordinator.RequestWork(competing, 1, out var competingLease));
-        clock.Advance(0.7);
-        competingLease.Complete();
-        competing.SetPending(false);
-        Assert.True(coordinator.IsHardBudgetExceeded);
-        Assert.Equal(1.1, coordinator.CurrentFrameElapsedMilliseconds, 6);
-
-        var blockedSameFrame = bus.Pump(1, GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+        var blockedSameFrame = bus.Pump(1, 8);
         Assert.Equal(0, blockedSameFrame.Operations);
         Assert.True(blockedSameFrame.BudgetExhausted);
 
         for (var frame = 2; bus.GetSnapshot().PendingCount > 0 && frame < 100; frame++)
-            bus.Pump(frame, GameplayInvalidationBus.DefaultMaxOperationsPerFrame);
+            bus.Pump(frame, 8);
 
         Assert.Equal(0, bus.GetSnapshot().PendingCount);
         Assert.Equal(128, observed.Count);
@@ -498,35 +483,24 @@ public sealed class GameplayInvalidationBusTests
         for (var index = 0; index < observed.Count; index++)
             Assert.Equal($"entity-{index:D3}", observed[index]);
 
-        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbModding.Common", out var delivery));
-        Assert.Equal(512, delivery.TotalOperations);
-        Assert.True(coordinator.TryGetSubsystemSnapshot("Automata", out var other));
-        Assert.Equal(1, other.TotalOperations);
+        Assert.Equal(512, bus.GetSnapshot().DeliveryOperations);
     }
 
     [Fact]
-    public void PublishingAloneDoesNotRunDeliveryForDisabledPumpOwners()
+    public void PublishingAloneDoesNotRunDelivery()
     {
-        var clock = new ManualPerformanceClock();
-        var coordinator = new SuitePerformanceCoordinator(clock, 0.5, 1.0, 16);
         var monitor = new GameLifecycleMonitor(() => 1);
-        using var bus = new GameplayInvalidationBus(
-            monitor,
-            readThreadId: () => 1,
-            coordinator: coordinator);
+        using var bus = new GameplayInvalidationBus(monitor, readThreadId: () => 1);
         var calls = 0;
         using var subscription = bus.Subscribe(
             new GameplayInvalidationFilter(GameplayInvalidationKind.Queue),
             _ => calls++);
 
         bus.Publish(GameplayInvalidationKind.Queue, burst: 0);
-        coordinator.BeginFrame(1);
 
         Assert.Equal(0, calls);
-        Assert.Equal(0.0, coordinator.CurrentFrameElapsedMilliseconds);
-        Assert.True(coordinator.TryGetSubsystemSnapshot("OrbModding.Common", out var delivery));
-        Assert.Equal(0, delivery.AdmittedWorkItems);
-        Assert.Equal(0, delivery.TotalOperations);
+        Assert.Equal(1, bus.GetSnapshot().PendingCount);
+        Assert.Equal(0, bus.GetSnapshot().DeliveryOperations);
     }
 
     [Fact]
@@ -547,16 +521,4 @@ public sealed class GameplayInvalidationBusTests
         Assert.Equal(1, snapshot.OffThreadRejections);
     }
 
-    private sealed class ManualPerformanceClock : IPerformanceClock
-    {
-        private long _microseconds;
-
-        public long GetTimestamp() => _microseconds;
-
-        public double GetElapsedMilliseconds(long startTimestamp, long endTimestamp) =>
-            (endTimestamp - startTimestamp) / 1000.0;
-
-        public void Advance(double milliseconds) =>
-            _microseconds += (long)(milliseconds * 1000.0);
-    }
 }

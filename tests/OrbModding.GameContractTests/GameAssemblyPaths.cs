@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.GameContractTests;
@@ -18,14 +19,21 @@ internal sealed class GameAssemblyFactAttribute : FactAttribute
 
 internal sealed class GameAssemblyPaths
 {
-    private GameAssemblyPaths(string gameRoot, string assemblyCSharp, string firstPass)
+    private GameAssemblyPaths(
+        string gameRoot,
+        string managedDirectory,
+        string assemblyCSharp,
+        string firstPass)
     {
         GameRoot = gameRoot;
+        ManagedDirectory = managedDirectory;
         AssemblyCSharp = assemblyCSharp;
         FirstPass = firstPass;
     }
 
     public string GameRoot { get; }
+
+    public string ManagedDirectory { get; }
 
     public string AssemblyCSharp { get; }
 
@@ -41,7 +49,11 @@ internal sealed class GameAssemblyPaths
             return false;
         }
 
-        var managed = Path.Combine(gameRoot, "Orb Of Creation_Data", "Managed");
+        if (!GameAssemblyAudit.TryResolveManagedDirectory(gameRoot, out var managed, out reason))
+        {
+            paths = null!;
+            return false;
+        }
         var assemblyCSharp = Path.Combine(managed, "Assembly-CSharp.dll");
         var firstPass = Path.Combine(managed, "Assembly-CSharp-firstpass.dll");
         if (!File.Exists(assemblyCSharp) || !File.Exists(firstPass))
@@ -51,7 +63,11 @@ internal sealed class GameAssemblyPaths
             return false;
         }
 
-        paths = new GameAssemblyPaths(Path.GetFullPath(gameRoot), assemblyCSharp, firstPass);
+        paths = new GameAssemblyPaths(
+            Path.GetFullPath(gameRoot),
+            Path.GetFullPath(managed),
+            assemblyCSharp,
+            firstPass);
         reason = string.Empty;
         return true;
     }

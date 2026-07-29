@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServiceCycle Arcane Observatory</title>
+  __TRACE_DASHBOARD_VENDOR_JS__
+  <style>
+    :root {
+      color-scheme:dark;
+      --void:#090816; --deep:#111027; --panel:rgba(25,23,52,.82); --panel2:rgba(35,31,70,.68);
+      --ink:#f4f0ff; --muted:#aaa4c4; --line:rgba(178,161,255,.18); --gold:#e7c878;
+      --collect:#56dfc0; --decide:#a98cff; --act:#ff827e; --response:#70b8ff; --other:#55516d;
+      --good:#70dda1; --warn:#f0bb65; --bad:#ff777d;
+    }
+    *{box-sizing:border-box}
+    html{min-height:100%;background:var(--void)}
+    body{margin:0;min-height:100%;color:var(--ink);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:
+      radial-gradient(circle at 12% 5%,rgba(119,77,205,.22),transparent 28rem),
+      radial-gradient(circle at 88% 18%,rgba(43,171,185,.12),transparent 25rem),
+      linear-gradient(180deg,#0c0a1c 0%,#090816 62%,#0d0a1a 100%);background-attachment:fixed}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.32;background-image:
+      radial-gradient(circle,#fff 0 1px,transparent 1.4px),
+      radial-gradient(circle,#bdaaff 0 1px,transparent 1.5px);
+      background-size:83px 83px,131px 131px;background-position:13px 21px,47px 69px}
+    main{position:relative;max-width:1540px;margin:auto;padding:28px}
+    .hero{position:relative;display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;padding:26px 28px;overflow:hidden;border:1px solid rgba(231,200,120,.26);border-radius:22px;background:linear-gradient(120deg,rgba(38,30,78,.92),rgba(17,25,54,.82));box-shadow:0 22px 70px rgba(0,0,0,.3)}
+    .hero:after{content:"";position:absolute;right:42px;width:156px;height:156px;border:1px solid rgba(231,200,120,.2);border-radius:50%;box-shadow:0 0 45px rgba(130,96,255,.25),inset 0 0 35px rgba(95,222,210,.08)}
+    .eyebrow{color:var(--gold);font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase}
+    h1{margin:3px 0 5px;font:600 clamp(27px,4vw,42px)/1.08 Georgia,"Times New Roman",serif;letter-spacing:-.02em}
+    h2{margin:0;font:600 19px/1.2 Georgia,"Times New Roman",serif}
+    h3{margin:0;font-size:13px;font-weight:720;letter-spacing:.02em}
+    .subtitle,.muted{color:var(--muted)}
+    .hero-orb{position:relative;z-index:1;width:106px;height:98px}
+    .orb-art{display:block;width:100%;height:100%;overflow:visible}
+    .toolbar{position:sticky;z-index:10;top:0;display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:16px 0;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(13,12,31,.9);backdrop-filter:blur(16px);box-shadow:0 12px 30px rgba(0,0,0,.22)}
+    label{display:grid;gap:4px;color:var(--muted);font-size:11px;letter-spacing:.04em}
+    select,input,button{font:inherit;border:1px solid var(--line);color:var(--ink);background:#17152f}
+    select,input{min-width:160px;padding:7px 9px;border-radius:8px}
+    input[type=number]{min-width:95px;width:105px}
+    button{padding:8px 12px;border-radius:9px;cursor:pointer;transition:background .15s,border .15s,transform .15s}
+    button:hover{border-color:rgba(231,200,120,.5);background:#242047}
+    button:active{transform:translateY(1px)}
+    .preset.active,nav button[aria-selected=true]{color:#100d22;border-color:#d4bbff;background:linear-gradient(135deg,#d7c5ff,#81dddc);box-shadow:0 0 22px rgba(148,117,255,.25)}
+    .filter-status{align-self:center;margin-left:auto;color:var(--muted);font-size:12px}
+    nav{display:flex;gap:8px;margin:18px 0 14px;overflow:auto;padding:2px}
+    nav button{white-space:nowrap;padding:9px 16px}
+    .view{display:none}.view.active{display:block}
+    .metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:0 0 14px}
+    .metric,.panel,.insight{border:1px solid var(--line);background:linear-gradient(145deg,var(--panel),rgba(19,18,42,.78));box-shadow:0 13px 30px rgba(0,0,0,.16)}
+    .metric{min-width:0;min-height:88px;padding:13px 15px;overflow:hidden;border-radius:13px}
+    .metric span{display:block;color:var(--muted);font-size:11px;letter-spacing:.035em}
+    .metric b{display:block;margin:4px 0 1px;font:600 21px/1.15 Georgia,serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .metric small{color:var(--muted);font-size:11px}
+    .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+    .panel{grid-column:span 6;min-width:0;padding:17px;border-radius:15px}
+    .panel.wide{grid-column:1/-1}
+    .panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:13px}
+    .panel-head p{max-width:620px;margin:4px 0 0;color:var(--muted);font-size:12px}
+    .scope{flex:0 0 auto;color:var(--muted);font-size:10px;letter-spacing:.04em;white-space:nowrap}
+    .chart{position:relative;height:290px}.chart.tall{height:390px}
+    .insight{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;align-items:baseline;margin-bottom:14px;padding:10px 14px;border-radius:14px}
+    .insight:before{content:"SUMMARY";grid-row:1/3;color:var(--muted);font-size:9px;letter-spacing:.08em}
+    .insight b{display:block;font-size:13px}.insight span{color:var(--muted);font-size:12px}
+    .table-wrap{overflow:auto;max-height:370px;border-top:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+    th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+    th{position:sticky;top:0;color:var(--gold);background:#17152f;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+    tr[data-at]{cursor:pointer}tr[data-at]:hover td{background:rgba(169,140,255,.08)}
+    .detail{min-height:70px;color:var(--muted);white-space:pre-wrap}
+    .error{display:none;margin:14px 0;padding:14px;border:1px solid var(--bad);border-radius:12px;color:var(--bad)}
+    .notice{display:none;margin:14px 0;padding:12px 14px;border:1px solid var(--warn);border-radius:12px;color:var(--warn)}
+    .notice p{margin:0 0 4px}.notice p:last-child{margin:0}
+    @media(max-width:1100px){.metrics{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:760px){main{padding:14px}.hero{grid-template-columns:1fr;padding:20px}.hero-orb{display:none}.toolbar{position:relative}.filter-status{width:100%;margin-left:0}.metrics{grid-template-columns:1fr 1fr}.panel{grid-column:1/-1}.chart.tall{height:310px}}
+    @media(max-width:440px){.metrics{grid-template-columns:1fr}.hero{border-radius:15px}}
+
+    /* Orb of Creation: hard pixel chrome, purple void, orange selection, cyan instrument lines. */
+    :root{--void:#08050e;--deep:#12051d;--panel:#242424;--panel2:#323232;--ink:#f4f1ed;--muted:#b9b2bd;--line:#66636a;--gold:#e5cc79;--orange:#d65a22;--collect:#5bc8e1;--decide:#9a69cf;--act:#e87867;--response:#6c9fc5;--other:#59565f;--good:#83bd55;--warn:#dca641;--bad:#e45c51}
+    body{font:14px/1.45 "Courier New",ui-monospace,monospace;background-color:#09050f;background-image:linear-gradient(30deg,rgba(74,24,92,.17) 12%,transparent 12.5%,transparent 87%,rgba(74,24,92,.17) 87.5%),linear-gradient(150deg,rgba(74,24,92,.17) 12%,transparent 12.5%,transparent 87%,rgba(74,24,92,.17) 87.5%),linear-gradient(30deg,rgba(53,12,74,.18) 12%,transparent 12.5%,transparent 87%,rgba(53,12,74,.18) 87.5%);background-size:58px 102px;background-position:0 0,0 0,29px 51px;background-attachment:fixed}
+    body:before{background:radial-gradient(circle at 50% 0,rgba(91,20,112,.18),transparent 50%);opacity:.8}
+    main{max-width:1600px;padding:18px}
+    .hero{grid-template-columns:1fr 112px;min-height:112px;padding:30px 20px 14px;border:2px solid #777;border-radius:2px;background:#303030;box-shadow:inset 2px 2px #8b8b8b,inset -3px -3px #111,0 0 0 2px #090909}
+    .hero:before{content:"SERVICE CYCLE TRACE";position:absolute;left:0;right:0;top:0;height:23px;padding-top:2px;text-align:center;border-bottom:2px solid #111;background:linear-gradient(#555,#292929);color:#fff;font-size:12px;text-shadow:2px 2px #000}
+    .hero:after{display:none}.eyebrow{color:#75cfe4;margin-top:3px}.eyebrow{letter-spacing:.08em}
+    h1{font:700 clamp(24px,4vw,36px)/1.08 "Courier New",ui-monospace,monospace;text-shadow:3px 3px #080808}
+    h2{font:700 18px/1.2 "Courier New",ui-monospace,monospace;text-shadow:2px 2px #000}
+    .hero-orb{width:106px;height:98px;filter:drop-shadow(0 0 7px rgba(91,204,244,.34))}
+    .toolbar{margin:12px 0;padding:10px;border:2px solid #686868;border-radius:2px;background:#202020;backdrop-filter:none;box-shadow:inset 2px 2px #4b4b4b,inset -2px -2px #080808,0 3px 0 #070707}
+    select,input,button{border:2px solid #666;border-radius:1px;color:var(--ink);background:#292929;box-shadow:inset 2px 2px #444,inset -2px -2px #0b0b0b;text-shadow:1px 1px #000}
+    select,input{border-radius:1px}button{border-radius:1px;transition:none}button:hover{border-color:#9b9b9b;background:#383838}
+    button:active{transform:none;box-shadow:inset 2px 2px #111}.preset.active,nav button[aria-selected=true]{color:#fff;border-color:#ed7a2b;background:#69291d;box-shadow:inset 2px 2px #9f4930,inset -2px -2px #260b08,0 0 0 1px #5e1d10}
+    nav{gap:5px;margin:12px 0;padding:2px}nav button{padding:9px 18px}
+    .metrics{gap:7px;margin-bottom:10px}.metric,.panel,.insight{border:2px solid #555;border-radius:1px;background:rgba(31,31,31,.96);box-shadow:inset 2px 2px #454545,inset -2px -2px #090909,0 2px 0 #050505}
+    .metric{min-height:82px;padding:11px 13px;border-left-color:#74508d}.metric b{font:700 20px/1.15 "Courier New",ui-monospace,monospace;color:#fff;text-shadow:2px 2px #000}
+    .grid{gap:9px}.panel{padding:14px}.scope{padding-top:3px;color:#918d96;font-size:10px}
+    .chart-controls{display:flex;gap:6px;align-items:center}.chart-controls button{padding:5px 8px;font-size:11px}
+    .insight{margin-bottom:10px;padding:9px 12px;border-color:#4f5960;background:#202426;box-shadow:inset 3px 0 #5bc8e1,inset 2px 2px #383d40,inset -2px -2px #090909,0 2px 0 #050505}
+    .insight:before{color:#75cfe4}.insight b{color:#eee;text-shadow:1px 1px #000}
+    th{background:#2b2b2b}tr[data-at]:hover td{background:#452219}.error{border-width:2px;border-radius:1px;background:#2a1111}
+    @media(max-width:1350px){.metrics{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:760px){main{padding:8px}.hero{padding:30px 12px 12px}}
+    .cold{display:none;margin:0 0 10px;padding:9px 12px;border:2px solid #6a4a2a;border-radius:1px;background:#241a10;color:#e0b070;font-size:12px;box-shadow:inset 2px 2px #3d2c19,inset -2px -2px #090909}
+    .cold b{color:#f0c68a}
+    .empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;text-align:center}
+    .toggle[aria-pressed=true]{color:#fff;border-color:#ed7a2b;background:#69291d;box-shadow:inset 2px 2px #9f4930,inset -2px -2px #260b08}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Automata / Performance Console</div>
+      <h1>Where does the frame go?</h1>
+      <div id="subtitle" class="subtitle"></div>
+    </div>
+    <div class="hero-orb" aria-hidden="true">
+      <svg class="orb-art" viewBox="0 0 112 104" shape-rendering="crispEdges">
+        <defs>
+          <clipPath id="orbGlassClip">
+            <polygon points="39,8 73,8 73,11 82,11 82,15 89,15 89,21 95,21 95,29 99,29 99,39 102,39 102,64 99,64 99,74 95,74 95,81 89,81 89,87 81,87 81,91 72,91 72,94 40,94 40,91 31,91 31,87 23,87 23,81 17,81 17,74 13,74 13,64 10,64 10,39 13,39 13,29 17,29 17,21 23,21 23,15 30,15 30,11 39,11"/>
+          </clipPath>
+        </defs>
+
+        <!-- Faceted cradle, drawn behind the glass. -->
+        <polygon fill="#371028" points="8,69 19,73 25,81 31,88 40,94 72,94 81,88 87,81 93,73 104,69 100,87 109,102 75,102 69,97 43,97 37,102 3,102 12,87"/>
+        <polygon fill="#8f2454" points="10,71 21,76 29,88 43,96 37,99 12,94 17,86"/>
+        <polygon fill="#b42d63" points="102,71 91,76 83,88 69,96 75,99 100,94 95,86"/>
+        <polygon fill="#5b193d" points="21,76 34,84 43,96 29,88"/>
+        <polygon fill="#6a1b43" points="91,76 78,84 69,96 83,88"/>
+        <polygon fill="#d23c73" points="11,70 22,72 31,79 28,83 19,78"/>
+        <polygon fill="#d23c73" points="101,70 90,72 81,79 84,83 93,78"/>
+        <polygon fill="#b92e66" points="43,96 49,91 63,91 69,96 64,101 48,101"/>
+        <polygon fill="#e34a7d" points="49,91 53,87 59,87 63,91 61,95 51,95"/>
+
+        <!-- Dark pixel outline and pale stepped rim. -->
+        <polygon fill="#173e66" points="36,2 76,2 76,5 84,5 84,9 91,9 91,14 97,14 97,21 102,21 102,30 106,30 106,68 102,68 102,77 97,77 97,84 91,84 91,90 84,90 84,94 75,94 75,97 37,97 37,94 28,94 28,90 21,90 21,84 15,84 15,77 10,77 10,68 6,68 6,30 10,30 10,21 15,21 15,14 21,14 21,9 28,9 28,5 36,5"/>
+        <polygon fill="#bff4ff" points="38,5 74,5 74,8 83,8 83,12 90,12 90,17 96,17 96,24 100,24 100,33 103,33 103,65 100,65 100,74 96,74 96,81 90,81 90,87 82,87 82,91 73,91 73,94 39,94 39,91 30,91 30,87 22,87 22,81 16,81 16,74 12,74 12,65 9,65 9,33 12,33 12,24 16,24 16,17 22,17 22,12 29,12 29,8 38,8"/>
+
+        <!-- Flat stepped glass with the title-screen lower refraction bands. -->
+        <polygon fill="#59a7d2" points="40,8 72,8 72,11 81,11 81,15 88,15 88,21 94,21 94,29 98,29 98,39 101,39 101,64 98,64 98,73 94,73 94,80 88,80 88,86 80,86 80,90 71,90 71,93 41,93 41,90 32,90 32,86 24,86 24,80 18,80 18,73 14,73 14,64 11,64 11,39 14,39 14,29 18,29 18,21 24,21 24,15 31,15 31,11 40,11"/>
+        <g clip-path="url(#orbGlassClip)">
+          <polygon fill="#4d99c8" points="8,63 104,63 104,76 96,76 96,83 88,83 88,89 78,89 78,94 34,94 34,91 24,91 24,86 17,86 17,78 12,78"/>
+          <polygon fill="#347cad" points="12,76 100,76 96,83 89,83 89,88 81,88 81,92 72,92 72,95 40,95 40,92 31,92 31,88 23,88 23,83 16,83"/>
+          <polygon fill="#286894" points="24,86 88,86 81,92 72,92 72,95 40,95 40,92 31,92"/>
+        </g>
+
+        <!-- Small block highlight from the original sprite. -->
+        <polygon fill="#9fe8ff" points="42,10 54,10 54,13 58,13 58,17 47,17 47,14 38,14"/>
+        <polygon fill="#ffffff" points="50,7 61,7 61,10 67,10 67,15 58,15 58,12 50,12"/>
+        <polygon fill="#dffaff" points="61,9 72,9 72,13 67,13 67,15 61,15"/>
+      </svg>
+    </div>
+  </header>
+  <div id="chartError" class="error">The charting library did not load. The generated JSON beside this file still contains the complete dataset.</div>
+  <div id="captureNotes" class="notice"></div>
+
+  <div class="toolbar">
+    <label>From (seconds)<input id="timeStart" type="number" min="0" step="0.1"></label>
+    <label>To (seconds)<input id="timeEnd" type="number" min="0" step="0.1"></label>
+    <button class="preset active" data-preset="full" type="button">Full trace</button>
+    <button class="preset" data-preset="first" type="button">First 30 s</button>
+    <button class="preset" data-preset="last" type="button">Last 30 s</button>
+    <button class="preset" data-preset="hot" type="button">Slowest frame</button>
+    <button id="warmOnly" class="toggle" type="button" aria-pressed="true">Warm only</button>
+    <span id="filterStatus" class="filter-status"></span>
+  </div>
+
+  <nav id="nav" aria-label="Dashboard views"></nav>
+
+  <section id="overview" class="view active">
+    <div id="overviewMetrics" class="metrics"></div>
+    <div id="overviewCold" class="cold"></div>
+    <div id="overviewInsight" class="insight"></div>
+    <div class="grid">
+      <article class="panel wide">
+        <div class="panel-head"><div><h2>Where does the frame go?</h2><p>One stacked bar per pump frame: the phases the pump measured itself, and whatever is left over. Bars are frames in order, not seconds, so a rejected frame leaves no gap.</p></div><div class="chart-controls"><span id="pumpScope" class="scope">Selected range</span><button id="pumpShare" class="toggle" type="button" aria-pressed="false">Share of frame</button></div></div>
+        <div class="chart tall"><canvas id="pumpStack"></canvas></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2>Which service owns the main thread?</h2><p>Total capture and dispatch time attributed to each service in range. One total split up, so a horizontal bar is the honest shape here.</p></div><span class="scope">Selected range</span></div>
+        <div class="chart"><canvas id="serviceCost"></canvas></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2>What is each service doing off the main thread?</h2><p>Worker time per cycle: derive, then project. Neither belongs to a frame.</p></div><span class="scope">Selected range</span></div>
+        <div class="chart"><canvas id="workerCost"></canvas></div>
+      </article>
+      <article class="panel wide">
+        <div class="panel-head"><div><h2>Which exact frames deserve investigation?</h2><p>Click a row to focus every page on its &plusmn;1 second neighbourhood.</p></div><span class="scope">Exact frames</span></div>
+        <div class="table-wrap"><table><thead><tr><th>At</th><th>Frame</th><th>Total</th><th>Response</th><th>Capture</th><th>Action</th><th>Overhead</th><th>Work</th><th>Cycles</th></tr></thead><tbody id="slowPumps"></tbody></table></div>
+      </article>
+    </div>
+  </section>
+
+  <div id="servicePages"></div>
+
+  <section id="evidence" class="view">
+    <div class="grid">
+      <article class="panel wide"><div class="panel-head"><div><h2>What happened, and when?</h2><p>Semantic event lanes. Click a point for identifiers, duration, disposition, and mutation evidence.</p></div><span class="scope">Selected range</span></div><div class="chart tall"><canvas id="eventTimeline"></canvas></div></article>
+      <article class="panel wide"><div class="panel-head"><div><h2>Selected evidence</h2></div></div><div id="selectedDetail" class="detail">Click an event point or a decision row to inspect its exact evidence.</div></article>
+      <article class="panel wide"><div class="panel-head"><div><h2>Decision spans</h2><p>Worker measurement and projection evidence correlated into the journal.</p></div></div><div class="table-wrap"><table><thead><tr><th>At</th><th>Service</th><th>Cycle</th><th>Capture</th><th>Terminal</th><th>Worker</th><th>Projection</th></tr></thead><tbody id="decisions"></tbody></table></div></article>
+      <article class="panel wide"><div class="panel-head"><div><h2>Profile stage evidence</h2><p>Whole-trace aggregates; bounded samples cannot be filtered by time.</p></div><span class="scope">Whole trace</span></div><div class="table-wrap"><table><thead><tr><th>Stage</th><th>Service</th><th>Temp</th><th>Count</th><th>Average</th><th>Min</th><th>Max</th><th>Allocation</th><th>Operations</th></tr></thead><tbody id="stages"></tbody></table></div></article>
+      <article class="panel wide"><div class="panel-head"><div><h2>Retained stage samples</h2><p>The individual occurrences the profiler kept, with the cycle and frame each ran on. At most eight per stage, service, lifecycle, temperature, and operation signature, so this is evidence rather than a distribution.</p></div><span class="scope">Whole trace &middot; bounded reservoir</span></div><div class="table-wrap"><table><thead><tr><th>At</th><th>Stage</th><th>Service</th><th>Frame</th><th>Cycle</th><th>Temp</th><th>Elapsed</th><th>Allocated</th><th>Operations</th></tr></thead><tbody id="stageSamples"></tbody></table></div></article>
+    </div>
+  </section>
+</main>
+<script id="traceData" type="application/json">__TRACE_DASHBOARD_JSON__</script>
+<script>
+(() => {
+  const data=JSON.parse(document.getElementById('traceData').textContent),m=data.metadata,seconds=m.windowMilliseconds/1000;
+  const fmt=(v,d=3)=>Number(v||0).toLocaleString(undefined,{maximumFractionDigits:d});
+  const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const quantile=(xs,q)=>{if(!xs.length)return 0;const a=xs.slice().sort((x,y)=>x-y),p=(a.length-1)*q,b=Math.floor(p),r=p-b;return a[b]+(a[b+1]===undefined?0:r*(a[b+1]-a[b]));};
+  const sum=xs=>xs.reduce((a,b)=>a+b,0),avg=xs=>xs.length?sum(xs)/xs.length:0;
+  const bytes=v=>v>=1048576?`${fmt(v/1048576,1)} MB`:v>=1024?`${fmt(v/1024,1)} KB`:`${fmt(v,0)} B`;
+  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C={collect:css('--collect'),decide:css('--decide'),act:css('--act'),response:css('--response'),other:css('--other'),gold:css('--gold'),muted:css('--muted'),line:css('--line'),good:css('--good'),bad:css('--bad'),warn:css('--warn')};
+  // One colour per stage, shared by every page, so "capture" is the same swatch everywhere.
+  const S={capture:'#5bc8e1',handoff:'#4a4a58',derive:'#9a69cf',project:'#c69b42',dispatch:'#e87867',response:'#6c9fc5',overhead:'#59565f'};
+  const BUCKET_LIMIT=1500,BUDGET=16.7;
+
+  const services=data.services||[];
+  const serviceName=id=>services.find(s=>s.service===id)?.name||`Service ${id}`;
+  const ordinalName=o=>services.find(s=>s.ordinal===o)?.name||`Service ${o+1}`;
+  const cold=t=>t!=='Warm';
+  let range=[0,m.windowMilliseconds],warmOnly=true,pumpShare=false,view='overview';
+  const charts={};
+
+  const inRange=t=>t>=range[0]&&t<=range[1];
+  const acceptedPumps=()=>data.pumps.filter(x=>x.accepted&&inRange(x.offsetMilliseconds));
+  const shownPumps=()=>warmOnly?acceptedPumps().filter(x=>!cold(x.temperature)):acceptedPumps();
+  const coldPumps=()=>acceptedPumps().filter(x=>cold(x.temperature));
+  const cyclesOf=id=>data.cycles.filter(x=>x.service===id&&inRange(x.offsetMilliseconds));
+  const shownCyclesOf=id=>warmOnly?cyclesOf(id).filter(x=>!cold(x.temperature)):cyclesOf(id);
+  const coldCyclesOf=id=>cyclesOf(id).filter(x=>cold(x.temperature));
+  const events=id=>data.events.filter(x=>inRange(x.offsetMilliseconds)&&(id===undefined||x.service===id));
+  const overhead=p=>Math.max(0,p.totalMilliseconds-p.responseMilliseconds-p.captureMilliseconds-p.actionMilliseconds);
+  const featureStages=o=>data.stageAggregates.filter(x=>x.service===o&&x.stageCode>=1000);
+
+  document.getElementById('subtitle').textContent=`${fmt(seconds,1)} seconds of main-thread, worker, and action evidence · ${m.fullTraceState}/${m.fullTraceReason}`;
+  const notes=m.notes||[];
+  if(notes.length){const box=document.getElementById('captureNotes');box.innerHTML=notes.map(x=>`<p>${esc(x)}</p>`).join('');box.style.display='block'}
+  const startInput=document.getElementById('timeStart'),endInput=document.getElementById('timeEnd');
+  startInput.value='0';endInput.value=seconds.toFixed(1);startInput.max=endInput.max=seconds.toFixed(3);
+
+  function buildPages(){
+    document.getElementById('nav').innerHTML=
+      `<button type="button" data-view="overview" aria-selected="true">Overview</button>`+
+      services.map(s=>`<button type="button" data-view="service-${s.ordinal}" aria-selected="false">${esc(s.name)}</button>`).join('')+
+      `<button type="button" data-view="evidence" aria-selected="false">Evidence</button>`;
+    document.getElementById('servicePages').innerHTML=services.map(s=>`
+      <section id="service-${s.ordinal}" class="view">
+        <div id="metrics-${s.ordinal}" class="metrics"></div>
+        <div id="cold-${s.ordinal}" class="cold"></div>
+        <div id="insight-${s.ordinal}" class="insight"></div>
+        <div class="grid">
+          <article class="panel wide">
+            <div class="panel-head"><div><h2>What does one ${esc(s.name)} cycle cost?</h2><p>One stacked bar per cycle. Capture and dispatch ran on the main thread inside a pump frame; handoff is queue latency rather than work; derive and project ran on the worker and belong to no frame.</p></div><span id="scope-${s.ordinal}" class="scope">Selected range</span></div>
+            <div class="chart tall"><canvas id="cycleStack-${s.ordinal}"></canvas></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><h2>Where does the average cycle go?</h2><p>Mean milliseconds per stage. Derive is the evaluator's own arithmetic and the snapshot allocation together — <code>Build</code> derives and allocates in one pass, so there is no seam between them to measure.</p></div><span class="scope">Selected range · mean</span></div>
+            <div class="chart" id="splitWrap-${s.ordinal}"><canvas id="cycleSplit-${s.ordinal}"></canvas></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><h2>What does the native boundary cost?</h2><p>Profiled action stages for this service.</p></div><span class="scope">Whole trace · bounded</span></div>
+            <div class="chart" id="nativeWrap-${s.ordinal}"><canvas id="native-${s.ordinal}"></canvas></div>
+          </article>
+        </div>
+      </section>`).join('');
+  }
+
+  const chartCommon={responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{labels:{color:C.muted,usePointStyle:true,boxWidth:9}},tooltip:{backgroundColor:'#14112b',borderColor:C.line,borderWidth:1,titleColor:C.gold,bodyColor:'#f4f0ff'}},scales:{x:{ticks:{color:C.muted},grid:{color:C.line}},y:{ticks:{color:C.muted},grid:{color:C.line}}}};
+  function create(id,type,options={}){const el=document.getElementById(id);if(el)charts[id]=new Chart(el,{type,data:{labels:[],datasets:[]},options:{...chartCommon,...options}})}
+  function replace(id,datasets,labels){const c=charts[id];if(!c)return;c.data.datasets=datasets;if(labels)c.data.labels=labels;c.update()}
+  function metrics(id,items){document.getElementById(id).innerHTML=items.map(x=>`<div class="metric"><span>${esc(x[0])}</span><b>${esc(x[1])}</b><small>${esc(x[2]||'')}</small></div>`).join('')}
+  function insight(id,title,text){document.getElementById(id).innerHTML=`<div><b>${title}</b><span>${text}</span></div>`}
+  function stacked(axisTitle,xTitle){return{plugins:{...chartCommon.plugins,tooltip:{...chartCommon.plugins.tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${fmt(c.parsed.y)}`}},zoom:{pan:{enabled:true,mode:'x',modifierKey:'shift'},zoom:{wheel:{enabled:true,speed:.06},drag:{enabled:true,borderColor:C.gold,borderWidth:1,backgroundColor:'rgba(229,204,121,.14)'},mode:'x'}}},scales:{x:{stacked:true,ticks:{color:C.muted,maxTicksLimit:22,autoSkip:true},grid:{display:false},title:{display:true,text:xTitle,color:C.muted}},y:{stacked:true,beginAtZero:true,ticks:{color:C.muted},grid:{color:C.line},title:{display:true,text:axisTitle,color:C.muted}}}}}
+  function composition(xTitle){return{indexAxis:'y',plugins:{...chartCommon.plugins},scales:{x:{stacked:true,beginAtZero:true,ticks:{color:C.muted},grid:{color:C.line},title:{display:true,text:xTitle,color:C.muted}},y:{stacked:true,ticks:{color:C.muted},grid:{display:false}}}}}
+  function emptyPanel(wrapId,text){const wrap=document.getElementById(wrapId);if(wrap)wrap.innerHTML=`<div class="empty">${esc(text)}</div>`}
+  function coldStrip(id,rows,unit){
+    const box=document.getElementById(id);
+    if(!rows.length||!warmOnly){box.style.display='none';return}
+    const costs=rows.slice().sort((a,b)=>b.cost-a.cost).slice(0,4).map(r=>`${fmt(r.cost)} ms`).join(', ');
+    box.innerHTML=`<b>${rows.length} cold ${unit} excluded</b> — ${esc(costs)}${rows.length>4?', …':''}. A first pass carries the JIT and the first touch of every buffer behind it; a rebind rebuilds what it moved. Switch to <em>All frames</em> to put them back.`;
+    box.style.display='block';
+  }
+
+  function pumpRows(){
+    const ps=shownPumps();
+    if(ps.length<=BUCKET_LIMIT)
+      return {bucketed:false,rows:ps.map(p=>({label:String(p.frame),at:p.offsetMilliseconds,response:p.responseMilliseconds,capture:p.captureMilliseconds,action:p.actionMilliseconds,overhead:overhead(p),total:p.totalMilliseconds,count:1}))};
+    const buckets=Math.max(60,Math.min(600,Math.round(ps.length/12)));
+    const first=ps[0].offsetMilliseconds,last=ps[ps.length-1].offsetMilliseconds,width=Math.max(1,(last-first)/buckets);
+    const acc=Array.from({length:buckets},(_,i)=>({at:first+width*(i+.5),response:0,capture:0,action:0,overhead:0,total:0,count:0}));
+    ps.forEach(p=>{const b=acc[Math.min(buckets-1,Math.floor((p.offsetMilliseconds-first)/width))];b.count++;b.response+=p.responseMilliseconds;b.capture+=p.captureMilliseconds;b.action+=p.actionMilliseconds;b.overhead+=overhead(p);b.total+=p.totalMilliseconds});
+    return {bucketed:true,rows:acc.filter(b=>b.count).map(b=>({label:`${fmt(b.at/1000,1)} s`,at:b.at,response:b.response/b.count,capture:b.capture/b.count,action:b.action/b.count,overhead:b.overhead/b.count,total:b.total/b.count,count:b.count}))};
+  }
+  function slices(rows,keys){
+    return keys.map(([key,label,color])=>({
+      label,backgroundColor:color,borderColor:'#111',borderWidth:0,stack:'frame',
+      data:rows.map(r=>pumpShare&&r.total?r[key]/r.total*100:r[key])
+    }));
+  }
+
+  function updateOverview(){
+    const ps=shownPumps(),all=acceptedPumps(),times=ps.map(x=>x.totalMilliseconds);
+    const active=ps.filter(x=>x.responses||x.captures||x.actions),chilly=coldPumps();
+    metrics('overviewMetrics',[
+      ['Observed window',`${fmt((range[1]-range[0])/1000,1)} s`,`${ps.length.toLocaleString()} of ${all.length.toLocaleString()} pumps`],
+      ['Median pump',`${fmt(quantile(times,.5))} ms`,warmOnly?'warm frames':'all frames'],
+      ['p95 pump',`${fmt(quantile(times,.95))} ms`,`${times.filter(x=>x>BUDGET).length} over ${BUDGET} ms`],
+      ['p99 pump',`${fmt(quantile(times,.99))} ms`,'tail latency'],
+      ['Slowest shown',`${fmt(Math.max(0,...times))} ms`,'worst frame in view'],
+      ['Active frames',active.length.toLocaleString(),`${fmt(active.length/(ps.length||1)*100,1)}% of shown`]
+    ]);
+    coldStrip('overviewCold',chilly.map(x=>({cost:x.totalMilliseconds})),'frame(s)');
+    const started=sum(ps.map(x=>x.started)),held=ps.filter(x=>x.held>0);
+    const worst=ps.length?ps.reduce((a,b)=>b.totalMilliseconds>a.totalMilliseconds?b:a):null;
+    insight('overviewInsight','Where the frame goes',
+      ps.length
+        ? `Of ${fmt(avg(times))} ms in the average frame the pump attributes ${fmt(avg(ps.map(x=>x.captureMilliseconds)))} ms to capture, ${fmt(avg(ps.map(x=>x.responseMilliseconds)))} ms to response acquisition and ${fmt(avg(ps.map(x=>x.actionMilliseconds)))} ms to actions; ${fmt(avg(ps.map(overhead)))} ms is unattributed overhead. ${started.toLocaleString()} cycles started; ${held.length?`${held.length.toLocaleString()} frame(s) held a service at the world gate`:'none held at the world gate'}.`
+        : 'No accepted pump frames in this selection.');
+
+    const {bucketed,rows}=pumpRows();
+    document.getElementById('pumpScope').textContent=bucketed?`Selected range · bucketed means (${rows.length} buckets)`:'Selected range · exact frames';
+    const datasets=slices(rows,[['response','Response',S.response],['capture','Capture',S.capture],['action','Action',S.dispatch],['overhead','Overhead',S.overhead]]);
+    if(!pumpShare)datasets.push({type:'line',label:`${BUDGET} ms budget`,data:rows.map(()=>BUDGET),borderColor:C.gold,borderDash:[7,5],borderWidth:1.5,pointRadius:0,stack:'budget'});
+    charts.pumpStack.options.scales.y.title.text=pumpShare?'Share of frame (%)':'Milliseconds';
+    charts.pumpStack.options.scales.y.max=pumpShare?100:undefined;
+    replace('pumpStack',datasets,rows.map(r=>r.label));
+
+    const ids=services.map(s=>s.service);
+    replace('serviceCost',[
+      {label:'Capture',backgroundColor:S.capture,stack:'main',data:ids.map(id=>sum(shownCyclesOf(id).map(c=>c.captureMilliseconds)))},
+      {label:'Dispatch',backgroundColor:S.dispatch,stack:'main',data:ids.map(id=>sum(shownCyclesOf(id).map(c=>c.dispatchMilliseconds)))}
+    ],ids.map(serviceName));
+    replace('workerCost',[
+      {label:'Derive (math + allocation)',backgroundColor:S.derive,stack:'worker',data:ids.map(id=>sum(shownCyclesOf(id).map(c=>c.deriveMilliseconds)))},
+      {label:'Project',backgroundColor:S.project,stack:'worker',data:ids.map(id=>sum(shownCyclesOf(id).map(c=>c.projectMilliseconds)))},
+      {label:'Handoff (waiting)',backgroundColor:S.handoff,stack:'worker',data:ids.map(id=>sum(shownCyclesOf(id).map(c=>c.handoffMilliseconds)))}
+    ],ids.map(serviceName));
+
+    document.getElementById('slowPumps').innerHTML=ps.slice().sort((a,b)=>b.totalMilliseconds-a.totalMilliseconds).slice(0,16)
+      .map(p=>`<tr data-at="${p.offsetMilliseconds}"><td>${fmt(p.offsetMilliseconds/1000)} s</td><td>${p.frame}</td><td>${fmt(p.totalMilliseconds)} ms</td><td>${fmt(p.responseMilliseconds)}</td><td>${fmt(p.captureMilliseconds)}</td><td>${fmt(p.actionMilliseconds)}</td><td>${fmt(overhead(p))}</td><td>${p.responses}/${p.captures}/${p.actions}</td><td>${p.started} started / ${p.held} held</td></tr>`).join('');
+  }
+
+  function updateService(s){
+    const o=s.ordinal,id=s.service,cs=shownCyclesOf(id);
+    const capture=cs.filter(x=>x.hasCapture).map(x=>x.captureMilliseconds),derive=cs.filter(x=>x.hasWorker).map(x=>x.deriveMilliseconds);
+    const committed=sum(cs.map(x=>x.committed)),skipped=sum(cs.map(x=>x.skipped)),failed=sum(cs.map(x=>x.failed));
+    const gaps=cs.slice(1).map((x,i)=>x.offsetMilliseconds-cs[i].offsetMilliseconds);
+    const alloc=featureStages(o).filter(x=>x.allocationPerCall!==null&&x.allocationPerCall!==undefined);
+    metrics(`metrics-${o}`,[
+      ['Cycles',cs.length.toLocaleString(),`${cyclesOf(id).length.toLocaleString()} in range`],
+      ['Cadence',gaps.length?`${fmt(quantile(gaps,.5)/1000,2)} s`:'Unavailable','median between cycles'],
+      ['Capture',capture.length?`${fmt(avg(capture))} ms`:'No capture stage',capture.length?`${fmt(quantile(capture,.95))} ms p95`:'main thread'],
+      ['Derive',derive.length?`${fmt(avg(derive))} ms`:'Unavailable','math + allocation, worker'],
+      ['Project',derive.length?`${fmt(avg(cs.filter(x=>x.hasWorker).map(x=>x.projectMilliseconds))*1000,1)} µs`:'Unavailable','worker'],
+      ['Actions',`${committed}/${committed+skipped+failed}`,`${skipped} skipped · ${failed} failed`]
+    ]);
+    coldStrip(`cold-${o}`,coldCyclesOf(id).map(x=>({cost:x.captureMilliseconds+x.handoffMilliseconds+x.deriveMilliseconds+x.projectMilliseconds+x.dispatchMilliseconds})),'cycle(s)');
+    const allocText=alloc.length?` Profiled action stages allocate ${bytes(sum(alloc.map(x=>x.allocationPerCall)))} per action.`:'';
+    insight(`insight-${o}`,`${esc(s.name)} · ${esc(s.role.toLowerCase())}`,
+      cs.length
+        ? `${cs.length.toLocaleString()} cycles: ${fmt(avg(capture))} ms capturing on the main thread, ${fmt(avg(cs.map(x=>x.handoffMilliseconds)))} ms waiting for the worker, ${fmt(avg(derive))} ms deriving, ${fmt(avg(cs.map(x=>x.projectMilliseconds))*1000,1)} µs projecting, and ${fmt(avg(cs.map(x=>x.dispatchMilliseconds)))} ms dispatching back on the main thread.${allocText}`
+        : 'No cycles for this service in the selection.');
+
+    const rows=cs.length>BUCKET_LIMIT?cs.filter((_,i)=>i%Math.ceil(cs.length/BUCKET_LIMIT)===0):cs;
+    document.getElementById(`scope-${o}`).textContent=rows.length===cs.length?'Selected range · exact cycles':`Selected range · every ${Math.ceil(cs.length/BUCKET_LIMIT)}th cycle`;
+    replace(`cycleStack-${o}`,[
+      {label:'Capture (main)',backgroundColor:S.capture,stack:'cycle',data:rows.map(x=>x.captureMilliseconds)},
+      {label:'Handoff (waiting)',backgroundColor:S.handoff,stack:'cycle',data:rows.map(x=>x.handoffMilliseconds)},
+      {label:'Derive (math + allocation)',backgroundColor:S.derive,stack:'cycle',data:rows.map(x=>x.deriveMilliseconds)},
+      {label:'Project',backgroundColor:S.project,stack:'cycle',data:rows.map(x=>x.projectMilliseconds)},
+      {label:'Dispatch (main)',backgroundColor:S.dispatch,stack:'cycle',data:rows.map(x=>x.dispatchMilliseconds)}
+    ],rows.map(x=>String(x.cycle)));
+    replace(`cycleSplit-${o}`,[
+      {label:'Capture',backgroundColor:S.capture,stack:'mean',data:[avg(cs.map(x=>x.captureMilliseconds))]},
+      {label:'Handoff',backgroundColor:S.handoff,stack:'mean',data:[avg(cs.map(x=>x.handoffMilliseconds))]},
+      {label:'Derive',backgroundColor:S.derive,stack:'mean',data:[avg(cs.map(x=>x.deriveMilliseconds))]},
+      {label:'Project',backgroundColor:S.project,stack:'mean',data:[avg(cs.map(x=>x.projectMilliseconds))]},
+      {label:'Dispatch',backgroundColor:S.dispatch,stack:'mean',data:[avg(cs.map(x=>x.dispatchMilliseconds))]}
+    ],['Mean cycle']);
+    const stages=featureStages(o);
+    if(stages.length)
+      replace(`native-${o}`,[{label:'Average',backgroundColor:stages.map((_,i)=>[S.capture,S.derive,S.project,S.dispatch,S.response][i%5]),data:stages.map(x=>x.averageMicroseconds)}],stages.map(x=>x.stage));
+  }
+
+  function updateEvidence(){
+    const lanes={Control:0,Lifecycle:1,Capture:2,Worker:3,Publication:4,Action:5};
+    const colors={Control:C.other,Lifecycle:C.muted,Capture:S.capture,Worker:S.derive,Publication:S.project,Action:S.dispatch};
+    const es=events(),ds=data.decisions.filter(x=>x.endMilliseconds>=range[0]&&x.startMilliseconds<=range[1]);
+    replace('eventTimeline',Object.keys(lanes).map(lane=>({label:lane,backgroundColor:colors[lane],pointRadius:lane==='Action'?4:2.5,data:es.filter(x=>x.lane===lane).map(x=>({x:x.offsetMilliseconds/1000,y:lanes[lane],source:x}))})).filter(x=>x.data.length));
+    document.getElementById('decisions').innerHTML=ds.map(d=>`<tr data-at="${(d.startMilliseconds+d.endMilliseconds)/2}"><td>${fmt(d.startMilliseconds/1000)} s</td><td>${esc(serviceName(d.service))}</td><td>${d.firstCycle}${d.lastCycle!==d.firstCycle?'–'+d.lastCycle:''}</td><td>${esc(d.captureDecision)}<br><span class="muted">${esc(d.wake)}</span></td><td>${esc(d.terminal)}<br><span class="muted">${d.committedActions}/${d.actionCount} committed</span></td><td>${d.workerSamples?`${fmt(d.workerAverageMilliseconds*1000,1)} µs`:'Unavailable'}</td><td>${d.projection.map(x=>`${esc(x.name)}=${esc(x.value)}`).join('<br>')||'Unavailable'}</td></tr>`).join('');
+    document.getElementById('stages').innerHTML=data.stageAggregates.map(x=>`<tr><td>${esc(x.stage)}</td><td>${esc(ordinalName(x.service))}</td><td>${esc(x.temperature)}</td><td>${x.count}</td><td>${fmt(x.averageMicroseconds)} µs</td><td>${fmt(x.minimumMicroseconds)} µs</td><td>${fmt(x.maximumMicroseconds)} µs</td><td>${x.allocationPerCall===null||x.allocationPerCall===undefined?'–':bytes(x.allocationPerCall)}</td><td>${operations(x.operations)}</td></tr>`).join('');
+    document.getElementById('stageSamples').innerHTML=data.stageSamples.slice().sort((a,b)=>b.elapsedMicroseconds-a.elapsedMicroseconds)
+      .map(x=>`<tr data-at="${x.offsetMilliseconds}"><td>${fmt(x.offsetMilliseconds/1000)} s</td><td>${esc(x.stage)}</td><td>${esc(ordinalName(x.service))}</td><td>${x.frame}</td><td>${x.cycle}</td><td>${esc(x.temperature)}</td><td>${fmt(x.elapsedMicroseconds)} µs</td><td>${x.allocatedBytes===null||x.allocatedBytes===undefined?'–':bytes(x.allocatedBytes)}</td><td>${operations(x.operations)}</td></tr>`).join('')
+      ||'<tr><td colspan="9">No profiler capture in this session.</td></tr>';
+  }
+  function operations(o){const names={reflectedFieldReads:'fields',reflectedMethodCalls:'methods',stableIdReads:'ids',listEntries:'entries',invocationArgumentArrays:'args',recordCopies:'copies'};return Object.entries(names).filter(([k])=>o[k]).map(([k,n])=>`${n}=${o[k]}`).join(', ')||'–'}
+  function showEvent(e){document.getElementById('selectedDetail').textContent=`${e.kind} at ${fmt(e.offsetMilliseconds/1000)} s\nService ${e.service||'-'}, lifecycle ${e.lifecycle||'-'}, world ${e.world||'-'}, capture ${e.capture||'-'}, cycle ${e.cycle||'-'}, batch ${e.batch||'-'}, action ${e.action||'-'}, frame ${e.framed?e.frame:'none'}\nDuration ${fmt(e.durationMilliseconds)} ms; code ${e.code}; disposition ${e.disposition}\nNative calls / mutation attempts / commits: ${e.nativeCallsAttempted} / ${e.mutationAttempts} / ${e.mutationsCommitted}`}
+
+  function initialize(){
+    create('pumpStack','bar',stacked('Milliseconds','Pump frame'));
+    create('serviceCost','bar',composition('Main-thread milliseconds in range'));
+    create('workerCost','bar',composition('Worker milliseconds in range'));
+    services.forEach(s=>{
+      create(`cycleStack-${s.ordinal}`,'bar',stacked('Milliseconds','Cycle'));
+      create(`cycleSplit-${s.ordinal}`,'bar',composition('Mean milliseconds per cycle'));
+      if(featureStages(s.ordinal).length)
+        create(`native-${s.ordinal}`,'bar',{indexAxis:'y',plugins:{...chartCommon.plugins,legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{color:C.muted},grid:{color:C.line},title:{display:true,text:'Microseconds per call',color:C.muted}},y:{ticks:{color:C.muted},grid:{display:false}}}});
+      else
+        emptyPanel(`nativeWrap-${s.ordinal}`,`${s.name} owns no profile spans in this build, so nothing measured its native boundary. The cycle stack beside this is wire evidence and is unaffected.`);
+    });
+    const lanes=['Control','Lifecycle','Capture','Worker','Publication','Action'];
+    create('eventTimeline','scatter',{onClick:(_,els)=>{if(els.length)showEvent(charts.eventTimeline.data.datasets[els[0].datasetIndex].data[els[0].index].source)},scales:{x:{type:'linear',ticks:{color:C.muted},grid:{color:C.line},title:{display:true,text:'Seconds',color:C.muted}},y:{min:-.5,max:5.5,ticks:{color:C.muted,callback:v=>lanes[v]||''},grid:{color:C.line}}}});
+  }
+  function updateAll(){
+    document.getElementById('filterStatus').textContent=`${warmOnly?'Warm only':'All frames'} · ${fmt(range[0]/1000,1)}–${fmt(range[1]/1000,1)} s`;
+    updateOverview();services.forEach(updateService);updateEvidence();
+  }
+  function setRange(a,b,preset=''){range=[Math.max(0,a),Math.min(m.windowMilliseconds,b)];startInput.value=(range[0]/1000).toFixed(1);endInput.value=(range[1]/1000).toFixed(1);document.querySelectorAll('.preset').forEach(x=>x.classList.toggle('active',x.dataset.preset===preset));updateAll()}
+  function applyInputs(){const a=(Number(startInput.value)||0)*1000,b=Math.min(m.windowMilliseconds,(Number(endInput.value)||seconds)*1000);range=a<=b?[a,b]:[b,a];document.querySelectorAll('.preset').forEach(x=>x.classList.remove('active'));updateAll()}
+  startInput.addEventListener('change',applyInputs);endInput.addEventListener('change',applyInputs);
+  document.getElementById('warmOnly').addEventListener('click',e=>{warmOnly=!warmOnly;e.currentTarget.setAttribute('aria-pressed',String(warmOnly));e.currentTarget.textContent=warmOnly?'Warm only':'All frames';updateAll()});
+  document.getElementById('pumpShare').addEventListener('click',e=>{pumpShare=!pumpShare;e.currentTarget.setAttribute('aria-pressed',String(pumpShare));e.currentTarget.textContent=pumpShare?'Absolute':'Share of frame';updateOverview()});
+  document.querySelectorAll('.preset').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.preset==='first')setRange(0,Math.min(30000,m.windowMilliseconds),'first');
+    else if(b.dataset.preset==='last')setRange(Math.max(0,m.windowMilliseconds-30000),m.windowMilliseconds,'last');
+    else if(b.dataset.preset==='hot'){const hot=data.pumps.filter(x=>x.accepted).sort((a,z)=>z.totalMilliseconds-a.totalMilliseconds)[0];if(hot)setRange(hot.offsetMilliseconds-1000,hot.offsetMilliseconds+1000,'hot')}
+    else setRange(0,m.windowMilliseconds,'full');
+  }));
+  document.addEventListener('click',e=>{const row=e.target.closest('tr[data-at]');if(row)setRange(Number(row.dataset.at)-1000,Number(row.dataset.at)+1000,'')});
+  if(!window.Chart){document.getElementById('chartError').style.display='block';return}
+  Chart.defaults.font.family='"Courier New", ui-monospace, monospace';
+  Chart.defaults.color=C.muted;
+  buildPages();
+  document.querySelectorAll('#nav button').forEach(button=>button.addEventListener('click',()=>{
+    view=button.dataset.view;
+    document.querySelectorAll('#nav button').forEach(x=>x.setAttribute('aria-selected',String(x===button)));
+    document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===view));
+    setTimeout(()=>Object.values(charts).forEach(x=>x.resize()),0);
+  }));
+  initialize();updateAll();
+})();
+</script>
+</body>
+</html>

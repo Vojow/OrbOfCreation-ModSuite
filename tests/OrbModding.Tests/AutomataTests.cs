@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using OrbAutomata;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 using UnityEngine;
 using Xunit;
 
@@ -11,27 +12,6 @@ namespace OrbModding.Tests;
 
 public sealed class AutomataTests
 {
-    [Fact]
-    public void SpellCostReaderUsesTrueMaxQuantityInsteadOfEffectSoftCap()
-    {
-        var resource = new TestResourceSO
-        {
-            uuid = "mana",
-            name = "Mana",
-            quantity = new TestBigDouble(8.0, 5),
-            maxQuantity = new TestValueModifierRecord(new TestBigDouble(5.0, 5)),
-            trueAmountMultiplier = 2.0,
-        };
-        Assert.True(ReflectionCostReader.TryRead(new[]
-        {
-            new TestCostEntry(resource, new TestBigDouble(1.0, 3)),
-        }, out var decoded, out var reason), reason);
-        var result = Assert.Single(decoded);
-
-        Assert.Equal("8e5", result.CurrentQuantity.ToString());
-        Assert.Equal("1e6", result.Capacity?.ToString());
-    }
-
     [Fact]
     public void DecisionLogGate_ThrottlesRepeatedStateButLogsTransitions()
     {
@@ -46,12 +26,11 @@ public sealed class AutomataTests
     [Fact]
     public void DefaultConfiguration_IsReadyForReleaseUse()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
 
         Assert.Equal(AutoBuyOperationMode.Active, config.AutoBuyMode.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.AutoBuyAffordability.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.UpgradeAffordability.Value);
-        Assert.Equal(1024, config.AutoBuyMaxCandidatesPerScan.Value);
         Assert.Equal(AutoBuyBatchSizingMode.FillAvailableQueue, config.AutoBuyBatchSizing.Value);
         Assert.Equal(8, config.MaxPurchasesPerBatch.Value);
         Assert.Equal(AutoBuyPurchaseGroupingMode.BulkDevelopment, config.PurchaseGrouping.Value);
@@ -60,87 +39,41 @@ public sealed class AutomataTests
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
+        Assert.Equal(AutoHarvestOperationMode.Disabled, config.AutoHarvestMode.Value);
+        Assert.True(config.AutoHarvestFruitTrees.Value);
+        Assert.True(config.AutoHarvestTreasureTrees.Value);
+        Assert.Equal(1.0f, config.AutoHarvestEvaluationIntervalSeconds.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.False(config.EnableOperationalLogging.Value);
-        Assert.Equal(1.0f, config.CpuBudgetMilliseconds.Value);
-        Assert.True(config.CanStartAutoBuyActively);
-        Assert.False(config.CanStartAutoCastActively);
-        Assert.False(config.CanStartAutoConceptActively);
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_MigratesLegacyBalanceMasteryModeToActive()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
-
-        var config = AutomataConfig.Bind(configFile);
-
-        Assert.Equal(AutoConceptOperationMode.Active, config.AutoConceptMode.Value);
-        Assert.True(config.CanStartAutoConceptActively);
-    }
-
-    [Theory]
-    [InlineData(0.1f, 10)]
-    [InlineData(1.0f, 60)]
-    [InlineData(2.5f, 150)]
-    [InlineData(30.0f, 1800)]
-    public void AutoConceptConfiguration_MigratesLegacyMinutesToSeconds(float legacyMinutes, int expectedSeconds)
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized(
-            "AutoConcept",
-            "RebalanceIntervalMinutes",
-            legacyMinutes.ToString(CultureInfo.InvariantCulture));
-
-        var config = AutomataConfig.Bind(configFile);
-
-        Assert.Equal(expectedSeconds, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalMinutes");
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_MigratesExistingRebalanceSecondsSetting()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
-
-        var config = AutomataConfig.Bind(configFile);
-
-        Assert.Equal(10, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" && pair.Key.Key == "RebalanceIntervalSeconds");
-    }
-
-    [Fact]
-    public void AutoConceptConfiguration_PreservesNewFallbackSettingOverLegacyValues()
-    {
-        var configFile = new ConfigFile();
-        configFile.SeedSerialized("AutoConcept", "FallbackEvaluationIntervalSeconds", "45");
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalSeconds", "10");
-        configFile.SeedSerialized("AutoConcept", "RebalanceIntervalMinutes", "2.0");
-
-        var config = AutomataConfig.Bind(configFile);
-
-        Assert.Equal(45, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.DoesNotContain(
-            configFile,
-            pair => pair.Key.Section == "AutoConcept" &&
-                    (pair.Key.Key == "RebalanceIntervalSeconds" || pair.Key.Key == "RebalanceIntervalMinutes"));
+        Assert.True(config.Current.CanStartAutoBuyActively);
+        Assert.False(config.Current.CanStartAutoCastActively);
+        Assert.False(config.Current.CanStartAutoConceptActively);
+        Assert.False(config.Current.CanStartAutoHarvestActively);
     }
 
     [Fact]
     public void AutoConceptToggleSwitchesModeWithoutReplacingConfiguredIntent()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
-        var toggle = new AutoConceptToggleControl(config);
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var changes = new AutomataConfigurationStore(config, (_, _) => { });
+        var toggle = new AutoConceptToggleControl(
+            changes,
+            () =>
+            {
+                var enabled = config.Current.AutoConcept.Mode == AutoConceptOperationMode.Active;
+                return new FeatureStatusSnapshot(
+                    new FeatureStatusKey(
+                        PluginIds.SuiteGuid,
+                        AutomataFeatureStatuses.AutoConceptFeatureId),
+                    "Auto Concept",
+                    enabled,
+                    enabled
+                        ? FeatureStatusState.Operational
+                        : FeatureStatusState.ConfigurationDisabled);
+            });
 
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
         toggle.Toggle();
@@ -151,14 +84,6 @@ public sealed class AutomataTests
         toggle.Toggle();
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
-    }
-
-    [Theory]
-    [InlineData(0, "CN OFF")]
-    [InlineData(1, "CN ON")]
-    public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
-    {
-        Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));
     }
 
     [Fact]
@@ -316,46 +241,6 @@ public sealed class AutomataTests
     }
 
     [Fact]
-    [Trait("Category", "HeadlessIntegration")]
-    public void AutoSpellLevelRuntimeTransitionsFromLockedToSingleToAll()
-    {
-        var upgrade = new UpgradeSO();
-        upgrade.uuid = ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid;
-        IdScriptableObject.RuntimeLookup.Clear();
-        IdScriptableObject.RuntimeLookup[new Guid(ReflectionSpellLevelRuntime.UnlockLevelAllSpellsUuid)] = upgrade;
-        var recipe = new SpellRecipeSO { discovered = true, readyToLevel = true };
-        SpellManager.instance = new SpellManager();
-        SpellManager.instance.availableSpellRecipes.value.Add(recipe);
-        using var runtime = new ReflectionSpellLevelRuntime();
-
-        Assert.Equal(AutoSpellLevelCapability.Locked, runtime.ReadSnapshot(out var reason).Capability);
-        Assert.Equal(string.Empty, reason);
-
-        recipe.levelingPrerequisites.unlocked = true;
-        upgrade.queuedPurchaseLevel = 1;
-        recipe.levelCost.affordable = false;
-        var single = runtime.ReadSnapshot(out reason);
-        Assert.Equal(AutoSpellLevelCapability.Single, single.Capability);
-        Assert.Null(single.Candidate);
-        Assert.Equal(0, recipe.levelCost.PerformCalls);
-
-        recipe.levelCost.affordable = true;
-        single = runtime.ReadSnapshot(out reason);
-        Assert.NotNull(single.Candidate);
-        Assert.True(runtime.TryLevelSingle(single.Candidate!, out reason));
-        Assert.Equal(1, recipe.masteryLevel);
-        Assert.Equal(1, recipe.levelCost.PerformCalls);
-
-        recipe.readyToLevel = true;
-        upgrade.purchaseLevel = 1;
-        var all = runtime.ReadSnapshot(out reason);
-        Assert.Equal(AutoSpellLevelCapability.All, all.Capability);
-        Assert.True(runtime.TryLevelAll(out reason));
-        Assert.Equal(2, recipe.masteryLevel);
-        Assert.Equal(2, recipe.levelCost.PerformCalls);
-    }
-
-    [Fact]
     public void AutoConceptOwnershipNeverClaimsUnexpectedManualQuantity()
     {
         var ledger = new ConceptOwnershipLedger();
@@ -371,33 +256,13 @@ public sealed class AutomataTests
         Assert.Equal(0, owned.AutomatedDelta);
     }
 
-    [Theory]
-    [InlineData(-1.0, 0.1)]
-    [InlineData(0.5, 0.5)]
-    [InlineData(4.0, 1.0)]
-    public void AutoBuyCpuBudgetIsHardCappedForFrameSafety(double configured, double expected)
-    {
-        Assert.Equal(expected, AutoBuyEngine.EffectiveCpuBudget(configured), 6);
-    }
-
-    [Fact]
-    public void ReflectionAutoBuyCatalogCachesTheStaticRegistry()
-    {
-        using var catalog = new ReflectionAutoBuyCatalog();
-
-        var first = catalog.Discover();
-        var second = catalog.Discover();
-
-        Assert.Same(first, second);
-    }
-
     [Fact]
     public void ReservePolicy_RequiresCostPlusTheLargestReserveFloor()
     {
-        var config = AutomataConfig.Bind(new ConfigFile());
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         config.AbsoluteReserve.Value = "100";
         config.RelativeReserveMultiplier.Value = 2.0f;
-        var policy = new ReservePolicy(config);
+        var policy = new ReservePolicy(() => config.Current);
 
         var accepted = policy.Evaluate(new[]
         {
@@ -410,54 +275,5 @@ public sealed class AutomataTests
 
         Assert.True(accepted.Passed);
         Assert.False(rejected.Passed);
-    }
-
-    private sealed class TestCostEntry
-    {
-        public TestCostEntry(TestResourceSO resource, TestBigDouble amount)
-        {
-            this.resource = resource;
-            this.amount = amount;
-        }
-
-        public readonly TestResourceSO resource;
-        public readonly TestBigDouble amount;
-    }
-
-    private sealed class TestResourceSO : ScriptableObject
-    {
-        public string uuid = string.Empty;
-        public TestBigDouble quantity = new TestBigDouble(0.0, 0);
-        public TestValueModifierRecord maxQuantity = new TestValueModifierRecord(new TestBigDouble(-1.0, 0));
-        public double trueAmountMultiplier = 1.0;
-
-        public TestBigDouble GetTrueQuantity() => quantity;
-
-        public TestBigDouble GetTrueAmount(TestBigDouble amount) =>
-            new TestBigDouble(amount.mantissa * trueAmountMultiplier, amount.exponent);
-    }
-
-    private sealed class TestValueModifierRecord
-    {
-        private readonly TestBigDouble _value;
-
-        public TestValueModifierRecord(TestBigDouble value)
-        {
-            _value = value;
-        }
-
-        public TestBigDouble GetValue() => _value;
-    }
-
-    private sealed class TestBigDouble
-    {
-        public TestBigDouble(double mantissa, long exponent)
-        {
-            this.mantissa = mantissa;
-            this.exponent = exponent;
-        }
-
-        public readonly double mantissa;
-        public readonly long exponent;
     }
 }

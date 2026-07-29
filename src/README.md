@@ -1,8 +1,8 @@
 # Source layout
 
-Build plugin projects with `OOC_GAME_DIR` set to the Orb Of Creation install root.
+Build the suite with `OOC_GAME_DIR` set to the Orb Of Creation install root.
 
-Expected install layout:
+Expected build-reference layout (use a gitignored staged tree on non-Windows platforms):
 
 ```text
 $OOC_GAME_DIR/
@@ -13,25 +13,40 @@ $OOC_GAME_DIR/
   Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll
 ```
 
-Each plugin is a separate BepInEx 5 DLL. `OrbModding.Common` stays intentionally small and must not grow into a shared gameplay framework until duplicated implementation pressure proves it is worth extracting.
+The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.csproj` at this directory's root, which compiles every feature folder below it. `Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by the features. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
-Tracked supported projects on this branch are `OrbAutomata`, `OrbMentor`, `OrbModConfig`, and `OrbModding.Common`. Orb Insights and Orb Toolbox remain design-only. Orb Chronomancer and Orb Achievement Resonance source lives only on `codex/experimental-chronomancer-resonance` and must not be inferred from old build-output directories.
+The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
 
 ## Shared configuration schemas
 
 `OrbModding.Common.ConfigurationSchemaTransaction` is the supported pre-bind configuration boundary. A plugin declares ordered one-version steps and a hidden `[OrbModding] ConfigurationSchemaVersion`; the transaction snapshots the original file, creates a non-overwriting sibling backup, disables `SaveOnConfigSet`, consumes only reviewed source keys, runs normal typed binding, writes the marker last, and saves once. Current schema files bypass mutation. Malformed, negative, future, bind, and save failures return no usable configuration and restore the original file exactly before publishing a sanitized exact-GUID status.
 
-Migration code must use explicit known-key maps and closed safe failure codes. It must not surface arbitrary exception messages, file paths, serialized values, or infer meaning from unknown settings. See the [versioned configuration schema plan](../docs/plans/configuration-schema.md).
+Migration code must use explicit known-key maps and closed safe failure codes. It must not surface arbitrary exception messages, file paths, serialized values, or infer meaning from unknown settings.
+
+## Deterministic runtime foundation
+
+`OrbModding.Common.Runtime` holds monotonic time, catalogs, configuration and strategy publications, the shared world collection, diagnostics, and tracing. The contracts contain no Unity objects or gameplay policy, and the configuration UI consumes their typed projections. The earlier R0 scheduler it once carried was deleted at the Auto Harvest cutover.
+
+`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, and Auto Concept. The ordinary runner through semantic export, snapshot export, and schema-v7 recording is verified by the portable suite. Replay was retired as a runtime system rather than rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
 
 ## Shared automation decisions
 
-`OrbModding.Common.AutomationDecision` is the cross-plugin diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.
+`OrbModding.Common.AutomationDecision` is the suite-wide automation diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.
 
-Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, feature-health state, and configuration transaction results remain outside this contract until their separately scoped issues are implemented.
+Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, feature-health state, and configuration transaction results remain outside this contract for now.
 
 ## Shared gameplay controls
 
-Queue-adjacent suite buttons register with `OrbModding.Common.StatusControlGroup`. Add a unique named assignment to `StatusControlOrder` and call `RegisterControl` before `Reflow`; lower values are closer to the native Auto Buy toggle. Current assignments are Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, and Mentor `400`, leaving space for insertion. Do not add object names or a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored non-controls, invalid indexes, the exact native anchor, and strips longer than the current button set.
+Suite buttons register with `OrbModding.Common.StatusControlGroup`, which owns a compact two-column
+tray in the audited empty lane at the left edge of `RightSidebar/AttributeBar`. Controls use
+34-pixel native spell frames with 4-pixel row/column spacing; STOP is last and has an additional
+6-pixel separation. Add a unique named assignment to `StatusControlOrder` and call
+`RegisterControl` before `Reflow`; higher values appear first in row-major order. Current
+assignments are emergency stop `50`, Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, Auto
+Harvest `400`, and Mentor `500`. The emergency control is composed independently of the worker
+host and master automation switch. Do not add object names or a fixed button count to the layout
+helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored
+non-controls, invalid indexes, the exact native anchor, compact tray geometry, and STOP separation.
 
 ## Shared alchemy gameplay-domain classifier
 
@@ -41,15 +56,15 @@ The classifier caches the verified registry snapshot and per-recipe results. Cal
 
 ## Shared typed registry resolver
 
-`OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only. See the [typed resolver plan](../docs/plans/typed-registry-resolver.md).
+`OrbModding.Common.TypedRegistryResolver` is the suite boundary for `IdScriptableObject.RuntimeLookup`. Resolve by non-empty UUID plus exact expected native type, retain the returned lifecycle generation with cached native references, and use `IsRetryable` rather than parsing reason strings. `ResolveMember` distinguishes verified inclusion from verified exclusion; malformed list evidence never proves absence. Names are diagnostics only.
 
 Common's suite-internal `KnownEntities` is a checked-in generated declaration set for the small, explicitly selected supported-domain subset in `data/known-entities.tsv`. Each `KnownEntity<TContract>` has a suite-owned type marker plus UUID, expected managed type name, and diagnostic asset name; generated signatures never embed fragile game types. The build verifies it against the canonical 2,792-row mapping, while runtime consumers still resolve through `TypedRegistryResolver` and validate the installed game.
 
-`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across supported plugins. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct. See the [invalidation bus plan](../docs/plans/gameplay-invalidation-bus.md).
+`OrbModding.Common.GameplayInvalidationBus` coordinates bounded cache and scheduling invalidation across the suite's features. Publishers use lifecycle generation, completed Unity-frame bursts, domains, stable UUIDs, and expected native types; the bus never retains native objects. Its callbacks only dirty existing resumable work. Immediate lifecycle cancellation, queue safety, Mentor XP capture, and native mutation validation remain direct.
 
-`OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation. See the [ownership plan](../docs/plans/action-family-ownership.md).
+`OrbModding.Common.ActionFamilyOwnershipRegistry` is a small process-local safety boundary, not a gameplay framework. Suite features atomically claim only the native mutation families they own, release them with configuration and lifecycle teardown, and recheck their lease immediately before mutation. Exact known external conflicts revoke overlaps; unknown unregistered callers remain an explicit limitation.
 
-## Orb Mentor
+## Mentor
 
 `OrbMentor` shares mastery in three independent domains: spells, artifacts, and alchemy. Spells use the native `SpellRecipeSO.GainMasteryExp(BigDouble)` boundary; the optional artifact and alchemy domains use their separately audited native hooks and grant paths. Each domain fails closed independently on contract or lifecycle errors.
 

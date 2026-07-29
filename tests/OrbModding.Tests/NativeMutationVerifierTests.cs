@@ -107,4 +107,29 @@ public sealed class NativeMutationVerifierTests
         Assert.True(evidence.MutationWasAttempted);
         Assert.False(evidence.HasAfter);
     }
+
+    [Fact]
+    public void ExecutesFromAnAlreadyCapturedAdmissionState()
+    {
+        var state = 10;
+        var afterCaptures = 0;
+
+        var evidence = NativeMutationVerifier.ExecuteAfterCapture(
+            "test queue",
+            "candidate-6",
+            "exact delta +1",
+            state,
+            () =>
+            {
+                afterCaptures++;
+                return state;
+            },
+            () => state++,
+            (before, after) => after == before + 1);
+
+        Assert.True(evidence.IsVerified);
+        Assert.Equal(1, afterCaptures);
+        Assert.Equal(10, evidence.Before);
+        Assert.Equal(11, evidence.After);
+    }
 }

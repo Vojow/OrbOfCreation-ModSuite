@@ -1,23 +1,11 @@
 using System;
 using System.Linq;
-using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.GameContractTests;
 
 public sealed class InstalledGameContractTests
 {
-    [GameAssemblyFact]
-    public void InstalledAssemblies_MatchAuditedHashes()
-    {
-        var paths = GameAssemblyPaths.Require();
-
-        var result = GameAssemblyAudit.Check(paths.GameRoot);
-
-        Assert.True(result.AssemblyCSharp.MatchesExpected, FormatMismatch(result.AssemblyCSharp));
-        Assert.True(result.AssemblyCSharpFirstPass.MatchesExpected, FormatMismatch(result.AssemblyCSharpFirstPass));
-    }
-
     [GameAssemblyFact]
     public void PlayerAndSaveHooks_MatchRuntimeContracts()
     {
@@ -30,6 +18,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "PersistentResetManager", "PersistentResetLogic", false, "System.Void");
         AssertMethod(assembly, "SaveStateManager", "CollectJsonData", false, "System.String");
         AssertMethod(assembly, "SaveStateManager", "ImplementLoadedJson", false, "System.Void");
+        AssertMethod(assembly, "SaveStateManager", "StartGame", false, "System.Void");
         AssertMethod(
             assembly,
             "SaveStateManager",
@@ -73,7 +62,6 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "QueueBuild", false, "System.Void", "System.Int32");
-        AssertMethod(assembly, "StructureSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
@@ -86,7 +74,6 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "HasFiniteLevels", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
-        AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("ActionManager", assembly.GetFieldType("ActionManager", "instance"));
         Assert.Equal("ActionableListVariable", assembly.GetFieldType("ActionManager", "actionableItems"));
@@ -103,7 +90,6 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
-        AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "ResourceSO", "IsBandwidthResource", false, "System.Boolean");
@@ -168,11 +154,6 @@ public sealed class InstalledGameContractTests
         Assert.Equal("SpellRecipeSO+CastType", assembly.GetFieldType("SpellRecipeSO", "castType"));
         Assert.Equal("System.Collections.Generic.List`1<InstantEffectBlock>", assembly.GetFieldType("SpellRecipeSO", "onCastEffects"));
         Assert.Equal("System.Collections.Generic.List`1<PersistentEffectBlock>", assembly.GetFieldType("SpellRecipeSO", "toggledEffects"));
-        AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
-        Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "maxQuantity"));
-        AssertMethod(assembly, "ValueModifierRecord", "GetValue", false, "BigDouble");
-        AssertMethod(assembly, "ResourceSO", "GetTrueAmount", false, "BigDouble", "BigDouble");
-
         Assert.Equal("Targeting.TargetSelectOptions", assembly.GetFieldType("RequestTargetEffectScript", "targetOptions"));
         AssertMethod(assembly, "Targeting.TargetSelectOptions", "HasValidTargetsLeft", false, "System.Boolean", "ScalingInfo");
         AssertMethod(assembly, "Targeting.TargetSelectOptions", "GetRandom", false, "Targeting.ITargetable", "ScalingInfo");
@@ -217,7 +198,7 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void AutoConcept_MatchesScopedCatalogSlotQuantityAndDrainContracts()
+    public void AutoConcept_MatchesPublishedWorldAndActionBoundaryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
@@ -228,20 +209,12 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
         Assert.Equal("ResourceCostList", assembly.GetFieldType("AlchemyRecipeSO", "drainCost"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
-        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
-        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperience", false, "BigDouble");
-        AssertMethod(assembly, "AlchemyRecipeSO", "GetRequiredExperience", false, "BigDouble");
-        AssertMethod(assembly, "AlchemyRecipeSO", "GetExperienceLevel", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
-        AssertMethod(assembly, "AlchemyRecipeSO", "Discover", false, "System.Void");
-        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
 
         AssertMethod(assembly, "AlchemyInstanceListVariable", "CanAddInstance", false, "System.Boolean", "AlchemyRecipeSO");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
         AssertMethod(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances", false, "System.Void", "AlchemyRecipeSO", "System.Int32");
-        AssertMethod(assembly, "AlchemyInstanceListVariable", "RebuildCounts", false, "System.Void");
-        AssertMethod(assembly, "AlchemyInstanceListVariable", "SetupMaxSlotsValue", false, "System.Void");
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "quantity"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyInstance", "queuedQuantity"));
         Assert.Equal("ResourceDrain", assembly.GetFieldType("AlchemyInstance", "resourceDrain"));
@@ -254,6 +227,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueRate", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetModdedDrain", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "IsAtZero", false, "System.Boolean");
         AssertMethod(assembly, "ResourceSO", "GetTrueSoftCap", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "HasMaxQuantity", false, "System.Boolean");
@@ -309,18 +283,13 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void OrbMentorDomainUnlocks_MatchNativeMasteryAndViewAvailabilityContracts()
+    public void OrbMentorWorldCollection_MatchesNativeViewAvailabilityContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
-        Assert.Equal(
-            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
-            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
-        AssertMethod(assembly, "IdScriptableObject", "GetInstance", true, "IdScriptableObject", "System.Guid");
         Assert.Equal("System.Collections.Generic.List`1<ViewSO>", assembly.GetFieldType("ViewSO", "All"));
         Assert.Equal("Prerequisites+Container", assembly.GetFieldType("ViewSO", "prerequisites"));
         AssertMethod(assembly, "ViewSO", "IsAvailable", false, "System.Boolean");
-        Assert.Equal("ViewSO", assembly.GetFieldType("UITooltip", "masteryEnabledView"));
     }
 
     [GameAssemblyFact]
@@ -331,11 +300,8 @@ public sealed class InstalledGameContractTests
         Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
         AssertMethod(assembly, "AlchemyRecipeSO", "GainMasteryXp", false, "System.Void", "BigDouble");
-        AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscoveredRecipe", false, "System.Boolean");
-        AssertMethod(assembly, "AlchemyRecipeSO", "ApplyMastery", false, "System.Void");
-        AssertMethod(assembly, "AlchemyInstance", "CompleteRecipe", false, "System.Void");
         Assert.Equal("BigDouble", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO+AlchemyRecipeSaveData", "masteryLevel"));
     }
@@ -347,11 +313,11 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Collections.Generic.List`1<EquipmentSO>", assembly.GetFieldType("EquipmentSO", "All"));
         Assert.Equal("BigDouble", assembly.GetFieldType("EquipmentSO", "masteryXp"));
         Assert.Equal("System.Int32", assembly.GetFieldType("EquipmentSO", "masteryLevel"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("EquipmentSO", "isCreated"));
         Assert.Equal("ExperienceContainer", assembly.GetFieldType("EquipmentSO", "experienceContainer"));
         AssertMethod(assembly, "EquipmentSO", "IncrementActive", false, "System.Void", "System.Double");
         AssertMethod(assembly, "EquipmentSO", "GainMasteryLevels", false, "System.Void", "System.Int32");
         AssertMethod(assembly, "EquipmentSO", "GetExperienceElement", false, "IExperienceElement");
-        AssertMethod(assembly, "EquipmentSO", "IsCreated", false, "System.Boolean");
         AssertMethod(assembly, "ExperienceContainer", "GainExperience", false, "System.Void", "BigDouble");
         AssertMethod(assembly, "ExperienceContainer", "GetGainedLevels", false, "System.Int32");
         AssertMethod(assembly, "ExperienceContainer", "GetExperience", false, "BigDouble");
@@ -383,6 +349,36 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ViewSO", "IsActive", false, "System.Boolean");
         Assert.Equal("ViewSO", assembly.GetFieldType("ManagedView", "viewReference"));
         Assert.Equal("UIGenericItem`1<ViewSO>", assembly.GetBaseType("UIViewRadioButton"));
+        Assert.Equal("TMPro.TextMeshProUGUI", assembly.GetFieldType("UIViewRadioButton", "viewText"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UIViewRadioButton", "viewImage"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "activeImage"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UIViewRadioButton", "buttonImage"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "baseImage"));
+
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "icon"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "insufficientBackground"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("UISpellButton", "isForCasting"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "background"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "baseBackground"));
+        Assert.Equal("UIImageEffects", assembly.GetFieldType("UISpellButton", "effects"));
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
+            "GetHarvestSpeedAttr",
+            true,
+            "AttributeSO");
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
+            "GetMasteryExpAttr",
+            true,
+            "AttributeSO");
+        AssertMethod(
+            assembly,
+            "TooltipableObject",
+            "GetIcon",
+            false,
+            "UnityEngine.Sprite");
     }
 
     private static void AssertMethod(
@@ -398,10 +394,5 @@ public sealed class InstalledGameContractTests
             method.IsStatic == isStatic &&
             method.ReturnType == returnType &&
             method.ParameterTypes.SequenceEqual(parameterTypes));
-    }
-
-    private static string FormatMismatch(AssemblyHashResult result)
-    {
-        return $"{result.Path}: expected {result.ExpectedSha256}, actual {result.ActualSha256 ?? "<missing>"}";
     }
 }

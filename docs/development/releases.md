@@ -1,53 +1,80 @@
 # Public release checklist
 
-[Back to roadmap](../plans/roadmap.md)
+[Back to roadmap](../plans/roadmap.md) · [Runtime validation](../testing/runtime-validation.md)
 
-## Current supported component betas
+## Supported package
 
-The supported package is an explicit allowlist:
+The release is one artifact containing one plugin assembly:
 
-- **Orb Automata 0.8.10:** adaptive bounded-burst, grouped, continuously repeating and rejection-aware queue-filling Auto Buy, coordinated Auto Cast and Auto Concept, progression-aware spell leveling, fail-closed native-family admission, and reviewed configuration migration.
-- **Orb Mentor 0.3.8:** progression-gated native mastery-XP sharing for spells, artifacts, and ordinary alchemy with independent domains, shared remaining-budget enforcement, and versioned configuration ownership.
-- **Orb Mod Config 0.6.3:** optional in-game configuration UI with separate configuration-schema and runtime-health status, variable-height descriptions, stable same-page scrolling, and responsive width remeasurement.
-- **Orb Modding Common 0.3.7:** bundled shared dependency with lifecycle, invalidation, configuration-schema, feature-health, circuit-breaker, action-ownership, admission, and performance contracts; not a separate gameplay mod.
+```text
+OrbOfCreation-ModSuite-<SuiteVersion>.zip
+|-- BepInEx/plugins/OrbModSuite/OrbModSuite.dll
+|-- README.md
+|-- CHANGELOG.md
+|-- LICENSE
+`-- THIRD_PARTY_NOTICES.md
+```
 
-`OrbChronomancer` and `OrbAchievementResonance` live only on the dedicated experimental branch and must not enter a supported archive. Orb Insights and Orb Toolbox remain plans rather than packaged plugins.
+There is one version. `SuiteVersion` in `Directory.Build.props` names the archive;
+`<Version>` in `src/OrbModSuite.csproj` and `PluginIds.Version` name the assembly and the
+loaded plugin, and the packaging script fails if the two disagree. There are no
+per-component versions to reconcile.
 
-## Release gates, in order
+Orb Insights and Orb Toolbox are plans, not plugins.
 
-### P0 — must pass before publishing
+## Candidate review
 
-1. **Release review:** record the exact commit, tag, project versions, supported plugin allowlist, archive entries, test evidence, and prerelease/stable status before publication.
-2. **Clean-install test:** use a fresh BepInEx profile and fresh generated configs. Verify there are no development backups, duplicate DLLs, experimental DLLs, or copied game assemblies.
-3. **Quiet-log acceptance:** run a representative 10-minute Active session with all supported modules enabled. Normal logs should contain lifecycle information plus warnings/errors, not per-action chatter.
-4. **Save and removal safety:** back up a normal save, exercise each supported gameplay plugin, save/reload, then remove the suite and verify the game and save still load normally.
-5. **Desktop and Steam Deck performance:** test new game and NG+, representative game-speed multipliers, large catalogs, populated queues, and concurrent supported modules. Confirm bounded work does not create sustained frame stalls or crashes.
-6. **Auto Buy matrix:** Structures only, Upgrades only, both, allowlist, blocklist, independent affordability modes, reserves, emergency disable, all four `PurchaseGrouping` modes, live Bulk Development and action-multiplier changes, priority configuration, locked structures, completed upgrades, and progression-aware spell leveling before and after native multi-level unlock.
-7. **Auto Cast matrix:** instant, channelled, toggle, and aura behavior; unavailable or unaffordable spells; native queue pressure; emergency disable; and scene/load transitions.
-8. **Auto Concept matrix:** disabled and timed-cycle modes, catch-up behavior, ten-second minimum, setup time, one and multiple acquired slots, zero-resource concepts, unavailable concepts, and reset/load transitions without assignment churn.
-9. **Mentor matrix:** spell source policies and independent spell, artifact, and alchemy domains; Shared Pool and Per Recipient; disabled-domain silence; native persistence; recursion suppression; and bounded processing.
-10. **Mod Config matrix:** 1280×720, 1280×800 Steam Deck, and 1920×1080; Mods available from a new game and last among available tabs; readable separate configuration-schema and runtime-status bands; variable-height descriptions; same-page scroll retention; live resolution and UI-scale changes; Apply/Revert; compound feature locking; and operation without native Auto Queue UI.
-11. **Configuration-schema matrix:** fresh files, current version, reviewed version-zero migration, malformed markers and known values, verified all-or-nothing first-free backup suffixing, partial-write/flush and reload failure containment, save failure rollback, future-version read-only refusal, worker-thread status handoff, and failed/future status-only tabs. Confirm failure diagnostics contain no configuration paths or serialized values.
-12. **Game-build guard:** verify the audited installed-game assembly contracts and ensure a mismatched build fails closed with a clear warning.
+Before publishing, record:
 
-Interactive behavior must satisfy [runtime validation](../testing/runtime-validation.md); a successful build or package rehearsal is not runtime approval.
+- exact clean commit and intended tag;
+- prerelease or stable status;
+- suite version and plugin GUID;
+- installed game, BepInEx, and audited assembly hashes;
+- exact archive entries and SHA-256 checksums;
+- portable, real-reference, installed-contract, and interactive evidence; and
+- known limitations.
 
-### P1 — package quality
+Build success alone is not publication approval.
 
-1. Build archives only through the supported allowlist. Package generation must fail if an experimental or unknown plugin DLL is present.
-2. Rehearse the complete suite package and inspect raw ZIP entries. Reject backslashes, rooted paths, missing `BepInEx/plugins/` entries, unexpected DLLs, or inconsistent versions.
-3. Include only the required DLLs, README, changelog, license, and install/uninstall guidance.
-4. Verify the first-run documentation covers module defaults, native queue ownership, reserves, emergency controls, concept modes, Mentor domains, and optional Mod Config.
-5. Verify troubleshooting covers opt-in diagnostics, duplicate DLLs, conflicting automation plugins, Auto Concept assignment churn, and restoring a previous version.
-6. Write release notes with the exact supported game/BepInEx baseline, known limitations, validation evidence, and prerelease/stable status.
-7. Create the tag and artifacts from the reviewed clean commit. Replacing or deleting an existing public release or tag requires explicit user authorization naming that target.
+## Package gate
 
-### P2 — follow-up after the candidate
+Run `./script/package` from a clean commit with `OOC_GAME_DIR` pointing at a game
+installation. It refuses a dirty or moved working tree, then runs the bounded portable
+gate, the installed-game contracts, and a real-reference Release build before staging the
+archive.
 
-1. Add an unsaved-changes prompt when leaving Mods if user testing shows accidental loss is common.
-2. Add further caches or aggregation only when profiling identifies a material remaining bottleneck and correctness can be preserved.
-3. Promote release-candidate features to stable only after their interactive gates are recorded.
+It fails the release when:
 
-## Recommended release decision
+- the built output is missing `OrbModSuite.dll`, or game/loader assemblies leaked beside it;
+- the archive entries differ from the five expected paths above in either direction;
+- the project version and `PluginIds.Version` disagree; or
+- an output archive or checksum file for that version already exists.
 
-ModSuite 0.3.0 Beta 1 completed its automated, real-reference, package, and desktop gates. The maintainer explicitly authorized prerelease publication with Steam Deck/Proton validation deferred until after release. Release notes must identify Proton as unverified, and the beta must not be promoted to stable until the remaining Proton and extended interactive gates pass.
+Confirm by inspection that no game, Unity, Harmony, BepInEx, test-stub, debug-symbol, save,
+configuration, trace, or experimental artifact reached the archive, and verify the generated
+checksums against the final file.
+
+## Runtime gate
+
+Use a clean BepInEx profile and a freshly generated configuration file. Complete the
+applicable V0–V7 [runtime validation](../testing/runtime-validation.md), including:
+
+- save backup, reload, removal, and restoration;
+- representative automation and Mentor behavior;
+- emergency, lifecycle, ownership, queue, reserve, and native postcondition checks;
+- the configuration UI's Apply/Revert and Runtime-page behavior;
+- a load-gate check: confirm the suite loads against the audited baseline and logs its
+  refusal, unchanged, against an unaudited one;
+- quiet-log acceptance; and
+- representative desktop and Steam Deck/Proton performance where claimed.
+
+## Publication
+
+Create the tag and artifacts only from the reviewed clean commit. Release notes must state
+the supported game/BepInEx baseline, the audited assembly baselines, important behavior
+changes, known limitations, and validation scope. A release that changes the plugin GUID or
+the configuration schema must say so as a breaking change, because settings do not migrate
+across a GUID change.
+
+Replacing or deleting an existing public release or tag requires explicit maintainer
+authorization naming that target.

@@ -1,0 +1,146 @@
+using System;
+using System.Threading;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using Xunit;
+
+namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
+
+internal static class ServiceRunnerTestWait
+{
+    internal static void ForPhase<TState, TAction>(
+        ServiceRunner<TState, TAction> runner,
+        ServiceHandoffPhase phase)
+    {
+        if (!SpinWait.SpinUntil(() => runner.Snapshot.Handoff.Phase == phase, ServiceCycleTestDeadline.Value))
+            throw new TimeoutException($"Runner did not reach phase {phase}; current {runner.Snapshot.Handoff.Phase}.");
+    }
+
+    internal static void ForCleanup<TState, TAction>(
+        ServiceRunner<TState, TAction> runner)
+    {
+        if (!SpinWait.SpinUntil(() => !runner.Snapshot.Handoff.CleanupPending, ServiceCycleTestDeadline.Value))
+            throw new TimeoutException("Runner suffix cleanup did not complete.");
+    }
+
+    internal static ServiceHandoffSnapshot ForHandoff<TState, TAction>(
+        ServiceRunner<TState, TAction> runner,
+        Func<ServiceHandoffSnapshot, bool> predicate,
+        string expectation)
+    {
+        var observed = default(ServiceHandoffSnapshot);
+        if (!SpinWait.SpinUntil(
+                () => predicate(observed = runner.ProbeHandoff()),
+                ServiceCycleTestDeadline.Value))
+        {
+            throw new TimeoutException(
+                $"Runner did not reach {expectation}; current phase {observed.Phase}, " +
+                $"waits {observed.WorkerWaitCount}, cleanup acknowledgements " +
+                $"{observed.CleanupAcknowledgementCount}.");
+        }
+        return observed;
+    }
+
+    /// <summary>
+    /// Takes the published response the way the pump does: without blocking, and again if the worker
+    /// happened to be holding the gate.
+    /// </summary>
+    /// <remarks>
+    /// A non-blocking acquisition is allowed to come back empty. It takes the handoff gate with a zero
+    /// timeout precisely so a worker can never park the main thread, and the pump answers an empty one
+    /// by trying again on the next frame. A test that reads the acquisition has to do the same, or it
+    /// is asserting that no worker held its own gate at that instant — which nothing promises, and
+    /// which stops being true as soon as the machine is busy.
+    /// </remarks>
+    internal static ServiceResponseAcquisition AcquireResponse<TState, TAction>(
+        ServiceRunner<TState, TAction> runner,
+        ThreadSafeTestClock clock)
+    {
+        var acquisition = default(ServiceResponseAcquisition);
+        if (!SpinWait.SpinUntil(
+                () => (acquisition = runner.TryAcquireResponseNonBlocking(clock.Now)).Acquired,
+                ServiceCycleTestDeadline.Value))
+        {
+            throw new TimeoutException("The runner never handed over its published response.");
+        }
+        return acquisition;
+    }
+
+    internal static long PrepareBatch(
+        SuiteFramePump pump,
+        ServiceRegistration<ExecutionState, ExecutionAction> registration)
+    {
+        var frame = 1L;
+        var waiting = ForHandoff(
+            registration.Runner,
+            value => value.Phase == ServiceHandoffPhase.Empty && value.WorkerWaitCount > 0,
+            "the initial worker wait");
+        Assert.Equal(1, pump.PumpFrame(frame++).CyclesStarted);
+        ForHandoff(
+            registration.Runner,
+            value => value.Phase == ServiceHandoffPhase.ResponseReady &&
+                value.WorkerWaitCount > waiting.WorkerWaitCount,
+            "the prepared response and worker wait");
+        Assert.Equal(1, pump.PumpFrame(frame++).ResponsesAcquired);
+        return frame;
+    }
+
+    /// <summary>
+    /// Pumps until the runtime has opened a cycle for the service, yielding between frames.
+    /// </summary>
+    /// <remarks>
+    /// Deadlined because the only way out of <see cref="ServiceHandoffPhase.Empty"/> is the
+    /// runtime opening a cycle, and the world freshness gate can refuse to do that forever: a
+    /// composition whose collector never publishes past the service's last action never leaves this
+    /// loop. That must fail the test rather than hang the run.
+    /// </remarks>
+    internal static void PublishDeferredRequest<TState, TAction>(
+        SuiteFramePump pump,
+        ServiceRunner<TState, TAction> runner,
+        ref long frameIdentity)
+    {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (runner.HandoffPhaseHint == ServiceHandoffPhase.Empty)
+        {
+            pump.PumpFrame(frameIdentity++);
+            if (deadline.Elapsed > ServiceCycleTestDeadline.Value)
+                throw new TimeoutException(
+                    "The runtime never opened a cycle; the world freshness gate may be holding it.");
+            Thread.Yield();
+        }
+    }
+
+    internal static void RunZeroActionCycle(
+        ServiceRunner<ExecutionState, ExecutionAction> runner,
+        ThreadSafeTestClock clock)
+    {
+        Assert.True(runner.TryStartCycle(clock.Now).Queued);
+        ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
+    }
+
+    internal static void RunAndDrain(
+        ServiceRunner<ExecutionState, ExecutionAction> runner,
+        ThreadSafeTestClock clock,
+        int count)
+    {
+        Assert.True(runner.TryStartCycle(clock.Now).Queued);
+        ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
+        for (var index = 0; index < count; index++)
+            Assert.True(runner.TryExecuteOne(clock.Now).Attempted);
+    }
+
+    internal static void RunRejectedBatch(
+        ServiceRunner<ExecutionState, ExecutionAction> runner,
+        ThreadSafeTestClock clock)
+    {
+        Assert.True(runner.TryStartCycle(clock.Now).Queued);
+        ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
+        Assert.True(runner.TryExecuteOne(clock.Now).BatchTerminal);
+    }
+}

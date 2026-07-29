@@ -55,7 +55,7 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         var modConfigFile = new ConfigFile();
         var modConfig = ModConfigSettings.TryBind(modConfigFile);
         var automataFile = new ConfigFile();
-        var automata = AutomataConfig.TryBind(automataFile);
+        var automata = BepInExAutomataConfiguration.TryBind(automataFile);
 
         Assert.True(mentor.Success);
         Assert.True(modConfig.Success);
@@ -67,21 +67,26 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         AssertMarkerHidden(automataFile);
     }
 
+    /// <summary>
+    /// The suite binds one schema at version 1 with nothing to migrate from, so what the catalog and
+    /// the edit session must start from is the value the bind transaction produced — never the raw
+    /// file text, and never the schema marker.
+    /// </summary>
     [Fact]
-    public void ModConfigCatalogAndEditSessionStartFromPostMigrationValues()
+    public void ModConfigCatalogAndEditSessionStartFromBoundValues()
     {
         var file = new ConfigFile();
-        file.SeedSerialized("AutoConcept", "Mode", "BalanceMastery");
+        file.SeedSerialized("AutoConcept", "Mode", "Active");
 
-        var migration = AutomataConfig.TryBind(file);
+        var bound = BepInExAutomataConfiguration.TryBind(file);
         var catalog = ConfigCatalog.Build(new[]
         {
-            new ConfigPluginSource(PluginIds.AutomataGuid, PluginIds.AutomataName, PluginIds.AutomataVersion, file),
+            new ConfigPluginSource(PluginIds.SuiteGuid, PluginIds.SuiteName, PluginIds.Version, file),
         });
         var session = new ConfigEditSession(catalog);
 
-        Assert.True(migration.Success);
-        Assert.Equal(AutoConceptOperationMode.Active, migration.Config!.AutoConceptMode.Value);
+        Assert.True(bound.Success);
+        Assert.Equal(AutoConceptOperationMode.Active, bound.Config!.AutoConceptMode.Value);
         Assert.DoesNotContain(catalog.Mods.SelectMany(mod => mod.Sections).SelectMany(section => section.Settings),
             setting => setting.Section == ConfigurationSchemaTransaction.MarkerSection);
         Assert.Equal(
@@ -120,12 +125,19 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         Assert.Equal(0, snapshot.SettingCount);
     }
 
+    /// <summary>
+    /// Two distinct plugin ids, because the projection is generic over plugin id and this fact needs
+    /// one plugin in Failed and another in Future at the same time. The suite ships one id, so these
+    /// are deliberately local test ids rather than production constants.
+    /// </summary>
     [Fact]
     public void FailedAndFutureSuitePluginsRemainSelectableReadOnlyWhileUnreportedEmptyPluginIsOmitted()
     {
+        const string failedPluginId = "test.plugin.alpha";
+        const string futurePluginId = "test.plugin.beta";
         var registry = new ConfigurationSchemaStatusRegistry();
         registry.Publish(new ConfigurationSchemaStatus(
-            PluginIds.AutomataGuid,
+            failedPluginId,
             ConfigurationSchemaState.Failed,
             0,
             1,
@@ -134,7 +146,7 @@ public sealed class ConfigurationSchemaStatusProjectionTests
             "failed safely",
             false));
         registry.Publish(new ConfigurationSchemaStatus(
-            PluginIds.MentorGuid,
+            futurePluginId,
             ConfigurationSchemaState.Future,
             2,
             1,
@@ -145,13 +157,13 @@ public sealed class ConfigurationSchemaStatusProjectionTests
 
         var snapshot = ConfigCatalog.Build(new[]
         {
-            new ConfigPluginSource(PluginIds.AutomataGuid, PluginIds.AutomataName, PluginIds.AutomataVersion, new ConfigFile()),
-            new ConfigPluginSource(PluginIds.MentorGuid, PluginIds.MentorName, PluginIds.MentorVersion, new ConfigFile()),
+            new ConfigPluginSource(failedPluginId, "Test Plugin Alpha", "1.0.0", new ConfigFile()),
+            new ConfigPluginSource(futurePluginId, "Test Plugin Beta", "1.0.0", new ConfigFile()),
             new ConfigPluginSource("third.party.empty", "Third Party Empty", "1.0.0", new ConfigFile()),
         }, registry);
         var session = new ConfigEditSession(snapshot);
 
-        Assert.Equal(new[] { PluginIds.AutomataGuid, PluginIds.MentorGuid }, snapshot.Mods.Select(mod => mod.Guid));
+        Assert.Equal(new[] { failedPluginId, futurePluginId }, snapshot.Mods.Select(mod => mod.Guid));
         Assert.All(snapshot.Mods, mod =>
         {
             Assert.Empty(mod.Sections);
@@ -161,8 +173,8 @@ public sealed class ConfigurationSchemaStatusProjectionTests
         Assert.False(session.IsDirty);
         Assert.Equal(0, snapshot.SettingCount);
         Assert.DoesNotContain(snapshot.Mods, mod => mod.Guid == "third.party.empty");
-        Assert.StartsWith("Configuration schema: Failed", ConfigurationSchemaStatusProjection.Build(PluginIds.AutomataGuid, registry).Text);
-        Assert.StartsWith("Configuration schema: Future", ConfigurationSchemaStatusProjection.Build(PluginIds.MentorGuid, registry).Text);
+        Assert.StartsWith("Configuration schema: Failed", ConfigurationSchemaStatusProjection.Build(failedPluginId, registry).Text);
+        Assert.StartsWith("Configuration schema: Future", ConfigurationSchemaStatusProjection.Build(futurePluginId, registry).Text);
     }
 
     [Fact]

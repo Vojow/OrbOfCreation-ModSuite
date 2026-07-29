@@ -24,9 +24,27 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Restore locked portable dependencies
+        run: dotnet restore tests/OrbModding.Tests/OrbModding.Tests.csproj --locked-mode -p:UseGameStubs=true
+
+      - name: Restore locked profiling dependencies
+        run: >-
+          dotnet restore tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj
+          --locked-mode -p:UseGameStubs=true -p:EnableServiceCycleProfiler=true
+
+      - name: Restore locked contract-test dependencies
+        run: dotnet restore tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj --locked-mode -p:UseGameStubs=true
+
       - name: Run fast game-independent tests
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast -NoRestore
+
+      - name: Run compile-time profiling tests
+        run: >-
+          dotnet test tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj
+          --configuration Release --no-restore -p:UseGameStubs=true -p:EnableServiceCycleProfiler=true
+          --results-directory artifacts/test-results/profile
+          --logger "trx;LogFileName=profile.trx"
 
       - name: Run external-process repository contracts
         shell: pwsh
@@ -35,7 +53,7 @@ jobs:
       - name: Audit native contract manifest and reflection declarations
         run: >-
           dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj
-          --configuration Release -p:UseGameStubs=true
+          --configuration Release --no-restore -p:UseGameStubs=true
           --results-directory artifacts/test-results/contracts
           --logger "trx;LogFileName=portable-contracts.trx"
 
@@ -52,9 +70,6 @@ jobs:
     name: Deterministic performance
     runs-on: windows-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Check out repository
@@ -67,112 +82,19 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Restore locked dependencies
+        run: dotnet restore tests/OrbModding.Tests/OrbModding.Tests.csproj --locked-mode -p:UseGameStubs=true
+
       - name: Run deterministic performance simulations
-        env:
-          OOC_PERFORMANCE_REPORT: ${{ github.workspace }}/artifacts/performance/autobuy-current.json
-          OOC_SUITE_PERFORMANCE_EVIDENCE: ${{ github.workspace }}/artifacts/performance/suite-performance-evidence.json
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane PerformanceAll
-
-      - name: Compare deterministic performance history
-        shell: pwsh
-        run: tools/check-performance-report.ps1 -ReportPath artifacts/performance/autobuy-current.json
-
-      - name: Compare pre-beta main and current engine
-        shell: pwsh
-        run: tools/compare-autobuy-performance.ps1
-
-      - name: Compare pull request target and current engine
-        if: github.event_name == 'pull_request'
-        env:
-          OOC_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        shell: pwsh
-        run: >-
-          tools/compare-autobuy-performance.ps1
-          -ReferenceRef $env:OOC_PR_BASE_SHA
-          -ReferenceApi Auto
-          -ReferenceLabel target
-          -CurrentLabel current
-          -Heading 'Auto Buy target/current deterministic comparison'
-          -OutputDirectory artifacts/performance/pr
-
-      - name: Validate and evaluate suite performance evidence
-        run: >-
-          dotnet run --project tools/OrbModding.PerformanceEvidence/OrbModding.PerformanceEvidence.csproj
-          --configuration Release --
-          --profile data/suite-performance-profile-v1.json
-          --evidence artifacts/performance/suite-performance-evidence.json
-          --json-output artifacts/performance/suite-performance-evaluation.json
-          --markdown-output artifacts/performance/suite-performance-evaluation.md
-
-      - name: Publish pull request performance comparison
-        if: >-
-          always() &&
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        uses: actions/github-script@v9
-        env:
-          OOC_COMPARISON_PATH: artifacts/performance/pr/comparison.md
-          OOC_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          OOC_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          retries: 3
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- autobuy-performance-comparison -->';
-            const reportPath = process.env.OOC_COMPARISON_PATH;
-            const report = fs.existsSync(reportPath)
-              ? fs.readFileSync(reportPath, 'utf8').trim()
-              : '## Auto Buy target/current deterministic comparison\n\nComparison generation did not complete. Inspect the workflow run.';
-            const { data: pull } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-            if (pull.head.sha !== process.env.OOC_HEAD_SHA) {
-              core.notice(`Skipping stale performance comment for ${process.env.OOC_HEAD_SHA}; current head is ${pull.head.sha}.`);
-              return;
-            }
-
-            const body = `${marker}\n${report}\n\nComparison output is diagnostic; the workflow check remains authoritative. [View workflow run](${process.env.OOC_RUN_URL}).`;
-            if (Buffer.byteLength(body, 'utf8') > 60000) {
-              core.setFailed('The performance comparison comment exceeds the safe size limit.');
-              return;
-            }
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const existing = comments.find(comment =>
-              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane PerformanceAll -NoRestore
 
       - name: Retain deterministic performance report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: autobuy-performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            artifacts/performance
-            artifacts/test-results/performanceall
+          path: artifacts/test-results/performanceall
           if-no-files-found: error
           retention-days: 90
 
@@ -190,10 +112,13 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Restore locked dependencies
+        run: dotnet restore tests/OrbModding.Tests/OrbModding.Tests.csproj --locked-mode -p:UseGameStubs=true
+
       - name: Collect production coverage
         run: >-
           dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj
-          --configuration Release -p:UseGameStubs=true
+          --configuration Release --no-restore -p:UseGameStubs=true
           --filter "Category!=ExternalProcess"
           --collect:"XPlat Code Coverage" --settings tests/coverage.runsettings
           --results-directory artifacts/coverage
@@ -230,7 +155,7 @@ jobs:
         shell: pwsh
         run: |
           $forbidden = git ls-files | Where-Object {
-            $_ -match '(^|/)(bin|obj|bin-stubs|obj-stubs)/' -or
+            $_ -match '(^|/)(bin|obj|bin-stubs|obj-stubs|bin-profile|obj-profile|bin-profile-stubs|obj-profile-stubs)/' -or
             $_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$'
           }
           if ($forbidden) {

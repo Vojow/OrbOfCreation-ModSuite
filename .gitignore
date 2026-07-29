@@ -1,18 +1,24 @@
 # Local reverse-engineering inputs and generated scratch output
 .analysis/
 artifacts/
+traces/
 
 # .NET build output
 bin/
 obj/
 bin-stubs/
 obj-stubs/
+bin-profile/
+obj-profile/
+bin-profile-stubs/
+obj-profile-stubs/
 
 # Local game libraries copied for compilation
 lib/
 
 # IDE and user-specific files
 .vs/
+.playwright-mcp/
 *.user
 *.suo
 
@@ -28,3 +34,10 @@ lib/
 # Local release staging
 release-staging/
 *.nupkg
+
+# macOS Finder metadata
+.DS_Store
+
+# Runtime trace output and test-result files
+trace/
+*.trx

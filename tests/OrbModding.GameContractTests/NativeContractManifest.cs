@@ -19,6 +19,8 @@ internal sealed class NativeContractManifest
 
     public List<NativeAssemblyManifest> Assemblies { get; set; } = new();
 
+    public List<NativeBaselineManifest> Baselines { get; set; } = new();
+
     public List<NativeContractEntry> Contracts { get; set; } = new();
 
     public NativeSourceAuditManifest SourceAudit { get; set; } = new();
@@ -44,6 +46,9 @@ internal sealed class NativeContractManifest
 
     public NativeAssemblyManifest RequireAssembly(string id) =>
         Assemblies.Single(candidate => string.Equals(candidate.Id, id, StringComparison.Ordinal));
+
+    public NativeBaselineManifest RequireBaseline(string id) =>
+        Baselines.Single(candidate => string.Equals(candidate.Id, id, StringComparison.Ordinal));
 }
 
 internal sealed class NativeAssemblyManifest
@@ -51,6 +56,29 @@ internal sealed class NativeAssemblyManifest
     public string Id { get; set; } = string.Empty;
 
     public string File { get; set; } = string.Empty;
+}
+
+internal sealed class NativeBaselineManifest
+{
+    public string Id { get; set; } = string.Empty;
+
+    public string Platform { get; set; } = string.Empty;
+
+    public string AuditedAt { get; set; } = string.Empty;
+
+    public string GameBuild { get; set; } = string.Empty;
+
+    public string Provenance { get; set; } = string.Empty;
+
+    public List<NativeBaselineAssemblyManifest> Assemblies { get; set; } = new();
+
+    public NativeBaselineAssemblyManifest RequireAssembly(string id) =>
+        Assemblies.Single(candidate => string.Equals(candidate.Assembly, id, StringComparison.Ordinal));
+}
+
+internal sealed class NativeBaselineAssemblyManifest
+{
+    public string Assembly { get; set; } = string.Empty;
 
     public string Sha256 { get; set; } = string.Empty;
 
@@ -87,7 +115,7 @@ internal sealed class NativeContractEntry
 
     public List<string> Usages { get; set; } = new();
 
-    public List<string> Sources { get; set; } = new();
+    public string Place { get; set; } = string.Empty;
 
     public List<string> SourceTokens { get; set; } = new();
 }

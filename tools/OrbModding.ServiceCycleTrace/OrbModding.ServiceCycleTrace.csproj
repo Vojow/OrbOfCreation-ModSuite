@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/OrbModSuite.csproj"
+                      AdditionalProperties="UseGameStubs=true" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbModding.ProfileTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Dashboard/trace-dashboard.html" CopyToOutputDirectory="PreserveNewest" TargetPath="trace-dashboard.html" />
+    <Content Include="Dashboard/vendor/*.js" CopyToOutputDirectory="PreserveNewest" TargetPath="dashboard-vendor/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -15,92 +15,30 @@ These notes describe the managed-code architecture of the installed Orb of Creat
 
 The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified. Runtime-resolved compatibility findings are also recorded in the machine-readable [`data/native-contracts.json`](../../data/native-contracts.json); maintain it through the [native contract workflow](../testing/native-contracts.md).
 
-## Knowledge map
-
-```mermaid
-mindmap
-  root((Orb of Creation))
-    Startup
-      GameManager
-      GamePhase
-        Validate
-        Bind
-        Initialize
-        Start
-        Increment
-        SlowIncrement
-      AbstractManager
-    Identity
-      IdScriptableObject
-      GuidContainer
-      RuntimeLookup
-      2792 mapped UUIDs
-      141 runtime types
-      Name collisions
-    Entity domains
-      Progression
-      Resources and structures
-      Magic and alchemy
-      Agromancy
-      Combat
-      UI and registries
-    Correlations
-      Instance to type
-      Type to registered members
-      Effect to modifier record
-      Group to merged properties
-    Resources
-      ResourceSO
-        quantity
-        lifetimeQuantity
-        maxQuantity
-        Gain
-        Spend
-        SetQuantity
-      ResourceManager
-      ResourceListVariable
-      ResourceCostList
-      ResourceFillList
-    Numbers
-      BigDouble
-        mantissa
-        exponent
-        Normalize
-    Persistence
-      SaveStateManager
-      ISaveable
-      JsonSaveData
-      SaveInfo
-      Base64 encoded JSON
-    Modding
-      BepInEx 5
-      Harmony
-      Runtime GUID lookup
-      Developer console hooks
-      Resource observables
-```
-
 ## Suggested reading order
 
 1. [Architecture](architecture.md)
 2. [Identity and registries](identity-and-registries.md)
 3. [Entity catalog and taxonomy](entity-catalog.md)
 4. [Entity correlations](entity-correlations.md)
-5. [Evidence strength](evidence-strength.md)
-6. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
-7. [Resources and large numbers](resources-and-bigdouble.md)
-8. [Save system](save-system.md)
-9. [Modding hooks](modding-hooks.md)
-10. [Reverse-engineering audit](audit.md)
+5. [In-game vocabulary](in-game-vocabulary.md) — what players call each managed type;
+   `StructureSO` is shown on screen as "Attribute".
+6. [Evidence strength](evidence-strength.md)
+7. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
+8. [Resources and large numbers](resources-and-bigdouble.md)
+9. [Economy mechanics](economy-mechanics.md)
+10. [Save system](save-system.md)
+11. [Modding hooks](modding-hooks.md)
+12. [Reverse-engineering audit](audit.md)
 
 ## Auto Buy dossier
 
+- [Raw-fact input graph](auto-buy-raw-fact-inputs.md) — installed Structure,
+  Upgrade, resource, prerequisite, and modifier inputs for worker-side game math.
 - [Native purchase pipeline](auto-buy-native-pipeline.md) — discovery,
   admission, live validation, mutation verification, and failure boundaries.
 - [Queue and completion model](auto-buy-queue-and-completion.md) — shared queue
   authority, manual versus automated signals, settlement, and lifecycle reset.
-- [Simulation evidence map](auto-buy-simulation-evidence.md) — how each modeled
-  seam maps to source, portable tests, installed contracts, and runtime gaps.
 - [Stage profiles](auto-buy-stage-profiles.md) — verified catalog facts,
   synthetic stress workloads, and the still-missing observed progression
   profiles.

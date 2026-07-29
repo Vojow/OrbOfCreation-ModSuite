@@ -8,26 +8,25 @@ Choose the path that matches what you are trying to do.
 - [Configure automation safely](user-guide/configuration.md)
 - [Troubleshoot a problem](user-guide/troubleshooting.md)
 - [Remove the mods](user-guide/uninstalling.md)
-- [Orb Automata behavior reference](../src/OrbAutomata/README.md)
-- [Orb Mod Config reference](../src/OrbModConfig/README.md)
-- [Orb Mentor beta reference](../src/OrbMentor/README.md)
+- [Automation behavior reference](../src/Automata/README.md)
+- [Mod Config UI reference](../src/ModConfig/README.md)
+- [Mentor reference](../src/Mentor/README.md)
 
 ## Contributors and maintainers
 
 - [Development setup](development/setup.md)
-- [Testing documentation hub](testing/README.md)
+- [Testing hub](testing/README.md)
 - [Repository test strategy](testing/strategy.md)
-- [Per-module test guides](testing/README.md#module-guides)
 - [Headless E2E simulation](testing/headless-e2e.md)
 - [Runtime validation protocol](testing/runtime-validation.md)
-- [Orb Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
+- [Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
 - [Release process](development/releases.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)
 
 ## Reverse-engineering research
 
-- [Knowledge map and reading order](reverse-engineering/README.md)
+- [Examined build and reading order](reverse-engineering/README.md)
 - [Architecture](reverse-engineering/architecture.md)
 - [Entity catalog](reverse-engineering/entity-catalog.md)
 - [Latest assembly audit](reverse-engineering/audit.md)
@@ -36,12 +35,11 @@ Research pages distinguish **Verified**, **Inferred**, and **Candidate** finding
 
 ## Roadmap and design plans
 
+- [The north star](north-star.md)
 - [Project roadmap](plans/roadmap.md)
 - [Plan index and lifecycle status](plans/README.md)
-- [Mod suite performance architecture](plans/performance-suite.md)
-- [Auto Concept mastery-balancing architecture](plans/auto-concept.md)
-- [Orb Mentor artifacts and alchemy design](plans/mentor-artifacts-alchemy.md)
+- [Runtime architecture dossier](runtime-architecture/README.md)
+- [Accepted service-cycle runtime](runtime-architecture/service-cycle-runtime.md)
+- [Service-cycle observability](runtime-architecture/observability.md)
 
-Plans explain intended or historical design. Released behavior is documented in the relevant mod README, not inferred from a plan.
-
-Experimental Orb Chronomancer and Orb Achievement Resonance documentation is intentionally absent from this supported branch. Their source, tests, and design notes live on `codex/experimental-chronomancer-resonance` until an explicit lifecycle promotion.
+Plans explain intended or historical design. Released behavior is documented in the relevant feature-area README, not inferred from a plan.

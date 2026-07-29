@@ -11,13 +11,19 @@ body:
   - type: dropdown
     id: component
     attributes:
-      label: Component
+      label: Area
+      description: The suite ships as one plugin; pick the feature area the problem shows up in.
       options:
-        - Orb Automata
-        - Orb Mod Config
-        - Orb Chronomancer
-        - Orb Achievement Resonance
+        - Suite loading, installation, or configuration file
+        - Auto Buy
+        - Auto Harvest
+        - Auto Cast
+        - Auto Concept
+        - Spell Leveling
+        - Mentor
+        - Mod Config UI
         - Build, tests, or documentation
+        - Other
     validations:
       required: true
 
@@ -25,8 +31,8 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Include the game, BepInEx, and plugin versions.
-      placeholder: "Orb of Creation ..., BepInEx 5.4.23.5, Orb Automata ..."
+      description: Include the game, BepInEx, and suite versions.
+      placeholder: "Orb of Creation ..., BepInEx 5.4.23.5, OrbModSuite 0.4.0"
     validations:
       required: true
 
@@ -66,7 +72,7 @@ body:
       options:
         - label: I backed up my save before reproducing the issue.
           required: true
-        - label: I am not running another automatic buyer alongside Automata.
+        - label: I am not running another automatic buyer alongside the suite.
           required: false
         - label: I removed personal information from attached logs.
           required: true

@@ -12,7 +12,7 @@ Thanks for helping improve OrbOfCreation-ModSuite. This is an unofficial modding
 
 ## Development setup
 
-Follow the [development setup](docs/development/setup.md) for local prerequisites and portable tests. Work that depends on real game state must also follow the [runtime validation protocol](docs/development/runtime-validation.md).
+Follow the [development setup](docs/development/setup.md) for local prerequisites and portable tests. Work that depends on real game state must also follow the [runtime validation protocol](docs/testing/runtime-validation.md).
 
 The test-stub build writes to `bin-stubs/` and `obj-stubs/`; deployable game builds write to the normal `bin/` directory. Never install a stub-linked DLL into BepInEx. Maintainers should use the documented [release process](docs/development/releases.md).
 

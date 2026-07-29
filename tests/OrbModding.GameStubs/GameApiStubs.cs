@@ -5,16 +5,30 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 
-public struct BigDouble
-{
-    public BigDouble(double mantissa, long exponent) { this.mantissa = mantissa; this.exponent = exponent; }
-    public double mantissa;
-    public long exponent;
-}
-
 public sealed class IntVariable
 {
-    public int Value { get; set; } = 1;
+    // The game keeps every global integer in one static registry, and world collection walks it
+    // rather than naming the hundred-odd accessors that read out of it.
+    public static List<IntVariable> All = new List<IntVariable>();
+    public Guid uuid = Guid.NewGuid();
+    public ValueModifierRecord value = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public bool isPercentVariable;
+
+    public Guid GetGuid() => uuid;
+
+    // The game's AsInt() reads out of `value`; storing the answer separately let a fixture set a
+    // count the collector could never see. Setting either keeps both in step.
+    public int Value
+    {
+        get => count;
+        set
+        {
+            count = value;
+            this.value = new ValueModifierRecord(new BigDouble(value, 0));
+        }
+    }
+
+    private int count = 1;
 
     public int SetCalls { get; private set; }
 
@@ -38,16 +52,50 @@ public sealed class IntVariable
             throw new InvalidOperationException($"setter rejected {value} after write");
         }
     }
+
+    internal static IntVariable Register(Guid id)
+    {
+        var variable = new IntVariable { uuid = id };
+        All.Add(variable);
+        return variable;
+    }
+
+    /// <summary>
+    /// Swaps a well-known global, keeping the registry to one entry per identity. Tests replace
+    /// these wholesale between cases; the game never does, and a registry that grew one entry per
+    /// reset would hand world collection a different answer on every pass.
+    /// </summary>
+    internal static IntVariable Replace(IntVariable current, IntVariable replacement, Guid id)
+    {
+        All.Remove(current);
+        replacement.uuid = id;
+        All.Add(replacement);
+        return replacement;
+    }
 }
 
 public static class GlobalVariables
 {
-    public static IntVariable MultiBuy { get; set; } = new IntVariable();
+    private static IntVariable multiBuy = IntVariable.Register(KnownVariableIds.MultiBuy);
+
+    // Registered in IntVariable.All under the uuid the game ships, because world collection finds
+    // these by identity in the registry rather than through the accessor beside them.
+    public static IntVariable MultiBuy
+    {
+        get => multiBuy;
+        set => multiBuy = IntVariable.Replace(multiBuy, value, KnownVariableIds.MultiBuy);
+    }
 
     public static IntVariable GetMultiBuy() => MultiBuy;
 }
 
-public sealed class ActionableListVariable
+public static class KnownVariableIds
+{
+    public static readonly Guid MultiBuy = new Guid("37a84399-98b5-463c-b858-c1ecf2f9bf34");
+    public static readonly Guid BulkDevelopment = new Guid("0ed119bf-0449-4d64-9989-1a3f68c7b8a2");
+}
+
+public sealed class ActionableListVariable : StackableListVariable<IActionable>
 {
     public IntVariable maxQueuedItems = new IntVariable();
 }
@@ -86,6 +134,7 @@ public class SpellRecipeSO : IdScriptableObject
     public int masteryLevel;
     public BigDouble masteryExperience;
     public bool discovered;
+    public int discRarityLevel;
     public bool readyToLevel;
     public bool SuppressMasteryGain { get; set; }
     public bool SuppressLevelMutation { get; set; }
@@ -113,15 +162,20 @@ public class SpellRecipeSO : IdScriptableObject
     }
     public string GetName() => "Spell";
 
-    private static BigDouble Add(BigDouble left, BigDouble right)
-    {
-        if (left.mantissa == 0) return right;
-        if (right.mantissa == 0) return left;
-        var exponent = Math.Max(left.exponent, right.exponent);
-        var mantissa = left.mantissa * Math.Pow(10, left.exponent - exponent) +
-                       right.mantissa * Math.Pow(10, right.exponent - exponent);
-        return new BigDouble(mantissa, exponent);
-    }
+    private static BigDouble Add(BigDouble left, BigDouble right) => left + right;
+    public bool hiddenDiscovery;
+    public bool isRequiredDiscovery;
+    public int penaltyUsageCost;
+    public double castSpeed;
+    public int baseCharges;
+    public bool repeatInstantEffects;
+    public ValueModifierRecord spellPowerMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord spellCostMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord spellCdSpeedMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord spellDurationMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord spellSpecialMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord spellXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    private bool hasAlertedThisMastery;
 }
 
 public class IdScriptableObject : UnityEngine.ScriptableObject
@@ -134,14 +188,68 @@ public class IdScriptableObject : UnityEngine.ScriptableObject
     public void SetGuid(Guid guid) => uuid = guid;
 }
 
+/// <summary>The game's global scalars. Same shape as <see cref="IntVariable"/>; separate registry.</summary>
+public sealed class DoubleVariable
+{
+    public static List<DoubleVariable> All = new List<DoubleVariable>();
+    public Guid uuid = Guid.NewGuid();
+    public ValueModifierRecord value = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public bool isPercentVariable;
+
+    public Guid GetGuid() => uuid;
+}
+
+/// <summary>
+/// The game's global flags. Not a NumberVariable — it holds a plain field with nothing to calculate.
+/// </summary>
+public sealed class BoolVariable
+{
+    public static List<BoolVariable> All = new List<BoolVariable>();
+    public Guid uuid = Guid.NewGuid();
+    public bool value;
+
+    public Guid GetGuid() => uuid;
+    public bool initialValue;
+    public bool isSaved;
+    private int observerId;
+}
+
 public class ViewSO : IdScriptableObject
 {
+    public static List<ViewSO> All = new List<ViewSO>();
     public bool available;
+    public bool active;
     public bool IsAvailable() => available;
+    public bool alwaysActive;
 }
 
 public sealed class AlchemyTypeSO : IdScriptableObject
 {
+    public static List<AlchemyTypeSO> All = new List<AlchemyTypeSO>();
+
+    // The type's level is a modifier record rather than a persisted integer, which is why world
+    // collection reads it through the record's cached field.
+    public ValueModifierRecord level = new ValueModifierRecord(new BigDouble(0.0, 0));
+
+    /// <summary>The chosen level, held in the shared variable registry rather than on the type.</summary>
+    public IntVariable selectedLevel;
+
+    // Composed records: no cached value of their own, so collection counts their active set.
+    public bool maxUsageByMastery;
+    public ModifierRecord power = new ModifierRecord();
+    public ModifierRecord speed = new ModifierRecord();
+    public ModifierRecord special = new ModifierRecord();
+    public ModifierRecord drainCostMod = new ModifierRecord();
+    public ModifierRecord experienceRate = new ModifierRecord();
+    public ModifierRecord overdrivePower = new ModifierRecord();
+    public ModifierRecord overdriveSpeed = new ModifierRecord();
+    public ModifierRecord overdriveDrainCostMod = new ModifierRecord();
+    public ModifierRecord overdriveXpRate = new ModifierRecord();
+    public ModifierRecord timeReqMod = new ModifierRecord();
+    public ModifierRecord timeScalingMod = new ModifierRecord();
+    public ModifierRecord freeUsageSlots = new ModifierRecord();
+    public ModifierRecord effectLevels = new ModifierRecord();
+
     public AlchemyTypeSO()
     {
         uuid = base.GetGuid().ToString();
@@ -190,7 +298,10 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public bool discovered = true;
     public int masteryLevel;
     public BigDouble masteryXp;
-    public int maxUsageSlots = 1;
+    public int maxLevel = 1;
+    public int advancementLevel;
+    public int discRarityLevel;
+    public BigDouble recipeTime;
     public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
     public ConceptCostVector drainCost = new ConceptCostVector();
     public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
@@ -208,7 +319,7 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public int GetExperienceLevel() => masteryLevel;
     public BigDouble GetExperience() => masteryXp;
     public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
-    public int GetMaxUsageSlots() => maxUsageSlots;
+    public int GetMaxUsageSlots() => maxUsageSlots.GetValue().ToInt();
     public AlchemyTypeSO GetCoreType() => coreType;
     public string GetName() => name;
     public void Discover() => discovered = true;
@@ -220,21 +331,81 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
         masteryXp = Add(masteryXp, amount);
     }
 
-    private static BigDouble Add(BigDouble left, BigDouble right)
-    {
-        if (left.mantissa == 0) return right;
-        if (right.mantissa == 0) return left;
-        var exponent = Math.Max(left.exponent, right.exponent);
-        return new BigDouble(
-            left.mantissa * Math.Pow(10, left.exponent - exponent) +
-            right.mantissa * Math.Pow(10, right.exponent - exponent),
-            exponent);
-    }
+    private static BigDouble Add(BigDouble left, BigDouble right) => left + right;
+    public bool isRequiredDiscovery;
+    public bool isCompletionRecipe;
+    public bool isAdvancementRecipe;
+    public double completionTime;
+    public bool isDebugAlchemy;
+    public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord speed = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord drainCostMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord special = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord timeReqMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord timeScalingMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord masteryXpRate = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord effectLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord overdrivePower = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord overdriveSpeed = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord overdriveDrainCostMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord overdriveXpRate = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord freeUsageSlots = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord maxUsageSlots = new ValueModifierRecord(new BigDouble(0.0, 0));
+    private BigDouble cachedCompletionTime;
+    private BigDouble cachedRequiredXp;
 }
 
+/// <summary>
+/// The list-variable hierarchy, shaped as the shipped assembly declares it: the value list and the
+/// per-element-type registry sit on the generic base, occupancy on the generic list, and a concrete
+/// list variable adds only its own members.
+/// </summary>
+/// <remarks>
+/// The shape is why <c>All</c> is no use for reaching a queue. It is declared on the generic base, so
+/// it holds every list variable over one element type rather than every instance of one concrete
+/// type — and reflection does not find a base type's static on a derived one at all.
+/// </remarks>
 public class AbstractListVariable<T> : IdScriptableObject
 {
+    public static List<AbstractListVariable<T>> All = new List<AbstractListVariable<T>>();
     public List<T> value = new List<T>();
+}
+
+public class GenericListVariable<T> : AbstractListVariable<T>
+{
+    public int GetUsedSpots()
+    {
+        var used = 0;
+        foreach (var element in value)
+        {
+            if (IsFilledElement(element)) used++;
+        }
+
+        return used;
+    }
+
+    public bool HasEmptySpot() => GetUsedSpots() < value.Count;
+
+    protected virtual bool IsFilledElement(T element) => element is not null;
+}
+
+public class EmptyTypeListVariable<T> : GenericListVariable<T>
+{
+}
+
+public class StackableListVariable<T> : GenericListVariable<T>
+{
+}
+
+public interface IActionable
+{
+}
+
+/// <summary>The plot-action queue: one instance, reached by uuid rather than through a registry.</summary>
+public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<PlotNodeActionInstance>
+{
+    protected override bool IsFilledElement(PlotNodeActionInstance element) =>
+        element is not null && !element.IsEmpty();
 }
 
 public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
@@ -254,44 +425,107 @@ public class UpgradeSO : IdScriptableObject
             if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
         }
     }
-    public int purchaseLevel;
-    public int queuedPurchaseLevel;
+    // The game stores one owned level and one in-flight count; every level question it answers is
+    // derived from those two and maxLevel. Storing the answers independently let a fixture describe
+    // an upgrade the game could never produce, which the suite then read straight out of the fields.
+    public int level;
+    public int queuedLevels;
+    public int maxLevel;
+    private int cachedCostLevel = -1;
     public bool available = true;
     public bool purchasable = true;
-    public bool finite;
-    public int maxLevel = int.MaxValue;
     public ResourceCostList purchaseCost = new ResourceCostList();
+
+    // The authored cost and the list it grows by per level, which together are what the suite
+    // computes GetPurchaseCost() from instead of calling it. An upgrade prices on an entirely
+    // different chain than a structure, so it names entirely different fields.
+    public ResourceCostList resourceCost = new ResourceCostList();
+    public ModifierListRef resourceCostModPerLevel = new ModifierListRef();
+
+    // The gate on the specific level being bought, as distinct from the whole-upgrade gate. The game
+    // checks it as prerequisitesPerLevel.Check(level + queuedLevels + 1), which takes a level and so
+    // cannot be a latched boolean the way `available` is.
+    public Prerequisites.Container prerequisitesPerLevel = new Prerequisites.Container();
+    public BigDouble buildTime;
+    public double developmentTime = 5.0;
     public new Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Upgrade";
     public bool IsAvailable() => available;
-    public bool CanPurchase() => purchasable && !IsMaxQueuedLevel();
+    public bool CanPurchase() => purchasable && !IsMaxQueuedLevel() && purchaseCost.HasEnough();
     public ResourceCostList GetPurchaseCost() => purchaseCost;
-    public int GetPurchaseLevel() => purchaseLevel;
-    public int GetQueuedPurchaseLevel() => queuedPurchaseLevel;
-    public bool HasFiniteLevels() => finite;
-    public bool IsMaxLevel() => finite && purchaseLevel >= maxLevel;
-    public bool IsMaxQueuedLevel() => finite && queuedPurchaseLevel >= maxLevel;
+    public int GetPurchaseLevel() => level;
+    public int GetQueuedPurchaseLevel() => level + queuedLevels;
+    public bool HasFiniteLevels() => maxLevel > 0;
+    public bool IsMaxLevel() => HasFiniteLevels() && level >= maxLevel;
+    public bool IsMaxQueuedLevel() => HasFiniteLevels() && level + queuedLevels >= maxLevel;
     public void Purchase()
     {
-        if (CanPurchase()) queuedPurchaseLevel++;
+        // The real upgrade Purchase() honours the global multi-buy multiplier, buying up to that
+        // many levels in a single call, each still bounded by CanPurchase() (so a finite maxLevel
+        // yields a partial "bought X of N" purchase). A multiplier of 1 keeps the single-level path.
+        var target = GlobalVariables.MultiBuy?.Value ?? 1;
+        if (target < 1) target = 1;
+        for (var bought = 0; bought < target && CanPurchase(); bought++)
+            queuedLevels++;
     }
     public void CompleteAction()
     {
-        if (queuedPurchaseLevel <= 0) return;
-        queuedPurchaseLevel--;
-        purchaseLevel++;
+        if (queuedLevels <= 0) return;
+        queuedLevels--;
+        level++;
     }
 }
 
-public class StructureSO
+public class StructureSO : UpgradeableObject
 {
     public static List<StructureSO> All = new List<StructureSO>();
-    public string uuid = Guid.NewGuid().ToString();
+    public StructureTypeSO structureType = new StructureTypeSO();
+
+    /// <summary>The standing effects the structure applies once built.</summary>
+    public List<PersistentEffectDeprecated.Property> structureProperties =
+        new List<PersistentEffectDeprecated.Property>();
+
     public int queuedQuantity;
     public int quantity;
     public bool available = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
+
+    // The authored cost and the modifier it scales by, which together are what the suite computes
+    // GetPurchaseCost() from instead of calling it.
+    public ResourceCostList baseCost = new ResourceCostList();
+    public ValueModifierRef costPerQuantity = new ValueModifierRef();
+
+    // The structure's own per-level gate, checked at its quantity rather than at a level count.
+    public Prerequisites.Container prerequisitesPerLevel = new Prerequisites.Container();
+
+    // World collection's reading. Field names mirror the game's.
+    public int queuedEchos;
+    public int completedEchos;
+    public int selfBonusLevels;
+    public BigDouble queueTimeLeft;
+    private BigDouble currentBuildTime;
+    public bool flagged;
+    public int baseLevel;
+    public float queueTimeTotal = 1f;
+    public bool debugStructure;
+    public bool disabled;
+    private int observableId;
+    private bool insufficientReqPenaltyActive;
+    private int bufferDevelopedQuantity;
+    public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord powerScaling = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord speed = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord passiveCostMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord activeCostMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord costScalingMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord attributeRankEffectMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord drainCostMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord bonusLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord effectLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord buildSpeed = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord echoBuildRating = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord powerBuildRating = new ValueModifierRecord(new BigDouble(0.0, 0));
     public bool ApplyPurchaseMutation { get; set; } = true;
     public int GetPurchaseCostCalls { get; private set; }
     public bool Available { get => available; set => available = value; }
@@ -299,10 +533,12 @@ public class StructureSO
     public int PurchaseLevel { get => quantity; set => quantity = value; }
     public int QueuedQuantity { get => queuedQuantity; set => queuedQuantity = value; }
     public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
-    public Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
-    public bool CanPurchase() => purchasable;
+
+    // The game's own CanPurchase folds the price in alongside its other conditions, which is the
+    // whole premise of reading those conditions apart when it refuses.
+    public bool CanPurchase() => purchasable && purchaseCost.HasEnough();
     public ResourceCostList GetPurchaseCost()
     {
         GetPurchaseCostCalls++;
@@ -312,7 +548,10 @@ public class StructureSO
     public int GetQueuedQuantity() => queuedQuantity;
     public void Purchase(bool forceOne)
     {
-        if (forceOne && CanPurchase() && ApplyPurchaseMutation) queuedQuantity++;
+        if (!forceOne || !CanPurchase() || !ApplyPurchaseMutation) return;
+        queuedQuantity++;
+        // The game charges when a level is queued, not when it completes.
+        purchaseCost.PerformCost();
     }
     public void QueueBuild(int amount) => queuedQuantity += amount;
     public void CompleteAction()
@@ -325,6 +564,40 @@ public class StructureSO
 
 public class Player
 {
+    private static IntVariable bulkDevelopment =
+        IntVariable.Register(KnownVariableIds.BulkDevelopment);
+
+    public static IntVariable BulkDevelopment
+    {
+        get => bulkDevelopment;
+        set => bulkDevelopment =
+            IntVariable.Replace(bulkDevelopment, value, KnownVariableIds.BulkDevelopment);
+    }
+
+    public static IntVariable GetBulkDevelopment() => BulkDevelopment;
+
+    // The three frame-wide terms the resource rate chain needs. Each is a DoubleVariable whose
+    // `value` record carries the number, exactly as the game holds them, so a reader that walks
+    // variable -> value -> calculatedValue works identically against the stub and the game.
+    public static DoubleVariable ResourceOverflow { get; set; } = new DoubleVariable();
+
+    public static DoubleVariable ResourceOverflowLoss { get; set; } = new DoubleVariable();
+
+    public static DoubleVariable ResetTimePassed { get; set; } = new DoubleVariable();
+
+    public static DoubleVariable GetResourceOverflow() => ResourceOverflow;
+
+    public static DoubleVariable GetResourceOverflowLoss() => ResourceOverflowLoss;
+
+    public static DoubleVariable GetResetTimePassed() => ResetTimePassed;
+
+    // The frame-wide structure-cost multiplier, authored at parity like every other percent the
+    // game holds.
+    public static DoubleVariable StructureCost { get; set; } =
+        new DoubleVariable { value = new ValueModifierRecord(new BigDouble(1.0, 2)) };
+
+    public static DoubleVariable GetStructureCost() => StructureCost;
+
     public void ManagerStart()
     {
     }
@@ -333,6 +606,10 @@ public class Player
 public class SaveStateManager
 {
     public void ImplementLoadedJson()
+    {
+    }
+
+    public void StartGame()
     {
     }
 }
@@ -364,6 +641,9 @@ public class Spell
     public bool EmitFireSignal { get; set; } = true;
     public bool HoldingCharge { get; private set; }
     public int FireCalls { get; private set; }
+    public int CurrentCharges { get; set; }
+    public int MaximumCharges { get; set; }
+    public BigDouble CooldownRemaining { get; set; }
     public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
@@ -384,29 +664,113 @@ public class Spell
     public bool CanCharge() => true;
     public bool IsCasting() => false;
     public bool IsReadyingCast() => false;
-    public bool CanCast() => true;
+
+    /// <summary>
+    /// The game's own composite readiness answer, settable so a boundary can be shown refusing a cast
+    /// the plan believed was ready — which is the ordinary case for a planner working off a snapshot.
+    /// </summary>
+    public bool NativeCanCast { get; set; } = true;
+
+    public bool CanCast() => NativeCanCast;
     public bool IsAttuning() => false;
     public bool IsChargeAvailable() => true;
     public bool HasEnoughResources() => true;
+    public int GetCurrSpellCharges() => CurrentCharges;
+    public int GetMaxSpellCharges() => MaximumCharges;
+    public BigDouble GetCooldownTimeRemaining() => CooldownRemaining;
     public ResourceCostList GetCost() => Cost;
     public ResourceCostList GetDrainCost() => new ResourceCostList();
     public object GetScalingInfo() => new object();
     public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
 
+    /// <summary>How many target requests this spell's effects open when it fires.</summary>
+    public int RequestsOnFire { get; set; }
+
     public void Fire()
     {
         if (EmitFireSignal) FireSignal?.Invoke();
         FireCalls++;
+        TargetingManager.OpenRequests += RequestsOnFire;
     }
 }
 
 public class Prerequisites
 {
+    /// <summary>
+    /// Named as the game names it. `available` is a latch, not a question: Check() evaluates the
+    /// conditions and leaves it set once they pass, which is why the suite reads the field and never
+    /// calls Check().
+    /// </summary>
     public class Container
     {
-        public bool unlocked;
-        public bool Check() => unlocked;
+        public bool available;
+
+        /// <summary>
+        /// The conditions themselves. The suite reads how many there are — none is what an
+        /// unconditional action authors — and never what they are or whether they hold.
+        /// </summary>
+        public List<object> prerequisites = new List<object>();
+
+        public bool Check() => available;
+
+        /// <summary>
+        /// The per-level overload, which takes the level being bought and neither stamps nor latches.
+        /// </summary>
+        /// <remarks>
+        /// Present so that the two overloads can be told apart, which is the one thing about reaching
+        /// this oracle that a portable test can check — picking the parameterless one by name would
+        /// turn a diagnostic into a mutation.
+        /// <para>
+        /// It answers only for the empty container, which is the case the game answers without
+        /// consulting anything. It does not evaluate conditions and never will: a stand-in that did
+        /// would be a second implementation of the arithmetic under test, and agreeing with it would
+        /// mean nothing.
+        /// </para>
+        /// </remarks>
+        public bool Check(Requirements.ConditionInfo conditionInfo) => prerequisites.Count == 0;
     }
+}
+
+/// <summary>
+/// The base every entity an effect can point at derives from, modelled only as far as the reference
+/// edge reads it: the identity a published row carries instead of the object.
+/// </summary>
+public abstract class UpgradeableObject
+{
+    /// <summary>One effect's modification of one named property of one upgradeable object.</summary>
+    /// <remarks>
+    /// The property is a string here because it is a string in the game: the names come from each
+    /// type's authored property record rather than from a shared enum, so two types can name
+    /// different sets and the same name can mean the same thing across them.
+    /// </remarks>
+    public sealed class UpgradeEffectModifier
+    {
+        public UpgradeableObject? upgradeableObject;
+        public string propertyType = string.Empty;
+        public ValueModifier modifier;
+        public bool useTargetRef;
+    }
+
+    public string uuid = Guid.NewGuid().ToString();
+
+    public Guid GetGuid() => Guid.Parse(uuid);
+}
+
+/// <summary>
+/// One authored effect block. Effects hang off this rather than off the entity, so a structure's
+/// standing effects are a list of lists.
+/// </summary>
+public class PersistentEffectDeprecated
+{
+    public sealed class Property : PersistentEffectDeprecated
+    {
+    }
+
+    public List<ResourceSO.PersistentEffect> resourceEffects =
+        new List<ResourceSO.PersistentEffect>();
+
+    public List<UpgradeableObject.UpgradeEffectModifier> upgradeableObjectEffects =
+        new List<UpgradeableObject.UpgradeEffectModifier>();
 }
 
 public class ResourceCostList
@@ -422,57 +786,389 @@ public class ResourceCostList
         }
     }
     public bool affordable = true;
+
+    // How many more purchases the holdings cover. Spending is what makes a price unaffordable in the
+    // game, so a fixture that wants a purchase to stop being possible partway says how far the
+    // holdings go rather than reaching in and flipping a flag mid-call.
+    public int AffordableLevels = int.MaxValue;
     public int PerformCalls { get; private set; }
-    public bool HasEnough() => affordable;
-    public void PerformCost() { PerformCalls++; }
+    public bool HasEnough() => affordable && AffordableLevels > 0;
+    public void PerformCost()
+    {
+        PerformCalls++;
+        if (AffordableLevels is > 0 and < int.MaxValue) AffordableLevels--;
+    }
 }
 
-public class ResourceSO
+public class ResourceSO : UpgradeableObject
 {
-    public string uuid = Guid.NewGuid().ToString();
+    /// <summary>The game's closed vocabulary of resource properties an effect can modify.</summary>
+    public enum ModifiableType
+    {
+        Rate,
+        MaxQuantity,
+        MaxQuantityRate,
+        Quality,
+        GainRate,
+        LossPercent,
+        RestingRate,
+        RateMaxPercent,
+        AttributeCostMod,
+        ReservationMod,
+        RateInterestPercent,
+        RateMissingPercent,
+        MaxQuantityFunctional,
+        RateLifetimePercent,
+        RallyThreshold,
+        RallyMod,
+    }
+
+    /// <summary>One structure's standing effect on one property of one resource.</summary>
+    public sealed class PersistentEffect
+    {
+        public ResourceSO? resource;
+        public ModifiableType upgradeType;
+        public ValueModifier modifier;
+    }
+
+    // The per-type registry the game keeps for every entity category, and the traversal entry point
+    // world collection uses. Tests populate it directly.
+    public static List<ResourceSO> All = new List<ResourceSO>();
     public string name = "Resource";
     public BigDouble quantity = new BigDouble(1.0, 3);
-    public BigDouble trueQuantity = new BigDouble(1.0, 3);
-    public BigDouble attributeCostMod = new BigDouble(1.0, 0);
+    public BigDouble trueRate = new BigDouble(0.0, 0);
     public bool available = true;
-    public bool bandwidthResource;
+    public bool visible = true;
     public ValueModifierRecord quality = new ValueModifierRecord(new BigDouble(1.0, 2));
     public ValueModifierRecord maxQuantity = new ValueModifierRecord(new BigDouble(1.0, 4));
-    public Guid GetGuid() => Guid.Parse(uuid);
+
+    // The rest of what world collection reads. Named exactly as the game names them, because the
+    // collector binds by name and this file is the cheap early warning when a name moves.
+    public BigDouble lifetimeQuantity;
+    public BigDouble discoveryTime;
+    public ValueModifierRecord gainRate = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord drain = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord reservationMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord usage = new ValueModifierRecord(new BigDouble(0.0, 0));
+
+    public long appliedLevels;
+
+    /// <summary>Where an experience resource pushes the levels it grants. Null for every other one.</summary>
+    public IntVariable levelVariable;
+
+    // The rate chain's own arguments.
+    public ValueModifierRecord rate = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rateSplash = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rateMaxPercent = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rateInterestPercent = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rateMissingPercent = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rateLifetimePercent = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord lossPercent = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord displayRate = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public double baseLoss = 0.5;
+
+    /// <summary>Private in the game too: it is recomputed rather than persisted.</summary>
+    private BigDouble calcRarityValue;
+
+    // The rest of what the runtime type carries. Enumerated from the ScriptableObject rather than
+    // the save record, and not filtered by what writes them; see D17.
+    public double rarityValue;
+    public double rarityValueEnd;
+    public double restEngageTime;
+    public bool pauseLossOnChange;
+    public bool canOverflow;
+    public bool noOverflowRubberBand;
+    public bool bandwidthResource;
+    public bool invertedResource;
+    public bool excludeFromGlobals;
+    public bool startVisible;
+    public BigDouble appliedMaxQuantity;
+    public int quantitySoftCapOrder;
+    public int quantitySoftCapMagnitude;
+    public double quantitySoftCapRatio;
+    public bool debugResource;
+    private double currentLossRate;
+    private BigDouble lastReservation;
+    private BigDouble debouncedReplenish;
+    private BigDouble debouncedReverberate;
+    private BigDouble debouncedDecay;
+    private bool firstIncrement;
+    public ValueModifierRecord maxQuantityRate = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord maxQuantityFunctional = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord restingRateMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    // Authored at parity in the game, not at zero. A zero here reads as "the game has never
+    // calculated this record" and withholds every price paid in this resource.
+    public ValueModifierRecord attributeCostMod = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord decayRatio = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord decayTimeMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord replenishRatio = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord replenishTimeMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord reverberateMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord reverberateTimeMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rallyThreshold = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord rallyMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord usageDrainPenalty = new ValueModifierRecord(new BigDouble(0.0, 0));
+
+    private bool inLossMode;
+    private bool inRestMode;
+    private bool inRallyMode;
     public string GetName() => name;
     public BigDouble GetQuantity() => quantity;
-    public BigDouble GetTrueQuantity() => trueQuantity;
-    public BigDouble GetAttributeCostMod() => attributeCostMod;
+    // The game's own formula. A settable field here would let the stub's GetTrueQuantity()
+    // disagree with its own quantity and quality, which is precisely the drift that makes a
+    // passing test mean nothing.
+    public BigDouble GetTrueQuantity() =>
+        quantity * BigDouble.Normalize(quality.GetValue().Mantissa, quality.GetValue().Exponent - 2);
+    public BigDouble GetAttributeCostMod() => attributeCostMod.GetValue();
+    public BigDouble GetTrueRate() => trueRate;
     public bool IsAvailable() => available;
+    public bool IsVisible() => visible;
     public bool IsBandwidthResource() => bandwidthResource;
     public BigDouble GetTrueAmount(BigDouble amount) => amount;
 }
 
+/// <summary>
+/// Stands in for the game's research entries. Modelled only as far as world collection reads it:
+/// identity, level, whether it is developing, and whether it is available.
+/// </summary>
+public class ResearchSO
+{
+    public static List<ResearchSO> All = new List<ResearchSO>();
+    public string uuid = Guid.NewGuid().ToString();
+    public int level;
+    public int queuedLevels;
+    public int researchStage;
+    public int selfBonusLevels;
+    public int maxLevel = 1;
+    public double researchTime = 60.0;
+    public bool isDeveloping;
+    public bool isActive;
+    public bool flagged;
+    public bool available = true;
+    public bool hiddenLevel;
+    public int levelVisibilityRange = 2;
+    public ModifierRecord requirementsAdjust = new ModifierRecord();
+    private int requiredStagesCached;
+    private BigDouble requiredTimeCached;
+    public ValueModifierRecord bonusLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord baseLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(1.0, 2));
+    public ValueModifierRecord maxLevelCap = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord leewayPoints = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public Guid GetGuid() => Guid.Parse(uuid);
+    public string GetName() => "Research";
+    public bool IsDeveloping() => isDeveloping;
+    public bool IsActive() => isActive;
+    public bool IsAvailable() => available;
+}
+
 public struct ResourceTuple
 {
-    private readonly BigDouble value;
+    // Both magnitudes, named as the game names them. `value` is the serialized double Unity writes to
+    // disk; `valueBig` is the one the arithmetic uses and the one world collection reads.
+    private readonly double value;
+    private readonly BigDouble valueBig;
 
     public ResourceTuple(ResourceSO resource, BigDouble value)
     {
         this.resource = resource;
-        this.value = value;
+        valueBig = value;
+        this.value = value.ToDouble();
     }
 
     public ResourceSO resource;
 
-    public BigDouble GetValue() => value;
+    public BigDouble GetValue() => valueBig;
+}
+
+/// <summary>
+/// A reference to a global modifier. A structure holds one of these rather than a modifier, which is
+/// why world collection carries the referenced variable's identity.
+/// </summary>
+public sealed class ValueModifierRef
+{
+    public ValueModifierVariable? variable;
+
+    public ValueModifier GetMod() => variable is null ? default : variable.GetValue();
+
+    public ValueModifier GetModifier() => GetMod();
+}
+
+/// <summary>
+/// The game's identity wrapper. Modelled only as far as the private field a reference edge reads,
+/// spelled as the game spells it.
+/// </summary>
+public sealed class GuidContainer
+{
+    private Guid _guid;
+
+    public GuidContainer()
+    {
+    }
+
+    public GuidContainer(Guid guid) => _guid = guid;
+
+    public Guid guid => _guid;
+}
+
+/// <summary>
+/// The base every modifier record derives from in the game. Modelled only as far as the active set
+/// world collection counts, since a plain ModifierRecord has no cached value of its own.
+/// </summary>
+public class ModifierRecord
+{
+    public Dictionary<Guid, ValueModifier> passiveModifiers = new Dictionary<Guid, ValueModifier>();
+
+    public Dictionary<Guid, ValueModifier> activeModifiers = new Dictionary<Guid, ValueModifier>();
+
+    public bool HasActiveElements() => activeModifiers.Count > 0;
+}
+
+/// <summary>
+/// One modifier. Named and shaped as the game shapes it — a struct whose three arithmetic fields
+/// world collection reads directly, plus enough identity to be countable inside a record's set.
+/// </summary>
+public struct ValueModifier
+{
+    public enum ValueModifierType
+    {
+        Raw,
+        MultiDiminishing,
+        MultiStacking,
+        Reduction,
+        Exponent,
+    }
+
+    public BigDouble adjustReal;
+    public ValueModifierType type;
+    public int order;
+
+    public ValueModifier(ValueModifierType type, BigDouble amount, int order = 0)
+    {
+        this.type = type;
+        adjustReal = amount;
+        this.order = order;
+    }
+}
+
+/// <summary>
+/// Two modifier lists, not one. The exponents strengthen the modifiers before any of them touches a
+/// value, so the suite reads both and keeps them apart.
+/// </summary>
+public sealed class ValueModifierList
+{
+    public List<ValueModifier> modifiers = new List<ValueModifier>();
+    public List<ValueModifier> exponents = new List<ValueModifier>();
+}
+
+/// <summary>
+/// The global modifier-list registry, the counterpart to <see cref="ValueModifierVariable"/> for
+/// whole lists.
+/// </summary>
+public sealed class ModifierListVariable
+{
+    public static List<ModifierListVariable> All = new List<ModifierListVariable>();
+
+    public Guid uuid = Guid.NewGuid();
+    public ValueModifierList value = new ValueModifierList();
+
+    public Guid GetGuid() => uuid;
+
+    public ValueModifierList GetValue() => value;
+}
+
+/// <summary>
+/// A reference to a modifier list. The game's Standard subclass resolves nine shared lists off
+/// GlobalValues instead of the named variable, which is why the suite reads the resolved list's
+/// contents through the virtual accessor rather than carrying an identity.
+/// </summary>
+public class ModifierListRef
+{
+    private static readonly ValueModifierList EmptyList = new ValueModifierList();
+
+    public ModifierListVariable? variable;
+
+    public virtual ValueModifierList GetValue() => variable is null ? EmptyList : variable.GetValue();
+}
+
+/// <summary>
+/// The global modifier registry. Entities hold a reference to one of these rather than owning a
+/// modifier, which is why the suite collects the registry and carries identities.
+/// </summary>
+public sealed class ValueModifierVariable
+{
+    public static List<ValueModifierVariable> All = new List<ValueModifierVariable>();
+
+    public Guid uuid = Guid.NewGuid();
+    public ValueModifier value;
+
+    public Guid GetGuid() => uuid;
+
+    public ValueModifier GetValue() => value;
 }
 
 public sealed class ValueModifierRecord
 {
-    private readonly BigDouble value;
+    /// <summary>
+    /// The value the game memoises. [NonSerialized] in the game, so it is zero for every record a save
+    /// has not touched — and it is exactly what GetValue() answers whenever the record is clean, which
+    /// is why world collection reads it rather than only recomputing.
+    /// </summary>
+    private BigDouble calculatedValue;
+
+    /// <summary>
+    /// Whether the memo is out of date. The game sets it when a modifier is added or removed and
+    /// clears it inside Calculate(); nothing else moves it, so a record that never carries a modifier
+    /// is never dirty and its memo is permanent.
+    /// </summary>
+    private bool calculationDirty;
+
+    /// <summary>The number the record is built from. World collection reads this and folds.</summary>
+    public double baseValue;
+
+    /// <summary>
+    /// The two modifier sets, named and shaped as the game names them on ModifierRecord. World
+    /// collection reads both and evaluates Calculate() itself when the record is dirty.
+    /// </summary>
+    public Dictionary<Guid, ValueModifier> passiveModifiers = new Dictionary<Guid, ValueModifier>();
+
+    public Dictionary<Guid, ValueModifier> activeModifiers = new Dictionary<Guid, ValueModifier>();
 
     public ValueModifierRecord(BigDouble value)
     {
-        this.value = value;
+        baseValue = value.ToDouble();
+        calculatedValue = value;
     }
 
-    public BigDouble GetValue() => value;
+    /// <summary>
+    /// Marks the memo out of date, the way the game does when a modifier is added or removed. A test
+    /// that puts a modifier into one of the sets without this describes a record the game cannot
+    /// produce.
+    /// </summary>
+    public ValueModifierRecord Dirty()
+    {
+        calculationDirty = true;
+        return this;
+    }
+
+    /// <summary>Puts the memo somewhere a recomputation would not, the way a save load does.</summary>
+    public ValueModifierRecord WithMemo(BigDouble memo)
+    {
+        calculatedValue = memo;
+        return this;
+    }
+
+    /// <summary>Whether the memo is out of date, so a test can state the shape it built.</summary>
+    public bool IsCalculationDirty => calculationDirty;
+
+    /// <summary>
+    /// The memo, which is what the game answers for a clean record. A dirty one recomputes, and this
+    /// deliberately does not: a stand-in that reimplemented Calculate() would be a second copy of the
+    /// arithmetic under test, and agreeing with it would prove nothing.
+    /// </summary>
+    public BigDouble GetValue() => calculatedValue;
+
+    public bool HasActiveElements() => activeModifiers.Count > 0;
 }
 
 public class SpellRecipeListVariable
@@ -514,13 +1210,15 @@ public class SpellManager
     }
 }
 
-public sealed class SpellListVariable : IEnumerable
+/// <summary>
+/// The equipped loadout. A list variable like every other, which is what lets world collection reach
+/// it by uuid through the identity registry rather than through the spell manager singleton.
+/// </summary>
+public sealed class SpellListVariable : AbstractListVariable<Spell>, IEnumerable
 {
-    public List<object> value = new List<object>();
+    public Spell this[int index] => value[index];
 
-    public object this[int index] => value[index];
-
-    public void Add(object spell) => value.Add(spell);
+    public void Add(Spell spell) => value.Add(spell);
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }
@@ -528,7 +1226,7 @@ public sealed class SpellListVariable : IEnumerable
 public sealed class EquipmentSO : IdScriptableObject
 {
     public static List<EquipmentSO> All = new List<EquipmentSO>();
-    private readonly ExperienceElement experienceContainer = new ExperienceElement();
+    private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
     private string stableUuid = Guid.NewGuid().ToString();
     public new string uuid
     {
@@ -542,12 +1240,16 @@ public sealed class EquipmentSO : IdScriptableObject
     public new string name = "Equipment";
     public int masteryLevel;
     public BigDouble masteryXp;
+    public int discRarityLevel;
     public bool isCreated = true;
     public new Guid GetGuid() => Guid.Parse(uuid);
     public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
-    public ExperienceElement GetExperienceElement() => experienceContainer;
+    public ExperienceContainer GetExperienceElement() => experienceContainer;
+    public void IncrementActive(double deltaTime)
+    {
+    }
     public void SetMasteryState(int level, BigDouble experience, BigDouble experiencePerLevel)
     {
         masteryLevel = level;
@@ -555,9 +1257,17 @@ public sealed class EquipmentSO : IdScriptableObject
         experienceContainer.SetState(level, experience, experiencePerLevel);
     }
     private void GainMasteryLevels(int levels) => masteryLevel += levels;
+    public bool isRequiredDiscovery;
+    public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord baseLevel = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ValueModifierRecord experienceRateMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    private int equippedLevel;
+    private int attuningLevel;
+    private double attunementTimeLeft;
+    private BigDouble baseXpRate;
 }
 
-public sealed class ExperienceElement
+public sealed class ExperienceContainer
 {
     private BigDouble experience;
     private int currentLevel;
@@ -596,39 +1306,22 @@ public sealed class ExperienceElement
 
     public int GetLevel() => currentLevel;
 
-    public ExperienceElement Clone()
+    public ExperienceContainer Clone()
     {
-        var clone = new ExperienceElement();
+        var clone = new ExperienceContainer();
         clone.SetState(currentLevel, experience, experiencePerLevel);
         return clone;
     }
 
-    private static BigDouble Add(BigDouble left, BigDouble right)
-    {
-        if (left.mantissa == 0) return right;
-        if (right.mantissa == 0) return left;
-        var exponent = Math.Max(left.exponent, right.exponent);
-        return new BigDouble(
-            left.mantissa * Math.Pow(10, left.exponent - exponent) +
-            right.mantissa * Math.Pow(10, right.exponent - exponent),
-            exponent);
-    }
+    private static BigDouble Add(BigDouble left, BigDouble right) => left + right;
 
     private static BigDouble Subtract(BigDouble left, BigDouble right)
     {
-        var exponent = Math.Max(left.exponent, right.exponent);
-        var mantissa = left.mantissa * Math.Pow(10, left.exponent - exponent) -
-                       right.mantissa * Math.Pow(10, right.exponent - exponent);
-        return mantissa <= 0 ? default : new BigDouble(mantissa, exponent);
+        var result = left - right;
+        return result.Mantissa <= 0 ? default : result;
     }
 
-    private static int Compare(BigDouble left, BigDouble right)
-    {
-        if (left.mantissa == 0) return right.mantissa == 0 ? 0 : -1;
-        if (right.mantissa == 0) return 1;
-        if (left.exponent != right.exponent) return left.exponent.CompareTo(right.exponent);
-        return left.mantissa.CompareTo(right.mantissa);
-    }
+    private static int Compare(BigDouble left, BigDouble right) => left.CompareTo(right);
 }
 
 public sealed class AlchemyInstance
@@ -643,6 +1336,7 @@ public sealed class AlchemyInstance
     public int queuedQuantity;
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
+    public AlchemyRecipeSO get_reference() => reference;
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
@@ -713,16 +1407,17 @@ public sealed class ConceptCostVector
 {
     public ConceptCostVector(params ConceptCostEntry[] entries)
     {
-        Entries = entries.ToList();
+        costs = entries.ToList();
     }
 
-    public List<ConceptCostEntry> Entries { get; }
+    public List<ConceptCostEntry> costs;
+    public List<ConceptCostEntry> Entries => costs;
     public IList GetEntries() => Entries;
 
     public ConceptCostVector Multiply(double multiplier) => new ConceptCostVector(
         Entries.Select(entry => new ConceptCostEntry(
             entry.resource,
-            new BigDouble(entry.Value.mantissa * multiplier, entry.Value.exponent))).ToArray());
+            entry.Value * multiplier)).ToArray());
 
     public ConceptCostVector Subtract(ConceptCostVector other)
     {
@@ -732,7 +1427,7 @@ public sealed class ConceptCostVector
             var previous = other.Entries.FirstOrDefault(item => ReferenceEquals(item.resource, entry.resource));
             remaining.Add(new ConceptCostEntry(
                 entry.resource,
-                new BigDouble(entry.Value.mantissa - (previous?.Value.mantissa ?? 0), entry.Value.exponent)));
+                entry.Value - (previous?.Value ?? default)));
         }
         return new ConceptCostVector(remaining.ToArray());
     }
@@ -744,9 +1439,11 @@ public sealed class ConceptCostEntry
     {
         this.resource = resource;
         Value = value;
+        valueBig = value;
     }
 
     public ConceptResource resource;
+    private BigDouble valueBig;
     public BigDouble Value { get; }
     public BigDouble GetValue() => Value;
 }
@@ -768,13 +1465,54 @@ public sealed class ConceptResource
     public BigDouble GetQuantity() => Quantity;
     public BigDouble GetTrueSoftCap() => SoftCap;
     public string GetName() => name;
+    public Guid GetGuid() => Guid.TryParse(uuid, out var guid) ? guid : Guid.Empty;
 }
 
 public static class TargetingManager
 {
-    public static bool Targeting { get; set; }
+    /// <summary>
+    /// How many target requests are open. The game opens one per targeted effect a cast triggers and
+    /// closes one per target submitted, which is why resolving a cast is a loop and not a single call.
+    /// </summary>
+    public static int OpenRequests { get; set; }
 
-    public static bool IsTargeting() => Targeting;
+    /// <summary>What the selector will offer, or null for a request nothing can satisfy.</summary>
+    public static object? AvailableTarget { get; set; }
+
+    public static List<object> SubmittedTargets { get; } = new List<object>();
+
+    public static bool Targeting
+    {
+        get => OpenRequests > 0;
+        set => OpenRequests = value ? 1 : 0;
+    }
+
+    public static bool IsTargeting() => OpenRequests > 0;
+
+    public static TargetLink? GetTargetingLink() =>
+        AvailableTarget is null ? null : new TargetLink(AvailableTarget);
+
+    public static void SubmitTarget(object target)
+    {
+        SubmittedTargets.Add(target);
+        if (OpenRequests > 0) OpenRequests--;
+    }
+
+    public static void Reset()
+    {
+        OpenRequests = 0;
+        AvailableTarget = null;
+        SubmittedTargets.Clear();
+    }
+
+    public sealed class TargetLink
+    {
+        private readonly object _target;
+
+        public TargetLink(object target) => _target = target;
+
+        public object GetRandom() => _target;
+    }
 }
 
 public interface ITooltipable
@@ -836,6 +1574,7 @@ namespace BepInEx
     public static class Paths
     {
         public static string GameRootPath { get; set; } = string.Empty;
+        public static string ConfigPath { get; set; } = string.Empty;
     }
 
     public sealed class PluginInfo
@@ -878,6 +1617,8 @@ namespace BepInEx.Configuration
         public int? ThrowOnSaveCall { get; set; }
 
         public int? ThrowOnReloadCall { get; set; }
+
+        public event EventHandler<SettingChangedEventArgs>? SettingChanged;
 
         public bool ThrowOnEveryReload { get; set; }
 
@@ -947,9 +1688,20 @@ namespace BepInEx.Configuration
 
         public bool Remove(ConfigDefinition definition) => _entries.Remove(definition);
 
+        internal void OnSettingChanged(ConfigEntryBase entry) =>
+            SettingChanged?.Invoke(this, new SettingChangedEventArgs(entry));
+
         public IEnumerator<KeyValuePair<ConfigDefinition, ConfigEntryBase>> GetEnumerator() => _entries.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    public sealed class SettingChangedEventArgs : EventArgs
+    {
+        public SettingChangedEventArgs(ConfigEntryBase changedSetting) =>
+            ChangedSetting = changedSetting;
+
+        public ConfigEntryBase ChangedSetting { get; }
     }
 
     public sealed class ConfigDefinition : IEquatable<ConfigDefinition>
@@ -1004,9 +1756,34 @@ namespace BepInEx.Configuration
                 return;
             }
 
-            BoxedValue = SettingType.IsEnum
-                ? Enum.Parse(SettingType, value, true)
-                : Convert.ChangeType(value, SettingType, CultureInfo.InvariantCulture);
+            BoxedValue = TomlTypeConverter.ConvertToValue(value, SettingType);
+        }
+    }
+
+    internal static class TomlTypeConverter
+    {
+        internal static object ConvertToValue(string value, Type targetType)
+        {
+            if (targetType == typeof(KeyboardShortcut))
+            {
+                var keys = value
+                    .Split('+')
+                    .Select(part =>
+                    {
+                        var trimmed = part.Trim();
+                        if (trimmed.Length == 0)
+                            throw new FormatException("A keyboard shortcut key cannot be empty.");
+                        return Enum.Parse<UnityEngine.KeyCode>(trimmed, ignoreCase: true);
+                    })
+                    .ToArray();
+                if (keys.Length == 0)
+                    throw new FormatException("A keyboard shortcut requires a main key.");
+                return new KeyboardShortcut(keys[0], keys.Skip(1).ToArray());
+            }
+
+            return targetType.IsEnum
+                ? Enum.Parse(targetType, value, true)
+                : Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture)!;
         }
     }
 
@@ -1032,6 +1809,7 @@ namespace BepInEx.Configuration
             {
                 _value = value;
                 SettingChanged?.Invoke(this, EventArgs.Empty);
+                ConfigFile.OnSettingChanged(this);
             }
         }
 
@@ -1136,16 +1914,46 @@ namespace BepInEx.Configuration
         public override string ToDescriptionString() => $"# Acceptable values: {string.Join(", ", AcceptableValues)}";
     }
 
-    public readonly struct KeyboardShortcut
+    /// <summary>
+    /// Carries the chord it was built from, because code under test compares a persisted shortcut
+    /// against the defaults it may have inherited, and a shortcut that remembers nothing makes every
+    /// chord equal to every other one.
+    /// </summary>
+    public readonly struct KeyboardShortcut : IEquatable<KeyboardShortcut>
     {
+        private readonly UnityEngine.KeyCode[]? _modifiers;
+
         public KeyboardShortcut(UnityEngine.KeyCode mainKey, params UnityEngine.KeyCode[] modifiers)
         {
+            MainKey = mainKey;
+            _modifiers = modifiers;
         }
+
+        public UnityEngine.KeyCode MainKey { get; }
+
+        public IEnumerable<UnityEngine.KeyCode> Modifiers =>
+            _modifiers ?? Array.Empty<UnityEngine.KeyCode>();
 
         public bool IsDown()
         {
             return false;
         }
+
+        public bool Equals(KeyboardShortcut other) =>
+            MainKey == other.MainKey &&
+            Modifiers.OrderBy(key => key).SequenceEqual(other.Modifiers.OrderBy(key => key));
+
+        public override bool Equals(object? obj) => obj is KeyboardShortcut other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            var hash = (int)MainKey;
+            foreach (var modifier in Modifiers.OrderBy(key => key)) hash = (hash * 397) ^ (int)modifier;
+            return hash;
+        }
+
+        public override string ToString() =>
+            string.Join(" + ", new[] { MainKey }.Concat(Modifiers));
     }
 }
 
@@ -1189,6 +1997,8 @@ namespace HarmonyLib
         {
         }
 
+        public PatchClassProcessor CreateClassProcessor(Type type) => new(this, type);
+
         public void Patch(MethodBase original, HarmonyMethod? prefix = null, HarmonyMethod? postfix = null, HarmonyMethod? transpiler = null, HarmonyMethod? finalizer = null)
         {
         }
@@ -1196,6 +2006,15 @@ namespace HarmonyLib
         public void UnpatchSelf()
         {
         }
+    }
+
+    public sealed class PatchClassProcessor
+    {
+        public PatchClassProcessor(Harmony instance, Type type)
+        {
+        }
+
+        public List<MethodInfo> Patch() => new();
     }
 
     public static class AccessTools
@@ -1336,6 +2155,8 @@ namespace UnityEngine
 
         public bool activeInHierarchy { get; set; } = true;
         public bool activeSelf { get; private set; } = true;
+        public UnityEngine.SceneManagement.Scene scene { get; set; } =
+            new UnityEngine.SceneManagement.Scene("Main");
 
         public static GameObject? Find(string name) => null;
 
@@ -1422,6 +2243,20 @@ namespace UnityEngine
         public static Vector2 one => new Vector2(1f, 1f);
     }
 
+    public readonly struct Vector3
+    {
+        public Vector3(float x, float y, float z = 0f)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public readonly float x;
+        public readonly float y;
+        public readonly float z;
+    }
+
     public readonly struct Color
     {
         public Color(float r, float g, float b, float a = 1f)
@@ -1439,6 +2274,28 @@ namespace UnityEngine
         public static Color white => new Color(1f, 1f, 1f, 1f);
 
         public static Color Lerp(Color a, Color b, float t) => t < 0.5f ? a : b;
+    }
+
+    public readonly struct Color32
+    {
+        public Color32(byte r, byte g, byte b, byte a)
+        {
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.a = a;
+        }
+
+        public readonly byte r;
+        public readonly byte g;
+        public readonly byte b;
+        public readonly byte a;
+
+        public static implicit operator Color32(Color color) => new Color32(
+            (byte)(color.r * byte.MaxValue),
+            (byte)(color.g * byte.MaxValue),
+            (byte)(color.b * byte.MaxValue),
+            (byte)(color.a * byte.MaxValue));
     }
 
     public class CanvasRenderer : Component
@@ -1467,8 +2324,46 @@ namespace UnityEngine
         Equals = 61,
         Minus = 45,
         Alpha0 = 48,
+        Alpha1 = 49,
+        Alpha2 = 50,
+        Alpha3 = 51,
+        Alpha4 = 52,
+        Alpha5 = 53,
+        Alpha6 = 54,
+        Alpha7 = 55,
+        Alpha8 = 56,
+        Alpha9 = 57,
+        Space = 32,
+        Q = 113,
+        W = 119,
+        E = 101,
+        R = 114,
+        T = 116,
         X = 120,
+        Y = 121,
+        Z = 122,
+        J = 106,
         M = 109,
+        Keypad1 = 257,
+        Keypad2 = 258,
+        Keypad3 = 259,
+        Keypad4 = 260,
+        Keypad5 = 261,
+        Keypad6 = 262,
+        Keypad7 = 263,
+        Keypad8 = 264,
+        Keypad9 = 265,
+        UpArrow = 273,
+        DownArrow = 274,
+        RightArrow = 275,
+        LeftArrow = 276,
+        F7 = 288,
+        F8 = 289,
+        RightShift = 303,
+        LeftShift = 304,
+        RightControl = 305,
+        LeftControl = 306,
+        RightAlt = 307,
         LeftAlt = 308,
     }
 
@@ -1491,13 +2386,20 @@ namespace UnityEngine
     {
         public Rect(float x, float y, float width, float height)
         {
+            this.x = x;
+            this.y = y;
             this.width = width;
             this.height = height;
         }
 
+        public readonly float x;
+        public readonly float y;
         public readonly float width;
-
         public readonly float height;
+        public float xMin => x;
+        public float xMax => x + width;
+        public float yMin => y;
+        public float yMax => y + height;
     }
 
     public static class GUI
@@ -1519,12 +2421,51 @@ namespace UnityEngine.UI
     {
         public UnityEngine.Color color { get; set; } = UnityEngine.Color.white;
         public bool raycastTarget { get; set; }
+        public UnityEngine.RectTransform rectTransform =>
+            (UnityEngine.RectTransform)transform;
+
+        protected void SetVerticesDirty()
+        {
+        }
+    }
+
+    public class MaskableGraphic : Graphic
+    {
+        protected virtual void OnPopulateMesh(VertexHelper helper)
+        {
+        }
+    }
+
+    public sealed class VertexHelper
+    {
+        public int currentVertCount { get; private set; }
+
+        public void Clear() => currentVertCount = 0;
+
+        public void AddVert(
+            UnityEngine.Vector3 position,
+            UnityEngine.Color32 color,
+            UnityEngine.Vector2 uv0) =>
+            currentVertCount++;
+
+        public void AddTriangle(int index0, int index1, int index2)
+        {
+        }
     }
 
     public class Image : Graphic
     {
+        public enum Type
+        {
+            Simple,
+            Sliced,
+            Tiled,
+            Filled,
+        }
+
         public UnityEngine.Sprite? sprite { get; set; }
         public bool preserveAspect { get; set; }
+        public Type type { get; set; }
     }
 
     public class Selectable : UnityEngine.Behaviour
@@ -1570,8 +2511,10 @@ namespace UnityEngine.UI
 
         public bool horizontal { get; set; }
         public bool vertical { get; set; }
+        public bool inertia { get; set; }
         public MovementType movementType { get; set; }
         public float scrollSensitivity { get; set; }
+        public float horizontalNormalizedPosition { get; set; }
         public float verticalNormalizedPosition { get; set; }
         public UnityEngine.RectTransform? viewport { get; set; }
         public UnityEngine.RectTransform? content { get; set; }
@@ -1647,6 +2590,7 @@ namespace TMPro
           public LineType lineType { get; set; }
           public OnChangeEvent onValueChanged { get; } = new OnChangeEvent();
           public OnChangeEvent onSelect { get; } = new OnChangeEvent();
+          public OnChangeEvent onEndEdit { get; } = new OnChangeEvent();
 
         public sealed class OnChangeEvent
         {
@@ -1675,6 +2619,8 @@ namespace UnityEngine.SceneManagement
         public readonly string name;
 
         public bool IsValid() => name is not null;
+
+        public bool isLoaded => IsValid();
     }
 
     public static class SceneManager

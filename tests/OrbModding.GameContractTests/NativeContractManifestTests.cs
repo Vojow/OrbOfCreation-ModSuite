@@ -19,13 +19,167 @@ public sealed class NativeContractManifestTests
         "(?:AccessTools\\.TypeByName|ReflectionUtil\\.FindLoadedType)\\s*\\(\\s*\"(?<type>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// A reflection selector and the literal it names, which need not share a physical line.
+    /// </summary>
+    /// <remarks>
+    /// The gap was <c>[^;\r\n]</c> — same line only — so a call wrapped across lines named a native
+    /// target the audit could not see. Twenty-five such calls were live when this was widened, among
+    /// them <c>AutoBuyNativeQueueRoomAdapter</c>'s <c>GetRemainingRoom</c>. Stopping at the statement
+    /// terminator still keeps one call's literals from bleeding into the next.
+    /// </remarks>
     private static readonly Regex LiteralSelectorPattern = new(
-        "(?:GetMethod|GetField|GetProperty|FindMethod|FindField|FindNoArgMethod|ResolveStaticNoArgMethod|InvokeNoArgs|TryInvokeBool|ReadMember|ReadBool|ReadInt|InvokeRequired|ReadStaticList)\\s*\\([^;\\r\\n]*?\"(?<target>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
+        "(?:GetMethod|GetField|GetProperty|FindMethod|FindField|FindNoArgMethod|ResolveStaticNoArgMethod|InvokeNoArgs|TryInvokeBool|ReadMember|ReadBool|ReadInt|InvokeRequired|ReadStaticList)\\s*\\([^;]*?\"(?<target>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex ReflectionUsePattern = new(
-        "(?:HarmonyPatch|AccessTools\\.(?:Method|TypeByName)|ReflectionUtil\\.FindLoadedType|\\.(?:GetMethod|GetMethods|GetField|GetFields|GetProperty|GetProperties)\\s*\\(|\\b(?:FindMethod|FindField)\\s*\\()",
+        "(?:HarmonyPatch|AccessTools\\.(?:Method|TypeByName)|ReflectionUtil\\.FindLoadedType"
+            + "|NativeAccessorBinder\\.|WorldMemberBinding"
+            + "|\\.(?:GetMethod|GetMethods|GetField|GetFields|GetProperty|GetProperties)\\s*\\("
+            + "|\\b(?:FindMethod|FindField)\\s*\\()",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// World-category binders name their native targets two ways that no reflection API appears in:
+    /// as arguments to the accessor-binding helper, and as the <c>TypeName</c> and
+    /// <c>RegistryMember</c> overrides that say which type and registry the category walks. Both are
+    /// declarations of a native contract, so both are audited as one — otherwise the manifest would
+    /// stop covering the collector precisely as the collector grew to span every category the game
+    /// ships.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The accessor-binding form is matched on the method name and its type argument rather than on
+    /// the receiver, so renaming the local a binder binds through cannot quietly drop a file out of
+    /// the audit.
+    /// </para>
+    /// <para>
+    /// The enum-field forms need their own alternative because they carry no type argument to match
+    /// on: the binder returns the raw <c>int</c> rather than a mirrored enum, so <c>EnumField</c> and
+    /// <c>NestedEnumField</c> are called bare. Requiring a type argument silently excluded every
+    /// instance-form enum selector in the collector — ten files' worth, including every plot phase
+    /// and modifier type.
+    /// </para>
+    /// <para>
+    /// <c>ModifierRecord</c> is bare for the same reason and matters more than most: it is how every
+    /// derived number in the game is now read, so a pattern that did not list it would drop a
+    /// hundred and fifty native member names out of the audit in one commit.
+    /// </para>
+    /// </remarks>
+    private static readonly Regex BinderTargetPattern = new(
+        "(?:\\.(?:Call|Field|NestedField|EnumField)<[^<>()]*>\\s*\\([^;]*?\\)"
+            + "|\\.(?:EnumField|NestedEnumField)\\s*\\([^;]*?\\)"
+            + "|\\.(?:CollectionCount|NestedCollectionCount|ReferenceGuid|CallReferenceGuid"
+            + "|ModifierRecord)\\s*\\([^;]*?\\)"
+            + "|NativeAccessorBinder\\.(?:Call|Field|NestedField|EnumField|NestedEnumField|StaticList"
+            + "|StaticDictionary|CollectionCount|NestedCollectionCount|ReferenceGuid|ModifierRecord)"
+            + "(?:<[^<>()]*>)?\\s*\\([^;]*?\\)"
+            + "|(?:TypeName|RegistryMember)\\s*=>\\s*\"[^\"\\r\\n]*\")",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>The game type each category walks, as its binder declares it.</summary>
+    private static readonly Regex TypeNamePattern = new(
+        "TypeName\\s*=>\\s*\"(?<type>[A-Za-z_][A-Za-z0-9_]*)\"",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The field types a collected type must declare a contract for. Everything else — collections,
+    /// entity references, Unity objects — is governed by its own rule in D17 rather than by this one.
+    /// </summary>
+    private static readonly HashSet<string> ScalarFieldTypes = new(StringComparer.Ordinal)
+    {
+        "System.Boolean", "System.Int32", "System.Int64", "System.Double", "System.Single",
+        "System.String", "BigDouble",
+    };
+
+    private static readonly HashSet<string> ModifierRecordTypes = new(StringComparer.Ordinal)
+    {
+        "ValueModifierRecord", "ModifierRecord", "OrderedMultiplierRecord", "MergingModifierRecord",
+    };
+
+    private static readonly Regex BareLiteralPattern = new(
+        "\"(?<target>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Contracts outside the service-cycle boundary model which are therefore still allowed to
+    /// declare <c>"place": "legacy"</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This list only ever shrinks. Migrating a service deletes its native access, so every id in
+    /// that service's block either disappears from the manifest or stops being legacy — and both
+    /// fail <see cref="EveryLegacyContractIsAnAllowlistedBoundaryException"/> until the block is
+    /// removed. Nothing has to remember to prune it.
+    /// </para>
+    /// <para>
+    /// <c>legacy</c> outranks the structural places rather than sitting beside them: migration-only
+    /// Harmony patches remain migration debt until their owning service moves.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] LegacyBoundaryExceptions =
+    {
+        // Auto Cast's toggle button, which is not a service and did not migrate with one. It walks
+        // live SpellManager state for the equipped spell's icon, and that read is the last native
+        // access the feature makes outside its action boundary. It leaves this list when the button
+        // stops reflecting, not when a runtime moves.
+        "spell.get-icon",
+    };
+
+    /// <summary>The places a contract may sit in once its service is on ServiceCycle.</summary>
+    private static readonly string[] LivePlaces = { "capture", "action", "patch" };
+
+    /// <summary>
+    /// Every contract is either owned by a live place — collected into the world snapshot, read at
+    /// an action boundary, or Harmony-patched — or is named debt of a service that has not migrated.
+    /// </summary>
+    /// <remarks>
+    /// The manifest recorded which native members the suite touches but never where, so nothing
+    /// distinguished a member read once during capture from one reflected on mid-action. The north
+    /// star is capture-once-then-decide, and that claim was unmeasurable while every contract looked
+    /// alike.
+    /// </remarks>
+    [Fact]
+    public void EveryLegacyContractIsAnAllowlistedBoundaryException()
+    {
+        var manifest = NativeContractManifest.Load();
+        var allowlist = LegacyBoundaryExceptions.ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(LegacyBoundaryExceptions.Length, allowlist.Count);
+
+        var byId = manifest.Contracts.ToDictionary(contract => contract.Id, StringComparer.Ordinal);
+        var failures = new List<string>();
+
+        foreach (var id in LegacyBoundaryExceptions)
+        {
+            if (!byId.TryGetValue(id, out var contract))
+            {
+                failures.Add($"{id}: allowlisted as unmigrated-service debt but no longer in the manifest; drop it from the allowlist");
+                continue;
+            }
+
+            if (contract.Place != "legacy")
+            {
+                failures.Add($"{id}: allowlisted as unmigrated-service debt but now declares place '{contract.Place}'; drop it from the allowlist");
+            }
+        }
+
+        foreach (var contract in manifest.Contracts)
+        {
+            if (allowlist.Contains(contract.Id))
+            {
+                continue;
+            }
+
+            if (!LivePlaces.Contains(contract.Place, StringComparer.Ordinal))
+            {
+                failures.Add(
+                    $"{contract.Id}: place '{contract.Place}' is not one of {string.Join(", ", LivePlaces)}; "
+                        + "a contract may only be legacy while it is listed as an unmigrated service's debt");
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
 
     [Fact]
     public void Manifest_IsCompleteAndInternallyConsistent()
@@ -33,7 +187,7 @@ public sealed class NativeContractManifestTests
         var manifest = NativeContractManifest.Load();
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
-        Assert.Equal(1, manifest.SchemaVersion);
+        Assert.Equal(3, manifest.SchemaVersion);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
         Assert.False(string.IsNullOrWhiteSpace(manifest.Provenance));
@@ -44,10 +198,34 @@ public sealed class NativeContractManifestTests
         {
             Assert.False(string.IsNullOrWhiteSpace(assembly.Id));
             Assert.EndsWith(".dll", assembly.File, StringComparison.OrdinalIgnoreCase);
-            Assert.Matches("^[A-F0-9]{64}$", assembly.Sha256);
-            Assert.False(string.IsNullOrWhiteSpace(assembly.Provenance));
         });
         Assert.Equal(manifest.Assemblies.Count, manifest.Assemblies.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
+
+        Assert.NotEmpty(manifest.Baselines);
+        Assert.Equal(
+            manifest.Baselines.Count,
+            manifest.Baselines.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(manifest.Baselines, baseline =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(baseline.Id));
+            Assert.Contains(baseline.Platform, new[] { "windows", "macos" });
+            Assert.False(string.IsNullOrWhiteSpace(baseline.AuditedAt));
+            Assert.False(string.IsNullOrWhiteSpace(baseline.GameBuild));
+            Assert.False(string.IsNullOrWhiteSpace(baseline.Provenance));
+            AssertNoUserSpecificPath(baseline.Provenance);
+            Assert.Equal(manifest.Assemblies.Count, baseline.Assemblies.Count);
+            Assert.Equal(
+                baseline.Assemblies.Count,
+                baseline.Assemblies.Select(item => item.Assembly).Distinct(StringComparer.Ordinal).Count());
+            Assert.All(baseline.Assemblies, assembly =>
+            {
+                Assert.Contains(manifest.Assemblies, declared => declared.Id == assembly.Assembly);
+                Assert.Matches("^[A-F0-9]{64}$", assembly.Sha256);
+                Assert.False(string.IsNullOrWhiteSpace(assembly.Provenance));
+                AssertNoUserSpecificPath(assembly.Provenance);
+                Assert.False(Path.IsPathRooted(assembly.Provenance));
+            });
+        });
 
         Assert.Equal(manifest.Contracts.Count, manifest.Contracts.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.All(manifest.Contracts, contract =>
@@ -61,14 +239,7 @@ public sealed class NativeContractManifestTests
             Assert.All(contract.Owners, owner => Assert.False(string.IsNullOrWhiteSpace(owner)));
             Assert.NotEmpty(contract.Usages);
             Assert.All(contract.Usages, usage => Assert.Contains(usage, new[] { "direct", "reflection", "harmony" }));
-            Assert.NotEmpty(contract.Sources);
-            Assert.All(contract.Sources, source =>
-            {
-                Assert.False(string.IsNullOrWhiteSpace(source));
-                Assert.True(
-                    File.Exists(Path.Combine(repositoryRoot, source.Replace('/', Path.DirectorySeparatorChar))),
-                    $"Manifest source does not exist: {source}");
-            });
+            Assert.Contains(contract.Place, LivePlaces.Append("legacy"));
 
             if (contract.Kind == "field")
             {
@@ -103,21 +274,78 @@ public sealed class NativeContractManifestTests
             manifest.SourceAudit.Exemptions.Select(item => NormalizePath(item.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    /// <summary>
+    /// Every source directory under <c>src/</c> must be an audit root, so that reflection added
+    /// anywhere in it is walked.
+    /// </summary>
+    /// <remarks>
+    /// A missing root does not fail — the walk simply never visits that directory and reports nothing,
+    /// which reads exactly like having nothing to report. <c>src/Common</c> was missing for
+    /// the whole life of the manifest while holding live game reflection, and was about to receive the
+    /// world collector on top of it (W26). Enumerating the directories rather than listing them is the
+    /// point: a new one is audited by existing, not by someone remembering. The one suite project now
+    /// lives at <c>src/</c> itself, so its build output lands beside the feature folders; build output
+    /// is not source and is never audited.
+    /// </remarks>
     [Fact]
-    public void RuntimeHashGuards_MatchManifestBaseline()
+    public void EverySourceDirectoryIsAnAuditRoot()
+    {
+        var manifest = NativeContractManifest.Load();
+        var repositoryRoot = RepositoryPaths.RequireRoot();
+        var roots = manifest.SourceAudit.Roots
+            .Select(NormalizePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var directories = Directory
+            .EnumerateDirectories(Path.Combine(repositoryRoot, "src"))
+            .Where(directory =>
+            {
+                var name = Path.GetFileName(directory)!;
+                return !name.StartsWith("bin", StringComparison.Ordinal) &&
+                       !name.StartsWith("obj", StringComparison.Ordinal);
+            })
+            .Select(directory => NormalizePath(Path.GetRelativePath(repositoryRoot, directory)))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(directories);
+        Assert.All(directories, directory =>
+            Assert.True(
+                roots.Contains(directory),
+                $"Source directory is not a native-contract audit root, so reflection in it is never "
+                    + $"checked: {directory}"));
+    }
+
+    [Fact]
+    public void RuntimeHashGuards_MatchEveryManifestBaselinePair()
     {
         var manifest = NativeContractManifest.Load();
 
-        Assert.Equal(
-            GameAssemblyAudit.ExpectedAssemblyCSharpSha256,
-            manifest.RequireAssembly("assembly-csharp").Sha256,
-            ignoreCase: true);
-        Assert.Equal(
-            GameAssemblyAudit.ExpectedFirstPassSha256,
-            manifest.RequireAssembly("assembly-csharp-firstpass").Sha256,
-            ignoreCase: true);
+        Assert.Equal(3, manifest.Baselines.Count);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.WindowsSteamBaseline);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacSteamBaseline);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacV1052SteamBaseline);
     }
 
+    /// <summary>
+    /// Every native type and member the suite names in a reflection or Harmony call is declared by
+    /// some contract.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The check is on the native shape, not on which of our files touches it. It used to be both:
+    /// every contract carried a hand-maintained <c>sources[]</c> path list and a literal counted as
+    /// declared only against contracts naming that same file. That coupled an audit of the game's
+    /// surface to our own folder layout — moving a file broke it while the native surface was
+    /// unchanged, and a new file reflecting on an already-declared member meant hand-editing entries
+    /// spread across the manifest with no compiler help. The scoping bought nothing the global check
+    /// does not: an undeclared native target still fails here.
+    /// </para>
+    /// <para>
+    /// Deriving the list instead of dropping it was considered and rejected — a field computed from
+    /// the extracted literals cannot then gate those same literals.
+    /// </para>
+    /// </remarks>
     [Fact]
     public void ActiveNativeReflectionAndHarmonyTargets_AreDeclared()
     {
@@ -129,10 +357,23 @@ public sealed class NativeContractManifestTests
             StringComparer.OrdinalIgnoreCase);
         Assert.All(exemptions.Values, exemption => Assert.False(string.IsNullOrWhiteSpace(exemption.Reason)));
 
-        var declaredSources = manifest.Contracts
-            .SelectMany(contract => contract.Sources.Select(source => (Path: NormalizePath(source), Contract: contract)))
-            .ToLookup(item => item.Path, item => item.Contract, StringComparer.OrdinalIgnoreCase);
+        var declaredTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var contract in manifest.Contracts)
+        {
+            declaredTargets.Add(contract.Type);
+            if (contract.Member is not null)
+            {
+                declaredTargets.Add(contract.Member);
+            }
+
+            foreach (var token in contract.SourceTokens)
+            {
+                declaredTargets.Add(token);
+            }
+        }
+
         var failures = new List<string>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var root in manifest.SourceAudit.Roots)
         {
@@ -140,6 +381,11 @@ public sealed class NativeContractManifestTests
             foreach (var sourcePath in Directory.EnumerateFiles(absoluteRoot, "*.cs", SearchOption.AllDirectories))
             {
                 var relativePath = NormalizePath(Path.GetRelativePath(repositoryRoot, sourcePath));
+                if (!visited.Add(relativePath))
+                {
+                    continue;
+                }
+
                 var source = File.ReadAllText(sourcePath);
                 if (!ReflectionUsePattern.IsMatch(source))
                 {
@@ -151,22 +397,11 @@ public sealed class NativeContractManifestTests
                     continue;
                 }
 
-                var sourceContracts = declaredSources[relativePath].ToArray();
-                if (sourceContracts.Length == 0)
+                foreach (var candidate in FindLiteralTargets(source).Distinct(StringComparer.Ordinal))
                 {
-                    failures.Add($"{relativePath}: reflection/Harmony source has no manifest contracts or documented exemption");
-                    continue;
-                }
-
-                var candidates = FindLiteralTargets(source).Distinct(StringComparer.Ordinal).ToArray();
-                foreach (var candidate in candidates)
-                {
-                    if (!sourceContracts.Any(contract =>
-                            contract.Type == candidate ||
-                            contract.Member == candidate ||
-                            contract.SourceTokens.Contains(candidate, StringComparer.Ordinal)))
+                    if (!declaredTargets.Contains(candidate))
                     {
-                        failures.Add($"{relativePath}: native target literal '{candidate}' is not declared by a manifest contract for this source");
+                        failures.Add($"{relativePath}: native target literal '{candidate}' is not declared by any manifest contract");
                     }
                 }
             }
@@ -182,8 +417,53 @@ public sealed class NativeContractManifestTests
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
+    /// <summary>
+    /// The installed assemblies are one of the audited baseline pairs, byte for byte.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="InstalledGame_MatchesEveryDeclaredContract"/> because the two answer
+    /// different questions and a re-audit needs them apart: a build that is deliberately not yet a
+    /// baseline fails this one by definition, while the contract sweep below is exactly what has to
+    /// be run against it before anyone stamps it. Folding them together made the sweep unrunnable
+    /// for the one build it matters most for. See <c>script/re-audit</c>.
+    /// </remarks>
     [GameAssemblyFact]
-    public void InstalledGame_MatchesManifest()
+    public void InstalledGame_IsAnAuditedBaseline()
+    {
+        var manifest = NativeContractManifest.Load();
+        var paths = GameAssemblyPaths.Require();
+        var failures = new List<string>();
+        var audit = GameAssemblyAudit.Check(paths.GameRoot);
+        if (!audit.MatchesExpected)
+        {
+            failures.Add(
+                $"Unknown assembly pair: main={audit.AssemblyCSharp.ActualSha256 ?? "<missing>"}, " +
+                $"first-pass={audit.AssemblyCSharpFirstPass.ActualSha256 ?? "<missing>"}; " +
+                $"discovery={audit.DiscoveryFailure}");
+        }
+        else
+        {
+            var baseline = manifest.RequireBaseline(audit.MatchedBaselineId);
+            foreach (var assemblyEntry in manifest.Assemblies)
+            {
+                using var stream = File.OpenRead(Path.Combine(paths.ManagedDirectory, assemblyEntry.File));
+                var actualHash = Convert.ToHexString(SHA256.HashData(stream));
+                var expectedHash = baseline.RequireAssembly(assemblyEntry.Id).Sha256;
+                if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add($"{assemblyEntry.File}: expected SHA-256 {expectedHash}, actual {actualHash}");
+                }
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
+    /// Every declared contract still names a member of the shape the shipped assembly declares.
+    /// </summary>
+    [GameAssemblyFact]
+    public void InstalledGame_MatchesEveryDeclaredContract()
     {
         var manifest = NativeContractManifest.Load();
         var paths = GameAssemblyPaths.Require();
@@ -191,16 +471,8 @@ public sealed class NativeContractManifestTests
 
         foreach (var assemblyEntry in manifest.Assemblies)
         {
-            var path = Path.Combine(paths.GameRoot, "Orb Of Creation_Data", "Managed", assemblyEntry.File);
-            using var stream = File.OpenRead(path);
-            var actualHash = Convert.ToHexString(SHA256.HashData(stream));
-            if (!string.Equals(actualHash, assemblyEntry.Sha256, StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add($"{assemblyEntry.File}: expected SHA-256 {assemblyEntry.Sha256}, actual {actualHash}");
-                continue;
-            }
-
-            using var metadata = new GameAssemblyMetadata(path);
+            using var metadata = new GameAssemblyMetadata(
+                Path.Combine(paths.ManagedDirectory, assemblyEntry.File));
             foreach (var contract in manifest.Contracts.Where(contract => contract.Assembly == assemblyEntry.Id))
             {
                 ValidateContract(metadata, contract, failures);
@@ -208,6 +480,121 @@ public sealed class NativeContractManifestTests
         }
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
+    /// Every value-shaped member of every type world collection walks is declared by a contract.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is D17 as a gate rather than a habit. The collector's first pass over twenty-five
+    /// categories was built from each type's <c>SaveDataBase</c> record and looked complete while
+    /// omitting 165 scalars and 125 modifier records — every value the game recomputes on load rather
+    /// than persisting. Nothing failed. A consumer would simply have found nothing where there was
+    /// something.
+    /// </para>
+    /// <para>
+    /// The check runs against the shipped assembly's metadata, so it measures the collector against
+    /// the type the game actually ships rather than against a decompile or a stub. A category that
+    /// gains a field in a future build fails here until it is either collected or exempted in the
+    /// manifest with a reason.
+    /// </para>
+    /// <para>
+    /// A field read through an accessor still needs its own contract. <c>UpgradeSO.level</c> is
+    /// collected by calling <c>GetPurchaseLevel()</c>, which returns it — so the suite depends on
+    /// that field's name and type just as directly as if it read it, and a manifest that recorded
+    /// only the method would not say so.
+    /// </para>
+    /// <para>
+    /// Only scalars and modifier records are required. A collection, a reference to another entity,
+    /// and a Unity object are all deliberately out of scope — the first two have their own rules in
+    /// D17 and the third is not state.
+    /// </para>
+    /// </remarks>
+    [GameAssemblyFact]
+    public void EveryValueMemberOfACollectedTypeIsDeclared()
+    {
+        var manifest = NativeContractManifest.Load();
+        var paths = GameAssemblyPaths.Require();
+        var repositoryRoot = RepositoryPaths.RequireRoot();
+
+        var worldDirectory = Path.Combine(
+            repositoryRoot, "src", "Common", "Runtime", "World");
+
+        // The directory is named here rather than discovered, so the next move of the world
+        // collector silently points this walk at nothing. Say so in the test's own words instead
+        // of leaving a DirectoryNotFoundException to explain it.
+        Assert.True(
+            Directory.Exists(worldDirectory),
+            $"World collector directory not found, so nothing was checked: {worldDirectory}");
+
+        var collected = Directory
+            .EnumerateFiles(worldDirectory, "World*.cs", SearchOption.AllDirectories)
+            .SelectMany(file => TypeNamePattern.Matches(File.ReadAllText(file)).Cast<Match>())
+            .Select(match => match.Groups["type"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        // Asserted as an exact count rather than merely non-empty. This walk went blind once
+        // already: the binders moved into a Categories/ subdirectory while the search was still
+        // top-level, so it matched three variable binders, found their contracts, and passed — while
+        // twenty-nine categories went unchecked. NotEmpty cannot tell "everything is declared" from
+        // "almost nothing was looked at". Update the number when a category is added or removed.
+        Assert.Equal(34, collected.Length);
+
+        var declared = manifest.Contracts
+            .Where(contract => contract.Assembly == "assembly-csharp")
+            .Select(contract => (contract.Type, contract.Member))
+            .ToHashSet();
+
+        var path = Path.Combine(paths.ManagedDirectory, "Assembly-CSharp.dll");
+        using var metadata = new GameAssemblyMetadata(path);
+        var failures = new List<string>();
+
+        foreach (var type in collected)
+        {
+            if (!metadata.HasType(type))
+            {
+                failures.Add($"{type}: collected but absent from the shipped assembly");
+                continue;
+            }
+
+            foreach (var field in metadata.GetFields(type))
+            {
+                if (field.IsStatic || !IsValueShaped(field.FieldType)) continue;
+                if (declared.Contains((type, field.Name))) continue;
+                failures.Add($"{type}.{field.Name} ({field.FieldType}) is not declared by any contract");
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    private static bool IsValueShaped(string fieldType) =>
+        ScalarFieldTypes.Contains(fieldType) || ModifierRecordTypes.Contains(fieldType);
+
+    private static void AssertRuntimeBaseline(
+        NativeContractManifest manifest,
+        GameAssemblyBaseline runtime)
+    {
+        Assert.True(runtime.IsValid);
+        var declared = manifest.RequireBaseline(runtime.Id);
+        Assert.Equal(
+            runtime.AssemblyCSharpSha256,
+            declared.RequireAssembly("assembly-csharp").Sha256,
+            ignoreCase: true);
+        Assert.Equal(
+            runtime.FirstPassSha256,
+            declared.RequireAssembly("assembly-csharp-firstpass").Sha256,
+            ignoreCase: true);
+    }
+
+    private static void AssertNoUserSpecificPath(string value)
+    {
+        Assert.DoesNotContain("/Users/", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/home/", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotMatch("^[A-Za-z]:[/\\\\]Users[/\\\\]", value);
     }
 
     private static void ValidateContract(
@@ -282,6 +669,16 @@ public sealed class NativeContractManifestTests
         foreach (Match match in LiteralSelectorPattern.Matches(source))
         {
             yield return match.Groups["target"].Value;
+        }
+
+        foreach (Match match in BinderTargetPattern.Matches(source))
+        {
+            // One binder call can name two members — a field and a field inside it — so every literal
+            // in the call is a target, not just the first.
+            foreach (Match literal in BareLiteralPattern.Matches(match.Value))
+            {
+                yield return literal.Groups["target"].Value;
+            }
         }
 
         if (source.Contains("[HarmonyPatch]", StringComparison.Ordinal))

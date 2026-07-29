@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrbModSuite</AssemblyName>
+    <RootNamespace>OrbModding</RootNamespace>
+    <RequireGameReferences>true</RequireGameReferences>
+    <!-- Literal, not $(SuiteVersion): tools/package-supported-suite.sh reads this with sed. -->
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
+    <Description>Orb Of Creation ModSuite: buying and progression automation, mastery catch-up, and the in-game configuration browser, in one BepInEx 5 plugin.</Description>
+    <!--
+      The project directory is the source root, so the default **/*.cs glob covers every feature
+      folder and nothing under tests/ or tools/. The excludes inherited from Directory.Build.props
+      are project-relative and therefore miss the build output still sitting inside the four former
+      project directories; anchor them at any depth.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**;**/bin-stubs/**;**/obj-stubs/**;**/bin-profile/**;**/obj-profile/**;**/bin-profile-stubs/**;**/obj-profile-stubs/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!--
+    Union of the four retired projects' Unity references. Common needed only UnityEngine.UI;
+    Automata, Mentor and Mod Config each additionally needed UIModule and TextMeshPro. BepInEx,
+    0Harmony, UnityEngine, UnityEngine.CoreModule, Assembly-CSharp and Assembly-CSharp-firstpass
+    continue to come from Directory.Build.props.
+  -->
+  <ItemGroup Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true' and '$(ManagedDir)' != ''">
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedDir)/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedDir)/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ManagedDir)/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Merged InternalsVisibleTo. The OrbAutomata and OrbMentor entries Common used to carry are gone:
+    they named this assembly. ProfileTests stays gated on the profiler symbol, because outside a
+    profiling build it has nothing here to see.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="OrbModding.Tests" />
+    <InternalsVisibleTo Include="OrbModding.ServiceCycleTrace" />
+    <InternalsVisibleTo Include="OrbModding.ProfileTests" Condition="'$(EnableServiceCycleProfiler)' == 'true'" />
+  </ItemGroup>
+
+  <!--
+    One level up now, not two: this project sits at src/, not src/Common/. The generator
+    still writes src/Common/KnownEntities.Generated.cs, which the glob picks up like any
+    other source.
+  -->
+  <Target Name="VerifyKnownEntitiesGenerated" BeforeTargets="BeforeCompile" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../tools/generate-known-entities.ps1&quot; -Verify" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="bash &quot;$(MSBuildProjectDirectory)/../tools/generate-known-entities.sh&quot; -Verify" />
+  </Target>
+</Project>

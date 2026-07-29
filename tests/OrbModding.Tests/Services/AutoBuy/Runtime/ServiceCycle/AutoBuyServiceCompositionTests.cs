@@ -1,0 +1,138 @@
+using System;
+using System.Threading;
+using OrbAutomata;
+using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Lifecycle;
+using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.World;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
+using OrbModding.Tests.Runtime.World;
+using Xunit;
+
+namespace OrbModding.Tests.Services.AutoBuy.Runtime.ServiceCycle;
+
+/// <summary>
+/// End-to-end wiring proof for Auto Buy's ServiceCycle composition: the shared pump drives the
+/// typed definition (AB-SC-014).
+/// </summary>
+/// <remarks>
+/// What runs where is the claim, and where the world comes from. The service is handed no world
+/// source at all: the registry owns the one publication, the runtime pins it, and the worker's
+/// projection turns it into candidates. Everything the service itself does — deciding to start and
+/// carrying out purchases — stays on the main thread. See W50.
+/// </remarks>
+public sealed class AutoBuyServiceCompositionTests
+{
+    [Fact]
+    public void CommonPumpExecutesThePlainServiceThroughMainThreadPorts()
+    {
+        var ownerThread = Thread.CurrentThread.ManagedThreadId;
+        var actions = new ActionPort(ownerThread);
+        var definition = AutoBuyService.Define(actions);
+        using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(7));
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(definition);
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+        TestWorldCollector.CollectedAtActivation(registry);
+
+        pump.PumpFrame(1);
+        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        pump.PumpFrame(2);
+        pump.PumpFrame(3);
+
+        Assert.Equal(0, actions.ExecutionCount);
+    }
+
+    /// <summary>
+    /// A world published into the registry reaches the worker's projection and becomes a purchase
+    /// attempt, without the service ever being handed a publisher.
+    /// </summary>
+    /// <remarks>
+    /// The composition compiles and pumps to completion against an empty world, so the test above
+    /// cannot tell a wired world from an unwired one. This one can: nothing but the registry's
+    /// publication can put a candidate in front of the action port.
+    /// </remarks>
+    [Fact]
+    public void AWorldPublishedIntoTheRegistryReachesTheWorkersProjection()
+    {
+        var ownerThread = Thread.CurrentThread.ManagedThreadId;
+        var actions = new ActionPort(ownerThread);
+        var definition = AutoBuyService.Define(actions);
+        using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(7));
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(definition);
+        // The one reading this composition ever gets, and the one that opens the gate: it is newer
+        // than the seed the service was armed on, so the service may act, and it is the only world
+        // that could have put a candidate in front of the action port.
+        registry.WorldPublication.Publish(AffordableStructureWorld(), new WorldGeneration(2));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        pump.PumpFrame(1);
+        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        pump.PumpFrame(2);
+        pump.PumpFrame(3);
+
+        Assert.True(actions.ExecutionCount > 0);
+    }
+
+    /// <summary>One structure priced at one unit of a resource the player holds plenty of.</summary>
+    private static GameWorldState AffordableStructureWorld()
+    {
+        var structureId = Guid.NewGuid();
+        var resourceId = Guid.NewGuid();
+        var costs = new[] { new WorldPurchaseCost(structureId, resourceId, new BigDouble(1.0, 0)) };
+        return new GameWorldState
+        {
+            Structures = WorldTable.Create(
+                new[] { WorldStructureDeriver.Shared.Derive(WorldSamples.Structure(structureId)) }),
+            Resources = WorldTable.Create(
+                new[]
+                {
+                    new WorldResourceDeriver(default).Derive(
+                        WorldSamples.Resource(resourceId, new BigDouble(1.0, 6), new BigDouble(-1d))),
+                }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(costs, costs.Length),
+        };
+    }
+
+    private static SuiteRuntimeConfiguration Configuration() =>
+        new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoBuy = new AutoBuyConfiguration
+            {
+                Mode = AutoBuyOperationMode.Active,
+                IncludeStructures = true,
+                IncludeUpgrades = false,
+                EvaluationIntervalSeconds = 0.01f,
+            },
+        };
+
+    private sealed class ActionPort : IAutoBuyCycleActionPort
+    {
+        private readonly int _ownerThread;
+
+        public ActionPort(int ownerThread) => _ownerThread = ownerThread;
+        public int ExecutionCount { get; private set; }
+
+        public ServiceActionResult TryExecute(
+            in AutoBuyCycleAction action,
+            in SuiteRuntimeConfiguration config,
+            in ServiceActionContext context)
+        {
+            Assert.Equal(_ownerThread, Thread.CurrentThread.ManagedThreadId);
+            ExecutionCount++;
+            var call = new NativeMutationCallOutcome(1, 1, 1);
+            return ServiceActionResult.Committed(
+                CommonActionResultCodes.Committed,
+                ServiceNativeMutationEvidence.Observed(NativeMutationOutcome.Verified, call));
+        }
+    }
+}

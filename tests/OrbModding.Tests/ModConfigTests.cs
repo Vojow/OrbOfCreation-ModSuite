@@ -19,6 +19,57 @@ public sealed class ModConfigTests
     }
 
     [Fact]
+    public void NativeShellUsesTopFrameAndLeavesOnlyDeliberateGutters()
+    {
+        Assert.Equal(0.975f, ModConfigShellLayout.TitleTop);
+        Assert.Equal(0.885f, ModConfigShellLayout.TitleBottom);
+        Assert.Equal(0.875f, ModConfigShellLayout.BodyTop);
+        Assert.Equal(0.115f, ModConfigShellLayout.BodyBottom);
+        Assert.Equal(0.105f, ModConfigShellLayout.FooterTop);
+        Assert.Equal(0.025f, ModConfigShellLayout.FooterBottom);
+        Assert.Equal(0.01f, ModConfigShellLayout.TitleBottom - ModConfigShellLayout.BodyTop, 3);
+        Assert.Equal(0.01f, ModConfigShellLayout.BodyBottom - ModConfigShellLayout.FooterTop, 3);
+        Assert.True(ModConfigShellLayout.TitleTop > ModConfigShellLayout.BodyTop);
+        Assert.True(ModConfigShellLayout.BodyTop - ModConfigShellLayout.BodyBottom > 0.75f);
+    }
+
+    [Fact]
+    public void TopNavigationPreservesTheRegisteredPluginTitle()
+    {
+        var catalog = new ConfigCatalogSnapshot(new[]
+        {
+            new ModConfigDescriptor(
+                "suite",
+                "Orb Of Creation ModSuite",
+                "test",
+                new[] { new ConfigSectionDescriptor("Auto Buy", Array.Empty<ConfigSettingDescriptor>()) }),
+        });
+
+        var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
+
+        Assert.Equal("Orb Of Creation ModSuite · Auto Buy", ModConfigTopNavigation.DetailTitle(catalog, pages[1]));
+    }
+
+    [Fact]
+    public void TopNavigationKeepsSchemaStatusOnlyPluginsSelectable()
+    {
+        var catalog = new ConfigCatalogSnapshot(new[]
+        {
+            new ModConfigDescriptor(
+                "suite",
+                "Orb Of Creation ModSuite",
+                "test",
+                Array.Empty<ConfigSectionDescriptor>()),
+        });
+
+        var page = ModConfigTopNavigation.Build(catalog, attentionCount: 0)[1];
+
+        Assert.Equal(-1, page.SectionIndex);
+        Assert.Equal("Orb Of Creation ModSuite", page.Label);
+        Assert.Equal("Orb Of Creation ModSuite", ModConfigTopNavigation.DetailTitle(catalog, page));
+    }
+
+    [Fact]
     public void Catalog_GroupsAndSortsModsSectionsAndSettingsDeterministically()
     {
         var laterConfig = new ConfigFile();
@@ -114,7 +165,7 @@ public sealed class ModConfigTests
     public void AutomataCatalog_ShowsOnlyOrderedPublicConfiguration()
     {
         var config = new ConfigFile();
-        AutomataConfig.Bind(config);
+        BepInExAutomataConfiguration.Bind(config);
 
         var mod = ConfigCatalog.Build(new[]
             {
@@ -123,7 +174,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "Auto Buy", "Auto Cast", "Auto Concept", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -135,6 +186,9 @@ public sealed class ModConfigTests
         Assert.Equal(
             new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
+            mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
@@ -146,11 +200,11 @@ public sealed class ModConfigTests
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
             setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
-        Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
-        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
+        Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
+        Assert.True(ModSettingsPage.IsImmediateModeSetting(autoBuyMode));
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
         var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
@@ -160,7 +214,6 @@ public sealed class ModConfigTests
         var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
         var settings = mod.Sections.SelectMany(section => section.Settings).ToDictionary(
             setting => $"{setting.SourceSection}.{setting.Key}");
-
         Assert.All(
             settings.Values.Where(setting => setting.SourceSection == "AutoBuy" && setting.Key != "Mode"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
@@ -175,6 +228,11 @@ public sealed class ModConfigTests
                 setting.Key is not ("Mode" or "ShowToggleButton")),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoConcept" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoHarvest" &&
+                setting.Key != "Mode"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoHarvest" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
 
         Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
         Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));
@@ -205,27 +263,56 @@ public sealed class ModConfigTests
     }
 
     [Fact]
+    public void SuiteCatalogConsolidatesTheNineLegacyTabsIntoSevenRailPages()
+    {
+        var config = new ConfigFile();
+        BepInExAutomataConfiguration.Bind(config);
+        MentorConfig.Bind(config);
+
+        var mod = ConfigCatalog.Build(new[]
+            {
+                new ConfigPluginSource("suite", "Orb Of Creation ModSuite", "test", config),
+            })
+            .Mods.Single();
+
+        Assert.Equal(
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Mentor", "Advanced" },
+            mod.Sections.Select(section => section.Name));
+        Assert.Equal(8, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.All(
+            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Mentor"),
+            section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
+                section.Settings.Single(setting => setting.Key == "Mode"))));
+    }
+
+    [Fact]
     public void MentorCatalog_UsesFeatureTabsAndDependencies()
     {
         var config = new ConfigFile();
         MentorConfig.Bind(config);
         var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("mentor", "Mentor", "test", config) }).Mods.Single();
 
-        Assert.Equal(new[] { "Spells", "Artifacts", "Alchemy", "Advanced" }, mod.Sections.Select(section => section.Name));
+        Assert.Equal(new[] { "Mentor", "Advanced" }, mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
-        var artifactShare = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "SharePercent");
+        var mentorSection = mod.Sections.Single(section => section.Name == "Mentor");
+        var artifactShare = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "Artifacts" && setting.Key == "SharePercent");
         Assert.Equal(2, artifactShare.Dependencies.Count);
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active");
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "Artifacts" && dependency.Key == "Enabled" && dependency.ExpectedValue == "true");
+        Assert.DoesNotContain(
+            mod.Sections.SelectMany(section => section.Settings),
+            setting => setting.SourceSection == "Performance");
 
         var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
-        var spellSection = mod.Sections.Single(section => section.Name == "Spells");
-        var mentorMode = spellSection.Settings.Single(setting => setting.Key == "Mode");
-        var toggleShortcut = spellSection.Settings.Single(setting => setting.Key == "ToggleShortcut");
-        var artifactEnabled = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "Enabled");
+        var mentorMode = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "General" && setting.Key == "Mode");
+        var toggleShortcut = mentorSection.Settings.Single(setting => setting.Key == "ToggleShortcut");
+        var artifactEnabled = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "Artifacts" && setting.Key == "Enabled");
         Assert.All(
             mod.Sections.SelectMany(section => section.Settings).Where(setting =>
-                setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy" or "Performance"),
+                setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.False(session.DependencySatisfied(artifactShare));
@@ -280,7 +367,7 @@ public sealed class ModConfigTests
         config.SeedSerialized("Research", "Mode", LegacyResearchAutomationMode.DryRun.ToString());
         config.SeedSerialized("AutoConcept", "AutoLevelSpells", "false");
 
-        AutomataConfig.Bind(config);
+        BepInExAutomataConfiguration.Bind(config);
 
         Assert.DoesNotContain(config, pair => pair.Key.Key.Contains("RuntimeProbe", StringComparison.Ordinal));
         Assert.DoesNotContain(config, pair => pair.Key.Key == "ActivePurchaseLimitPerSession");
@@ -349,26 +436,76 @@ public sealed class ModConfigTests
     }
 
     [Fact]
-    public void EditSession_RefreshesExternalChangesWithoutOverwritingStagedEdits()
+    public void EditSession_ExternalChangesConflictUntilExplicitlyResolved()
     {
         var config = new ConfigFile();
-        var mode = config.Bind("General", "Mode", SampleMode.Disabled, "Mode");
-        var enabled = config.Bind("General", "Enabled", true, "Enabled");
+        var count = config.Bind("General", "Count", 1, "Count");
         var catalog = ConfigCatalog.Build(new[]
         {
             new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
         });
         var session = new ConfigEditSession(catalog);
-        var settings = catalog.Mods.Single().Sections.Single().Settings.ToDictionary(setting => setting.Key);
+        var setting = catalog.Mods.Single().Sections.Single().Settings.Single();
 
-        mode.Value = SampleMode.Active;
-        session.Get(settings["Enabled"]).Stage("false");
-        enabled.Value = false;
+        session.Get(setting).Stage("2");
+        count.Value = 3;
 
         Assert.True(session.RefreshExternalValues());
-        Assert.Equal("Active", session.Get(settings["Mode"]).StagedSerialized);
-        Assert.Equal("false", session.Get(settings["Enabled"]).StagedSerialized, ignoreCase: true);
-        Assert.True(session.Get(settings["Enabled"]).IsDirty);
+        Assert.Equal("2", session.Get(setting).StagedSerialized);
+        Assert.Equal("3", session.Get(setting).ExternalSerialized);
+        Assert.True(session.Get(setting).HasExternalConflict);
+        Assert.False(session.Apply(out var conflict));
+        Assert.Contains("Keep mine or Take live", conflict);
+        Assert.Equal(3, count.Value);
+
+        session.Get(setting).KeepStagedValue();
+        Assert.True(session.Apply(out var error), error);
+        Assert.Equal(2, count.Value);
+
+        session.Get(setting).Stage("4");
+        count.Value = 5;
+        Assert.True(session.RefreshExternalValues());
+        session.Get(setting).TakeExternalValue();
+        Assert.False(session.Get(setting).IsDirty);
+        Assert.Equal("5", session.Get(setting).StagedSerialized);
+    }
+
+    [Fact]
+    public void EditSession_ApplyAndRevertAreScopedToTheSelectedMod()
+    {
+        var firstConfig = new ConfigFile();
+        var secondConfig = new ConfigFile();
+        var first = firstConfig.Bind("General", "Enabled", true, "Enabled");
+        var second = secondConfig.Bind("General", "Enabled", true, "Enabled");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("first", "First", "1.0.0", firstConfig),
+            new ConfigPluginSource("second", "Second", "1.0.0", secondConfig),
+        });
+        var session = new ConfigEditSession(catalog);
+        var firstMod = catalog.Mods.Single(mod => mod.Guid == "first");
+        var secondMod = catalog.Mods.Single(mod => mod.Guid == "second");
+        var firstEdit = session.Values.Single(value => value.Setting.PluginGuid == "first");
+        var secondEdit = session.Values.Single(value => value.Setting.PluginGuid == "second");
+        firstEdit.Stage("false");
+        secondEdit.Stage("not-a-boolean");
+
+        Assert.True(session.IsModDirty(firstMod));
+        Assert.True(session.IsModValid(firstMod));
+        Assert.False(session.IsModValid(secondMod));
+        Assert.True(session.Apply(firstMod, out var error, out var applied), error);
+        Assert.False(first.Value);
+        Assert.True(second.Value);
+        Assert.Single(applied);
+        Assert.False(session.IsModDirty(firstMod));
+        Assert.True(session.IsModDirty(secondMod));
+
+        firstEdit.Stage("true");
+        session.Revert(secondMod);
+        Assert.True(firstEdit.IsDirty);
+        Assert.False(secondEdit.IsDirty);
+        Assert.False(first.Value);
+        Assert.True(second.Value);
     }
 
     [Fact]
@@ -396,6 +533,37 @@ public sealed class ModConfigTests
         session.Get(settings["Count"]).Stage("12");
         Assert.False(session.IsValid);
         Assert.Contains("Range", session.Get(settings["Count"]).Error);
+    }
+
+    [Fact]
+    public void EditSession_ValidatesKeyboardShortcutsBeforeApply()
+    {
+        var config = new ConfigFile();
+        var shortcut = config.Bind(
+            "General",
+            "Shortcut",
+            new KeyboardShortcut(KeyCode.Equals, KeyCode.LeftAlt),
+            "Shortcut");
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("plugin", "Plugin", "1.0.0", config),
+        });
+        var session = new ConfigEditSession(catalog);
+        var setting = catalog.Mods.Single().Sections.Single().Settings.Single();
+
+        session.Get(setting).Stage("DefinitelyNotAKey + LeftAlt");
+
+        Assert.False(session.Get(setting).IsValid);
+        Assert.False(session.Apply(out _));
+        Assert.Equal(KeyCode.Equals, shortcut.Value.MainKey);
+
+        session.Get(setting).Stage(ConfigCatalog.Serialize(
+            new KeyboardShortcut(KeyCode.Y, KeyCode.LeftControl)));
+
+        Assert.True(session.Get(setting).IsValid, session.Get(setting).Error);
+        Assert.True(session.Apply(out var error), error);
+        Assert.Equal(KeyCode.Y, shortcut.Value.MainKey);
+        Assert.Contains(KeyCode.LeftControl, shortcut.Value.Modifiers);
     }
 
     [Fact]

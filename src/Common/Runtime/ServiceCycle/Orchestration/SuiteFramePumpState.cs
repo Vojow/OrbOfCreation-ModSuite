@@ -1,0 +1,122 @@
+using System;
+using System.Threading;
+using OrbModding.Common.Runtime;
+#if SERVICE_CYCLE_PROFILE
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
+#endif
+using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.ServiceCycle.Tracing.Emission;
+
+namespace OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+
+internal sealed class SuiteFramePumpState
+{
+    private readonly int _ownerThreadId;
+
+    internal SuiteFramePumpState(
+        ServiceCycleRegistry registry,
+        ServiceCycleSemanticRecorder? semanticRecorder
+#if SERVICE_CYCLE_PROFILE
+        , ServiceCycleProfileProbe profileProbe
+#endif
+        )
+    {
+        Registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _ownerThreadId = Thread.CurrentThread.ManagedThreadId;
+        if (semanticRecorder is { Enabled: true } &&
+            semanticRecorder.ServiceCapacity != registry.OrdinalCount)
+        {
+            throw new ArgumentException(
+                "The semantic recorder service capacity must equal the registry ordinal count.",
+                nameof(semanticRecorder));
+        }
+#if SERVICE_CYCLE_PROFILE
+        if (profileProbe is null) throw new ArgumentNullException(nameof(profileProbe));
+#endif
+        var serviceCapacity = registry.ClaimPump();
+        Clock = registry.Clock;
+        Transitioned = new bool[serviceCapacity];
+        Traces = new SuiteFramePumpTraceSession(
+            registry,
+            serviceCapacity,
+            semanticRecorder);
+        Journal = new SuiteFramePumpJournalSession(registry, serviceCapacity);
+        EvidenceScanner = new SuiteFramePumpEvidenceScanner(registry, serviceCapacity);
+#if SERVICE_CYCLE_PROFILE
+        EvidenceProfiler = new SuiteFramePumpEvidenceProfiler(profileProbe);
+        EvidenceEmitter = new SuiteFramePumpEvidenceEmitter(
+            Traces,
+            Journal,
+            EvidenceProfiler);
+#else
+        EvidenceEmitter = new SuiteFramePumpEvidenceEmitter(Traces, Journal);
+#endif
+    }
+
+    internal ServiceCycleRegistry Registry { get; }
+    internal IMonotonicClock Clock { get; }
+    internal bool[] Transitioned { get; }
+    internal SuiteEmergencyStopState Emergency { get; } = new();
+    internal SuiteFramePumpObservability Observability { get; } = new();
+    internal SuiteFramePumpTraceSession Traces { get; }
+    internal SuiteFramePumpJournalSession Journal { get; }
+    internal SuiteFramePumpEvidenceScanner EvidenceScanner { get; }
+    internal SuiteFramePumpEvidenceEmitter EvidenceEmitter { get; }
+#if SERVICE_CYCLE_PROFILE
+    internal SuiteFramePumpEvidenceProfiler EvidenceProfiler { get; }
+#endif
+    internal int NextStartOrdinal { get; set; }
+    internal bool IsPumping { get; private set; }
+    internal bool IsInsideServiceCallback { get; private set; }
+    internal bool IsDisposed { get; private set; }
+
+    internal void AssertOwnerThread()
+    {
+        if (Thread.CurrentThread.ManagedThreadId != _ownerThreadId)
+            throw new InvalidOperationException(
+                "The service-cycle frame pump must remain on its owning main thread.");
+    }
+
+    internal void EnsureAvailable()
+    {
+        AssertOwnerThread();
+        if (IsDisposed) throw new ObjectDisposedException(nameof(SuiteFramePump));
+    }
+
+    internal void EnsureIdle(string message)
+    {
+        EnsureAvailable();
+        if (IsPumping) throw new InvalidOperationException(message);
+    }
+
+    internal void BeginPump() => IsPumping = true;
+
+    internal void PrepareFrame()
+    {
+        Emergency.BeginFrame();
+        Array.Clear(Transitioned, 0, Transitioned.Length);
+    }
+
+    internal void EndFrame()
+    {
+        IsInsideServiceCallback = false;
+        IsPumping = false;
+        Emergency.EndFrame();
+    }
+
+    internal void EnterServiceCallback()
+    {
+        Registry.EnterPumpCallback();
+        IsInsideServiceCallback = true;
+    }
+
+    internal void ExitServiceCallback()
+    {
+        IsInsideServiceCallback = false;
+        Registry.ExitPumpCallback();
+    }
+
+    internal void DisposeRegistry() => Registry.Dispose();
+
+    internal void MarkDisposed() => IsDisposed = true;
+}

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using OrbModding.Common;
 using Xunit;
 
@@ -18,7 +19,7 @@ public sealed class KnownEntitiesGenerationTests
             .ToDictionary(parts => parts[0], StringComparer.OrdinalIgnoreCase);
         var selected = ReadTsv("known-entities.tsv", "symbol\tid\tname\ttype", 4);
 
-        Assert.Equal(16, selected.Count);
+        Assert.Equal(28, selected.Count);
         Assert.Equal(selected.Count, selected.Select(parts => parts[0]).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(selected.Count, selected.Select(parts => parts[1]).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(selected, parts =>
@@ -120,19 +121,27 @@ public sealed class KnownEntitiesGenerationTests
             File.WriteAllText(canonicalPath, canonical);
             File.WriteAllText(selectionPath, selection);
             File.WriteAllText(outputPath, "stale");
+            var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
             var start = new ProcessStartInfo
             {
-                FileName = "powershell.exe",
+                FileName = isWindows ? "powershell.exe" : "bash",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
-            start.ArgumentList.Add("-NoProfile");
-            start.ArgumentList.Add("-ExecutionPolicy");
-            start.ArgumentList.Add("Bypass");
-            start.ArgumentList.Add("-File");
-            start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "tools", "generate-known-entities.ps1"));
+            if (isWindows)
+            {
+                start.ArgumentList.Add("-NoProfile");
+                start.ArgumentList.Add("-ExecutionPolicy");
+                start.ArgumentList.Add("Bypass");
+                start.ArgumentList.Add("-File");
+                start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "tools", "generate-known-entities.ps1"));
+            }
+            else
+            {
+                start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "tools", "generate-known-entities.sh"));
+            }
             start.ArgumentList.Add("-CanonicalPath");
             start.ArgumentList.Add(canonicalPath);
             start.ArgumentList.Add("-SelectionPath");

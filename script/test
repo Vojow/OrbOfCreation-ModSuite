@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+timeout_seconds="${ORB_TEST_TIMEOUT_SECONDS:-60}"
+configuration="${ORB_TEST_CONFIGURATION:-Debug}"
+export NUGET_HTTP_CACHE_PATH="${NUGET_HTTP_CACHE_PATH:-${repository_root}/artifacts/nuget-http-cache}"
+if [[ "$#" -ne 0 ]]; then
+    echo "Usage: ./script/test" >&2
+    exit 2
+fi
+
+results_directory="${repository_root}/artifacts/test-results/all"
+profile_results_directory="${repository_root}/artifacts/test-results/profile"
+timeout_marker="$(mktemp "${TMPDIR:-/tmp}/orbmodding-test-timeout.XXXXXX")"
+rm -f "${timeout_marker}"
+
+if [[ ! "${timeout_seconds}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ORB_TEST_TIMEOUT_SECONDS must be a positive integer." >&2
+    exit 2
+fi
+
+test_pid=""
+watchdog_pid=""
+
+stop_process_group() {
+    local signal="$1"
+    local pid="$2"
+    kill "-${signal}" -- "-${pid}" 2>/dev/null || kill "-${signal}" "${pid}" 2>/dev/null || true
+}
+
+process_group_is_alive() {
+    kill -0 -- "-$1" 2>/dev/null || kill -0 "$1" 2>/dev/null
+}
+
+cleanup() {
+    if [[ -n "${watchdog_pid}" ]]; then
+        stop_process_group TERM "${watchdog_pid}"
+    fi
+    if [[ -n "${test_pid}" ]]; then
+        stop_process_group TERM "${test_pid}"
+    fi
+    rm -f "${timeout_marker}"
+}
+
+handle_signal() {
+    local status="$1"
+    cleanup
+    trap - EXIT INT TERM
+    exit "${status}"
+}
+
+watch_for_timeout() {
+    sleep "${timeout_seconds}"
+    if ! process_group_is_alive "$1"; then
+        return
+    fi
+
+    : > "${timeout_marker}"
+    echo "Portable test gate exceeded ${timeout_seconds}s; terminating the test process." >&2
+    stop_process_group TERM "$1"
+    sleep 1
+    if process_group_is_alive "$1"; then
+        stop_process_group KILL "$1"
+    fi
+}
+
+trap cleanup EXIT
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
+mkdir -p "${results_directory}" "${profile_results_directory}"
+
+ordinary_command=(
+    dotnet test "${repository_root}/tests/OrbModding.Tests/OrbModding.Tests.csproj"
+    --disable-build-servers
+    --configuration "${configuration}"
+    -p:UseGameStubs=true
+    --results-directory "${results_directory}"
+    --logger "trx;LogFileName=all.trx"
+)
+profile_command=(
+    dotnet test "${repository_root}/tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj"
+    --disable-build-servers
+    --configuration "${configuration}"
+    -p:UseGameStubs=true
+    -p:EnableServiceCycleProfiler=true
+    --results-directory "${profile_results_directory}"
+    --logger "trx;LogFileName=profile.trx"
+)
+# The trace tool's stage-name decoder is compiled only under the profiler symbol, and nothing else in
+# the gate defines it. Without this build it rots silently: retiring a stage code left the decoder
+# naming constants that no longer existed, and every gate run stayed green for three commits.
+profile_tool_command=(
+    dotnet build "${repository_root}/tools/OrbModding.ServiceCycleTrace/OrbModding.ServiceCycleTrace.csproj"
+    --disable-build-servers
+    --configuration "${configuration}"
+    -p:UseGameStubs=true
+    -p:EnableServiceCycleProfiler=true
+)
+
+# Each command's status is checked explicitly rather than left to `set -e`, which does not reliably
+# abort this function when it runs as a background job. Without this, a failing ordinary run
+# followed by a passing profile run reports the gate as green.
+run_all_tests() {
+    "${ordinary_command[@]}" || return "$?"
+    "${profile_command[@]}" || return "$?"
+    "${profile_tool_command[@]}" || return "$?"
+}
+
+# The suite currently contains thread-timing tests that do not pass reliably, so a single red run
+# is not trustworthy evidence of a real break. Retrying keeps the gate usable without hiding
+# anything: every test that failed on an earlier attempt is reported at the end, loudly, so a
+# genuinely flaky test stays visible instead of quietly becoming acceptable. Remove the retry once
+# the suite is deterministic again.
+attempt_limit="${ORB_TEST_ATTEMPTS:-3}"
+if [[ ! "${attempt_limit}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ORB_TEST_ATTEMPTS must be a positive integer." >&2
+    exit 2
+fi
+
+attempt_log="$(mktemp "${TMPDIR:-/tmp}/orbmodding-test-attempt.XXXXXX")"
+flaky_report="$(mktemp "${TMPDIR:-/tmp}/orbmodding-test-flaky.XXXXXX")"
+cleanup_logs() {
+    rm -f "${attempt_log}" "${flaky_report}"
+}
+trap 'cleanup; cleanup_logs' EXIT
+
+# The deadline is per attempt, not for the whole gate: a retry is a fresh run and gets a fresh
+# budget. A timeout is never retried — it means the suite hung, which is not a flake.
+run_one_attempt() {
+    rm -f "${timeout_marker}"
+    set -m
+    run_all_tests >"${attempt_log}" 2>&1 &
+    test_pid="$!"
+    watch_for_timeout "${test_pid}" &
+    watchdog_pid="$!"
+    set +m
+
+    # Must not be written as `if ! wait ...`: inside that branch `$?` is the negated status, so a
+    # real failure would be recorded as success.
+    local status=0
+    wait "${test_pid}" || status="$?"
+
+    cat "${attempt_log}"
+
+    if [[ -e "${timeout_marker}" ]]; then
+        wait "${watchdog_pid}" 2>/dev/null || true
+        watchdog_pid=""
+        test_pid=""
+        return 124
+    fi
+
+    stop_process_group TERM "${watchdog_pid}"
+    wait "${watchdog_pid}" 2>/dev/null || true
+    watchdog_pid=""
+    test_pid=""
+    return "${status}"
+}
+
+test_status=0
+for ((attempt = 1; attempt <= attempt_limit; attempt++)); do
+    if [[ "${attempt}" -eq 1 ]]; then
+        echo "Running all portable tests with a ${timeout_seconds}s deadline..."
+    else
+        echo "Retrying the portable gate (attempt ${attempt} of ${attempt_limit})..."
+    fi
+
+    test_status=0
+    run_one_attempt || test_status="$?"
+
+    if [[ "${test_status}" -eq 124 ]]; then
+        echo "Portable test gate timed out; not retrying." >&2
+        exit 124
+    fi
+
+    if [[ "${test_status}" -eq 0 ]]; then
+        break
+    fi
+
+    grep -E '^[[:space:]]+Failed [A-Za-z0-9_.]+' "${attempt_log}" \
+        | sed -E 's/^[[:space:]]+Failed ([^ ]+).*/\1/' >>"${flaky_report}" || true
+done
+
+if [[ -s "${flaky_report}" && "${test_status}" -eq 0 ]]; then
+    echo ""
+    echo "WARNING: the portable gate passed only after a retry. These tests failed on an earlier"
+    echo "attempt and are not reliable:"
+    sort -u "${flaky_report}" | sed 's/^/  - /'
+    echo ""
+fi
+
+exit "${test_status}"

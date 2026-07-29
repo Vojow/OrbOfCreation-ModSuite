@@ -17,17 +17,10 @@ function Invoke-DotNet {
 }
 
 function Assert-PluginOutput {
-    param(
-        [Parameter(Mandatory)][string]$ProjectName,
-        [Parameter(Mandatory)][string]$PluginAssembly
-    )
-
-    $outputDirectory = Join-Path $repositoryRoot "src/$ProjectName/bin/Release/netstandard2.1"
+    $outputDirectory = Join-Path $repositoryRoot 'src/bin/Release/netstandard2.1'
     $names = @(Get-ChildItem -LiteralPath $outputDirectory -File | Select-Object -ExpandProperty Name)
-    foreach ($required in @($PluginAssembly, 'OrbModding.Common.dll')) {
-        if ($required -notin $names) {
-            throw "Required build artifact is missing from ${ProjectName}: $required"
-        }
+    if ('OrbModSuite.dll' -notin $names) {
+        throw 'Required build artifact is missing from the suite output: OrbModSuite.dll'
     }
 
     $forbiddenPatterns = @(
@@ -40,7 +33,7 @@ function Assert-PluginOutput {
     foreach ($pattern in $forbiddenPatterns) {
         $forbidden = @($names | Where-Object { $_ -like $pattern })
         if ($forbidden.Count -gt 0) {
-            throw "Game/runtime assemblies leaked into ${ProjectName} output: $($forbidden -join ', ')"
+            throw "Game/runtime assemblies leaked into the suite output: $($forbidden -join ', ')"
         }
     }
 }
@@ -80,16 +73,9 @@ try {
     )
 
     if (-not $SkipRealBuild) {
-        Write-Host 'Building supported plugins against the installed game references...'
-        $builds = @(
-            [pscustomobject]@{ Project = 'src/OrbAutomata/OrbAutomata.csproj'; Name = 'OrbAutomata'; Assembly = 'OrbAutomata.dll' }
-            [pscustomobject]@{ Project = 'src/OrbModConfig/OrbModConfig.csproj'; Name = 'OrbModConfig'; Assembly = 'OrbModConfig.dll' }
-            [pscustomobject]@{ Project = 'src/OrbMentor/OrbMentor.csproj'; Name = 'OrbMentor'; Assembly = 'OrbMentor.dll' }
-        )
-        foreach ($build in $builds) {
-            Invoke-DotNet @('build', $build.Project, '-c', 'Release')
-            Assert-PluginOutput -ProjectName $build.Name -PluginAssembly $build.Assembly
-        }
+        Write-Host 'Building the supported suite against the installed game references...'
+        Invoke-DotNet @('build', 'src/OrbModSuite.csproj', '-c', 'Release')
+        Assert-PluginOutput
     }
 }
 finally {
