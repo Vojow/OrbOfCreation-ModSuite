@@ -26,6 +26,7 @@ public sealed record SuiteRuntimeConfiguration
     internal AutoCastConfiguration AutoCast { get; init; } = new();
     internal AutoConceptConfiguration AutoConcept { get; init; } = new();
     internal AutoHarvestConfiguration AutoHarvest { get; init; } = new();
+    internal AutoAgromancyConfiguration AutoAgromancy { get; init; } = new();
     internal MentorConfiguration Mentor { get; init; } = new();
     internal SuiteSafetyConfiguration Safety { get; init; } = new();
     internal AutomataReserveConfiguration Reserves { get; init; } = new();
@@ -41,6 +42,10 @@ public sealed record SuiteRuntimeConfiguration
 
     internal bool CanStartAutoHarvestActively =>
         AutoHarvest.Mode == AutoHarvestOperationMode.Active && !Safety.EmergencyDisable;
+
+    internal bool CanStartAutoAgromancyActively =>
+        AutoAgromancy.Mode == AutoAgromancyOperationMode.Active &&
+        !Safety.EmergencyDisable;
 
     internal bool CanStartMentorActively =>
         Mentor.Mode == MentorOperationMode.Active && !Safety.EmergencyDisable;

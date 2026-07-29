@@ -20,6 +20,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.SpellLevelPurchase };
     private static readonly AutomationActionFamily[] HarvestFamilies =
         { AutomationActionFamily.HarvestAction };
+    private static readonly AutomationActionFamily[] AgromancyFamilies =
+        { AutomationActionFamily.HarvestLevelAdjustment };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -30,6 +32,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private ActionFamilyLeaseSet? _concept;
     private ActionFamilyLeaseSet? _spellLevel;
     private ActionFamilyLeaseSet? _harvest;
+    private ActionFamilyLeaseSet? _agromancy;
     private IDisposable? _knownExternal;
     private int _pluginInventoryCount = -1;
     private long _structuresRetryFrame;
@@ -38,6 +41,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private long _conceptRetryFrame;
     private long _spellLevelRetryFrame;
     private long _harvestRetryFrame;
+    private long _agromancyRetryFrame;
 
     internal int ClaimAttempts { get; private set; }
     public bool KnownAutoBuyLoaded { get; private set; }
@@ -67,6 +71,9 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;
     public bool OwnsHarvest => _harvest?.IsHeld == true;
     public bool TryCaptureHarvestMutationPermit() => _harvest?.TryCaptureMutationPermit() == true;
+    public bool OwnsAgromancy => _agromancy?.IsHeld == true;
+    public bool TryCaptureAgromancyMutationPermit() =>
+        _agromancy?.TryCaptureMutationPermit() == true;
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -112,10 +119,14 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             suiteReady && config.CanStartAutoHarvestActively &&
             (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees),
             "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
+        RefreshLease(ref _agromancy, ref _agromancyRetryFrame, frame,
+            suiteReady && config.CanStartAutoAgromancyActively,
+            "AutoAgromancy", "Automata Auto Agromancy", AgromancyFamilies);
     }
 
     public void ReleaseLifecycleClaims()
     {
+        Release(ref _agromancy);
         Release(ref _harvest);
         Release(ref _spellLevel);
         Release(ref _concept);
@@ -177,5 +188,6 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _conceptRetryFrame = 0;
         _spellLevelRetryFrame = 0;
         _harvestRetryFrame = 0;
+        _agromancyRetryFrame = 0;
     }
 }

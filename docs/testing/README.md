@@ -50,6 +50,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
 | Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
 | Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
+| Auto Agromancy world, planner, triggers, and boundary | [Auto Agromancy](automata/auto-agromancy.md) | `FullyQualifiedName~AutoAgromancy` |
 | Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
 | Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |

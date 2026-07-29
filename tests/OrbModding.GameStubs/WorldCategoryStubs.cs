@@ -114,6 +114,12 @@ public sealed class CraftingRecipeTypeSO : IdScriptableObject
 
 public sealed class HarvestElementSO : IdScriptableObject
 {
+    public sealed class HarvestActionReference
+    {
+        public ResourceCostList actionCost = new ResourceCostList();
+        public double elementCost;
+    }
+
     public static List<HarvestElementSO> All = new List<HarvestElementSO>();
     public BigDouble masteryXp;
     public int masteryLevel;
@@ -140,6 +146,11 @@ public sealed class HarvestElementSO : IdScriptableObject
     /// registry cannot reach it and it is read through its owner.
     /// </summary>
     private ResourceSO harvestResource = new ResourceSO();
+
+    public ResourceSO internalResource = new ResourceSO();
+    public HarvestActionReference actionReference = new HarvestActionReference();
+
+    public ResourceSO GetInternalResource() => internalResource;
 }
 
 

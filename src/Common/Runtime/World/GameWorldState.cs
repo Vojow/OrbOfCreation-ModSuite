@@ -229,6 +229,23 @@ public sealed record GameWorldState
     internal PublicationTable<WorldAlchemyCost> AlchemyCosts { get; init; } =
         PublicationTable<WorldAlchemyCost>.Empty;
 
+    /// <summary>The active Druidry action/element pairs captured atomically.</summary>
+    internal PublicationTable<WorldHarvestAction> HarvestActions { get; init; } =
+        PublicationTable<WorldHarvestAction>.Empty;
+
+    /// <summary>Ordered authored and observed-current raw drains for each active pair.</summary>
+    internal PublicationTable<WorldHarvestActionCost> HarvestActionCosts { get; init; } =
+        PublicationTable<WorldHarvestActionCost>.Empty;
+
+    /// <summary>Raw cost/speed instance-scaling modifier and exponent rows.</summary>
+    internal PublicationTable<WorldHarvestActionModifier> HarvestActionModifiers { get; init; } =
+        PublicationTable<WorldHarvestActionModifier>.Empty;
+
+    /// <summary>
+    /// Distinguishes a complete empty list from a failed or unavailable capture.
+    /// </summary>
+    internal WorldHarvestActionCaptureState HarvestActionCaptureState { get; init; }
+
     /// <summary>
     /// What each plot's author decided about it. Keyed by plot rather than keyed <em>as</em> a plot,
     /// so the plot's identity stays claimed exactly once.
@@ -291,6 +308,12 @@ public sealed record GameWorldState
     /// gate: an epoch is not a frame and never participates in that comparison.
     /// </remarks>
     internal long CollectedAtEpoch { get; init; }
+
+    /// <summary>Accepted plot-action additions observed by the exact native hook.</summary>
+    internal long HarvestPlotActionEpoch { get; init; }
+
+    /// <summary>Auto Harvest submissions whose native queue mutation was verified.</summary>
+    internal long HarvestSubmissionEpoch { get; init; }
 
     // Lookups live on WorldLookup rather than here. A member per category would be a forwarding
     // one-liner repeated once per table, and the record is meant to grow to roughly thirty of them.

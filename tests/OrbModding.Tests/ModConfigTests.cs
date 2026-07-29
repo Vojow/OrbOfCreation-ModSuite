@@ -174,7 +174,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Agromancy", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -189,6 +189,9 @@ public sealed class ModConfigTests
         Assert.Equal(
             new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode" },
+            mod.Sections.Single(section => section.Name == "Auto Agromancy").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
@@ -280,11 +283,11 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Mentor", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Agromancy", "Mentor", "Advanced" },
             mod.Sections.Select(section => section.Name));
-        Assert.Equal(8, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.Equal(9, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
         Assert.All(
-            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Mentor"),
+            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Agromancy" or "Mentor"),
             section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
                 section.Settings.Single(setting => setting.Key == "Mode"))));
     }

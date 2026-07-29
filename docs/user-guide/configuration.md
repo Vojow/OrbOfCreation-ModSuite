@@ -8,9 +8,9 @@ The suite is one plugin with one identity (`dev.vojow.orbofcreation.modsuite`), 
 
 Important controls:
 
-The left rail contains Runtime, General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, and Advanced. The old Safety, Spells, Artifacts, Alchemy, and duplicate feature-tab row is gone. Mentor's spell, artifact, alchemy, source, percentage, and economy policies live together on the Mentor page.
+The left rail contains Runtime, General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Agromancy, Mentor, and Advanced. The old Safety, Spells, Artifacts, Alchemy, and duplicate feature-tab row is gone. Mentor's spell, artifact, alchemy, source, percentage, and economy policies live together on the Mentor page.
 
-Each feature page begins with one status card and an immediate **Turn on/Turn off** command. That command and the matching gameplay quick button are the only two feature-mode controls in the UI, and both publish through the committed configuration store before returning. Mode rows are not repeated in the staged settings list. Disabled feature modes lock their tuning fields. Nested controls unlock only when all of their committed or staged prerequisites are selected; these UI dependencies do not change or erase saved values.
+Each feature page begins with one status card and an immediate **Turn on/Turn off** command. Where a matching gameplay quick button exists, it publishes through the same committed configuration store; Auto Agromancy intentionally has no quick button. Mode rows are not repeated in the staged settings list. Disabled feature modes lock their tuning fields. Nested controls unlock only when all of their committed or staged prerequisites are selected; these UI dependencies do not change or erase saved values.
 
 Apply, Revert, unsaved-state, and validation in the Mods page are scoped to the selected mod. If a quick button, hotkey, or file reload changes a value that is also staged, the row shows both values and requires an explicit **Keep mine** or **Take live** choice before Apply.
 
@@ -18,7 +18,7 @@ Keyboard shortcuts are parsed and validated while staged. Text-backed dependenci
 
 The Mods catalog is reused across ordinary refreshes and unchanged scene rebuilds. Late plugin/config-definition additions or removals invalidate it at the existing integrity check, rebuild it once, and restore navigation by stable plugin and section identity.
 
-Runtime starts with a two-column summary of all six suite features; failures and attention states sort before waiting and healthy features. Recent events and differential verification follow, then full trace, optional profiling, pump timing, the decision journal, and detailed service cards. The Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods maintenance admits at most one pass per Unity frame and continues pending work on later frames.
+Runtime starts with a two-column summary of all seven suite features; failures and attention states sort before waiting and healthy features. Recent events and differential verification follow, then full trace, optional profiling, pump timing, the decision journal, and detailed service cards. The Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
 The Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor quick buttons and feature-card commands publish the saved value through the
 same configuration store used by every other writer before the click returns, then render that committed
@@ -42,6 +42,7 @@ If the shared automation host cannot start, desired-On features report that runt
 - `AutoBuy.Mode` and `AutoCast.Mode`: saved values are `Disabled` or `Active`; change them with the feature header or quick button.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts; change it with the feature header or quick button.
 - `AutoHarvest.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick button. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
+- `AutoAgromancy.Mode`: `Disabled` (default) or `Active`. When active it balances Druidry levels after a direct increase, an accepted plot action, or a verified Auto Harvest submission. It has no gameplay quick button.
 - `AutoHarvest.EvaluationIntervalSeconds`: minimum time between service-planning passes while enabled; default 1.0, range 0.25 to 10 seconds. Published readiness and lifecycle changes can wake the service earlier. Its native harvest-speed icon in the quick strip toggles the feature immediately.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates compatible concepts only after each has received the complete configured settled-active period; `RotateAll` replaces active concepts to train a compatible strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
 - `AutoConcept.ShowToggleButton`: show the `CN ON/OFF` configured-intent button in the native Auto Buy-anchored control strip; runtime health remains in its tooltip; default true.
@@ -53,7 +54,7 @@ If the shared automation host cannot start, desired-On features report that runt
 - `LeaveQueueSlots` preserves queue room for manual actions.
 - `AutoBuy.PurchaseGrouping` selects `Single`, `Fixed`, `BulkDevelopment` (default), or `ActionMultiplier`; every level is capped to live queue room and revalidated independently.
 - Auto Concept rate, quantity, and drain-ratio floors protect continuous resources; zero-resource replacements are skipped so they cannot starve other safe concepts in the cycle. Current concept quantities remain the rollback ownership baseline even when `RotateAll` permits assignment replacement.
-- `Safety.EmergencyDisable`: General suite emergency stop. It immediately stops new automated purchases, casts, concept mutations, spell levels, harvest submissions, and mastery sharing. On a quarantined build, explicitly clearing it also accepts the exact observed assembly pair.
+- `Safety.EmergencyDisable`: General suite emergency stop. It immediately stops new automated purchases, casts, concept mutations, spell levels, harvest submissions, Druidry level adjustments, and mastery sharing. On a quarantined build, explicitly clearing it also accepts the exact observed assembly pair.
 - `Compatibility.AllowUnverifiedGameBuild`: Advanced-only risk acknowledgement for the exact unaudited assembly pair currently installed. Default false; a changed pair resets it automatically.
 
 Default input inventory:
@@ -63,6 +64,6 @@ Default input inventory:
 - Differential verification has no key listener. Run it with **Run differential verification** on Mods -> Runtime.
 - Auto Buy, Auto Concept, Auto Harvest, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners.
 
-Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, and Auto Harvest default to Disabled. Auto Harvest queues quantity one, keeps at most one supported collect active, and runs only through the Common ServiceCycle engine. It may use the final free plot-action entry when the game's native capacity contract also reports room. When enabled, Auto Cast fully charges charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10% positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by default. Warnings and errors are always emitted. Use the Runtime page's explicit trace, event, journal, and verification actions when deeper evidence is needed; there is no global detailed-logging mode.
+Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, Auto Harvest, and Auto Agromancy default to Disabled. Auto Harvest queues quantity one, keeps at most one supported collect active, and runs only through the Common ServiceCycle engine. It may use the final free plot-action entry when the game's native capacity contract also reports room. When enabled, Auto Cast fully charges charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10% positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by default. Warnings and errors are always emitted. Use the Runtime page's explicit trace, event, journal, and verification actions when deeper evidence is needed; there is no global detailed-logging mode.
 
 Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](../../src/Automata/README.md).

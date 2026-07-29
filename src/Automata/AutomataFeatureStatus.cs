@@ -207,6 +207,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     internal const string AutoConceptFeatureId = "AutoConcept";
     internal const string SpellLevelFeatureId = "SpellLevel";
     internal const string AutoHarvestFeatureId = "AutoHarvest";
+    internal const string AutoAgromancyFeatureId = "AutoAgromancy";
     internal const string MentorFeatureId = "Mentor";
 
     public AutomataFeatureStatuses(
@@ -222,6 +223,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutomataFeatureStatusReporter? autoConcept = null;
         AutomataFeatureStatusReporter? spellLevel = null;
         AutomataFeatureStatusReporter? autoHarvest = null;
+        AutomataFeatureStatusReporter? autoAgromancy = null;
         AutomataFeatureStatusReporter? mentor = null;
         try
         {
@@ -243,6 +245,9 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             autoHarvest = CreateInitialReporter(
                 target, AutoHarvestFeatureId, "Auto Harvest", config.General.Enabled,
                 IsAutoHarvestConfigured(config), true, lifecycleGeneration, initialGeneration);
+            autoAgromancy = CreateInitialReporter(
+                target, AutoAgromancyFeatureId, "Auto Agromancy", config.General.Enabled,
+                IsAutoAgromancyConfigured(config), true, lifecycleGeneration, initialGeneration);
             mentor = CreateInitialReporter(
                 target, MentorFeatureId, "Orb Mentor", config.General.Enabled,
                 config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, initialGeneration);
@@ -250,6 +255,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         catch
         {
             mentor?.Dispose();
+            autoAgromancy?.Dispose();
             autoHarvest?.Dispose();
             spellLevel?.Dispose();
             autoConcept?.Dispose();
@@ -262,6 +268,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutoConcept = autoConcept!;
         SpellLevel = spellLevel!;
         AutoHarvest = autoHarvest!;
+        AutoAgromancy = autoAgromancy!;
         Mentor = mentor!;
         ObserveConfiguration(config, initialGeneration);
     }
@@ -271,6 +278,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatusReporter AutoConcept { get; }
     public AutomataFeatureStatusReporter SpellLevel { get; }
     public AutomataFeatureStatusReporter AutoHarvest { get; }
+    public AutomataFeatureStatusReporter AutoAgromancy { get; }
     public AutomataFeatureStatusReporter Mentor { get; }
 
     internal void ObserveConfiguration(
@@ -313,6 +321,12 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             parentEnabled: true,
             configurationGeneration);
         ObserveConfiguredIntent(
+            AutoAgromancy,
+            config.General.Enabled,
+            IsAutoAgromancyConfigured(config),
+            parentEnabled: true,
+            configurationGeneration);
+        ObserveConfiguredIntent(
             Mentor,
             config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active,
@@ -343,6 +357,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutoConcept.SetEmergencyStop(active, configurationGeneration);
         SpellLevel.SetEmergencyStop(active, configurationGeneration);
         AutoHarvest.SetEmergencyStop(active, configurationGeneration);
+        AutoAgromancy.SetEmergencyStop(active, configurationGeneration);
         Mentor.SetEmergencyStop(active, configurationGeneration);
     }
 
@@ -363,6 +378,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             lifecycleGeneration, summary);
         ObserveContractFeature(AutoHarvest, config.General.Enabled,
             IsAutoHarvestConfigured(config), true, lifecycleGeneration, summary);
+        ObserveContractFeature(AutoAgromancy, config.General.Enabled,
+            IsAutoAgromancyConfigured(config), true, lifecycleGeneration, summary);
         ObserveContractFeature(Mentor, config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, summary);
     }
@@ -413,6 +430,12 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             parentEnabled: true,
             summary);
         ObserveUnavailableFeature(
+            AutoAgromancy,
+            config.General.Enabled,
+            IsAutoAgromancyConfigured(config),
+            parentEnabled: true,
+            summary);
+        ObserveUnavailableFeature(
             Mentor,
             config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active,
@@ -452,6 +475,11 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             AutoHarvest,
             config.General.Enabled,
             IsAutoHarvestConfigured(config),
+            lifecycleGeneration);
+        ObserveLifecycleFeature(
+            AutoAgromancy,
+            config.General.Enabled,
+            IsAutoAgromancyConfigured(config),
             lifecycleGeneration);
         ObserveLifecycleFeature(
             Mentor,
@@ -643,6 +671,9 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
         (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees);
 
+    private static bool IsAutoAgromancyConfigured(SuiteRuntimeConfiguration config) =>
+        config.AutoAgromancy.Mode == AutoAgromancyOperationMode.Active;
+
     private static void ObserveConfigurationDisabled(
         AutomataFeatureStatusReporter reporter,
         long lifecycleGeneration,
@@ -723,6 +754,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public void Dispose()
     {
         Mentor.Dispose();
+        AutoAgromancy.Dispose();
         AutoHarvest.Dispose();
         SpellLevel.Dispose();
         AutoConcept.Dispose();

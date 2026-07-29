@@ -41,12 +41,31 @@ case "$1" in
 esac
 mode="$1"
 
-for command_name in dotnet git find cp cmp shasum awk grep pgrep; do
+for command_name in dotnet git find cp cmp awk grep; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
     fi
 done
+
+if ! command -v pgrep >/dev/null 2>&1 &&
+    ! command -v powershell.exe >/dev/null 2>&1; then
+    echo "Required process-query command is unavailable: install pgrep or use Windows PowerShell." >&2
+    exit 1
+fi
+
+if command -v shasum >/dev/null 2>&1; then
+    sha256_file() {
+        shasum -a 256 "$1"
+    }
+elif command -v sha256sum >/dev/null 2>&1; then
+    sha256_file() {
+        sha256sum "$1"
+    }
+else
+    echo "Required SHA-256 command is unavailable: install shasum or sha256sum." >&2
+    exit 1
+fi
 
 resolve_game_root() {
     if [[ -n "${OOC_GAME_DIR:-}" ]]; then
@@ -100,9 +119,16 @@ if [[ ! -d "${plugins_root}" || ! -f "${bepinex_core}/BepInEx.dll" ||
 fi
 
 game_is_running() {
-    pgrep -x "Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.exe" >/dev/null 2>&1
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -x "Orb Of Creation" >/dev/null 2>&1 ||
+            pgrep -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" >/dev/null 2>&1 ||
+            pgrep -f "[O]rb Of Creation\\.exe" >/dev/null 2>&1
+        return
+    fi
+
+    powershell.exe -NoProfile -NonInteractive -Command \
+        "if (Get-Process -Name 'Orb Of Creation' -ErrorAction SilentlyContinue) { exit 0 }; exit 1" \
+        >/dev/null 2>&1
 }
 
 if game_is_running; then
@@ -342,7 +368,7 @@ verify_install "${suite_source}" "${suite_target}"
 print_hash() {
     local installed_file="$1"
     local digest
-    digest="$(shasum -a 256 "${installed_file}" | awk '{print $1}')"
+    digest="$(sha256_file "${installed_file}" | awk '{print $1}')"
     echo "  ${digest}  $(basename "${installed_file}")"
 }
 

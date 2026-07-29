@@ -145,6 +145,24 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void AutoAgromancyActionBoundaryCollectsOnlyItsFourFactCategories()
+    {
+        var collector = Collector();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 1 };
+
+        var report = collector.CollectAutoAgromancy(frame);
+        var world = GameWorldFrameDeriver.Build(frame);
+
+        Assert.Equal(4, report.Categories.Length);
+        Assert.NotEqual(
+            WorldHarvestActionCaptureState.Unknown,
+            world.HarvestActionCaptureState);
+        Assert.Equal(0, world.Structures.Count);
+        Assert.Equal(0, world.Upgrades.Count);
+        Assert.Equal(0, world.Research.Count);
+    }
+
+    [Fact]
     public void AStructuresDisabledEffectFlagIsPublished()
     {
         var active = Guid.NewGuid();
@@ -177,13 +195,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(45, report.Categories.Length);
+        Assert.Equal(46, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "active Druidry actions", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }

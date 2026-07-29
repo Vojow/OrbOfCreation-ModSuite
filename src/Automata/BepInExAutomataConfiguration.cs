@@ -96,6 +96,7 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<bool> autoHarvestFruitTrees,
         ConfigEntry<bool> autoHarvestTreasureTrees,
         ConfigEntry<float> autoHarvestEvaluationIntervalSeconds,
+        ConfigEntry<AutoAgromancyOperationMode> autoAgromancyMode,
         ConfigEntry<bool> allowUnverifiedGameBuild,
         ConfigEntry<string> acceptedUnverifiedBuildFingerprint,
         ConfigEntry<bool> emergencyDisable,
@@ -140,6 +141,7 @@ internal sealed class BepInExAutomataConfiguration
         AutoHarvestFruitTrees = autoHarvestFruitTrees;
         AutoHarvestTreasureTrees = autoHarvestTreasureTrees;
         AutoHarvestEvaluationIntervalSeconds = autoHarvestEvaluationIntervalSeconds;
+        AutoAgromancyMode = autoAgromancyMode;
         AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
         AcceptedUnverifiedBuildFingerprint = acceptedUnverifiedBuildFingerprint;
         EmergencyDisable = emergencyDisable;
@@ -219,6 +221,7 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<bool> AutoHarvestFruitTrees { get; }
     public ConfigEntry<bool> AutoHarvestTreasureTrees { get; }
     public ConfigEntry<float> AutoHarvestEvaluationIntervalSeconds { get; }
+    public ConfigEntry<AutoAgromancyOperationMode> AutoAgromancyMode { get; }
 
     public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
 
@@ -400,9 +403,10 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoHarvest", "CollectFruitTrees", true, "Collect ready fruit trees through their native plot action.", 18, 10, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between exact Auto Harvest readiness checks.", 18, 30, new AcceptableValueRange<float>(0.25f, 10.0f), AutoHarvestActiveDependencies),
+                Bind(config, "AutoAgromancy", "Mode", AutoAgromancyOperationMode.Disabled, "Disabled performs no Druidry level balancing. Active rebalances an increased pair or all active pairs after accepted plot and verified Auto Harvest submissions.", 19, 0),
                 Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
                 Bind(config, "Compatibility", "AcceptedUnverifiedBuildFingerprint", string.Empty, "Exact assembly-pair fingerprint accepted by the player. Managed by the suite.", 50, 10, hidden: true),
-                Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, and mastery sharing immediately.", 40, 0),
+                Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, Druidry level adjustments, and mastery sharing immediately.", 40, 0),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
                 Bind(config, "Reserves", "RelativeReserveMultiplier", 0.0f, "Additional amount to leave after each action, expressed as a multiple of that action's cost. Affordability modes remain separate.", 20, 10));
 
@@ -432,6 +436,7 @@ internal sealed class BepInExAutomataConfiguration
             "AutoCast" => "Auto Cast",
             "AutoConcept" when !advancedAutoConcept => "Auto Concept",
             "AutoHarvest" => "Auto Harvest",
+            "AutoAgromancy" => "Auto Agromancy",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -441,6 +446,7 @@ internal sealed class BepInExAutomataConfiguration
             "Mode" when section == "AutoCast" => "Auto Cast",
             "Mode" when section == "AutoConcept" => "Auto Concept",
             "Mode" when section == "AutoHarvest" => "Auto Harvest",
+            "Mode" when section == "AutoAgromancy" => "Auto Agromancy",
             "CollectFruitTrees" => "Collect fruit trees",
             "CollectTreasureTrees" => "Collect treasure trees",
             "EvaluationIntervalSeconds" when section == "AutoHarvest" => "Evaluation interval (seconds)",
@@ -458,7 +464,7 @@ internal sealed class BepInExAutomataConfiguration
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
+        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Agromancy" ? 18 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

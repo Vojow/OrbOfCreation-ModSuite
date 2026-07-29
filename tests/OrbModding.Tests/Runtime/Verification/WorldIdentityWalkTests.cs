@@ -101,6 +101,9 @@ public sealed class WorldIdentityWalkTests
         "PlotPhaseDescriptors",
         "EffectBlocks",
         "EntityRequirements",
+        "HarvestActions",
+        "HarvestActionCosts",
+        "HarvestActionModifiers",
     };
 
     /// <summary>

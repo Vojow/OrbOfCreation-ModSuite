@@ -69,6 +69,10 @@ internal static class BepInExAutomataConfigurationReader
                     source.AutoHarvestEvaluationIntervalSeconds.Value,
                     nameof(source.AutoHarvestEvaluationIntervalSeconds)),
             },
+            AutoAgromancy = new AutoAgromancyConfiguration
+            {
+                Mode = source.AutoAgromancyMode.Value,
+            },
             Mentor = source.Mentor is null
                 ? new OrbMentor.MentorConfiguration()
                 : OrbMentor.MentorConfiguration.Read(source.Mentor),
