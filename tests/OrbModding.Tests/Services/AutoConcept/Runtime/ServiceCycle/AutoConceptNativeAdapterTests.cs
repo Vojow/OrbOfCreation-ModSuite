@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -242,6 +243,37 @@ public sealed class AutoConceptNativeAdapterTests : IDisposable
         var submission = runtime.Submit(in action, new AutoConceptConfiguration());
 
         Assert.Equal(AutoConceptPreflight.SlotUnavailable, submission.Preflight);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void RotationDoesNotDegradeWhenTheNativeAdmissionReadThrows()
+    {
+        var activeType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString());
+        var replacementType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString());
+        var activeRecipe = RecipeWithType(RecipeId, "Active", activeType);
+        var replacementRecipe = RecipeWithType(ReplacementId, "Replacement", replacementType);
+        var active = InstallNativeLists(activeRecipe, replacementRecipe);
+        active.TypelessSlots = 1;
+        active.ThrowOnCanAdd = true;
+        active.value.Add(new AlchemyInstance(activeRecipe) { quantity = 1, queuedQuantity = 1 });
+        using var runtime = new AutoConceptNativeAdapter(new AlchemyGameplayDomainClassifier());
+        var belief = new AutoConceptPlanBelief(1, 1, 1, Guid.Empty, 0);
+        var action = new AutoConceptCycleAction(
+            AutoConceptActionKind.RotateOut,
+            RecipeId,
+            1,
+            ReplacementId,
+            1,
+            in belief);
+
+        var exception = Assert.Throws<TargetInvocationException>(
+            () => runtime.Submit(in action, new AutoConceptConfiguration()));
+
+        Assert.Contains("CanAddInstance failed", exception.GetBaseException().Message);
         Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
     }
 

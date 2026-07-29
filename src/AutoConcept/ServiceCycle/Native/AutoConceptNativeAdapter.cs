@@ -206,7 +206,7 @@ internal sealed class AutoConceptNativeAdapter :
             {
                 var uuid = _recipeUuids[recipe];
                 if (!string.Equals(uuid, recipeId.ToString(), StringComparison.Ordinal)) continue;
-                if (_isDiscovered!.Invoke(recipe, null) is not true)
+                if (!InvokeBoolean(_isDiscovered!, recipe))
                 {
                     reason = "the planned concept is no longer unlocked";
                     return false;
@@ -236,18 +236,9 @@ internal sealed class AutoConceptNativeAdapter :
         }
     }
 
-    public bool CanAdd(NativeConceptCandidate candidate)
-    {
-        try
-        {
-            return IsCurrentRecipe(candidate) &&
-                _canAddInstance!.Invoke(_activeConcepts, new[] { candidate.Recipe }) is true;
-        }
-        catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException)
-        {
-            return false;
-        }
-    }
+    public bool CanAdd(NativeConceptCandidate candidate) =>
+        IsCurrentRecipe(candidate) &&
+        InvokeBoolean(_canAddInstance!, _activeConcepts!, candidate.Recipe);
 
     public bool TryFindSafeTarget(
         NativeConceptCandidate candidate,
@@ -706,8 +697,26 @@ internal sealed class AutoConceptNativeAdapter :
         return Convert.ToInt32(value ?? 0);
     }
 
-    private static int InvokeInt(MethodInfo method, object instance, params object[] arguments) =>
-        Convert.ToInt32(method.Invoke(instance, arguments) ?? 0);
+    private static bool InvokeBoolean(
+        MethodInfo method,
+        object instance,
+        params object[] arguments)
+    {
+        var value = method.Invoke(instance, arguments);
+        return value is bool result
+            ? result
+            : throw new InvalidOperationException(
+                $"{method.DeclaringType?.FullName}.{method.Name} returned no Boolean value.");
+    }
+
+    private static int InvokeInt(MethodInfo method, object instance, params object[] arguments)
+    {
+        var value = method.Invoke(instance, arguments);
+        return value is int result
+            ? result
+            : throw new InvalidOperationException(
+                $"{method.DeclaringType?.FullName}.{method.Name} returned no Int32 value.");
+    }
 
     private static bool Returns(MethodInfo? method, Type returnType) =>
         method is not null && method.ReturnType == returnType;

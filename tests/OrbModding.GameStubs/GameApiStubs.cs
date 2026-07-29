@@ -1377,12 +1377,14 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
     public bool SuppressAddMutation { get; set; }
     public bool SuppressRemoveMutation { get; set; }
+    public bool ThrowOnCanAdd { get; set; }
     public int TypelessSlots { get; set; } = 16;
     public Dictionary<AlchemyTypeSO, int> TypeSlots { get; } =
         new Dictionary<AlchemyTypeSO, int>();
 
     public bool CanAddInstance(AlchemyRecipeSO recipe)
     {
+        if (ThrowOnCanAdd) throw new InvalidOperationException("CanAddInstance failed");
         var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
         if (instance is not null && instance.queuedQuantity >= recipe.GetMaxUsageSlots()) return false;
         if (instance is not null) return true;

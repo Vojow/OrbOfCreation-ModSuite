@@ -391,7 +391,10 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                     continue;
                 }
 
-                var canAddNow = _canAddInstance!.Invoke(activeList, new[] { recipe }) is true;
+                var canAddValue = _canAddInstance!.Invoke(activeList, new[] { recipe });
+                if (canAddValue is not bool canAddNow)
+                    throw new InvalidOperationException(
+                        "AlchemyInstanceListVariable.CanAddInstance returned no Boolean value");
                 frame.ConceptRecipes.Append(new WorldConceptRecipe(id, core, canAddNow));
                 AppendCosts(id, WorldAlchemyCostKind.RecipeDrain, _recipeDrain!(recipe), frame.AlchemyCosts);
                 sampled++;

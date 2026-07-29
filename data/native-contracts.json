@@ -562,7 +562,8 @@
         "AlchemyRecipeSO"
       ],
       "owners": [
-        "Automata Auto Concept action boundary"
+        "Automata Auto Concept action boundary",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
@@ -697,7 +698,8 @@
       "valueType": "System.Collections.Generic.List`1<AlchemyTypeSO>",
       "owners": [
         "Common Alchemy classifier",
-        "Automata world collection"
+        "Automata world collection",
+        "Automata Auto Concept action boundary"
       ],
       "usages": [
         "reflection"
@@ -775,6 +777,25 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "alchemy-recipe.is-discovered",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsDiscovered",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Concept action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "alchemy-recipe.disc-rarity-level",

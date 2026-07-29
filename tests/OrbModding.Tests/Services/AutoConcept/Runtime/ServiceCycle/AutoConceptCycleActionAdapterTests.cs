@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
@@ -105,6 +106,16 @@ public sealed class AutoConceptCycleActionAdapterTests
         Assert.Equal(0, native.Submissions);
     }
 
+    [Fact]
+    public void NativeContractInvocationFailureFaultsInsteadOfDegrading()
+    {
+        var result = Execute(new ThrowingNativePort());
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
+
     [Theory]
     [InlineData(2, 3329)]
     [InlineData(3, 3330)]
@@ -134,7 +145,7 @@ public sealed class AutoConceptCycleActionAdapterTests
             mode);
 
     private static ServiceActionResult Execute(
-        FakeNativePort native,
+        IAutoConceptNativePort native,
         long nativeEpoch = PlannedEpoch,
         bool ownsActionFamily = true,
         AutoConceptOperationMode mode = AutoConceptOperationMode.Active)
@@ -183,5 +194,14 @@ public sealed class AutoConceptCycleActionAdapterTests
             Submissions++;
             return _submission;
         }
+    }
+
+    private sealed class ThrowingNativePort : IAutoConceptNativePort
+    {
+        public AutoConceptSubmission Submit(
+            in AutoConceptCycleAction action,
+            in AutoConceptConfiguration config) =>
+            throw new TargetInvocationException(
+                new InvalidOperationException("CanAddInstance failed"));
     }
 }
