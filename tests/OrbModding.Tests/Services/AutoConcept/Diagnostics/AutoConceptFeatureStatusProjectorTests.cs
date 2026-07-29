@@ -29,4 +29,34 @@ public sealed class AutoConceptFeatureStatusProjectorTests
         Assert.Equal(FeatureStatusState.Operational, status.State);
         Assert.Equal(FeatureStatusReasonCode.None, status.Reason);
     }
+
+    [Fact]
+    public void TrainingWaitIsHighlightedWithoutTreatingItAsAFailure()
+    {
+        var status = AutoConceptFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            cycleObserved: true,
+            idleReason: AutoConceptIdleReason.WaitingForTraining);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
+        Assert.Equal(FeatureStatusReasonCode.NativeBusy, status.Reason);
+        Assert.Contains("training period", status.Summary);
+    }
+
+    [Fact]
+    public void MissingUnlockedAssignableReplacementIsProgressionLocked()
+    {
+        var status = AutoConceptFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            cycleObserved: true,
+            idleReason: AutoConceptIdleReason.NoUnlockedAssignableReplacement);
+
+        Assert.Equal(FeatureStatusState.Locked, status.State);
+        Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, status.Reason);
+        Assert.Equal(
+            "No other unlocked, allowed concept can be assigned.",
+            status.Summary);
+    }
 }

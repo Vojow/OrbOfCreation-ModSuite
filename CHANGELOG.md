@@ -16,6 +16,11 @@
   6 migrates the inherited 300-second value while preserving customized intervals.
 - Reduce Auto Concept's default settled training period from five minutes to 30 seconds.
   Configuration schema 7 migrates the inherited value while preserving customized periods.
+- Make Timed Cycle rotate through all unlocked, allowed concepts rather than partitioning its order
+  by concept type. The game remains authoritative for whether releasing the active assignment opens
+  a compatible typed or typeless slot, and locked concepts are revalidated again before mutation.
+- Show whether Auto Concept is waiting for settled training or has no other unlocked, allowed
+  assignment in its tooltip, Runtime status, decision journal, and trace dashboard.
 
 ## Game-native UI overhaul — 2026-07-28
 

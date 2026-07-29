@@ -14,7 +14,9 @@ public sealed class AutoConceptCycleEvaluatorTests
 {
     private static readonly Guid Alpha = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Beta = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid Gamma = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid Core = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid OtherCore = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
     public void ReschedulesAtTheConfiguredFallbackWhenThereIsNoWork()
@@ -147,14 +149,94 @@ public sealed class AutoConceptCycleEvaluatorTests
         Assert.Empty(Plan(world, Config(mode: AutoConceptOperationMode.Disabled), ref state, out _));
     }
 
+    [Fact]
+    public void TimedCycleRotatesToAnUnlockedConceptAfterTraining()
+    {
+        var world = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 1),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(slotMode: AutoConceptSlotManagementMode.TimedCycle);
+
+        Assert.Empty(PlanAt(
+            world, config, ref state, decisionAtTicks: 0, out _, out var training));
+        var action = Assert.Single(PlanAt(
+            world, config, ref state, TimeSpan.FromSeconds(61).Ticks, out _, out _));
+
+        Assert.Equal(AutoConceptIdleReason.WaitingForTraining, training.IdleReason);
+        Assert.Equal(AutoConceptActionKind.RotateOut, action.Kind);
+        Assert.Equal(Alpha, action.RecipeId);
+        Assert.Equal(Beta, action.ReplacementId);
+    }
+
+    [Fact]
+    public void TimedCycleRotatesAcrossConceptTypesWhenAFreeSlotMustBeReleased()
+    {
+        var world = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 1),
+                Recipe(Beta, maximum: 1, coreTypeId: OtherCore),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) },
+            cannotAddNow: Beta);
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(slotMode: AutoConceptSlotManagementMode.TimedCycle);
+
+        Assert.Empty(PlanAt(
+            world, config, ref state, decisionAtTicks: 0, out _, out _));
+        var action = Assert.Single(PlanAt(
+            world, config, ref state, TimeSpan.FromSeconds(61).Ticks, out _, out _));
+
+        Assert.Equal(AutoConceptActionKind.RotateOut, action.Kind);
+        Assert.Equal(Alpha, action.RecipeId);
+        Assert.Equal(Beta, action.ReplacementId);
+    }
+
+    [Fact]
+    public void TimedCycleHighlightsWhenOnlyAlternativeIsLocked()
+    {
+        var world = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 1),
+                Recipe(Beta, maximum: 1, discovered: false),
+                Recipe(Gamma, maximum: 0, coreTypeId: OtherCore),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(slotMode: AutoConceptSlotManagementMode.TimedCycle);
+
+        Assert.Empty(PlanAt(
+            world, config, ref state, decisionAtTicks: 0, out _, out _));
+        var actions = PlanAt(
+            world, config, ref state, TimeSpan.FromSeconds(61).Ticks,
+            out _, out var idle);
+
+        Assert.Empty(actions);
+        Assert.Equal(3, idle.CapturedRecipes);
+        Assert.Equal(2, idle.EligibleRecipes);
+        Assert.Equal(AutoConceptDecisionKind.Idle, idle.Kind);
+        Assert.Equal(
+            AutoConceptIdleReason.NoUnlockedAssignableReplacement,
+            idle.IdleReason);
+    }
+
     private static WorldAlchemyRecipe Recipe(
         Guid id,
         int masteryLevel = 0,
         double masteryXp = 0,
         double requiredXp = 100,
-        int maximum = 4) =>
+        int maximum = 4,
+        bool discovered = true,
+        Guid? coreTypeId = null) =>
         new(
-            id, Core, true, 0, 0, 0, new BigDouble(masteryXp), masteryLevel, default,
+            id, coreTypeId ?? Core, discovered, 0, 0, 0,
+            new BigDouble(masteryXp), masteryLevel, default,
             false, false, false, 0, false,
             default, default, default, default, default, default, default, default,
             default, default, default, default, default, new BigDouble(maximum), default,
@@ -174,12 +256,26 @@ public sealed class AutoConceptCycleEvaluatorTests
     private static GameWorldState World(
         WorldAlchemyRecipe[] recipes,
         WorldAlchemyInstance[] instances,
-        long collectedAtEpoch = 1)
+        long collectedAtEpoch = 1,
+        Guid? cannotAddNow = null)
     {
         var concepts = new WorldConceptRecipeBuffer();
         foreach (var recipe in recipes)
         {
-            var row = new WorldConceptRecipe(recipe.RecipeId, Core);
+            var canAddNow = recipe.RecipeId != cannotAddNow;
+            foreach (var instance in instances)
+            {
+                if (instance.RecipeId == recipe.RecipeId ||
+                    Math.Max(instance.Quantity, instance.QueuedQuantity) <= 0) continue;
+                foreach (var activeRecipe in recipes)
+                    if (activeRecipe.RecipeId == instance.RecipeId &&
+                        activeRecipe.CoreTypeId == recipe.CoreTypeId)
+                        canAddNow = false;
+            }
+            var row = new WorldConceptRecipe(
+                recipe.RecipeId,
+                recipe.CoreTypeId,
+                canAddNow);
             concepts.Append(in row);
         }
         var active = new WorldAlchemyInstanceBuffer();
@@ -220,7 +316,16 @@ public sealed class AutoConceptCycleEvaluatorTests
         GameWorldState world,
         SuiteRuntimeConfiguration config,
         ref AutoConceptCycleState state,
-        out WakePolicy wake)
+        out WakePolicy wake) =>
+        PlanAt(world, config, ref state, 0, out wake, out _);
+
+    private static IReadOnlyList<AutoConceptCycleAction> PlanAt(
+        GameWorldState world,
+        SuiteRuntimeConfiguration config,
+        ref AutoConceptCycleState state,
+        long decisionAtTicks,
+        out WakePolicy wake,
+        out AutoConceptDecisionMetrics metrics)
     {
         var store = new ReusableActionStore<AutoConceptCycleAction>();
         store.BeginWrite();
@@ -229,9 +334,10 @@ public sealed class AutoConceptCycleEvaluatorTests
             new ServiceId("auto-concept"), new LifecycleGeneration(1),
             new ConfigGeneration(1), StrategyGeneration.Initial,
             new WorldGeneration(1), new CycleId(1));
-        var context = new ServiceCycleContext(identity, default, new MonotonicTimestamp(0));
+        var context = new ServiceCycleContext(
+            identity, default, new MonotonicTimestamp(decisionAtTicks));
         wake = AutoConceptCycleEvaluator.Evaluate(
-            world, in config, in context, ref state, writer, out var metrics);
+            world, in config, in context, ref state, writer, out metrics);
         state.RecordDecision(in metrics);
 
         var actions = new List<AutoConceptCycleAction>(store.Count);

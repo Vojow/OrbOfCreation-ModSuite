@@ -24,7 +24,8 @@ internal static class AutoConceptFeatureStatusProjector
     public static AutoConceptFeatureStatus Project(
         bool emergencyDisabled,
         bool owned,
-        bool cycleObserved)
+        bool cycleObserved,
+        AutoConceptIdleReason idleReason = AutoConceptIdleReason.None)
     {
         if (emergencyDisabled)
             return new AutoConceptFeatureStatus(
@@ -41,6 +42,16 @@ internal static class AutoConceptFeatureStatusProjector
                 FeatureStatusState.NotReady,
                 FeatureStatusReasonCode.GameplayNotReady,
                 "Auto Concept is waiting for its first evaluation.");
+        if (idleReason == AutoConceptIdleReason.WaitingForTraining)
+            return new AutoConceptFeatureStatus(
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.NativeBusy,
+                "Auto Concept is waiting for the active assignment to settle and complete its training period.");
+        if (idleReason == AutoConceptIdleReason.NoUnlockedAssignableReplacement)
+            return new AutoConceptFeatureStatus(
+                FeatureStatusState.Locked,
+                FeatureStatusReasonCode.ProgressionLocked,
+                "No other unlocked, allowed concept can be assigned.");
         return new AutoConceptFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,

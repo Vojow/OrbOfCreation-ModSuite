@@ -29,7 +29,7 @@ next lifecycle.
   mastery clamping, verified mutations, and lifecycle recovery.
 - [AutoConceptServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Runtime/ServiceCycle/AutoConceptServiceCompositionTests.cs)
   owns worker-to-action composition, fallback cadence, configuration wake-up,
-  and structural worker-state safety.
+  idle-reason handoff to feature health, and structural worker-state safety.
 - [AutoConceptFeatureStatusProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Diagnostics/AutoConceptFeatureStatusProjectorTests.cs)
   owns feature health projection.
 - [AutoConceptDomainClassifierAdoptionTests.cs](../../../tests/OrbModding.Tests/AutoConceptDomainClassifierAdoptionTests.cs)
@@ -48,13 +48,19 @@ native-boundary change.
 
 ## Required cases for behavior changes
 
-- Locked or undiscovered concepts are never assigned.
+- Timed Cycle orders every unlocked, allowed concept across concept types. A
+  cross-type rotation proceeds only when removing the exact active assignment
+  provably opens a native typed or typeless slot for its replacement.
+- Locked or undiscovered concepts are never assigned or counted as rotation
+  candidates, and unlock state is revalidated immediately before mutation.
 - Same-name/different-UUID or wrong-type content never aliases.
 - Unsafe owned drain rolls back before any balancing action.
 - A recent rotation prefers its remembered compatible replacement.
 - Breadth precedes mastery rebalance, and rebalance precedes depth.
 - Manual-preservation policy removes only verified owned quantity.
 - Timed training starts only after assignment settlement.
+- Feature health distinguishes an active training wait from the post-training
+  absence of another unlocked, assignable replacement.
 - Depth clamps to both configured quantity and the live mastery limit.
 - Projection preserves the reserve test, quantity floor, and halving search.
 - A stale epoch, changed identity, unsettled quantity, or ambiguous mutation

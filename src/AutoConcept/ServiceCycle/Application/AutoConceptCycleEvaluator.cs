@@ -23,6 +23,7 @@ internal static class AutoConceptCycleEvaluator
         internal int AuthoredDrainResources;
         internal bool HasInstance;
         internal bool DrainSafe;
+        internal bool CanAddNow;
         internal bool IsSettled => Quantity == QueuedQuantity;
         internal ConceptProgress Progress =>
             new(Key, MasteryLevel, MasteryProgress, MaximumQuantity > 0);
@@ -88,8 +89,10 @@ internal static class AutoConceptCycleEvaluator
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Depth,
                 actions, ref state, out metrics);
 
+        var idleReason = ClassifyIdle(candidates, in config, ref state);
         metrics = new AutoConceptDecisionMetrics(
-            world.ConceptRecipes.Count, candidates.Count, active, owned, 0, AutoConceptDecisionKind.Idle);
+            world.ConceptRecipes.Count, candidates.Count, active, owned, 0,
+            AutoConceptDecisionKind.Idle, idleReason);
         return WakePolicy.AfterDecision(TrainingWake(in config, in context, ref state, fallback));
     }
 
@@ -133,6 +136,7 @@ internal static class AutoConceptCycleEvaluator
                 AuthoredDrainResources = drainCount,
                 HasInstance = instanceFound,
                 DrainSafe = !instanceFound || IsDrainSafe(world, in instance, config.AutoConcept.MinimumDrainRatio),
+                CanAddNow = concept.CanAddNow,
             });
         }
         return result;
@@ -252,7 +256,7 @@ internal static class AutoConceptCycleEvaluator
         {
             var index = Normalize(state.CandidateCursor + offset, ranked.Count);
             var candidate = byId[ranked[index].Uuid];
-            if (!candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate, byId.Values)) continue;
+            if (!candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate)) continue;
             action = Action(AutoConceptActionKind.Add, candidate, 1, Guid.Empty, world.CollectedAtEpoch);
             return true;
         }
@@ -273,8 +277,11 @@ internal static class AutoConceptCycleEvaluator
             var desiredIndex = Normalize(state.CandidateCursor + desiredOffset, ranked.Count);
             var desiredProgress = ranked[desiredIndex];
             var desired = byId[desiredProgress.Uuid];
-            if (!desired.IsSettled || desired.Quantity != 0 || desired.CoreTypeId == Guid.Empty) continue;
-            if (config.AutoConcept.SlotManagement == AutoConceptSlotManagementMode.TimedCycle &&
+            if (!desired.IsSettled || desired.Quantity != 0 ||
+                desired.CoreTypeId == Guid.Empty || desired.MaximumQuantity <= 0) continue;
+            var timedCycle =
+                config.AutoConcept.SlotManagement == AutoConceptSlotManagementMode.TimedCycle;
+            if (timedCycle &&
                 !IsNextTimed(desired, ranked, byId, ref state)) continue;
 
             for (var activeIndex = ranked.Count - 1; activeIndex >= 0; activeIndex--)
@@ -284,7 +291,7 @@ internal static class AutoConceptCycleEvaluator
                     !AutoConceptBalancer.HasStrictlyLowerMastery(desiredProgress, activeProgress)) continue;
                 var active = byId[activeProgress.Uuid];
                 if (!active.IsSettled || active.Quantity <= 0 ||
-                    active.CoreTypeId != desired.CoreTypeId ||
+                    (!timedCycle && active.CoreTypeId != desired.CoreTypeId) ||
                     state.TrainingSessions.Contains(active.Key)) continue;
 
                 if (AutoConceptBalancer.UsesFullRotation(config.AutoConcept.SlotManagement))
@@ -348,7 +355,7 @@ internal static class AutoConceptCycleEvaluator
             state.PreferredReplacement = Guid.Empty;
             return false;
         }
-        if (!candidate.IsSettled || !CanAdd(candidate, byId.Values)) return true;
+        if (!candidate.IsSettled || !CanAdd(candidate)) return true;
         action = Action(AutoConceptActionKind.Add, candidate, 1, Guid.Empty, world.CollectedAtEpoch);
         return true;
     }
@@ -383,13 +390,37 @@ internal static class AutoConceptCycleEvaluator
         return WakePolicy.Immediate;
     }
 
-    private static bool CanAdd(Candidate candidate, IEnumerable<Candidate> candidates)
+    private static bool CanAdd(Candidate candidate) =>
+        candidate.CanAddNow && candidate.MaximumQuantity > candidate.QueuedQuantity;
+
+    private static AutoConceptIdleReason ClassifyIdle(
+        IReadOnlyList<Candidate> candidates,
+        in SuiteRuntimeConfiguration config,
+        ref AutoConceptCycleState state)
     {
-        if (candidate.MaximumQuantity <= candidate.QueuedQuantity) return false;
-        foreach (var other in candidates)
-            if (other.Id != candidate.Id && other.CoreTypeId == candidate.CoreTypeId &&
-                Math.Max(other.Quantity, other.QueuedQuantity) > 0) return false;
-        return true;
+        if (state.TrainingSessions.Count > 0)
+            return AutoConceptIdleReason.WaitingForTraining;
+        if (config.AutoConcept.SlotManagement != AutoConceptSlotManagementMode.TimedCycle)
+            return AutoConceptIdleReason.None;
+
+        var hasActive = false;
+        foreach (var active in candidates)
+        {
+            if (!active.IsSettled || active.Quantity <= 0) continue;
+            hasActive = true;
+            foreach (var replacement in candidates)
+            {
+                if (replacement.Id != active.Id &&
+                    replacement.IsSettled &&
+                    replacement.Quantity == 0 &&
+                    replacement.MaximumQuantity > 0)
+                    return AutoConceptIdleReason.None;
+            }
+        }
+
+        return hasActive
+            ? AutoConceptIdleReason.NoUnlockedAssignableReplacement
+            : AutoConceptIdleReason.None;
     }
 
     private static void RefreshTrainingPolicy(
@@ -490,7 +521,7 @@ internal static class AutoConceptCycleEvaluator
         foreach (var progress in ranked)
         {
             var other = byId[progress.Uuid];
-            if (!other.IsSettled || other.Quantity != 0 || other.CoreTypeId != candidate.CoreTypeId) continue;
+            if (!other.IsSettled || other.Quantity != 0 || other.MaximumQuantity <= 0) continue;
             long? otherLast = state.LastTimedAssignment.TryGet(other.Key, out var otherSequence)
                 ? otherSequence
                 : null;
