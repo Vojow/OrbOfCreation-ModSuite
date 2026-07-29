@@ -8,6 +8,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.World;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoConcept.Runtime.ServiceCycle;
@@ -41,6 +42,34 @@ public sealed class AutoConceptServiceCompositionTests
         Assert.Equal(Recipe, actions.LastRecipe);
     }
 
+    [Fact]
+    public void EnablingAfterDisabledStartDoesNotWaitForTheFallbackInterval()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        var actions = new ActionPort(Thread.CurrentThread.ManagedThreadId);
+        var definition = AutoConceptService.Define(actions);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        registry.ConfigurationPublication.Publish(Configuration(AutoConceptOperationMode.Disabled));
+        using var registration = registry.Register(definition, new LifecycleGeneration(7));
+        var runner = registration.Runner;
+
+        var disabled = runner.TryStartCycle(clock.Now);
+
+        Assert.False(disabled.Queued);
+        Assert.True(runner.Snapshot.HasWakeDue);
+        Assert.Equal(
+            TimeSpan.FromSeconds(10).Ticks + clock.Now.Ticks,
+            runner.Snapshot.NextWakeDue.Ticks);
+
+        registry.ConfigurationPublication.Publish(Configuration(AutoConceptOperationMode.Active));
+
+        var enabled = runner.TryStartCycle(clock.Now);
+
+        Assert.True(
+            enabled.Queued,
+            "Publishing Active intent must wake Auto Concept instead of retaining its disabled-state fallback sleep.");
+    }
+
     private static GameWorldState World()
     {
         var concepts = new WorldConceptRecipeBuffer();
@@ -63,14 +92,15 @@ public sealed class AutoConceptServiceCompositionTests
         };
     }
 
-    private static SuiteRuntimeConfiguration Configuration() =>
+    private static SuiteRuntimeConfiguration Configuration(
+        AutoConceptOperationMode mode = AutoConceptOperationMode.Active) =>
         new()
         {
             General = new SuiteGeneralConfiguration { Enabled = true },
             AutoConcept = new AutoConceptConfiguration
             {
-                Mode = AutoConceptOperationMode.Active,
-                FallbackEvaluationIntervalSeconds = 30,
+                Mode = mode,
+                FallbackEvaluationIntervalSeconds = 10,
                 TrainingPeriodSeconds = 60,
             },
         };

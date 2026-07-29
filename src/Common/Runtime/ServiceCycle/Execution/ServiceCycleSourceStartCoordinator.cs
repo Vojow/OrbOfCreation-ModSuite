@@ -123,10 +123,11 @@ internal sealed class ServiceCycleSourceStartCoordinator<TState, TAction> :
             // one would outlive the runner that owns it.
             if (!Lifetime.IsSuperseded)
             {
-                State.NextWakeDue = ServiceWakeSchedule.FromRetryPolicy(
-                    result.WakePolicy,
-                    captureObservedAt);
-                State.HasWakeDue = true;
+                State.ScheduleWake(
+                    ServiceWakeSchedule.FromRetryPolicy(
+                        result.WakePolicy,
+                        captureObservedAt),
+                    configuration.Generation);
             }
             return new ServiceCycleStartAttempt(
                 false, startFact, committedCapture, default, opening.Batch, default,

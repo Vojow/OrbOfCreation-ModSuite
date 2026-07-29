@@ -82,8 +82,10 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
             _runtime.PublishActionMetrics(response.ActionMetrics);
             if (!response.TransientContention)
                 _runtime.State.LatestFault = response.Fault;
-            _runtime.State.NextWakeDue = response.WakeDue;
-            _runtime.State.HasWakeDue = true;
+            _runtime.State.ScheduleWake(
+                response.WakeDue,
+                response.Cycle.Config,
+                invalidatedByConfiguration: false);
             _runtime.State.CycleConfiguration = null;
             _runtime.State.HasActiveBatch = false;
             _runtime.State.HasInFlightCycle = false;
@@ -131,7 +133,7 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
         _runtime.State.HasInFlightCycle = false;
         _runtime.Actions.CompleteSuccessfulBatch();
         _runtime.ClearVisibleActionBatch();
-        _runtime.State.HasWakeDue = true;
+        _runtime.State.ScheduleWake(response.WakeDue, response.Cycle.Config);
         _runtime.State.CycleConfiguration = null;
         _completion.ReturnMainOwnership(nonBlockingHandoff);
     }

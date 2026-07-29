@@ -28,7 +28,8 @@ next lifecycle.
   owns live re-identification, settled quantity checks, prospective drain parity,
   mastery clamping, verified mutations, and lifecycle recovery.
 - [AutoConceptServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Runtime/ServiceCycle/AutoConceptServiceCompositionTests.cs)
-  owns worker-to-action composition and structural worker-state safety.
+  owns worker-to-action composition, fallback cadence, configuration wake-up,
+  and structural worker-state safety.
 - [AutoConceptFeatureStatusProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Diagnostics/AutoConceptFeatureStatusProjectorTests.cs)
   owns feature health projection.
 - [AutoConceptDomainClassifierAdoptionTests.cs](../../../tests/OrbModding.Tests/AutoConceptDomainClassifierAdoptionTests.cs)

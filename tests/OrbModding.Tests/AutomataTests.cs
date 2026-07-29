@@ -47,7 +47,7 @@ public sealed class AutomataTests
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
-        Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.Equal(10, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
         Assert.True(config.Current.CanStartAutoBuyActively);
         Assert.False(config.Current.CanStartAutoCastActively);
         Assert.False(config.Current.CanStartAutoConceptActively);
