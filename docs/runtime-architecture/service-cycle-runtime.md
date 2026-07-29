@@ -159,6 +159,11 @@ hidden runner generic.
 
 - Publishing any of the three never cancels, orphans, rewrites, or partially updates current work.
 - A running evaluation finishes with the world, configuration, and strategy it was pinned with, and a draining batch terminates under that same policy context.
+- Once a service is idle, a newer configuration generation invalidates a policy wake deadline
+  calculated from an older generation. The next pump admission re-runs `ShouldStart` immediately
+  against the latest committed snapshot; unrelated configuration changes may therefore cause one
+  extra evaluation, but cannot leave newly enabled work behind an obsolete fallback delay. Fault
+  recovery deadlines retain their bounded backoff under configuration churn.
 - The next cycle consumes the latest publications; intermediate publications may coalesce.
 - The state projection exposes both pinned and latest generations so the UI can explain that a saved change applies next cycle.
 

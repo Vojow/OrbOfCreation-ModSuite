@@ -15,8 +15,19 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         if (Lifetime.IsSuperseded) return default;
         if (_hasPendingRequest)
             return TryPublishPendingRequest(nonBlockingProbe);
-        if (State.HasWakeDue && now < State.NextWakeDue)
+
+        var configuration = _configuration.ReadLatest();
+        State.LatestConfigGeneration = configuration.Generation;
+        if (State.HasWakeDue &&
+            (!State.WakeInvalidatedByConfiguration ||
+             configuration.Generation == State.WakeConfigurationGeneration) &&
+            now < State.NextWakeDue)
             return default;
+        if (State.HasWakeDue &&
+            State.WakeInvalidatedByConfiguration &&
+            configuration.Generation != State.WakeConfigurationGeneration)
+            State.ClearWake();
+
         ServiceHandoffSnapshot handoff;
         if (nonBlockingProbe)
         {
@@ -31,8 +42,6 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         if (handoff.Phase != ServiceHandoffPhase.Empty || handoff.CleanupPending)
             return default;
 
-        var configuration = _configuration.ReadLatest();
-        State.LatestConfigGeneration = configuration.Generation;
         var startContext = new ServiceCycleStartContext(
             Lifecycle,
             configuration.Generation,
@@ -90,10 +99,11 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
 
         if (!start.ShouldStart)
         {
-            State.NextWakeDue = ServiceWakeSchedule.FromRetryPolicy(
-                start.WakePolicy,
-                startObservedAt);
-            State.HasWakeDue = true;
+            State.ScheduleWake(
+                ServiceWakeSchedule.FromRetryPolicy(
+                    start.WakePolicy,
+                    startObservedAt),
+                configuration.Generation);
             var recoveredFault = RecoverStartFault(startObservedAt);
             return new ServiceCycleStartAttempt(
                 false, startFact, default, default, default, default,

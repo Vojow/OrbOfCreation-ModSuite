@@ -153,11 +153,12 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
         bool nonBlockingHandoff)
     {
         _runtime.State.PreviousReceipt = receipt;
-        _runtime.State.NextWakeDue = ServiceWakeSchedule.AtBatchTerminal(
-            _runtime.State.ActiveWake,
-            _runtime.State.ResponsePublishedAt,
-            terminalAt);
-        _runtime.State.HasWakeDue = true;
+        _runtime.State.ScheduleWake(
+            ServiceWakeSchedule.AtBatchTerminal(
+                _runtime.State.ActiveWake,
+                _runtime.State.ResponsePublishedAt,
+                terminalAt),
+            _runtime.State.ActiveCycle.Config);
         _runtime.State.CycleConfiguration = null;
         _runtime.State.HasActiveBatch = false;
         _runtime.State.HasInFlightCycle = false;

@@ -353,7 +353,7 @@ internal sealed class BepInExAutomataConfiguration
                 config,
                 "AutoConcept",
                 "FallbackEvaluationIntervalSeconds",
-                300,
+                10,
                 "Maximum idle seconds before a fallback Auto Concept evaluation. Published lifecycle, mastery, slot, quantity, and safety changes can wake it earlier.",
                 17,
                 10,

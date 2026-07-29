@@ -151,7 +151,7 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         _pendingContext = default;
         _pendingBatch = default;
         _pendingStart = default;
-        State.HasWakeDue = false;
+        State.ClearWake();
         State.InFlightCycle = identity;
         State.InFlightBatch = batch;
         State.HasInFlightCycle = true;
@@ -175,8 +175,10 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
     {
         var record = _startFaults.Record(category, observedAt);
         State.LatestFault = record.Fault;
-        State.NextWakeDue = record.RetryDue;
-        State.HasWakeDue = true;
+        State.ScheduleWake(
+            record.RetryDue,
+            State.LatestConfigGeneration,
+            invalidatedByConfiguration: false);
         return record;
     }
 

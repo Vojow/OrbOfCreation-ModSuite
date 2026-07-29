@@ -22,6 +22,7 @@ for alternate chrome.
 | Navigation cadence and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
 | Schema 4 to 5 retirement transaction | [SuiteConfigurationSchemaFiveTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaFiveTests.cs) |
+| Schema 5 to 6 Auto Concept fallback migration | [SuiteConfigurationSchemaSixTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaSixTests.cs) |
 | One-path quick-control publication | [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs), [AutomataFeatureStatusTests.cs](../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) |
 | Native frame and single-pixel-writer ownership | [ConfiguredIntentIconButtonVisualTests.cs](../../tests/OrbModding.Tests/ConfiguredIntentIconButtonVisualTests.cs), [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
 | Native-surface install reporting | [SuiteUiSurfaceDiagnosticsTests.cs](../../tests/OrbModding.Tests/OrbModConfig/SuiteUiSurfaceDiagnosticsTests.cs) |

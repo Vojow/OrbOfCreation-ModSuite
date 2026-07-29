@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace OrbModding.Common;
@@ -13,7 +14,7 @@ namespace OrbModding.Common;
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 5;
+    internal const int CurrentVersion = 6;
     internal static readonly ConfigurationKey AutoCastShortcut =
         new("AutoCast", "ToggleShortcut");
     internal static readonly ConfigurationKey DifferentialVerificationShortcut =
@@ -34,6 +35,8 @@ internal static class SuiteConfigurationSchema
         new("Diagnostics", "DetailedLogging");
     internal static readonly ConfigurationKey DevelopmentEventProbe =
         new("Development", "EventProbe");
+    internal static readonly ConfigurationKey AutoConceptFallbackEvaluationIntervalSeconds =
+        new("AutoConcept", "FallbackEvaluationIntervalSeconds");
 
     internal static ConfigurationSchemaPlan Plan { get; } = new(CurrentVersion, new[]
     {
@@ -80,7 +83,7 @@ internal static class SuiteConfigurationSchema
         // Maintained diagnostics are explicit Runtime actions and unconditional warnings/errors.
         new ConfigurationMigrationStep(
             4,
-            CurrentVersion,
+            5,
             new[]
             {
                 AutoBuyMaxCandidatesPerScan,
@@ -114,6 +117,35 @@ internal static class SuiteConfigurationSchema
                 context.DiscardObsolete(
                     DifferentialVerificationShortcut,
                     "Differential verification is an explicit Mods Runtime action.");
+            }),
+        // Schema 6 shortens Auto Concept's inherited idle fallback. A player-selected interval is
+        // preserved; only the previous default is rewritten.
+        new ConfigurationMigrationStep(
+            5,
+            CurrentVersion,
+            new[] { AutoConceptFallbackEvaluationIntervalSeconds },
+            static context =>
+            {
+                if (!context.TryGet(AutoConceptFallbackEvaluationIntervalSeconds, out var serialized))
+                    return;
+
+                if (int.TryParse(
+                        serialized,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var seconds) &&
+                    seconds == 300)
+                {
+                    context.Map(
+                        AutoConceptFallbackEvaluationIntervalSeconds,
+                        AutoConceptFallbackEvaluationIntervalSeconds,
+                        "10",
+                        "Shortened the inherited Auto Concept idle fallback from 300 seconds to 10 seconds.");
+                }
+                else
+                {
+                    context.Preserve(AutoConceptFallbackEvaluationIntervalSeconds, serialized);
+                }
             }),
     });
 

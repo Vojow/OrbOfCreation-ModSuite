@@ -104,8 +104,10 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 result.Code,
                 observedAt);
             _runtime.State.LatestFault = record.Fault;
-            _runtime.State.NextWakeDue = record.RetryDue;
-            _runtime.State.HasWakeDue = true;
+            _runtime.State.ScheduleWake(
+                record.RetryDue,
+                _runtime.State.ActiveCycle.Config,
+                invalidatedByConfiguration: false);
             fault = record.Fault;
             retryDue = record.RetryDue;
         }
