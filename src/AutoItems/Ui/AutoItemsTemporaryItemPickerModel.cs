@@ -75,7 +75,7 @@ internal static class AutoItemsTemporaryItemFiltering
 internal static class AutoItemsTemporaryItemSelection
 {
     internal static HashSet<Guid> Parse(string serialized) =>
-        AutoItemsTemporaryItemPolicy.ParseAllowlist(serialized);
+        AutoItemsTemporaryItemAllowlist.Parse(serialized);
 
     internal static string Toggle(string serialized, Guid itemId)
     {

@@ -32,7 +32,7 @@ Last updated: **2026-07-29**
 - Worktree: `.analysis/worktrees/auto-items-plan`
 - Branch: `agent/auto-items-plan`
 - Base: `main` at `7f07c16`
-- Current task: interactive Phase 11 behavior validation and Phase 12 layout validation for the
+- Current task: run interactive Phase 11 behavior validation and Phase 12 layout validation for the
   conservative Fruit/Potion extension.
   Exercise one explicitly allowlisted Fruit and Potion on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
@@ -44,7 +44,7 @@ Last updated: **2026-07-29**
   player-equivalent submission method, global multi-buy interaction, and the remaining live probes.
 - Implemented: exact known identities and metadata contracts; `ConsumableTypes` and
   `ConsumableCosts` one-to-many world tables; fail-closed collection; portable traversal, sorting,
-  and installed-game contract tests; a native-free profiler that requires exactly one supported
+  and installed-game contract tests; a native-free profile builder that requires exactly one supported
   family, a capped inverted toxicity resource, a valid immediate toxicity cost, and preserves
   additional native costs; disabled-by-default configuration; a bounded ServiceCycle evaluator;
   feature health and decision projection; shared action-family ownership; native Scroll and Relic
@@ -60,20 +60,26 @@ Last updated: **2026-07-29**
   only that exact item for the lifecycle. The Mods page exposes this allowlist as a discovered-item
   picker while persisting only exact stable UUIDs.
 - PR cleanup: picker rendering, picker state/selection, catalog parsing, and exact reflection
-  binding are separated. One explicit editor-mode state prevents Items/Raw overlap; invariant
-  numeric formatting and fail-closed ambiguous-family/duplicate-identity tests are in place.
-- Verification: 1,920 ordinary portable tests, 90 profiler tests, the profiler trace-tool build,
+  binding are separated. Core taxonomy is centralized; pure candidate scanning is separated from
+  lifecycle/recovery evaluation; native contract discovery is separated from live preflight and
+  mutation; unused action beliefs are removed; allowlists are cached by configuration generation;
+  and reflection failures use one containment policy. The review also fixed temporary-only
+  ownership/status, live temporary-cost revalidation, exact per-service evaluation status, and the
+  rule that any pending or active temporary use blocks every automated item family.
+- Verification: 1,928 ordinary portable tests, 90 profiler tests, the profiler trace-tool build,
   the 5-test native-contract source gate, and all 25 installed-game contract tests pass on the
-  current tree. The installed contract run used the local Windows Steam assemblies. Interactive
-  game validation has not been performed in this worktree.
-- Working tree: all Auto Items work remains uncommitted in the dedicated worktree.
-- Next action: run the Phase 11 behavior and Phase 12 layout checklists. This still requires explicit
-  install/live-session approval and a disposable save.
+  current tree. The focused Auto Items/integration/ModConfig scope passes 169 tests. The installed
+  contract run used the local Windows Steam assemblies. Interactive game validation has not been
+  performed in this worktree.
+- Working tree: the original implementation and branch-wide cleanup are committed in draft PR #99.
+- Next action: run the Phase 11 behavior and Phase 12 layout checklists. The interactive checks still
+  require explicit install/live-session approval and a disposable save.
 
 ### Locked decisions
 
 1. **Fill-first recovery with Relic priority.** Relics have first priority whenever native
-   readiness and toxicity headroom admit them; they have no separate exact-zero restriction.
+   readiness and toxicity headroom admit them and no temporary usage is pending or active; they
+   have no separate exact-zero restriction.
    Scrolls and admitted temporary items use remaining headroom. Once no otherwise-eligible item
    fits, Auto Items latches a recovery wait and submits nothing until toxicity returns to exact
    zero, then starts another fill cycle.

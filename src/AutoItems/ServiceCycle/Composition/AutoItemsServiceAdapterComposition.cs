@@ -25,7 +25,7 @@ internal sealed class AutoItemsServiceAdapterComposition
         var temporaryActivations = new AutoItemsTemporaryActivationTracker();
         var natives = new AutoItemsNativeAdapter(
             dependencies.RegistryResolver,
-            dependencies.CaptureMutationPermit,
+            dependencies.TryCaptureMutationPermit,
             temporaryActivations);
         var actions = new AutoItemsCycleActionAdapter(
             natives,

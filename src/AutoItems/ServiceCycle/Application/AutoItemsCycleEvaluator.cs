@@ -1,6 +1,7 @@
+using System;
+using System.Collections.Generic;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
-using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
@@ -15,14 +16,14 @@ internal static class AutoItemsCycleEvaluator
         ref AutoItemsCycleState state,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         AutoItemsTemporaryActivationTracker temporaryActivations,
+        ISet<Guid>? temporaryAllowlist,
         out AutoItemsDecisionMetrics metrics)
     {
         var interval = AutoItemsConfigurationPolicy.EvaluationInterval(config);
         if (!AutoItemsConfigurationPolicy.IsOperational(config))
         {
             state.EndRecoveryWait();
-            metrics = new AutoItemsDecisionMetrics(
-                world.Consumables.Count, 0, 0, 0, 0, 0, AutoItemsDecisionKind.Disabled);
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.Disabled);
             return WakePolicy.AfterDecision(interval);
         }
 
@@ -30,13 +31,8 @@ internal static class AutoItemsCycleEvaluator
         if (activation is AutoItemsTemporaryActivationState.AwaitingActivation or
             AutoItemsTemporaryActivationState.Active)
         {
-            metrics = new AutoItemsDecisionMetrics(
-                world.Consumables.Count,
-                0,
-                0,
-                0,
-                0,
-                0,
+            metrics = EmptyMetrics(
+                world,
                 activation == AutoItemsTemporaryActivationState.Active
                     ? AutoItemsDecisionKind.TemporaryEffectActive
                     : AutoItemsDecisionKind.AwaitingTemporaryActivation);
@@ -44,32 +40,16 @@ internal static class AutoItemsCycleEvaluator
         }
         if (activation == AutoItemsTemporaryActivationState.Quarantined)
         {
-            metrics = new AutoItemsDecisionMetrics(
-                world.Consumables.Count,
-                0,
-                0,
-                0,
-                0,
-                0,
-                AutoItemsDecisionKind.TemporaryItemQuarantined);
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.TemporaryItemQuarantined);
             return WakePolicy.AfterDecision(interval);
         }
 
-        var rows = world.Consumables.AsSpan();
-        for (var index = 0; index < rows.Length; index++)
+        if (HasPreparedConsumable(world))
         {
-            if (rows[index].QueuedQuantity <= 0 &&
-                rows[index].CurrentPrepTime.CompareTo(BigDouble.Zero) <= 0)
-                continue;
-            metrics = new AutoItemsDecisionMetrics(
-                rows.Length, 0, 0, 0, 0, 0, AutoItemsDecisionKind.NativeBusy);
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.NativeBusy);
             return WakePolicy.AfterDecision(interval);
         }
 
-        var rejected = 0;
-        var temporary = 0;
-        var eligibleRelics = 0;
-        var eligibleScrolls = 0;
         var hasToxicityReading =
             WorldLookup.TryFind(
                 world.Resources,
@@ -81,215 +61,98 @@ internal static class AutoItemsCycleEvaluator
         if (state.RecoveryWaitActive)
         {
             if (toxicityAtZero)
+            {
                 state.EndRecoveryWait();
+            }
             else if (hasToxicityReading)
             {
-                metrics = new AutoItemsDecisionMetrics(
-                    rows.Length,
-                    rejected,
-                    temporary,
-                    eligibleRelics,
-                    eligibleScrolls,
-                    0,
-                    AutoItemsDecisionKind.WaitingForToxicityRecovery);
+                metrics = EmptyMetrics(world, AutoItemsDecisionKind.WaitingForToxicityRecovery);
                 return WakePolicy.AfterDecision(interval);
             }
         }
-        AutoItemsCycleAction firstRelic = default;
-        AutoItemsCycleAction firstScroll = default;
-        AutoItemsCycleAction firstTemporary = default;
-        var eligibleTemporary = 0;
-        var saturationCandidate = false;
-        var temporaryUsagePresent = false;
-        var allowlist =
-            AutoItemsTemporaryItemPolicy.ParseAllowlist(
-                config.AutoItems.TemporaryItemAllowlist);
 
-        for (var index = 0; index < rows.Length; index++)
+        var scan = AutoItemsCandidateScanner.Scan(
+            world,
+            in config,
+            temporaryActivations,
+            temporaryAllowlist);
+
+        // An externally restored or manually started temporary effect has the same exclusion
+        // strength as one submitted by this service. Check it before every family priority.
+        if (scan.TemporaryUsagePresent)
         {
-            var profile = AutoItemsConsumableProfiler.Build(world, rows[index].ConsumableId);
-            if (!profile.IsReady)
-            {
-                rejected++;
-                continue;
-            }
-
-            if (profile.Family is AutoItemsConsumableFamily.Fruit or AutoItemsConsumableFamily.Potion)
-            {
-                temporary++;
-                if (WorldConsumableUsageLookup.TryFindRange(
-                        world.ConsumableUsages,
-                        profile.Consumable.ConsumableId,
-                        out var usageStart,
-                        out var usageCount))
-                {
-                    for (var usageIndex = 0; usageIndex < usageCount; usageIndex++)
-                    {
-                        if (!world.ConsumableUsages[usageStart + usageIndex].Expired)
-                        {
-                            temporaryUsagePresent = true;
-                            break;
-                        }
-                    }
-                }
-                if (!AutoItemsTemporaryItemPolicy.IsFamilyEnabled(
-                        config.AutoItems,
-                        profile.Family) ||
-                    !allowlist.Contains(profile.Consumable.ConsumableId) ||
-                    temporaryActivations.IsQuarantined(profile.Consumable.ConsumableId) ||
-                    !IsBaseEligible(in profile) ||
-                    !HasSafeTemporaryShape(in profile))
-                    continue;
-
-                saturationCandidate |= CanFitAfterFullRecovery(in profile);
-                if (!HasCurrentToxicityHeadroom(in profile)) continue;
-                eligibleTemporary++;
-                if (firstTemporary.ItemId == System.Guid.Empty)
-                {
-                    var temporaryBelief = new AutoItemsPlanBelief(
-                        profile.Consumable.Quantity,
-                        profile.Consumable.QueuedQuantity,
-                        profile.Consumable.Randomized,
-                        profile.Consumable.CanBeRandomized);
-                    firstTemporary = new AutoItemsCycleAction(
-                        profile.Consumable.ConsumableId,
-                        profile.Family,
-                        world.CollectedAtFrame,
-                        world.CollectedAtEpoch,
-                        in temporaryBelief);
-                }
-                continue;
-            }
-            if (!IsBaseEligible(in profile)) continue;
-
-            var belief = new AutoItemsPlanBelief(
-                profile.Consumable.Quantity,
-                profile.Consumable.QueuedQuantity,
-                profile.Consumable.Randomized,
-                profile.Consumable.CanBeRandomized);
-            if (profile.Family == AutoItemsConsumableFamily.Relic && config.AutoItems.UseRelics)
-            {
-                saturationCandidate |= CanFitAfterFullRecovery(in profile);
-                if (!HasCurrentToxicityHeadroom(in profile)) continue;
-                eligibleRelics++;
-                if (firstRelic.ItemId == System.Guid.Empty)
-                    firstRelic = new AutoItemsCycleAction(
-                        profile.Consumable.ConsumableId,
-                        profile.Family,
-                        world.CollectedAtFrame,
-                        world.CollectedAtEpoch,
-                        in belief);
-            }
-            else if (
-                profile.Family == AutoItemsConsumableFamily.Scroll &&
-                config.AutoItems.UseScrolls &&
-                profile.Consumable.CanBeRandomized)
-            {
-                saturationCandidate |= CanFitAfterFullRecovery(in profile);
-                if (!HasCurrentToxicityHeadroom(in profile)) continue;
-                eligibleScrolls++;
-                if (firstScroll.ItemId == System.Guid.Empty)
-                    firstScroll = new AutoItemsCycleAction(
-                        profile.Consumable.ConsumableId,
-                        profile.Family,
-                        world.CollectedAtFrame,
-                        world.CollectedAtEpoch,
-                        in belief);
-            }
-        }
-
-        if (eligibleRelics > 0)
-            return Plan(
-                in firstRelic, rows.Length, rejected, temporary, eligibleRelics, eligibleScrolls,
-                AutoItemsDecisionKind.Relic, actions, out metrics);
-        if (temporaryUsagePresent)
-        {
-            metrics = new AutoItemsDecisionMetrics(
-                rows.Length,
-                rejected,
-                temporary,
-                eligibleRelics,
-                eligibleScrolls,
-                0,
-                AutoItemsDecisionKind.TemporaryEffectActive);
+            metrics = scan.ToMetrics(AutoItemsDecisionKind.TemporaryEffectActive);
             return WakePolicy.AfterDecision(interval);
         }
-        if (eligibleTemporary > 0)
+        if (scan.EligibleRelics > 0)
+        {
+            var action = scan.FirstRelic;
             return Plan(
-                in firstTemporary,
-                rows.Length,
-                rejected,
-                temporary,
-                eligibleRelics,
-                eligibleScrolls,
+                in action,
+                in scan,
+                AutoItemsDecisionKind.Relic,
+                actions,
+                out metrics);
+        }
+        if (scan.EligibleTemporaryItems > 0)
+        {
+            var action = scan.FirstTemporary;
+            return Plan(
+                in action,
+                in scan,
                 AutoItemsDecisionKind.TemporaryItem,
                 actions,
                 out metrics);
-        if (eligibleScrolls > 0)
+        }
+        if (scan.EligibleScrolls > 0)
+        {
+            var action = scan.FirstScroll;
             return Plan(
-                in firstScroll, rows.Length, rejected, temporary, eligibleRelics, eligibleScrolls,
-                AutoItemsDecisionKind.Scroll, actions, out metrics);
-        if (saturationCandidate && hasToxicityReading && !toxicityAtZero)
+                in action,
+                in scan,
+                AutoItemsDecisionKind.Scroll,
+                actions,
+                out metrics);
+        }
+        if (scan.SaturationCandidate && hasToxicityReading && !toxicityAtZero)
         {
             state.BeginRecoveryWait();
-            metrics = new AutoItemsDecisionMetrics(
-                rows.Length,
-                rejected,
-                temporary,
-                eligibleRelics,
-                eligibleScrolls,
-                0,
-                AutoItemsDecisionKind.WaitingForToxicityRecovery);
+            metrics = scan.ToMetrics(AutoItemsDecisionKind.WaitingForToxicityRecovery);
             return WakePolicy.AfterDecision(interval);
         }
 
-        metrics = new AutoItemsDecisionMetrics(
-            rows.Length, rejected, temporary, eligibleRelics, eligibleScrolls, 0,
-            AutoItemsDecisionKind.Idle);
+        metrics = scan.ToMetrics(AutoItemsDecisionKind.Idle);
         return WakePolicy.AfterDecision(interval);
     }
 
-    private static bool IsBaseEligible(in AutoItemsConsumableProfile profile) =>
-        profile.Consumable.Visible &&
-        profile.Consumable.Quantity - profile.Consumable.QueuedQuantity > 0 &&
-        profile.Consumable.CurrentPrepTime.CompareTo(BigDouble.Zero) <= 0 &&
-        profile.Consumable.CurrentCooldown.CompareTo(BigDouble.Zero) <= 0;
-
-    private static bool HasCurrentToxicityHeadroom(in AutoItemsConsumableProfile profile) =>
-        profile.Toxicity.TrueQuantity.CompareTo(profile.ImmediateToxicityCost) >= 0;
-
-    private static bool CanFitAfterFullRecovery(in AutoItemsConsumableProfile profile)
+    private static bool HasPreparedConsumable(GameWorldState world)
     {
-        var trueCapacity =
-            profile.Toxicity.Reading.Capacity *
-            OrbGameMath.AsPercent(profile.Toxicity.Reading.Quality);
-        return !BigDouble.IsNaN(trueCapacity) &&
-               !BigDouble.IsInfinity(trueCapacity) &&
-               trueCapacity.CompareTo(profile.ImmediateToxicityCost) >= 0;
+        var rows = world.Consumables.AsSpan();
+        for (var index = 0; index < rows.Length; index++)
+        {
+            if (rows[index].QueuedQuantity > 0 ||
+                rows[index].CurrentPrepTime.CompareTo(BigDouble.Zero) > 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private static bool HasSafeTemporaryShape(in AutoItemsConsumableProfile profile) =>
-        profile.Consumable.HasDuration &&
-        profile.Consumable.DurationBase > 0d &&
-        !double.IsNaN(profile.Consumable.DurationBase) &&
-        !double.IsInfinity(profile.Consumable.DurationBase) &&
-        !profile.HasAdditionalImmediateCosts &&
-        !profile.HasAdditionalHeldCosts;
+    private static AutoItemsDecisionMetrics EmptyMetrics(
+        GameWorldState world,
+        AutoItemsDecisionKind kind) =>
+        new(world.Consumables.Count, 0, 0, 0, 0, 0, kind);
 
     private static WakePolicy Plan(
         in AutoItemsCycleAction action,
-        int captured,
-        int rejected,
-        int temporary,
-        int relics,
-        int scrolls,
+        in AutoItemsCandidateScan scan,
         AutoItemsDecisionKind kind,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
-        metrics = new AutoItemsDecisionMetrics(
-            captured, rejected, temporary, relics, scrolls, 1, kind);
+        metrics = scan.ToMetrics(kind, plannedActions: 1);
         return WakePolicy.Immediate;
     }
 }

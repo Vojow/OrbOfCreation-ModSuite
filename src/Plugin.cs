@@ -291,9 +291,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoHarvestToggleControl = new AutoHarvestToggleControl(
             _configurationStore!,
             () => featureStatuses.AutoHarvest.Current);
-        Func<long> readAutoHarvestLifecycleEpoch =
+        Func<long> readLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
-        var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
+        var registryResolver = TypedRegistryResolver.Shared;
         _serviceCycleActivation = new AutomataServiceCycleActivation(
             IsLifecycleReady,
             (configuration, configurationGeneration) =>
@@ -308,7 +308,7 @@ public sealed class Plugin : BaseUnityPlugin
                     configurationGeneration,
                     new AutomataServiceCycleHostDependencies(
                         readFrameIdentity,
-                        readAutoHarvestLifecycleEpoch,
+                        readLifecycleEpoch,
                         pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
                         observability: new AutomataServiceCycleObservabilityOptions(
                             AutomataFullTracePathPolicy.Create(
@@ -326,7 +326,7 @@ public sealed class Plugin : BaseUnityPlugin
                         // reading the empty snapshot for no reason.
                         new AutomataWorldCollectionFeature(
                             readFrameIdentity,
-                            readAutoHarvestLifecycleEpoch,
+                            readLifecycleEpoch,
                             static report =>
                             {
                                 if (report.IsComplete) Log.LogInfo(report.Describe());
@@ -336,7 +336,7 @@ public sealed class Plugin : BaseUnityPlugin
                                 new GameWorldCollector(_mentorMasteryJournal)),
                         new AutoHarvestServiceCycleFeature(
                             new AutoHarvestFeatureDependencies(
-                                autoHarvestRegistryResolver,
+                                registryResolver,
                                 ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsHarvest,
                                 tryCaptureMutationPermit: () =>
                                     _automataActionFamilyOwnership!.TryCaptureHarvestMutationPermit(),
@@ -344,16 +344,16 @@ public sealed class Plugin : BaseUnityPlugin
                                 featureStatus: featureStatuses.AutoHarvest)),
                         new AutoItemsServiceCycleFeature(
                             new AutoItemsFeatureDependencies(
-                                autoHarvestRegistryResolver,
-                                readAutoHarvestLifecycleEpoch,
+                                registryResolver,
+                                readLifecycleEpoch,
                                 ownsActionFamily: () =>
                                     _automataActionFamilyOwnership!.OwnsItems,
-                                captureMutationPermit: () =>
+                                tryCaptureMutationPermit: () =>
                                     _automataActionFamilyOwnership!.TryCaptureItemMutationPermit(),
                                 featureStatus: featureStatuses.AutoItems)),
                         new AutoBuyServiceCycleFeature(
                             new AutoBuyFeatureDependencies(
-                                readAutoHarvestLifecycleEpoch,
+                                readLifecycleEpoch,
                                 ownershipMask: () =>
                                     _automataActionFamilyOwnership!.EffectiveAutoBuyOwnership(
                                         _configurationStore!.Current.AutoBuy),
@@ -371,24 +371,24 @@ public sealed class Plugin : BaseUnityPlugin
                                     message => Log.LogAutomataError(message)))),
                         new SpellLevelServiceCycleFeature(
                             new SpellLevelFeatureDependencies(
-                                readAutoHarvestLifecycleEpoch,
+                                readLifecycleEpoch,
                                 ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsSpellLevel,
                                 capability: _spellLevelCapability,
                                 featureStatus: featureStatuses.SpellLevel)),
                         new AutoCastServiceCycleFeature(
                             new AutoCastFeatureDependencies(
-                                readAutoHarvestLifecycleEpoch,
+                                readLifecycleEpoch,
                                 ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsCast,
                                 _autoCastManualPause,
                                 featureStatus: featureStatuses.AutoCast)),
                         new AutoConceptServiceCycleFeature(
                             new AutoConceptFeatureDependencies(
-                                readAutoHarvestLifecycleEpoch,
+                                readLifecycleEpoch,
                                 ownsActionFamily: () => _automataActionFamilyOwnership!.OwnsConcept,
                                 featureStatus: featureStatuses.AutoConcept)),
                         new MentorServiceCycleFeature(
                             new MentorFeatureDependencies(
-                                readAutoHarvestLifecycleEpoch,
+                                readLifecycleEpoch,
                                 captureMutationPermit: domain =>
                                     _mentorActionFamilyOwnership!.TryCaptureMutationPermit(
                                         domain switch

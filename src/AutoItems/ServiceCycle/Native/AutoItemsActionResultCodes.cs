@@ -12,4 +12,5 @@ internal static class AutoItemsActionResultCodes
     internal static ServiceActionResultCode RandomizationUnavailable => new(1105);
     internal static ServiceActionResultCode MutationPermitUnavailable => new(1107);
     internal static ServiceActionResultCode TemporaryEffectPresent => new(1108);
+    internal static ServiceActionResultCode TemporaryCostChanged => new(1109);
 }

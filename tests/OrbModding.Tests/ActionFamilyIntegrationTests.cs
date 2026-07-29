@@ -178,6 +178,24 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
+    public void TemporaryOnlyAutoItemsStillClaimsTheCompleteConsumableTransaction()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Disabled;
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoItemsScrolls.Value = false;
+        config.AutoItemsRelics.Value = false;
+        config.AutoItemsFruits.Value = true;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.True(ownership.OwnsItems);
+        Assert.True(ownership.TryCaptureItemMutationPermit());
+    }
+
+    [Fact]
     public void MentorDomainClaimsAreIndependentAndReleaseOnLifecycleTeardown()
     {
         var registry = new ActionFamilyOwnershipRegistry();

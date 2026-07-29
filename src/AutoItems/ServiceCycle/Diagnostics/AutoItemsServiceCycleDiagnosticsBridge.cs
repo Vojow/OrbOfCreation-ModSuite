@@ -1,6 +1,7 @@
 using System;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 
 namespace OrbAutomata;
@@ -8,11 +9,14 @@ namespace OrbAutomata;
 internal sealed class AutoItemsServiceCycleDiagnosticsBridge
 {
     private readonly AutomataFeatureStatusReporter _featureStatus;
+    private ServiceCycleServiceDiagnosticsSnapshot[] _services =
+        new ServiceCycleServiceDiagnosticsSnapshot[8];
     private long _lifecycle;
     private ConfigGeneration _configurationGeneration;
     private bool _emergencyDisabled;
     private bool _owned;
     private bool _cycleObserved;
+    private bool _evaluationRefreshPending;
 
     internal AutoItemsServiceCycleDiagnosticsBridge(
         long lifecycle,
@@ -33,8 +37,10 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         var changed = _emergencyDisabled != pump.IsEmergencyStopEngaged || _owned != owned;
         _emergencyDisabled = pump.IsEmergencyStopEngaged;
         _owned = owned;
-        if (!_cycleObserved && report.ResponsesAcquired != 0)
+        if (report.ResponsesAcquired != 0) _evaluationRefreshPending = true;
+        if (!_cycleObserved && _evaluationRefreshPending && HasEvaluated(pump))
         {
+            _evaluationRefreshPending = false;
             _cycleObserved = true;
             Publish();
         }
@@ -49,6 +55,7 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _configurationGeneration = configurationGeneration;
         _cycleObserved = false;
+        _evaluationRefreshPending = false;
     }
 
     internal void ObserveLifecycle(
@@ -61,6 +68,7 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         _configurationGeneration = configurationGeneration;
         _owned = owned;
         _cycleObserved = false;
+        _evaluationRefreshPending = false;
         Publish();
     }
 
@@ -76,5 +84,21 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
             status.Summary,
             _lifecycle,
             _configurationGeneration);
+    }
+
+    private bool HasEvaluated(SuiteFramePump pump)
+    {
+        var copy = ServiceCycleDiagnostics.CopyServices(pump, _services);
+        if (copy.RequiredCount > _services.Length)
+        {
+            _services = new ServiceCycleServiceDiagnosticsSnapshot[copy.RequiredCount];
+            copy = ServiceCycleDiagnostics.CopyServices(pump, _services);
+        }
+        for (var index = 0; index < copy.WrittenCount; index++)
+        {
+            if (!_services[index].ServiceId.Equals(AutoItemsServicePolicies.ServiceId)) continue;
+            return _services[index].LatestProjection.IsPresent;
+        }
+        return false;
     }
 }

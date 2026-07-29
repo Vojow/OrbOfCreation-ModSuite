@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -52,14 +55,33 @@ internal struct AutoItemsCycleState
         Lifecycle = lifecycle;
         Decision = default;
         RecoveryWaitActive = false;
+        _allowlistConfiguration = default;
+        _temporaryAllowlist = null;
     }
+
+    private ConfigGeneration _allowlistConfiguration;
+    private HashSet<Guid>? _temporaryAllowlist;
 
     internal LifecycleGeneration Lifecycle { get; }
     internal AutoItemsDecisionMetrics Decision { get; private set; }
     internal bool RecoveryWaitActive { get; private set; }
+    internal ISet<Guid>? TemporaryAllowlist => _temporaryAllowlist;
 
     internal static AutoItemsCycleState Create(LifecycleGeneration lifecycle) => new(lifecycle);
     internal void RecordDecision(in AutoItemsDecisionMetrics decision) => Decision = decision;
     internal void BeginRecoveryWait() => RecoveryWaitActive = true;
     internal void EndRecoveryWait() => RecoveryWaitActive = false;
+
+    internal void ObserveConfiguration(
+        ConfigGeneration generation,
+        AutoItemsConfiguration configuration)
+    {
+        if (_allowlistConfiguration == generation) return;
+        _temporaryAllowlist =
+            configuration.UseFruits || configuration.UsePotions
+                ? AutoItemsTemporaryItemAllowlist.Parse(
+                    configuration.TemporaryItemAllowlist)
+                : null;
+        _allowlistConfiguration = generation;
+    }
 }

@@ -326,9 +326,9 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             IsAutoItemsConfigured(config),
             parentEnabled: true,
             configurationGeneration,
-            config.AutoItems.UseScrolls || config.AutoItems.UseRelics
+            AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems)
                 ? null
-                : "Auto Items has neither Scrolls nor Relics selected.");
+                : "Auto Items has no item families selected.");
         ObserveConfiguredIntent(
             Mentor,
             config.General.Enabled,
@@ -676,7 +676,7 @@ internal sealed class AutomataFeatureStatuses : IDisposable
 
     private static bool IsAutoItemsConfigured(SuiteRuntimeConfiguration config) =>
         config.AutoItems.Mode == AutoItemsOperationMode.Active &&
-        (config.AutoItems.UseScrolls || config.AutoItems.UseRelics);
+        AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems);
 
     private static void ObserveConfigurationDisabled(
         AutomataFeatureStatusReporter reporter,

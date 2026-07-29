@@ -5,6 +5,7 @@ using Xunit;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
 
@@ -1467,7 +1468,7 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         var collector = Collector();
         Assert.True(collector.Collect().IsComplete);
-        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+        var profile = AutoItemsConsumableProfileBuilder.Build(collector.Build(), item);
 
         Assert.True(profile.IsReady);
         Assert.Equal(AutoItemsConsumableFamily.Scroll, profile.Family);
@@ -1493,7 +1494,7 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         var collector = Collector();
         collector.Collect();
-        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+        var profile = AutoItemsConsumableProfileBuilder.Build(collector.Build(), item);
 
         Assert.Equal(
             AutoItemsConsumableProfileStatus.AmbiguousSupportedFamily,
@@ -1520,7 +1521,7 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         var collector = Collector();
         collector.Collect();
-        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+        var profile = AutoItemsConsumableProfileBuilder.Build(collector.Build(), item);
 
         Assert.Equal(AutoItemsConsumableProfileStatus.ToxicityCostMissing, profile.Status);
         Assert.Equal(AutoItemsConsumableFamily.Fruit, profile.Family);
@@ -1546,7 +1547,7 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         var collector = Collector();
         collector.Collect();
-        var profile = AutoItemsConsumableProfiler.Build(collector.Build(), item);
+        var profile = AutoItemsConsumableProfileBuilder.Build(collector.Build(), item);
 
         Assert.Equal(
             AutoItemsConsumableProfileStatus.ToxicityResourceNotInverted,
@@ -1693,7 +1694,6 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.Equal(scroll.Identity, action.ItemId);
         Assert.Equal(AutoItemsConsumableFamily.Scroll, action.Family);
-        Assert.True(action.Belief.CanBeRandomized);
         Assert.Equal(2, metrics.TemporaryItems);
     }
 
@@ -1714,6 +1714,42 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.Empty(actions);
         Assert.Equal(AutoItemsDecisionKind.Disabled, metrics.Kind);
+    }
+
+    [Fact]
+    public void AutoItemsParsesTemporaryAllowlistOncePerConfigurationGeneration()
+    {
+        var fruit = Guid.NewGuid();
+        var potion = Guid.NewGuid();
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var first = new AutoItemsConfiguration
+        {
+            UseFruits = true,
+            TemporaryItemAllowlist = fruit.ToString("D"),
+        };
+        state.ObserveConfiguration(new ConfigGeneration(1), first);
+        var original = Assert.IsType<HashSet<Guid>>(state.TemporaryAllowlist);
+
+        state.ObserveConfiguration(
+            new ConfigGeneration(1),
+            first with { TemporaryItemAllowlist = potion.ToString("D") });
+
+        Assert.Same(original, state.TemporaryAllowlist);
+        Assert.Contains(fruit, original);
+        Assert.DoesNotContain(potion, original);
+
+        state.ObserveConfiguration(
+            new ConfigGeneration(2),
+            first with { TemporaryItemAllowlist = potion.ToString("D") });
+
+        Assert.NotSame(original, state.TemporaryAllowlist);
+        Assert.Contains(potion, state.TemporaryAllowlist!);
+
+        state.ObserveConfiguration(
+            new ConfigGeneration(3),
+            first with { UseFruits = false });
+
+        Assert.Null(state.TemporaryAllowlist);
     }
 
     [Fact]
@@ -1847,6 +1883,59 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.Empty(actions);
         Assert.Equal(AutoItemsDecisionKind.TemporaryEffectActive, metrics.Kind);
+    }
+
+    [Fact]
+    public void AnActiveTemporaryUsageBlocksAnOtherwiseEligibleRelic()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var fruit = AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        fruit.consumableUsages.Add(new FakeConsumableUsage
+        {
+            en = true,
+            dr = new BigDouble(30d),
+            maxDr = new BigDouble(60d),
+        });
+        AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var actions = PlanAutoItems(collector.Build(), out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryEffectActive, metrics.Kind);
+        Assert.Equal(1, metrics.EligibleRelics);
+    }
+
+    [Fact]
+    public void AnActiveTemporaryUsageStillBlocksWhenItsOwnProfileIsInvalid()
+    {
+        AddToxicity(rawHeadroom: 100d);
+        var fruit = AddConsumable(
+            KnownEntities.ConsumableFruitType.Uuid,
+            canBeRandomized: false);
+        fruit.consumeCost.costs.Clear();
+        fruit.consumableUsages.Add(new FakeConsumableUsage
+        {
+            en = true,
+            dr = new BigDouble(30d),
+            maxDr = new BigDouble(60d),
+        });
+        AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var actions = PlanAutoItems(collector.Build(), out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryEffectActive, metrics.Kind);
+        Assert.Equal(1, metrics.RejectedProfiles);
     }
 
     [Fact]
@@ -1993,12 +2082,15 @@ public sealed class GameWorldCollectorTests : IDisposable
         };
         var store = new ReusableActionStore<AutoItemsCycleAction>();
         store.BeginWrite();
+        var generation = new ConfigGeneration(1);
+        state.ObserveConfiguration(generation, config.AutoItems);
         AutoItemsCycleEvaluator.Evaluate(
             world,
             in config,
             ref state,
             new ServiceActionWriter<AutoItemsCycleAction>(store),
             tracker,
+            state.TemporaryAllowlist,
             out metrics);
         var actions = new List<AutoItemsCycleAction>(store.Count);
         while (!store.IsComplete)

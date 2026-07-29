@@ -41,6 +41,7 @@ internal sealed class AutoItemsTemporaryActivationTracker
         GameWorldState world,
         out Guid itemId)
     {
+        if (world is null) throw new ArgumentNullException(nameof(world));
         lock (_gate)
         {
             itemId = _pendingItem;
@@ -86,9 +87,7 @@ internal sealed class AutoItemsTemporaryActivationTracker
             if (!_activationSeen)
                 return QuarantinePending(out itemId);
 
-            _pendingItem = Guid.Empty;
-            _submittedFromFrame = 0;
-            _activationSeen = false;
+            ClearPending();
             return AutoItemsTemporaryActivationState.Completed;
         }
     }
@@ -102,9 +101,7 @@ internal sealed class AutoItemsTemporaryActivationTracker
     {
         lock (_gate)
         {
-            _pendingItem = Guid.Empty;
-            _submittedFromFrame = 0;
-            _activationSeen = false;
+            ClearPending();
             _quarantined.Clear();
         }
     }
@@ -113,9 +110,14 @@ internal sealed class AutoItemsTemporaryActivationTracker
     {
         itemId = _pendingItem;
         _quarantined.Add(itemId);
+        ClearPending();
+        return AutoItemsTemporaryActivationState.Quarantined;
+    }
+
+    private void ClearPending()
+    {
         _pendingItem = Guid.Empty;
         _submittedFromFrame = 0;
         _activationSeen = false;
-        return AutoItemsTemporaryActivationState.Quarantined;
     }
 }

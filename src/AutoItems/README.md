@@ -14,14 +14,16 @@ The implemented boundary is deliberately split:
 - Common world collection publishes raw `ConsumableSO` scalars, every `ConsumableTypeSO`
   membership, both native resource-cost vectors, and every usage's stable UUID, pending/engaged
   state, and remaining/maximum duration.
-- `Policy/AutoItemsConsumableProfile.cs` maps those neutral facts to the four exact Auto Items
+- `Policy/AutoItemsConsumableProfileBuilder.cs` maps those neutral facts to the four exact Auto Items
   families. It requires exactly one supported family, a capped inverted toxicity resource, a valid
   immediate toxicity cost, and retains evidence that other native costs exist.
-- `ServiceCycle/` registers a bounded one-action service. The worker emits at most one stable-UUID
-  action from immutable world facts and publishes compact decision metrics.
+- `ServiceCycle/` registers a bounded one-action service. A pure candidate scanner selects from
+  immutable world facts, while the evaluator owns lifecycle, activation, busy, and recovery gates.
+  The worker parses the temporary allowlist only when its configuration generation changes.
 - The main-thread adapter re-resolves exact identity and family, checks visibility, the shared
   Inventory idle predicate, `CanFire()`, lifecycle and ownership, pins multi-buy to one, and verifies
-  the exact stock/queue submission edge.
+  the exact stock/queue submission edge. Temporary duration and toxicity-only cost vectors are
+  revalidated live before mutation.
 - Scrolls require live randomization capability and call the game's own
   `SetRandomization(true)`/`IsRandomized()` path. Relics have first priority whenever the native
   readiness and toxicity-headroom checks admit them.
@@ -33,7 +35,8 @@ The implemented boundary is deliberately split:
   persists as sorted exact UUIDs; unavailable selected identities are preserved and the raw UUID
   editor remains available.
 - A temporary submission verifies stock, queue, and pending-usage creation immediately, then waits
-  for a later publication to prove engagement. It blocks further item automation through expiry.
+  for a later publication to prove engagement. Any pending or active temporary usage blocks every
+  automated family—including Relics—through expiry and is rechecked immediately before mutation.
   Scrolls and allowed temporary items keep filling toxicity while headroom permits. Once no
   otherwise-eligible item fits, a lifecycle-scoped recovery latch blocks new uses until toxicity
   returns to exact zero, after which ordinary priority resumes. Missing or contradictory activation

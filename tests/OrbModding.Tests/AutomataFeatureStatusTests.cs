@@ -143,6 +143,26 @@ public sealed class AutomataFeatureStatusTests
     }
 
     [Fact]
+    public void TemporaryOnlyAutoItemsConfigurationKeepsFeatureIntentEnabled()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoItemsScrolls.Value = false;
+        config.AutoItemsRelics.Value = false;
+        config.AutoItemsPotions.Value = true;
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            4,
+            new FeatureStatusRegistry(),
+            new ConfigGeneration(1));
+
+        Assert.True(statuses.AutoItems.Current.ConfiguredEnabled);
+        Assert.NotEqual(
+            FeatureStatusReasonCode.ConfigurationDisabled,
+            statuses.AutoItems.Current.Reason.Code);
+    }
+
+    [Fact]
     public void AssemblyContractFailurePreservesConfigurationDisabledPrecedence()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());

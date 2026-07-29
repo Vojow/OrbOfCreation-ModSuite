@@ -116,7 +116,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             suiteReady &&
             (config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades ||
              config.CanStartAutoItemsActively &&
-             (config.AutoItems.UseScrolls || config.AutoItems.UseRelics)),
+             AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems)),
             "NativeMultiBuy", "Automata Native Multi-Buy Scope", MultiBuyFamilies);
         RefreshLease(ref _cast, ref _castRetryFrame, frame,
             suiteReady && config.CanStartAutoCastActively,
@@ -133,7 +133,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
         RefreshLease(ref _items, ref _itemsRetryFrame, frame,
             suiteReady && config.CanStartAutoItemsActively &&
-            (config.AutoItems.UseScrolls || config.AutoItems.UseRelics),
+            AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems),
             "AutoItems", "Automata Auto Items", ItemFamilies);
     }
 

@@ -67,6 +67,19 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     }
 
     [Fact]
+    public void RuntimeAllowlistMembershipUsesExactParsedIdentity()
+    {
+        var selected = Guid.Parse("10000000-0000-0000-0000-000000000001");
+        var other = Guid.Parse("10000000-0000-0000-0000-000000000002");
+        var serialized = $"invalid, {{{selected:D}}}, {other:D}";
+
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(serialized, selected));
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(serialized, other));
+        Assert.False(AutoItemsTemporaryItemAllowlist.Contains(serialized, Guid.NewGuid()));
+        Assert.False(AutoItemsTemporaryItemAllowlist.Contains(serialized, Guid.Empty));
+    }
+
+    [Fact]
     public void FiltersCoverFamiliesOwnedAndSelectedItems()
     {
         var selected = new System.Collections.Generic.HashSet<Guid>();

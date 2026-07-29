@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using OrbModding;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -30,18 +29,10 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         in ServiceActionContext context)
     {
         if (!AutoItemsConfigurationPolicy.IsOperational(config) ||
-            action.Family == AutoItemsConsumableFamily.Scroll && !config.AutoItems.UseScrolls ||
-            action.Family == AutoItemsConsumableFamily.Relic && !config.AutoItems.UseRelics ||
-            action.Family == AutoItemsConsumableFamily.Fruit &&
-            (!config.AutoItems.UseFruits ||
-             !AutoItemsTemporaryItemPolicy.IsAllowed(
-                 config.AutoItems.TemporaryItemAllowlist,
-                 action.ItemId)) ||
-            action.Family == AutoItemsConsumableFamily.Potion &&
-            (!config.AutoItems.UsePotions ||
-             !AutoItemsTemporaryItemPolicy.IsAllowed(
-                 config.AutoItems.TemporaryItemAllowlist,
-                 action.ItemId)))
+            !AutoItemsConfigurationPolicy.Allows(
+                config.AutoItems,
+                action.Family,
+                action.ItemId))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
         if (!Owns())
             return ServiceActionResult.Rejected(AutoItemsActionResultCodes.ActionFamilyUnavailable);
@@ -53,9 +44,7 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         {
             submission = _native.Submit(in action);
         }
-        catch (Exception ex) when (
-            ex is TargetInvocationException or ArgumentException or InvalidOperationException or
-            TargetException or MemberAccessException or FormatException or OverflowException)
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
         {
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Items failed at the native boundary: {ex.GetBaseException().Message}.");
@@ -80,21 +69,21 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.RandomizationUnavailable,
             AutoItemsPreflight.TemporaryEffectPresent =>
                 AutoItemsActionResultCodes.TemporaryEffectPresent,
+            AutoItemsPreflight.TemporaryCostChanged =>
+                AutoItemsActionResultCodes.TemporaryCostChanged,
             AutoItemsPreflight.MutationPermitUnavailable =>
                 AutoItemsActionResultCodes.MutationPermitUnavailable,
             AutoItemsPreflight.ContractUnavailable or
             AutoItemsPreflight.MultiBuyUnavailable or
             AutoItemsPreflight.Quarantined =>
                 CommonActionResultCodes.AdapterFault,
-            _ => CommonActionResultCodes.Committed,
+            AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
+            _ => CommonActionResultCodes.AdapterFault,
         };
         if (submission.Preflight != AutoItemsPreflight.Proceeded)
-            return submission.Preflight is
-                AutoItemsPreflight.ContractUnavailable or
-                AutoItemsPreflight.MultiBuyUnavailable or
-                AutoItemsPreflight.Quarantined
-                ? ServiceActionResult.Faulted(code)
-                : ServiceActionResult.Rejected(code);
+            return IsExpectedRejection(submission.Preflight)
+                ? ServiceActionResult.Rejected(code)
+                : ServiceActionResult.Faulted(code);
 
         var evidence = ServiceNativeMutationEvidence.Observed(
             submission.Outcome, submission.CallOutcome);
@@ -102,6 +91,16 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             ? ServiceActionResult.Committed(CommonActionResultCodes.Committed, evidence)
             : ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault, evidence);
     }
+
+    private static bool IsExpectedRejection(AutoItemsPreflight preflight) =>
+        preflight is AutoItemsPreflight.ItemUnavailable or
+            AutoItemsPreflight.FamilyChanged or
+            AutoItemsPreflight.NativeBusy or
+            AutoItemsPreflight.NotAdmissible or
+            AutoItemsPreflight.RandomizationUnavailable or
+            AutoItemsPreflight.TemporaryEffectPresent or
+            AutoItemsPreflight.MutationPermitUnavailable or
+            AutoItemsPreflight.TemporaryCostChanged;
 
     private bool Owns()
     {
@@ -119,9 +118,7 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             var current = _readLifecycleEpoch();
             return current > 0 && current == plannedEpoch;
         }
-        catch (Exception ex) when (
-            ex is TargetInvocationException or ArgumentException or InvalidOperationException or
-            TargetException or MemberAccessException)
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
         {
             return false;
         }

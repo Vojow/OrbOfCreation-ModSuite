@@ -60,8 +60,9 @@ If the shared automation host cannot start, desired-On features report that runt
   Potion, Owned, and Selected. The picker stores sorted exact `ConsumableSO` UUIDs, preserves
   selected UUIDs that are not currently discoverable, and offers **Raw** editing as an advanced
   fallback. A listed item is considered only when its family switch is on, native toxicity
-  headroom covers its cost, and no temporary effect is pending or active. Auto Items keeps using
-  eligible Scrolls and temporary items until no safe use fits the remaining headroom, then latches
+  headroom covers its cost, and no temporary effect is pending or active. While such an effect is
+  pending or active, Auto Items pauses Scrolls and Relics as well as other temporary items. It keeps
+  using eligible Scrolls and temporary items until no safe use fits the remaining headroom, then latches
   a recovery wait until toxicity returns to exact zero. Relics have first priority whenever their
   cost fits the available headroom; they do not have a separate zero-toxicity restriction.
 - `AutoItems.EvaluationIntervalSeconds`: minimum time between Auto Items planning passes while

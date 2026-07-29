@@ -223,7 +223,8 @@ absence of another temporary usage.
 - pending or active temporary usages block all further item automation, and a later publication
   must confirm engagement before disappearance can count as clean expiry;
 - the action boundary re-resolves identity and family, rechecks visibility, queue idleness,
-  `CanFire()`, lifecycle, ownership, and targeting capability;
+  `CanFire()`, lifecycle, ownership, targeting capability, every temporary cost-vector entry, and
+  the absence of any pending or active temporary usage before every family mutation;
 - one-item multi-buy isolation is restored synchronously; an ambiguous Scroll/Relic attempt
   quarantines Auto Items, while an ambiguous or unconfirmed temporary attempt quarantines only the
   exact item until lifecycle invalidation.

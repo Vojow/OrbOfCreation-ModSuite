@@ -107,10 +107,7 @@ internal static class AutoItemsTemporaryItemCatalog
             options.Sort(Compare);
             return AutoItemsTemporaryItemCatalogSnapshot.Available(options);
         }
-        catch (Exception ex) when (
-            ex is TargetInvocationException or ArgumentException or InvalidOperationException or
-            TargetException or MemberAccessException or FormatException or OverflowException or
-            TypeInitializationException)
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
         {
             return AutoItemsTemporaryItemCatalogSnapshot.Unavailable(
                 "The native temporary-item catalog could not be read: " +
@@ -131,7 +128,8 @@ internal static class AutoItemsTemporaryItemCatalog
         {
             if (entry is null || entry.GetType() != bindings.FamilyType)
                 throw new InvalidOperationException("A consumable family entry changed type.");
-            var candidate = KnownFamily(Invoke<Guid>(bindings.FamilyGuid, entry));
+            var candidate = AutoItemsConsumableFamilies.FromTypeId(
+                Invoke<Guid>(bindings.FamilyGuid, entry));
             if (candidate == AutoItemsConsumableFamily.Unknown) continue;
             family = candidate;
             supported++;
@@ -141,15 +139,6 @@ internal static class AutoItemsTemporaryItemCatalog
                 "A consumable belongs to more than one supported Auto Items family.");
         return supported == 1 &&
                family is AutoItemsConsumableFamily.Fruit or AutoItemsConsumableFamily.Potion;
-    }
-
-    private static AutoItemsConsumableFamily KnownFamily(Guid id)
-    {
-        if (id == KnownEntities.ConsumableFruitType.Uuid) return AutoItemsConsumableFamily.Fruit;
-        if (id == KnownEntities.ConsumablePotionType.Uuid) return AutoItemsConsumableFamily.Potion;
-        if (id == KnownEntities.ConsumableRelicType.Uuid) return AutoItemsConsumableFamily.Relic;
-        if (id == KnownEntities.ConsumableScrollType.Uuid) return AutoItemsConsumableFamily.Scroll;
-        return AutoItemsConsumableFamily.Unknown;
     }
 
     private static string ReadToxicityCost(

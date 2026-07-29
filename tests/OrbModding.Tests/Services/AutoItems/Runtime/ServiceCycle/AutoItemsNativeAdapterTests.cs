@@ -130,6 +130,46 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
     }
 
     [Fact]
+    public void TemporaryUsageStartedAfterPlanningBlocksARelicSubmission()
+    {
+        Toxicity(displayQuantity: 0d);
+        var relic = Item(KnownEntities.ConsumableRelicType.Uuid, randomizable: false);
+        var fruit = Item(KnownEntities.ConsumableFruitType.Uuid, randomizable: false);
+        fruit.hasDuration = true;
+        fruit.durationBase = 60d;
+        using var adapter = Adapter();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+        fruit.consumableUsages.Add(
+            new ConsumableUsage { en = true, dr = 30d, maxDr = 60d });
+
+        var result = adapter.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.TemporaryEffectPresent, result.Preflight);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+    }
+
+    [Fact]
+    public void ChangedTemporaryCostShapeDoesNotMutate()
+    {
+        Toxicity(displayQuantity: 0d);
+        var fruit = Item(KnownEntities.ConsumableFruitType.Uuid, randomizable: false);
+        fruit.hasDuration = true;
+        fruit.durationBase = 60d;
+        var otherResource = new ResourceSO { uuid = Guid.NewGuid().ToString("D") };
+        fruit.consumeCost.costs.Add(new ResourceTuple(otherResource, new BigDouble(1d)));
+        using var adapter = Adapter();
+        var action = Action(fruit, AutoItemsConsumableFamily.Fruit);
+
+        var result = adapter.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.TemporaryCostChanged, result.Preflight);
+        Assert.Equal(1, fruit.GetQuantity());
+        Assert.Empty(fruit.consumableUsages);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+    }
+
+    [Fact]
     public void AmbiguousTemporaryMutationQuarantinesOnlyTheExactItem()
     {
         Toxicity(displayQuantity: 0d);
@@ -290,6 +330,11 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
         item.SetGuid(Guid.NewGuid());
         item.SetStock(1, 0, 0);
         item.consumableTypes.Add(familyType);
+        var toxicity = new ResourceSO
+        {
+            uuid = KnownEntities.PotionToxicity.Uuid.ToString("D"),
+        };
+        item.consumeCost.costs.Add(new ResourceTuple(toxicity, new BigDouble(1d)));
         ConsumableSO.All.Add(item);
         _registry.Add(item.GetGuid(), item);
         return item;
@@ -309,13 +354,6 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
 
     private static AutoItemsCycleAction Action(
         ConsumableSO item,
-        AutoItemsConsumableFamily family)
-    {
-        var belief = new AutoItemsPlanBelief(
-            item.GetQuantity(),
-            item.GetQueued(),
-            item.randomized,
-            item.canBeRandomized);
-        return new AutoItemsCycleAction(item.GetGuid(), family, 1, 1, in belief);
-    }
+        AutoItemsConsumableFamily family) =>
+        new(item.GetGuid(), family, 1, 1);
 }

@@ -5,16 +5,6 @@ using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
-/// <summary>The four native consumable families Auto Items recognizes by exact stable identity.</summary>
-internal enum AutoItemsConsumableFamily
-{
-    Unknown = 0,
-    Fruit = 1,
-    Potion = 2,
-    Relic = 3,
-    Scroll = 4,
-}
-
 /// <summary>Why a complete native-free consumable profile could not be built.</summary>
 internal enum AutoItemsConsumableProfileStatus
 {
@@ -79,7 +69,7 @@ internal readonly struct AutoItemsConsumableProfile
     internal bool HasAdditionalHeldCosts { get; }
 }
 
-internal static class AutoItemsConsumableProfiler
+internal static class AutoItemsConsumableProfileBuilder
 {
     internal static AutoItemsConsumableProfile Build(GameWorldState world, Guid consumableId)
     {
@@ -164,7 +154,7 @@ internal static class AutoItemsConsumableProfiler
         var supportedCount = 0;
         for (var index = 0; index < count; index++)
         {
-            var candidate = KnownFamily(types[start + index].TypeId);
+            var candidate = AutoItemsConsumableFamilies.FromTypeId(types[start + index].TypeId);
             if (candidate == AutoItemsConsumableFamily.Unknown) continue;
             family = candidate;
             supportedCount++;
@@ -184,15 +174,6 @@ internal static class AutoItemsConsumableProfiler
 
         status = AutoItemsConsumableProfileStatus.Ready;
         return family;
-    }
-
-    private static AutoItemsConsumableFamily KnownFamily(Guid typeId)
-    {
-        if (typeId == KnownEntities.ConsumableFruitType.Uuid) return AutoItemsConsumableFamily.Fruit;
-        if (typeId == KnownEntities.ConsumablePotionType.Uuid) return AutoItemsConsumableFamily.Potion;
-        if (typeId == KnownEntities.ConsumableRelicType.Uuid) return AutoItemsConsumableFamily.Relic;
-        if (typeId == KnownEntities.ConsumableScrollType.Uuid) return AutoItemsConsumableFamily.Scroll;
-        return AutoItemsConsumableFamily.Unknown;
     }
 
     private static CostSummary SumCosts(
