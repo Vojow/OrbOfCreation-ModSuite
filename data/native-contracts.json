@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
-  "auditedAt": "2026-07-22",
-  "gameBuild": "Orb of Creation / Unity 6000.0.70 / audited Windows and macOS Steam managed builds",
+  "auditedAt": "2026-07-29",
+  "gameBuild": "Orb of Creation through v1.0.5-2 / Unity 6000.0.70 / audited Windows and macOS Steam managed builds",
   "provenance": "Metadata and selected IL audited from installed Steam builds with read-only PE tooling; no game binary was modified.",
   "assemblies": [
     {
@@ -68,6 +68,25 @@
           "assembly": "assembly-csharp-firstpass",
           "sha256": "CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891",
           "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll"
+        }
+      ]
+    },
+    {
+      "id": "steam-windows-2026-07-29",
+      "platform": "windows",
+      "auditedAt": "2026-07-29",
+      "gameBuild": "Orb of Creation v1.0.5-2 / Unity 6000.0.70f1 / Windows Steam build 24426975 installed 2026-07-29",
+      "provenance": "All declared contracts passed exact PE metadata validation; user-triggered in-game differential verification passed every cost, rate, modifier, and requirement comparison.",
+      "assemblies": [
+        {
+          "assembly": "assembly-csharp",
+          "sha256": "436210E61D9F8B84658609D35E32BC274356170005AC15FE93FA36D4D9F7AA4C",
+          "provenance": "Orb Of Creation_Data/Managed/Assembly-CSharp.dll"
+        },
+        {
+          "assembly": "assembly-csharp-firstpass",
+          "sha256": "D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A",
+          "provenance": "Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll"
         }
       ]
     }

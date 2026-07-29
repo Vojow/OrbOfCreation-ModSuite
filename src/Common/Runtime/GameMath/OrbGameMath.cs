@@ -24,7 +24,8 @@ namespace OrbModding.Common.Runtime.GameMath;
 /// </para>
 /// <para>
 /// <b>Version binding.</b> This code is only valid for the assembly baseline above. The load gate
-/// refuses to start the suite on any other build rather than computing against changed formulas.
+/// quarantines gameplay runtime on any other build unless the player explicitly accepts that exact
+/// assembly pair.
 /// </para>
 /// </remarks>
 internal static class OrbGameMath

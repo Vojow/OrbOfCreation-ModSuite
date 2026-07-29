@@ -22,7 +22,7 @@ The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.
 
 The supported baseline is Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton and requires separate runtime validation.
 
-The suite computes the game's economy math itself, transcribed from one audited pair of game assemblies, so it refuses to load against a game build it has not audited. A game update therefore disables the suite until that build is re-audited; this is deliberate and has no bypass.
+The suite computes the game's economy math itself, transcribed from audited game assemblies. An unknown but complete assembly pair therefore starts in compatibility quarantine: the Mods configuration and differential verifier load, while Harmony patches, services, feature controls, and gameplay mutation remain emergency-stopped. Advanced users may accept that exact assembly pair at their own risk; the acknowledgement is hash-bound and automatically expires after another game update. An incomplete assembly audit still refuses the plugin entirely.
 
 ## Runtime foundation
 

@@ -63,8 +63,9 @@ applicable V0–V7 [runtime validation](../testing/runtime-validation.md), inclu
 - representative automation and Mentor behavior;
 - emergency, lifecycle, ownership, queue, reserve, and native postcondition checks;
 - the configuration UI's Apply/Revert and Runtime-page behavior;
-- a load-gate check: confirm the suite loads against the audited baseline and logs its
-  refusal, unchanged, against an unaudited one;
+- a load-gate check: confirm the suite loads against the audited baseline, enters control-plane-only
+  quarantine against an unknown complete pair, resets stale acknowledgement after either hash
+  changes, and refuses an incomplete assembly audit;
 - quiet-log acceptance; and
 - representative desktop and Steam Deck/Proton performance where claimed.
 

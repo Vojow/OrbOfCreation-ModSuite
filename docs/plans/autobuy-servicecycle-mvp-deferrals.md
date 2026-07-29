@@ -47,8 +47,9 @@ indirection, and would show whether the game exposes cheaper bulk-read entry poi
 currently reconstructs candidate by candidate.
 
 The graceful-degradation guards (runtime audit, "contract not audited" fallbacks, per-invoke
-try/catch) exist so a game update fails soft. Since the suite already refuses to load against an
-unaudited build, removing them is a coherent option if it measurably speeds up the hot path.
+try/catch) exist so a game update fails soft. Since the suite quarantines mutation against an
+unaudited build unless the player explicitly accepts that exact pair, removing them is a coherent
+option only if the acknowledged-build path remains fail-closed at each adapter.
 Quantify the per-candidate cost of the audit and try/catch branches before deciding.
 
 ## Deferred (post-baseline)

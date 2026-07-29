@@ -150,4 +150,34 @@ public sealed class AutomataConfigurationTests
         Assert.True(config.Current.General.Enabled);
         Assert.Equal("100", config.Current.Reserves.AbsoluteReserve);
     }
+
+    [Fact]
+    public void UnverifiedBuildConsentAndItsExactFingerprintAreSeparateEntries()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+
+        Assert.False(config.AllowUnverifiedGameBuild.Value);
+        Assert.Empty(config.AcceptedUnverifiedBuildFingerprint.Value);
+
+        config.SetAllowUnverifiedGameBuild(true);
+        config.AcceptUnverifiedBuild("candidate-pair");
+
+        Assert.True(config.AllowUnverifiedGameBuild.Value);
+        Assert.Equal("candidate-pair", config.AcceptedUnverifiedBuildFingerprint.Value);
+    }
+
+    [Fact]
+    public void ExplicitEmergencyClearIsConsumableButInitialFalseIsNotARequest()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+
+        Assert.False(config.TryTakeEmergencyClearRequest());
+
+        config.SetEmergencyStop(true);
+        Assert.False(config.TryTakeEmergencyClearRequest());
+
+        config.SetEmergencyStop(false);
+        Assert.True(config.TryTakeEmergencyClearRequest());
+        Assert.False(config.TryTakeEmergencyClearRequest());
+    }
 }

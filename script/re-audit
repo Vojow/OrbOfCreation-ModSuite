@@ -2,8 +2,9 @@
 # Re-audit an Orb of Creation build after the game updates.
 #
 # The suite computes the game's economy math itself, transcribed from one specific assembly pair,
-# so it refuses to load against any build it has not audited (see SuiteLoadGate). That refusal is
-# deliberate and has no bypass. This script is how a new build becomes trusted.
+# so gameplay runtime starts quarantined on a build it has not audited (see SuiteLoadGate). The
+# quarantined Mods verifier is how a new build becomes trusted; the Advanced override is player
+# consent, not audit evidence and never makes --stamp automatic.
 #
 # It never stamps a baseline it has not verified. Each stage must pass before the next runs, and
 # the final stamp only happens if every stage passed, because a baseline written on the strength of
@@ -157,7 +158,9 @@ fi
 cat <<'PENDING'
 Stage 5 differential math : MANUAL
 
-  Launch the game with this build and run the in-game cost verifier.
+  Launch the game with this build. The quarantined control plane loads without
+  installing gameplay patches or services; use Mods -> Runtime to run the
+  differential verifier.
   It compares every cost the suite computes against the game's own result and
   reports pass or fail.
 

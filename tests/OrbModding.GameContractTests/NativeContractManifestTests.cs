@@ -282,10 +282,10 @@ public sealed class NativeContractManifestTests
     /// A missing root does not fail — the walk simply never visits that directory and reports nothing,
     /// which reads exactly like having nothing to report. <c>src/Common</c> was missing for
     /// the whole life of the manifest while holding live game reflection, and was about to receive the
-    /// world collector on top of it (W26). Enumerating the directories rather than listing them is the
-    /// point: a new one is audited by existing, not by someone remembering. The one suite project now
-    /// lives at <c>src/</c> itself, so its build output lands beside the feature folders; build output
-    /// is not source and is never audited.
+    /// world collector on top of it (W26). Enumerating directories that contain real C# source rather
+    /// than listing them is the point: a new one is audited by existing, not by someone remembering.
+    /// The one suite project now lives at <c>src/</c> itself, so current and legacy build output can
+    /// land beside the feature folders; build output is not source and is never audited.
     /// </remarks>
     [Fact]
     public void EverySourceDirectoryIsAnAuditRoot()
@@ -302,7 +302,8 @@ public sealed class NativeContractManifestTests
             {
                 var name = Path.GetFileName(directory)!;
                 return !name.StartsWith("bin", StringComparison.Ordinal) &&
-                       !name.StartsWith("obj", StringComparison.Ordinal);
+                       !name.StartsWith("obj", StringComparison.Ordinal) &&
+                       ContainsAuditableSource(directory);
             })
             .Select(directory => NormalizePath(Path.GetRelativePath(repositoryRoot, directory)))
             .OrderBy(name => name, StringComparer.Ordinal)
@@ -316,13 +317,31 @@ public sealed class NativeContractManifestTests
                     + $"checked: {directory}"));
     }
 
+    private static bool ContainsAuditableSource(string directory)
+    {
+        if (Directory.EnumerateFiles(directory, "*.cs", SearchOption.TopDirectoryOnly).Any())
+            return true;
+
+        foreach (var child in Directory.EnumerateDirectories(directory))
+        {
+            var name = Path.GetFileName(child)!;
+            if (name.StartsWith("bin", StringComparison.Ordinal) ||
+                name.StartsWith("obj", StringComparison.Ordinal))
+                continue;
+            if (ContainsAuditableSource(child)) return true;
+        }
+
+        return false;
+    }
+
     [Fact]
     public void RuntimeHashGuards_MatchEveryManifestBaselinePair()
     {
         var manifest = NativeContractManifest.Load();
 
-        Assert.Equal(3, manifest.Baselines.Count);
+        Assert.Equal(4, manifest.Baselines.Count);
         AssertRuntimeBaseline(manifest, GameAssemblyAudit.WindowsSteamBaseline);
+        AssertRuntimeBaseline(manifest, GameAssemblyAudit.WindowsV1052SteamBaseline);
         AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacSteamBaseline);
         AssertRuntimeBaseline(manifest, GameAssemblyAudit.MacV1052SteamBaseline);
     }

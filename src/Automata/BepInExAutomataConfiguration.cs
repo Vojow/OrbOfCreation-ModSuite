@@ -13,6 +13,7 @@ internal sealed class BepInExAutomataConfiguration
     private SuiteRuntimeConfiguration _current = null!;
     private MentorConfig? _mentor;
     private int _unpublishedChange;
+    private int _emergencyClearRequested;
     private static readonly IReadOnlyList<ModConfigDependency> AutoBuyActiveDependencies = new[]
     {
         new ModConfigDependency("AutoBuy", "Mode", "Active"),
@@ -95,6 +96,8 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<bool> autoHarvestFruitTrees,
         ConfigEntry<bool> autoHarvestTreasureTrees,
         ConfigEntry<float> autoHarvestEvaluationIntervalSeconds,
+        ConfigEntry<bool> allowUnverifiedGameBuild,
+        ConfigEntry<string> acceptedUnverifiedBuildFingerprint,
         ConfigEntry<bool> emergencyDisable,
         ConfigEntry<string> absoluteReserve,
         ConfigEntry<float> relativeReserveMultiplier)
@@ -137,6 +140,8 @@ internal sealed class BepInExAutomataConfiguration
         AutoHarvestFruitTrees = autoHarvestFruitTrees;
         AutoHarvestTreasureTrees = autoHarvestTreasureTrees;
         AutoHarvestEvaluationIntervalSeconds = autoHarvestEvaluationIntervalSeconds;
+        AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
+        AcceptedUnverifiedBuildFingerprint = acceptedUnverifiedBuildFingerprint;
         EmergencyDisable = emergencyDisable;
         AbsoluteReserve = absoluteReserve;
         RelativeReserveMultiplier = relativeReserveMultiplier;
@@ -145,6 +150,11 @@ internal sealed class BepInExAutomataConfiguration
         {
             RefreshCurrent();
             Volatile.Write(ref _unpublishedChange, 1);
+        };
+        emergencyDisable.SettingChanged += (_, _) =>
+        {
+            if (!emergencyDisable.Value)
+                Volatile.Write(ref _emergencyClearRequested, 1);
         };
     }
 
@@ -210,6 +220,10 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<bool> AutoHarvestTreasureTrees { get; }
     public ConfigEntry<float> AutoHarvestEvaluationIntervalSeconds { get; }
 
+    public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
+
+    internal ConfigEntry<string> AcceptedUnverifiedBuildFingerprint { get; }
+
     public ConfigEntry<bool> EmergencyDisable { get; }
 
     public ConfigEntry<string> AbsoluteReserve { get; }
@@ -233,6 +247,12 @@ internal sealed class BepInExAutomataConfiguration
     }
 
     internal void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
+
+    internal void SetAllowUnverifiedGameBuild(bool allowed) =>
+        AllowUnverifiedGameBuild.Value = allowed;
+
+    internal void AcceptUnverifiedBuild(string fingerprint) =>
+        AcceptedUnverifiedBuildFingerprint.Value = fingerprint ?? string.Empty;
 
     internal bool IsAutoCastTogglePressed() => AutoCastToggleShortcut.Value.IsDown();
 
@@ -268,6 +288,17 @@ internal sealed class BepInExAutomataConfiguration
         configuration = Current;
         return true;
     }
+
+    /// <summary>
+    /// Consumes an explicit post-bind request to clear the saved emergency stop.
+    /// </summary>
+    /// <remarks>
+    /// Initial config binding does not raise this signal. On an unverified build, that distinction
+    /// lets the General emergency switch act as explicit consent without treating a persisted
+    /// false default as consent after the game assemblies change.
+    /// </remarks>
+    internal bool TryTakeEmergencyClearRequest() =>
+        Interlocked.Exchange(ref _emergencyClearRequested, 0) != 0;
 
     public static BepInExAutomataConfiguration Bind(ConfigFile config)
     {
@@ -369,6 +400,8 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoHarvest", "CollectFruitTrees", true, "Collect ready fruit trees through their native plot action.", 18, 10, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between exact Auto Harvest readiness checks.", 18, 30, new AcceptableValueRange<float>(0.25f, 10.0f), AutoHarvestActiveDependencies),
+                Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
+                Bind(config, "Compatibility", "AcceptedUnverifiedBuildFingerprint", string.Empty, "Exact assembly-pair fingerprint accepted by the player. Managed by the suite.", 50, 10, hidden: true),
                 Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, and mastery sharing immediately.", 40, 0),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
                 Bind(config, "Reserves", "RelativeReserveMultiplier", 0.0f, "Additional amount to leave after each action, expressed as a multiple of that action's cost. Affordability modes remain separate.", 20, 10));
@@ -386,9 +419,9 @@ internal sealed class BepInExAutomataConfiguration
         int settingOrder,
         AcceptableValueBase? acceptableValues = null,
         IReadOnlyList<ModConfigDependency>? dependencies = null,
-        bool restartRequired = false)
+        bool restartRequired = false,
+        bool hidden = false)
     {
-        var hidden = false;
         var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids");
         var advancedAutoConcept = section == "AutoConcept" && key == "FallbackEvaluationIntervalSeconds";
         var displaySection = section switch
@@ -415,6 +448,7 @@ internal sealed class BepInExAutomataConfiguration
             "TrainingPeriodSeconds" => "Training period (seconds)",
             "AutoLevelSpells" => "Auto-level spells",
             "FallbackEvaluationIntervalSeconds" => "Auto Concept fallback evaluation (seconds)",
+            "AllowUnverifiedGameBuild" => "Allow this unverified game build",
             "AffordabilityMode" => "Structure affordability",
             "UpgradeAffordabilityMode" => "Upgrade affordability",
             "IncludeStructures" => "Buy structures",

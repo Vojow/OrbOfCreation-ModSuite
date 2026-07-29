@@ -4,21 +4,22 @@
 
 ## Audited build
 
-The current audited baseline is `steam-macos-2026-07-28`, the macOS Steam managed build of Orb of Creation v1.0.5-2.
+The current audited baseline is `steam-windows-2026-07-29`, the Windows Steam build `24426975` of Orb of Creation v1.0.5-2.
 
 | Item | Verified value |
 |---|---|
-| Baseline | `steam-macos-2026-07-28` |
+| Baseline | `steam-windows-2026-07-29` |
 | Game build | Orb of Creation v1.0.5-2 |
-| Platform | macOS Steam managed build |
+| Steam build | `24426975` |
+| Platform | Windows Steam managed build |
 | Unity | `6000.0.70f1` |
 | Runtime | 64-bit Mono / CLR 4.x |
 | Active mod loader | BepInEx `5.4.23.5` |
-| Audit input | Read-only staged copy at `artifacts/game-v105` |
-| `Assembly-CSharp.dll` SHA-256 | `46B723AD8E3DF5ADF7186EC32B220C338E26C1CC79369E01213C091155073BDC` |
-| `Assembly-CSharp-firstpass.dll` SHA-256 | `CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891` |
+| Audit input | Read-only installed assemblies plus user-triggered in-game differential verifier |
+| `Assembly-CSharp.dll` SHA-256 | `436210E61D9F8B84658609D35E32BC274356170005AC15FE93FA36D4D9F7AA4C` |
+| `Assembly-CSharp-firstpass.dll` SHA-256 | `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A` |
 
-The staged assembly pair hashes exactly to this baseline. The audit uses read-only PE metadata and selected IL inspection; no game files are changed.
+The installed assembly pair hashes exactly to this baseline. The suite compiled against it, all portable and profile tests passed, all installed-game metadata contracts passed, and the in-game verifier reported exact parity for costs, rates, modifiers, affordability, accessors, and structure and upgrade requirements. The audit used no Computer Use and changed no game or save files.
 
 The audited hashes and active runtime-resolved member contracts are mirrored in [`data/native-contracts.json`](../../data/native-contracts.json). Installed-game tests validate the manifest directly, including type/member visibility and staticness. The manifest hash baseline is also checked against the runtime `GameAssemblyAudit` constants so those fail-closed warnings cannot drift independently.
 
