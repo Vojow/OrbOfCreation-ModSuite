@@ -258,7 +258,6 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
             {
                 Mode = AutoBuyOperationMode.Active,
                 AutoLevelSpells = autoLevelSpells,
-                EvaluationIntervalSeconds = 1f,
             },
         };
         return adapter.TryExecute(in action, in config, default);

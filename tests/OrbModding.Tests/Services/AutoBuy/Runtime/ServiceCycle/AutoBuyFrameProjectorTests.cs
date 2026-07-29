@@ -52,7 +52,6 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
 
         var frame = Project(Config(structures: true, upgrades: true));
 
-        Assert.Equal(3, frame.Global.ActionMultiplier);
         Assert.Equal(2, frame.Global.BulkDevelopment);
 
         var candidate = Assert.Single(frame.Candidates.ToArray());
@@ -509,7 +508,6 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
                 Mode = AutoBuyOperationMode.Active,
                 IncludeStructures = structures,
                 IncludeUpgrades = upgrades,
-                EvaluationIntervalSeconds = 0.5f,
             },
         };
 

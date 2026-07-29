@@ -17,16 +17,18 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
             return TryPublishPendingRequest(nonBlockingProbe);
 
         var configuration = _configuration.ReadLatest();
+        var world = _world.ReadLatest();
         State.LatestConfigGeneration = configuration.Generation;
-        if (State.HasWakeDue &&
-            (!State.WakeInvalidatedByConfiguration ||
-             configuration.Generation == State.WakeConfigurationGeneration) &&
-            now < State.NextWakeDue)
-            return default;
         if (State.HasWakeDue &&
             State.WakeInvalidatedByConfiguration &&
             configuration.Generation != State.WakeConfigurationGeneration)
             State.ClearWake();
+        if (State.HasWakeDue &&
+            State.WakeInvalidatedByWorld &&
+            world.Generation != State.WakeWorldGeneration)
+            State.ClearWake();
+        if (State.HasWakeDue && now < State.NextWakeDue)
+            return default;
 
         ServiceHandoffSnapshot handoff;
         if (nonBlockingProbe)
@@ -103,7 +105,9 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
                 ServiceWakeSchedule.FromRetryPolicy(
                     start.WakePolicy,
                     startObservedAt),
-                configuration.Generation);
+                configuration.Generation,
+                world.Generation,
+                invalidatedByWorld: WakeOnWorldPublication);
             var recoveredFault = RecoverStartFault(startObservedAt);
             return new ServiceCycleStartAttempt(
                 false, startFact, default, default, default, default,

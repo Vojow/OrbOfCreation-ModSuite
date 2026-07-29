@@ -71,7 +71,6 @@ internal sealed class GameWorldCollector
     private readonly WorldPurchaseCostReader _purchaseCosts;
     private readonly WorldUpgradeCostReader _upgradeCosts;
     private readonly WorldPlotActionReader _plotActions;
-    private readonly WorldEntityEffectReader _entityEffects;
     private readonly WorldActionQueueReader _actionQueues;
     private readonly WorldSpellSlotReader _spellSlots;
     private readonly WorldAlchemyInstanceReader _alchemyInstances;
@@ -235,7 +234,6 @@ internal sealed class GameWorldCollector
         _purchaseCosts = new WorldPurchaseCostReader(resolveType("StructureSO"), resolveType);
         _upgradeCosts = new WorldUpgradeCostReader(resolveType("UpgradeSO"), resolveType);
         _plotActions = new WorldPlotActionReader(resolveType("PlotNodeSO"));
-        _entityEffects = new WorldEntityEffectReader(resolveType("StructureSO"));
         _actionQueues = new WorldActionQueueReader(
             resolveType("IdScriptableObject"),
             resolveType("PlotNodeActionInstanceListVariable"),
@@ -264,7 +262,7 @@ internal sealed class GameWorldCollector
             _rituals, _achievements, _advancements, _challenges,
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
-            _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
+            _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,
             _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks, _entityRequirements,
         };
 

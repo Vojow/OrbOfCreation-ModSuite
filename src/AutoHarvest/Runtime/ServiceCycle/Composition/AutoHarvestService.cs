@@ -33,5 +33,5 @@ internal static class AutoHarvestService
             ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
             : ServiceStartDecision.Wait(
                 CommonServiceDecisionCodes.NotReady,
-                WakePolicy.AfterDecision(config.AutoHarvest.EvaluationInterval));
+                WakePolicy.OnPublication);
 }

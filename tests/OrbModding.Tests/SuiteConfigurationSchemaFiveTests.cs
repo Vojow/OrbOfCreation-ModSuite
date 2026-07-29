@@ -26,7 +26,7 @@ public sealed class SuiteConfigurationSchemaFiveTests
     public void SchemaFiveDiscardsEveryRetiredKeyAndPreservesUnrelatedPlayerValues()
     {
         var file = VersionFourFile();
-        file.SeedSerialized("AutoBuy", "EvaluationIntervalSeconds", "7");
+        file.SeedSerialized("AutoBuy", "LeaveQueueSlots", "7");
         file.SeedSerialized("ThirdParty", "Opaque", "preserve-me");
 
         var result = SuiteConfiguration.TryBind(file);
@@ -34,7 +34,7 @@ public sealed class SuiteConfigurationSchemaFiveTests
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
         Assert.Equal(4, result.Status.FromVersion);
-        Assert.Equal(7, result.Status.ToVersion);
+        Assert.Equal(6, result.Status.ToVersion);
         Assert.Equal(7, result.Diagnostics.Count);
         Assert.All(
             result.Diagnostics,
@@ -43,7 +43,7 @@ public sealed class SuiteConfigurationSchemaFiveTests
                 diagnostic.Kind));
         foreach (var retired in Retired)
             Assert.False(file.TryGetPersisted(retired.Section, retired.Key, out _));
-        Assert.Equal(7f, result.Config!.Automata.AutoBuyIntervalSeconds.Value);
+        Assert.Equal(7, result.Config!.Automata.LeaveQueueSlots.Value);
         Assert.True(file.TryGetPersisted("ThirdParty", "Opaque", out var opaque));
         Assert.Equal("preserve-me", opaque);
     }
@@ -82,7 +82,7 @@ public sealed class SuiteConfigurationSchemaFiveTests
         Assert.Equal(original, files.ReadAllBytes(path));
         Assert.Equal(
             original,
-            files.ReadAllBytes(ConfigurationSchemaTransaction.GetBackupPath(path, 7)));
+            files.ReadAllBytes(ConfigurationSchemaTransaction.GetBackupPath(path, 6)));
         Assert.Empty(file);
     }
 

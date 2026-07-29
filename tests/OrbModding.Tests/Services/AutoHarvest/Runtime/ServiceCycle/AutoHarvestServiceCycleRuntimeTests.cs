@@ -87,17 +87,14 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         Assert.Equal(new ConfigGeneration(1), runtime.CurrentConfigurationGeneration);
 
         runtime.Tick(0);
-        configuration.EvaluationIntervalSeconds = 2;
         configuration.EmergencyDisabled = true;
         runtime.Tick(0);
 
-        Assert.Equal(TimeSpan.FromSeconds(1).Ticks, runtime.CurrentConfiguration.AutoHarvest.EvaluationInterval.Ticks);
         runtime.PublishSavedConfiguration(
             configuration.Snapshot(),
             new ConfigGeneration(1).Next());
         Assert.Equal(new ConfigGeneration(2), runtime.CurrentConfigurationGeneration);
         runtime.Tick(0);
-        Assert.Equal(TimeSpan.FromSeconds(2).Ticks, runtime.CurrentConfiguration.AutoHarvest.EvaluationInterval.Ticks);
         Assert.True(runtime.EmergencyStopEngaged);
         Assert.Equal(3, frame);
         Assert.Equal(0, nativeRegistryReads);
@@ -285,14 +282,12 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         public bool ActiveMode { get; set; }
         public bool FruitSelected { get; set; } = true;
         public bool TreasureSelected { get; set; } = true;
-        public float EvaluationIntervalSeconds { get; set; } = 1;
         public SuiteRuntimeConfiguration Snapshot() => AutoHarvestConfigurationFactory.Create(
             MasterEnabled,
             EmergencyDisabled,
             ActiveMode,
             FruitSelected,
-            TreasureSelected,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(EvaluationIntervalSeconds)));
+            TreasureSelected);
     }
 
     private sealed class JournalSource : IAutomataDecisionJournalSource

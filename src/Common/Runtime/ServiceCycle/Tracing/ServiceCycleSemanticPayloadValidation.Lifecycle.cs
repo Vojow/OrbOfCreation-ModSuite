@@ -58,7 +58,8 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             case ServiceCycleSemanticEventKind.StartDeferred:
                 Require(IsDecisionCode(payload.Code, CommonServiceDecisionCodes.NotReady.Value) &&
                     payload.TryGetReturnedWake(out var startWake) &&
-                    startWake.Kind is WakePolicyKind.AfterDecision or WakePolicyKind.At, nameof(payload));
+                    startWake.Kind is WakePolicyKind.AfterDecision or WakePolicyKind.At or
+                        WakePolicyKind.OnPublication, nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.StartFaulted:
                 Require(payload.Disposition == (int)ServiceFaultCategory.Start &&

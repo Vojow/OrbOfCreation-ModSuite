@@ -162,7 +162,10 @@ hidden runner generic.
 - Once a service is idle, a newer configuration generation invalidates a policy wake deadline
   calculated from an older generation. The next pump admission re-runs `ShouldStart` immediately
   against the latest committed snapshot; unrelated configuration changes may therefore cause one
-  extra evaluation, but cannot leave newly enabled work behind an obsolete fallback delay. Fault
+  extra evaluation, but cannot leave newly enabled work behind an obsolete delay. A newer world
+  generation likewise invalidates an ordinary service's normal wait, including the wait returned by
+  an evaluation that was in flight when publication occurred. The source service does not wake on
+  its own publication. Fault
   recovery deadlines retain their bounded backoff under configuration churn.
 - The next cycle consumes the latest publications; intermediate publications may coalesce.
 - The state projection exposes both pinned and latest generations so the UI can explain that a saved change applies next cycle.
@@ -292,6 +295,7 @@ Action execution and continuation timing are separate response fields. Initial p
 - `AfterDecision(duration)`, anchored when the worker publishes its response;
 - `AfterBatch(duration)`, anchored when the batch becomes terminal;
 - `At(monotonicTimestamp)`;
+- `OnPublication`, dormant until a newer world or configuration generation is visible;
 - `Default`, resolved from explicit registration.
 
 The service never overlaps its active batch. If an `AfterDecision` or absolute deadline expires while the batch drains, the next cycle becomes eligible immediately when the batch terminates. `AfterBatch` intentionally starts its delay at termination.

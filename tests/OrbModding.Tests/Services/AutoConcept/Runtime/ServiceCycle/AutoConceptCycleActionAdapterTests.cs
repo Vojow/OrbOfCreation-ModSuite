@@ -158,7 +158,6 @@ public sealed class AutoConceptCycleActionAdapterTests
             AutoConcept = new AutoConceptConfiguration
             {
                 Mode = mode,
-                FallbackEvaluationIntervalSeconds = 30,
             },
         };
         var belief = new AutoConceptPlanBelief(0, 0, 4, Guid.Empty, 1);

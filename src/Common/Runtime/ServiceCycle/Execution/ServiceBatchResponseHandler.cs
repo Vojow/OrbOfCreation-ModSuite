@@ -85,7 +85,8 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
             _runtime.State.ScheduleWake(
                 response.WakeDue,
                 response.Cycle.Config,
-                invalidatedByConfiguration: false);
+                invalidatedByConfiguration: false,
+                invalidatedByWorld: false);
             _runtime.State.CycleConfiguration = null;
             _runtime.State.HasActiveBatch = false;
             _runtime.State.HasInFlightCycle = false;
@@ -134,7 +135,11 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
         _runtime.State.HasInFlightCycle = false;
         _runtime.Actions.CompleteSuccessfulBatch();
         _runtime.ClearVisibleActionBatch();
-        _runtime.State.ScheduleWake(response.WakeDue, response.Cycle.Config);
+        _runtime.State.ScheduleWake(
+            response.WakeDue,
+            response.Cycle.Config,
+            response.Cycle.World,
+            invalidatedByWorld: _runtime.Starts.WakeOnWorldPublication);
         _runtime.State.CycleConfiguration = null;
         _completion.ReturnMainOwnership(nonBlockingHandoff);
     }

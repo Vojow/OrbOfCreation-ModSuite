@@ -114,8 +114,7 @@ public sealed class AutoHarvestSemanticParityTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected,
-            treasureSelected: true,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: true);
         return new CycleInput(frame, config);
     }
 

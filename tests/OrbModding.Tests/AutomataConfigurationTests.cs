@@ -111,10 +111,10 @@ public sealed class AutomataConfigurationTests
         config.TryTakeUnpublishedChange(out _);
         Assert.False(config.TryTakeUnpublishedChange(out _));
 
-        config.AutoBuyIntervalSeconds.Value = 7f;
+        config.LeaveQueueSlots.Value = 7;
 
         Assert.True(config.TryTakeUnpublishedChange(out var changed));
-        Assert.Equal(7f, changed.AutoBuy.EvaluationIntervalSeconds);
+        Assert.Equal(7, changed.AutoBuy.LeaveQueueSlots);
         Assert.Same(config.Current, changed);
         Assert.False(config.TryTakeUnpublishedChange(out _));
     }
@@ -126,7 +126,7 @@ public sealed class AutomataConfigurationTests
         config.Enabled.Value = false;
         config.AutoBuyStructures.Value = false;
         config.AutoCastStartResourcePercent.Value = 37;
-        config.AutoConceptQuantityCap.Value = 19;
+        config.AutoConceptTrainingPeriodSeconds.Value = 19;
         config.AutoHarvestTreasureTrees.Value = false;
         config.EmergencyDisable.Value = true;
         config.AbsoluteReserve.Value = "42";
@@ -136,7 +136,7 @@ public sealed class AutomataConfigurationTests
         Assert.False(snapshot.General.Enabled);
         Assert.False(snapshot.AutoBuy.IncludeStructures);
         Assert.Equal(37, snapshot.AutoCast.StartResourcePercent);
-        Assert.Equal(19, snapshot.AutoConcept.QuantityCap);
+        Assert.Equal(19, snapshot.AutoConcept.TrainingPeriodSeconds);
         Assert.False(snapshot.AutoHarvest.CollectTreasureTrees);
         Assert.True(snapshot.Safety.EmergencyDisable);
         Assert.Equal("42", snapshot.Reserves.AbsoluteReserve);

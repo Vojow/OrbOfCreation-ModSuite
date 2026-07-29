@@ -51,7 +51,7 @@ internal static class AutoConceptFeatureStatusProjector
             return new AutoConceptFeatureStatus(
                 FeatureStatusState.Locked,
                 FeatureStatusReasonCode.ProgressionLocked,
-                "No other unlocked, allowed concept can be assigned.");
+                "No other unlocked concept can be assigned.");
         return new AutoConceptFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,

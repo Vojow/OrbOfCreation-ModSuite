@@ -934,10 +934,9 @@ internal sealed class AutomataWorldCollectionCheck
     /// candidate is counted in, and the histogram is read as though each count were a cause.
     /// </para>
     /// <para>
-    /// Only the gates the <em>game</em> can be asked about are modelled. <c>KindNotSelected</c>,
-    /// <c>Blocklisted</c> and <c>NotAllowlisted</c> are configuration, not facts about the world, and
-    /// a candidate the user chose not to buy is not a candidate the suite got wrong — including them
-    /// would report the user's own settings as defects.
+    /// Only the gates the <em>game</em> can be asked about are modelled. <c>KindNotSelected</c> is
+    /// configuration, not a fact about the world, and a family the user chose not to buy is not a
+    /// candidate the suite got wrong — including it would report the user's own setting as a defect.
     /// </para>
     /// <para>
     /// An entity in neither published registry answers <c>Uncaptured</c> rather than surviving. The

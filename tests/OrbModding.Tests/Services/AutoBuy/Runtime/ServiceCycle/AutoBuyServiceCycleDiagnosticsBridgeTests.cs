@@ -150,7 +150,6 @@ public sealed class AutoBuyServiceCycleDiagnosticsBridgeTests
                 Mode = active ? AutoBuyOperationMode.Active : AutoBuyOperationMode.Disabled,
                 IncludeStructures = true,
                 IncludeUpgrades = true,
-                EvaluationIntervalSeconds = 0.01f,
             },
         };
 

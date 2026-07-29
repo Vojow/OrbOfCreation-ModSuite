@@ -1038,7 +1038,6 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
                 IncludeStructures = structures,
                 IncludeUpgrades = upgrades,
                 LeaveQueueSlots = leaveQueueSlots,
-                EvaluationIntervalSeconds = 0.5f,
             },
         };
 

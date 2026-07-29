@@ -178,31 +178,33 @@ public sealed class ModConfigTests
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
-            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
+            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "LeaveQueueSlots" },
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(7).Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
+            new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
+            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
                        setting.Key.Contains("PurchaseLimitPerSession", StringComparison.Ordinal));
-        Assert.Contains(
-            mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "PurchaseGrouping");
         Assert.DoesNotContain(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
+            setting => setting.Key is "PurchaseGrouping" or "FixedGroupSize" or
+                "BatchSizingMode" or "MaxPurchasesPerBatch" or
+                "PrioritizeCostAndQualityStructures" or "AllowedUuids" or "BlockedUuids");
 
         Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "General").Settings, setting => setting.Key == "EmergencyDisable");
-        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
+        Assert.DoesNotContain(
+            mod.Sections.SelectMany(section => section.Settings),
+            setting => setting.Key is "EvaluationIntervalSeconds" or
+                "FallbackEvaluationIntervalSeconds" or "PerConceptQuantityCap");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "AllowUnverifiedGameBuild");
         Assert.DoesNotContain(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EmergencyDisable");
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.Key == "AcceptedUnverifiedBuildFingerprint");
@@ -248,22 +250,11 @@ public sealed class ModConfigTests
         Assert.False(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
         Assert.False(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
         Assert.True(session.DependencySatisfied(settings["AutoConcept.ShowToggleButton"]));
-        Assert.False(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
 
         session.Get(settings["AutoCast.Mode"]).Stage("Active");
         session.Get(settings["AutoConcept.Mode"]).Stage("Active");
         Assert.True(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
         Assert.True(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
-        Assert.True(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
-
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
-        session.Get(settings["AutoBuy.BatchSizingMode"]).Stage("Fixed");
-        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("Fixed");
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
-        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("ActionMultiplier");
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
     }
 
     [Fact]

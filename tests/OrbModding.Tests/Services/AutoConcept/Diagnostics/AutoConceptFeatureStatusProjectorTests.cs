@@ -56,7 +56,7 @@ public sealed class AutoConceptFeatureStatusProjectorTests
         Assert.Equal(FeatureStatusState.Locked, status.State);
         Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, status.Reason);
         Assert.Equal(
-            "No other unlocked, allowed concept can be assigned.",
+            "No other unlocked concept can be assigned.",
             status.Summary);
     }
 }

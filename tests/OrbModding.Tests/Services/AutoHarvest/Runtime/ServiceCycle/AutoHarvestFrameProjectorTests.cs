@@ -120,8 +120,7 @@ public sealed class AutoHarvestFrameProjectorTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected: fruit,
-            treasureSelected: treasure,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: treasure);
 
     private static void AssertUnavailable(in AutoHarvestPairCapture capture)
     {

@@ -19,6 +19,8 @@ internal sealed class ServiceCycleMainState
     internal bool HasWakeDue;
     internal ConfigGeneration WakeConfigurationGeneration;
     internal bool WakeInvalidatedByConfiguration;
+    internal WorldGeneration WakeWorldGeneration;
+    internal bool WakeInvalidatedByWorld;
     internal BatchReceipt PreviousReceipt;
     internal ServiceProjectionPublication Projection;
     internal ServiceFault LatestFault;
@@ -44,15 +46,23 @@ internal sealed class ServiceCycleMainState
     internal void ScheduleWake(
         MonotonicTimestamp due,
         ConfigGeneration configurationGeneration,
-        bool invalidatedByConfiguration = true)
+        WorldGeneration worldGeneration = default,
+        bool invalidatedByConfiguration = true,
+        bool invalidatedByWorld = true)
     {
         if (!configurationGeneration.IsValid)
             throw new System.ArgumentException(
                 "A valid configuration generation is required.",
                 nameof(configurationGeneration));
+        if (invalidatedByWorld && !worldGeneration.IsValid)
+            throw new System.ArgumentException(
+                "A valid world generation is required for a world-sensitive wake.",
+                nameof(worldGeneration));
         NextWakeDue = due;
         WakeConfigurationGeneration = configurationGeneration;
         WakeInvalidatedByConfiguration = invalidatedByConfiguration;
+        WakeWorldGeneration = worldGeneration;
+        WakeInvalidatedByWorld = invalidatedByWorld;
         HasWakeDue = true;
     }
 
@@ -61,5 +71,7 @@ internal sealed class ServiceCycleMainState
         HasWakeDue = false;
         WakeConfigurationGeneration = default;
         WakeInvalidatedByConfiguration = false;
+        WakeWorldGeneration = default;
+        WakeInvalidatedByWorld = false;
     }
 }

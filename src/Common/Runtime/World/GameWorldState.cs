@@ -72,13 +72,6 @@ public sealed record GameWorldState
     /// entity and then resource, with several rows per entity; read it through
     /// <see cref="WorldPurchaseCostLookup"/> rather than <see cref="WorldLookup"/>.
     /// </summary>
-    /// <summary>
-    /// What each entity's purchase does to other entities' named properties, keyed by the entity
-    /// applying the effect; read it through <see cref="WorldEntityEffectLookup"/>.
-    /// </summary>
-    internal PublicationTable<WorldEntityEffect> EntityEffects { get; init; } =
-        PublicationTable<WorldEntityEffect>.Empty;
-
     internal PublicationTable<WorldPurchaseCost> PurchaseCosts { get; init; } =
         PublicationTable<WorldPurchaseCost>.Empty;
 

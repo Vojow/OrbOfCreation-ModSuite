@@ -144,8 +144,6 @@ public sealed class AutoBuyProfileTests : IDisposable
             Mode = AutoBuyOperationMode.Active,
             IncludeStructures = true,
             IncludeUpgrades = true,
-            PrioritizeCostAndQualityStructures = true,
-            EvaluationIntervalSeconds = 0.5f,
         },
     };
 

@@ -37,10 +37,9 @@ internal static class AutoConceptCycleEvaluator
         ServiceActionWriter<AutoConceptCycleAction> actions,
         out AutoConceptDecisionMetrics metrics)
     {
-        var fallback = AutoConceptConfigurationPolicy.FallbackInterval(config);
         metrics = default;
         if (!AutoConceptConfigurationPolicy.IsOperational(config))
-            return WakePolicy.AfterDecision(fallback);
+            return WakePolicy.OnPublication;
 
         var candidates = Project(world, in config);
         ReconcileReceipt(candidates, in context, ref state);
@@ -73,7 +72,7 @@ internal static class AutoConceptCycleEvaluator
 
         if (TryPreferredReplacement(byId, world, in context, ref state, out action))
             return action.RecipeId == Guid.Empty
-                ? WakePolicy.AfterDecision(MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250)))
+                ? WakePolicy.OnPublication
                 : Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.PreferredReplacement,
                     actions, ref state, out metrics);
 
@@ -93,22 +92,22 @@ internal static class AutoConceptCycleEvaluator
         metrics = new AutoConceptDecisionMetrics(
             world.ConceptRecipes.Count, candidates.Count, active, owned, 0,
             AutoConceptDecisionKind.Idle, idleReason);
-        return WakePolicy.AfterDecision(TrainingWake(in config, in context, ref state, fallback));
+        var trainingWake = TrainingWake(in config, in context, ref state);
+        return trainingWake.Ticks > 0
+            ? WakePolicy.AfterDecision(trainingWake)
+            : WakePolicy.OnPublication;
     }
 
     private static List<Candidate> Project(
         GameWorldState world,
         in SuiteRuntimeConfiguration config)
     {
-        var allowed = AutoConceptConfigurationPolicy.ParseUuids(config.AutoConcept.AllowedUuids);
-        var blocked = AutoConceptConfigurationPolicy.ParseUuids(config.AutoConcept.BlockedUuids);
         var result = new List<Candidate>(world.ConceptRecipes.Count);
         var rows = world.ConceptRecipes.AsSpan();
         for (var index = 0; index < rows.Length; index++)
         {
             ref readonly var concept = ref rows[index];
             var key = concept.RecipeId.ToString();
-            if (blocked.Contains(key) || allowed.Count > 0 && !allowed.Contains(key)) continue;
             if (!WorldLookup.TryFind(world.AlchemyRecipes, concept.RecipeId, out var recipe) ||
                 !recipe.Discovered) continue;
 
@@ -325,9 +324,7 @@ internal static class AutoConceptCycleEvaluator
             var candidate = byId[ranked[index].Uuid];
             if (!candidate.IsSettled || candidate.Quantity <= 0 ||
                 candidate.Quantity >= candidate.MaximumQuantity) continue;
-            var desired = config.AutoConcept.QuantityCap > 0
-                ? Math.Min(candidate.MaximumQuantity, config.AutoConcept.QuantityCap)
-                : candidate.MaximumQuantity;
+            var desired = candidate.MaximumQuantity;
             action = Action(AutoConceptActionKind.Add, candidate, desired, Guid.Empty, world.CollectedAtEpoch);
             return true;
         }
@@ -534,10 +531,9 @@ internal static class AutoConceptCycleEvaluator
     private static MonotonicDuration TrainingWake(
         in SuiteRuntimeConfiguration config,
         in ServiceCycleContext context,
-        ref AutoConceptCycleState state,
-        MonotonicDuration fallback)
+        ref AutoConceptCycleState state)
     {
-        var remaining = fallback.Ticks;
+        var remaining = long.MaxValue;
         var period = TimeSpan.FromSeconds(AutoConceptConfigurationPolicy.TrainingPeriodSeconds(config)).Ticks;
         for (var index = 0; index < state.TrainingSessions.Count; index++)
         {
@@ -546,7 +542,7 @@ internal static class AutoConceptCycleEvaluator
             var deadline = checked(session.StartedAtTicks.Value + period);
             remaining = Math.Min(remaining, Math.Max(0, deadline - context.DecisionAt.Ticks));
         }
-        return new MonotonicDuration(remaining);
+        return new MonotonicDuration(remaining == long.MaxValue ? 0 : remaining);
     }
 
     private static int Normalize(int value, int count) =>

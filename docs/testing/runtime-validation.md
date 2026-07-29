@@ -85,7 +85,7 @@ Enable one capability at a time on a disposable save. Exercise its normal action
 ### Auto Buy
 
 - Test Structure and Upgrade purchases separately.
-- Cover allow/block lists, reserves, queue reservation, each purchase grouping mode, native multi-buy restoration, and live rising costs.
+- Cover reserves, queue reservation, live Bulk Development grouping, single-level Upgrade submission, native multi-buy restoration, and live rising costs.
 - Confirm one accepted mutation never exceeds queue room or crosses a newly observed reserve/emergency/lifecycle boundary.
 - Verify definite pre-call rejection does not starve healthy lower-ranked candidates.
 

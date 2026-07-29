@@ -58,9 +58,7 @@ public sealed class AutoConceptServiceCompositionTests
 
         Assert.False(disabled.Queued);
         Assert.True(runner.Snapshot.HasWakeDue);
-        Assert.Equal(
-            TimeSpan.FromSeconds(10).Ticks + clock.Now.Ticks,
-            runner.Snapshot.NextWakeDue.Ticks);
+        Assert.Equal(long.MaxValue, runner.Snapshot.NextWakeDue.Ticks);
 
         registry.ConfigurationPublication.Publish(Configuration(AutoConceptOperationMode.Active));
 
@@ -190,7 +188,6 @@ public sealed class AutoConceptServiceCompositionTests
             {
                 Mode = mode,
                 SlotManagement = AutoConceptSlotManagementMode.TimedCycle,
-                FallbackEvaluationIntervalSeconds = 10,
                 TrainingPeriodSeconds = 60,
             },
         };

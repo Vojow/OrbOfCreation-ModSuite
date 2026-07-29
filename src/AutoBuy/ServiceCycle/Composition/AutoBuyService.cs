@@ -39,6 +39,6 @@ internal static class AutoBuyService
                 ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
                 : ServiceStartDecision.Wait(
                     CommonServiceDecisionCodes.NotReady,
-                    WakePolicy.AfterDecision(AutoBuyConfigurationPolicy.EvaluationInterval(config)));
+                    WakePolicy.OnPublication);
     }
 }

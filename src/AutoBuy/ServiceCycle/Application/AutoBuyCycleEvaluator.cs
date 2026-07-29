@@ -12,8 +12,8 @@ namespace OrbAutomata;
 /// The pure Auto Buy worker policy: a stateless per-capture batch planner. Given one native-free
 /// <see cref="AutoBuyCycleFrame"/> and the pinned <see cref="SuiteRuntimeConfiguration"/> it plans one
 /// purchase per eligible candidate in ranked order — the faithful replacement for the legacy
-/// engine's admission → reserve/affordability → ranked-pass → grouping pipeline — and returns an
-/// <c>AfterDecision</c> wake anchored on the capture time. It owns no hidden control state: no
+/// engine's admission → reserve/affordability → ranked-pass → grouping pipeline — and waits for the
+/// next world or configuration publication. It owns no hidden control state: no
 /// ranked-pass cursor, no group/batch counter, no retry/backoff. Fairness and pacing come entirely
 /// from one-action-per-pump batch execution plus the wake cadence, so it can never re-plan stale
 /// facts. All magnitude math stays on the game's own <see cref="BigDouble"/> end to end — no copy,
@@ -29,7 +29,7 @@ namespace OrbAutomata;
 /// structure — so one action advances several levels. Nothing here bounds the plan by the queue.
 /// The action adapter is
 /// the real-time authority that re-validates and submits each call, stopping the cascade the moment
-/// one is rejected; pacing is <c>AfterDecision</c>, not per-item backoff. The adapter re-reads the
+/// one is rejected; pacing comes from world publication, not per-item backoff. The adapter re-reads the
 /// live queue room before every submission, rejects — cascade-terminating the batch — once only
 /// <see cref="AutoBuyConfiguration.LeaveQueueSlots"/> remain, and clamps a multi-level request to the
 /// room above that reserve, since the game queues one entry per level. So the plan is as long as the
@@ -41,10 +41,7 @@ internal static class AutoBuyCycleEvaluator
 {
     private static readonly IComparer<Eligible> RankOrder = Comparer<Eligible>.Create(static (left, right) =>
     {
-        // PriorityRank descending, then CostRatio ascending, then UUID ascending (OrdinalIgnoreCase)
-        // — byte-for-byte the legacy ranked-pass ordering.
-        var priority = right.PriorityRank.CompareTo(left.PriorityRank);
-        if (priority != 0) return priority;
+        // CostRatio ascending, then UUID ascending (OrdinalIgnoreCase).
         var ratio = left.CostRatio.CompareTo(right.CostRatio);
         if (ratio != 0) return ratio;
         return string.Compare(left.UuidText, right.UuidText, StringComparison.OrdinalIgnoreCase);
@@ -56,7 +53,7 @@ internal static class AutoBuyCycleEvaluator
         ServiceActionWriter<AutoBuyCycleAction> actions,
         out AutoBuyDecisionMetrics metrics)
     {
-        var wake = WakePolicy.AfterDecision(AutoBuyConfigurationPolicy.EvaluationInterval(config));
+        var wake = WakePolicy.OnPublication;
         metrics = new AutoBuyDecisionMetrics(
             frame.StructureCount,
             frame.UpgradeCount,
@@ -75,16 +72,13 @@ internal static class AutoBuyCycleEvaluator
         var absoluteReserve = ResolveAbsoluteReserve(config.Reserves.AbsoluteReserve);
         var relativeMultiplier = Math.Max(0.0, config.Reserves.RelativeReserveMultiplier);
 
-        var allowed = ParseUuidSet(config.AutoBuy.AllowedUuids);
-        var blocked = ParseUuidSet(config.AutoBuy.BlockedUuids);
-
         var candidates = frame.Candidates;
         var resources = frame.Resources;
         var costs = frame.Costs;
 
         // The worker holds no state between cycles (the framework's worker-definition validator
         // enforces this), so the ranked-pass scratch is a per-cycle local. The evaluation runs off
-        // the main thread at the configured cadence, where this allocation is immaterial.
+        // the main thread at the world-publication cadence, where this allocation is immaterial.
         var eligible = new List<Eligible>();
 
         // One counter per exclusion term. Every candidate that does not reach the plan increments
@@ -94,7 +88,7 @@ internal static class AutoBuyCycleEvaluator
         for (var i = 0; i < candidates.Length; i++)
         {
             ref readonly var candidate = ref candidates[i];
-            var admission = Admit(in candidate, config, allowed, blocked);
+            var admission = Admit(in candidate, config);
             if (admission != AutoBuyExclusion.None)
             {
                 excluded[(int)admission]++;
@@ -122,7 +116,6 @@ internal static class AutoBuyCycleEvaluator
                 candidate.Uuid,
                 candidate.Uuid.ToString("D", CultureInfo.InvariantCulture),
                 costRatio,
-                PriorityRank(in candidate, config),
                 in belief));
         }
 
@@ -149,10 +142,6 @@ internal static class AutoBuyCycleEvaluator
         // the live room before every submission, clamps the request to what fits above the reserve,
         // and the first submission that does not fit cascade-terminates the rest of the batch. So
         // the plan is as long as the ranked list and the runtime stops it at the truth.
-        var maximumActions = eligible.Count;
-        if (config.AutoBuy.BatchSizing == AutoBuyBatchSizingMode.Fixed)
-            maximumActions = Math.Min(maximumActions, Math.Max(1, config.AutoBuy.MaxPurchasesPerBatch));
-
         // Eligibility asked "can this candidate be afforded on its own", against untouched quantities.
         // A batch spends for real: the game deducts the cost when a purchase is queued, not when it
         // completes, so by the time the fourth action runs the first three have already been paid for.
@@ -162,10 +151,10 @@ internal static class AutoBuyCycleEvaluator
 
         var emitted = 0;
         var requestedLevels = 0;
-        for (var i = 0; i < eligible.Count && emitted < maximumActions; i++)
+        for (var i = 0; i < eligible.Count; i++)
         {
             var decision = eligible[i];
-            var count = PerCandidateAmount(decision.Kind, config, frame.Global);
+            var count = PerCandidateAmount(decision.Kind, frame.Global);
             ref readonly var candidate = ref candidates[decision.CandidateIndex];
             if (!TryCommitSpend(
                     in candidate, costs, resources, committed, count, in absoluteReserve, relativeMultiplier))
@@ -199,8 +188,6 @@ internal static class AutoBuyCycleEvaluator
     private static AutoBuyExclusionHistogram Histogram(int[] excluded) =>
         new(
             excluded[(int)AutoBuyExclusion.KindNotSelected],
-            excluded[(int)AutoBuyExclusion.Blocklisted],
-            excluded[(int)AutoBuyExclusion.NotAllowlisted],
             excluded[(int)AutoBuyExclusion.Unavailable],
             excluded[(int)AutoBuyExclusion.RequirementsUnmet],
             excluded[(int)AutoBuyExclusion.Terminal],
@@ -219,19 +206,12 @@ internal static class AutoBuyCycleEvaluator
     /// </remarks>
     private static AutoBuyExclusion Admit(
         in AutoBuyCandidateRow candidate,
-        in SuiteRuntimeConfiguration config,
-        HashSet<Guid>? allowed,
-        HashSet<Guid>? blocked)
+        in SuiteRuntimeConfiguration config)
     {
         // Kind selection — the action adapter revalidates this too, so a config that drops a family
         // between planning and execution can never commit an unwanted purchase.
         if (!AutoBuyConfigurationPolicy.IsSelected(config, candidate.Kind))
             return AutoBuyExclusion.KindNotSelected;
-
-        if (blocked is not null && blocked.Contains(candidate.Uuid))
-            return AutoBuyExclusion.Blocklisted;
-        if (allowed is not null && !allowed.Contains(candidate.Uuid))
-            return AutoBuyExclusion.NotAllowlisted;
 
         if (!candidate.IsAvailable)
             return AutoBuyExclusion.Unavailable;
@@ -507,25 +487,12 @@ internal static class AutoBuyCycleEvaluator
         return true;
     }
 
-    private static int PriorityRank(in AutoBuyCandidateRow candidate, in SuiteRuntimeConfiguration config) =>
-        config.AutoBuy.PrioritizeCostAndQualityStructures &&
-        candidate.Kind == AutoBuyCandidateKind.Structure &&
-        candidate.EconomicPriority != AutoBuyEconomicPriority.None
-            ? 1
-            : 0;
-
     /// <summary>
-    /// How many levels one action requests for a candidate, from the operator's grouping mode and
-    /// the game's own live counts.
+    /// How many levels one action requests for a candidate.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The two bulk modes name two different native mechanisms and each belongs to one kind.
-    /// <c>ActionMultiplier</c> is the MultiBuy value the native upgrade <c>Purchase()</c> honours, so
-    /// it raises an upgrade's count and does nothing for a structure, whose purchase consults no
-    /// multiplier. <c>BulkDevelopment</c> is the structure count the game's own bulk-build control
-    /// sets, so it raises a structure's count and does nothing for an upgrade. Every other mode asks
-    /// for one level.
+    /// Structures use the live Bulk Development count. Upgrades always request one level.
     /// </para>
     /// <para>
     /// The hundred-level ceiling is the legacy engine's and is kept: it bounds one action to
@@ -536,16 +503,8 @@ internal static class AutoBuyCycleEvaluator
     /// </remarks>
     private static int PerCandidateAmount(
         AutoBuyCandidateKind kind,
-        in SuiteRuntimeConfiguration config,
         in AutoBuyGlobalRow global) =>
-        config.AutoBuy.PurchaseGrouping switch
-        {
-            AutoBuyPurchaseGroupingMode.ActionMultiplier when kind == AutoBuyCandidateKind.Upgrade =>
-                Clamp(global.ActionMultiplier),
-            AutoBuyPurchaseGroupingMode.BulkDevelopment when kind == AutoBuyCandidateKind.Structure =>
-                Clamp(global.BulkDevelopment),
-            _ => 1,
-        };
+        kind == AutoBuyCandidateKind.Structure ? Clamp(global.BulkDevelopment) : 1;
 
     /// <summary>The most levels one action may ask for, whatever the game's count says.</summary>
     private const int MaximumGroupedLevels = WorldPurchaseGrouping.MaximumLevels;
@@ -577,32 +536,6 @@ internal static class AutoBuyCycleEvaluator
         return default;
     }
 
-    // Legacy splits on ',' and trims; a non-empty allowlist restricts, the blocklist excludes, both
-    // OrdinalIgnoreCase. Every candidate UUID is a parsed Guid, so matching parsed Guids is the same
-    // membership decision (and is robust to brace/case formatting) — non-Guid tokens can never match
-    // a Guid candidate and are dropped. A null set means "no filter".
-    private static HashSet<Guid>? ParseUuidSet(string csv)
-    {
-        if (string.IsNullOrWhiteSpace(csv))
-            return null;
-
-        HashSet<Guid>? set = null;
-        var start = 0;
-        while (start <= csv.Length)
-        {
-            var separator = csv.IndexOf(',', start);
-            var stop = separator >= 0 ? separator : csv.Length;
-            var token = csv.Substring(start, stop - start).Trim();
-            if (token.Length > 0 && Guid.TryParse(token, out var uuid))
-                (set ??= new HashSet<Guid>()).Add(uuid);
-            if (separator < 0)
-                break;
-            start = separator + 1;
-        }
-
-        return set;
-    }
-
     private static bool IsZero(BigDouble value) => value.Mantissa == 0.0;
 
     private static bool IsNegative(BigDouble value) => value.Mantissa < 0.0;
@@ -615,7 +548,6 @@ internal static class AutoBuyCycleEvaluator
             Guid uuid,
             string uuidText,
             double costRatio,
-            int priorityRank,
             in AutoBuyPlanBelief belief)
         {
             CandidateIndex = candidateIndex;
@@ -623,7 +555,6 @@ internal static class AutoBuyCycleEvaluator
             Uuid = uuid;
             UuidText = uuidText;
             CostRatio = costRatio;
-            PriorityRank = priorityRank;
             Belief = belief;
         }
 
@@ -633,7 +564,6 @@ internal static class AutoBuyCycleEvaluator
         public Guid Uuid { get; }
         public string UuidText { get; }
         public double CostRatio { get; }
-        public int PriorityRank { get; }
 
         /// <summary>What this candidate was believed to be when it was ranked.</summary>
         public AutoBuyPlanBelief Belief { get; }

@@ -264,8 +264,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
                 emergencyDisabled: false,
                 activeMode: true,
                 fruitSelected: true,
-                treasureSelected: false,
-                MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+                treasureSelected: false);
             var cycle = new ServiceCycleIdentity(
                 new ServiceId("AutoHarvest"),
                 new LifecycleGeneration(7),

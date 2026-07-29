@@ -5808,42 +5808,6 @@
       "place": "capture"
     },
     {
-      "id": "persistent-effect-deprecated.resource-effects",
-      "assembly": "assembly-csharp",
-      "type": "PersistentEffectDeprecated",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "resourceEffects",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<ResourceSO+PersistentEffect>",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "persistent-effect-deprecated.upgradeable-object-effects",
-      "assembly": "assembly-csharp",
-      "type": "PersistentEffectDeprecated",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "upgradeableObjectEffects",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<UpgradeableObject+UpgradeEffectModifier>",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "persistent-reset-manager.persistent-reset-logic",
       "assembly": "assembly-csharp",
       "type": "PersistentResetManager",
@@ -7752,60 +7716,6 @@
       "static": false,
       "returnType": "BigDouble",
       "parameters": [],
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "resource-persistent-effect.modifier",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO+PersistentEffect",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "modifier",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ValueModifier",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "resource-persistent-effect.resource",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO+PersistentEffect",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "resource",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ResourceSO",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "resource-persistent-effect.upgrade-type",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO+PersistentEffect",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "upgradeType",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ResourceSO+ModifiableType",
       "owners": [
         "Automata world collection"
       ],
@@ -12823,24 +12733,6 @@
       "place": "capture"
     },
     {
-      "id": "structure.structure-properties",
-      "assembly": "assembly-csharp",
-      "type": "StructureSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "structureProperties",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<PersistentEffectDeprecated+Property>",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "structure.structure-type",
       "assembly": "assembly-csharp",
       "type": "StructureSO",
@@ -13619,78 +13511,6 @@
       "valueType": "TMPro.TextMeshProUGUI",
       "owners": [
         "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "upgrade-effect-modifier.modifier",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeableObject+UpgradeEffectModifier",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "modifier",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ValueModifier",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "upgrade-effect-modifier.property-type",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeableObject+UpgradeEffectModifier",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "propertyType",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.String",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "upgrade-effect-modifier.upgradeable-object",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeableObject+UpgradeEffectModifier",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "upgradeableObject",
-      "visibility": "public",
-      "static": false,
-      "valueType": "UpgradeableObject",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "upgrade-effect-modifier.use-target-ref",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeableObject+UpgradeEffectModifier",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "useTargetRef",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Boolean",
-      "owners": [
-        "Automata world collection"
       ],
       "usages": [
         "reflection"

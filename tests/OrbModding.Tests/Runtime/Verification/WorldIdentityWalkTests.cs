@@ -70,8 +70,7 @@ public sealed class WorldIdentityWalkTests
     /// already owns. Walking it would report every priced structure as colliding with itself, which
     /// would turn the collision check from a real invariant into noise everyone learns to ignore.
     /// <c>PlotActions</c> is worse: its rows are pairs, so neither of the two identities on one is
-    /// the row's own, and both belong to a table that already claims them. <c>EntityEffects</c> is
-    /// the same shape — an edge from one claimed entity to another, and <c>PlotActionInstances</c>
+    /// the row's own, and both belong to a table that already claims them. <c>PlotActionInstances</c>
     /// is that edge several times over, one row per instance the plot holds. <c>PlotAuthoring</c>,
     /// <c>PlotPhaseDescriptors</c> and <c>EffectBlocks</c> are all second readings of an entity the
     /// plot and action tables already claim, said about the entity rather than as it. So is
@@ -89,7 +88,6 @@ public sealed class WorldIdentityWalkTests
         "PurchaseCosts",
         "PlotActions",
         "PlotActionInstances",
-        "EntityEffects",
         "ActionQueueSlots",
         "SpellSlots",
         "SpellCosts",

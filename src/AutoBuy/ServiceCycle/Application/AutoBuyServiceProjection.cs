@@ -8,7 +8,7 @@ namespace OrbAutomata;
 /// eligibility, requested-level, and exclusion dimensions under the same cycle identity.
 /// </summary>
 /// <remarks>
-/// The eight exclusion counters answer the question a bare "0 eligible of 180" cannot: which term
+/// The six exclusion counters answer the question a bare "0 eligible of 180" cannot: which term
 /// refused them. Captured minus eligible equals their sum on every cycle, so an operator reading the
 /// journal can attribute every candidate that did not reach the plan without attaching a debugger.
 /// The unaffordable bucket's binding resource does not ride here — the projection surface carries
@@ -24,8 +24,6 @@ internal static class AutoBuyServiceProjection
     internal const int PlannedActionsKey = 14;
     internal const int RequestedLevelsKey = 15;
     internal const int ExcludedKindNotSelectedKey = 16;
-    internal const int ExcludedBlocklistedKey = 17;
-    internal const int ExcludedNotAllowlistedKey = 18;
     internal const int ExcludedUnavailableKey = 19;
     internal const int ExcludedRequirementsUnmetKey = 20;
     internal const int ExcludedTerminalKey = 21;
@@ -46,8 +44,6 @@ internal static class AutoBuyServiceProjection
 
         var exclusions = decision.Exclusions;
         output.Add(Key(ExcludedKindNotSelectedKey), Integer(exclusions.KindNotSelected));
-        output.Add(Key(ExcludedBlocklistedKey), Integer(exclusions.Blocklisted));
-        output.Add(Key(ExcludedNotAllowlistedKey), Integer(exclusions.NotAllowlisted));
         output.Add(Key(ExcludedUnavailableKey), Integer(exclusions.Unavailable));
         output.Add(Key(ExcludedRequirementsUnmetKey), Integer(exclusions.RequirementsUnmet));
         output.Add(Key(ExcludedTerminalKey), Integer(exclusions.Terminal));

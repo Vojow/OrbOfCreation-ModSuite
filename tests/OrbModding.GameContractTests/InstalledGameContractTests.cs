@@ -93,23 +93,6 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ResourceSO", "GetAttributeCostMod", false, "BigDouble");
         AssertMethod(assembly, "ResourceSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "ResourceSO", "IsBandwidthResource", false, "System.Boolean");
-        Assert.Equal(
-            "System.Collections.Generic.List`1<PersistentEffectDeprecated+Property>",
-            assembly.GetFieldType("StructureSO", "structureProperties"));
-        Assert.Equal(
-            "System.Collections.Generic.List`1<ResourceSO+PersistentEffect>",
-            assembly.GetFieldType("PersistentEffectDeprecated", "resourceEffects"));
-        Assert.Equal(
-            "System.Collections.Generic.List`1<UpgradeableObject+UpgradeEffectModifier>",
-            assembly.GetFieldType("PersistentEffectDeprecated", "upgradeableObjectEffects"));
-        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceSO+PersistentEffect", "resource"));
-        Assert.Equal("ResourceSO+ModifiableType", assembly.GetFieldType("ResourceSO+PersistentEffect", "upgradeType"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("ResourceSO+PersistentEffect", "modifier"));
-        Assert.Equal("UpgradeableObject", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "upgradeableObject"));
-        Assert.Equal("System.String", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "propertyType"));
-        Assert.Equal("ValueModifier", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "modifier"));
-        Assert.Equal("System.Boolean", assembly.GetFieldType("UpgradeableObject+UpgradeEffectModifier", "useTargetRef"));
-        AssertMethod(assembly, "ValueModifier", "Adjust", false, "BigDouble", "BigDouble");
         AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
         AssertMethod(assembly, "TooltipableObject", "GetName", false, "System.String");
         Assert.Equal("ValueModifierRecord", assembly.GetFieldType("ResourceSO", "quality"));

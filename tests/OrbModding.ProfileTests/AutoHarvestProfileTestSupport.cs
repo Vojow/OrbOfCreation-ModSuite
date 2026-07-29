@@ -96,8 +96,7 @@ internal static class AutoHarvestProfileTestSupport
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: true,
-        MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+        treasureSelected: true);
 
     internal static ServiceActionContext ActionContext(int serviceOrdinal, long frameIdentity)
     {

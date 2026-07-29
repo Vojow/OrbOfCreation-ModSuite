@@ -10,6 +10,7 @@ public enum WakePolicyKind
     AfterDecision = 2,
     AfterBatch = 3,
     At = 4,
+    OnPublication = 5,
 }
 
 public readonly struct WakePolicy : IEquatable<WakePolicy>
@@ -28,7 +29,8 @@ public readonly struct WakePolicy : IEquatable<WakePolicy>
         WakePolicyKind.Immediate or
         WakePolicyKind.AfterDecision or
         WakePolicyKind.AfterBatch or
-        WakePolicyKind.At;
+        WakePolicyKind.At or
+        WakePolicyKind.OnPublication;
 
     public static WakePolicy Default => default;
     public static WakePolicy Immediate => new(WakePolicyKind.Immediate, default, default);
@@ -37,6 +39,8 @@ public readonly struct WakePolicy : IEquatable<WakePolicy>
     public static WakePolicy AfterBatch(MonotonicDuration delay) =>
         new(WakePolicyKind.AfterBatch, delay, default);
     public static WakePolicy At(MonotonicTimestamp dueTime) => new(WakePolicyKind.At, default, dueTime);
+    public static WakePolicy OnPublication =>
+        new(WakePolicyKind.OnPublication, default, default);
 
     public bool Equals(WakePolicy other) =>
         Kind == other.Kind && Delay == other.Delay && DueTime == other.DueTime;

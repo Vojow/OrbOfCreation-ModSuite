@@ -344,7 +344,6 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
             {
                 Mode = mode,
                 FullCharge = fullCharge,
-                EvaluationIntervalSeconds = 1f,
                 ManualPauseSeconds = 5f,
             },
         };

@@ -1,5 +1,3 @@
-using System;
-using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
@@ -11,12 +9,8 @@ internal static class AutoHarvestConfigurationFactory
         bool emergencyDisabled,
         bool activeMode,
         bool fruitSelected,
-        bool treasureSelected,
-        MonotonicDuration evaluationInterval)
+        bool treasureSelected)
     {
-        if (evaluationInterval.Ticks <= 0)
-            throw new ArgumentOutOfRangeException(nameof(evaluationInterval));
-
         return new SuiteRuntimeConfiguration
         {
             General = new SuiteGeneralConfiguration { Enabled = masterEnabled },
@@ -28,7 +22,6 @@ internal static class AutoHarvestConfigurationFactory
                     : AutoHarvestOperationMode.Disabled,
                 CollectFruitTrees = fruitSelected,
                 CollectTreasureTrees = treasureSelected,
-                EvaluationInterval = evaluationInterval,
             },
         };
     }

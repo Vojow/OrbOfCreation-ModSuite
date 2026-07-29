@@ -19,26 +19,22 @@ internal readonly struct AutoBuyGlobalRow
 {
     public AutoBuyGlobalRow(
         int bulkDevelopment,
-        int actionMultiplier,
         long collectedAtEpoch)
-        : this(bulkDevelopment, actionMultiplier, collectedAtEpoch, default)
+        : this(bulkDevelopment, collectedAtEpoch, default)
     {
     }
 
     public AutoBuyGlobalRow(
         int bulkDevelopment,
-        int actionMultiplier,
         long collectedAtEpoch,
         MonotonicTimestamp collectedAt)
     {
         BulkDevelopment = bulkDevelopment;
-        ActionMultiplier = actionMultiplier;
         CollectedAtEpoch = collectedAtEpoch;
         CollectedAt = collectedAt;
     }
 
     public int BulkDevelopment { get; }
-    public int ActionMultiplier { get; }
 
     /// <summary>
     /// The lifecycle epoch the world this frame was projected from was collected under.
@@ -80,7 +76,6 @@ internal readonly struct AutoBuyCandidateRow
         bool isMaxLevel,
         bool isMaxQueuedLevel,
         bool meetsNextLevelRequirements,
-        AutoBuyEconomicPriority economicPriority,
         int costRowStart,
         int costRowCount)
     {
@@ -93,7 +88,6 @@ internal readonly struct AutoBuyCandidateRow
         IsMaxLevel = isMaxLevel;
         IsMaxQueuedLevel = isMaxQueuedLevel;
         MeetsNextLevelRequirements = meetsNextLevelRequirements;
-        EconomicPriority = economicPriority;
         CostRowStart = costRowStart;
         CostRowCount = costRowCount;
     }
@@ -121,7 +115,6 @@ internal readonly struct AutoBuyCandidateRow
     /// </remarks>
     public bool MeetsNextLevelRequirements { get; }
 
-    public AutoBuyEconomicPriority EconomicPriority { get; }
     public int CostRowStart { get; }
     public int CostRowCount { get; }
 }

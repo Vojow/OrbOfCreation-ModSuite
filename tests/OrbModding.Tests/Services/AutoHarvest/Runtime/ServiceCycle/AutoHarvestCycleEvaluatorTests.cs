@@ -11,7 +11,7 @@ namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 public sealed class AutoHarvestCycleEvaluatorTests
 {
     [Fact]
-    public void FirstEligibleCyclePlansOnlyFruitAndWaitsAfterBatch()
+    public void FirstEligibleCyclePlansOnlyFruitAndWaitsForTheNextPublication()
     {
         var result = Evaluate(ReadyFrame(), Configuration(), InitialState(), Context(1));
 
@@ -19,8 +19,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
         Assert.Equal(AutoHarvestPair.FruitTree, result.Action.Pair);
         Assert.True(result.State.HasPlannedAction);
         Assert.Equal(AutoHarvestPair.FruitTree, result.State.PlannedPair);
-        Assert.Equal(WakePolicyKind.AfterBatch, result.Wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(1), result.Wake.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, result.Wake.Kind);
     }
 
     /// <summary>
@@ -398,8 +397,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: true,
-        MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+        treasureSelected: true);
 
     private static AutoHarvestCycleState InitialState() =>
         AutoHarvestCycleState.Create(new LifecycleGeneration(1));

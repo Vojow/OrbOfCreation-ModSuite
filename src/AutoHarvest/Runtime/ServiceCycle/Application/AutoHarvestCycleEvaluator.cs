@@ -41,7 +41,7 @@ internal sealed class AutoHarvestCycleEvaluator
             state,
             action,
             hasAction,
-            WakePolicy.AfterBatch(config.AutoHarvest.EvaluationInterval));
+            WakePolicy.OnPublication);
     }
 
     /// <summary>

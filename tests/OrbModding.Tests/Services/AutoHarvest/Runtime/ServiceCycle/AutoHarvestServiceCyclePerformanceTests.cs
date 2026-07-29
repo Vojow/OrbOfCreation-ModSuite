@@ -234,8 +234,7 @@ public sealed class AutoHarvestServiceCyclePerformanceTests
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: true,
-        Interval);
+        treasureSelected: true);
 
     private sealed class JournalSource : IAutomataDecisionJournalSource
     {

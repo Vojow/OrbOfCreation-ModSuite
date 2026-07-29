@@ -731,7 +731,7 @@ plots but not this pair. Collapsing the two would report a loading game when an 
 
 ## W42 — Authored effects become a world category, and the property travels as its name
 
-**Live.** `EntityEffects` publishes, per structure, what its purchase does to another entity's named
+**Historical; retired with the configurable structure-priority heuristic.** `EntityEffects` published, per structure, what its purchase does to another entity's named
 property: the two identities, the property's name, and what the modifier does to a value of one. It
 is a classification of the build's authored content, which is a fact about the game and therefore the
 snapshot's job; the ranking that reads it stays Automata policy (W43).
@@ -753,8 +753,9 @@ object is decided from whatever applies the effect, so the object it names is no
 
 ## W43 — Auto Buy classifies economic priority from the snapshot
 
-**Live.** `AutoBuyEconomicPriorityPolicy` reads the published `EntityEffects` rows for a candidate and
-decides which are worth preferring. The reflecting classifier and its tests are deleted.
+**Historical; retired.** Auto Buy now ranks by cost ratio and stable UUID. The configuration key,
+policy, world category, native reads, and tests for the structure-effect priority tier were deleted
+together.
 
 **Two paths became one rule per target kind, behaviour-preserving on this build.** The classifier
 asked different questions of a resource effect and an object effect; the table has one column for the

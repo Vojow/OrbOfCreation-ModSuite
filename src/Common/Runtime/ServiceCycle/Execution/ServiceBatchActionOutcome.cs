@@ -110,7 +110,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
             _runtime.State.ScheduleWake(
                 record.RetryDue,
                 _runtime.State.ActiveCycle.Config,
-                invalidatedByConfiguration: false);
+                invalidatedByConfiguration: false,
+                invalidatedByWorld: false);
             fault = record.Fault;
             retryDue = record.RetryDue;
         }

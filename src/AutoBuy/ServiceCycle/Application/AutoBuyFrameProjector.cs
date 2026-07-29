@@ -70,7 +70,6 @@ internal static class AutoBuyFrameProjector
                     structures[index].EntityId,
                     Levels(world, in structures[index]),
                     world,
-                    config.AutoBuy.PrioritizeCostAndQualityStructures,
                     ref candidates,
                     ref resources,
                     ref costs,
@@ -92,7 +91,6 @@ internal static class AutoBuyFrameProjector
                     upgrades[index].EntityId,
                     Levels(world, in upgrades[index]),
                     world,
-                    includePriority: false,
                     ref candidates,
                     ref resources,
                     ref costs,
@@ -106,7 +104,6 @@ internal static class AutoBuyFrameProjector
         // the readings it was made from were true for.
         var global = new AutoBuyGlobalRow(
             ReadGlobalCount(world, KnownEntities.BulkDevelopment.Uuid),
-            ReadGlobalCount(world, KnownEntities.MultiBuy.Uuid),
             world.CollectedAtEpoch,
             world.CollectedAt);
 
@@ -127,7 +124,6 @@ internal static class AutoBuyFrameProjector
         Guid uuid,
         in AutoBuyCandidateLevels levels,
         GameWorldState world,
-        bool includePriority,
         ref AutoBuyCandidateRow[] candidates,
         ref AutoBuyResourceRow[] resources,
         ref AutoBuyCostRow[] costs,
@@ -135,10 +131,6 @@ internal static class AutoBuyFrameProjector
         ref int resourceCount,
         ref int costCount)
     {
-        var priority = includePriority
-            ? AutoBuyEconomicPriorityPolicy.Classify(world, uuid)
-            : AutoBuyEconomicPriority.None;
-
         if (!TryReadCosts(
                 uuid,
                 world,
@@ -165,7 +157,6 @@ internal static class AutoBuyFrameProjector
                 levels.IsMaxLevel,
                 levels.IsMaxQueuedLevel,
                 levels.MeetsNextLevelRequirements,
-                priority,
                 costStart,
                 costRowCount));
         candidateCount++;

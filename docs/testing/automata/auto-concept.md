@@ -48,7 +48,7 @@ native-boundary change.
 
 ## Required cases for behavior changes
 
-- Timed Cycle orders every unlocked, allowed concept across concept types. A
+- Timed Cycle orders every unlocked concept across concept types. A
   cross-type rotation proceeds only when removing the exact active assignment
   provably opens a native typed or typeless slot for its replacement.
 - Locked or undiscovered concepts are never assigned or counted as rotation

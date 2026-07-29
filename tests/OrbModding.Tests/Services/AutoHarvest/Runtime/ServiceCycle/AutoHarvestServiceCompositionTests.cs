@@ -41,8 +41,7 @@ public sealed class AutoHarvestServiceCompositionTests
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: false,
-        MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(10)));
+        treasureSelected: false);
 
     private sealed class ActionPort : IAutoHarvestCycleActionPort
     {

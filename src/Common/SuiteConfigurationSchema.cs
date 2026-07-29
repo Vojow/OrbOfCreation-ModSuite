@@ -14,7 +14,7 @@ namespace OrbModding.Common;
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 7;
+    internal const int CurrentVersion = 6;
     internal static readonly ConfigurationKey AutoCastShortcut =
         new("AutoCast", "ToggleShortcut");
     internal static readonly ConfigurationKey DifferentialVerificationShortcut =
@@ -35,8 +35,34 @@ internal static class SuiteConfigurationSchema
         new("Diagnostics", "DetailedLogging");
     internal static readonly ConfigurationKey DevelopmentEventProbe =
         new("Development", "EventProbe");
+    internal static readonly ConfigurationKey AutoBuyEvaluationIntervalSeconds =
+        new("AutoBuy", "EvaluationIntervalSeconds");
+    internal static readonly ConfigurationKey AutoCastEvaluationIntervalSeconds =
+        new("AutoCast", "EvaluationIntervalSeconds");
+    internal static readonly ConfigurationKey AutoHarvestEvaluationIntervalSeconds =
+        new("AutoHarvest", "EvaluationIntervalSeconds");
     internal static readonly ConfigurationKey AutoConceptFallbackEvaluationIntervalSeconds =
         new("AutoConcept", "FallbackEvaluationIntervalSeconds");
+    internal static readonly ConfigurationKey AutoBuyAllowedUuids =
+        new("AutoBuy", "AllowedUuids");
+    internal static readonly ConfigurationKey AutoBuyBlockedUuids =
+        new("AutoBuy", "BlockedUuids");
+    internal static readonly ConfigurationKey AutoConceptAllowedUuids =
+        new("AutoConcept", "AllowedUuids");
+    internal static readonly ConfigurationKey AutoConceptBlockedUuids =
+        new("AutoConcept", "BlockedUuids");
+    internal static readonly ConfigurationKey AutoBuyPurchaseGrouping =
+        new("AutoBuy", "PurchaseGrouping");
+    internal static readonly ConfigurationKey AutoBuyFixedGroupSize =
+        new("AutoBuy", "FixedGroupSize");
+    internal static readonly ConfigurationKey AutoBuyBatchSizingMode =
+        new("AutoBuy", "BatchSizingMode");
+    internal static readonly ConfigurationKey AutoBuyMaxPurchasesPerBatch =
+        new("AutoBuy", "MaxPurchasesPerBatch");
+    internal static readonly ConfigurationKey AutoBuyPrioritizeCostAndQualityStructures =
+        new("AutoBuy", "PrioritizeCostAndQualityStructures");
+    internal static readonly ConfigurationKey AutoConceptPerConceptQuantityCap =
+        new("AutoConcept", "PerConceptQuantityCap");
     internal static readonly ConfigurationKey AutoConceptTrainingPeriodSeconds =
         new("AutoConcept", "TrainingPeriodSeconds");
 
@@ -120,47 +146,79 @@ internal static class SuiteConfigurationSchema
                     DifferentialVerificationShortcut,
                     "Differential verification is an explicit Mods Runtime action.");
             }),
-        // Schema 6 rewrites every serialized Auto Concept idle fallback equal to the former
-        // 300-second default to 10 seconds, whether that value was inherited or deliberately saved.
+        // Schema 6 establishes one suite cadence. Service evaluation follows world/configuration
+        // publications, so the cadence, filtering, grouping, batching, priority, and concept-cap
+        // preferences below no longer describe runtime behavior and are deleted. Every serialized
+        // 300-second training period (the former default) becomes 30 seconds, whether that value was
+        // inherited or deliberately saved; every other serialized training period is preserved.
         new ConfigurationMigrationStep(
             5,
-            6,
-            new[] { AutoConceptFallbackEvaluationIntervalSeconds },
-            static context =>
-            {
-                if (!context.TryGet(AutoConceptFallbackEvaluationIntervalSeconds, out var serialized))
-                    return;
-
-                if (int.TryParse(
-                        serialized,
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out var seconds) &&
-                    seconds == 300)
-                {
-                    context.Map(
-                        AutoConceptFallbackEvaluationIntervalSeconds,
-                        AutoConceptFallbackEvaluationIntervalSeconds,
-                        "10",
-                        "Rewrote the serialized Auto Concept idle fallback from 300 seconds to 10 seconds.");
-                }
-                else
-                {
-                    context.Preserve(AutoConceptFallbackEvaluationIntervalSeconds, serialized);
-                }
-            }),
-        // Schema 7 rewrites every serialized Auto Concept training period equal to the former
-        // 300-second default to 30 seconds, whether that value was inherited or deliberately saved.
-        new ConfigurationMigrationStep(
-            6,
             CurrentVersion,
-            new[] { AutoConceptTrainingPeriodSeconds },
+            new[]
+            {
+                AutoBuyEvaluationIntervalSeconds,
+                AutoCastEvaluationIntervalSeconds,
+                AutoHarvestEvaluationIntervalSeconds,
+                AutoConceptFallbackEvaluationIntervalSeconds,
+                AutoBuyAllowedUuids,
+                AutoBuyBlockedUuids,
+                AutoConceptAllowedUuids,
+                AutoConceptBlockedUuids,
+                AutoBuyPurchaseGrouping,
+                AutoBuyFixedGroupSize,
+                AutoBuyBatchSizingMode,
+                AutoBuyMaxPurchasesPerBatch,
+                AutoBuyPrioritizeCostAndQualityStructures,
+                AutoConceptPerConceptQuantityCap,
+                AutoConceptTrainingPeriodSeconds,
+            },
             static context =>
             {
-                if (!context.TryGet(AutoConceptTrainingPeriodSeconds, out var serialized))
-                    return;
+                context.DiscardObsolete(
+                    AutoBuyEvaluationIntervalSeconds,
+                    "Auto Buy evaluates after each world or configuration publication.");
+                context.DiscardObsolete(
+                    AutoCastEvaluationIntervalSeconds,
+                    "Auto Cast evaluates after each world or configuration publication.");
+                context.DiscardObsolete(
+                    AutoHarvestEvaluationIntervalSeconds,
+                    "Auto Harvest evaluates after each world or configuration publication.");
+                context.DiscardObsolete(
+                    AutoConceptFallbackEvaluationIntervalSeconds,
+                    "Auto Concept evaluates after each world or configuration publication.");
+                context.DiscardObsolete(
+                    AutoBuyAllowedUuids,
+                    "Auto Buy no longer filters candidates through a configured allow list.");
+                context.DiscardObsolete(
+                    AutoBuyBlockedUuids,
+                    "Auto Buy no longer filters candidates through a configured block list.");
+                context.DiscardObsolete(
+                    AutoConceptAllowedUuids,
+                    "Auto Concept no longer filters candidates through a configured allow list.");
+                context.DiscardObsolete(
+                    AutoConceptBlockedUuids,
+                    "Auto Concept no longer filters candidates through a configured block list.");
+                context.DiscardObsolete(
+                    AutoBuyPurchaseGrouping,
+                    "Auto Buy always groups structures by live Bulk Development and upgrades singly.");
+                context.DiscardObsolete(
+                    AutoBuyFixedGroupSize,
+                    "The retired fixed purchase-grouping mode was this setting's only consumer.");
+                context.DiscardObsolete(
+                    AutoBuyBatchSizingMode,
+                    "Auto Buy always plans candidates until the live queue reserve is reached.");
+                context.DiscardObsolete(
+                    AutoBuyMaxPurchasesPerBatch,
+                    "The retired fixed batch-sizing mode was this setting's only consumer.");
+                context.DiscardObsolete(
+                    AutoBuyPrioritizeCostAndQualityStructures,
+                    "Auto Buy now uses cost ratio and stable identity without a structure-effect priority tier.");
+                context.DiscardObsolete(
+                    AutoConceptPerConceptQuantityCap,
+                    "Auto Concept always uses the recipe's native mastery maximum.");
 
-                if (int.TryParse(
+                if (context.TryGet(AutoConceptTrainingPeriodSeconds, out var serialized) &&
+                    int.TryParse(
                         serialized,
                         NumberStyles.Integer,
                         CultureInfo.InvariantCulture,
@@ -173,7 +231,7 @@ internal static class SuiteConfigurationSchema
                         "30",
                         "Rewrote the serialized Auto Concept training period from 300 seconds to 30 seconds.");
                 }
-                else
+                else if (context.TryGet(AutoConceptTrainingPeriodSeconds, out serialized))
                 {
                     context.Preserve(AutoConceptTrainingPeriodSeconds, serialized);
                 }

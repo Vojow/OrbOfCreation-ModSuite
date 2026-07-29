@@ -145,7 +145,6 @@ public sealed class AutoBuyServiceCompositionTests
                 Mode = AutoBuyOperationMode.Active,
                 IncludeStructures = true,
                 IncludeUpgrades = false,
-                EvaluationIntervalSeconds = 0.01f,
             },
         };
 

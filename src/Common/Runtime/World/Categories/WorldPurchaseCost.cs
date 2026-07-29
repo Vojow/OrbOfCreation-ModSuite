@@ -205,7 +205,6 @@ internal sealed class WorldPurchaseCostDeriver
     private readonly WorldLevelCostModifierBuffer _levelModifiers;
     private readonly WorldFrameGlobals _globals;
     private readonly int _structureGroupedLevels;
-    private readonly int _upgradeGroupedLevels;
 
     private GameResourceCost[] _scratch = new GameResourceCost[8];
     private BigDouble[] _attributeMods = new BigDouble[8];
@@ -224,8 +223,7 @@ internal sealed class WorldPurchaseCostDeriver
         PublicationTable<WorldModifierVariable> modifiers,
         WorldLevelCostModifierBuffer levelModifiers,
         in WorldFrameGlobals globals,
-        int structureGroupedLevels,
-        int upgradeGroupedLevels)
+        int structureGroupedLevels)
     {
         _structures = structures ?? throw new ArgumentNullException(nameof(structures));
         _upgrades = upgrades ?? throw new ArgumentNullException(nameof(upgrades));
@@ -235,8 +233,6 @@ internal sealed class WorldPurchaseCostDeriver
         _globals = globals;
         _structureGroupedLevels = Math.Max(
             1, Math.Min(WorldPurchaseGrouping.MaximumLevels, structureGroupedLevels));
-        _upgradeGroupedLevels = Math.Max(
-            1, Math.Min(WorldPurchaseGrouping.MaximumLevels, upgradeGroupedLevels));
     }
 
     /// <summary>
@@ -305,7 +301,7 @@ internal sealed class WorldPurchaseCostDeriver
                 TryPriceStructure(buffer, start, in structure, length, groupedLevels);
         }
 
-        groupedLevels = _upgradeGroupedLevels;
+        groupedLevels = 1;
         return WorldLookup.TryFind(_upgrades, entityId, out var upgrade) &&
             TryPriceUpgrade(buffer, start, in upgrade, entityId, length, groupedLevels);
     }

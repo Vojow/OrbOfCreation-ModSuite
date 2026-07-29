@@ -22,8 +22,7 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected: true,
-            treasureSelected: false,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: false);
         var definition = AutoHarvestService.Define(new CommittingActions());
         using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(1));
         registry.ConfigurationPublication.Publish(configuration);
@@ -114,8 +113,7 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected: true,
-            treasureSelected: false,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: false);
         using var registry = new ServiceCycleRegistry(3, new LifecycleGeneration(1));
         registry.ConfigurationPublication.Publish(configuration);
         using var collection = registry.Register(
@@ -165,8 +163,7 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected: true,
-            treasureSelected: false,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: false);
         var definition = AutoHarvestService.Define(new CommittingActions());
         using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(1));
         registry.ConfigurationPublication.Publish(configuration);

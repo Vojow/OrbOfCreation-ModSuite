@@ -288,7 +288,6 @@ public sealed class SharedWorldEndToEndTests : IDisposable
             Mode = AutoBuyOperationMode.Active,
             IncludeStructures = true,
             IncludeUpgrades = false,
-            EvaluationIntervalSeconds = 0.5f,
         },
     };
 }

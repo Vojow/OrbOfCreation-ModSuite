@@ -50,7 +50,8 @@ internal sealed class ServiceCycleSourceStartCoordinator<TState, TAction> :
             clock,
             lifetime,
             strategy,
-            world)
+            world,
+            wakeOnWorldPublication: false)
     {
         _definition = definition;
         _frame = frame;
@@ -127,7 +128,9 @@ internal sealed class ServiceCycleSourceStartCoordinator<TState, TAction> :
                     ServiceWakeSchedule.FromRetryPolicy(
                         result.WakePolicy,
                         captureObservedAt),
-                    configuration.Generation);
+                    configuration.Generation,
+                    opening.World.Generation,
+                    invalidatedByWorld: WakeOnWorldPublication);
             }
             return new ServiceCycleStartAttempt(
                 false, startFact, committedCapture, default, opening.Batch, default,

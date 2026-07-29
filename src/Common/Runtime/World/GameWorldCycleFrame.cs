@@ -46,12 +46,6 @@ internal sealed class GameWorldCycleFrame
     internal WorldLevelCostModifierBuffer LevelCostModifiers { get; } = new();
 
     /// <summary>
-    /// Every authored effect an entity's purchase applies. One-to-many per entity as well, and the
-    /// row is keyed by two entities rather than by one.
-    /// </summary>
-    internal WorldEntityEffectBuffer EntityEffects { get; } = new();
-
-    /// <summary>
     /// Every plot-and-action pair. Not one row per entity either: a pair belongs to neither side.
     /// </summary>
     internal WorldPlotActionBuffer PlotActions { get; } = new();
@@ -216,8 +210,7 @@ internal static class GameWorldFrameDeriver
         var purchaseCosts = new WorldPurchaseCostDeriver(
                 structures, upgrades, resources, modifierVariables, frame.LevelCostModifiers,
                 frame.FrameGlobals,
-                WorldPurchaseGrouping.Read(intVariables, KnownEntities.BulkDevelopment.Uuid),
-                WorldPurchaseGrouping.Read(intVariables, KnownEntities.MultiBuy.Uuid))
+                WorldPurchaseGrouping.Read(intVariables, KnownEntities.BulkDevelopment.Uuid))
             .Build(frame.PurchaseCosts);
 
         // Same shape, same reason: what one run of an action costs a plot is a function of both, so
@@ -234,7 +227,6 @@ internal static class GameWorldFrameDeriver
             Resources = resources,
             Structures = structures,
             PurchaseCosts = purchaseCosts,
-            EntityEffects = new WorldEntityEffectDeriver().Build(frame.EntityEffects),
             Upgrades = upgrades,
             Research = frame.Research.Build(WorldIdentityDeriver<WorldResearch>.Shared),
             DoubleVariables = frame.DoubleVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared),

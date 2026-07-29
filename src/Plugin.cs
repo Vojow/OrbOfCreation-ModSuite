@@ -404,11 +404,6 @@ public sealed class Plugin : BaseUnityPlugin
             $"Automata loaded. AutoBuyMode={runtimeConfig.AutoBuy.Mode}, " +
             $"StructureAffordability={runtimeConfig.AutoBuy.StructureAffordability}, " +
             $"UpgradeAffordability={runtimeConfig.AutoBuy.UpgradeAffordability}, " +
-            $"AutoBuyAllowedUuidCount={CountConfiguredUuids(runtimeConfig.AutoBuy.AllowedUuids)}, " +
-            $"AutoBuyBatchSizing={runtimeConfig.AutoBuy.BatchSizing}, " +
-            $"AutoBuyBatchSize={runtimeConfig.AutoBuy.MaxPurchasesPerBatch}, " +
-            $"AutoBuyPurchaseGrouping={runtimeConfig.AutoBuy.PurchaseGrouping}, " +
-            $"AutoBuyFixedGroupSize={runtimeConfig.AutoBuy.FixedGroupSize}, " +
             $"AutoCastMode={runtimeConfig.AutoCast.Mode}, " +
             $"AutoCastFullCharge={runtimeConfig.AutoCast.FullCharge}, " +
             $"AutoCastStartResourcePercent={runtimeConfig.AutoCast.StartResourcePercent}, " +
@@ -418,7 +413,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoHarvestFruitTrees={runtimeConfig.AutoHarvest.CollectFruitTrees}, " +
             $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
-            $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}.");
+            "Auto Buy fills the available queue and groups structures by live Bulk Development.");
     }
 
     /// <summary>
@@ -1203,15 +1198,6 @@ public sealed class Plugin : BaseUnityPlugin
                      (string.IsNullOrWhiteSpace(reason)
                          ? "native objects are not ready; retry is pending"
                          : reason));
-    }
-
-    private static int CountConfiguredUuids(string value)
-    {
-        return value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(item => item.Trim())
-            .Where(item => item.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
     }
 
     private static void BeforeSaveLoad(object __instance) =>

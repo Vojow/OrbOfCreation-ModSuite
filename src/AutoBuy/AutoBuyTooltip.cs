@@ -34,8 +34,8 @@ internal sealed class AutoBuyTooltip : ITooltipable
         nodes.AddRange(new[]
         {
             new TooltipNode($"Queue slots reserved: {Config.AutoBuy.LeaveQueueSlots}"),
-            new TooltipNode($"Batch sizing: {Config.AutoBuy.BatchSizing}"),
-            new TooltipNode($"Purchase grouping: {Config.AutoBuy.PurchaseGrouping}"),
+            new TooltipNode("Batch sizing: fill available queue"),
+            new TooltipNode("Structure grouping: live Bulk Development"),
             new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         });
         return nodes;

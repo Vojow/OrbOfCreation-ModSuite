@@ -19,15 +19,14 @@ public sealed class AutoConceptCycleEvaluatorTests
     private static readonly Guid OtherCore = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
-    public void ReschedulesAtTheConfiguredFallbackWhenThereIsNoWork()
+    public void WaitsForTheNextPublicationWhenThereIsNoWork()
     {
         var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
 
-        var actions = Plan(World(), Config(fallbackSeconds: 17), ref state, out var wake);
+        var actions = Plan(World(), Config(), ref state, out var wake);
 
         Assert.Empty(actions);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(17), wake.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -57,17 +56,17 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
-    public void DepthRaisesAnActiveConceptToTheConfiguredCap()
+    public void DepthRaisesAnActiveConceptToTheNativeMasteryMaximum()
     {
         var world = World(
             new[] { Recipe(Alpha, maximum: 8) },
             new[] { Instance(Alpha, quantity: 2, queued: 2) });
         var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
 
-        var action = Assert.Single(Plan(world, Config(quantityCap: 5), ref state, out _));
+        var action = Assert.Single(Plan(world, Config(), ref state, out _));
 
         Assert.Equal(AutoConceptActionKind.Add, action.Kind);
-        Assert.Equal(5, action.TargetOrDelta);
+        Assert.Equal(8, action.TargetOrDelta);
     }
 
     [Fact]
@@ -294,9 +293,7 @@ public sealed class AutoConceptCycleEvaluatorTests
         bool enabled = true,
         bool emergencyDisabled = false,
         AutoConceptOperationMode mode = AutoConceptOperationMode.Active,
-        AutoConceptSlotManagementMode slotMode = AutoConceptSlotManagementMode.RotateAll,
-        int fallbackSeconds = 30,
-        int quantityCap = 0) =>
+        AutoConceptSlotManagementMode slotMode = AutoConceptSlotManagementMode.RotateAll) =>
         new()
         {
             General = new SuiteGeneralConfiguration { Enabled = enabled },
@@ -305,9 +302,7 @@ public sealed class AutoConceptCycleEvaluatorTests
             {
                 Mode = mode,
                 SlotManagement = slotMode,
-                FallbackEvaluationIntervalSeconds = fallbackSeconds,
                 TrainingPeriodSeconds = 60,
-                QuantityCap = quantityCap,
                 MinimumDrainRatio = 0.25f,
             },
         };
