@@ -13,9 +13,11 @@
 - Keep incomplete game installations closed, bind an unverified-build choice to the exact two game
   files, and reset that choice automatically after another game update.
 - Reduce Auto Concept's maximum idle fallback from five minutes to 10 seconds. Configuration schema
-  6 migrates the inherited 300-second value while preserving customized intervals.
+  6 rewrites every serialized 300-second value, whether inherited or deliberately saved, while
+  preserving other customized intervals.
 - Reduce Auto Concept's default settled training period from five minutes to 30 seconds.
-  Configuration schema 7 migrates the inherited value while preserving customized periods.
+  Configuration schema 7 likewise rewrites every serialized 300-second value, whether inherited or
+  deliberately saved, while preserving other customized periods.
 - Make Timed Cycle rotate through all unlocked, allowed concepts rather than partitioning its order
   by concept type. The game remains authoritative for whether releasing the active assignment opens
   a compatible typed or typeless slot, and locked concepts are revalidated again before mutation.

@@ -149,8 +149,8 @@ internal static class SuiteConfigurationSchema
                     context.Preserve(AutoConceptFallbackEvaluationIntervalSeconds, serialized);
                 }
             }),
-        // Schema 7 shortens Auto Concept's inherited settled training period. A player-selected
-        // period is preserved; only the previous default is rewritten.
+        // Schema 7 rewrites every serialized Auto Concept training period equal to the former
+        // 300-second default to 30 seconds, whether that value was inherited or deliberately saved.
         new ConfigurationMigrationStep(
             6,
             CurrentVersion,
@@ -171,7 +171,7 @@ internal static class SuiteConfigurationSchema
                         AutoConceptTrainingPeriodSeconds,
                         AutoConceptTrainingPeriodSeconds,
                         "30",
-                        "Shortened the inherited Auto Concept training period from 300 seconds to 30 seconds.");
+                        "Rewrote the serialized Auto Concept training period from 300 seconds to 30 seconds.");
                 }
                 else
                 {
