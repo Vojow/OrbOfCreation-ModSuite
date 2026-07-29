@@ -83,6 +83,12 @@ quick icons, and STOP:
 
 ## Emergency stop and scene rebuild
 
+0. With an unknown complete assembly pair, confirm Mods and differential verification load, STOP is engaged,
+   no feature quick control or gameplay service starts, and General shows an engaged **Emergency disable**
+   switch. Clear it and Apply; confirm the exact pair is accepted and the runtime composes without the switch
+   being forced on again. Separately confirm **Allow this unverified game build** composes the runtime while
+   STOP stays engaged until the ordinary two-click resume. Change either test hash and confirm the
+   acknowledgement resets on next launch.
 1. Configure a resume set containing Auto Buy/Spell Leveling, Auto Cast, Auto Concept, Auto Harvest,
    and Mentor. Hover STOP and confirm its tooltip lists that exact desired-On set.
 2. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On

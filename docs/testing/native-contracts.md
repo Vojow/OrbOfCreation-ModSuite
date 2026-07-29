@@ -65,4 +65,6 @@ A hash-only update is insufficient. Every contract must pass against the new ass
 When multiple platform builds are supported, admit exact assembly pairs rather than independent per-file
 hash allowlists. This prevents a main assembly from one audited build being combined with a first-pass
 assembly from another. Platform path discovery is a separate compatibility contract: a recognized hash pair
-must still be read from the platform's actual Managed directory, and every unknown or mixed pair fails closed.
+must still be read from the platform's actual Managed directory. An unknown complete pair admits only the
+quarantined control plane unless the player explicitly accepts that exact pair; an incomplete or
+undiscoverable pair still fails closed completely.

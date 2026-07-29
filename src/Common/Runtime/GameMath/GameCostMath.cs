@@ -49,8 +49,8 @@ internal readonly struct GameResourceCost
 /// </para>
 /// <para>
 /// Provenance: <c>Assembly-CSharp.dll</c> SHA-256 <c>5652EBE3…</c>, audited baseline
-/// <c>steam-macos-2026-07-13</c>. Valid only for that build; <see cref="SuiteLoadGate"/> refuses to
-/// load the suite against any other.
+/// <c>steam-macos-2026-07-13</c>. An unknown pair is quarantined by <see cref="SuiteLoadGate"/>
+/// unless the player explicitly accepts that exact pair.
 /// </para>
 /// </remarks>
 internal static class GameCostMath

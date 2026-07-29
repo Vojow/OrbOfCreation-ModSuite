@@ -2,21 +2,21 @@
 
 [Back to documentation](../README.md) · [Installation](installation.md)
 
-## The mod stopped loading after a game update
+## The mod entered compatibility quarantine after a game update
 
-This is the expected result of a game update, not a broken install. The suite computes the game's economy math itself, transcribed from one audited pair of game assemblies, so it refuses to run against a build it has not audited rather than produce confident, plausible, incorrect numbers.
+This is the expected result of a game update, not a broken install. The suite computes the game's economy math itself, so an unknown complete assembly pair loads only the Mods configuration and verifier while gameplay patches and services remain emergency-stopped.
 
-`BepInEx/LogOutput.log` will contain one error line beginning:
+`BepInEx/LogOutput.log` will contain one warning line beginning:
 
 ```text
-Refusing to load: the installed game build does not match an audited baseline.
+Gameplay runtime quarantined: the installed game build does not match an audited baseline.
 ```
 
-The line goes on to name the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` hashes and the baselines the build was audited against. A second form, `Refusing to load: the game assembly audit could not be completed (...)`, means the audit itself failed to run — usually a game directory the suite could not read.
+The line names the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` hashes and the audited baselines. A refusal beginning `Refusing to load even the diagnostic control plane` means the pair could not be discovered completely, so even a hash-bound acknowledgement would be unsafe.
 
-There is no bypass and no degraded mode: when the suite refuses, it applies no patch, subscribes to no game event, and registers no service, so the game is left completely untouched. Falling back to asking the game for its own numbers is not offered, because a hash mismatch invalidates the reflected member contracts exactly as much as it invalidates the ported math.
+Run **Mods > Runtime > Run differential verification** while quarantined and report the results. If a player chooses to proceed before an audited release, clear **General > Emergency disable** and Apply. That action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later two-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
 
-Players should report the new game version on the [issue tracker](https://github.com/Vojow/OrbOfCreation-ModSuite/issues) and wait for a release that audits it. Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
+Players should still report the new game version on the [issue tracker](https://github.com/Vojow/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
 
 ## Steam Deck UI or severe frame-rate loss
 
