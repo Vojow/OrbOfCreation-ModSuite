@@ -14,6 +14,8 @@ module ownership, installed-game contracts, and runtime validation.
 - [Native contracts](native-contracts.md) — manifest and installed-assembly
   verification.
 - [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
+- [UI overhaul validation](ui-overhaul-validation.md) — post-install native styling,
+  interaction ownership, emergency resume, responsive layout, and Runtime-action checks.
 Run the complete normal-development feedback loop with:
 
 ```bash

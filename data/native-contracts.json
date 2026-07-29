@@ -4416,6 +4416,63 @@
       "place": "patch"
     },
     {
+      "id": "global-variables.get-global-structure-type",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGlobalStructureType",
+      "visibility": "public",
+      "static": true,
+      "returnType": "StructureTypeSO",
+      "parameters": [],
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "global-variables.get-harvest-speed-attr",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetHarvestSpeedAttr",
+      "visibility": "public",
+      "static": true,
+      "returnType": "AttributeSO",
+      "parameters": [],
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "global-variables.get-mastery-exp-attr",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMasteryExpAttr",
+      "visibility": "public",
+      "static": true,
+      "returnType": "AttributeSO",
+      "parameters": [],
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "global-variables.get-multi-buy",
       "assembly": "assembly-csharp",
       "type": "GlobalVariables",
@@ -10306,6 +10363,25 @@
       "place": "patch"
     },
     {
+      "id": "save-state-manager.start-game",
+      "assembly": "assembly-csharp",
+      "type": "SaveStateManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "StartGame",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Suite UI validation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "spell-list-variable.type",
       "assembly": "assembly-csharp",
       "type": "SpellListVariable",
@@ -13026,6 +13102,25 @@
       "place": "capture"
     },
     {
+      "id": "tooltipable-object.get-icon",
+      "assembly": "assembly-csharp",
+      "type": "TooltipableObject",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetIcon",
+      "visibility": "public",
+      "static": false,
+      "returnType": "UnityEngine.Sprite",
+      "parameters": [],
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "tooltipable-object.get-name",
       "assembly": "assembly-csharp",
       "type": "TooltipableObject",
@@ -13182,6 +13277,204 @@
       "valueType": "System.Boolean",
       "owners": [
         "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.background",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "background",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.UI.Image",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.base-background",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseBackground",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.Sprite",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.effects",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "effects",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UIImageEffects",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.icon",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "icon",
+      "visibility": "public",
+      "static": false,
+      "valueType": "UnityEngine.UI.Image",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.insufficient-background",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "insufficientBackground",
+      "visibility": "public",
+      "static": false,
+      "valueType": "UnityEngine.Sprite",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.spell-button.is-for-casting",
+      "assembly": "assembly-csharp",
+      "type": "UISpellButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isForCasting",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.view-radio.active-frame",
+      "assembly": "assembly-csharp",
+      "type": "UIViewRadioButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "activeImage",
+      "visibility": "public",
+      "static": false,
+      "valueType": "UnityEngine.Sprite",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.view-radio.base-frame",
+      "assembly": "assembly-csharp",
+      "type": "UIViewRadioButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseImage",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.Sprite",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.view-radio.button-image",
+      "assembly": "assembly-csharp",
+      "type": "UIViewRadioButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "buttonImage",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.UI.Image",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.view-radio.view-image",
+      "assembly": "assembly-csharp",
+      "type": "UIViewRadioButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "viewImage",
+      "visibility": "public",
+      "static": false,
+      "valueType": "UnityEngine.UI.Image",
+      "owners": [
+        "Mod Config native visual sampler"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ui.view-radio.view-text",
+      "assembly": "assembly-csharp",
+      "type": "UIViewRadioButton",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "viewText",
+      "visibility": "public",
+      "static": false,
+      "valueType": "TMPro.TextMeshProUGUI",
+      "owners": [
+        "Mod Config native visual sampler"
       ],
       "usages": [
         "reflection"
@@ -14019,7 +14312,7 @@
       },
       {
         "path": "src/ModConfig/Native/NativeViewAdapter.cs",
-        "reason": "Reflects generic Unity UI shell state and fields; installed layout smoke contracts remain separately tested."
+        "reason": "Reflects the declared native view-radio and bottom-bar spell-button visual fields plus generic ViewSO shell state; installed layout contracts validate every sampled field."
       },
       {
         "path": "src/ModConfig/SteamKeyboardBridge.cs",

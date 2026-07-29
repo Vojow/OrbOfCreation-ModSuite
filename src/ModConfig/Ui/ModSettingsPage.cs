@@ -22,16 +22,15 @@ internal sealed class ModSettingsPage : IDisposable
     private readonly ConfigEditSession _session;
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly ManualLogSource _log;
-    private readonly RectTransform _sectionTabs;
     private readonly RectTransform _content;
     private readonly ScrollRect _scroll;
     private readonly TextMeshProUGUI _statusText;
     private readonly Button _applyButton;
     private readonly Button _revertButton;
     private readonly ModSettingsApplyCoordinator _applyCoordinator;
-    private readonly List<GameObject> _sectionTabObjects = new();
     private readonly Dictionary<int, ModSettingsNavigationState> _navigation = new();
     private readonly ModSettingListView _settingList;
+    private readonly ModConfigFeatureCommands _featureCommands;
     private int _selectedModIndex;
     private int _selectedSectionIndex;
     private bool _visible;
@@ -41,24 +40,24 @@ internal sealed class ModSettingsPage : IDisposable
         ConfigCatalogSnapshot catalog,
         TextMeshProUGUI labelTemplate,
         ManualLogSource log,
-        RectTransform sectionTabs,
         RectTransform content,
         ScrollRect scroll,
         TextMeshProUGUI statusText,
         Button applyButton,
         Button revertButton,
-        GameplayInvalidationBus invalidationBus)
+        GameplayInvalidationBus invalidationBus,
+        ModConfigFeatureCommands featureCommands)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _session = new ConfigEditSession(catalog);
         _labelTemplate = labelTemplate ?? throw new ArgumentNullException(nameof(labelTemplate));
         _log = log ?? throw new ArgumentNullException(nameof(log));
-        _sectionTabs = sectionTabs ?? throw new ArgumentNullException(nameof(sectionTabs));
         _content = content ?? throw new ArgumentNullException(nameof(content));
         _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
         _statusText = statusText ?? throw new ArgumentNullException(nameof(statusText));
         _applyButton = applyButton ?? throw new ArgumentNullException(nameof(applyButton));
         _revertButton = revertButton ?? throw new ArgumentNullException(nameof(revertButton));
+        _featureCommands = featureCommands ?? throw new ArgumentNullException(nameof(featureCommands));
         _applyCoordinator = new ModSettingsApplyCoordinator(
             invalidationBus ?? throw new ArgumentNullException(nameof(invalidationBus)),
             () => Time.frameCount);
@@ -101,18 +100,28 @@ internal sealed class ModSettingsPage : IDisposable
             Math.Max(0f, bookmark.ScrollOffset));
     }
 
-    public void ShowPlugin(int pluginIndex)
+    public void ShowSection(int pluginIndex, int sectionIndex)
     {
         ThrowIfDisposed();
         CaptureNavigation();
         _visible = true;
         _selectedModIndex = Math.Max(0, Math.Min(pluginIndex, _catalog.Mods.Count - 1));
         var mod = _catalog.Mods[_selectedModIndex];
-        var state = _navigation.TryGetValue(_selectedModIndex, out var remembered)
-            ? remembered.ClampTo(mod.Sections.Count)
-            : new ModSettingsNavigationState(0, 0f);
-        _selectedSectionIndex = state.SectionIndex;
-        RebuildSections(state.ScrollOffset);
+        if (mod.Sections.Count == 0)
+        {
+            _selectedSectionIndex = 0;
+            _settingList.Clear();
+            _content.sizeDelta = new Vector2(0f, 1f);
+            RestoreScrollOffset(0f, 1f);
+            RefreshStatus();
+            return;
+        }
+        var rememberedOffset = _navigation.TryGetValue(_selectedModIndex, out var remembered) &&
+                               remembered.SectionIndex == sectionIndex
+            ? remembered.ScrollOffset
+            : 0f;
+        _selectedSectionIndex = Math.Max(0, Math.Min(sectionIndex, mod.Sections.Count - 1));
+        RebuildSettings(rememberedOffset);
     }
 
     public void Hide()
@@ -120,7 +129,6 @@ internal sealed class ModSettingsPage : IDisposable
         if (_disposed || !_visible) return;
         CaptureNavigation();
         _visible = false;
-        ModConfigUiFactory.ClearObjects(_sectionTabObjects);
         _settingList.Clear();
     }
 
@@ -161,11 +169,20 @@ internal sealed class ModSettingsPage : IDisposable
             string.Equals(value.Setting.PluginGuid, mod.Guid, StringComparison.Ordinal) &&
             value.HasExternalConflict);
         if (conflict is not null)
-            SetStatus($"{conflict.Setting.Key}: changed outside this page; choose Keep mine or Take live.", invalid: true);
+            SetStatus(
+                $"{_session.CountModConflicts(mod)} conflict(s): {conflict.Setting.Key} changed outside this page; choose Keep mine or Take live.",
+                invalid: true);
         else if (changed is not null && !changed.IsValid)
             SetStatus($"{changed.Setting.Key}: {changed.Error}", invalid: true);
         else
-            SetStatus(_session.IsModDirty(mod) ? "Unsaved changes" : "Ready", invalid: false);
+        {
+            var staged = _session.CountModDirty(mod);
+            SetStatus(
+                staged == 0
+                    ? "Ready"
+                    : $"{staged} staged change(s) in {mod.Name}",
+                invalid: false);
+        }
 
         SetFooterInteractable(
             CanApplySelection(mod, _session.IsModDirty(mod), _session.IsModValid(mod)),
@@ -178,7 +195,6 @@ internal sealed class ModSettingsPage : IDisposable
         _disposed = true;
         _applyButton.onClick.RemoveListener(Apply);
         _revertButton.onClick.RemoveListener(Revert);
-        ModConfigUiFactory.ClearObjects(_sectionTabObjects);
         _settingList.Dispose();
     }
 
@@ -187,30 +203,6 @@ internal sealed class ModSettingsPage : IDisposable
         bool sessionDirty,
         bool sessionValid) =>
         selectedMod.Sections.Count > 0 && sessionDirty && sessionValid;
-
-    private void RebuildSections(float requestedScrollOffset)
-    {
-        ModConfigUiFactory.ClearObjects(_sectionTabObjects);
-        var mod = _catalog.Mods[_selectedModIndex];
-        if (mod.Sections.Count == 0)
-        {
-            _settingList.Clear();
-            _content.sizeDelta = new Vector2(0f, 1f);
-            RestoreScrollOffset(0f, 1f);
-            RefreshStatus();
-            return;
-        }
-
-        _selectedSectionIndex = Math.Max(0, Math.Min(_selectedSectionIndex, mod.Sections.Count - 1));
-        ModConfigUiFactory.BuildTabs(
-            _sectionTabs,
-            mod.Sections.Select(section => section.Name).ToArray(),
-            _selectedSectionIndex,
-            _sectionTabObjects,
-            _labelTemplate,
-            SelectSection);
-        RebuildSettings(requestedScrollOffset);
-    }
 
     private void RebuildSettings(float? requestedScrollOffset = null)
     {
@@ -225,18 +217,14 @@ internal sealed class ModSettingsPage : IDisposable
         }
 
         var requestedOffset = requestedScrollOffset ?? Math.Max(0f, _content.anchoredPosition.y);
-        var settings = mod.Sections[_selectedSectionIndex].Settings;
-        var contentHeight = _settingList.Render(settings);
+        var section = mod.Sections[_selectedSectionIndex];
+        _featureCommands.TryGet(mod.Guid, section.Name, out var command);
+        var settings = section.Settings
+            .Where(setting => command is null || !IsImmediateModeSetting(setting))
+            .ToArray();
+        var contentHeight = _settingList.Render(settings, command);
         RestoreScrollOffset(requestedOffset, contentHeight);
         RefreshStatus();
-    }
-
-    private void SelectSection(int index)
-    {
-        if (index == _selectedSectionIndex) return;
-        _selectedSectionIndex = index;
-        _navigation[_selectedModIndex] = new ModSettingsNavigationState(index, 0f);
-        RebuildSections(0f);
     }
 
     private void Apply()
@@ -310,4 +298,8 @@ internal sealed class ModSettingsPage : IDisposable
     {
         if (_disposed) throw new ObjectDisposedException(nameof(ModSettingsPage));
     }
+
+    internal static bool IsImmediateModeSetting(ConfigSettingDescriptor setting) =>
+        string.Equals(setting.Key, "Mode", StringComparison.Ordinal) &&
+        setting.SourceSection is "AutoBuy" or "AutoCast" or "AutoConcept" or "AutoHarvest" or "General";
 }

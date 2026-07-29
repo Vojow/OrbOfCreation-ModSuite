@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace OrbModConfig;
 
@@ -11,6 +12,7 @@ internal sealed class RuntimeDiagnosticsCardView : IDisposable
     private const float MinimumRowHeight = 112f;
     private readonly GameObject _root;
     private readonly RectTransform _rect;
+    private readonly Image _frame;
     private readonly TextMeshProUGUI _title;
     private readonly TextMeshProUGUI _body;
     private RuntimeDiagnosticsCard? _card;
@@ -30,6 +32,11 @@ internal sealed class RuntimeDiagnosticsCardView : IDisposable
             ModConfigPalette.Row);
         _rect = (RectTransform)_root.transform;
         _rect.pivot = new Vector2(0.5f, 1f);
+        _frame = _root.GetComponent<Image>()!;
+        ModConfigNativeRailFactory.SkinPanel(
+            _frame,
+            ModConfigUiFactory.NativeVisuals.FeatureRailBaseFrame,
+            ModConfigPalette.Row);
         _title = ModConfigUiFactory.CreateText(
             "Title",
             _root.transform,
@@ -70,6 +77,13 @@ internal sealed class RuntimeDiagnosticsCardView : IDisposable
             _titleValue = RuntimeDiagnosticsCardText.Title(card);
             _bodyValue = RuntimeDiagnosticsCardText.Body(card);
         }
+        _frame.color = card.Severity switch
+        {
+            RuntimeDiagnosticsSeverity.Failure => new Color(0.32f, 0.10f, 0.10f, 0.98f),
+            RuntimeDiagnosticsSeverity.Attention => new Color(0.28f, 0.20f, 0.08f, 0.98f),
+            RuntimeDiagnosticsSeverity.Waiting => new Color(0.10f, 0.15f, 0.22f, 0.98f),
+            _ => ModConfigPalette.Row,
+        };
         return Layout(contentWidth, topOffset, siblingIndex, renderGeneration, cardChanged);
     }
 
@@ -83,6 +97,7 @@ internal sealed class RuntimeDiagnosticsCardView : IDisposable
     {
         _card = null;
         _cardRevision = 0;
+        _frame.color = ModConfigPalette.Row;
         var changed = !string.Equals(_titleValue, title, StringComparison.Ordinal) ||
             !string.Equals(_bodyValue, body, StringComparison.Ordinal);
         _titleValue = title;

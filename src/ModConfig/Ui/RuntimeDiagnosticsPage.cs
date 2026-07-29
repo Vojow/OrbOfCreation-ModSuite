@@ -34,6 +34,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private ManualFullTraceControlView? _traceView;
     private HostTraceDumpControlView? _hostTraceDumpView;
     private PumpTimingGraphView? _pumpTimingView;
+    private RuntimeFeatureHealthGridView? _featureHealthView;
 #if SERVICE_CYCLE_PROFILE
     private PerformanceProfileControlView? _performanceProfileView;
 #endif
@@ -98,9 +99,11 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 
         var top = 4f;
         var siblingIndex = 0;
-        _traceView ??= new ManualFullTraceControlView(_content, _labelTemplate, _traceControl);
-        top += _traceView.Layout(_content.rect.width, top, siblingIndex++);
-        _traceRevision = _traceControl.Revision;
+        _featureHealthView ??= new RuntimeFeatureHealthGridView(_content, _labelTemplate);
+        top += _featureHealthView.Layout(
+            RuntimeFeatureHealthProjection.Build(dashboard),
+            top,
+            siblingIndex++);
         _hostTraceDumpView ??= new HostTraceDumpControlView(
             _content,
             _labelTemplate,
@@ -109,6 +112,9 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         top += _hostTraceDumpView.Layout(_content.rect.width, top, siblingIndex++);
         _hostTraceDumpRevision = _hostTraceDump.Revision;
         _differentialVerificationRevision = _differentialVerification.Revision;
+        _traceView ??= new ManualFullTraceControlView(_content, _labelTemplate, _traceControl);
+        top += _traceView.Layout(_content.rect.width, top, siblingIndex++);
+        _traceRevision = _traceControl.Revision;
 #if SERVICE_CYCLE_PROFILE
         _performanceProfileView ??= new PerformanceProfileControlView(
             _content,
@@ -186,6 +192,8 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _hostTraceDumpView = null;
         _pumpTimingView?.Dispose();
         _pumpTimingView = null;
+        _featureHealthView?.Dispose();
+        _featureHealthView = null;
 #if SERVICE_CYCLE_PROFILE
         _performanceProfileView?.Dispose();
         _performanceProfileView = null;

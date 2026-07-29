@@ -123,6 +123,9 @@ internal sealed class ConfigEditSession
     public bool IsValid => _values.Values.All(value => value.IsValid);
     public bool IsModDirty(ModConfigDescriptor mod) => ValuesFor(mod).Any(value => value.IsDirty);
     public bool IsModValid(ModConfigDescriptor mod) => ValuesFor(mod).All(value => value.IsValid);
+    public int CountModDirty(ModConfigDescriptor mod) => ValuesFor(mod).Count(value => value.IsDirty);
+    public int CountModConflicts(ModConfigDescriptor mod) =>
+        ValuesFor(mod).Count(value => value.HasExternalConflict);
     public bool ModHasExternalConflicts(ModConfigDescriptor mod) =>
         ValuesFor(mod).Any(value => value.HasExternalConflict);
 

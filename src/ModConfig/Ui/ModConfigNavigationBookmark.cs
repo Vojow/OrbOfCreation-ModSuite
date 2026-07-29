@@ -21,10 +21,20 @@ internal static class ModConfigNavigationBookmarkPolicy
     {
         if (catalog is null) throw new ArgumentNullException(nameof(catalog));
         if (bookmark.IsRuntime) return 0;
-        var pluginIndex = Array.FindIndex(
-            catalog.Mods.ToArray(),
-            mod => string.Equals(mod.Guid, bookmark.PluginGuid, StringComparison.Ordinal));
-        return pluginIndex < 0 ? 0 : pluginIndex + 1;
+        var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
+        for (var index = 1; index < pages.Count; index++)
+        {
+            var page = pages[index];
+            var mod = catalog.Mods[page.PluginIndex];
+            if (string.Equals(mod.Guid, bookmark.PluginGuid, StringComparison.Ordinal) &&
+                (page.SectionIndex < 0 && string.IsNullOrEmpty(bookmark.SectionName) ||
+                 page.SectionIndex >= 0 && string.Equals(
+                     mod.Sections[page.SectionIndex].Name,
+                     bookmark.SectionName,
+                     StringComparison.Ordinal)))
+                return index;
+        }
+        return 0;
     }
 
     public static int ResolveSectionIndex(

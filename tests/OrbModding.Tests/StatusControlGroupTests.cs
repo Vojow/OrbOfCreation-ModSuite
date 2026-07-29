@@ -9,102 +9,136 @@ namespace OrbModding.Tests;
 public sealed class StatusControlGroupTests
 {
     [Theory]
-    [InlineData(0.0f, 0.0f, 50.0f, -12.0f)]
-    [InlineData(100.0f, 0.5f, 50.0f, 63.0f)]
-    [InlineData(100.0f, 1.0f, 50.0f, 38.0f)]
-    public void GroupEndsOneGapBeforeNativeLeftEdge(float nativeX, float pivotX, float width, float expectedX)
+    [InlineData(0.0f, 0.0f, 50.0f, 4.0f)]
+    [InlineData(100.0f, 0.5f, 50.0f, 79.0f)]
+    [InlineData(100.0f, 1.0f, 50.0f, 54.0f)]
+    public void TrayStartsInsideNativeRightSidebarLane(
+        float nativeX,
+        float pivotX,
+        float width,
+        float expectedX)
     {
-        var nativePosition = new Vector2(nativeX, 20.0f);
-        var nativePivot = new Vector2(pivotX, 0.5f);
-        var group = StatusControlGroup.CalculateGroupPosition(nativePosition, nativePivot, width, 50.0f);
-        Assert.Equal(expectedX, group.x);
-        Assert.Equal(20.0f, group.y);
-    }
-
-    [Fact]
-    public void ModControlsPreserveNativeOutwardOrderWithUniformGaps()
-    {
-        const float width = 50.0f;
-        const int count = 3;
-        var expectedCentersFromNative = new[] { 149.0f, 87.0f, 25.0f };
-        for (var slotFromNative = 0; slotFromNative < expectedCentersFromNative.Length; slotFromNative++)
-            Assert.Equal(expectedCentersFromNative[slotFromNative], StatusControlGroup.CalculateSlotCenterX(width, count, slotFromNative));
-        Assert.Equal(174.0f, StatusControlGroup.CalculateGroupWidth(width, count));
-        Assert.Equal(12.0f, expectedCentersFromNative[0] - expectedCentersFromNative[1] - width);
-        Assert.Equal(12.0f, expectedCentersFromNative[1] - expectedCentersFromNative[2] - width);
+        var position = StatusControlGroup.CalculateGroupPosition(
+            new Vector2(nativeX, -35.0f),
+            new Vector2(pivotX, 0.5f),
+            width);
+        Assert.Equal(expectedX, position.x);
+        Assert.Equal(StatusControlGroup.TrayInset, position.y);
     }
 
     [Theory]
-    [InlineData(1, 50.0f, 25.0f)]
-    [InlineData(2, 112.0f, 87.0f)]
-    [InlineData(3, 174.0f, 149.0f)]
-    [InlineData(4, 236.0f, 211.0f)]
-    [InlineData(8, 484.0f, 459.0f)]
-    public void ClosestPresentControlRemainsBesideNative(int count, float expectedGroupWidth, float expectedCenter)
+    [InlineData(0, 0.0f, 0.0f)]
+    [InlineData(1, 34.0f, 34.0f)]
+    [InlineData(2, 72.0f, 34.0f)]
+    [InlineData(3, 72.0f, 72.0f)]
+    [InlineData(5, 72.0f, 110.0f)]
+    [InlineData(6, 72.0f, 110.0f)]
+    [InlineData(8, 72.0f, 148.0f)]
+    public void TrayUsesTwoCompactColumns(int count, float expectedWidth, float expectedHeight)
     {
-        const float width = 50.0f;
-        Assert.Equal(expectedGroupWidth, StatusControlGroup.CalculateGroupWidth(width, count));
-        Assert.Equal(expectedCenter, StatusControlGroup.CalculateSlotCenterX(width, count, 0));
-        Assert.Equal(25.0f, StatusControlGroup.CalculateSlotCenterX(width, count, count - 1));
+        var size = StatusControlGroup.CalculateGroupSize(count);
+        Assert.Equal(expectedWidth, size.x);
+        Assert.Equal(expectedHeight, size.y);
     }
 
     [Fact]
-    public void ReflowOrdersAnyNumberOfRegisteredControlsIndependentlyOfCreationOrder()
+    public void SixControlsFillThreeRowsInReadingOrder()
+    {
+        var expectedCenters = new[]
+        {
+            new Vector2(17.0f, 93.0f),
+            new Vector2(55.0f, 93.0f),
+            new Vector2(17.0f, 55.0f),
+            new Vector2(55.0f, 55.0f),
+            new Vector2(17.0f, 17.0f),
+            new Vector2(55.0f, 17.0f),
+        };
+        for (var index = 0; index < expectedCenters.Length; index++)
+            Assert.Equal(expectedCenters[index], StatusControlGroup.CalculateSlotCenter(index, 6));
+    }
+
+    [Fact]
+    public void ReflowOrdersRegisteredControlsByVisiblePriorityAndScalesThem()
     {
         var parent = new GameObject("AttributeBar");
-        var native = new GameObject("AutoBuyToggle");
-        native.transform.SetParent(parent.transform, false);
-        var nativeRect = (RectTransform)native.transform;
-        nativeRect.anchorMin = new Vector2(0.0f, 0.5f);
-        nativeRect.anchorMax = new Vector2(0.0f, 0.5f);
-        nativeRect.pivot = new Vector2(0.0f, 0.5f);
-        nativeRect.anchoredPosition = new Vector2(0.0f, -35.0f);
-        nativeRect.rect = new Rect(0.0f, 0.0f, 50.0f, 50.0f);
-
-        var group = StatusControlGroup.GetOrCreate(nativeRect);
-        var mentor = AddControl(group, "OrbMentor.Toggle", 300);
-        var future = AddControl(group, "OrbFuture.Toggle", 400);
-        var autoBuy = AddControl(group, "OrbAutomata.AutoBuyToggle", 100);
+        var native = CreateNative(parent.transform);
+        var group = StatusControlGroup.GetOrCreate(native);
+        var mentor = AddControl(group, "OrbMentor.Toggle", StatusControlOrder.Mentor);
+        var autoBuy = AddControl(group, "OrbAutomata.AutoBuyToggle", StatusControlOrder.AutoBuy);
         var ignoredDecoration = new GameObject("Decoration");
         ignoredDecoration.transform.SetParent(group, false);
-        var autoCast = AddControl(group, "OrbAutomata.AutoCastToggle", 200);
+        var autoCast = AddControl(group, "OrbAutomata.AutoCastToggle", StatusControlOrder.AutoCast);
         var inactive = AddControl(group, "OrbInactive.Toggle", 250);
         inactive.SetActive(false);
-        var autoConcept = AddControl(group, "OrbAutomata.AutoConceptToggle", 300);
+        var autoConcept = AddControl(group, "OrbAutomata.AutoConceptToggle", StatusControlOrder.AutoConcept);
 
-        StatusControlGroup.Reflow(group, nativeRect);
+        StatusControlGroup.Reflow(group, native);
 
-        Assert.Equal(298.0f, ((RectTransform)group).sizeDelta.x);
-        Assert.Equal(-12.0f, ((RectTransform)group).anchoredPosition.x);
-        Assert.Equal(273.0f, ((RectTransform)autoBuy.transform).anchoredPosition.x);
-        Assert.Equal(211.0f, ((RectTransform)autoCast.transform).anchoredPosition.x);
-        Assert.Equal(149.0f, ((RectTransform)autoConcept.transform).anchoredPosition.x);
-        Assert.Equal(87.0f, ((RectTransform)mentor.transform).anchoredPosition.x);
-        Assert.Equal(25.0f, ((RectTransform)future.transform).anchoredPosition.x);
-        Assert.Equal(0.0f, ((RectTransform)ignoredDecoration.transform).anchoredPosition.x);
-        Assert.Equal(0.0f, ((RectTransform)inactive.transform).anchoredPosition.x);
+        Assert.Equal(new Vector2(72.0f, 72.0f), ((RectTransform)group).sizeDelta);
+        Assert.Equal(new Vector2(4.0f, 4.0f), ((RectTransform)group).anchoredPosition);
+        Assert.Equal(new Vector2(17.0f, 55.0f), ((RectTransform)mentor.transform).anchoredPosition);
+        Assert.Equal(new Vector2(55.0f, 55.0f), ((RectTransform)autoConcept.transform).anchoredPosition);
+        Assert.Equal(new Vector2(17.0f, 17.0f), ((RectTransform)autoCast.transform).anchoredPosition);
+        Assert.Equal(new Vector2(55.0f, 17.0f), ((RectTransform)autoBuy.transform).anchoredPosition);
+        Assert.Equal(
+            new Vector2(StatusControlGroup.ControlSize, StatusControlGroup.ControlSize),
+            ((RectTransform)mentor.transform).sizeDelta);
+        Assert.Equal(Vector2.zero, ((RectTransform)ignoredDecoration.transform).anchoredPosition);
+        Assert.Equal(Vector2.zero, ((RectTransform)inactive.transform).anchoredPosition);
     }
 
     [Fact]
     public void SlotCalculationRejectsInvalidIndexes()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenterX(50.0f, 0, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenterX(50.0f, 3, -1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenterX(50.0f, 3, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenter(0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenter(-1, 3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => StatusControlGroup.CalculateSlotCenter(3, 3));
     }
 
     [Fact]
-    public void DeclaredControlOrdersAreUniqueAndPreserveCurrentSequence()
+    public void DeclaredControlOrdersAreUniqueAndPreserveVisibleSequence()
     {
         var orders = typeof(StatusControlOrder).GetFields()
             .Where(field => field.IsLiteral && field.FieldType == typeof(int))
             .Select(field => (int)field.GetRawConstantValue()!)
             .ToArray();
         Assert.Equal(orders.Length, orders.Distinct().Count());
-        Assert.True(StatusControlOrder.EmergencyStop < StatusControlOrder.AutoBuy);
-        Assert.True(StatusControlOrder.AutoBuy < StatusControlOrder.AutoCast);
-        Assert.True(StatusControlOrder.AutoCast < StatusControlOrder.AutoConcept);
-        Assert.True(StatusControlOrder.AutoConcept < StatusControlOrder.Mentor);
+        Assert.True(StatusControlOrder.Mentor > StatusControlOrder.AutoHarvest);
+        Assert.True(StatusControlOrder.AutoHarvest > StatusControlOrder.AutoConcept);
+        Assert.True(StatusControlOrder.AutoConcept > StatusControlOrder.AutoCast);
+        Assert.True(StatusControlOrder.AutoCast > StatusControlOrder.AutoBuy);
+        Assert.True(StatusControlOrder.AutoBuy > StatusControlOrder.EmergencyStop);
+    }
+
+    [Fact]
+    public void EmergencyStopHasAProtectedGapInTheLastTrayCell()
+    {
+        var rightSidebar = new GameObject("RightSidebar");
+        var attributeBar = new GameObject("AttributeBar");
+        attributeBar.transform.SetParent(rightSidebar.transform, false);
+        var native = CreateNative(attributeBar.transform);
+        var group = StatusControlGroup.GetOrCreate(native);
+        AddControl(group, "Mentor", StatusControlOrder.Mentor);
+        AddControl(group, "Harvest", StatusControlOrder.AutoHarvest);
+        AddControl(group, "Concept", StatusControlOrder.AutoConcept);
+        AddControl(group, "Cast", StatusControlOrder.AutoCast);
+        var autoBuy = AddControl(group, "Buy", StatusControlOrder.AutoBuy);
+        var stop = AddControl(group, "Stop", StatusControlOrder.EmergencyStop);
+        StatusControlGroup.RegisterControl(
+            stop,
+            StatusControlOrder.EmergencyStop,
+            StatusControlGroup.StopSeparation);
+
+        StatusControlGroup.Reflow(group, native);
+
+        Assert.Equal(new Vector2(78.0f, 110.0f), ((RectTransform)group).sizeDelta);
+        Assert.Equal(new Vector2(17.0f, 17.0f), ((RectTransform)autoBuy.transform).anchoredPosition);
+        Assert.Equal(new Vector2(61.0f, 17.0f), ((RectTransform)stop.transform).anchoredPosition);
+        Assert.Equal(
+            StatusControlGroup.ColumnGap + StatusControlGroup.StopSeparation,
+            ((RectTransform)stop.transform).anchoredPosition.x -
+            ((RectTransform)autoBuy.transform).anchoredPosition.x -
+            StatusControlGroup.ControlSize);
     }
 
     [Fact]
@@ -121,6 +155,19 @@ public sealed class StatusControlGroupTests
         native.name = "AutoBuyToggle";
         attributeBar.transform.name = "DifferentBar";
         Assert.False(StatusControlGroup.IsNativeAnchor(native.transform));
+    }
+
+    private static RectTransform CreateNative(Transform parent)
+    {
+        var native = new GameObject("AutoBuyToggle");
+        native.transform.SetParent(parent, false);
+        var nativeRect = (RectTransform)native.transform;
+        nativeRect.anchorMin = new Vector2(0.0f, 0.5f);
+        nativeRect.anchorMax = new Vector2(0.0f, 0.5f);
+        nativeRect.pivot = new Vector2(0.0f, 0.5f);
+        nativeRect.anchoredPosition = new Vector2(0.0f, -35.0f);
+        nativeRect.rect = new Rect(0.0f, 0.0f, 50.0f, 50.0f);
+        return nativeRect;
     }
 
     private static GameObject AddControl(Transform group, string name, int order)

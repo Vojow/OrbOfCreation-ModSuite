@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -43,12 +44,16 @@ internal sealed class ModSettingListView : IDisposable
 
     public float MeasuredDescriptionWidth { get; private set; }
 
-    public float Render(IReadOnlyList<ConfigSettingDescriptor> settings)
+    public float Render(
+        IReadOnlyList<ConfigSettingDescriptor> settings,
+        ModConfigFeatureCommand? featureCommand = null)
     {
         if (settings is null) throw new ArgumentNullException(nameof(settings));
         Clear();
         MeasuredDescriptionWidth = ModSettingsLayout.CalculateDescriptionWidth(_content.rect.width);
         var contentHeight = 0f;
+        if (featureCommand is not null)
+            contentHeight += CreateFeatureHeader(featureCommand, contentHeight);
         foreach (var setting in settings)
             contentHeight += CreateRow(setting, contentHeight, MeasuredDescriptionWidth);
         contentHeight = Math.Max(1f, contentHeight);
@@ -63,6 +68,58 @@ internal sealed class ModSettingListView : IDisposable
     }
 
     public void Dispose() => Clear();
+
+    private float CreateFeatureHeader(ModConfigFeatureCommand command, float topOffset)
+    {
+        const float headerHeight = 82f;
+        var status = command.Status;
+        var presentation = FeatureStatusPresenter.Present(status);
+        var row = ModConfigUiFactory.CreateRectObject(
+            "Feature." + command.DisplayName,
+            _content,
+            new Vector2(0.01f, 1f),
+            new Vector2(0.99f, 1f),
+            ModConfigPalette.Row);
+        var rect = (RectTransform)row.transform;
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, -topOffset - SettingRowTopInset);
+        rect.sizeDelta = new Vector2(0f, headerHeight - SettingRowGap);
+        _rows.Add(row);
+
+        ModConfigUiFactory.CreateText(
+            "Title",
+            row.transform,
+            new Vector2(0.025f, 0.52f),
+            new Vector2(0.56f, 0.94f),
+            _labelTemplate,
+            command.DisplayName,
+            TextAlignmentOptions.MidlineLeft,
+            0.88f);
+        ModConfigUiFactory.CreateText(
+            "Status",
+            row.transform,
+            new Vector2(0.025f, 0.08f),
+            new Vector2(0.74f, 0.5f),
+            _labelTemplate,
+            FeatureStatusPresenter.Format(status),
+            TextAlignmentOptions.MidlineLeft,
+            0.56f);
+        ModConfigUiFactory.CreateButton(
+            "ImmediateMode",
+            row.transform,
+            new Vector2(0.77f, 0.18f),
+            new Vector2(0.975f, 0.82f),
+            _labelTemplate,
+            presentation.IsConfiguredOn ? "Turn off" : "Turn on",
+            () =>
+            {
+                command.Toggle();
+                _session.RefreshExternalValues();
+                _rebuildRequested();
+            },
+            active: presentation.IsConfiguredOn);
+        return headerHeight;
+    }
 
     private float CreateRow(
         ConfigSettingDescriptor setting,

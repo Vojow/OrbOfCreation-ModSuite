@@ -56,14 +56,6 @@ internal sealed class SuiteConfiguration
             automata,
             mentor,
             ModConfigSettings.BindCurrent(file));
-        file.Bind(
-            SuiteConfigurationSchema.DifferentialVerificationShortcut.Section,
-            SuiteConfigurationSchema.DifferentialVerificationShortcut.Key,
-            new KeyboardShortcut(UnityEngine.KeyCode.None),
-            new ConfigDescription(
-                "Retained only to preserve a player-customized legacy value. The verifier is run from Mods > Runtime.",
-                null,
-                new ModConfigMetadata(int.MaxValue, int.MaxValue, hidden: true)));
         return configuration;
     }
 }

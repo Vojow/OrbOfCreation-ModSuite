@@ -1,5 +1,51 @@
 # Changelog
 
+## Game-native UI overhaul — 2026-07-28
+
+- Move the five feature controls and STOP out of the expanding spell-slot row into the audited
+  empty lane inside `RightSidebar/AttributeBar`. The controls now form a compact 2×3 tray of
+  34-pixel native spell frames; STOP keeps a distinct gap without consuming another horizontal
+  spell-slot-sized run.
+- Use the full Mods frame: the native title panel now spans the top edge, the rail and detail pane
+  fill the middle, and the staged Apply/Revert footer occupies the bottom edge with only deliberate
+  gutters between them.
+- Retain profile-build-only UI validation shortcuts: F12 invokes the audited native Continue
+  action on Start, F11 toggles Mods on Main, and F10 advances the Mods rail. These keys do not
+  mutate configuration or native gameplay state.
+- Correct native visual capture against the production view state: the Magic/Scholar rail is sampled
+  while its source view is inactive, and spell frames come only from direct children of the audited
+  gameplay `CastingBar/SmallSpellList` instead of requiring unrelated active spell buttons to agree.
+- Remove the text quick-control and flat horizontal Mods-shell fallbacks. Native capture now retries
+  only for bounded startup timing; a terminal mismatch logs the exact reason at error level and
+  publishes a failed Suite UI capability on Runtime. Successful installs self-report both surfaces
+  in the BepInEx log before the Mods panel is opened.
+- Source Auto Buy's quick icon from audited
+  `GlobalVariables.GetGlobalStructureType().GetIcon()` instead of the cloned queue toggle's optional
+  image, while preserving the single pixel writer and the existing status contract.
+- Advance the unified configuration file to schema 5 and transactionally discard the retired Auto Buy
+  scan cap, rejection cap, global logging switches, Mentor detailed logging, mastery event probe, and
+  verifier shortcut. ServiceCycle plans from complete published snapshots; maintained diagnostics are
+  explicit Runtime actions, traces, journals, warnings, and errors.
+- Keep cadence controls, but describe them as minimum service-planning intervals or maximum idle
+  fallback delays instead of per-frame scan budgets.
+- Audit the game's native nested-navigation and spell-button visual contracts. The suite samples
+  the exact inactive-capable `MainContentContainer/SubviewRadio` frame family, exact named top-bar
+  icons, and bottom-bar spell-frame structural paths; a mismatch is a suite defect on the audited
+  game baseline, not a request to render alternate chrome.
+- Replace the cramped quick-strip labels with native spell-frame icon controls for Mentor, Auto
+  Harvest, Auto Concept, Auto Cast, and Auto Buy. Desired Off, desired On, unhealthy, and
+  emergency-stopped states share one renderer; STOP uses a separated alert control and retains its
+  two-step resume confirmation.
+- Reframe the Mods surface with the game's audited vertical subview-radio vocabulary and preserve
+  the full `Orb Of Creation ModSuite` title.
+- Replace the nine legacy section tabs with a Runtime/General/feature/Advanced rail, merge Mentor's
+  spell, artifact, and alchemy policy into one page, and move each feature mode to an immediate
+  status-card command backed by the committed configuration store. Policy fields remain staged
+  behind the conflict-protected Apply/Revert transaction.
+- Lead Runtime with a compact two-column feature-health grid ordered by severity, then present
+  recent events and verification before full trace, profile, pump timing, journal, and detailed
+  native-framed diagnostics.
+
 ## Configuration publication and application ownership — 2026-07-28
 
 - Route Auto Buy, Auto Cast, Auto Concept, Mentor, and emergency-stop quick controls through the
@@ -26,8 +72,8 @@
 - Centralize host-construction failure and unavailable projection, remove seven startup-failure
   callbacks and the production-composition forwarding file, and require feature diagnostics/status
   dependencies instead of silently running without presentation.
-- Preserve configuration schema 4, trace wire format, assembly shape, native-contract manifest
-  schema 3, and the `spell.get-icon` legacy allowlist.
+- Preserve trace wire format, assembly shape, native-contract manifest schema 3, and the
+  `spell.get-icon` legacy allowlist.
 
 ## Mentor on the shared engine — 2026-07-28
 

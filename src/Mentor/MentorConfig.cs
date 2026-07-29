@@ -30,15 +30,13 @@ internal sealed class MentorConfig
         ConfigEntry<MentorEconomyMode> economyMode, ConfigEntry<MentorSpellSourcePolicy> spellSourcePolicy,
         ConfigEntry<double> sharePercent,
         ConfigEntry<bool> artifactsEnabled, ConfigEntry<double> artifactSharePercent,
-        ConfigEntry<bool> alchemyEnabled, ConfigEntry<double> alchemySharePercent,
-        ConfigEntry<bool> detailedLogging, ConfigEntry<bool>? developmentProbe)
+        ConfigEntry<bool> alchemyEnabled, ConfigEntry<double> alchemySharePercent)
     {
         Enabled = enabled; Mode = mode; ToggleShortcut = shortcut; EmergencyDisable = emergencyDisable;
         EconomyMode = economyMode; SharePercent = sharePercent;
         SpellSourcePolicy = spellSourcePolicy;
         ArtifactsEnabled = artifactsEnabled; ArtifactSharePercent = artifactSharePercent;
         AlchemyEnabled = alchemyEnabled; AlchemySharePercent = alchemySharePercent;
-        DetailedLogging = detailedLogging; DevelopmentProbe = developmentProbe;
     }
 
     public ConfigEntry<bool> Enabled { get; }
@@ -52,9 +50,6 @@ internal sealed class MentorConfig
     public ConfigEntry<double> ArtifactSharePercent { get; }
     public ConfigEntry<bool> AlchemyEnabled { get; }
     public ConfigEntry<double> AlchemySharePercent { get; }
-    public ConfigEntry<bool> DetailedLogging { get; }
-    public ConfigEntry<bool>? DevelopmentProbe { get; }
-    public bool DevelopmentProbeEnabled => DevelopmentProbe?.Value == true;
     public bool Active => Enabled.Value && Mode.Value == MentorOperationMode.Active && !EmergencyDisable.Value;
 
     public static MentorConfig Bind(ConfigFile file)
@@ -73,27 +68,16 @@ internal sealed class MentorConfig
 
     internal static MentorConfig BindCurrent(ConfigFile file) => new(
         Bind(file, "General", "Enabled", true, "Enable Orb Mentor. Mode still starts Disabled on fresh installations.", 0, 0, hidden: true),
-        Bind(file, "General", "Mode", MentorOperationMode.Disabled, "Disabled rejects and clears sharing work. Active grants through native mastery paths.", 0, 0, displaySection: "Spells", displayName: "Mentor"),
-        Bind(file, "General", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.M, UnityEngine.KeyCode.LeftAlt), "Toggle Disabled/Active. Default: Left Alt + M.", 0, 20, displaySection: "Spells", displayName: "Toggle shortcut"),
+        Bind(file, "General", "Mode", MentorOperationMode.Disabled, "Disabled rejects and clears sharing work. Active grants through native mastery paths.", 19, 0, displaySection: "Mentor", displayName: "Mentor"),
+        Bind(file, "General", "ToggleShortcut", new KeyboardShortcut(UnityEngine.KeyCode.M, UnityEngine.KeyCode.LeftAlt), "Toggle Disabled/Active. Default: Left Alt + M.", 19, 10, displaySection: "Mentor", displayName: "Toggle shortcut"),
         Bind(file, "Safety", "EmergencyDisable", false, "Immediately reject new events and discard pending bonus work.", 30, 20, displaySection: "Advanced", displayName: "Emergency disable"),
-        Bind(file, "Sharing", "EconomyMode", MentorEconomyMode.SharedPool, "SharedPool bounds total bonus XP. PerRecipient grants the percentage to every recipient and scales with collection size.", 30, 10, displaySection: "Advanced", displayName: "Economy mode", dependencies: ActiveDependencies),
-        Bind(file, "Sharing", "SpellSourcePolicy", MentorSpellSourcePolicy.EquippedSpells, "EquippedSpells lets every equipped spell share its native mastery XP with discovered spells below that source's mastery. HighestDiscovered keeps the original highest-mastery-only rule.", 0, 5, displaySection: "Spells", displayName: "Sharing sources", dependencies: ActiveDependencies),
-        Bind(file, "Sharing", "SharePercent", 10.0, "Final mentor XP percentage, clamped to 0-100.", 0, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Spells", displayName: "Spell share percent", dependencies: ActiveDependencies),
-        Bind(file, "Artifacts", "Enabled", false, "Share mastery XP earned by equipped artifacts with lower-mastery created artifacts.", 10, 0, displaySection: "Artifacts", displayName: "Artifact sharing", dependencies: ActiveDependencies),
-        Bind(file, "Artifacts", "SharePercent", 10.0, "Artifact mastery XP percentage, clamped to 0-100.", 10, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Artifacts", displayName: "Artifact share percent", dependencies: ActiveArtifactDependencies),
-        Bind(file, "Alchemy", "Enabled", false, "Share alchemy mastery XP with lower-mastery discovered recipes.", 20, 0, displaySection: "Alchemy", displayName: "Alchemy sharing", dependencies: ActiveDependencies),
-        Bind(file, "Alchemy", "SharePercent", 10.0, "Alchemy mastery XP percentage, clamped to 0-100.", 20, 10, new AcceptableValueRange<double>(0, 100), displaySection: "Alchemy", displayName: "Alchemy share percent", dependencies: ActiveAlchemyDependencies),
-        Bind(file, "Diagnostics", "DetailedLogging", false, "Log mentor events, batches, recipients, and amounts.", 30, 50, displaySection: "Advanced", displayName: "Detailed logging"),
-        BindDevelopmentProbe(file));
-
-    private static ConfigEntry<bool>? BindDevelopmentProbe(ConfigFile file)
-    {
-#if DEBUG
-        return Bind(file, "Development", "EventProbe", false, "Log native mastery events for development validation.", 100, 0, hidden: true);
-#else
-        return null;
-#endif
-    }
+        Bind(file, "Sharing", "EconomyMode", MentorEconomyMode.SharedPool, "SharedPool bounds total bonus XP. PerRecipient grants the percentage to every recipient and scales with collection size.", 19, 80, displaySection: "Mentor", displayName: "Economy mode", dependencies: ActiveDependencies),
+        Bind(file, "Sharing", "SpellSourcePolicy", MentorSpellSourcePolicy.EquippedSpells, "EquippedSpells lets every equipped spell share its native mastery XP with discovered spells below that source's mastery. HighestDiscovered keeps the original highest-mastery-only rule.", 19, 20, displaySection: "Mentor", displayName: "Sharing sources", dependencies: ActiveDependencies),
+        Bind(file, "Sharing", "SharePercent", 10.0, "Final mentor XP percentage, clamped to 0-100.", 19, 30, new AcceptableValueRange<double>(0, 100), displaySection: "Mentor", displayName: "Spell share percent", dependencies: ActiveDependencies),
+        Bind(file, "Artifacts", "Enabled", false, "Share mastery XP earned by equipped artifacts with lower-mastery created artifacts.", 19, 40, displaySection: "Mentor", displayName: "Artifact sharing", dependencies: ActiveDependencies),
+        Bind(file, "Artifacts", "SharePercent", 10.0, "Artifact mastery XP percentage, clamped to 0-100.", 19, 50, new AcceptableValueRange<double>(0, 100), displaySection: "Mentor", displayName: "Artifact share percent", dependencies: ActiveArtifactDependencies),
+        Bind(file, "Alchemy", "Enabled", false, "Share alchemy mastery XP with lower-mastery discovered recipes.", 19, 60, displaySection: "Mentor", displayName: "Alchemy sharing", dependencies: ActiveDependencies),
+        Bind(file, "Alchemy", "SharePercent", 10.0, "Alchemy mastery XP percentage, clamped to 0-100.", 19, 70, new AcceptableValueRange<double>(0, 100), displaySection: "Mentor", displayName: "Alchemy share percent", dependencies: ActiveAlchemyDependencies));
 
     private static ConfigEntry<T> Bind<T>(ConfigFile file, string section, string key, T value, string description,
         int sectionOrder, int settingOrder, AcceptableValueBase? range = null, bool hidden = false,

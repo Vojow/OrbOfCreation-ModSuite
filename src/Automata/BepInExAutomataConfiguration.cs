@@ -67,7 +67,6 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<AutoBuyPurchaseGroupingMode> purchaseGrouping,
         ConfigEntry<float> autoBuyIntervalSeconds,
         ConfigEntry<int> leaveQueueSlots,
-        ConfigEntry<int> autoBuyMaxCandidatesPerScan,
         ConfigEntry<AutoBuyBatchSizingMode> autoBuyBatchSizingMode,
         ConfigEntry<int> maxPurchasesPerBatch,
         ConfigEntry<int> fixedGroupSize,
@@ -97,9 +96,6 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<bool> autoHarvestTreasureTrees,
         ConfigEntry<float> autoHarvestEvaluationIntervalSeconds,
         ConfigEntry<bool> emergencyDisable,
-        ConfigEntry<bool> enableOperationalLogging,
-        ConfigEntry<int> maxLoggedRejections,
-        ConfigEntry<SuiteDecisionLogLevel> decisionLogLevel,
         ConfigEntry<string> absoluteReserve,
         ConfigEntry<float> relativeReserveMultiplier)
     {
@@ -113,7 +109,6 @@ internal sealed class BepInExAutomataConfiguration
         PurchaseGrouping = purchaseGrouping;
         AutoBuyIntervalSeconds = autoBuyIntervalSeconds;
         LeaveQueueSlots = leaveQueueSlots;
-        AutoBuyMaxCandidatesPerScan = autoBuyMaxCandidatesPerScan;
         AutoBuyBatchSizing = autoBuyBatchSizingMode;
         MaxPurchasesPerBatch = maxPurchasesPerBatch;
         FixedGroupSize = fixedGroupSize;
@@ -143,9 +138,6 @@ internal sealed class BepInExAutomataConfiguration
         AutoHarvestTreasureTrees = autoHarvestTreasureTrees;
         AutoHarvestEvaluationIntervalSeconds = autoHarvestEvaluationIntervalSeconds;
         EmergencyDisable = emergencyDisable;
-        EnableOperationalLogging = enableOperationalLogging;
-        MaxLoggedRejections = maxLoggedRejections;
-        DecisionLogLevel = decisionLogLevel;
         AbsoluteReserve = absoluteReserve;
         RelativeReserveMultiplier = relativeReserveMultiplier;
         RefreshCurrent();
@@ -173,8 +165,6 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<float> AutoBuyIntervalSeconds { get; }
 
     public ConfigEntry<int> LeaveQueueSlots { get; }
-
-    public ConfigEntry<int> AutoBuyMaxCandidatesPerScan { get; }
 
     public ConfigEntry<AutoBuyBatchSizingMode> AutoBuyBatchSizing { get; }
 
@@ -222,12 +212,6 @@ internal sealed class BepInExAutomataConfiguration
 
     public ConfigEntry<bool> EmergencyDisable { get; }
 
-    public ConfigEntry<bool> EnableOperationalLogging { get; }
-
-    public ConfigEntry<int> MaxLoggedRejections { get; }
-
-    public ConfigEntry<SuiteDecisionLogLevel> DecisionLogLevel { get; }
-
     public ConfigEntry<string> AbsoluteReserve { get; }
 
     public ConfigEntry<float> RelativeReserveMultiplier { get; }
@@ -239,6 +223,14 @@ internal sealed class BepInExAutomataConfiguration
     internal void SetAutoCastMode(AutoCastOperationMode mode) => AutoCastMode.Value = mode;
 
     internal void SetAutoConceptMode(AutoConceptOperationMode mode) => AutoConceptMode.Value = mode;
+
+    internal void SetAutoHarvestMode(AutoHarvestOperationMode mode) => AutoHarvestMode.Value = mode;
+
+    internal void SetMentorMode(MentorOperationMode mode)
+    {
+        if (_mentor is null) throw new InvalidOperationException("Mentor configuration is not attached.");
+        _mentor.Mode.Value = mode;
+    }
 
     internal void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
 
@@ -331,7 +323,7 @@ internal sealed class BepInExAutomataConfiguration
                 "AutoConcept",
                 "FallbackEvaluationIntervalSeconds",
                 300,
-                "Maximum idle seconds between full concept plan evaluations. Native lifecycle, mastery, slot, quantity, and safety signals can request an earlier pass.",
+                "Maximum idle seconds before a fallback Auto Concept evaluation. Published lifecycle, mastery, slot, quantity, and safety changes can wake it earlier.",
                 17,
                 10,
                 new AcceptableValueRange<int>(10, 1800),
@@ -347,11 +339,10 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoBuy", "IncludeUpgrades", true, "Include native UpgradeSO purchases.", 10, 20, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "AutoLevelSpells", true, "Automatically level ready spells while Auto Buy is active. Capability follows native progression automatically: locked, one spell per action, then the native level-all action after its upgrade completes.", 10, 25, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "PurchaseGrouping", AutoBuyPurchaseGroupingMode.BulkDevelopment, "Group size for each ranked candidate before Auto Buy advances and later repeats the ranked pass. Single buys one level; Fixed groups Structures by FixedGroupSize; BulkDevelopment follows the live Player value for Structures; ActionMultiplier follows the live native multiplier for either purchase family. Upgrades otherwise remain one level.", 10, 55, dependencies: AutoBuyPurchaseGroupingDependencies),
-                Bind(config, "AutoBuy", "EvaluationIntervalSeconds", 0.5f, "Unscaled seconds between idle scans when no eligible purchase is pending. In-progress scans and active queue feeding continue every frame.", 10, 90, new AcceptableValueRange<float>(0.25f, 10.0f), AutoBuyActiveDependencies),
+                Bind(config, "AutoBuy", "EvaluationIntervalSeconds", 0.5f, "Minimum unscaled seconds between Auto Buy and Spell Level planning cycles when no earlier service wake is due.", 10, 90, new AcceptableValueRange<float>(0.25f, 10.0f), AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "LeaveQueueSlots", 1, "Minimum native action-queue slots Automata leaves free for manual actions.", 10, 70, dependencies: AutoBuyActiveDependencies),
-                Bind(config, "AutoBuy", "MaxCandidatesPerScan", 1024, "Safety cap for the combined StructureSO and UpgradeSO registry. CPU-limited scans resume on the next frame.", 10, 110, dependencies: AutoBuyActiveDependencies),
                 Bind(config, "AutoBuy", "BatchSizingMode", AutoBuyBatchSizingMode.FillAvailableQueue, "FillAvailableQueue continues through ranked candidates until only LeaveQueueSlots remain. Fixed queues up to MaxPurchasesPerBatch levels.", 10, 40, dependencies: AutoBuyActiveDependencies),
-                Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum queued levels from one completed scan when BatchSizingMode is Fixed.", 10, 50, dependencies: AutoBuyFixedBatchDependencies),
+                Bind(config, "AutoBuy", "MaxPurchasesPerBatch", 8, "Maximum actions proposed by one decision when BatchSizingMode is Fixed.", 10, 50, dependencies: AutoBuyFixedBatchDependencies),
                 Bind(config, "AutoBuy", "FixedGroupSize", 2, "Maximum consecutive one-level Structure purchases when PurchaseGrouping is Fixed. Upgrades remain one level.", 10, 56, new AcceptableValueRange<int>(1, 100), AutoBuyFixedGroupingDependencies),
                 Bind(config, "AutoBuy", "PrioritizeCostAndQualityStructures", false, "When enabled, unlocked and affordable Structures with native effects proven to reduce costs or increase resource quality rank before ordinary candidates. Unknown effects receive no priority.", 10, 65, dependencies: AutoBuyStructuresActiveDependencies),
                 Bind(config, "AutoBuy", "AllowedUuids", string.Empty, "Optional comma-separated allowlist. When non-empty, only these StructureSO or UpgradeSO UUIDs may be purchased.", 10, 120, dependencies: AutoBuyActiveDependencies),
@@ -379,9 +370,6 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between exact Auto Harvest readiness checks.", 18, 30, new AcceptableValueRange<float>(0.25f, 10.0f), AutoHarvestActiveDependencies),
                 Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, and mastery sharing immediately.", 40, 0),
-                Bind(config, "Diagnostics", "EnableOperationalLogging", false, "Write normal automation decisions to the BepInEx log. Startup, catalog initialization, warnings, and errors are always logged.", 50, 0),
-                Bind(config, "Diagnostics", "MaxLoggedRejections", 12, "Maximum rejected candidates written per verbose evaluation when operational logging is enabled.", 50, 20),
-                Bind(config, "Diagnostics", "DecisionLogLevel", SuiteDecisionLogLevel.Summary, "Recommendation detail when operational logging is enabled.", 50, 10),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
                 Bind(config, "Reserves", "RelativeReserveMultiplier", 0.0f, "Additional amount to leave after each action, expressed as a multiple of that action's cost. Affordability modes remain separate.", 20, 10));
 
@@ -401,11 +389,12 @@ internal sealed class BepInExAutomataConfiguration
         bool restartRequired = false)
     {
         var hidden = false;
-        var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids" || key == "MaxCandidatesPerScan");
+        var advancedAutoBuy = section == "AutoBuy" && (key == "AllowedUuids" || key == "BlockedUuids");
         var advancedAutoConcept = section == "AutoConcept" && key == "FallbackEvaluationIntervalSeconds";
         var displaySection = section switch
         {
-            "General" when key == "Enabled" => "Safety",
+            "General" when key == "Enabled" => "General",
+            "Safety" when key == "EmergencyDisable" => "General",
             "AutoBuy" when !advancedAutoBuy => "Auto Buy",
             "AutoCast" => "Auto Cast",
             "AutoConcept" when !advancedAutoConcept => "Auto Concept",
@@ -435,7 +424,7 @@ internal sealed class BepInExAutomataConfiguration
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "Safety" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
+        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

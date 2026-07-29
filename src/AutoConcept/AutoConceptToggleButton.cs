@@ -14,7 +14,7 @@ internal sealed class AutoConceptToggleButton : IDisposable
     internal const string ObjectName = "OrbAutomata.AutoConceptToggle";
     private readonly GameObject _root;
     private readonly Button _button;
-    private readonly TextMeshProUGUI? _text;
+    private readonly ConfiguredIntentIconButtonVisual _visual;
     private readonly AutoConceptToggleControl _control;
     private AutoCastToggleVisualState? _renderedState;
     private bool _renderedStopped;
@@ -23,12 +23,12 @@ internal sealed class AutoConceptToggleButton : IDisposable
     private AutoConceptToggleButton(
         GameObject root,
         Button button,
-        TextMeshProUGUI? text,
+        ConfiguredIntentIconButtonVisual visual,
         AutoConceptToggleControl control)
     {
         _root = root;
         _button = button;
-        _text = text;
+        _visual = visual;
         _control = control;
     }
 
@@ -68,11 +68,6 @@ internal sealed class AutoConceptToggleButton : IDisposable
             var cloned = root.GetComponent(toggleType);
             var text = ReadField(cloned, "textElement") as TextMeshProUGUI;
             var icon = ReadField(cloned, "iconImage") as Image;
-            if (icon is not null)
-            {
-                icon.sprite = null;
-                icon.enabled = false;
-            }
             if (text is not null)
             {
                 text.gameObject.SetActive(true);
@@ -102,7 +97,26 @@ internal sealed class AutoConceptToggleButton : IDisposable
             }
             button.onClick.RemoveAllListeners();
             ConfiguredIntentButtonVisualOwnership.Claim(button);
-            result = new AutoConceptToggleButton(root, button, text, control);
+            if (!NativeFeatureIconResolver.TryGetConceptIcon(out var iconSprite, out var iconReason))
+            {
+                UnityEngine.Object.Destroy(root);
+                reason = "Auto Concept icon capture failed: " + iconReason;
+                return false;
+            }
+            if (!ConfiguredIntentIconButtonVisual.TryCreateFeature(
+                root,
+                button,
+                icon,
+                text,
+                iconSprite,
+                out var visual,
+                out var visualReason))
+            {
+                UnityEngine.Object.Destroy(root);
+                reason = "Auto Concept native visual capture failed: " + visualReason;
+                return false;
+            }
+            result = new AutoConceptToggleButton(root, button, visual!, control);
             button.onClick.AddListener(result.Toggle);
             result.Render(force: true);
             root.SetActive(true);
@@ -128,22 +142,8 @@ internal sealed class AutoConceptToggleButton : IDisposable
         if (!force && _renderedState == state && _renderedStopped == stopped) return;
         _renderedState = state;
         _renderedStopped = stopped;
-        if (_text is null) return;
-        _text.text = FormatLabel(state, stopped);
-        _text.color = stopped
-            ? new Color(1.0f, 0.45f, 0.25f)
-            : state == AutoCastToggleVisualState.On
-            ? new Color(0.4f, 1.0f, 0.55f)
-            : new Color(0.7f, 0.7f, 0.7f);
+        _visual.Render(ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status), force);
     }
-
-    internal static string FormatLabel(AutoCastToggleVisualState state, bool stopped = false) => stopped
-        ? "CN ON / STOPPED"
-        : state switch
-    {
-        AutoCastToggleVisualState.On => "CN ON",
-        _ => "CN OFF",
-    };
 
     private void Toggle()
     {

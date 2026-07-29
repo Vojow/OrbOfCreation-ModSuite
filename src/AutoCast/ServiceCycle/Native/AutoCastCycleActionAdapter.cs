@@ -90,43 +90,31 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
-        Narrate(in action, in submission, in config);
+        Narrate(in action, in submission);
         return Map(in submission);
     }
 
     /// <summary>
-    /// Says what happened, at the volume the legacy engine said it at.
+    /// Preserves an unconditional warning when a native mutation was attempted but did not land.
     /// </summary>
     /// <remarks>
-    /// A failure past preflight is always a warning: something was attempted and did not land. Every
-    /// other line is verbose-only, and that gate is the port rather than a preference. Auto Cast looks
-    /// several times a second, so a refusal is its most common outcome by a wide margin — an
-    /// ungated line would bury every log the suite writes under the ordinary case.
+    /// Ordinary preflight refusals and successes belong to ServiceCycle observation products rather
+    /// than the BepInEx log. A failure past preflight remains a warning.
     /// </remarks>
     private static void Narrate(
         in AutoCastCycleAction action,
-        in AutoCastSubmission submission,
-        in SuiteRuntimeConfiguration config)
+        in AutoCastSubmission submission)
     {
-        var verbose =
-            config.Diagnostics.IsOperationalLoggingEnabled &&
-            config.Diagnostics.DecisionLogLevel == SuiteDecisionLogLevel.Verbose;
         var what = action.Kind == AutoCastActionKind.ReleaseCharge
             ? $"release the charged spell in slot {action.SlotIndex + 1}"
             : $"cast the spell in slot {action.SlotIndex + 1}";
-        if (submission.Verified)
-        {
-            if (verbose) Plugin.Log?.LogAutomataInfo($"Auto Cast completed: {what}.");
-            return;
-        }
+        if (submission.Verified) return;
 
         var message =
             $"Auto Cast did not {what}: {submission.Reason} " +
             $"(planned from a snapshot with {action.Belief.EligibleSlots} eligible slots).";
         if (submission.Preflight == AutoCastPreflight.Proceeded)
             Plugin.Log?.LogAutomataWarning(message);
-        else if (verbose)
-            Plugin.Log?.LogAutomataInfo(message);
     }
 
     private bool Owns()

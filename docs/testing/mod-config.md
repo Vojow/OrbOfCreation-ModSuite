@@ -1,13 +1,15 @@
 # Orb Mod Config testing
 
-[Testing hub](README.md) · [Mod Config behavior reference](../../src/ModConfig/README.md) · [Runtime protocol](runtime-validation.md)
+[Testing hub](README.md) · [Mod Config behavior reference](../../src/ModConfig/README.md) · [UI overhaul validation](ui-overhaul-validation.md) · [Runtime protocol](runtime-validation.md)
 
 ## Risk contract
 
 Mod Config must project supported configuration without changing serialized
 meaning, preserve staged edits and scroll/navigation state, isolate plugin and
 subscriber failures, display saved configuration separately from runtime
-health, and remain usable before optional native progression UI exists.
+health, and retry startup until the audited native UI exists. Once the supported game baseline has
+created its UI objects, a missing audited shape is a surfaced suite failure rather than a request
+for alternate chrome.
 
 ## Test ownership
 
@@ -19,7 +21,10 @@ health, and remain usable before optional native progression UI exists.
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
 | Navigation cadence and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
+| Schema 4 to 5 retirement transaction | [SuiteConfigurationSchemaFiveTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaFiveTests.cs) |
 | One-path quick-control publication | [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs), [AutomataFeatureStatusTests.cs](../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) |
+| Native frame and single-pixel-writer ownership | [ConfiguredIntentIconButtonVisualTests.cs](../../tests/OrbModding.Tests/ConfiguredIntentIconButtonVisualTests.cs), [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
+| Native-surface install reporting | [SuiteUiSurfaceDiagnosticsTests.cs](../../tests/OrbModding.Tests/OrbModConfig/SuiteUiSurfaceDiagnosticsTests.cs) |
 | Installed native navigation shape | `OrbModding.GameContractTests` Mod Config contract |
 
 ## Commands
@@ -48,13 +53,23 @@ installation, recovery, or layout work changes.
   combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
 - Disabled/absent plugins remain honest status-only or absent entries.
+- Feature modes appear only in the feature header and gameplay quick strip; both publish through
+  the committed store, while policy fields remain staged.
+- Every suite-owned `Button` has `targetGraphic == null`; native `UIImageEffects` is disabled and
+  destroyed, so hover, press, release, selection, and interactable changes cannot repaint a
+  suite-rendered state.
+- Inactive audited rail candidates remain capturable while Mods is open; the spell-frame sampler
+  considers only the exact gameplay casting-bar family.
+- Feature quick controls cannot retain or construct a text-rendering path. Every terminal native
+  surface failure publishes a Runtime failure and an error log containing the exact reason.
 
 ## Runtime handoff
 
 Portable layout tests cannot prove Unity text measurement, canvas clipping,
-navigation ordering, input focus, or actual config-file persistence. V4 UAT
+  navigation ordering, input focus, or actual config-file persistence. V5 UAT
 must cover early-progression UI, long descriptions, responsive resizing,
 staged edits, Apply/Revert/Default, external changes, save/reload, and removal.
+Use the [UI overhaul checklist](ui-overhaul-validation.md) for the post-install pass.
 
 ## Known next work
 

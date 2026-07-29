@@ -27,7 +27,6 @@ internal static class BepInExAutomataConfigurationReader
                 PurchaseGrouping = source.PurchaseGrouping.Value,
                 EvaluationIntervalSeconds = source.AutoBuyIntervalSeconds.Value,
                 LeaveQueueSlots = source.LeaveQueueSlots.Value,
-                MaxCandidatesPerScan = source.AutoBuyMaxCandidatesPerScan.Value,
                 BatchSizing = source.AutoBuyBatchSizing.Value,
                 MaxPurchasesPerBatch = source.MaxPurchasesPerBatch.Value,
                 FixedGroupSize = source.FixedGroupSize.Value,
@@ -76,12 +75,6 @@ internal static class BepInExAutomataConfigurationReader
             Safety = new SuiteSafetyConfiguration
             {
                 EmergencyDisable = source.EmergencyDisable.Value,
-            },
-            Diagnostics = new SuiteDiagnosticsConfiguration
-            {
-                EnableOperationalLogging = source.EnableOperationalLogging.Value,
-                MaxLoggedRejections = source.MaxLoggedRejections.Value,
-                DecisionLogLevel = source.DecisionLogLevel.Value,
             },
             Reserves = new AutomataReserveConfiguration
             {

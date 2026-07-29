@@ -11,7 +11,6 @@ internal sealed record AutoBuyConfiguration
     internal AutoBuyPurchaseGroupingMode PurchaseGrouping { get; init; }
     internal float EvaluationIntervalSeconds { get; init; }
     internal int LeaveQueueSlots { get; init; }
-    internal int MaxCandidatesPerScan { get; init; }
     internal AutoBuyBatchSizingMode BatchSizing { get; init; }
     internal int MaxPurchasesPerBatch { get; init; }
     internal int FixedGroupSize { get; init; }

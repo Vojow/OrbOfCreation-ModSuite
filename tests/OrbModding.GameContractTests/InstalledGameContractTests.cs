@@ -18,6 +18,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "PersistentResetManager", "PersistentResetLogic", false, "System.Void");
         AssertMethod(assembly, "SaveStateManager", "CollectJsonData", false, "System.String");
         AssertMethod(assembly, "SaveStateManager", "ImplementLoadedJson", false, "System.Void");
+        AssertMethod(assembly, "SaveStateManager", "StartGame", false, "System.Void");
         AssertMethod(
             assembly,
             "SaveStateManager",
@@ -348,6 +349,36 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ViewSO", "IsActive", false, "System.Boolean");
         Assert.Equal("ViewSO", assembly.GetFieldType("ManagedView", "viewReference"));
         Assert.Equal("UIGenericItem`1<ViewSO>", assembly.GetBaseType("UIViewRadioButton"));
+        Assert.Equal("TMPro.TextMeshProUGUI", assembly.GetFieldType("UIViewRadioButton", "viewText"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UIViewRadioButton", "viewImage"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "activeImage"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UIViewRadioButton", "buttonImage"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "baseImage"));
+
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "icon"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "insufficientBackground"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("UISpellButton", "isForCasting"));
+        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "background"));
+        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "baseBackground"));
+        Assert.Equal("UIImageEffects", assembly.GetFieldType("UISpellButton", "effects"));
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
+            "GetHarvestSpeedAttr",
+            true,
+            "AttributeSO");
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
+            "GetMasteryExpAttr",
+            true,
+            "AttributeSO");
+        AssertMethod(
+            assembly,
+            "TooltipableObject",
+            "GetIcon",
+            false,
+            "UnityEngine.Sprite");
     }
 
     private static void AssertMethod(

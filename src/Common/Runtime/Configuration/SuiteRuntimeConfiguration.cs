@@ -28,7 +28,6 @@ public sealed record SuiteRuntimeConfiguration
     internal AutoHarvestConfiguration AutoHarvest { get; init; } = new();
     internal MentorConfiguration Mentor { get; init; } = new();
     internal SuiteSafetyConfiguration Safety { get; init; } = new();
-    internal SuiteDiagnosticsConfiguration Diagnostics { get; init; } = new();
     internal AutomataReserveConfiguration Reserves { get; init; } = new();
 
     internal bool CanStartAutoBuyActively =>

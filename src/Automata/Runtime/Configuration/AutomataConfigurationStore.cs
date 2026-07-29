@@ -1,6 +1,7 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbMentor;
 
 namespace OrbAutomata;
 
@@ -82,6 +83,24 @@ internal sealed class AutomataConfigurationStore
             Current.AutoConcept.Mode == AutoConceptOperationMode.Active
                 ? AutoConceptOperationMode.Disabled
                 : AutoConceptOperationMode.Active);
+        PublishPending();
+    }
+
+    internal void ToggleAutoHarvest()
+    {
+        _configuration.SetAutoHarvestMode(
+            Current.AutoHarvest.Mode == AutoHarvestOperationMode.Active
+                ? AutoHarvestOperationMode.Disabled
+                : AutoHarvestOperationMode.Active);
+        PublishPending();
+    }
+
+    internal void ToggleMentor()
+    {
+        _configuration.SetMentorMode(
+            Current.Mentor.Mode == MentorOperationMode.Active
+                ? MentorOperationMode.Disabled
+                : MentorOperationMode.Active);
         PublishPending();
     }
 

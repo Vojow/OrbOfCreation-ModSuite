@@ -17,18 +17,27 @@ internal static class TestSuiteConfiguration
 
     /// <summary>A snapshot a test can tell apart from another by the number it carries.</summary>
     /// <remarks>
-    /// It rides on a real setting — the logged-rejection limit — that no ServiceCycle code reads, so
-    /// varying it cannot change what the runtime does. That is the point: a service recording the
-    /// number it was handed says which snapshot reached it and nothing else.
+    /// It rides on a real policy value that the generic ServiceCycle framework does not interpret.
+    /// The test services recording the number therefore say which snapshot reached them and nothing
+    /// else.
     /// </remarks>
     internal static SuiteRuntimeConfiguration WithSetting(int setting) => new()
     {
-        Diagnostics = new SuiteDiagnosticsConfiguration { MaxLoggedRejections = setting },
+        Reserves = new OrbAutomata.AutomataReserveConfiguration
+        {
+            AbsoluteReserve = setting.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        },
     };
 
     /// <summary>Reads back what <see cref="WithSetting"/> put in.</summary>
     internal static int SettingOf(SuiteRuntimeConfiguration configuration) =>
-        configuration.Diagnostics.MaxLoggedRejections;
+        int.TryParse(
+            configuration.Reserves.AbsoluteReserve,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var setting)
+            ? setting
+            : 0;
 
     /// <summary>What the suite says about the emergency stop.</summary>
     internal static SuiteRuntimeConfiguration WithEmergencyDisable(bool disable) => new()

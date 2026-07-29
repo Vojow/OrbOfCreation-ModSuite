@@ -129,7 +129,6 @@ public sealed class AutomataConfigurationTests
         config.AutoConceptQuantityCap.Value = 19;
         config.AutoHarvestTreasureTrees.Value = false;
         config.EmergencyDisable.Value = true;
-        config.EnableOperationalLogging.Value = true;
         config.AbsoluteReserve.Value = "42";
 
         var snapshot = config.Current;
@@ -140,7 +139,6 @@ public sealed class AutomataConfigurationTests
         Assert.Equal(19, snapshot.AutoConcept.QuantityCap);
         Assert.False(snapshot.AutoHarvest.CollectTreasureTrees);
         Assert.True(snapshot.Safety.EmergencyDisable);
-        Assert.True(snapshot.Diagnostics.EnableOperationalLogging);
         Assert.Equal("42", snapshot.Reserves.AbsoluteReserve);
 
         config.Enabled.Value = true;

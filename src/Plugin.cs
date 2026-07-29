@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using OrbAutomata;
@@ -35,6 +36,12 @@ public sealed class Plugin : BaseUnityPlugin
 {
 #if SERVICE_CYCLE_PROFILE
     private const bool AutoStartServiceCycleDiagnostics = true;
+    private static readonly KeyboardShortcut UiValidationContinueShortcut =
+        new((KeyCode)293);
+    private static readonly KeyboardShortcut UiValidationOpenModsShortcut =
+        new((KeyCode)292);
+    private static readonly KeyboardShortcut UiValidationNextPageShortcut =
+        new((KeyCode)291);
 #else
     private const bool AutoStartServiceCycleDiagnostics = false;
 #endif
@@ -97,18 +104,22 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoBuyToggleButton? _autoBuyToggleButton;
     private AutoConceptToggleControl? _autoConceptToggleControl;
     private AutoConceptToggleButton? _autoConceptToggleButton;
+    private AutoHarvestToggleControl? _autoHarvestToggleControl;
+    private AutoHarvestToggleButton? _autoHarvestToggleButton;
     private EmergencyStopControl? _emergencyStopControl;
     private EmergencyStopButton? _emergencyStopButton;
     private AutomataDifferentialVerificationControl? _mathVerification;
     private float _autoCastUiRetrySeconds;
     private float _autoBuyUiRetrySeconds;
     private float _autoConceptUiRetrySeconds;
-    private float _autoCastUiFailureSeconds;
-    private float _autoConceptUiFailureSeconds;
-    private bool _autoCastUiFailureLogged;
-    private bool _autoConceptUiFailureLogged;
+    private float _autoHarvestUiRetrySeconds;
+    private string _autoBuyUiFailureReason = string.Empty;
     private string _autoCastUiFailureReason = string.Empty;
     private string _autoConceptUiFailureReason = string.Empty;
+    private string _autoHarvestUiFailureReason = string.Empty;
+    private string _mentorUiFailureReason = string.Empty;
+    private string _emergencyStopUiFailureReason = string.Empty;
+    private float _quickStripFailureSeconds;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
     private bool _runtimeComposed;
@@ -125,6 +136,7 @@ public sealed class Plugin : BaseUnityPlugin
     private float _uiRetrySeconds;
     private float _uiIntegritySeconds;
     private bool _uiFailureLogged;
+    private int _uiFailureAttempts;
     private bool _uiMaintenanceDue;
     private bool _uiIntegrityDue;
     private int _deferInstallUntilFrame;
@@ -134,6 +146,8 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigNavigationBookmark _catalogNavigation = ModConfigNavigationBookmark.Runtime;
     private ModConfigFrameWork? _uiWork;
     private ModConfigRuntimeSources? _runtimeSources;
+    private ModConfigFeatureCommands? _modConfigFeatureCommands;
+    private SuiteUiSurfaceDiagnostics? _uiSurfaceDiagnostics;
     private Action? _runUiMaintenance;
 
     // One lifecycle generation, one lease and one invalidation bus for the whole suite: the three
@@ -243,6 +257,9 @@ public sealed class Plugin : BaseUnityPlugin
             () => _spellLevelCapability.Current,
             () => featureStatuses.AutoBuy.Current,
             () => featureStatuses.SpellLevel.Current);
+        _autoHarvestToggleControl = new AutoHarvestToggleControl(
+            _configurationStore!,
+            () => featureStatuses.AutoHarvest.Current);
         Func<long> readAutoHarvestLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
         var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
@@ -358,7 +375,6 @@ public sealed class Plugin : BaseUnityPlugin
             $"StructureAffordability={runtimeConfig.AutoBuy.StructureAffordability}, " +
             $"UpgradeAffordability={runtimeConfig.AutoBuy.UpgradeAffordability}, " +
             $"AutoBuyAllowedUuidCount={CountConfiguredUuids(runtimeConfig.AutoBuy.AllowedUuids)}, " +
-            $"AutoBuyCandidateCap={runtimeConfig.AutoBuy.MaxCandidatesPerScan}, " +
             $"AutoBuyBatchSizing={runtimeConfig.AutoBuy.BatchSizing}, " +
             $"AutoBuyBatchSize={runtimeConfig.AutoBuy.MaxPurchasesPerBatch}, " +
             $"AutoBuyPurchaseGrouping={runtimeConfig.AutoBuy.PurchaseGrouping}, " +
@@ -372,9 +388,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoHarvestFruitTrees={runtimeConfig.AutoHarvest.CollectFruitTrees}, " +
             $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
-            $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}, " +
-            $"OperationalLogging={runtimeConfig.Diagnostics.IsOperationalLoggingEnabled}, " +
-            $"DecisionLogLevel={runtimeConfig.Diagnostics.DecisionLogLevel}.");
+            $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}.");
     }
 
     /// <summary>
@@ -384,6 +398,10 @@ public sealed class Plugin : BaseUnityPlugin
     private void ComposeModConfig()
     {
         _invalidationBus ??= GameplayInvalidationBus.Shared;
+        _uiSurfaceDiagnostics = new SuiteUiSurfaceDiagnostics(
+            RuntimeDiagnosticsRegistry.Shared,
+            message => Log.LogAutomataInfo(message),
+            message => Log.LogAutomataError(message));
         _runtimeSources = new ModConfigRuntimeSources(
             ConfigurationSchemaStatusRegistry.Shared,
             FeatureStatusRegistry.Shared,
@@ -398,6 +416,11 @@ public sealed class Plugin : BaseUnityPlugin
             , PerformanceProfileControlRegistry.Shared
 #endif
             );
+        _modConfigFeatureCommands = new ModConfigFeatureCommands(
+            _configurationStore ??
+            throw new InvalidOperationException("Configuration store was not composed."),
+            _featureStatuses ??
+            throw new InvalidOperationException("Feature statuses were not composed."));
         _runUiMaintenance = RunUiMaintenance;
         _uiWork = new ModConfigFrameWork(() => Time.frameCount);
         ResetSceneState(SceneManager.GetActiveScene());
@@ -406,6 +429,9 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         if (_automataConfig is null) return;
+#if SERVICE_CYCLE_PROFILE
+        UpdateUiValidationNavigation();
+#endif
         PublishChangedConfiguration();
         ValidateSuiteShortcuts();
         UpdateEmergencyStopControl();
@@ -439,8 +465,46 @@ public sealed class Plugin : BaseUnityPlugin
 
         UpdateAutomata();
         UpdateMentor();
+        UpdateQuickStripSurface(Time.unscaledDeltaTime);
         UpdateModConfig();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    private void UpdateUiValidationNavigation()
+    {
+        if (SceneManager.GetActiveScene().name == "Start" &&
+            UiValidationContinueShortcut.IsDown())
+        {
+            var managerType = AccessTools.TypeByName("SaveStateManager");
+            var manager = managerType is null
+                ? null
+                : Resources.FindObjectsOfTypeAll(managerType).FirstOrDefault();
+            var startGame = AccessTools.Method("SaveStateManager:StartGame");
+            if (manager is null || startGame is null)
+            {
+                Logger.LogError("UI validation navigation could not resolve the native Continue action.");
+                return;
+            }
+            Logger.LogWarning("UI validation navigation: invoking the native Continue action.");
+            startGame.Invoke(manager, Array.Empty<object>());
+        }
+
+        if (SceneManager.GetActiveScene().name == "Main" &&
+            UiValidationOpenModsShortcut.IsDown())
+        {
+            if (_uiShell is null)
+            {
+                Logger.LogError("UI validation navigation could not resolve the suite Mods shell.");
+                return;
+            }
+            _uiShell.Toggle();
+        }
+
+        if (SceneManager.GetActiveScene().name == "Main" &&
+            UiValidationNextPageShortcut.IsDown())
+            _uiShell?.SelectNextPageForValidation();
+    }
+#endif
 
     private void ValidateSuiteShortcuts()
     {
@@ -491,6 +555,7 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateAutoCastControls(deltaTime);
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
+        UpdateAutoHarvestControl(deltaTime);
         if (!_nativeContractsAvailable)
         {
             _featureStatuses?.ObserveContractUnavailable(
@@ -540,22 +605,31 @@ public sealed class Plugin : BaseUnityPlugin
         _mentorActionFamilyOwnership?.Refresh(_mentorConfig, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _mentorConfig.ToggleShortcut.Value.IsDown())
         {
-            _mentorConfig.Mode.Value = _mentorConfig.Mode.Value == MentorOperationMode.Active ? MentorOperationMode.Disabled : MentorOperationMode.Active;
-            PublishChangedConfiguration();
+            _configurationStore!.ToggleMentor();
             Logger.LogInfo($"Orb Mentor is now {_mentorConfig.Mode.Value}.");
         }
-        if (SceneManager.GetActiveScene().name != "Main") { _mentorButton?.Dispose(); _mentorButton = null; return; }
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _mentorButton?.Dispose();
+            _mentorButton = null;
+            _mentorUiFailureReason = string.Empty;
+            return;
+        }
         if (_mentorButton is not null && !_mentorButton.IsAlive) { _mentorButton.Dispose(); _mentorButton = null; }
         if (_mentorButton is not null) { _mentorButton.Render(); return; }
         _mentorUiRetrySeconds -= Time.unscaledDeltaTime;
         if (_mentorUiRetrySeconds <= 0)
         {
             _mentorUiRetrySeconds = UiRetryIntervalSeconds;
-            MentorToggleButton.TryCreate(
+            if (MentorToggleButton.TryCreate(
                 _mentorConfig,
+                _configurationStore!,
                 () => _featureStatuses!.Mentor.Current,
-                PublishChangedConfiguration,
-                out _mentorButton);
+                out _mentorButton,
+                out var reason))
+                _mentorUiFailureReason = string.Empty;
+            else
+                _mentorUiFailureReason = reason;
         }
     }
 
@@ -634,6 +708,9 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork = null;
         _runUiMaintenance = null;
         _runtimeSources = null;
+        _modConfigFeatureCommands = null;
+        _uiSurfaceDiagnostics?.Dispose();
+        _uiSurfaceDiagnostics = null;
         _configurationStore = null;
 
         _mentorButton?.Dispose();
@@ -657,6 +734,9 @@ public sealed class Plugin : BaseUnityPlugin
         _autoConceptToggleButton?.Dispose();
         _autoConceptToggleButton = null;
         _autoConceptToggleControl = null;
+        _autoHarvestToggleButton?.Dispose();
+        _autoHarvestToggleButton = null;
+        _autoHarvestToggleControl = null;
         _mathVerification = null;
         _featureStatuses?.Dispose();
         _featureStatuses = null;
@@ -678,6 +758,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             _emergencyStopButton?.Dispose();
             _emergencyStopButton = null;
+            _emergencyStopUiFailureReason = string.Empty;
             return;
         }
         if (_emergencyStopButton is not null && !_emergencyStopButton.IsAlive)
@@ -693,7 +774,13 @@ public sealed class Plugin : BaseUnityPlugin
         _emergencyStopUiRetrySeconds -= Time.unscaledDeltaTime;
         if (_emergencyStopUiRetrySeconds > 0) return;
         _emergencyStopUiRetrySeconds = UiRetryIntervalSeconds;
-        EmergencyStopButton.TryCreate(_emergencyStopControl, out _emergencyStopButton);
+        if (EmergencyStopButton.TryCreate(
+                _emergencyStopControl,
+                out _emergencyStopButton,
+                out var reason))
+            _emergencyStopUiFailureReason = string.Empty;
+        else
+            _emergencyStopUiFailureReason = reason;
     }
 
     private void OnEmergencyStopChanged(bool stopped)
@@ -828,8 +915,7 @@ public sealed class Plugin : BaseUnityPlugin
             _autoCastToggleButton?.Dispose();
             _autoCastToggleButton = null;
             _autoCastUiRetrySeconds = 0.0f;
-            _autoCastUiFailureSeconds = 0.0f;
-            _autoCastUiFailureLogged = false;
+            _autoCastUiFailureReason = string.Empty;
             return;
         }
 
@@ -848,36 +934,17 @@ public sealed class Plugin : BaseUnityPlugin
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _autoCastUiRetrySeconds -= elapsed;
         if (_autoCastUiRetrySeconds > 0.0f)
-        {
-            _autoCastUiFailureSeconds += elapsed;
-            LogAutoCastUiFailureIfPersistent();
             return;
-        }
 
         _autoCastUiRetrySeconds = UiRetryIntervalSeconds;
         if (AutoCastToggleButton.TryCreate(_autoCastToggleControl, Log, out var toggle, out var reason))
         {
             _autoCastToggleButton = toggle;
-            _autoCastUiFailureSeconds = 0.0f;
-            _autoCastUiFailureLogged = false;
             _autoCastUiFailureReason = string.Empty;
             return;
         }
 
         _autoCastUiFailureReason = reason;
-        _autoCastUiFailureSeconds += elapsed;
-        LogAutoCastUiFailureIfPersistent();
-    }
-
-    private void LogAutoCastUiFailureIfPersistent()
-    {
-        if (_autoCastUiFailureLogged || _autoCastUiFailureSeconds < 10.0f)
-        {
-            return;
-        }
-
-        _autoCastUiFailureLogged = true;
-        Log.LogAutomataWarning($"Auto Cast toggle could not attach beside the native Auto Buy queue: {_autoCastUiFailureReason}");
     }
 
     private void UpdateAutoBuyControl(float unscaledDeltaTime)
@@ -888,6 +955,7 @@ public sealed class Plugin : BaseUnityPlugin
             _autoBuyToggleButton?.Dispose();
             _autoBuyToggleButton = null;
             _autoBuyUiRetrySeconds = 0.0f;
+            _autoBuyUiFailureReason = string.Empty;
             return;
         }
         if (_autoBuyToggleButton is not null && !_autoBuyToggleButton.IsAlive)
@@ -899,7 +967,13 @@ public sealed class Plugin : BaseUnityPlugin
         _autoBuyUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
         if (_autoBuyUiRetrySeconds > 0.0f) return;
         _autoBuyUiRetrySeconds = UiRetryIntervalSeconds;
-        AutoBuyToggleButton.TryCreate(_autoBuyToggleControl, out _autoBuyToggleButton);
+        if (AutoBuyToggleButton.TryCreate(
+                _autoBuyToggleControl,
+                out _autoBuyToggleButton,
+                out var reason))
+            _autoBuyUiFailureReason = string.Empty;
+        else
+            _autoBuyUiFailureReason = reason;
     }
 
     private void UpdateAutoConceptControl(float unscaledDeltaTime)
@@ -911,8 +985,6 @@ public sealed class Plugin : BaseUnityPlugin
             _autoConceptToggleButton?.Dispose();
             _autoConceptToggleButton = null;
             _autoConceptUiRetrySeconds = 0.0f;
-            _autoConceptUiFailureSeconds = 0.0f;
-            _autoConceptUiFailureLogged = false;
             _autoConceptUiFailureReason = string.Empty;
             return;
         }
@@ -930,11 +1002,7 @@ public sealed class Plugin : BaseUnityPlugin
         var elapsed = Math.Max(0.0f, unscaledDeltaTime);
         _autoConceptUiRetrySeconds -= elapsed;
         if (_autoConceptUiRetrySeconds > 0.0f)
-        {
-            _autoConceptUiFailureSeconds += elapsed;
-            LogAutoConceptUiFailureIfPersistent();
             return;
-        }
         _autoConceptUiRetrySeconds = UiRetryIntervalSeconds;
         if (AutoConceptToggleButton.TryCreate(
                 _autoConceptToggleControl,
@@ -942,22 +1010,120 @@ public sealed class Plugin : BaseUnityPlugin
                 out var reason))
         {
             _autoConceptToggleButton = toggle;
-            _autoConceptUiFailureSeconds = 0.0f;
-            _autoConceptUiFailureLogged = false;
             _autoConceptUiFailureReason = string.Empty;
             return;
         }
         _autoConceptUiFailureReason = reason;
-        _autoConceptUiFailureSeconds += elapsed;
-        LogAutoConceptUiFailureIfPersistent();
     }
 
-    private void LogAutoConceptUiFailureIfPersistent()
+    private void UpdateAutoHarvestControl(float unscaledDeltaTime)
     {
-        if (_autoConceptUiFailureLogged || _autoConceptUiFailureSeconds < 10.0f) return;
-        _autoConceptUiFailureLogged = true;
-        Log.LogAutomataWarning(
-            $"Auto Concept toggle could not attach beside the native Auto Buy queue: {_autoConceptUiFailureReason}");
+        if (_autoHarvestToggleControl is null) return;
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _autoHarvestToggleButton?.Dispose();
+            _autoHarvestToggleButton = null;
+            _autoHarvestUiRetrySeconds = 0.0f;
+            _autoHarvestUiFailureReason = string.Empty;
+            return;
+        }
+        if (_autoHarvestToggleButton is not null && !_autoHarvestToggleButton.IsAlive)
+        {
+            _autoHarvestToggleButton.Dispose();
+            _autoHarvestToggleButton = null;
+        }
+        if (_autoHarvestToggleButton is not null)
+        {
+            _autoHarvestToggleButton.Render();
+            return;
+        }
+        _autoHarvestUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
+        if (_autoHarvestUiRetrySeconds > 0.0f) return;
+        _autoHarvestUiRetrySeconds = UiRetryIntervalSeconds;
+        if (AutoHarvestToggleButton.TryCreate(
+                _autoHarvestToggleControl,
+                out _autoHarvestToggleButton,
+                out var reason))
+            _autoHarvestUiFailureReason = string.Empty;
+        else
+            _autoHarvestUiFailureReason = reason;
+    }
+
+    private void UpdateQuickStripSurface(float unscaledDeltaTime)
+    {
+        if (_uiSurfaceDiagnostics is null ||
+            SceneManager.GetActiveScene().name != "Main")
+            return;
+
+        var failures = new System.Collections.Generic.List<string>(6);
+        AddMissingUiControl(
+            failures,
+            "STOP",
+            _emergencyStopControl is not null,
+            _emergencyStopButton is not null,
+            _emergencyStopUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Mentor",
+            _mentorConfig is not null,
+            _mentorButton is not null,
+            _mentorUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Buy",
+            _autoBuyToggleControl is not null,
+            _autoBuyToggleButton is not null,
+            _autoBuyUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Cast",
+            _autoCastToggleControl is not null &&
+            _configurationStore!.Current.AutoCast.ShowToggleButton,
+            _autoCastToggleButton is not null,
+            _autoCastUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Concept",
+            _autoConceptToggleControl is not null &&
+            _configurationStore!.Current.AutoConcept.ShowToggleButton,
+            _autoConceptToggleButton is not null,
+            _autoConceptUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Harvest",
+            _autoHarvestToggleControl is not null,
+            _autoHarvestToggleButton is not null,
+            _autoHarvestUiFailureReason);
+
+        if (failures.Count == 0)
+        {
+            _quickStripFailureSeconds = 0.0f;
+            _uiSurfaceDiagnostics.ReportSuccess(SuiteUiSurface.QuickStrip);
+            return;
+        }
+
+        _quickStripFailureSeconds += Math.Max(0.0f, unscaledDeltaTime);
+        var reason = string.Join("; ", failures);
+        if (_quickStripFailureSeconds < 10.0f)
+        {
+            _uiSurfaceDiagnostics.ReportWaiting(SuiteUiSurface.QuickStrip, reason);
+            return;
+        }
+        _uiSurfaceDiagnostics.ReportFailure(SuiteUiSurface.QuickStrip, reason);
+    }
+
+    private static void AddMissingUiControl(
+        System.Collections.Generic.ICollection<string> failures,
+        string displayName,
+        bool required,
+        bool installed,
+        string reason)
+    {
+        if (!required || installed) return;
+        failures.Add(displayName + ": " +
+                     (string.IsNullOrWhiteSpace(reason)
+                         ? "native objects are not ready; retry is pending"
+                         : reason));
     }
 
     private static int CountConfiguredUuids(string value)
@@ -1066,6 +1232,8 @@ public sealed class Plugin : BaseUnityPlugin
                               throw new InvalidOperationException("Mod Config invalidation bus was not composed.");
         var runtimeSources = _runtimeSources ??
                              throw new InvalidOperationException("Mod Config runtime sources were not composed.");
+        var featureCommands = _modConfigFeatureCommands ??
+                              throw new InvalidOperationException("Mod Config feature commands were not composed.");
         var loadedCatalogSources = ConfigCatalog.CaptureLoadedSources();
         var currentCatalogGeneration = ConfigCatalogGeneration.Capture(loadedCatalogSources);
         var catalog = ModConfigCatalogSession.GetOrDiscover(
@@ -1079,20 +1247,28 @@ public sealed class Plugin : BaseUnityPlugin
                 catalog,
                 invalidationBus,
                 runtimeSources,
+                featureCommands,
                 _catalogNavigation,
                 MarkUiMaintenanceDue,
                 MarkNavigationMaintenanceDue,
                 out _uiShell,
                 out var reason))
         {
+            _uiFailureAttempts++;
             if (!_uiFailureLogged)
             {
                 _uiFailureLogged = true;
-                Logger.LogWarning("Mod Config UI is not ready; installation will retry: " + reason);
+                Logger.LogInfo("Mod Config UI is not ready; installation will retry: " + reason);
             }
+            if (_uiFailureAttempts < 3)
+                _uiSurfaceDiagnostics?.ReportWaiting(SuiteUiSurface.ModsRail, reason);
+            else
+                _uiSurfaceDiagnostics?.ReportFailure(SuiteUiSurface.ModsRail, reason);
             return;
         }
         _uiFailureLogged = false;
+        _uiFailureAttempts = 0;
+        _uiSurfaceDiagnostics?.ReportSuccess(SuiteUiSurface.ModsRail);
         _uiIntegritySeconds = UiIntegrityIntervalSeconds;
     }
 
@@ -1127,6 +1303,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiShell = null;
         _uiRetrySeconds = 0f;
         _uiFailureLogged = false;
+        _uiFailureAttempts = 0;
     }
 
     private void ResetSceneState(Scene scene)
@@ -1135,9 +1312,18 @@ public sealed class Plugin : BaseUnityPlugin
         _uiRetrySeconds = 0f;
         _uiIntegritySeconds = 0f;
         _uiFailureLogged = false;
+        _uiFailureAttempts = 0;
+        _quickStripFailureSeconds = 0f;
+        _autoBuyUiFailureReason = string.Empty;
+        _autoCastUiFailureReason = string.Empty;
+        _autoConceptUiFailureReason = string.Empty;
+        _autoHarvestUiFailureReason = string.Empty;
+        _mentorUiFailureReason = string.Empty;
+        _emergencyStopUiFailureReason = string.Empty;
         _uiMaintenanceDue = false;
         _uiIntegrityDue = false;
         _deferInstallUntilFrame = 0;
+        _uiSurfaceDiagnostics?.ResetForScene();
         _uiWork?.SetState(scene.name == "Main", false);
     }
 

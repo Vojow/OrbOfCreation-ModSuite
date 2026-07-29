@@ -10,6 +10,18 @@ using UnityEngine.UI;
 
 namespace OrbModConfig;
 
+internal static class ModConfigShellLayout
+{
+    internal const float OuterLeft = 0.02f;
+    internal const float OuterRight = 0.98f;
+    internal const float TitleBottom = 0.885f;
+    internal const float TitleTop = 0.975f;
+    internal const float BodyBottom = 0.115f;
+    internal const float BodyTop = 0.875f;
+    internal const float FooterBottom = 0.025f;
+    internal const float FooterTop = 0.105f;
+}
+
 /// <summary>
 /// Composes the Mods surface and switches between independent top-level pages.
 /// Editable settings and runtime diagnostics own their rendering and navigation
@@ -23,15 +35,16 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly ConfigCatalogSnapshot _catalog;
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly RectTransform _modTabs;
-    private readonly RectTransform _sectionTabs;
     private readonly RectTransform _settingsViewport;
     private readonly RectTransform _settingsContent;
     private readonly ModConfigRuntimeSources _runtimeSources;
     private readonly RuntimeDiagnosticsPage _runtimePage;
     private readonly ModSettingsPage _settingsPage;
     private readonly TextMeshProUGUI _statusText;
+    private readonly TextMeshProUGUI _pageTitle;
     private readonly Button _applyButton;
     private readonly Button _revertButton;
+    private readonly NativeFeatureRailVisualPrimitives _nativeRail;
     private readonly List<GameObject> _topTabObjects = new();
     private readonly RuntimeDiagnosticsDirtyLatch _fullDashboardDirty = new();
     private readonly RuntimeDiagnosticsTransitionQueue _runtimeTransitions = new();
@@ -47,27 +60,30 @@ internal sealed class ModConfigPanel : IDisposable
         TextMeshProUGUI labelTemplate,
         ManualLogSource log,
         RectTransform modTabs,
-        RectTransform sectionTabs,
         RectTransform settingsViewport,
         RectTransform settingsContent,
         ScrollRect settingsScroll,
         GameplayInvalidationBus invalidationBus,
         ModConfigRuntimeSources runtimeSources,
+        ModConfigFeatureCommands featureCommands,
+        TextMeshProUGUI pageTitle,
         TextMeshProUGUI statusText,
         Button applyButton,
-        Button revertButton)
+        Button revertButton,
+        NativeFeatureRailVisualPrimitives nativeRail)
     {
         Root = root;
         _catalog = catalog;
         _labelTemplate = labelTemplate;
         _modTabs = modTabs;
-        _sectionTabs = sectionTabs;
         _settingsViewport = settingsViewport;
         _settingsContent = settingsContent;
         _runtimeSources = runtimeSources;
+        _pageTitle = pageTitle;
         _statusText = statusText;
         _applyButton = applyButton;
         _revertButton = revertButton;
+        _nativeRail = nativeRail;
         RuntimeDiagnosticsPage? runtimePage = null;
         ModSettingsPage? settingsPage = null;
         var subscribed = false;
@@ -90,13 +106,13 @@ internal sealed class ModConfigPanel : IDisposable
                 catalog,
                 labelTemplate,
                 log,
-                sectionTabs,
                 settingsContent,
                 settingsScroll,
                 statusText,
                 applyButton,
                 revertButton,
-                invalidationBus);
+                invalidationBus,
+                featureCommands);
             _runtimePage = runtimePage;
             _settingsPage = settingsPage;
             _runtimeSources.SchemaStatuses.Transitioned += OnSchemaStatusTransitioned;
@@ -149,8 +165,11 @@ internal sealed class ModConfigPanel : IDisposable
         ConfigCatalogSnapshot catalog,
         ManualLogSource log,
         GameplayInvalidationBus invalidationBus,
-        ModConfigRuntimeSources runtimeSources)
+        ModConfigRuntimeSources runtimeSources,
+        ModConfigFeatureCommands featureCommands,
+        NativeFeatureRailVisualPrimitives nativeRail)
     {
+        ModConfigUiFactory.UseNativeVisuals(nativeRail);
         var root = ModConfigUiFactory.CreateRectObject(
             ModConfigUiShell.PanelObjectName,
             parent,
@@ -165,7 +184,9 @@ internal sealed class ModConfigPanel : IDisposable
                 catalog,
                 log,
                 invalidationBus,
-                runtimeSources);
+                runtimeSources,
+                featureCommands,
+                nativeRail);
         }
         catch
         {
@@ -180,25 +201,29 @@ internal sealed class ModConfigPanel : IDisposable
         ConfigCatalogSnapshot catalog,
         ManualLogSource log,
         GameplayInvalidationBus invalidationBus,
-        ModConfigRuntimeSources runtimeSources)
+        ModConfigRuntimeSources runtimeSources,
+        ModConfigFeatureCommands featureCommands,
+        NativeFeatureRailVisualPrimitives nativeRail)
     {
+        var detailLeft = ModConfigNativeRailFactory.DetailLeft;
+        var topNavigationRight = ModConfigNativeRailFactory.RailWidth + 0.02f;
         var header = ModConfigUiFactory.CreateRectObject(
             "ModTabs",
             root.transform,
-            new Vector2(0.02f, 0.875f),
-            new Vector2(0.98f, 0.975f),
+            new Vector2(ModConfigShellLayout.OuterLeft, ModConfigShellLayout.BodyBottom),
+            new Vector2(topNavigationRight, ModConfigShellLayout.BodyTop),
             ModConfigPalette.Bar);
         var sections = ModConfigUiFactory.CreateRectObject(
             "SectionTabs",
             root.transform,
-            new Vector2(0.02f, 0.77f),
-            new Vector2(0.98f, 0.86f),
+            new Vector2(ModConfigShellLayout.OuterLeft, ModConfigShellLayout.TitleBottom),
+            new Vector2(ModConfigShellLayout.OuterRight, ModConfigShellLayout.TitleTop),
             ModConfigPalette.Bar);
         var viewport = ModConfigUiFactory.CreateRectObject(
             "SettingsViewport",
             root.transform,
-            new Vector2(0.02f, 0.15f),
-            new Vector2(0.98f, 0.75f),
+            new Vector2(detailLeft, ModConfigShellLayout.BodyBottom),
+            new Vector2(ModConfigShellLayout.OuterRight, ModConfigShellLayout.BodyTop),
             new Color(0.035f, 0.043f, 0.06f, 0.98f));
         viewport.AddComponent<RectMask2D>();
         var scroll = viewport.AddComponent<ScrollRect>();
@@ -221,9 +246,38 @@ internal sealed class ModConfigPanel : IDisposable
         var footer = ModConfigUiFactory.CreateRectObject(
             "Footer",
             root.transform,
-            new Vector2(0.02f, 0.03f),
-            new Vector2(0.98f, 0.13f),
+            new Vector2(detailLeft, ModConfigShellLayout.FooterBottom),
+            new Vector2(ModConfigShellLayout.OuterRight, ModConfigShellLayout.FooterTop),
             ModConfigPalette.Bar);
+        ModConfigNativeRailFactory.SkinPanel(
+            root.GetComponent<Image>()!,
+            nativeRail.FeatureRailBaseFrame,
+            ModConfigPalette.Background);
+        ModConfigNativeRailFactory.SkinPanel(
+            header.GetComponent<Image>()!,
+            nativeRail.FeatureRailBaseFrame,
+            Color.white);
+        ModConfigNativeRailFactory.SkinPanel(
+            sections.GetComponent<Image>()!,
+            nativeRail.FeatureRailBaseFrame,
+            Color.white);
+        ModConfigNativeRailFactory.SkinPanel(
+            viewport.GetComponent<Image>()!,
+            nativeRail.FeatureRailBaseFrame,
+            new Color(0.72f, 0.72f, 0.72f, 1f));
+        ModConfigNativeRailFactory.SkinPanel(
+            footer.GetComponent<Image>()!,
+            nativeRail.FeatureRailBaseFrame,
+            Color.white);
+        var pageTitle = ModConfigUiFactory.CreateText(
+            "PageTitle",
+            sections.transform,
+            new Vector2(0.025f, 0.08f),
+            new Vector2(0.975f, 0.92f),
+            labelTemplate,
+            "Runtime",
+            TextAlignmentOptions.MidlineLeft,
+            0.82f);
         var status = ModConfigUiFactory.CreateText(
             "Status",
             footer.transform,
@@ -256,15 +310,17 @@ internal sealed class ModConfigPanel : IDisposable
             labelTemplate,
             log,
             (RectTransform)header.transform,
-            (RectTransform)sections.transform,
             (RectTransform)viewport.transform,
             contentRect,
             scroll,
             invalidationBus,
             runtimeSources,
+            featureCommands,
+            pageTitle,
             status,
             apply,
-            revert);
+            revert,
+            nativeRail);
     }
 
     public void SetActive(bool active)
@@ -274,6 +330,15 @@ internal sealed class ModConfigPanel : IDisposable
     }
 
     public void RefreshExternalValues() => _settingsPage.RefreshExternalValues();
+
+    internal void SelectNextPageForValidation()
+    {
+        var pageCount = ModConfigTopNavigation.Build(_catalog, _dashboard.AttentionCount).Count;
+        if (pageCount == 0) return;
+        _selectedTopPageIndex = (_selectedTopPageIndex + 1) % pageCount;
+        RebuildTopTabs();
+        ShowSelectedPage();
+    }
 
     public void RefreshResponsiveLayout()
     {
@@ -370,13 +435,17 @@ internal sealed class ModConfigPanel : IDisposable
     {
         ModConfigUiFactory.ClearObjects(_topTabObjects);
         var pages = ModConfigTopNavigation.Build(_catalog, _dashboard.AttentionCount);
-        ModConfigUiFactory.BuildTabs(
+        if (ModConfigNativeRailFactory.TryBuild(
             _modTabs,
             pages.Select(page => page.Label).ToArray(),
             _selectedTopPageIndex,
             _topTabObjects,
             _labelTemplate,
-            SelectTopPage);
+            _nativeRail,
+            SelectTopPage,
+            out var reason))
+            return;
+        throw new InvalidOperationException("Native Mods rail construction failed: " + reason);
     }
 
     private void ShowSelectedPage()
@@ -387,11 +456,13 @@ internal sealed class ModConfigPanel : IDisposable
         if (page.Kind == ModConfigTopPageKind.Runtime)
         {
             _settingsPage.Hide();
-            _sectionTabs.gameObject.SetActive(false);
             _applyButton.gameObject.SetActive(false);
             _revertButton.gameObject.SetActive(false);
             ((RectTransform)_statusText.transform).anchorMax = new Vector2(0.98f, 0.88f);
-            _settingsViewport.anchorMax = new Vector2(_settingsViewport.anchorMax.x, 0.86f);
+            _settingsViewport.anchorMax = new Vector2(
+                _settingsViewport.anchorMax.x,
+                ModConfigShellLayout.BodyTop);
+            _pageTitle.text = ModConfigTopNavigation.DetailTitle(_catalog, page);
             _runtimePage.Render(_dashboard, resetScroll: false);
             _measuredRuntimeWidth = _settingsContent.rect.width;
             _statusText.color = _labelTemplate.color;
@@ -402,12 +473,15 @@ internal sealed class ModConfigPanel : IDisposable
         }
 
         _runtimePage.Hide();
-        _sectionTabs.gameObject.SetActive(true);
         _applyButton.gameObject.SetActive(true);
         _revertButton.gameObject.SetActive(true);
         ((RectTransform)_statusText.transform).anchorMax = new Vector2(0.62f, 0.88f);
-        _settingsViewport.anchorMax = new Vector2(_settingsViewport.anchorMax.x, 0.75f);
-        _settingsPage.ShowPlugin(page.PluginIndex);
+        _settingsViewport.anchorMax = new Vector2(
+            _settingsViewport.anchorMax.x,
+            ModConfigShellLayout.BodyTop);
+        var mod = _catalog.Mods[page.PluginIndex];
+        _pageTitle.text = ModConfigTopNavigation.DetailTitle(_catalog, page);
+        _settingsPage.ShowSection(page.PluginIndex, page.SectionIndex);
     }
 
     private void SelectTopPage(int index)

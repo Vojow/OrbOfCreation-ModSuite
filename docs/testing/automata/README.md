@@ -31,7 +31,7 @@ For an isolated feature change:
    invalidation, or hot-path work changed.
 5. Run installed contracts when a reflected member, Harmony target, native type,
    UUID/type assumption, or mutation postcondition changed.
-6. Complete proportional Automata V3/V4 UAT for packaged runtime behavior.
+6. Complete proportional Automata V3/V4/V5 UAT for packaged runtime behavior.
 
 Changes to ServiceCycle scheduling, lifecycle generation, queue capacity,
 invalidation bus, or action ownership are not isolated feature changes. They

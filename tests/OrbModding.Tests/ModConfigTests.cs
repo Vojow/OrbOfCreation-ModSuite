@@ -19,6 +19,57 @@ public sealed class ModConfigTests
     }
 
     [Fact]
+    public void NativeShellUsesTopFrameAndLeavesOnlyDeliberateGutters()
+    {
+        Assert.Equal(0.975f, ModConfigShellLayout.TitleTop);
+        Assert.Equal(0.885f, ModConfigShellLayout.TitleBottom);
+        Assert.Equal(0.875f, ModConfigShellLayout.BodyTop);
+        Assert.Equal(0.115f, ModConfigShellLayout.BodyBottom);
+        Assert.Equal(0.105f, ModConfigShellLayout.FooterTop);
+        Assert.Equal(0.025f, ModConfigShellLayout.FooterBottom);
+        Assert.Equal(0.01f, ModConfigShellLayout.TitleBottom - ModConfigShellLayout.BodyTop, 3);
+        Assert.Equal(0.01f, ModConfigShellLayout.BodyBottom - ModConfigShellLayout.FooterTop, 3);
+        Assert.True(ModConfigShellLayout.TitleTop > ModConfigShellLayout.BodyTop);
+        Assert.True(ModConfigShellLayout.BodyTop - ModConfigShellLayout.BodyBottom > 0.75f);
+    }
+
+    [Fact]
+    public void TopNavigationPreservesTheRegisteredPluginTitle()
+    {
+        var catalog = new ConfigCatalogSnapshot(new[]
+        {
+            new ModConfigDescriptor(
+                "suite",
+                "Orb Of Creation ModSuite",
+                "test",
+                new[] { new ConfigSectionDescriptor("Auto Buy", Array.Empty<ConfigSettingDescriptor>()) }),
+        });
+
+        var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
+
+        Assert.Equal("Orb Of Creation ModSuite · Auto Buy", ModConfigTopNavigation.DetailTitle(catalog, pages[1]));
+    }
+
+    [Fact]
+    public void TopNavigationKeepsSchemaStatusOnlyPluginsSelectable()
+    {
+        var catalog = new ConfigCatalogSnapshot(new[]
+        {
+            new ModConfigDescriptor(
+                "suite",
+                "Orb Of Creation ModSuite",
+                "test",
+                Array.Empty<ConfigSectionDescriptor>()),
+        });
+
+        var page = ModConfigTopNavigation.Build(catalog, attentionCount: 0)[1];
+
+        Assert.Equal(-1, page.SectionIndex);
+        Assert.Equal("Orb Of Creation ModSuite", page.Label);
+        Assert.Equal("Orb Of Creation ModSuite", ModConfigTopNavigation.DetailTitle(catalog, page));
+    }
+
+    [Fact]
     public void Catalog_GroupsAndSortsModsSectionsAndSettingsDeterministically()
     {
         var laterConfig = new ConfigFile();
@@ -123,7 +174,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "Safety", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -150,10 +201,10 @@ public sealed class ModConfigTests
             setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
         Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
-        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EnableOperationalLogging");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
+        Assert.True(ModSettingsPage.IsImmediateModeSetting(autoBuyMode));
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
         var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
@@ -212,15 +263,40 @@ public sealed class ModConfigTests
     }
 
     [Fact]
+    public void SuiteCatalogConsolidatesTheNineLegacyTabsIntoSevenRailPages()
+    {
+        var config = new ConfigFile();
+        BepInExAutomataConfiguration.Bind(config);
+        MentorConfig.Bind(config);
+
+        var mod = ConfigCatalog.Build(new[]
+            {
+                new ConfigPluginSource("suite", "Orb Of Creation ModSuite", "test", config),
+            })
+            .Mods.Single();
+
+        Assert.Equal(
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Mentor", "Advanced" },
+            mod.Sections.Select(section => section.Name));
+        Assert.Equal(8, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.All(
+            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Mentor"),
+            section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
+                section.Settings.Single(setting => setting.Key == "Mode"))));
+    }
+
+    [Fact]
     public void MentorCatalog_UsesFeatureTabsAndDependencies()
     {
         var config = new ConfigFile();
         MentorConfig.Bind(config);
         var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("mentor", "Mentor", "test", config) }).Mods.Single();
 
-        Assert.Equal(new[] { "Spells", "Artifacts", "Alchemy", "Advanced" }, mod.Sections.Select(section => section.Name));
+        Assert.Equal(new[] { "Mentor", "Advanced" }, mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
-        var artifactShare = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "SharePercent");
+        var mentorSection = mod.Sections.Single(section => section.Name == "Mentor");
+        var artifactShare = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "Artifacts" && setting.Key == "SharePercent");
         Assert.Equal(2, artifactShare.Dependencies.Count);
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "General" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active");
         Assert.Contains(artifactShare.Dependencies, dependency => dependency.Section == "Artifacts" && dependency.Key == "Enabled" && dependency.ExpectedValue == "true");
@@ -229,10 +305,11 @@ public sealed class ModConfigTests
             setting => setting.SourceSection == "Performance");
 
         var session = new ConfigEditSession(new ConfigCatalogSnapshot(new[] { mod }));
-        var spellSection = mod.Sections.Single(section => section.Name == "Spells");
-        var mentorMode = spellSection.Settings.Single(setting => setting.Key == "Mode");
-        var toggleShortcut = spellSection.Settings.Single(setting => setting.Key == "ToggleShortcut");
-        var artifactEnabled = mod.Sections.Single(section => section.Name == "Artifacts").Settings.Single(setting => setting.Key == "Enabled");
+        var mentorMode = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "General" && setting.Key == "Mode");
+        var toggleShortcut = mentorSection.Settings.Single(setting => setting.Key == "ToggleShortcut");
+        var artifactEnabled = mentorSection.Settings.Single(setting =>
+            setting.SourceSection == "Artifacts" && setting.Key == "Enabled");
         Assert.All(
             mod.Sections.SelectMany(section => section.Settings).Where(setting =>
                 setting.SourceSection is "Sharing" or "Artifacts" or "Alchemy"),

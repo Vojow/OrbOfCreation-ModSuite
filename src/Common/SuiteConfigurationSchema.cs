@@ -13,7 +13,7 @@ namespace OrbModding.Common;
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 4;
+    internal const int CurrentVersion = 5;
     internal static readonly ConfigurationKey AutoCastShortcut =
         new("AutoCast", "ToggleShortcut");
     internal static readonly ConfigurationKey DifferentialVerificationShortcut =
@@ -22,6 +22,18 @@ internal static class SuiteConfigurationSchema
         new("Performance", "OperationsPerFrame");
     internal static readonly ConfigurationKey CpuBudgetMilliseconds =
         new("Performance", "CpuBudgetMilliseconds");
+    internal static readonly ConfigurationKey AutoBuyMaxCandidatesPerScan =
+        new("AutoBuy", "MaxCandidatesPerScan");
+    internal static readonly ConfigurationKey MaxLoggedRejections =
+        new("Diagnostics", "MaxLoggedRejections");
+    internal static readonly ConfigurationKey EnableOperationalLogging =
+        new("Diagnostics", "EnableOperationalLogging");
+    internal static readonly ConfigurationKey DecisionLogLevel =
+        new("Diagnostics", "DecisionLogLevel");
+    internal static readonly ConfigurationKey MentorDetailedLogging =
+        new("Diagnostics", "DetailedLogging");
+    internal static readonly ConfigurationKey DevelopmentEventProbe =
+        new("Development", "EventProbe");
 
     internal static ConfigurationSchemaPlan Plan { get; } = new(CurrentVersion, new[]
     {
@@ -46,14 +58,14 @@ internal static class SuiteConfigurationSchema
         new ConfigurationMigrationStep(
             2,
             3,
-            new[] { AutoCastShortcut, DifferentialVerificationShortcut },
+            new[] { AutoCastShortcut },
             MigrateInheritedShortcuts),
         // Mentor was the last consumer of the legacy main-thread work admission and CPU-time
         // budget. ServiceCycle owns bounded planning and action dispatch, so retaining these values
         // would advertise controls that no runtime reads.
         new ConfigurationMigrationStep(
             3,
-            CurrentVersion,
+            4,
             new[] { MentorOperationsPerFrame, CpuBudgetMilliseconds },
             static context =>
             {
@@ -63,6 +75,45 @@ internal static class SuiteConfigurationSchema
                 context.DiscardObsolete(
                     CpuBudgetMilliseconds,
                     "ServiceCycle replaced the legacy shared CPU-time budget.");
+            }),
+        // Schema 5 removes preferences that only described the retired scan/budget/logging engines.
+        // Maintained diagnostics are explicit Runtime actions and unconditional warnings/errors.
+        new ConfigurationMigrationStep(
+            4,
+            CurrentVersion,
+            new[]
+            {
+                AutoBuyMaxCandidatesPerScan,
+                MaxLoggedRejections,
+                EnableOperationalLogging,
+                DecisionLogLevel,
+                MentorDetailedLogging,
+                DevelopmentEventProbe,
+                DifferentialVerificationShortcut,
+            },
+            static context =>
+            {
+                context.DiscardObsolete(
+                    AutoBuyMaxCandidatesPerScan,
+                    "ServiceCycle evaluates the complete audited Auto Buy snapshot without a per-scan candidate cap.");
+                context.DiscardObsolete(
+                    MaxLoggedRejections,
+                    "The retired rejection logger was the only consumer of this limit.");
+                context.DiscardObsolete(
+                    EnableOperationalLogging,
+                    "Runtime full trace, recent events, and the decision journal replace legacy operational narration.");
+                context.DiscardObsolete(
+                    DecisionLogLevel,
+                    "Runtime observation controls replace the legacy decision-log level.");
+                context.DiscardObsolete(
+                    MentorDetailedLogging,
+                    "Mentor ServiceCycle never consumed the legacy detailed-logging preference.");
+                context.DiscardObsolete(
+                    DevelopmentEventProbe,
+                    "ServiceCycle trace and journal evidence replace the unused mastery event probe.");
+                context.DiscardObsolete(
+                    DifferentialVerificationShortcut,
+                    "Differential verification is an explicit Mods Runtime action.");
             }),
     });
 
@@ -84,28 +135,7 @@ internal static class SuiteConfigurationSchema
             }
         }
 
-        if (!context.TryGet(DifferentialVerificationShortcut, out var verifier)) return;
-        if (IsInheritedVerifierDefault(verifier))
-        {
-            context.Map(
-                DifferentialVerificationShortcut,
-                DifferentialVerificationShortcut,
-                KeyCode.None.ToString(),
-                "Unbound the inherited differential-verification shortcut; use the Mods Runtime action.");
-            return;
-        }
-        context.Preserve(DifferentialVerificationShortcut, verifier);
     }
-
-    private static bool IsInheritedVerifierDefault(string serialized) =>
-        IsChord(serialized, KeyCode.Y, KeyCode.LeftControl, KeyCode.LeftAlt) ||
-        IsChord(serialized, KeyCode.M, KeyCode.LeftAlt) ||
-        IsChord(
-            serialized,
-            KeyCode.M,
-            KeyCode.LeftControl,
-            KeyCode.LeftShift,
-            KeyCode.LeftAlt);
 
     internal static bool IsChord(
         string serialized,

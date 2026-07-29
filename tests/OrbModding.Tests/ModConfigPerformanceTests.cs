@@ -2,6 +2,8 @@ using OrbModConfig;
 using OrbModding.Common;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -166,10 +168,11 @@ public sealed class ModConfigPerformanceTests
         });
 
         var pageIndex = ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(rebuilt, bookmark);
-        var selected = rebuilt.Mods[pageIndex - 1];
+        var selected = rebuilt.Mods[ModConfigTopNavigation.Build(rebuilt, 0)[pageIndex].PluginIndex];
 
         Assert.Equal("z.plugin", original.Mods[
-            ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(original, bookmark) - 1].Guid);
+            ModConfigTopNavigation.Build(original, 0)[
+                ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(original, bookmark)].PluginIndex].Guid);
         Assert.Equal("z.plugin", selected.Guid);
         Assert.Equal(
             "Section B",
@@ -288,6 +291,176 @@ public sealed class ModConfigPerformanceTests
         Assert.Contains("bool IsActive()", reason);
     }
 
+    [Theory]
+    [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio/ViewNoIconRadioButtonSub(Clone)", true)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio/ViewNoIconRadioButtonSub(Clone)/Nested", false)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio", false)]
+    [InlineData("PreviewCanvas/ContentArea/MainContentContainer/SubviewRadio/ViewNoIconRadioButtonSub(Clone)", false)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio", false)]
+    public void NativeFeatureRailSamplingRequiresTheAuditedStructuralPath(string path, bool expected)
+    {
+        Assert.Equal(expected, NativeViewAdapter.IsFeatureRailPath(path));
+    }
+
+    [Theory]
+    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly", true)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly (1)", true)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/Nested/SpellButton", false)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/ScreenContent/MagicScreen/SpellButton", false)]
+    [InlineData("Canvas/BottomBar/SpellButtonBottomBar", false)]
+    public void SpellFrameSamplingRequiresTheAuditedCastingBarDirectChildPath(
+        string path,
+        bool expected)
+    {
+        Assert.Equal(expected, NativeViewAdapter.IsAuditedBottomBarSpellPath(path));
+    }
+
+    [Theory]
+    [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)", true)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)/Icon", false)]
+    [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio/ViewRadioButtonLong(Clone)", false)]
+    public void TopBarIconSamplingRequiresTheAuditedDirectChildPath(string path, bool expected)
+    {
+        Assert.Equal(expected, NativeViewAdapter.IsAuditedTopBarPath(path));
+    }
+
+    [Fact]
+    public void FeatureRailCaptureAcceptsInactiveNativeCandidatesWhileModsIsOpen()
+    {
+        var canvas = new GameObject("Canvas");
+        var contentArea = Child(canvas, "ContentArea");
+        var main = Child(contentArea, "MainContentContainer");
+        var group = Child(main, "SubviewRadio");
+        var buttonObject = Child(group, "ViewNoIconRadioButtonSub(Clone)");
+        var frame = buttonObject.AddComponent<Image>();
+        var candidate = buttonObject.AddComponent<FakeRailButton>();
+        candidate.buttonImage = frame;
+        candidate.viewImage = null;
+        candidate.baseImage = new Sprite();
+        candidate.activeImage = new Sprite();
+        main.SetActive(false);
+        buttonObject.activeInHierarchy = false;
+
+        Assert.False(candidate.gameObject.activeInHierarchy);
+        Assert.True(
+            NativeViewAdapter.TryReadFeatureRailFrames(
+                new Component[] { candidate },
+                out var prototype,
+                out var baseFrame,
+                out var activeFrame,
+                out var reason),
+            reason);
+        Assert.Same(candidate, prototype);
+        Assert.Same(candidate.baseImage, baseFrame);
+        Assert.Same(candidate.activeImage, activeFrame);
+    }
+
+    [Fact]
+    public void TopBarIconCaptureAcceptsInactiveSceneCandidateWithRealFieldPopulation()
+    {
+        var canvas = new GameObject("Canvas");
+        var contentArea = Child(canvas, "ContentArea");
+        var main = Child(contentArea, "MainContentContainer");
+        var topBar = Child(main, "TopBar");
+        var group = Child(topBar, "ViewRadio");
+        var buttonObject = Child(group, "ViewRadioButtonLong(Clone)");
+        var candidate = buttonObject.AddComponent<FakeRailButton>();
+        candidate.item = new GameObject("ScreenTime");
+        candidate.viewImage = buttonObject.AddComponent<Image>();
+        candidate.viewImage.sprite = new Sprite();
+        main.SetActive(false);
+        buttonObject.activeInHierarchy = false;
+
+        Assert.False(candidate.gameObject.activeInHierarchy);
+        Assert.True(
+            NativeViewAdapter.TryReadNamedTopBarIcon(
+                new Component[] { candidate },
+                "ScreenTime",
+                out var icon,
+                out var reason),
+            reason);
+        Assert.Same(candidate.viewImage.sprite, icon);
+    }
+
+    [Fact]
+    public void BottomBarSpellFrameAcceptsTheRealNullOptionalFields()
+    {
+        var buttonObject = new GameObject("SpellButtonIconOnly");
+        var background = buttonObject.AddComponent<Image>();
+        var candidate = buttonObject.AddComponent<FakeSpellButton>();
+        candidate.background = background;
+        candidate.icon = buttonObject.AddComponent<Image>();
+        candidate.baseBackground = new Sprite();
+        candidate.insufficientBackground = null;
+        candidate.effects = null;
+        candidate.isForCasting = true;
+
+        Assert.True(
+            NativeViewAdapter.TryReadBottomBarSpellFrame(
+                new Component[] { candidate },
+                out var prototype,
+                out var baseFrame,
+                out var reason),
+            reason);
+        Assert.Same(candidate, prototype);
+        Assert.Same(candidate.baseBackground, baseFrame);
+    }
+
+    [Fact]
+    public void CaptureFailureCensusReportsEveryAuditedFieldAndLifecycleFact()
+    {
+        var canvas = new GameObject("Canvas");
+        var buttonObject = Child(canvas, "SpellButtonIconOnly");
+        var candidate = buttonObject.AddComponent<FakeSpellButton>();
+        candidate.isForCasting = true;
+        buttonObject.SetActive(false);
+
+        var census = NativeViewAdapter.BuildSpellCandidateCensus(
+            new Component[] { candidate });
+
+        Assert.Contains("path='Canvas/SpellButtonIconOnly'", census);
+        Assert.Contains("activeSelf=False", census);
+        Assert.Contains("activeInHierarchy=False", census);
+        Assert.Contains("scene=Main(loaded=True)", census);
+        Assert.Contains("pathMatch=False", census);
+        Assert.Contains("isForCasting=True", census);
+        Assert.Contains("background=null", census);
+        Assert.Contains("icon=null", census);
+        Assert.Contains("baseBackground=null", census);
+        Assert.Contains("insufficientBackground=null(optional)", census);
+        Assert.Contains("effects=null(optional)", census);
+    }
+
+    [Fact]
+    public void RailFailureCensusReportsInactiveLifecycleItemAndEveryVisualField()
+    {
+        var canvas = new GameObject("Canvas");
+        var buttonObject = Child(canvas, "ViewNoIconRadioButtonSub(Clone)");
+        var candidate = buttonObject.AddComponent<FakeRailButton>();
+        candidate.item = new GameObject("ScholarConcepts");
+        candidate.buttonImage = buttonObject.AddComponent<Image>();
+        candidate.viewImage = null;
+        candidate.baseImage = new Sprite();
+        candidate.activeImage = new Sprite();
+        buttonObject.SetActive(false);
+
+        var census = NativeViewAdapter.BuildFeatureRailCandidateCensus(
+            new Component[] { candidate });
+
+        Assert.Contains("path='Canvas/ViewNoIconRadioButtonSub(Clone)'", census);
+        Assert.Contains("activeSelf=False", census);
+        Assert.Contains("activeInHierarchy=False", census);
+        Assert.Contains("scene=Main(loaded=True)", census);
+        Assert.Contains("pathMatch=False", census);
+        Assert.Contains("item='ScholarConcepts' (GameObject)", census);
+        Assert.Contains("buttonImage=present", census);
+        Assert.Contains("buttonOwned=True", census);
+        Assert.Contains("viewImage=null", census);
+        Assert.Contains("viewIcon=null", census);
+        Assert.Contains("baseImage=present", census);
+        Assert.Contains("activeImage=present", census);
+    }
+
     [Fact]
     public void OpeningUiSchedulesRefreshForCoordinatorInsteadOfRunningItInline()
     {
@@ -338,5 +511,31 @@ public sealed class ModConfigPerformanceTests
     {
         public int IsActive() => 1;
         public void SetActive(bool active) { }
+    }
+
+    private sealed class FakeRailButton : Behaviour
+    {
+        public object item = new();
+        public Sprite? baseImage;
+        public Sprite? activeImage;
+        public Image? buttonImage;
+        public Image? viewImage;
+    }
+
+    private sealed class FakeSpellButton : Behaviour
+    {
+        public Image? icon;
+        public Sprite? insufficientBackground;
+        public bool isForCasting;
+        public Image? background;
+        public Sprite? baseBackground;
+        public Component? effects;
+    }
+
+    private static GameObject Child(GameObject parent, string name)
+    {
+        var child = new GameObject(name);
+        child.transform.SetParent(parent.transform, false);
+        return child;
     }
 }

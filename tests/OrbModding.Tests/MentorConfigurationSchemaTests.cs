@@ -9,7 +9,7 @@ namespace OrbModding.Tests;
 public sealed class MentorConfigurationSchemaTests
 {
     [Fact]
-    public void SchemaFourDiscardsLegacyMentorAdmissionControls()
+    public void CurrentSchemaDiscardsLegacyMentorAdmissionControls()
     {
         var file = new ConfigFile();
         file.SeedSerialized(
@@ -24,7 +24,7 @@ public sealed class MentorConfigurationSchemaTests
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
         Assert.Equal(3, result.Status.FromVersion);
-        Assert.Equal(4, result.Status.ToVersion);
+        Assert.Equal(5, result.Status.ToVersion);
         Assert.Equal(2, result.Diagnostics.Count);
         Assert.All(
             result.Diagnostics,

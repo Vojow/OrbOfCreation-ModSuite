@@ -27,14 +27,16 @@ public sealed class AutomataDifferentialVerificationShortcutTests
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
         Assert.Equal(2, result.Status.FromVersion);
-        Assert.Equal(4, result.Status.ToVersion);
+        Assert.Equal(5, result.Status.ToVersion);
         Assert.Equal(KeyCode.F8, result.Config!.Automata.AutoCastToggleShortcut.Value.MainKey);
-        Assert.Equal(KeyCode.None, ReadVerificationShortcut(file).MainKey);
+        Assert.DoesNotContain(
+            file,
+            pair => pair.Key.Section == VerificationSection && pair.Key.Key == VerificationKey);
         Assert.Equal(2, result.Diagnostics.Count);
     }
 
     [Fact]
-    public void CurrentSchemaPreservesPlayerCustomizedChords()
+    public void CurrentSchemaPreservesPlayerCustomizedAutoCastAndRetiresVerifierChord()
     {
         var file = VersionTwoFile(
             "F7",
@@ -44,14 +46,14 @@ public sealed class AutomataDifferentialVerificationShortcutTests
 
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(KeyCode.F7, result.Config!.Automata.AutoCastToggleShortcut.Value.MainKey);
-        var verifier = ReadVerificationShortcut(file);
-        Assert.Equal(KeyCode.J, verifier.MainKey);
-        Assert.Contains(KeyCode.LeftShift, verifier.Modifiers);
-        Assert.Empty(result.Diagnostics);
+        Assert.DoesNotContain(
+            file,
+            pair => pair.Key.Section == VerificationSection && pair.Key.Key == VerificationKey);
+        Assert.Single(result.Diagnostics);
     }
 
     [Fact]
-    public void CurrentSchemaDoesNotReinterpretOldLookingPlayerValues()
+    public void SchemaFiveRetiresOldLookingVerifierValueWithoutReinterpretingAutoCast()
     {
         var file = new ConfigFile();
         file.SeedSerialized(
@@ -67,9 +69,11 @@ public sealed class AutomataDifferentialVerificationShortcutTests
         var result = SuiteConfiguration.TryBind(file);
 
         Assert.True(result.Success, result.Status.Reason);
-        Assert.Equal(ConfigurationSchemaState.Current, result.Status.State);
+        Assert.Equal(ConfigurationSchemaState.Migrated, result.Status.State);
         Assert.Equal(KeyCode.X, result.Config!.Automata.AutoCastToggleShortcut.Value.MainKey);
-        Assert.Equal(KeyCode.Y, ReadVerificationShortcut(file).MainKey);
+        Assert.DoesNotContain(
+            file,
+            pair => pair.Key.Section == VerificationSection && pair.Key.Key == VerificationKey);
     }
 
     [Fact]
@@ -80,7 +84,9 @@ public sealed class AutomataDifferentialVerificationShortcutTests
 
         Assert.True(result.Success, result.Status.Reason);
         Assert.Equal(KeyCode.F8, result.Config!.Automata.AutoCastToggleShortcut.Value.MainKey);
-        Assert.Equal(KeyCode.None, ReadVerificationShortcut(file).MainKey);
+        Assert.DoesNotContain(
+            file,
+            pair => pair.Key.Section == VerificationSection && pair.Key.Key == VerificationKey);
     }
 
     [Fact]
@@ -180,10 +186,4 @@ public sealed class AutomataDifferentialVerificationShortcutTests
         file.SeedSerialized(VerificationSection, VerificationKey, verifier);
         return file;
     }
-
-    private static KeyboardShortcut ReadVerificationShortcut(ConfigFile file) =>
-        (KeyboardShortcut)file.Single(pair =>
-                pair.Key.Section == VerificationSection &&
-                pair.Key.Key == VerificationKey)
-            .Value.BoxedValue!;
 }

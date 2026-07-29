@@ -31,7 +31,6 @@ public sealed class AutomataTests
         Assert.Equal(AutoBuyOperationMode.Active, config.AutoBuyMode.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.AutoBuyAffordability.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.UpgradeAffordability.Value);
-        Assert.Equal(1024, config.AutoBuyMaxCandidatesPerScan.Value);
         Assert.Equal(AutoBuyBatchSizingMode.FillAvailableQueue, config.AutoBuyBatchSizing.Value);
         Assert.Equal(8, config.MaxPurchasesPerBatch.Value);
         Assert.Equal(AutoBuyPurchaseGroupingMode.BulkDevelopment, config.PurchaseGrouping.Value);
@@ -49,7 +48,6 @@ public sealed class AutomataTests
         Assert.True(config.AutoLevelSpells.Value);
         Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
-        Assert.False(config.EnableOperationalLogging.Value);
         Assert.True(config.Current.CanStartAutoBuyActively);
         Assert.False(config.Current.CanStartAutoCastActively);
         Assert.False(config.Current.CanStartAutoConceptActively);
@@ -86,14 +84,6 @@ public sealed class AutomataTests
         toggle.Toggle();
         Assert.Equal(AutoConceptOperationMode.Disabled, config.AutoConceptMode.Value);
         Assert.Equal(AutoCastToggleVisualState.Off, toggle.State);
-    }
-
-    [Theory]
-    [InlineData(0, "CN OFF")]
-    [InlineData(1, "CN ON")]
-    public void AutoConceptButtonUsesDistinctCompactLabels(int state, string expected)
-    {
-        Assert.Equal(expected, AutoConceptToggleButton.FormatLabel((AutoCastToggleVisualState)state));
     }
 
     [Fact]

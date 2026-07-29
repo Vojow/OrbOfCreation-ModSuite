@@ -47,6 +47,7 @@ internal sealed class ModConfigUiShell : IDisposable
         ConfigCatalogSnapshot catalog,
         GameplayInvalidationBus invalidationBus,
         ModConfigRuntimeSources runtimeSources,
+        ModConfigFeatureCommands featureCommands,
         ModConfigNavigationBookmark navigationBookmark,
         Action maintenanceRequested,
         Action navigationMaintenanceRequested,
@@ -57,11 +58,18 @@ internal sealed class ModConfigUiShell : IDisposable
         if (catalog is null) throw new ArgumentNullException(nameof(catalog));
         if (invalidationBus is null) throw new ArgumentNullException(nameof(invalidationBus));
         if (runtimeSources is null) throw new ArgumentNullException(nameof(runtimeSources));
+        if (featureCommands is null) throw new ArgumentNullException(nameof(featureCommands));
         if (maintenanceRequested is null) throw new ArgumentNullException(nameof(maintenanceRequested));
         if (navigationMaintenanceRequested is null)
             throw new ArgumentNullException(nameof(navigationMaintenanceRequested));
 
         shell = null;
+        if (!ModConfigNativeRailFactory.TryCapture(out var nativeRail, out var captureReason) ||
+            nativeRail is null)
+        {
+            reason = "Mods rail native capture failed: " + captureReason;
+            return false;
+        }
         if (!ModConfigNativeNavigationInstaller.TryInstall(
                 PanelObjectName,
                 out var navigation,
@@ -77,7 +85,9 @@ internal sealed class ModConfigUiShell : IDisposable
                 catalog,
                 log,
                 invalidationBus,
-                runtimeSources);
+                runtimeSources,
+                featureCommands,
+                nativeRail);
             panel.RestoreNavigation(navigationBookmark);
             shell = new ModConfigUiShell(log, navigation, panel, maintenanceRequested);
             navigation.Connect(shell.Toggle, shell.CloseFromNativeTab, navigationMaintenanceRequested);
@@ -103,6 +113,8 @@ internal sealed class ModConfigUiShell : IDisposable
     public ModConfigNavigationBookmark CaptureNavigation() => _panel.CaptureNavigation();
 
     public void RefreshNavigation() => _navigation.RefreshNavigation();
+
+    internal void SelectNextPageForValidation() => _panel.SelectNextPageForValidation();
 
     public bool ScheduleRefresh(float unscaledDeltaTime)
     {

@@ -41,22 +41,6 @@ public sealed class AutoCastTests
         Assert.Equal(37.0f, config.AutoCastStartResourcePercent.Value);
     }
 
-    [Theory]
-    [InlineData(0, "AC OFF")]
-    [InlineData(1, "AC ON")]
-    public void CompactToggleUsesConsistentAutoCastLabels(int state, string expected)
-    {
-        Assert.Equal(expected, AutoCastToggleButton.FormatLabel((AutoCastToggleVisualState)state));
-    }
-
-    [Fact]
-    public void EmergencyStopDisplaysDesiredAndRuntimeAxes()
-    {
-        Assert.Equal(
-            "AC ON / STOPPED",
-            AutoCastToggleButton.FormatLabel(AutoCastToggleVisualState.On, stopped: true));
-    }
-
     [Fact]
     public void ToggleSwitchesBetweenDisabledAndActive()
     {

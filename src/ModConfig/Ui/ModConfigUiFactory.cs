@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbAutomata;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -19,6 +20,16 @@ internal static class ModConfigPalette
 
 internal static class ModConfigUiFactory
 {
+    private static NativeFeatureRailVisualPrimitives? _nativeVisuals;
+
+    internal static void UseNativeVisuals(NativeFeatureRailVisualPrimitives primitives) =>
+        _nativeVisuals = primitives ?? throw new ArgumentNullException(nameof(primitives));
+
+    internal static NativeFeatureRailVisualPrimitives NativeVisuals =>
+        _nativeVisuals ??
+        throw new InvalidOperationException(
+            "Native Mods visuals must be captured before constructing controls.");
+
     public static GameObject CreateRectObject(
         string name,
         Transform parent,
@@ -92,7 +103,13 @@ internal static class ModConfigUiFactory
             anchorMax,
             active ? ModConfigPalette.ActiveButton : ModConfigPalette.Button);
         var button = gameObject.AddComponent<Button>();
-        button.targetGraphic = gameObject.GetComponent<Image>();
+        var image = gameObject.GetComponent<Image>()!;
+        var native = NativeVisuals;
+        image.sprite = active
+            ? native.FeatureRailActiveFrame
+            : native.FeatureRailBaseFrame;
+        image.color = Color.white;
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
         CreateText(
             "Label",
             gameObject.transform,
@@ -104,33 +121,6 @@ internal static class ModConfigUiFactory
             0.68f);
         button.onClick.AddListener(action);
         return button;
-    }
-
-    public static void BuildTabs(
-        RectTransform parent,
-        IReadOnlyList<string> labels,
-        int selected,
-        ICollection<GameObject> owned,
-        TextMeshProUGUI template,
-        Action<int> onSelected)
-    {
-        var count = Math.Max(1, labels.Count);
-        for (var index = 0; index < labels.Count; index++)
-        {
-            var captured = index;
-            var left = (float)index / count;
-            var right = (float)(index + 1) / count;
-            var button = CreateButton(
-                "Tab." + labels[index],
-                parent,
-                new Vector2(left + 0.003f, 0.08f),
-                new Vector2(right - 0.003f, 0.92f),
-                template,
-                labels[index],
-                () => onSelected(captured),
-                index == selected);
-            owned.Add(button.gameObject);
-        }
     }
 
     public static void SetTopAnchoredHeight(RectTransform rect, float topInset, float height)

@@ -40,7 +40,7 @@ Expected on the upgrade to 0.4.0. The suite has one configuration file named aft
 
 ## Auto Concept repeatedly removes and re-adds one concept
 
-Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, enable operational logging briefly and include the `Auto Concept` lines plus the affected resource name.
+Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, capture the Runtime page's recent events and full trace, then include those records plus the affected resource name.
 
 ## Checking the suite against the live game
 
@@ -50,7 +50,7 @@ A requirement pass that reports `INCOMPLETE` names a condition class the suite d
 
 It deliberately runs everything inside the single frame the key was pressed in, so **the game will visibly hitch** — that hitch is the acknowledgement that the run happened. Load a save first; with no structures or resources available the passes report as unavailable.
 
-`Diagnostics/VerifyGameMathShortcut` remains hidden only to preserve a player-customized legacy value; the runtime does not listen to it. Schema 3 unbinds inherited `Left Ctrl + Left Alt + Y` and historical Alt+M defaults while preserving customized chords. Mentor's toggle (`General/ToggleShortcut`) remains `Left Alt + M`. Auto Cast defaults to `F8`; schema 3 migrates only the inherited `Left Alt + X` value and leaves a player-selected chord alone.
+Schema 5 removes the retired `Diagnostics/VerifyGameMathShortcut`; differential verification is an explicit Runtime action. Mentor's toggle (`General/ToggleShortcut`) remains `Left Alt + M`. Auto Cast defaults to `F8`; schema 3 migrates only the inherited `Left Alt + X` value and leaves a player-selected chord alone.
 
 ## Reporting a bug
 

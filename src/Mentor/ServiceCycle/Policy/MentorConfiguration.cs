@@ -11,7 +11,6 @@ internal sealed record MentorConfiguration
     internal double ArtifactSharePercent { get; init; }
     internal bool AlchemyEnabled { get; init; }
     internal double AlchemySharePercent { get; init; }
-    internal bool DetailedLogging { get; init; }
 
     internal static MentorConfiguration Read(MentorConfig source) => new()
     {
@@ -23,6 +22,5 @@ internal sealed record MentorConfiguration
         ArtifactSharePercent = source.ArtifactSharePercent.Value,
         AlchemyEnabled = source.AlchemyEnabled.Value,
         AlchemySharePercent = source.AlchemySharePercent.Value,
-        DetailedLogging = source.DetailedLogging.Value,
     };
 }

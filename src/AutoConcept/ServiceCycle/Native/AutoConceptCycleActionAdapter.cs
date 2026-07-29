@@ -53,7 +53,7 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
-        Narrate(in action, in submission, in config);
+        Narrate(in action, in submission);
         return Map(in submission);
     }
 
@@ -86,28 +86,15 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
 
     private static void Narrate(
         in AutoConceptCycleAction action,
-        in AutoConceptSubmission submission,
-        in SuiteRuntimeConfiguration config)
+        in AutoConceptSubmission submission)
     {
-        var verbose =
-            config.Diagnostics.IsOperationalLoggingEnabled &&
-            config.Diagnostics.DecisionLogLevel == SuiteDecisionLogLevel.Verbose;
-        if (submission.Verified)
-        {
-            if (verbose)
-                Plugin.Log?.LogAutomataInfo(
-                    $"Auto Concept completed {action.Kind} for {action.RecipeId:D} " +
-                    $"({submission.AppliedDelta} instance(s)).");
-            return;
-        }
+        if (submission.Verified) return;
 
         var message =
             $"Auto Concept did not complete {action.Kind} for {action.RecipeId:D}: " +
             submission.Reason;
         if (submission.Preflight == AutoConceptPreflight.Proceeded)
             Plugin.Log?.LogAutomataWarning(message);
-        else if (verbose)
-            Plugin.Log?.LogAutomataInfo(message);
     }
 
     private bool Owns()

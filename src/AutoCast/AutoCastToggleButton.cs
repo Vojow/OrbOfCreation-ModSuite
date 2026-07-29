@@ -13,17 +13,9 @@ namespace OrbAutomata;
 internal sealed class AutoCastToggleButton : IDisposable
 {
     internal const string ObjectName = "OrbAutomata.AutoCastToggle";
-    private static readonly Color OffColor = new Color(0.55f, 0.55f, 0.55f, 1.0f);
-    private static readonly Color OnColor = new Color(0.4f, 1.0f, 0.55f, 1.0f);
-
     private readonly GameObject _root;
     private readonly Button _button;
-    private readonly Image? _rootImage;
-    private readonly Image? _iconImage;
-    private readonly TextMeshProUGUI? _text;
-    private readonly Sprite? _offSprite;
-    private readonly Sprite? _onSprite;
-    private readonly Color _baseRootColor;
+    private readonly ConfiguredIntentIconButtonVisual _visual;
     private readonly AutoCastToggleControl _control;
     private readonly ManualLogSource _log;
     private AutoCastToggleVisualState? _renderedState;
@@ -34,22 +26,13 @@ internal sealed class AutoCastToggleButton : IDisposable
     private AutoCastToggleButton(
         GameObject root,
         Button button,
-        Image? rootImage,
-        Image? iconImage,
-        TextMeshProUGUI? text,
-        Sprite? offSprite,
-        Sprite? onSprite,
+        ConfiguredIntentIconButtonVisual visual,
         AutoCastToggleControl control,
         ManualLogSource log)
     {
         _root = root;
         _button = button;
-        _rootImage = rootImage;
-        _iconImage = iconImage;
-        _text = text;
-        _offSprite = offSprite;
-        _onSprite = onSprite;
-        _baseRootColor = rootImage?.color ?? Color.white;
+        _visual = visual;
         _control = control;
         _log = log;
     }
@@ -91,8 +74,6 @@ internal sealed class AutoCastToggleButton : IDisposable
             var clonedNativeToggle = root.GetComponent(nativeToggleType);
             var iconImage = ReadField(clonedNativeToggle, "iconImage") as Image;
             var text = ReadField(clonedNativeToggle, "textElement") as TextMeshProUGUI;
-            var offSprite = ReadField(clonedNativeToggle, "offButtonSprite") as Sprite ?? root.GetComponent<Image>()?.sprite;
-            var onSprite = ReadField(clonedNativeToggle, "onButtonSprite") as Sprite;
             var spellIcon = FindEquippedSpellIcon(out var iconSource);
             if (iconImage is not null && spellIcon is not null)
             {
@@ -142,14 +123,24 @@ internal sealed class AutoCastToggleButton : IDisposable
 
             button.onClick.RemoveAllListeners();
             ConfiguredIntentButtonVisualOwnership.Claim(button);
+            if (!ConfiguredIntentIconButtonVisual.TryCreateFeature(
+                root,
+                button,
+                iconImage,
+                text,
+                spellIcon,
+                out var visual,
+                out var visualReason))
+            {
+                UnityEngine.Object.Destroy(root);
+                reason = "Auto Cast native visual capture failed: " + visualReason +
+                         $"; icon source: {iconSource}";
+                return false;
+            }
             toggle = new AutoCastToggleButton(
                 root,
                 button,
-                root.GetComponent<Image>(),
-                iconImage,
-                text,
-                offSprite,
-                onSprite,
+                visual!,
                 control,
                 log);
             button.onClick.AddListener(toggle.Toggle);
@@ -192,38 +183,13 @@ internal sealed class AutoCastToggleButton : IDisposable
         var announce = _renderedState.HasValue && _renderedState.Value != state;
         _renderedState = state;
         _renderedStopped = stopped;
-        var active = state == AutoCastToggleVisualState.On;
-        var color = state == AutoCastToggleVisualState.On ? OnColor : OffColor;
-        if (_rootImage is not null)
-        {
-            _rootImage.sprite = active && _onSprite is not null ? _onSprite : _offSprite;
-            _rootImage.color = _baseRootColor;
-        }
-
-        if (_iconImage is not null)
-        {
-            _iconImage.color = color;
-        }
-
-        if (_text is not null)
-        {
-            _text.text = FormatLabel(state, stopped);
-            _text.color = stopped ? new Color(1.0f, 0.45f, 0.25f) : color;
-        }
+        _visual.Render(ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status), force);
 
         if (announce)
         {
             ShowStateNotice(state);
         }
     }
-
-    internal static string FormatLabel(AutoCastToggleVisualState state, bool stopped = false) => stopped
-        ? "AC ON / STOPPED"
-        : state switch
-    {
-        AutoCastToggleVisualState.On => "AC ON",
-        _ => "AC OFF",
-    };
 
     public void Dispose()
     {
@@ -363,9 +329,9 @@ internal sealed class AutoCastToggleButton : IDisposable
         }
     }
 
-    private static Sprite? FindEquippedSpellIcon(out string source)
+    internal static Sprite? FindEquippedSpellIcon(out string source)
     {
-        source = "native Auto Buy fallback";
+        source = "no equipped spell icon";
         var managerType = Type.GetType("SpellManager, Assembly-CSharp", false);
         var manager = managerType?
             .GetField("instance", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?

@@ -608,6 +608,10 @@ public class SaveStateManager
     public void ImplementLoadedJson()
     {
     }
+
+    public void StartGame()
+    {
+    }
 }
 
 public class GameManager
@@ -2151,6 +2155,8 @@ namespace UnityEngine
 
         public bool activeInHierarchy { get; set; } = true;
         public bool activeSelf { get; private set; } = true;
+        public UnityEngine.SceneManagement.Scene scene { get; set; } =
+            new UnityEngine.SceneManagement.Scene("Main");
 
         public static GameObject? Find(string name) => null;
 
@@ -2449,8 +2455,17 @@ namespace UnityEngine.UI
 
     public class Image : Graphic
     {
+        public enum Type
+        {
+            Simple,
+            Sliced,
+            Tiled,
+            Filled,
+        }
+
         public UnityEngine.Sprite? sprite { get; set; }
         public bool preserveAspect { get; set; }
+        public Type type { get; set; }
     }
 
     public class Selectable : UnityEngine.Behaviour
@@ -2604,6 +2619,8 @@ namespace UnityEngine.SceneManagement
         public readonly string name;
 
         public bool IsValid() => name is not null;
+
+        public bool isLoaded => IsValid();
     }
 
     public static class SceneManager

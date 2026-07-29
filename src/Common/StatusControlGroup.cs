@@ -12,27 +12,39 @@ public static class StatusControlOrder
     public const int AutoBuy = 100;
     public const int AutoCast = 200;
     public const int AutoConcept = 300;
-    public const int Mentor = 400;
+    public const int AutoHarvest = 400;
+    public const int Mentor = 500;
 }
 
 /// <summary>
-/// Marks a gameplay status control for ordered placement beside the native Auto Buy toggle.
-/// Lower order values are placed closer to the native toggle.
+/// Marks a gameplay status control for ordered placement in the compact suite tray.
+/// Higher order values appear first; STOP is deliberately last and separated.
 /// </summary>
 public sealed class StatusControlSlot : MonoBehaviour
 {
     public int Order { get; private set; }
+    public float ExtraGapBefore { get; private set; }
 
-    public void Configure(int order) => Order = order;
+    public void Configure(int order, float extraGapBefore)
+    {
+        Order = order;
+        ExtraGapBefore = Math.Max(0.0f, extraGapBefore);
+    }
 }
 
 /// <summary>
-/// Owns the shared, variable-length status-control strip used by suite plugins.
+/// Owns the compact two-column status-control tray in the audited empty lane at
+/// the left edge of the native right-sidebar AttributeBar.
 /// </summary>
 public static class StatusControlGroup
 {
     public const string ObjectName = "OrbModSuite.StatusControls";
-    public const float Gap = 12.0f;
+    public const int Columns = 2;
+    public const float ControlSize = 34.0f;
+    public const float ColumnGap = 4.0f;
+    public const float RowGap = 4.0f;
+    public const float TrayInset = 4.0f;
+    public const float StopSeparation = 6.0f;
 
     public static Component? FindNativeToggle(Type toggleType) =>
         Resources.FindObjectsOfTypeAll(toggleType)
@@ -57,25 +69,23 @@ public static class StatusControlGroup
         }
 
         if (nativeToggle.transform is not RectTransform nativeRect) throw new InvalidOperationException("native toggle rect unavailable");
-        var height = Math.Max(1.0f, Math.Abs(nativeRect.rect.height));
         var root = new GameObject(ObjectName, typeof(RectTransform));
         root.transform.SetParent(parent, false);
         root.AddComponent<LayoutElement>().ignoreLayout = true;
         var rect = (RectTransform)root.transform;
-        rect.sizeDelta = new Vector2(0.0f, height);
+        rect.sizeDelta = Vector2.zero;
         ConfigureGroupRect(rect, nativeRect);
         return rect;
     }
 
-    public static void RegisterControl(GameObject control, int order)
+    public static void RegisterControl(GameObject control, int order, float extraGapBefore = 0.0f)
     {
         var slot = control.GetComponent<StatusControlSlot>() ?? control.AddComponent<StatusControlSlot>();
-        slot.Configure(order);
+        slot.Configure(order, extraGapBefore);
     }
 
     public static void Reflow(Transform group, RectTransform nativeRect)
     {
-        var width = GetWidth(nativeRect);
         var controls = new List<StatusControlSlot>(group.childCount);
         for (var index = 0; index < group.childCount; index++)
         {
@@ -86,55 +96,72 @@ public static class StatusControlGroup
 
         controls.Sort(static (left, right) =>
         {
-            var order = left.Order.CompareTo(right.Order);
+            var order = right.Order.CompareTo(left.Order);
             return order != 0 ? order : string.CompareOrdinal(left.gameObject.name, right.gameObject.name);
         });
 
-        var groupWidth = CalculateGroupWidth(width, controls.Count);
-        for (var slotFromNative = 0; slotFromNative < controls.Count; slotFromNative++)
+        var extraWidth = controls
+            .Select((control, index) => index % Columns == 0 ? 0.0f : control.ExtraGapBefore)
+            .DefaultIfEmpty(0.0f)
+            .Max();
+        var groupSize = CalculateGroupSize(controls.Count, extraWidth);
+        for (var visibleIndex = 0; visibleIndex < controls.Count; visibleIndex++)
         {
-            var rect = (RectTransform)controls[slotFromNative].transform;
-            rect.anchorMin = new Vector2(0.0f, 0.5f);
-            rect.anchorMax = new Vector2(0.0f, 0.5f);
+            var slot = controls[visibleIndex];
+            var rect = (RectTransform)slot.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.zero;
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(
-                CalculateSlotCenterX(width, controls.Count, slotFromNative),
-                0.0f);
+            rect.sizeDelta = new Vector2(ControlSize, ControlSize);
+            rect.anchoredPosition = CalculateSlotCenter(
+                visibleIndex,
+                controls.Count,
+                visibleIndex % Columns == 0 ? 0.0f : slot.ExtraGapBefore);
         }
 
         if (group is RectTransform groupRect)
         {
-            groupRect.sizeDelta = new Vector2(groupWidth, groupRect.sizeDelta.y);
+            groupRect.sizeDelta = groupSize;
             ConfigureGroupRect(groupRect, nativeRect);
         }
     }
 
-    public static Vector2 CalculateGroupPosition(Vector2 nativePosition, Vector2 nativePivot, float width, float height) =>
-        new(nativePosition.x - nativePivot.x * width - Gap,
-            nativePosition.y + (0.5f - nativePivot.y) * height);
+    public static Vector2 CalculateGroupPosition(Vector2 nativePosition, Vector2 nativePivot, float nativeWidth) =>
+        new(nativePosition.x - nativePivot.x * nativeWidth + TrayInset, TrayInset);
 
-    public static float CalculateGroupWidth(float width, int count) =>
-        count <= 0 ? 0.0f : count * width + (count - 1) * Gap;
+    public static Vector2 CalculateGroupSize(int count, float extraWidth = 0.0f)
+    {
+        if (count <= 0) return Vector2.zero;
+        var columns = Math.Min(Columns, count);
+        var rows = (count + Columns - 1) / Columns;
+        return new Vector2(
+            columns * ControlSize + (columns - 1) * ColumnGap + Math.Max(0.0f, extraWidth),
+            rows * ControlSize + (rows - 1) * RowGap);
+    }
 
-    public static float CalculateSlotCenterX(float width, int count, int slotFromNative)
+    public static Vector2 CalculateSlotCenter(int visibleIndex, int count, float extraGapBefore = 0.0f)
     {
         if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
-        if (slotFromNative < 0 || slotFromNative >= count) throw new ArgumentOutOfRangeException(nameof(slotFromNative));
-        return CalculateGroupWidth(width, count) - width * 0.5f - slotFromNative * (width + Gap);
+        if (visibleIndex < 0 || visibleIndex >= count) throw new ArgumentOutOfRangeException(nameof(visibleIndex));
+        var groupSize = CalculateGroupSize(count, visibleIndex % Columns == 0 ? 0.0f : extraGapBefore);
+        var column = visibleIndex % Columns;
+        var row = visibleIndex / Columns;
+        return new Vector2(
+            ControlSize * 0.5f + column * (ControlSize + ColumnGap) +
+            (column == 0 ? 0.0f : Math.Max(0.0f, extraGapBefore)),
+            groupSize.y - ControlSize * 0.5f - row * (ControlSize + RowGap));
     }
 
     private static void ConfigureGroupRect(RectTransform groupRect, RectTransform nativeRect)
     {
         var width = GetWidth(nativeRect);
-        var height = Math.Abs(nativeRect.rect.height);
-        groupRect.anchorMin = nativeRect.anchorMin;
-        groupRect.anchorMax = nativeRect.anchorMax;
-        groupRect.pivot = new Vector2(1.0f, 0.5f);
+        groupRect.anchorMin = new Vector2(nativeRect.anchorMin.x, 0.0f);
+        groupRect.anchorMax = groupRect.anchorMin;
+        groupRect.pivot = Vector2.zero;
         groupRect.anchoredPosition = CalculateGroupPosition(
             nativeRect.anchoredPosition,
             nativeRect.pivot,
-            width,
-            height);
+            width);
     }
 
     private static float GetWidth(RectTransform rect)

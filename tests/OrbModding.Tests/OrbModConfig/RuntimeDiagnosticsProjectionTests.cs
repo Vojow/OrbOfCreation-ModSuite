@@ -24,10 +24,47 @@ public sealed class RuntimeDiagnosticsProjectionTests
         Assert.Equal(ModConfigTopPageKind.Runtime, pages[0].Kind);
         Assert.Equal("Runtime (2)", pages[0].Label);
         Assert.Equal(-1, pages[0].PluginIndex);
-        Assert.Equal("Automata", pages[1].Label);
+        Assert.Equal("Orb Automata · Main", pages[1].Label);
         Assert.Equal(0, pages[1].PluginIndex);
-        Assert.Equal("Mentor", pages[2].Label);
+        Assert.Equal(0, pages[1].SectionIndex);
+        Assert.Equal("Orb Mentor · Main", pages[2].Label);
         Assert.Equal(1, pages[2].PluginIndex);
+        Assert.Equal(0, pages[2].SectionIndex);
+    }
+
+    [Fact]
+    public void FeatureHealthGridPutsFailuresAndAttentionBeforeHealthyFeatures()
+    {
+        var dashboard = new RuntimeDiagnosticsDashboard(new[]
+        {
+            new RuntimeDiagnosticsCard(
+                "suite",
+                "Suite",
+                "1",
+                "Schema ready",
+                new[]
+                {
+                    Feature("suite", "healthy", FeatureStatusState.Operational),
+                    Feature("suite", "failure", FeatureStatusState.Faulted),
+                    Feature("suite", "attention", FeatureStatusState.Degraded),
+                },
+                Array.Empty<RuntimeServiceDiagnosticsSnapshot>(),
+                RuntimeDiagnosticsSeverity.Healthy),
+        });
+
+        var items = RuntimeFeatureHealthProjection.Build(dashboard);
+
+        Assert.Equal(
+            new[] { "failure", "attention", "healthy" },
+            items.Select(item => item.Status.Key.FeatureId));
+        Assert.Equal(
+            new[]
+            {
+                RuntimeDiagnosticsSeverity.Failure,
+                RuntimeDiagnosticsSeverity.Attention,
+                RuntimeDiagnosticsSeverity.Healthy,
+            },
+            items.Select(item => item.Severity));
     }
 
     [Fact]
@@ -236,7 +273,11 @@ public sealed class RuntimeDiagnosticsProjectionTests
     }
 
     private static ModConfigDescriptor Mod(string guid, string name) =>
-        new(guid, name, "1", Array.Empty<ConfigSectionDescriptor>());
+        new(
+            guid,
+            name,
+            "1",
+            new[] { new ConfigSectionDescriptor("Main", Array.Empty<ConfigSettingDescriptor>()) });
 
     private static FeatureStatusSnapshot Feature(
         string pluginId,
