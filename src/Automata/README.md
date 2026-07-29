@@ -162,7 +162,7 @@ the appropriate target and accounting.
 
 The suite is designed to be the only auto-buy plugin in the installation. Running another buyer against the same resources and queue is unsupported.
 
-Auto Buy finishes the configured purchase group for each candidate and advances through the prepared ranking before refreshing dirty resource and cost state. With the default `BulkDevelopment` policy, every ranked Structure receives one live group and every Upgrade receives one level, preventing a cheap Structure from monopolizing the queue indefinitely. It does not predict future levels: every mutation is admitted independently.
+Auto Buy finishes the configured purchase group for each candidate and advances through the prepared ranking before refreshing dirty resource and cost state. With the default `BulkDevelopment` policy, every ranked Structure receives one live group and every Upgrade receives one level, preventing a cheap Structure from monopolizing the queue indefinitely. World derivation prices every level in the current bounded native group with the ported game curve, so the batch ledger reserves the exact grouped sum before admitting a later candidate that shares its resources. Every mutation is still admitted independently against live native state.
 
 Active membership and ranked recommendation views use reused buffers and deterministic bounded walks; routine evaluations do not rebuild reflected wrappers or sort the complete registry. The slow ten-second registry reconciliation reuses wrappers when native identity is unchanged.
 

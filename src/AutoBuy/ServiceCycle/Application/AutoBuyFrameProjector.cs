@@ -221,7 +221,14 @@ internal static class AutoBuyFrameProjector
                 return false;
             }
 
-            Append(ref costs, costCount, new AutoBuyCostRow(resourceRowIndex, published.Amount));
+            Append(
+                ref costs,
+                costCount,
+                new AutoBuyCostRow(
+                    resourceRowIndex,
+                    published.Amount,
+                    published.ExactGroupedLevels,
+                    published.ExactGroupedAmount));
             costCount++;
             costRowCount++;
         }
@@ -407,9 +414,7 @@ internal static class AutoBuyFrameProjector
     /// </para>
     /// </remarks>
     private static int ReadGlobalCount(GameWorldState world, Guid variableId) =>
-        WorldLookup.TryFind(world.IntVariables, variableId, out var variable)
-            ? Math.Max(1, (int)variable.Value.ToDouble())
-            : 1;
+        WorldPurchaseGrouping.Read(world.IntVariables, variableId);
 
     private static void Append<T>(ref T[] buffer, int count, in T value)
     {

@@ -1337,6 +1337,11 @@ public sealed class GameWorldCollectorTests : IDisposable
         var water = Guid.NewGuid();
         var cauldron = Guid.NewGuid();
 
+        FakeCount.All.Add(new FakeCount
+        {
+            Identity = KnownEntities.BulkDevelopment.Uuid,
+            value = new FakeModifierRecord(3d),
+        });
         FakePlayerGlobals.SetStructureCost(200d);
         FakeResource.All.Add(new FakeResource
         {
@@ -1374,6 +1379,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         var row = world.PurchaseCosts[start];
         Assert.Equal(water, row.ResourceId);
         Assert.Equal(730.8d, row.Amount.ToDouble(), 6);
+        Assert.Equal(3, row.ExactGroupedLevels);
+        Assert.Equal(2208.6d, row.ExactGroupedAmount.ToDouble(), 6);
     }
 
     /// <summary>
@@ -1779,6 +1786,38 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, count);
         Assert.Equal(water, world.PurchaseCosts[start].ResourceId);
         Assert.Equal(200000d, world.PurchaseCosts[start].Amount.ToDouble(), 6);
+    }
+
+    [Fact]
+    public void AnUpgradePublishesTheExactSuccessiveMultiBuyTotal()
+    {
+        var water = Guid.NewGuid();
+        var insight = Guid.NewGuid();
+
+        FakeCount.All.Add(new FakeCount
+        {
+            Identity = KnownEntities.MultiBuy.Uuid,
+            value = new FakeModifierRecord(3d),
+        });
+        FakeResource.All.Add(new FakeResource { Identity = water, Quantity = 500d });
+        FakeUpgrade.All.Add(new FakeUpgrade
+        {
+            Identity = insight,
+            resourceCost = CostOf((water, 50d)),
+            resourceCostModPerLevel = LevelModifiers(
+                new[] { new FakeValueModifier(FakeModifierKind.MultiStacking, 2d, order: 0) }),
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldPurchaseCostLookup.TryFindRange(
+            world.PurchaseCosts, insight, out var start, out _));
+        Assert.Equal(50d, world.PurchaseCosts[start].Amount.ToDouble(), 6);
+        Assert.Equal(3, world.PurchaseCosts[start].ExactGroupedLevels);
+        Assert.Equal(350d, world.PurchaseCosts[start].ExactGroupedAmount.ToDouble(), 6);
     }
 
     /// <summary>

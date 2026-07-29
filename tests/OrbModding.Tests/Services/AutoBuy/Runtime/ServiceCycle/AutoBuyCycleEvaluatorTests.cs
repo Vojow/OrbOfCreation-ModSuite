@@ -257,6 +257,52 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(3, actions[0].Count);
     }
 
+    [Fact]
+    public void FillAvailableQueueReservesTheExactRisingGroupedCost()
+    {
+        var builder = new FrameBuilder().Multiplier(3);
+        var resource = builder.Resource(65);
+        builder.GroupedUpgrade(
+            UpgradeA,
+            resource,
+            nextCost: 10.0,
+            exactGroupedCost: 60.0); // successive prices 10 + 20 + 30
+        builder.Structure(StructureA, new[] { (resource, 20.0) });
+        var frame = builder.Build();
+
+        // The old lower bound reserved 3 * 10 = 30, leaving 35 and admitting the structure. Native
+        // payment leaves only 5 after the rising 10 + 20 + 30 curve, so the structure is predictably
+        // unaffordable. FillAvailableQueue still plans the grouped upgrade, but no longer emits that
+        // doomed later action.
+        var action = Assert.Single(Plan(
+            frame,
+            Config(
+                grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier,
+                batchSizing: AutoBuyBatchSizingMode.FillAvailableQueue),
+            out _));
+
+        Assert.Equal(UpgradeA, action.Uuid);
+        Assert.Equal(3, action.Count);
+    }
+
+    [Fact]
+    public void AGroupedRequestWithoutItsExactPublishedCurveIsRefused()
+    {
+        var builder = new FrameBuilder().Multiplier(3);
+        var resource = builder.Resource(1_000);
+        builder.GroupedUpgrade(
+            UpgradeA,
+            resource,
+            nextCost: 10.0,
+            exactGroupedCost: 30.0,
+            publishedGroupedLevels: 2);
+
+        Assert.Empty(Plan(
+            builder.Build(),
+            Config(grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier),
+            out _));
+    }
+
     // ---- Affordability threshold ----------------------------------------------------------------
 
     [Fact]
@@ -1138,6 +1184,26 @@ public sealed class AutoBuyCycleEvaluatorTests
                 AutoBuyCandidateKind.Upgrade, uuid, costs, available, AutoBuyEconomicPriority.None,
                 hasFiniteLevels, isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements);
 
+        public FrameBuilder GroupedUpgrade(
+            Guid uuid,
+            int resourceIndex,
+            double nextCost,
+            double exactGroupedCost,
+            int? publishedGroupedLevels = null) =>
+            Candidate(
+                AutoBuyCandidateKind.Upgrade,
+                uuid,
+                new[] { (resourceIndex, nextCost) },
+                available: true,
+                AutoBuyEconomicPriority.None,
+                hasFiniteLevels: false,
+                isMaxLevel: false,
+                isMaxQueuedLevel: false,
+                queuedLevels: 0,
+                meetsNextLevelRequirements: true,
+                new[] { exactGroupedCost },
+                publishedGroupedLevels);
+
         private FrameBuilder Candidate(
             AutoBuyCandidateKind kind,
             Guid uuid,
@@ -1148,11 +1214,22 @@ public sealed class AutoBuyCycleEvaluatorTests
             bool isMaxLevel,
             bool isMaxQueuedLevel,
             int queuedLevels,
-            bool meetsNextLevelRequirements)
+            bool meetsNextLevelRequirements,
+            double[]? exactGroupedCosts = null,
+            int? publishedGroupedLevels = null)
         {
             var start = _costs.Count;
-            foreach (var (resourceIndex, cost) in costs)
-                _costs.Add(new AutoBuyCostRow(resourceIndex, cost));
+            var configuredLevels = kind == AutoBuyCandidateKind.Upgrade ? _multiplier : _bulk;
+            var groupedLevels = publishedGroupedLevels ?? Math.Max(
+                1, Math.Min(WorldPurchaseGrouping.MaximumLevels, configuredLevels));
+            for (var index = 0; index < costs.Length; index++)
+            {
+                var (resourceIndex, cost) = costs[index];
+                var groupedCost = exactGroupedCosts is null
+                    ? cost * groupedLevels
+                    : exactGroupedCosts[index];
+                _costs.Add(new AutoBuyCostRow(resourceIndex, cost, groupedLevels, groupedCost));
+            }
 
             _candidates.Add(new AutoBuyCandidateRow(
                 kind,

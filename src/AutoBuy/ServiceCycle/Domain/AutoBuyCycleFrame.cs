@@ -207,13 +207,26 @@ internal readonly struct AutoBuyResourceRow
 internal readonly struct AutoBuyCostRow
 {
     public AutoBuyCostRow(int resourceRowIndex, BigDouble cost)
+        : this(resourceRowIndex, cost, exactGroupedLevels: 1, cost)
+    {
+    }
+
+    public AutoBuyCostRow(
+        int resourceRowIndex,
+        BigDouble cost,
+        int exactGroupedLevels,
+        BigDouble exactGroupedCost)
     {
         ResourceRowIndex = resourceRowIndex;
         Cost = cost;
+        ExactGroupedLevels = exactGroupedLevels;
+        ExactGroupedCost = exactGroupedCost;
     }
 
     public int ResourceRowIndex { get; }
     public BigDouble Cost { get; }
+    public int ExactGroupedLevels { get; }
+    public BigDouble ExactGroupedCost { get; }
 }
 
 /// <summary>

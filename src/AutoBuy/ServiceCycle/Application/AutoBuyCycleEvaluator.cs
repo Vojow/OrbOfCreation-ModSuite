@@ -4,6 +4,7 @@ using System.Globalization;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
@@ -32,8 +33,9 @@ namespace OrbAutomata;
 /// live queue room before every submission, rejects — cascade-terminating the batch — once only
 /// <see cref="AutoBuyConfiguration.LeaveQueueSlots"/> remain, and clamps a multi-level request to the
 /// room above that reserve, since the game queues one entry per level. So the plan is as long as the
-/// ranked list and the runtime stops it at the truth. A cost-curve-aware planner that buys many
-/// affordable levels of a candidate in one cycle is deferred to Pillar B.
+/// ranked list and the runtime stops it at the truth. The ledger reserves the exact ported cost-curve
+/// sum for the configured native group; choosing a new group size from affordability remains deferred
+/// to Pillar B.
 /// </remarks>
 internal static class AutoBuyCycleEvaluator
 {
@@ -300,11 +302,10 @@ internal static class AutoBuyCycleEvaluator
     /// something else still gets its turn.
     /// </summary>
     /// <remarks>
-    /// A multi-level request is charged <c>levels x next-cost</c>. That is a lower bound, because each
-    /// level costs more than the last and the snapshot only carries the next one. The game's own
-    /// per-level <c>HasEnough()</c> still stops a purchase going negative; what the curve can do is let
-    /// a multi-level buy dip into the reserve. Charging it exactly needs the ported cost math, which is
-    /// not wired in yet. See W25.
+    /// A multi-level request is charged the published exact sum of each successively priced level.
+    /// The same ported game math that prices the next level produces that grouped total during world
+    /// derivation, including per-level rounding and the finite-upgrade cap. A row that does not carry
+    /// the exact requested group is refused here rather than degraded to <c>levels x next-cost</c>.
     /// </remarks>
     private static bool TryCommitSpend(
         in AutoBuyCandidateRow candidate,
@@ -324,7 +325,10 @@ internal static class AutoBuyCycleEvaluator
                 continue;
 
             var resourceIndex = costs[i].ResourceRowIndex;
-            var cost = CombinedCost(costs, start, end, resourceIndex) * levels;
+            if (!TryCombinedExactCost(costs, start, end, resourceIndex, levels, out var cost))
+                return false;
+            if (IsNegative(cost))
+                return false;
             if (IsZero(cost))
                 continue;
             if ((uint)resourceIndex >= (uint)committed.Length)
@@ -342,7 +346,38 @@ internal static class AutoBuyCycleEvaluator
                 continue;
 
             var resourceIndex = costs[i].ResourceRowIndex;
-            committed[resourceIndex] += CombinedCost(costs, start, end, resourceIndex) * levels;
+            if (!TryCombinedExactCost(costs, start, end, resourceIndex, levels, out var cost))
+                return false;
+            committed[resourceIndex] += cost;
+        }
+
+        return true;
+    }
+
+    private static bool TryCombinedExactCost(
+        ReadOnlySpan<AutoBuyCostRow> costs,
+        int start,
+        int end,
+        int resourceIndex,
+        int levels,
+        out BigDouble combined)
+    {
+        combined = default;
+        for (var index = start; index < end; index++)
+        {
+            ref readonly var row = ref costs[index];
+            if (row.ResourceRowIndex != resourceIndex)
+                continue;
+
+            if (levels == 1)
+            {
+                combined += row.Cost;
+                continue;
+            }
+
+            if (row.ExactGroupedLevels != levels)
+                return false;
+            combined += row.ExactGroupedCost;
         }
 
         return true;
@@ -513,7 +548,7 @@ internal static class AutoBuyCycleEvaluator
         };
 
     /// <summary>The most levels one action may ask for, whatever the game's count says.</summary>
-    private const int MaximumGroupedLevels = 100;
+    private const int MaximumGroupedLevels = WorldPurchaseGrouping.MaximumLevels;
 
     private static int Clamp(int levels) => Math.Max(1, Math.Min(MaximumGroupedLevels, levels));
 

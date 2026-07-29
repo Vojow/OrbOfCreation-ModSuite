@@ -205,14 +205,19 @@ internal static class GameWorldFrameDeriver
         var structures = frame.Structures.Build(WorldStructureDeriver.Shared);
         var modifierVariables =
             frame.ModifierVariables.Build(WorldIdentityDeriver<WorldModifierVariable>.Shared);
+        var intVariables =
+            frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared);
 
         // Built after the three tables it reads, because a cost is the one derived fact that is not a
         // function of its own category: it needs the entity's modifiers, each resource's attribute
-        // modifier, and the modifier the entity points at.
+        // modifier, the modifier the entity points at, and the already-collected grouping counts that
+        // bound its exact rising-curve total.
         var upgrades = frame.Upgrades.Build(WorldUpgradeDeriver.Shared);
         var purchaseCosts = new WorldPurchaseCostDeriver(
                 structures, upgrades, resources, modifierVariables, frame.LevelCostModifiers,
-                frame.FrameGlobals)
+                frame.FrameGlobals,
+                WorldPurchaseGrouping.Read(intVariables, KnownEntities.BulkDevelopment.Uuid),
+                WorldPurchaseGrouping.Read(intVariables, KnownEntities.MultiBuy.Uuid))
             .Build(frame.PurchaseCosts);
 
         // Same shape, same reason: what one run of an action costs a plot is a function of both, so
@@ -233,7 +238,7 @@ internal static class GameWorldFrameDeriver
             Upgrades = upgrades,
             Research = frame.Research.Build(WorldIdentityDeriver<WorldResearch>.Shared),
             DoubleVariables = frame.DoubleVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared),
-            IntVariables = frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared),
+            IntVariables = intVariables,
             BoolVariables = frame.BoolVariables.Build(WorldIdentityDeriver<WorldBoolVariable>.Shared),
             ModifierVariables = modifierVariables,
             AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
