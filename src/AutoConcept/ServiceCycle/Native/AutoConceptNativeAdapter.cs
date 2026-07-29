@@ -14,7 +14,6 @@ internal sealed class NativeConceptCandidate
         string uuid,
         string displayName,
         object recipe,
-        string slotTypeUuid,
         int maximumQuantity,
         object? instance,
         int quantity,
@@ -23,7 +22,6 @@ internal sealed class NativeConceptCandidate
         Uuid = uuid;
         DisplayName = displayName;
         Recipe = recipe;
-        SlotTypeUuid = slotTypeUuid;
         MaximumQuantity = maximumQuantity;
         Instance = instance;
         Quantity = quantity;
@@ -33,7 +31,6 @@ internal sealed class NativeConceptCandidate
     public string Uuid { get; }
     public string DisplayName { get; }
     public object Recipe { get; }
-    public string SlotTypeUuid { get; }
     public int MaximumQuantity { get; }
     public object? Instance { get; }
     public int Quantity { get; }
@@ -58,11 +55,16 @@ internal sealed class AutoConceptNativeAdapter :
     private Type? _recipeType;
     private Type? _instanceType;
     private FieldInfo? _activeValuesField;
+    private FieldInfo? _recipeTypesField;
     private FieldInfo? _recipeDrainField;
     private FieldInfo? _instanceQuantityField;
     private FieldInfo? _instanceQueuedQuantityField;
     private FieldInfo? _instanceDrainField;
     private MethodInfo? _canAddInstance;
+    private MethodInfo? _isDiscovered;
+    private MethodInfo? _getNumEmptyTypelessSlots;
+    private MethodInfo? _getSlotsOnlyForType;
+    private MethodInfo? _getNumOfType;
     private MethodInfo? _addInstances;
     private MethodInfo? _removeInstances;
     private string? _blockedReason;
@@ -111,9 +113,11 @@ internal sealed class AutoConceptNativeAdapter :
 
             _recipeType = ReflectionUtil.FindLoadedType("AlchemyRecipeSO");
             _instanceType = ReflectionUtil.FindLoadedType("AlchemyInstance");
+            var alchemyType = ReflectionUtil.FindLoadedType("AlchemyTypeSO");
             var activeType = ReflectionUtil.FindLoadedType(KnownEntities.ActiveConcepts.ManagedTypeName);
             var recipeListType = ReflectionUtil.FindLoadedType(KnownEntities.ConceptRecipes.ManagedTypeName);
-            if (_recipeType is null || _instanceType is null || activeType is null || recipeListType is null)
+            if (_recipeType is null || _instanceType is null || alchemyType is null ||
+                activeType is null || recipeListType is null)
                 return Retry("native concept types are not registered yet", out reason);
 
             var activeId = KnownEntities.ActiveConcepts.Uuid;
@@ -131,16 +135,28 @@ internal sealed class AutoConceptNativeAdapter :
 
             _activeValuesField = FindField(activeType, "value", isStatic: false);
             var recipeValuesField = FindField(recipeListType, "value", isStatic: false);
+            _recipeTypesField = FindField(_recipeType, "alchemyTypes", isStatic: false);
             _recipeDrainField = FindField(_recipeType, "drainCost", isStatic: false);
             _instanceQuantityField = FindField(_instanceType, "quantity", isStatic: false);
             _instanceQueuedQuantityField = FindField(_instanceType, "queuedQuantity", isStatic: false);
             _instanceDrainField = FindField(_instanceType, "resourceDrain", isStatic: false);
             _canAddInstance = FindMethod(activeType, "CanAddInstance", _recipeType);
+            _isDiscovered = FindMethod(_recipeType, "IsDiscovered");
+            _getNumEmptyTypelessSlots = FindMethod(activeType, "GetNumEmptyTypelessSlots");
+            _getSlotsOnlyForType = FindMethod(
+                activeType, "GetSlotsOnlyForType", alchemyType);
+            _getNumOfType = FindMethod(
+                activeType, "GetNumOfType", alchemyType);
             _addInstances = FindMethod(activeType, "AddAlchemyInstances", _recipeType, typeof(int));
             _removeInstances = FindMethod(activeType, "RemoveAlchemyInstances", _recipeType, typeof(int));
-            if (_activeValuesField is null || recipeValuesField is null || _recipeDrainField is null ||
+            if (_activeValuesField is null || recipeValuesField is null || _recipeTypesField is null ||
+                _recipeDrainField is null ||
                 _instanceQuantityField is null || _instanceQueuedQuantityField is null || _instanceDrainField is null ||
-                _canAddInstance is null || _addInstances is null || _removeInstances is null)
+                !Returns(_canAddInstance, typeof(bool)) || !Returns(_isDiscovered, typeof(bool)) ||
+                !Returns(_getNumEmptyTypelessSlots, typeof(int)) ||
+                !Returns(_getSlotsOnlyForType, typeof(int)) ||
+                !Returns(_getNumOfType, typeof(int)) ||
+                _addInstances is null || _removeInstances is null)
                 return Fail("native Active Concepts accessors are unavailable", out reason);
 
             if (recipeValuesField.GetValue(recipes) is not IEnumerable scopedRecipes)
@@ -190,9 +206,12 @@ internal sealed class AutoConceptNativeAdapter :
             {
                 var uuid = _recipeUuids[recipe];
                 if (!string.Equals(uuid, recipeId.ToString(), StringComparison.Ordinal)) continue;
+                if (_isDiscovered!.Invoke(recipe, null) is not true)
+                {
+                    reason = "the planned concept is no longer unlocked";
+                    return false;
+                }
                 var maximum = Math.Max(0, ReadInt(recipe, "GetMaxUsageSlots", "maxUsageSlots"));
-                var coreType = ReflectionUtil.InvokeNoArgs(recipe, "GetCoreType");
-                var slotTypeUuid = coreType is null ? string.Empty : ReflectionUtil.ReadStableId(coreType) ?? string.Empty;
                 active.TryGetValue(recipe, out var instance);
                 var quantity = instance is null ? 0 : Convert.ToInt32(_instanceQuantityField!.GetValue(instance) ?? 0);
                 var queued = instance is null ? 0 : Convert.ToInt32(_instanceQueuedQuantityField!.GetValue(instance) ?? 0);
@@ -200,7 +219,6 @@ internal sealed class AutoConceptNativeAdapter :
                     uuid,
                     ReflectionUtil.ReadDisplayName(recipe) ?? uuid,
                     recipe,
-                    slotTypeUuid,
                     maximum,
                     instance,
                     Math.Max(0, quantity),
@@ -366,12 +384,12 @@ internal sealed class AutoConceptNativeAdapter :
             reason = "the rotation no longer names a replacement";
             return false;
         }
-        if (!TryResolveCandidate(replacementId, out var replacement, out reason) ||
-            replacement is null || !replacement.IsSettled || replacement.Quantity != 0 ||
-            !string.Equals(replacement.SlotTypeUuid, active.SlotTypeUuid, StringComparison.Ordinal) ||
-            !CanAdd(replacement))
+        if (!TryResolveCandidate(replacementId, out var replacement, out reason))
+            return false;
+        if (replacement is null || !replacement.IsSettled || replacement.Quantity != 0 ||
+            !CanReplaceAfterRemoval(active, replacement))
         {
-            reason = "the replacement identity, slot, or quantity changed";
+            reason = "the replacement identity, prospective slot, unlock, or quantity changed";
             return false;
         }
         return TryFindSafeTarget(
@@ -381,6 +399,39 @@ internal sealed class AutoConceptNativeAdapter :
             config.MinimumResourcePercent,
             out _,
             out reason);
+    }
+
+    private bool CanReplaceAfterRemoval(
+        NativeConceptCandidate active,
+        NativeConceptCandidate replacement)
+    {
+        if (CanAdd(replacement)) return true;
+        if (_activeConcepts is null ||
+            _recipeTypesField!.GetValue(active.Recipe) is not IList activeTypes ||
+            _recipeTypesField.GetValue(replacement.Recipe) is not IList replacementTypes)
+            return false;
+
+        var genericAfter = InvokeInt(_getNumEmptyTypelessSlots!, _activeConcepts) + 1;
+        var activeTypeSet = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        for (var index = 0; index < activeTypes.Count; index++)
+        {
+            var type = activeTypes[index];
+            if (type is null || !activeTypeSet.Add(type)) continue;
+            var count = InvokeInt(_getNumOfType!, _activeConcepts, type);
+            var slots = InvokeInt(_getSlotsOnlyForType!, _activeConcepts, type);
+            if (count > 0 && count <= slots) genericAfter--;
+        }
+
+        for (var index = 0; index < replacementTypes.Count; index++)
+        {
+            var type = replacementTypes[index];
+            if (type is null) continue;
+            var count = InvokeInt(_getNumOfType!, _activeConcepts, type);
+            if (activeTypeSet.Contains(type) && count > 0) count--;
+            var slots = InvokeInt(_getSlotsOnlyForType!, _activeConcepts, type);
+            if (genericAfter + Math.Max(slots - count, 0) > 0) return true;
+        }
+        return false;
     }
 
     private bool TryAdd(NativeConceptCandidate candidate, int delta, out string reason)
@@ -654,6 +705,12 @@ internal sealed class AutoConceptNativeAdapter :
         var value = ReflectionUtil.InvokeNoArgs(instance, methodName) ?? FindField(instance.GetType(), fieldName, false)?.GetValue(instance);
         return Convert.ToInt32(value ?? 0);
     }
+
+    private static int InvokeInt(MethodInfo method, object instance, params object[] arguments) =>
+        Convert.ToInt32(method.Invoke(instance, arguments) ?? 0);
+
+    private static bool Returns(MethodInfo? method, Type returnType) =>
+        method is not null && method.ReturnType == returnType;
 
     private static FieldInfo? FindField(Type type, string name, bool isStatic)
     {

@@ -252,6 +252,13 @@ internal enum AutoConceptDecisionKind
     Depth = 5,
 }
 
+internal enum AutoConceptIdleReason
+{
+    None = 0,
+    WaitingForTraining = 1,
+    NoUnlockedAssignableReplacement = 2,
+}
+
 internal readonly struct AutoConceptDecisionMetrics
 {
     internal AutoConceptDecisionMetrics(
@@ -260,7 +267,8 @@ internal readonly struct AutoConceptDecisionMetrics
         int activeRecipes,
         int ownedRecipes,
         int plannedActions,
-        AutoConceptDecisionKind kind)
+        AutoConceptDecisionKind kind,
+        AutoConceptIdleReason idleReason = AutoConceptIdleReason.None)
     {
         CapturedRecipes = capturedRecipes;
         EligibleRecipes = eligibleRecipes;
@@ -268,6 +276,7 @@ internal readonly struct AutoConceptDecisionMetrics
         OwnedRecipes = ownedRecipes;
         PlannedActions = plannedActions;
         Kind = kind;
+        IdleReason = idleReason;
     }
 
     public int CapturedRecipes { get; }
@@ -276,4 +285,5 @@ internal readonly struct AutoConceptDecisionMetrics
     public int OwnedRecipes { get; }
     public int PlannedActions { get; }
     public AutoConceptDecisionKind Kind { get; }
+    public AutoConceptIdleReason IdleReason { get; }
 }

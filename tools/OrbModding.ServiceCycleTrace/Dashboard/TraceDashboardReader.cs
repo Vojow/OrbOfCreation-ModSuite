@@ -717,6 +717,7 @@ internal static class TraceDashboardReader
                 AutoConceptServiceProjection.OwnedRecipesKey => "Owned recipes",
                 AutoConceptServiceProjection.PlannedActionsKey => "Planned actions",
                 AutoConceptServiceProjection.DecisionKindKey => "Decision kind",
+                AutoConceptServiceProjection.IdleReasonKey => "Idle reason",
                 _ => NeutralProjectionName(key),
             };
         if (string.Equals(
@@ -756,6 +757,20 @@ internal static class TraceDashboardReader
                 return ((AutoHarvestPair)integer).ToString();
             if (key is 5 or 8 && Enum.IsDefined(typeof(AutoHarvestPairHealthKind), integer))
                 return ((AutoHarvestPairHealthKind)integer).ToString();
+        }
+        if (string.Equals(
+                serviceMachineId,
+                AutoConceptServicePolicies.ServiceId.Value,
+                StringComparison.Ordinal) &&
+            value.Integer is >= int.MinValue and <= int.MaxValue)
+        {
+            var integer = (int)value.Integer;
+            if (key == AutoConceptServiceProjection.DecisionKindKey &&
+                Enum.IsDefined(typeof(AutoConceptDecisionKind), integer))
+                return ((AutoConceptDecisionKind)integer).ToString();
+            if (key == AutoConceptServiceProjection.IdleReasonKey &&
+                Enum.IsDefined(typeof(AutoConceptIdleReason), integer))
+                return ((AutoConceptIdleReason)integer).ToString();
         }
         return value.Integer.ToString(CultureInfo.InvariantCulture);
     }

@@ -1377,15 +1377,35 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
     public bool SuppressAddMutation { get; set; }
     public bool SuppressRemoveMutation { get; set; }
+    public int TypelessSlots { get; set; } = 16;
+    public Dictionary<AlchemyTypeSO, int> TypeSlots { get; } =
+        new Dictionary<AlchemyTypeSO, int>();
 
     public bool CanAddInstance(AlchemyRecipeSO recipe)
     {
         var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
         if (instance is not null && instance.queuedQuantity >= recipe.GetMaxUsageSlots()) return false;
-        return value.All(item =>
-            ReferenceEquals(item.reference, recipe) ||
-            Math.Max(item.quantity, item.queuedQuantity) == 0 ||
-            !string.Equals(item.reference.GetCoreType().uuid, recipe.GetCoreType().uuid, StringComparison.Ordinal));
+        if (instance is not null) return true;
+        return recipe.alchemyTypes.Any(type =>
+            GetNumEmptyTypelessSlots() + Math.Max(GetSlotsOnlyForType(type) - GetNumOfType(type), 0) > 0);
+    }
+
+    public int GetNumOfType(AlchemyTypeSO type) =>
+        value.Count(item =>
+            Math.Max(item.quantity, item.queuedQuantity) > 0 &&
+            item.reference.alchemyTypes.Contains(type));
+
+    public int GetSlotsOnlyForType(AlchemyTypeSO type) =>
+        TypeSlots.TryGetValue(type, out var slots) ? slots : 0;
+
+    public int GetNumEmptyTypelessSlots()
+    {
+        var totalSlots = TypelessSlots + TypeSlots.Values.Sum();
+        var emptySlots = Math.Max(0, totalSlots - value.Count(item =>
+            Math.Max(item.quantity, item.queuedQuantity) > 0));
+        var reservedTyped = TypeSlots.Sum(entry =>
+            Math.Max(entry.Value - GetNumOfType(entry.Key), 0));
+        return emptySlots - reservedTyped;
     }
 
     public void AddAlchemyInstances(AlchemyRecipeSO recipe, int delta)

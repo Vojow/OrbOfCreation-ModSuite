@@ -56,7 +56,7 @@ public sealed class TraceDashboardReaderTests
         using var fixture = new DashboardTraceFixture(
             service: 6,
             machineId: "orbautomata.auto-concept",
-            Projection((10, 8), (11, 5), (15, 2)));
+            Projection((10, 8), (11, 5), (15, 2), (16, 2)));
 
         var decision = fixture.ReadDecision();
 
@@ -64,7 +64,16 @@ public sealed class TraceDashboardReaderTests
             decision.Projection,
             entry => Assert.Equal("Captured recipes", entry.Name),
             entry => Assert.Equal("Eligible recipes", entry.Name),
-            entry => Assert.Equal("Decision kind", entry.Name));
+            entry =>
+            {
+                Assert.Equal("Decision kind", entry.Name);
+                Assert.Equal("PreferredReplacement", entry.Value);
+            },
+            entry =>
+            {
+                Assert.Equal("Idle reason", entry.Name);
+                Assert.Equal("NoUnlockedAssignableReplacement", entry.Value);
+            });
     }
 
     [Fact]

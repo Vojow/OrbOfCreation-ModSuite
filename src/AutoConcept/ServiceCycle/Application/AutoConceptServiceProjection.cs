@@ -10,6 +10,7 @@ internal static class AutoConceptServiceProjection
     internal const int OwnedRecipesKey = 13;
     internal const int PlannedActionsKey = 14;
     internal const int DecisionKindKey = 15;
+    internal const int IdleReasonKey = 16;
 
     public static void Write(in AutoConceptCycleState state, ServiceStateProjectionBuilder output)
     {
@@ -20,5 +21,6 @@ internal static class AutoConceptServiceProjection
         output.Add(new ServiceProjectionKey(OwnedRecipesKey), ServiceProjectionValue.FromInteger(decision.OwnedRecipes));
         output.Add(new ServiceProjectionKey(PlannedActionsKey), ServiceProjectionValue.FromInteger(decision.PlannedActions));
         output.Add(new ServiceProjectionKey(DecisionKindKey), ServiceProjectionValue.FromInteger((int)decision.Kind));
+        output.Add(new ServiceProjectionKey(IdleReasonKey), ServiceProjectionValue.FromInteger((int)decision.IdleReason));
     }
 }

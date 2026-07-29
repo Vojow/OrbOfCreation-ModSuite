@@ -303,6 +303,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(report.IsComplete, report.Describe());
         Assert.True(WorldConceptRecipeLookup.TryFind(world.ConceptRecipes, recipe.Identity, out var concept));
         Assert.Equal(coreType.Identity, concept.CoreTypeId);
+        Assert.True(concept.CanAddNow);
         Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var alchemyRecipe));
         Assert.Equal(coreType.Identity, alchemyRecipe.CoreTypeId);
 

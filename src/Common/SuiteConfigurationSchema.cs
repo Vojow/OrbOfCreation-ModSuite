@@ -14,7 +14,7 @@ namespace OrbModding.Common;
 /// </summary>
 internal static class SuiteConfigurationSchema
 {
-    internal const int CurrentVersion = 6;
+    internal const int CurrentVersion = 7;
     internal static readonly ConfigurationKey AutoCastShortcut =
         new("AutoCast", "ToggleShortcut");
     internal static readonly ConfigurationKey DifferentialVerificationShortcut =
@@ -37,6 +37,8 @@ internal static class SuiteConfigurationSchema
         new("Development", "EventProbe");
     internal static readonly ConfigurationKey AutoConceptFallbackEvaluationIntervalSeconds =
         new("AutoConcept", "FallbackEvaluationIntervalSeconds");
+    internal static readonly ConfigurationKey AutoConceptTrainingPeriodSeconds =
+        new("AutoConcept", "TrainingPeriodSeconds");
 
     internal static ConfigurationSchemaPlan Plan { get; } = new(CurrentVersion, new[]
     {
@@ -122,7 +124,7 @@ internal static class SuiteConfigurationSchema
         // 300-second default to 10 seconds, whether that value was inherited or deliberately saved.
         new ConfigurationMigrationStep(
             5,
-            CurrentVersion,
+            6,
             new[] { AutoConceptFallbackEvaluationIntervalSeconds },
             static context =>
             {
@@ -145,6 +147,35 @@ internal static class SuiteConfigurationSchema
                 else
                 {
                     context.Preserve(AutoConceptFallbackEvaluationIntervalSeconds, serialized);
+                }
+            }),
+        // Schema 7 shortens Auto Concept's inherited settled training period. A player-selected
+        // period is preserved; only the previous default is rewritten.
+        new ConfigurationMigrationStep(
+            6,
+            CurrentVersion,
+            new[] { AutoConceptTrainingPeriodSeconds },
+            static context =>
+            {
+                if (!context.TryGet(AutoConceptTrainingPeriodSeconds, out var serialized))
+                    return;
+
+                if (int.TryParse(
+                        serialized,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var seconds) &&
+                    seconds == 300)
+                {
+                    context.Map(
+                        AutoConceptTrainingPeriodSeconds,
+                        AutoConceptTrainingPeriodSeconds,
+                        "30",
+                        "Shortened the inherited Auto Concept training period from 300 seconds to 30 seconds.");
+                }
+                else
+                {
+                    context.Preserve(AutoConceptTrainingPeriodSeconds, serialized);
                 }
             }),
     });

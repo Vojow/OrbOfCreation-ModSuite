@@ -455,6 +455,8 @@ internal sealed class FakeAlchemyRecipeList
 internal sealed class FakeAlchemyInstanceList
 {
     public List<FakeAlchemyInstance> value = new();
+
+    public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
 }
 
 internal sealed class FakeAlchemyInstance

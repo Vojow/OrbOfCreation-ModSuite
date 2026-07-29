@@ -16,6 +16,7 @@ namespace OrbModding.Tests.Services.AutoConcept.Runtime.ServiceCycle;
 public sealed class AutoConceptServiceCompositionTests
 {
     private static readonly Guid Recipe = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid LockedRecipe = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Core = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     [Fact]
@@ -70,6 +71,60 @@ public sealed class AutoConceptServiceCompositionTests
             "Publishing Active intent must wake Auto Concept instead of retaining its disabled-state fallback sleep.");
     }
 
+    [Fact]
+    public void LockedOnlyAlternativeIsHighlightedAfterTraining()
+    {
+        var clock = new ThreadSafeTestClock();
+        var definition = AutoConceptService.Define(
+            new ActionPort(Thread.CurrentThread.ManagedThreadId));
+        using var registry = new ServiceCycleRegistry(1, clock);
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(7));
+        registry.WorldPublication.Publish(IdleWorld(), new WorldGeneration(2));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+        var featureRegistry = new FeatureStatusRegistry();
+        using var status = new AutomataFeatureStatusReporter(
+            featureRegistry,
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(
+                    PluginIds.SuiteGuid,
+                    AutomataFeatureStatuses.AutoConceptFeatureId),
+                "Auto Concept",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(
+                    FeatureStatusReasonCode.GameplayNotReady,
+                    "Gameplay lifecycle is not ready."),
+                lifecycleGeneration: 7));
+        var bridge = new AutoConceptServiceCycleDiagnosticsBridge(
+            lifecycle: 7,
+            configurationGeneration: new ConfigGeneration(1),
+            owned: true,
+            featureStatus: status);
+
+        pump.PumpFrame(1);
+        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        var training = pump.PumpFrame(2);
+        bridge.Observe(pump, in training, owned: true);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.NativeBusy, status.Current.Reason.Code);
+
+        pump.PumpFrame(3);
+        clock.Advance(MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(61)));
+        pump.PumpFrame(4);
+        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        var idle = pump.PumpFrame(5);
+        bridge.Observe(pump, in idle, owned: true);
+
+        Assert.Equal(FeatureStatusState.Locked, status.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.ProgressionLocked, status.Current.Reason.Code);
+        Assert.Contains("No other unlocked", status.Current.Reason.Summary);
+    }
+
     private static GameWorldState World()
     {
         var concepts = new WorldConceptRecipeBuffer();
@@ -92,6 +147,40 @@ public sealed class AutoConceptServiceCompositionTests
         };
     }
 
+    private static GameWorldState IdleWorld()
+    {
+        var concepts = new WorldConceptRecipeBuffer();
+        var activeConcept = new WorldConceptRecipe(Recipe, Core);
+        var lockedConcept = new WorldConceptRecipe(LockedRecipe, Core);
+        concepts.Append(in activeConcept);
+        concepts.Append(in lockedConcept);
+        var recipes = new[]
+        {
+            RecipeRow(Recipe, discovered: true),
+            RecipeRow(LockedRecipe, discovered: false),
+        };
+        var instances = new WorldAlchemyInstanceBuffer();
+        var active = new WorldAlchemyInstance(
+            Recipe, quantity: 1, queuedQuantity: 1,
+            drainReadable: true, drainRatio: new BigDouble(1));
+        instances.Append(in active);
+        return new GameWorldState
+        {
+            AlchemyRecipes = WorldTable.Create(recipes),
+            ConceptRecipes = WorldAlchemyRowDeriver.Build(concepts),
+            AlchemyInstances = WorldAlchemyRowDeriver.Build(instances),
+            CollectedAtEpoch = 1,
+        };
+    }
+
+    private static WorldAlchemyRecipe RecipeRow(Guid id, bool discovered) =>
+        new(
+            id, Core, discovered, 0, 0, 0, default, 0, default,
+            false, false, false, 0, false,
+            default, default, default, default, default, default, default, default,
+            default, default, default, default, default, new BigDouble(1), default,
+            new BigDouble(1));
+
     private static SuiteRuntimeConfiguration Configuration(
         AutoConceptOperationMode mode = AutoConceptOperationMode.Active) =>
         new()
@@ -100,6 +189,7 @@ public sealed class AutoConceptServiceCompositionTests
             AutoConcept = new AutoConceptConfiguration
             {
                 Mode = mode,
+                SlotManagement = AutoConceptSlotManagementMode.TimedCycle,
                 FallbackEvaluationIntervalSeconds = 10,
                 TrainingPeriodSeconds = 60,
             },
