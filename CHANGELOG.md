@@ -1,5 +1,18 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.4.0 Beta 1 — 2026-07-29
+
+- Support Orb of Creation `1.0.5-2` on Windows after checking the current game assemblies and
+  comparing ModSuite's costs, rates, modifiers, affordability, and requirements with the running game.
+- Move all supported automation and Mentor work onto one shared service cycle. Decisions run from
+  captured game state, and every action is checked again immediately before it changes the game.
+- Add Auto Harvest, spell leveling, clearer Runtime diagnostics, compact gameplay controls, and a
+  Mods screen that uses the game's own visual style.
+- Put **Emergency disable** on the General page. Unknown but complete game builds now open in a safe
+  compatibility mode, with all gameplay changes stopped until the player chooses to continue.
+- Keep incomplete game installations closed, bind an unverified-build choice to the exact two game
+  files, and reset that choice automatically after another game update.
+
 ## Game-native UI overhaul — 2026-07-28
 
 - Move the five feature controls and STOP out of the expanding spell-slot row into the audited

@@ -201,7 +201,11 @@ public sealed class ModConfigTests
             setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
 
         Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "General").Settings, setting => setting.Key == "EmergencyDisable");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "AllowUnverifiedGameBuild");
+        Assert.DoesNotContain(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EmergencyDisable");
+        Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.Key == "AcceptedUnverifiedBuildFingerprint");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
         Assert.True(ModSettingsPage.IsImmediateModeSetting(autoBuyMode));
@@ -292,8 +296,9 @@ public sealed class ModConfigTests
         MentorConfig.Bind(config);
         var mod = ConfigCatalog.Build(new[] { new ConfigPluginSource("mentor", "Mentor", "test", config) }).Mods.Single();
 
-        Assert.Equal(new[] { "Mentor", "Advanced" }, mod.Sections.Select(section => section.Name));
+        Assert.Equal(new[] { "General", "Mentor" }, mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
+        Assert.Contains(mod.Sections.Single(section => section.Name == "General").Settings, setting => setting.Key == "EmergencyDisable");
         var mentorSection = mod.Sections.Single(section => section.Name == "Mentor");
         var artifactShare = mentorSection.Settings.Single(setting =>
             setting.SourceSection == "Artifacts" && setting.Key == "SharePercent");

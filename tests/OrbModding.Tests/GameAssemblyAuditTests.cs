@@ -14,6 +14,9 @@ public sealed class GameAssemblyAuditTests
             GameAssemblyAudit.WindowsAssemblyCSharpSha256,
             GameAssemblyAudit.WindowsFirstPassSha256).MatchesExpected);
         Assert.True(Result(
+            GameAssemblyAudit.WindowsV1052AssemblyCSharpSha256,
+            GameAssemblyAudit.WindowsV1052FirstPassSha256).MatchesExpected);
+        Assert.True(Result(
             GameAssemblyAudit.MacAssemblyCSharpSha256,
             GameAssemblyAudit.MacFirstPassSha256).MatchesExpected);
         Assert.True(Result(
@@ -26,6 +29,9 @@ public sealed class GameAssemblyAuditTests
         Assert.False(Result(
             GameAssemblyAudit.MacAssemblyCSharpSha256,
             GameAssemblyAudit.WindowsFirstPassSha256).MatchesExpected);
+        Assert.False(Result(
+            GameAssemblyAudit.WindowsV1052AssemblyCSharpSha256,
+            GameAssemblyAudit.MacFirstPassSha256).MatchesExpected);
         Assert.False(Result(new string('A', 64), new string('B', 64)).MatchesExpected);
     }
 

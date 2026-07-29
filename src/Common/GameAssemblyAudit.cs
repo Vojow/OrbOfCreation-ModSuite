@@ -8,12 +8,17 @@ namespace OrbModding.Common;
 public static class GameAssemblyAudit
 {
     public const string WindowsBaselineId = "steam-windows-2026-07-11";
+    public const string WindowsV1052BaselineId = "steam-windows-2026-07-29";
     public const string MacBaselineId = "steam-macos-2026-07-13";
     public const string MacV1052BaselineId = "steam-macos-2026-07-28";
 
     public const string WindowsAssemblyCSharpSha256 =
         "5845797D40E4631517DE9F4D6296F10C7381AAD5DA733128B2C4685E66E8711F";
     public const string WindowsFirstPassSha256 =
+        "D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A";
+    public const string WindowsV1052AssemblyCSharpSha256 =
+        "436210E61D9F8B84658609D35E32BC274356170005AC15FE93FA36D4D9F7AA4C";
+    public const string WindowsV1052FirstPassSha256 =
         "D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A";
     public const string MacAssemblyCSharpSha256 =
         "5652EBE35A4B87223A014EAA7B364AE921477D2E016789CB4E13C8C892055DE4";
@@ -33,6 +38,11 @@ public static class GameAssemblyAudit
         WindowsBaselineId,
         WindowsAssemblyCSharpSha256,
         WindowsFirstPassSha256);
+
+    public static GameAssemblyBaseline WindowsV1052SteamBaseline => new(
+        WindowsV1052BaselineId,
+        WindowsV1052AssemblyCSharpSha256,
+        WindowsV1052FirstPassSha256);
 
     public static GameAssemblyBaseline MacSteamBaseline => new(
         MacBaselineId,
@@ -128,6 +138,8 @@ public static class GameAssemblyAudit
     {
         var windows = WindowsSteamBaseline;
         if (windows.Matches(assemblyCSharpSha256, firstPassSha256)) return windows;
+        var windowsV1052 = WindowsV1052SteamBaseline;
+        if (windowsV1052.Matches(assemblyCSharpSha256, firstPassSha256)) return windowsV1052;
         var mac = MacSteamBaseline;
         if (mac.Matches(assemblyCSharpSha256, firstPassSha256)) return mac;
         var macV1052 = MacV1052SteamBaseline;

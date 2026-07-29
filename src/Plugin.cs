@@ -29,7 +29,8 @@ namespace OrbModding;
 
 /// <summary>
 /// The suite's single BepInEx entry point. One DLL, one loader identity, one configuration file:
-/// automation, mastery catch-up and the configuration browser load, refuse and unload together.
+/// automation, mastery catch-up and the configuration browser share one lifecycle. On an unknown
+/// complete game build, only the browser and verifier load until the exact pair is acknowledged.
 /// </summary>
 [BepInPlugin(PluginIds.SuiteGuid, PluginIds.SuiteName, PluginIds.Version)]
 public sealed class Plugin : BaseUnityPlugin
@@ -122,6 +123,9 @@ public sealed class Plugin : BaseUnityPlugin
     private float _quickStripFailureSeconds;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
+    private bool _auditedBuild;
+    private bool _runtimeActivationAllowed;
+    private string _observedBuildFingerprint = string.Empty;
     private bool _runtimeComposed;
     private bool _runtimeCompositionAttempted;
     private float _emergencyStopUiRetrySeconds;
@@ -165,11 +169,11 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
 
-        // First, before configuration or anything else. The suite computes the game's economy math
-        // itself and patches game methods, so an unaudited build is one whose numbers and methods we
-        // cannot vouch for; refusing here leaves the game entirely untouched.
+        // First, before configuration or anything else. An incomplete audit refuses everything. A
+        // complete unknown pair may load only the control plane; mutation remains quarantined until
+        // the exact pair is explicitly accepted.
         var loadDecision = SuiteLoadGate.Evaluate(Paths.GameRootPath);
-        if (!loadDecision.ShouldLoad)
+        if (!loadDecision.CanLoadControlPlane)
         {
             Logger.LogError(loadDecision.Message);
             return;
@@ -185,6 +189,19 @@ public sealed class Plugin : BaseUnityPlugin
         _automataConfig = suite.Automata;
         _mentorConfig = suite.Mentor;
         _modConfigSettings = suite.ModConfig;
+        _auditedBuild = loadDecision.ShouldLoad;
+        _observedBuildFingerprint = loadDecision.ObservedBuildFingerprint;
+        var compatibility = UnverifiedBuildCompatibilityPolicy.AtStartup(
+            _auditedBuild,
+            _observedBuildFingerprint,
+            _automataConfig.AllowUnverifiedGameBuild.Value,
+            _automataConfig.AcceptedUnverifiedBuildFingerprint.Value);
+        if (compatibility.ResetOverride)
+            _automataConfig.SetAllowUnverifiedGameBuild(false);
+        if (compatibility.EngageEmergencyStop)
+            _automataConfig.SetEmergencyStop(true);
+        _runtimeActivationAllowed = compatibility.RuntimeAllowed;
+        _nativeContractsAvailable = _runtimeActivationAllowed;
         foreach (var diagnostic in configuration.Diagnostics)
             Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
 
@@ -201,21 +218,35 @@ public sealed class Plugin : BaseUnityPlugin
         _emergencyStopControl = new EmergencyStopControl(
             _configurationStore,
             ReadEmergencyStopResumePreview,
-            OnEmergencyStopChanged);
+            OnEmergencyStopChanged,
+            canResume: () => _runtimeActivationAllowed);
         ValidateSuiteShortcuts();
 
-        // The load gate above already refused any build that does not match an audited baseline, so
-        // reaching here means the native contracts are the ones the suite was built against.
-        Log.LogAutomataInfo(loadDecision.Message);
+        if (_auditedBuild)
+            Log.LogAutomataInfo(loadDecision.Message);
+        else
+        {
+            Log.LogAutomataWarning(loadDecision.Message);
+            if (_runtimeActivationAllowed)
+            {
+                Log.LogAutomataWarning(
+                    "A persisted acknowledgement matches this exact unverified assembly pair. Runtime composition is permitted at the player's own risk.");
+            }
+        }
         GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         ComposeModConfig();
-        if (_configurationStore.Current.General.Enabled)
+        if (_runtimeActivationAllowed && _configurationStore.Current.General.Enabled)
         {
             EnsureRuntimeComposition();
+        }
+        else if (!_runtimeActivationAllowed)
+        {
+            Log.LogAutomataWarning(
+                "Compatibility emergency stop is active. Clear Emergency disable in Mods > General to accept and resume, or use Advanced to accept while keeping STOP engaged.");
         }
         else
         {
@@ -432,10 +463,11 @@ public sealed class Plugin : BaseUnityPlugin
 #if SERVICE_CYCLE_PROFILE
         UpdateUiValidationNavigation();
 #endif
+        UpdateBuildCompatibilityOverride();
         PublishChangedConfiguration();
         ValidateSuiteShortcuts();
         UpdateEmergencyStopControl();
-        if (!_configurationStore!.Current.General.Enabled)
+        if (!_runtimeActivationAllowed || !_configurationStore!.Current.General.Enabled)
         {
             _runtimeCompositionAttempted = false;
         }
@@ -467,6 +499,47 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateMentor();
         UpdateQuickStripSurface(Time.unscaledDeltaTime);
         UpdateModConfig();
+    }
+
+    private void UpdateBuildCompatibilityOverride()
+    {
+        if (_auditedBuild || _automataConfig is null) return;
+
+        var emergencyClearRequested = _automataConfig.TryTakeEmergencyClearRequest();
+        if (emergencyClearRequested && !_runtimeActivationAllowed)
+            _automataConfig.SetAllowUnverifiedGameBuild(true);
+
+        var decision = UnverifiedBuildCompatibilityPolicy.AfterExplicitChange(
+            audited: false,
+            _observedBuildFingerprint,
+            _automataConfig.AllowUnverifiedGameBuild.Value,
+            _automataConfig.AcceptedUnverifiedBuildFingerprint.Value);
+        if (decision.AcceptObserved)
+            _automataConfig.AcceptUnverifiedBuild(_observedBuildFingerprint);
+
+        if (!decision.RuntimeAllowed &&
+            decision.EngageEmergencyStop &&
+            !_automataConfig.EmergencyDisable.Value)
+        {
+            _automataConfig.SetEmergencyStop(true);
+        }
+
+        if (decision.RuntimeAllowed == _runtimeActivationAllowed) return;
+        if (decision.RuntimeAllowed && !emergencyClearRequested)
+            _automataConfig.SetEmergencyStop(true);
+        _runtimeActivationAllowed = decision.RuntimeAllowed;
+        _nativeContractsAvailable = decision.RuntimeAllowed;
+
+        if (decision.RuntimeAllowed)
+        {
+            Logger.LogWarning(emergencyClearRequested
+                ? "The player cleared the General emergency stop and accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk."
+                : "The player accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk; the emergency stop remains engaged until explicitly resumed.");
+            return;
+        }
+
+        Logger.LogError(
+            "The unverified-build acknowledgement was removed. The compatibility emergency stop is engaged; restart the game to unload already-installed patches.");
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -551,20 +624,20 @@ public sealed class Plugin : BaseUnityPlugin
     {
         var configuration = _configurationStore!.Current;
         _mathVerification?.Tick();
-        var deltaTime = Time.unscaledDeltaTime;
-        UpdateAutoCastControls(deltaTime);
-        UpdateAutoBuyControl(deltaTime);
-        UpdateAutoConceptControl(deltaTime);
-        UpdateAutoHarvestControl(deltaTime);
         if (!_nativeContractsAvailable)
         {
             _featureStatuses?.ObserveContractUnavailable(
                 configuration,
                 _lifecycleGeneration,
-                "Installed game assemblies do not match Automata's audited native contracts.",
+                "Installed game assemblies are quarantined pending an exact-build acknowledgement.",
                 _configurationStore.CurrentGeneration);
             return;
         }
+        var deltaTime = Time.unscaledDeltaTime;
+        UpdateAutoCastControls(deltaTime);
+        UpdateAutoBuyControl(deltaTime);
+        UpdateAutoConceptControl(deltaTime);
+        UpdateAutoHarvestControl(deltaTime);
         if (!configuration.General.Enabled)
         {
             CancelPreparedAutomationForOwnershipRelease();
@@ -602,6 +675,13 @@ public sealed class Plugin : BaseUnityPlugin
     private void UpdateMentor()
     {
         if (_mentorConfig is null) return;
+        if (!_nativeContractsAvailable)
+        {
+            _mentorButton?.Dispose();
+            _mentorButton = null;
+            _mentorUiFailureReason = string.Empty;
+            return;
+        }
         _mentorActionFamilyOwnership?.Refresh(_mentorConfig, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _mentorConfig.ToggleShortcut.Value.IsDown())
         {

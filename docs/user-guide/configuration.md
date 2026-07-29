@@ -35,6 +35,8 @@ release, and selection transitions cannot repaint it as a second state.
 
 The native-sidebar safety control is always present in gameplay, including when the automation master switch is off or the worker host failed. **STOP ALL** engages the suite emergency stop with one click and discards prepared automation work. Desired-On quick controls then say `ON / STOPPED`. Clearing is deliberately two-step: click **STOPPED** to arm **RESUME?**, review the tooltip's exact desired-On service list, then click again. The Mods **General** page also exposes **Automation enabled**, so automation can be turned off and back on without editing the file; the Mods and safety surfaces remain installed while it is off.
 
+After a game update produces a complete but unaudited assembly pair, the suite opens in compatibility quarantine instead of disappearing. Mods and **Run differential verification** remain available, while no Harmony patch, automation service, Mentor service, or feature quick control is installed. **General > Emergency disable** starts engaged. Clearing that switch is the player's explicit acknowledgement for the exact two-file hash pair: it records the pair and permits runtime composition at the player's own risk in the same action. The acknowledgement survives restarts only for that exact pair and automatically resets after either game assembly changes. **Advanced > Allow this unverified game build** remains available as a separate acknowledgement path when the player wants to permit composition but leave STOP engaged for a later two-click resume. Turning that acknowledgement off re-engages STOP immediately; restart the game to unload patches already installed during that session.
+
 If the shared automation host cannot start, desired-On features report that runtime fault while desired-Off features remain Off. Configuration changes are retained while the host is absent. One automatic retry is made on the next eligible frame; after that bounded attempt, the fault remains visible instead of retrying indefinitely.
 
 - `AutoBuy.Mode` and `AutoCast.Mode`: saved values are `Disabled` or `Active`; change them with the feature header or quick button.
@@ -51,7 +53,8 @@ If the shared automation host cannot start, desired-On features report that runt
 - `LeaveQueueSlots` preserves queue room for manual actions.
 - `AutoBuy.PurchaseGrouping` selects `Single`, `Fixed`, `BulkDevelopment` (default), or `ActionMultiplier`; every level is capped to live queue room and revalidated independently.
 - Auto Concept rate, quantity, and drain-ratio floors protect continuous resources; zero-resource replacements are skipped so they cannot starve other safe concepts in the cycle. Current concept quantities remain the rollback ownership baseline even when `RotateAll` permits assignment replacement.
-- `Safety.EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, and harvest submissions.
+- `Safety.EmergencyDisable`: General suite emergency stop. It immediately stops new automated purchases, casts, concept mutations, spell levels, harvest submissions, and mastery sharing. On a quarantined build, explicitly clearing it also accepts the exact observed assembly pair.
+- `Compatibility.AllowUnverifiedGameBuild`: Advanced-only risk acknowledgement for the exact unaudited assembly pair currently installed. Default false; a changed pair resets it automatically.
 
 Default input inventory:
 

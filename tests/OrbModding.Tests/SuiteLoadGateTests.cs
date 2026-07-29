@@ -7,13 +7,13 @@ namespace OrbModding.Tests;
 
 /// <summary>
 /// The load gate is the guard that makes owning the game's economy math safe: the ported arithmetic
-/// is only valid for one audited assembly pair, so any other build must not run the suite at all.
-/// These tests pin refusal, and pin that a refusal is actionable rather than merely silent.
+/// is only valid for an audited or explicitly accepted assembly pair. Unknown complete pairs admit
+/// diagnostics in quarantine; incomplete installs still refuse completely.
 /// </summary>
 public sealed class SuiteLoadGateTests
 {
     [Fact]
-    public void AnUnknownBuildIsRefused()
+    public void AnUnknownCompleteBuildLoadsOnlyTheQuarantinedControlPlane()
     {
         using var install = new FakeInstall(
             assemblyCSharp: "not the audited assembly",
@@ -22,21 +22,24 @@ public sealed class SuiteLoadGateTests
         var decision = SuiteLoadGate.Evaluate(install.Root);
 
         Assert.False(decision.ShouldLoad);
+        Assert.True(decision.CanLoadControlPlane);
+        Assert.True(decision.IsQuarantined);
         Assert.Empty(decision.BaselineId);
+        Assert.Equal(129, decision.ObservedBuildFingerprint.Length);
     }
 
     [Fact]
-    public void ARefusalNamesTheObservedHashesAndTheAuditedBaselines()
+    public void AQuarantineWarningNamesTheObservedHashesAndTheAuditedBaselines()
     {
-        // "The mod did not load" without evidence is indistinguishable from a broken install. The
-        // message has to carry enough to act on, because the gate deliberately offers no way to
-        // continue.
+        // The acknowledgement is bound to the pair named here, so the warning must carry both
+        // observed identities and the supported baselines.
         using var install = new FakeInstall("unknown", "unknown");
 
         var decision = SuiteLoadGate.Evaluate(install.Root);
 
-        Assert.Contains("Refusing to load", decision.Message, StringComparison.Ordinal);
+        Assert.Contains("Gameplay runtime quarantined", decision.Message, StringComparison.Ordinal);
         Assert.Contains(GameAssemblyAudit.WindowsBaselineId, decision.Message, StringComparison.Ordinal);
+        Assert.Contains(GameAssemblyAudit.WindowsV1052BaselineId, decision.Message, StringComparison.Ordinal);
         Assert.Contains(GameAssemblyAudit.MacBaselineId, decision.Message, StringComparison.Ordinal);
         Assert.Contains(GameAssemblyAudit.MacV1052BaselineId, decision.Message, StringComparison.Ordinal);
         Assert.Contains("Observed Assembly-CSharp=", decision.Message, StringComparison.Ordinal);
@@ -49,13 +52,16 @@ public sealed class SuiteLoadGateTests
         var decision = SuiteLoadGate.Evaluate(Path.Combine(Path.GetTempPath(), "orb-suite-absent-" + Guid.NewGuid().ToString("N")));
 
         Assert.False(decision.ShouldLoad);
+        Assert.False(decision.CanLoadControlPlane);
         Assert.Contains("Refusing to load", decision.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AnEmptyGameRootIsRefused()
     {
-        Assert.False(SuiteLoadGate.Evaluate(string.Empty).ShouldLoad);
+        var decision = SuiteLoadGate.Evaluate(string.Empty);
+        Assert.False(decision.ShouldLoad);
+        Assert.False(decision.CanLoadControlPlane);
     }
 
     [Fact]
@@ -67,6 +73,7 @@ public sealed class SuiteLoadGateTests
             firstPass: null);
 
         Assert.False(SuiteLoadGate.Evaluate(install.Root).ShouldLoad);
+        Assert.False(SuiteLoadGate.Evaluate(install.Root).CanLoadControlPlane);
     }
 
     /// <summary>A throwaway managed-assembly layout the audit will discover and hash.</summary>

@@ -94,6 +94,27 @@ public sealed class EmergencyStopControlTests
         AssertStopped(statuses.AutoCast.Current);
     }
 
+    [Fact]
+    public void CompatibilityQuarantineCannotBeResumedBeforeAcknowledgement()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.EmergencyDisable.Value = true;
+        var store = new AutomataConfigurationStore(config, (_, _) => { });
+        var control = new EmergencyStopControl(
+            store,
+            () => new[] { "Auto Buy" },
+            _ => { },
+            canResume: () => false);
+
+        control.Activate();
+        control.Activate();
+
+        Assert.True(store.Current.Safety.EmergencyDisable);
+        Assert.False(control.ResumeArmed);
+        Assert.Equal("STOPPED", control.Label);
+        Assert.Contains("Mods > General", control.ResumePreview);
+    }
+
     private static void AssertStopped(FeatureStatusSnapshot status)
     {
         Assert.True(status.ConfiguredEnabled);
