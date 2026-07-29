@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
@@ -27,7 +28,8 @@ internal sealed class AutoBuyServiceAdapterComposition
         AutoBuyCycleAction> Definition { get; }
 
     internal static AutoBuyServiceAdapterComposition Create(
-        AutoBuyFeatureDependencies dependencies
+        AutoBuyFeatureDependencies dependencies,
+        IServiceWorldGenerationSource worldGenerations
 #if SERVICE_CYCLE_PROFILE
         , ServiceCycleProfileProbe profileProbe
 #endif
@@ -44,14 +46,16 @@ internal sealed class AutoBuyServiceAdapterComposition
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnershipMask,
             profileOperations,
-            dependencies.RefusalResponse);
+            dependencies.RefusalResponse,
+            worldGenerations);
 #else
         var actions = new AutoBuyCycleActionAdapter(
             new AutoBuyNativePurchaseAdapter(),
             new AutoBuyNativeQueueRoomAdapter(),
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnershipMask,
-            dependencies.RefusalResponse);
+            dependencies.RefusalResponse,
+            worldGenerations);
 #endif
         return new AutoBuyServiceAdapterComposition(AutoBuyService.Define(actions));
     }

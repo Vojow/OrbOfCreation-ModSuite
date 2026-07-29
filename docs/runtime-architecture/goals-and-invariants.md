@@ -78,7 +78,7 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 ### World freshness
 
 - A service does not start a cycle against a world collected before it went live or before its own last committed native mutation. The gate is unconditional, strictly-after, and armed by activation and by what a service commits rather than by any declaration. [Acting twice on one world](world-collection.md) specifies it.
-- The gate is a start refusal, not a wake policy: a held service is skipped and asked again next frame, no feature callback is entered, and every held frame is recorded, because holding a service is otherwise indistinguishable from that service having nothing to do.
+- The gate is a start refusal, not a wake policy: activation, a committed native change, or a pre-native skip that proves the pinned snapshot stale raises its floor. A held service is skipped and asked again next frame, no feature callback is entered, and every held frame is recorded, because holding a service is otherwise indistinguishable from that service having nothing to do.
 - A source that cannot answer holds the service closed, because "unknown" is not "fresh".
 
 ### Dedicated service execution

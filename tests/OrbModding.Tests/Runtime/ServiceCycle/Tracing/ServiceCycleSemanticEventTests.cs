@@ -37,6 +37,68 @@ public sealed class ServiceCycleSemanticEventTests
     }
 
     [Fact]
+    public void PreNativeSkipShapesRemainValidWithoutChangingTheTraceWire()
+    {
+        var skipped = ServiceCycleSemanticPayload.ActionFact(
+            in ServiceCycleTraceFixtures.Cycle,
+            batch: 8,
+            action: 10,
+            actionIndex: 0,
+            disposition: (int)ServiceActionDisposition.Skipped,
+            code: CommonActionResultCodes.Skipped.Value,
+            nativeOutcome: null,
+            nativeCalls: 0,
+            mutationAttempts: 0,
+            mutationsCommitted: 0,
+            timestampTicks: 100,
+            durationTicks: 0,
+            frameIdentity: ServiceCycleTraceFixtures.Frame);
+        _ = new ServiceCycleSemanticEvent(
+            new ServiceCycleTraceEventId(ServiceCycleTraceFixtures.Session, 1),
+            default,
+            ServiceCycleSemanticEventKind.ActionSkipped,
+            in skipped);
+
+        var completed = ServiceCycleSemanticPayload.BatchFact(
+            in ServiceCycleTraceFixtures.Cycle,
+            batch: 8,
+            disposition: (int)BatchTerminalDisposition.Completed,
+            code: CommonActionResultCodes.Committed.Value,
+            actionCount: 2,
+            committedCount: 1,
+            terminalIndex: -1,
+            suffixCount: 0,
+            nativeCalls: 1,
+            mutationAttempts: 1,
+            mutationsCommitted: 1,
+            timestampTicks: 100);
+        _ = new ServiceCycleSemanticEvent(
+            new ServiceCycleTraceEventId(ServiceCycleTraceFixtures.Session, 2),
+            default,
+            ServiceCycleSemanticEventKind.BatchCompleted,
+            in completed);
+
+        var orphaned = ServiceCycleSemanticPayload.BatchFact(
+            in ServiceCycleTraceFixtures.Cycle,
+            batch: 8,
+            disposition: (int)BatchTerminalDisposition.Orphaned,
+            code: CommonActionResultCodes.LifecycleReplaced.Value,
+            actionCount: 3,
+            committedCount: 1,
+            terminalIndex: -1,
+            suffixCount: 1,
+            nativeCalls: 1,
+            mutationAttempts: 1,
+            mutationsCommitted: 1,
+            timestampTicks: 100);
+        _ = new ServiceCycleSemanticEvent(
+            new ServiceCycleTraceEventId(ServiceCycleTraceFixtures.Session, 3),
+            default,
+            ServiceCycleSemanticEventKind.BatchOrphaned,
+            in orphaned);
+    }
+
+    [Fact]
     public void InvalidKindAndIncoherentBatchAreRejected()
     {
         var valid = ServiceCycleTraceFixtures.Payload(ServiceCycleSemanticEventKind.CycleStarted);

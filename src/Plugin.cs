@@ -350,9 +350,8 @@ public sealed class Plugin : BaseUnityPlugin
                                         _configurationStore!.Current.AutoBuy),
                                 runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
                                 featureStatus: featureStatuses.AutoBuy,
-                                // A purchase the game refuses is a planner bug, so Auto Buy
-                                // writes down both halves of the disagreement and turns its
-                                // own setting off rather than retrying into a livelock.
+                                // Every refusal writes both halves. Affordability-only drift skips
+                                // and re-plans; structural contradictions stand the feature down.
                                 refusalResponse: new AutoBuyRefusalResponder(
                                     () => _configurationStore!.Current.AutoBuy.Mode ==
                                         AutoBuyOperationMode.Active,

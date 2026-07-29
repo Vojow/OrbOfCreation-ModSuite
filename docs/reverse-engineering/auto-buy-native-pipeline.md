@@ -60,12 +60,12 @@ One cold path adds to that. When `CanPurchase()` refuses, the adapter asks the
 game *why*, so a refusal can name a cause instead of being a silent skip:
 `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()` and
 `GetPurchaseCost().HasEnough()` — the game's own verdict on the price, not a
-re-pricing. Every term is optional and answers `Unread` rather than throwing,
-because a diagnosis that can fail the action it is diagnosing is worse than no
-diagnosis. The manifest carries these under the owner *Automata Auto Buy
-diagnostics*: `GetPurchaseCost`, `HasEnough`, `IsMaxLevel` and
-`IsMaxQueuedLevel` at place `action`, and `IsAvailable` at place `capture`,
-since collection already calls it on every entity of every cycle.
+re-pricing. The same exact cost list is decoded into every resource UUID, cost,
+bandwidth flag, and live `GetTrueQuantity()`/`GetMissing()` value. An incomplete
+read carries an explicit status rather than a partial list. The manifest carries
+these under the owner *Automata Auto Buy refusal diagnostics* at place `action`;
+`IsAvailable` remains at place `capture`, since collection already calls it on
+every entity of every cycle.
 
 The shared queue contract is `ActionManager.GetRemainingRoom()` plus
 `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Upgrade
@@ -120,17 +120,19 @@ an unfinished `ImprovedScribing`. See W58.
 
 ## Refusal diagnosis
 
-`CanPurchase()` refusing a purchase the worker planned means the plan and the
-game disagree, which is a planner bug rather than a race to ride out. So the
-fold is taken apart on the cold path, after the refusal, by reading each term the
-game exposes on its own: `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`
-and `GetPurchaseCost().HasEnough()`. The first that refuses is named in the log
-line and in the diagnostic bundle. The per-level prerequisites take a level
-argument and cannot be read parameterlessly, so when every readable term passes
-they are named by elimination rather than guessed at — and since the planner now
-models them itself, reaching that clause means the suite's model and the game
-disagree, which the line says in those words. None of these reads happen on an
-admitted purchase.
+`CanPurchase()` refusing a purchase the worker planned means one of two things.
+If `HasEnough()` is the only refusing term, resource quantities moved after
+collection through drain or queue-time spending. That is expected snapshot
+staleness: the action records every live row, same-batch resource overlap,
+collection-to-admission time, and world-generation delta, then returns a
+pre-native skip. Common holds the service behind its world-freshness gate until
+a later collection; configuration is untouched.
+
+An availability or level-cap contradiction is structural. If every readable
+term passes, the parameterized per-level prerequisite is the remaining term by
+elimination. Those cases remain invariant violations: they terminate the batch
+and stand Auto Buy down after writing the full diagnostic. None of these cold
+reads happen on an admitted purchase.
 
 ## Mutation transaction
 
@@ -188,10 +190,10 @@ for real exceptions is deliberate — around a fifth of attempts in observed pla
 are zero-delta misses, and treating each as a fault discarded the rest of the
 batch.
 
-A definite rejection before any native call — no queue room, admission refused —
-is distinguished from an attempted or ambiguous mutation. Rejection terminates
-the batch, because no later queued purchase can fit either; an ambiguous mutation
-remains blocked until lifecycle recovery.
+A definite structural rejection before any native call terminates the batch.
+A price-only admission refusal is instead a pre-native skip and requires a fresh
+world before re-planning. An ambiguous mutation remains blocked until lifecycle
+recovery.
 
 ## What remains unknown
 

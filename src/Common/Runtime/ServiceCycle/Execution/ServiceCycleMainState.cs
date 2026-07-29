@@ -27,6 +27,7 @@ internal sealed class ServiceCycleMainState
 
     /// <summary>Committed actions in this batch that published rather than mutated the game.</summary>
     internal int PublishedCount;
+    internal int PreNativeSkippedCount;
     internal ConfigGeneration LatestConfigGeneration;
     internal int ActionCount;
     internal int ActionCursor;

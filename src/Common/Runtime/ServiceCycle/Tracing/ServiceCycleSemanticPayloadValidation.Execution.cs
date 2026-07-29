@@ -36,9 +36,11 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             case ServiceCycleSemanticEventKind.ActionSkipped:
                 Require(payload.Disposition == (int)ServiceActionDisposition.Skipped &&
                     IsActionCode(payload.Code, CommonActionResultCodes.Skipped.Value) &&
-                    payload.ActionIndex >= 0 && payload.HasNativeOutcome &&
-                    payload.NativeOutcome == NativeMutationOutcome.PostconditionFailed &&
-                    NativeEvidenceIsCoherent(in payload),
+                    payload.ActionIndex >= 0 &&
+                    (payload.HasNativeOutcome
+                        ? payload.NativeOutcome == NativeMutationOutcome.PostconditionFailed &&
+                            NativeEvidenceIsCoherent(in payload)
+                        : NativeTotalsAreZero(in payload)),
                     nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.ActionRejected:
@@ -58,8 +60,9 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.Code == CommonActionResultCodes.Committed.Value &&
                     payload.ActionCount >= 0 && payload.CommittedCount <= payload.ActionCount &&
                     payload.ActionIndex == -1 && payload.UntouchedSuffixCount == 0 &&
-                    (payload.ActionCount - payload.PublishedCount == 0 ? NativeTotalsAreZero(in payload) :
-                        payload.MutationAttempts >= payload.ActionCount - payload.PublishedCount &&
+                    (payload.CommittedCount - payload.PublishedCount == 0 &&
+                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
+                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
                         payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
                         (payload.CommittedCount - payload.PublishedCount != 0 ||
                             payload.MutationsCommitted == 0)),
@@ -85,13 +88,12 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.CommittedCount <= payload.ActionCount && payload.ActionIndex == -1 &&
                     payload.UntouchedSuffixCount <= payload.ActionCount - payload.CommittedCount &&
                     NativeTotalsAreCoherent(in payload) &&
-                    (payload.ActionCount - payload.UntouchedSuffixCount - payload.PublishedCount == 0
-                        ? NativeTotalsAreZero(in payload)
-                        : payload.MutationAttempts >=
-                            payload.ActionCount - payload.UntouchedSuffixCount - payload.PublishedCount &&
-                          payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                          (payload.CommittedCount - payload.PublishedCount != 0 ||
-                              payload.MutationsCommitted == 0)), nameof(payload));
+                    (payload.CommittedCount - payload.PublishedCount == 0 &&
+                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
+                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
+                        payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
+                        (payload.CommittedCount - payload.PublishedCount != 0 ||
+                            payload.MutationsCommitted == 0)), nameof(payload));
                 break;
         }
     }

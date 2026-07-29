@@ -27,7 +27,8 @@ internal sealed class AutoBuyServiceCycleFeature : IAutomataServiceCycleFeature
     public IAutomataServiceCycleFeatureRuntime Register(in AutomataServiceCycleFeatureContext context)
     {
         var adapters = AutoBuyServiceAdapterComposition.Create(
-            _dependencies
+            _dependencies,
+            context.Registry.WorldGenerations
 #if SERVICE_CYCLE_PROFILE
             , context.ProfileProbe
 #endif

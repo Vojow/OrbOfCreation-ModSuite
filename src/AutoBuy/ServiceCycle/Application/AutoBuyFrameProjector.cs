@@ -107,7 +107,8 @@ internal static class AutoBuyFrameProjector
         var global = new AutoBuyGlobalRow(
             ReadGlobalCount(world, KnownEntities.BulkDevelopment.Uuid),
             ReadGlobalCount(world, KnownEntities.MultiBuy.Uuid),
-            world.CollectedAtEpoch);
+            world.CollectedAtEpoch,
+            world.CollectedAt);
 
         frame = new AutoBuyCycleFrame(
             global,

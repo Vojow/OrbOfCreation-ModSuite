@@ -101,6 +101,7 @@ internal static class AutomataWorldCollectionService
                     WakePolicy.AfterDecision(AutomataWorldCollectionPolicies.UnavailableRetry));
             }
 
+            frame.CollectedAt = context.CapturedAt;
             capture.Collect(frame);
             return ServiceCaptureResult.Captured(CommonServiceDecisionCodes.Captured);
         }

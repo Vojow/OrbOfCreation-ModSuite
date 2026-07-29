@@ -215,11 +215,12 @@ public readonly struct ServiceActionResult
             _ => false,
         },
         ServiceActionDisposition.Skipped =>
+            Effect == ServiceActionEffect.None && !HasNativeEvidence ||
             Effect == ServiceActionEffect.NativeMutation &&
-            HasNativeEvidence && NativeEvidence.IsValid &&
-            NativeEvidence.Outcome == NativeMutationOutcome.PostconditionFailed &&
-            NativeEvidence.CallOutcome.MutationAttempts > 0 &&
-            NativeEvidence.CallOutcome.MutationsCommitted == 0,
+                HasNativeEvidence && NativeEvidence.IsValid &&
+                NativeEvidence.Outcome == NativeMutationOutcome.PostconditionFailed &&
+                NativeEvidence.CallOutcome.MutationAttempts > 0 &&
+                NativeEvidence.CallOutcome.MutationsCommitted == 0,
         ServiceActionDisposition.Rejected =>
             Effect == ServiceActionEffect.None && !HasNativeEvidence,
         ServiceActionDisposition.Faulted =>
@@ -249,6 +250,11 @@ public readonly struct ServiceActionResult
     public static ServiceActionResult Rejected(ServiceActionResultCode code) =>
         Create(
             ServiceActionDisposition.Rejected, code, ServiceActionEffect.None,
+            false, default, default);
+    public static ServiceActionResult Skipped(
+        ServiceActionResultCode code) =>
+        Create(
+            ServiceActionDisposition.Skipped, code, ServiceActionEffect.None,
             false, default, default);
     public static ServiceActionResult Skipped(
         ServiceActionResultCode code,
@@ -301,13 +307,16 @@ public readonly struct ServiceActionResult
                     throw new ArgumentException("A committed action requires observed verified native evidence.", nameof(nativeEvidence));
                 break;
             case ServiceActionDisposition.Skipped:
-                if (!hasNativeEvidence ||
+                if (effect == ServiceActionEffect.None && !hasNativeEvidence)
+                    break;
+                if (effect != ServiceActionEffect.NativeMutation ||
+                    !hasNativeEvidence ||
                     nativeEvidence.Outcome != NativeMutationOutcome.PostconditionFailed ||
                     nativeEvidence.CallOutcome.MutationAttempts <= 0 ||
                     nativeEvidence.CallOutcome.MutationsCommitted != 0)
                 {
                     throw new ArgumentException(
-                        "A skipped action requires observed zero-commit postcondition evidence.",
+                        "A native skipped action requires observed zero-commit postcondition evidence.",
                         nameof(nativeEvidence));
                 }
                 break;

@@ -292,6 +292,16 @@ public sealed record GameWorldState
     /// </remarks>
     internal long CollectedAtEpoch { get; init; }
 
+    /// <summary>
+    /// Monotonic time at which the collection that produced this snapshot began.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the world generation, which names the Unity frame, this gives diagnostics a duration
+    /// even when frame cadence varies. It is inert published data and does not participate in
+    /// freshness or scheduling.
+    /// </remarks>
+    internal MonotonicTimestamp CollectedAt { get; init; }
+
     // Lookups live on WorldLookup rather than here. A member per category would be a forwarding
     // one-liner repeated once per table, and the record is meant to grow to roughly thirty of them.
 }

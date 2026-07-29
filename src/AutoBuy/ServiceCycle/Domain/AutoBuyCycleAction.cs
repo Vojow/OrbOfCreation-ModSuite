@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime;
 
 namespace OrbAutomata;
 
@@ -8,10 +9,10 @@ namespace OrbAutomata;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A native refusal of a planned purchase is a planner bug: the worker decided from published rows,
-/// and the game disagreed. Diagnosing that needs both halves — what the plan believed and what the
-/// game says — and only one of them survives the seam. The frame is gone by the time an action runs,
-/// so the belief travels by value with the action, in the leaf shapes a published action may hold.
+/// A native refusal of a planned purchase is either expected snapshot staleness or a structural
+/// contradiction. Distinguishing them needs both halves — what the plan believed and what the game
+/// says — and only one of them survives the seam. The frame is gone by the time an action runs, so
+/// the belief travels by value with the action, in the leaf shapes a published action may hold.
 /// </para>
 /// <para>
 /// Only the binding resource is carried, not every cost row: it is the one that set
@@ -93,7 +94,7 @@ internal readonly struct AutoBuyCycleAction
         Guid uuid,
         long collectedAtEpoch,
         int count = 1)
-        : this(kind, uuid, collectedAtEpoch, count, default)
+        : this(kind, uuid, collectedAtEpoch, count, default, default)
     {
     }
 
@@ -103,6 +104,17 @@ internal readonly struct AutoBuyCycleAction
         long collectedAtEpoch,
         int count,
         AutoBuyPlanBelief belief)
+        : this(kind, uuid, collectedAtEpoch, count, belief, default)
+    {
+    }
+
+    public AutoBuyCycleAction(
+        AutoBuyCandidateKind kind,
+        Guid uuid,
+        long collectedAtEpoch,
+        int count,
+        AutoBuyPlanBelief belief,
+        MonotonicTimestamp worldCollectedAt)
     {
         if (kind is not (AutoBuyCandidateKind.Structure or AutoBuyCandidateKind.Upgrade))
             throw new ArgumentOutOfRangeException(nameof(kind));
@@ -115,6 +127,7 @@ internal readonly struct AutoBuyCycleAction
         CollectedAtEpoch = collectedAtEpoch;
         Count = count;
         Belief = belief;
+        WorldCollectedAt = worldCollectedAt;
     }
 
     public AutoBuyCandidateKind Kind { get; }
@@ -135,6 +148,9 @@ internal readonly struct AutoBuyCycleAction
     /// collected cannot be submitted.
     /// </remarks>
     public long CollectedAtEpoch { get; }
+
+    /// <summary>When the world snapshot was collected, for refusal timing diagnostics.</summary>
+    public MonotonicTimestamp WorldCollectedAt { get; }
 
     /// <summary>
     /// How many levels this action should request for its candidate — the live bulk or multiplier

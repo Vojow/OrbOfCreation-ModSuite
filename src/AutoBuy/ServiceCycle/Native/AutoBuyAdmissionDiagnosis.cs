@@ -1,5 +1,7 @@
 namespace OrbAutomata;
 
+using System;
+
 /// <summary>What one live admission term said, or that it could not be asked at all.</summary>
 internal enum AutoBuyAdmissionTerm
 {
@@ -10,6 +12,88 @@ internal enum AutoBuyAdmissionTerm
 
     /// <summary>The term is the reason, or one of the reasons, the game said no.</summary>
     Refused,
+}
+
+/// <summary>Policy class for a native refusal, derived from the individual live terms.</summary>
+internal enum AutoBuyRefusalClassification
+{
+    /// <summary>
+    /// Only affordability moved after the snapshot. This is expected staleness: skip and re-plan.
+    /// </summary>
+    AffordabilityChanged = 0,
+
+    /// <summary>A live structural boolean contradicts the snapshot the planner admitted.</summary>
+    StructuralMismatch,
+
+    /// <summary>
+    /// Every readable term passed (or affordability was unreadable) although the native fold refused.
+    /// The world model claims this cannot happen, so it remains an invariant violation.
+    /// </summary>
+    ImpossibleMismatch,
+}
+
+/// <summary>Why live per-resource terms could not be captured after admission refused.</summary>
+internal enum AutoBuyLiveCostReadStatus
+{
+    Unread = 0,
+    Complete,
+    PurchaseCostUnavailable,
+    EntryListUnavailable,
+    EntryContractUnavailable,
+    ResourceContractUnavailable,
+    IdentityContractUnavailable,
+    InvalidResourceIdentity,
+}
+
+/// <summary>One row from the live native cost list, detached from all game objects.</summary>
+internal readonly struct AutoBuyLiveCostRow
+{
+    public AutoBuyLiveCostRow(
+        Guid resourceId,
+        bool isBandwidth,
+        BigDouble cost,
+        BigDouble available)
+    {
+        ResourceId = resourceId;
+        IsBandwidth = isBandwidth;
+        Cost = cost;
+        Available = available;
+    }
+
+    public Guid ResourceId { get; }
+    public bool IsBandwidth { get; }
+    public BigDouble Cost { get; }
+    public BigDouble Available { get; }
+}
+
+/// <summary>
+/// All rows in one live native cost list, or an explicit reason the complete list was unavailable.
+/// </summary>
+internal readonly struct AutoBuyLiveCostSnapshot
+{
+    private readonly AutoBuyLiveCostRow[]? _rows;
+
+    private AutoBuyLiveCostSnapshot(
+        AutoBuyLiveCostReadStatus status,
+        AutoBuyLiveCostRow[]? rows)
+    {
+        Status = status;
+        _rows = rows;
+    }
+
+    public AutoBuyLiveCostReadStatus Status { get; }
+    public bool IsComplete => Status == AutoBuyLiveCostReadStatus.Complete;
+    public ReadOnlySpan<AutoBuyLiveCostRow> Rows => _rows ?? Array.Empty<AutoBuyLiveCostRow>();
+
+    public static AutoBuyLiveCostSnapshot Complete(AutoBuyLiveCostRow[] rows) =>
+        new(AutoBuyLiveCostReadStatus.Complete, rows ?? throw new ArgumentNullException(nameof(rows)));
+
+    public static AutoBuyLiveCostSnapshot Unavailable(AutoBuyLiveCostReadStatus status)
+    {
+        if (status == AutoBuyLiveCostReadStatus.Complete)
+            throw new ArgumentOutOfRangeException(nameof(status));
+        return new AutoBuyLiveCostSnapshot(status, null);
+    }
 }
 
 /// <summary>
@@ -48,11 +132,28 @@ internal readonly struct AutoBuyAdmissionDiagnosis
         AutoBuyAdmissionTerm isMaxLevel,
         AutoBuyAdmissionTerm isMaxQueuedLevel,
         AutoBuyAdmissionTerm hasEnough)
+        : this(
+            isAvailable,
+            isMaxLevel,
+            isMaxQueuedLevel,
+            hasEnough,
+            AutoBuyLiveCostSnapshot.Unavailable(
+                AutoBuyLiveCostReadStatus.PurchaseCostUnavailable))
+    {
+    }
+
+    public AutoBuyAdmissionDiagnosis(
+        AutoBuyAdmissionTerm isAvailable,
+        AutoBuyAdmissionTerm isMaxLevel,
+        AutoBuyAdmissionTerm isMaxQueuedLevel,
+        AutoBuyAdmissionTerm hasEnough,
+        in AutoBuyLiveCostSnapshot liveCosts)
     {
         IsAvailable = isAvailable;
         IsMaxLevel = isMaxLevel;
         IsMaxQueuedLevel = isMaxQueuedLevel;
         HasEnough = hasEnough;
+        LiveCosts = liveCosts;
     }
 
     /// <summary>The candidate is unlocked and visible. <c>Refused</c> means it is not.</summary>
@@ -69,6 +170,9 @@ internal readonly struct AutoBuyAdmissionDiagnosis
 
     /// <summary>The game's own verdict on the price, from the cost list it builds for this level.</summary>
     public AutoBuyAdmissionTerm HasEnough { get; }
+
+    /// <summary>Every live price row and its live spendable amount, when the cost list was readable.</summary>
+    public AutoBuyLiveCostSnapshot LiveCosts { get; }
 
     /// <summary>Whether any term at all could be read.</summary>
     public bool WasAsked =>
@@ -87,6 +191,28 @@ internal readonly struct AutoBuyAdmissionDiagnosis
             if (IsMaxQueuedLevel == AutoBuyAdmissionTerm.Refused) return "IsMaxQueuedLevel()";
             if (HasEnough == AutoBuyAdmissionTerm.Refused) return "GetPurchaseCost().HasEnough()";
             return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// The policy boundary for this refusal. Structural contradictions take precedence when several
+    /// native terms refuse at once; affordability is expected staleness only when it is the sole
+    /// readable contradiction.
+    /// </summary>
+    public AutoBuyRefusalClassification Classification
+    {
+        get
+        {
+            if (IsAvailable == AutoBuyAdmissionTerm.Refused ||
+                IsMaxLevel == AutoBuyAdmissionTerm.Refused ||
+                IsMaxQueuedLevel == AutoBuyAdmissionTerm.Refused)
+            {
+                return AutoBuyRefusalClassification.StructuralMismatch;
+            }
+
+            return HasEnough == AutoBuyAdmissionTerm.Refused
+                ? AutoBuyRefusalClassification.AffordabilityChanged
+                : AutoBuyRefusalClassification.ImpossibleMismatch;
         }
     }
 

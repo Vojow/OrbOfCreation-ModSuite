@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime;
 
 namespace OrbAutomata;
 
@@ -20,10 +21,20 @@ internal readonly struct AutoBuyGlobalRow
         int bulkDevelopment,
         int actionMultiplier,
         long collectedAtEpoch)
+        : this(bulkDevelopment, actionMultiplier, collectedAtEpoch, default)
+    {
+    }
+
+    public AutoBuyGlobalRow(
+        int bulkDevelopment,
+        int actionMultiplier,
+        long collectedAtEpoch,
+        MonotonicTimestamp collectedAt)
     {
         BulkDevelopment = bulkDevelopment;
         ActionMultiplier = actionMultiplier;
         CollectedAtEpoch = collectedAtEpoch;
+        CollectedAt = collectedAt;
     }
 
     public int BulkDevelopment { get; }
@@ -41,6 +52,9 @@ internal readonly struct AutoBuyGlobalRow
     /// which is the comparison that closes the game-reload race.
     /// </remarks>
     public long CollectedAtEpoch { get; }
+
+    /// <summary>When the world readings were captured, on the runtime's monotonic clock.</summary>
+    public MonotonicTimestamp CollectedAt { get; }
 }
 
 /// <summary>

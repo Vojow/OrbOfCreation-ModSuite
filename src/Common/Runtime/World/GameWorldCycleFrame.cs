@@ -1,4 +1,5 @@
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -175,6 +176,12 @@ internal sealed class GameWorldCycleFrame
     internal long CollectedAtEpoch { get; set; }
 
     /// <summary>
+    /// Monotonic time at which this collection began, carried to diagnostics so a native refusal can
+    /// quantify how long its resource quantities had to move before admission.
+    /// </summary>
+    internal MonotonicTimestamp CollectedAt { get; set; }
+
+    /// <summary>
     /// What the capture could and could not read. Carried on the frame so the worker can project it
     /// into the service's diagnostics without asking the Unity thread a second time.
     /// </summary>
@@ -218,6 +225,7 @@ internal static class GameWorldFrameDeriver
         {
             FixedDeltaTime = frame.FixedDeltaTime,
             CollectedAtEpoch = frame.CollectedAtEpoch,
+            CollectedAt = frame.CollectedAt,
             Resources = resources,
             Structures = structures,
             PurchaseCosts = purchaseCosts,

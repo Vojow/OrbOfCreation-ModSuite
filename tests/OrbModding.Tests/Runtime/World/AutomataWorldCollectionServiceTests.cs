@@ -39,6 +39,26 @@ public sealed class AutomataWorldCollectionServiceTests
         Assert.Equal(10d, row.Reading.Quantity.ToDouble());
     }
 
+    [Fact]
+    public void PublishedWorldCarriesTheCaptureTimestamp()
+    {
+        var capture = new FakeCapture((_, _) => { });
+        var publish = new FakePublish();
+        var definition = AutomataWorldCollectionService.Define(capture, publish);
+        var worker = definition.CreateWorkerDefinition();
+        var frame = new GameWorldCycleFrame();
+        var state = worker.CreateState(new LifecycleGeneration(1));
+
+        Cycle(
+            definition,
+            worker,
+            frame,
+            ref state,
+            new MonotonicTimestamp(123456));
+
+        Assert.Equal(new MonotonicTimestamp(123456), Assert.Single(publish.Published).CollectedAt);
+    }
+
     /// <summary>
     /// The reason the frame is reused rather than rebuilt: a second cycle must not disturb the
     /// snapshot the first one published, because a worker somewhere is still reading it.
@@ -260,10 +280,11 @@ public sealed class AutomataWorldCollectionServiceTests
             AutomataWorldCollectionState,
             AutomataWorldCollectionAction> worker,
         GameWorldCycleFrame frame,
-        ref AutomataWorldCollectionState state)
+        ref AutomataWorldCollectionState state,
+        MonotonicTimestamp capturedAt = default)
     {
         var config = new SuiteRuntimeConfiguration();
-        var captured = definition.Capture(frame, in config, CaptureContext());
+        var captured = definition.Capture(frame, in config, CaptureContext(capturedAt));
         Assert.Equal(ServiceCaptureDisposition.Captured, captured.Disposition);
         var store = new ReusableActionStore<AutomataWorldCollectionAction>();
         store.BeginWrite();
@@ -298,7 +319,8 @@ public sealed class AutomataWorldCollectionServiceTests
             0,
             default);
 
-    private static ServiceCaptureContext CaptureContext() =>
+    private static ServiceCaptureContext CaptureContext(
+        MonotonicTimestamp capturedAt = default) =>
         new(
             AutomataWorldCollectionPolicies.ServiceId,
             new LifecycleGeneration(1),
@@ -307,7 +329,7 @@ public sealed class AutomataWorldCollectionServiceTests
             new CaptureSequence(1),
             new CycleId(1),
             GameWorldStateDefaults.Empty,
-            default);
+            capturedAt);
 
     private sealed class FakeCapture : IAutomataWorldCapturePort
     {

@@ -111,6 +111,7 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
         _runtime.State.NativeOutcome = default;
         _runtime.State.CommittedCount = 0;
         _runtime.State.PublishedCount = 0;
+        _runtime.State.PreNativeSkippedCount = 0;
         _runtime.PublishActionMetrics(response.ActionMetrics);
 
         if (response.ActionCount != 0)

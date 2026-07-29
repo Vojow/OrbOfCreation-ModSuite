@@ -21,6 +21,7 @@ public readonly struct BatchReceipt
         int actionCount,
         int committedCount,
         int publishedCount,
+        int preNativeSkippedCount,
         int terminalIndex,
         int untouchedSuffixCount,
         ServiceActionResultCode resultCode,
@@ -36,6 +37,7 @@ public readonly struct BatchReceipt
         ActionCount = actionCount;
         CommittedCount = committedCount;
         PublishedCount = publishedCount;
+        PreNativeSkippedCount = preNativeSkippedCount;
         TerminalIndex = terminalIndex;
         UntouchedSuffixCount = untouchedSuffixCount;
         ResultCode = resultCode;
@@ -64,8 +66,11 @@ public readonly struct BatchReceipt
     /// </remarks>
     public int PublishedCount { get; }
 
-    /// <summary>Actions in this batch that could produce native mutation evidence.</summary>
-    public int NativeActionCount => ActionCount - PublishedCount;
+    /// <summary>Skipped actions whose live preflight proved the pinned snapshot stale.</summary>
+    public int PreNativeSkippedCount { get; }
+
+    /// <summary>Actions in this batch that reached or could reach a native mutation boundary.</summary>
+    public int NativeActionCount => ActionCount - PublishedCount - PreNativeSkippedCount;
     public int SkippedCount => Disposition switch
     {
         BatchTerminalDisposition.Completed => ActionCount - CommittedCount,
@@ -92,8 +97,11 @@ public readonly struct BatchReceipt
         int actionCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0) =>
-        Completed(cycle, batch, actionCount, actionCount, nativeCallOutcome, completedAt, publishedCount);
+        int publishedCount = 0,
+        int preNativeSkippedCount = 0) =>
+        Completed(
+            cycle, batch, actionCount, actionCount, nativeCallOutcome, completedAt,
+            publishedCount, preNativeSkippedCount);
 
     public static BatchReceipt Completed(
         ServiceCycleIdentity cycle,
@@ -102,14 +110,18 @@ public readonly struct BatchReceipt
         int committedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0)
+        int publishedCount = 0,
+        int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
         if (committedCount < 0 || committedCount > actionCount)
             throw new ArgumentOutOfRangeException(nameof(committedCount));
         if (publishedCount < 0 || publishedCount > committedCount)
             throw new ArgumentOutOfRangeException(nameof(publishedCount));
-        var nativeActions = actionCount - publishedCount;
+        if (preNativeSkippedCount < 0 ||
+            preNativeSkippedCount > actionCount - committedCount)
+            throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
+        var nativeActions = actionCount - publishedCount - preNativeSkippedCount;
         var nativeCommitted = committedCount - publishedCount;
         if (nativeActions == 0)
         {
@@ -128,7 +140,7 @@ public readonly struct BatchReceipt
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Completed, actionCount, committedCount,
-            publishedCount, -1, 0,
+            publishedCount, preNativeSkippedCount, -1, 0,
             CommonActionResultCodes.Committed, default, false, nativeCallOutcome, completedAt, default);
     }
 
@@ -142,7 +154,8 @@ public readonly struct BatchReceipt
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
         EmergencyStopContext emergencyStop = default,
-        int publishedCount = 0)
+        int publishedCount = 0,
+        int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
         if (actionCount == 0) throw new ArgumentOutOfRangeException(nameof(actionCount));
@@ -152,12 +165,15 @@ public readonly struct BatchReceipt
             throw new ArgumentOutOfRangeException(nameof(terminalIndex));
         if (publishedCount < 0 || publishedCount > committedCount)
             throw new ArgumentOutOfRangeException(nameof(publishedCount));
+        if (preNativeSkippedCount < 0 ||
+            preNativeSkippedCount > terminalIndex - committedCount)
+            throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
         if (!terminalAction.IsValid ||
             terminalAction.Disposition is not (
                 ServiceActionDisposition.Rejected or ServiceActionDisposition.Faulted))
             throw new ArgumentException("A terminal action must be rejected or faulted.", nameof(terminalAction));
         var terminalNative = terminalAction.NativeCallOutcome;
-        var nativePrefix = terminalIndex - publishedCount;
+        var nativePrefix = terminalIndex - publishedCount - preNativeSkippedCount;
         var minimumCalls = checked((long)nativePrefix + terminalNative.NativeCallsAttempted);
         var minimumAttempts = checked((long)nativePrefix + terminalNative.MutationAttempts);
         var prefixMutations = checked(nativeCallOutcome.MutationsCommitted - terminalNative.MutationsCommitted);
@@ -181,7 +197,7 @@ public readonly struct BatchReceipt
                 nameof(emergencyStop));
         return new BatchReceipt(
             cycle, batch, disposition, actionCount, committedCount, publishedCount,
-            terminalIndex, actionCount - terminalIndex - 1,
+            preNativeSkippedCount, terminalIndex, actionCount - terminalIndex - 1,
             terminalAction.Code, terminalAction, true, nativeCallOutcome, completedAt, emergencyStop);
     }
 
@@ -192,10 +208,11 @@ public readonly struct BatchReceipt
         int committedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0) =>
+        int publishedCount = 0,
+        int preNativeSkippedCount = 0) =>
         Orphaned(
             cycle, batch, actionCount, committedCount, committedCount, nativeCallOutcome, completedAt,
-            publishedCount);
+            publishedCount, preNativeSkippedCount);
 
     public static BatchReceipt Orphaned(
         ServiceCycleIdentity cycle,
@@ -205,7 +222,8 @@ public readonly struct BatchReceipt
         int processedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0)
+        int publishedCount = 0,
+        int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
         if (processedCount < 0 || processedCount > actionCount)
@@ -214,7 +232,10 @@ public readonly struct BatchReceipt
             throw new ArgumentOutOfRangeException(nameof(committedCount));
         if (publishedCount < 0 || publishedCount > committedCount)
             throw new ArgumentOutOfRangeException(nameof(publishedCount));
-        var nativeProcessed = processedCount - publishedCount;
+        if (preNativeSkippedCount < 0 ||
+            preNativeSkippedCount > processedCount - committedCount)
+            throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
+        var nativeProcessed = processedCount - publishedCount - preNativeSkippedCount;
         var nativeCommitted = committedCount - publishedCount;
         if (nativeProcessed == 0)
         {
@@ -233,7 +254,7 @@ public readonly struct BatchReceipt
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Orphaned, actionCount, committedCount,
-            publishedCount, -1,
+            publishedCount, preNativeSkippedCount, -1,
             actionCount - processedCount, CommonActionResultCodes.LifecycleReplaced,
             default, false, nativeCallOutcome, completedAt, default);
     }

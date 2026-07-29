@@ -125,10 +125,14 @@ public sealed class ServiceCycleContractTests
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(1, 1, 0));
         var skipped = ServiceActionResult.Skipped(CommonActionResultCodes.Skipped, skippedEvidence);
+        var preNativeSkipped = ServiceActionResult.Skipped(CommonActionResultCodes.Skipped);
         var preNativeFault = ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
 
         Assert.True(committed.IsValid);
         Assert.True(skipped.IsValid);
+        Assert.True(preNativeSkipped.IsValid);
+        Assert.False(preNativeSkipped.HasNativeEvidence);
+        Assert.Equal(ServiceActionEffect.None, preNativeSkipped.Effect);
         Assert.Equal(ServiceActionDisposition.Skipped, skipped.Disposition);
         Assert.False(rejected.HasNativeEvidence);
         Assert.Equal(ServiceActionDisposition.Rejected, rejected.Disposition);

@@ -87,9 +87,8 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             ServiceCycleSemanticEventKind.BatchAborted or ServiceCycleSemanticEventKind.BatchOrphaned => BatchFields,
         // ActionCommitted omits the mutation outcome when the action published rather than mutated;
         // EnsureValid admits that shape explicitly, the same way it already does for ActionFaulted.
-        ServiceCycleSemanticEventKind.ActionCommitted => ActionFields,
-        ServiceCycleSemanticEventKind.ActionSkipped =>
-            ActionFields | ServiceCycleSemanticFields.NativeMutationOutcome,
+        ServiceCycleSemanticEventKind.ActionCommitted or
+            ServiceCycleSemanticEventKind.ActionSkipped => ActionFields,
         ServiceCycleSemanticEventKind.ActionAttempted or ServiceCycleSemanticEventKind.ActionRejected or
             ServiceCycleSemanticEventKind.ActionFaulted => ActionFields,
         ServiceCycleSemanticEventKind.RetryScheduled or ServiceCycleSemanticEventKind.FaultObserved or
@@ -111,12 +110,13 @@ internal static partial class ServiceCycleSemanticPayloadValidation
         // Capture and action work runs inside a pump frame and says which one. The same facts
         // emitted from a host control transition — an emergency stop rejecting live batches between
         // frames — belong to no frame and say nothing.
-        ServiceCycleSemanticEventKind.ActionCommitted or ServiceCycleSemanticEventKind.ActionFaulted =>
+        ServiceCycleSemanticEventKind.ActionCommitted or ServiceCycleSemanticEventKind.ActionSkipped or
+            ServiceCycleSemanticEventKind.ActionFaulted =>
             ServiceCycleSemanticFields.NativeMutationOutcome | ServiceCycleSemanticFields.FrameIdentity,
         ServiceCycleSemanticEventKind.CaptureStarted or ServiceCycleSemanticEventKind.CaptureCompleted or
             ServiceCycleSemanticEventKind.CaptureUnavailable or ServiceCycleSemanticEventKind.CaptureFaulted or
-            ServiceCycleSemanticEventKind.ActionAttempted or ServiceCycleSemanticEventKind.ActionSkipped or
-            ServiceCycleSemanticEventKind.ActionRejected => ServiceCycleSemanticFields.FrameIdentity,
+            ServiceCycleSemanticEventKind.ActionAttempted or ServiceCycleSemanticEventKind.ActionRejected =>
+            ServiceCycleSemanticFields.FrameIdentity,
         _ => ServiceCycleSemanticFields.None,
     };
 

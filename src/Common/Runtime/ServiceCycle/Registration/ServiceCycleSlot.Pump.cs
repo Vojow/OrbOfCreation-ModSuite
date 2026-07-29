@@ -73,24 +73,27 @@ internal sealed partial class ServiceCycleSlot<TState, TAction>
             , in profileCoordinates
 #endif
             );
-        RecordGameMutation(in dispatch, frameIdentity);
+        RecordWorldInvalidation(in dispatch, frameIdentity);
         return dispatch;
     }
 
     /// <summary>
-    /// Remembers the frame on which this service last actually changed the game.
+    /// Remembers the frame on which this service last changed the game or proved its snapshot stale.
     /// </summary>
     /// <remarks>
-    /// Only a committed native mutation counts. A publication changed no game state, so a publishing
-    /// service must not gate itself behind its own output; and a rejected or skipped action left the
-    /// world exactly as the snapshot described it.
+    /// A committed native mutation is absent from the pinned world, and a pre-native skip explicitly
+    /// says the pinned world was no longer sufficient to authorize this action. Both wait for a
+    /// reading collected after the action. A publication changed no game state, while a rejected
+    /// action says policy or structure refused rather than that the snapshot moved.
     /// </remarks>
-    private void RecordGameMutation(in ServiceActionDispatch dispatch, long frameIdentity)
+    private void RecordWorldInvalidation(in ServiceActionDispatch dispatch, long frameIdentity)
     {
         if (!dispatch.Attempted) return;
         var result = dispatch.ActionFact.Result;
         if (result.Disposition == ServiceActionDisposition.Committed &&
-            result.Effect == ServiceActionEffect.NativeMutation)
+                result.Effect == ServiceActionEffect.NativeMutation ||
+            result.Disposition == ServiceActionDisposition.Skipped &&
+                result.Effect == ServiceActionEffect.None)
         {
             RaiseWorldGateFloor(frameIdentity);
         }

@@ -754,6 +754,7 @@ public abstract class UpgradeableObject
     public string uuid = Guid.NewGuid().ToString();
 
     public Guid GetGuid() => Guid.Parse(uuid);
+
 }
 
 /// <summary>
@@ -792,10 +793,25 @@ public class ResourceCostList
     // holdings go rather than reaching in and flipping a flag mid-call.
     public int AffordableLevels = int.MaxValue;
     public int PerformCalls { get; private set; }
-    public bool HasEnough() => affordable && AffordableLevels > 0;
+    public bool HasEnough()
+    {
+        if (!affordable || AffordableLevels <= 0) return false;
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var row = costs[index];
+            if (row.resource is null || !row.resource.HasAmount(row.GetValue())) return false;
+        }
+        return true;
+    }
+    public List<ResourceTuple> GetEntries() => costs;
     public void PerformCost()
     {
         PerformCalls++;
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var row = costs[index];
+            row.resource?.Spend(row.GetValue());
+        }
         if (AffordableLevels is > 0 and < int.MaxValue) AffordableLevels--;
     }
 }
@@ -924,6 +940,22 @@ public class ResourceSO : UpgradeableObject
     public bool IsAvailable() => available;
     public bool IsVisible() => visible;
     public bool IsBandwidthResource() => bandwidthResource;
+    public BigDouble GetMissing() => BigDouble.Max(maxQuantity.GetValue() - quantity, 0);
+    public bool HasAmount(BigDouble amount) =>
+        bandwidthResource ? GetMissing() >= amount : GetTrueQuantity() >= amount;
+    public void Spend(BigDouble amount)
+    {
+        if (bandwidthResource)
+        {
+            quantity += amount;
+            return;
+        }
+
+        var normalizedQuality = BigDouble.Normalize(
+            quality.GetValue().Mantissa,
+            quality.GetValue().Exponent - 2);
+        quantity -= amount / normalizedQuality;
+    }
     public BigDouble GetTrueAmount(BigDouble amount) => amount;
 }
 

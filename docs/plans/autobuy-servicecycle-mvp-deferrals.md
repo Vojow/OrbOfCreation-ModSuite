@@ -85,7 +85,13 @@ Quantify the per-candidate cost of the audit and try/catch branches before decid
 - **What:** buy many affordable levels of one candidate in a cycle using the rising cost curve, and
   fix cross-candidate resource-contention cascade cancellation.
 - **Why deferred:** the game exposes no purchasable count and no cost curve — only next-level
-  `CanPurchase` and `GetPurchaseCost`. The shipped approach is probe-based; this is a separate effort.
+  `CanPurchase` and `GetPurchaseCost`. The worker already accounts for cumulative same-batch spending
+  across candidates, but a grouped action reserves `levels × next cost`, a lower bound when later
+  levels rise. This is not an owned-versus-queued pricing bug: the next-level formula already starts
+  from current plus queued levels. Refusal diagnostics now name earlier same-batch purchases touching
+  the refused resources, so a future live bundle can prove whether grouped under-reservation matters
+  before this larger planning change is opened. The native boundary remains the exact affordability
+  authority meanwhile.
 
 ### 5. Replicating the last game formula in the worker
 - **What is left:** `CanPurchase()` is the one live game call on the action path, by design — it

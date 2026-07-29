@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using OrbModding;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
@@ -38,6 +41,9 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<AutoBuyCandidateKinds> _ownershipMask;
     private readonly IAutoBuyRefusalResponsePort _refusals;
+    private readonly IServiceWorldGenerationSource? _worldGenerations;
+    private readonly List<AutoBuyEarlierPurchase> _batchPurchases = new(16);
+    private ulong _journalBatch;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataProfileOperations _profileOperations;
 #endif
@@ -50,13 +56,15 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 #if SERVICE_CYCLE_PROFILE
         , AutomataProfileOperations profileOperations
 #endif
-        , IAutoBuyRefusalResponsePort refusals)
+        , IAutoBuyRefusalResponsePort refusals
+        , IServiceWorldGenerationSource? worldGenerations = null)
     {
         _purchases = purchases ?? throw new ArgumentNullException(nameof(purchases));
         _queueRoom = queueRoom ?? throw new ArgumentNullException(nameof(queueRoom));
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _ownershipMask = ownershipMask ?? throw new ArgumentNullException(nameof(ownershipMask));
         _refusals = refusals ?? throw new ArgumentNullException(nameof(refusals));
+        _worldGenerations = worldGenerations;
 #if SERVICE_CYCLE_PROFILE
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
@@ -68,6 +76,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
     {
+        BeginBatch(context.Batch.Value);
+
         if (!AutoBuyConfigurationPolicy.IsOperational(config) ||
             !AutoBuyConfigurationPolicy.IsSelected(config, action.Kind))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
@@ -146,7 +156,18 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         Narrate(action.Kind, action.Uuid, submission, action.Belief);
         if (submission.Preflight == AutoBuyPurchasePreflight.NotAdmissible)
             ReportRefusal(in action, levels, in submission, in context);
-        return Map(submission);
+        var result = Map(submission);
+        if (result.Disposition == ServiceActionDisposition.Committed)
+        {
+            var liveCosts = submission.LiveCosts;
+            _batchPurchases.Add(new AutoBuyEarlierPurchase(
+                action.Kind,
+                action.Uuid,
+                context.ActionIndex,
+                submission.CommittedLevels,
+                in liveCosts));
+        }
+        return result;
     }
 
     /// <summary>
@@ -164,6 +185,11 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         in AutoBuyPurchaseSubmission submission,
         in ServiceActionContext context)
     {
+        var latest = default(WorldGeneration);
+        var latestReadable = _worldGenerations is not null &&
+            _worldGenerations.TryGetLatestGeneration(out latest);
+        var liveCosts = submission.Diagnosis.LiveCosts;
+        var earlier = RelatedPurchases(in liveCosts);
         _refusals.ObserveRefusal(new AutoBuyRefusalReport(
             action.Kind,
             action.Uuid,
@@ -174,7 +200,54 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             action.CollectedAtEpoch,
             context.Cycle.Config.Value,
             context.Cycle.Lifecycle.Value,
-            context.Cycle.Cycle.Value));
+            context.Cycle.Cycle.Value,
+            context.Batch.Value,
+            context.ActionIndex,
+            action.WorldCollectedAt,
+            context.AttemptedAt,
+            latestReadable,
+            latestReadable ? latest.Value : 0,
+            earlier));
+    }
+
+    private void BeginBatch(ulong batch)
+    {
+        if (_journalBatch == batch) return;
+        _journalBatch = batch;
+        _batchPurchases.Clear();
+    }
+
+    private AutoBuyEarlierPurchase[] RelatedPurchases(in AutoBuyLiveCostSnapshot refusedCosts)
+    {
+        if (_batchPurchases.Count == 0) return Array.Empty<AutoBuyEarlierPurchase>();
+        var related = new List<AutoBuyEarlierPurchase>();
+        for (var index = 0; index < _batchPurchases.Count; index++)
+        {
+            var purchase = _batchPurchases[index];
+            if (!refusedCosts.IsComplete || !purchase.HasCompleteCosts ||
+                SharesResource(in purchase, in refusedCosts))
+            {
+                related.Add(purchase);
+            }
+        }
+
+        return related.ToArray();
+    }
+
+    private static bool SharesResource(
+        in AutoBuyEarlierPurchase purchase,
+        in AutoBuyLiveCostSnapshot refusedCosts)
+    {
+        var earlier = purchase.Costs;
+        var refused = refusedCosts.Rows;
+        for (var i = 0; i < earlier.Length; i++)
+        {
+            for (var j = 0; j < refused.Length; j++)
+            {
+                if (earlier[i].ResourceId == refused[j].ResourceId) return true;
+            }
+        }
+        return false;
     }
 
     // Always-on human-readable decision line ("purchased X of Y" / "failed to purchase") so buying
@@ -243,6 +316,10 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             case AutoBuyPurchasePreflight.CandidateUnavailable:
                 return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
             case AutoBuyPurchasePreflight.NotAdmissible:
+                return submission.Diagnosis.Classification ==
+                    AutoBuyRefusalClassification.AffordabilityChanged
+                    ? ServiceActionResult.Skipped(CommonActionResultCodes.Skipped)
+                    : ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             case AutoBuyPurchasePreflight.SingleBuyUnavailable:
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
         }

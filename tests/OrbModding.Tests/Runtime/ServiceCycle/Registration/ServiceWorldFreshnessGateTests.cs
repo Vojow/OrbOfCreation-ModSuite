@@ -367,6 +367,33 @@ public sealed class ServiceWorldFreshnessGateTests
     }
 
     /// <summary>
+    /// A pre-native skip says the action's snapshot was stale even though no game mutation happened,
+    /// so the same snapshot must not be planned again.
+    /// </summary>
+    [Fact]
+    public void APreNativeSkipWaitsForAWorldCollectedAfterTheRefusal()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var service = new ExecutionServiceDefinition("gate.pre-native-skip")
+        {
+            ActionCount = 1,
+            SkipWithoutNativeAtIndex = 0,
+        };
+        using var registration = registry.Register(service, new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var executions = service.ActionExecutionCount;
+        PumpUntilHeld(pump, actionFrame + 1);
+        Assert.Equal(executions, service.ActionExecutionCount);
+
+        TestWorldCollector.CollectedAt(registry, actionFrame + 1);
+        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+    }
+
+    /// <summary>
     /// The epoch a snapshot was collected under is no part of this gate, in either direction: a
     /// snapshot from another run of the game releases a held service if its frame is fresh enough, and
     /// one from this run holds it if its frame is not.

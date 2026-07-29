@@ -5221,6 +5221,25 @@
       "place": "capture"
     },
     {
+      "id": "id-scriptable-object.get-guid-action",
+      "assembly": "assembly-csharp",
+      "type": "IdScriptableObject",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Buy refusal diagnostics"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "id-scriptable-object.runtime-lookup",
       "assembly": "assembly-csharp",
       "type": "IdScriptableObject",
@@ -7573,7 +7592,8 @@
       "parameters": [],
       "owners": [
         "Automata resource-cost decoding",
-        "Automata Auto Concept drain"
+        "Automata Auto Concept drain",
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -7594,7 +7614,7 @@
       "owners": [
         "Automata world-collection verification",
         "Automata spell leveling",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -7727,7 +7747,8 @@
         "Automata world-collection verification",
         "Automata resource-cost decoding",
         "Automata Auto Concept drain",
-        "Automata cost-math verification"
+        "Automata cost-math verification",
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -7766,7 +7787,8 @@
       "owners": [
         "Automata world-collection verification",
         "Automata Auto Concept drain",
-        "Automata cost-math verification"
+        "Automata cost-math verification",
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -8769,7 +8791,8 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata rate-math verification"
+        "Automata rate-math verification",
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -8870,7 +8893,8 @@
       "parameters": [],
       "owners": [
         "Automata resource snapshots",
-        "Automata world-collection verification"
+        "Automata world-collection verification",
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -9048,6 +9072,25 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "resource.is-bandwidth-resource",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsBandwidthResource",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Buy refusal diagnostics"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "resource.is-at-zero",
@@ -12353,7 +12396,7 @@
       "owners": [
         "Automata world-collection verification",
         "Automata cost-math verification",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -12432,7 +12475,7 @@
       "owners": [
         "Automata Auto Buy admission",
         "Automata world collection",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -13678,7 +13721,7 @@
       "parameters": [],
       "owners": [
         "Automata world-collection verification",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -13758,7 +13801,7 @@
       "owners": [
         "Automata Auto Buy admission",
         "Automata world collection",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -13778,7 +13821,7 @@
       "parameters": [],
       "owners": [
         "Automata Auto Buy completion",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"
@@ -13798,7 +13841,7 @@
       "parameters": [],
       "owners": [
         "Automata Auto Buy queue",
-        "Automata Auto Buy diagnostics"
+        "Automata Auto Buy refusal diagnostics"
       ],
       "usages": [
         "reflection"

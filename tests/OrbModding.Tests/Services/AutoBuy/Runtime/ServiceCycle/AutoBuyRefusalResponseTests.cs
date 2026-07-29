@@ -5,6 +5,7 @@ using System.Linq;
 using BepInEx.Configuration;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using Xunit;
 
@@ -12,7 +13,7 @@ namespace OrbModding.Tests.Services.AutoBuy.Runtime.ServiceCycle;
 
 /// <summary>
 /// What the suite does when the game refuses a purchase the worker planned: write down both halves
-/// of the disagreement, say so loudly, and turn Auto Buy off.
+/// and separate expected affordability staleness from structural contradictions.
 /// </summary>
 public sealed class AutoBuyRefusalResponseTests : IDisposable
 {
@@ -100,6 +101,21 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
     }
 
     [Fact]
+    public void AffordabilityRefusalWritesOnceAndLeavesConfigurationUntouched()
+    {
+        var config = new EditableConfig(AutoBuyOperationMode.Active);
+        var responder = Responder(config, out var bundles, out var logged);
+
+        responder.ObserveRefusal(Report(RefusedOnAffordability()));
+
+        Assert.Equal(AutoBuyOperationMode.Active, config.Current.AutoBuy.Mode);
+        Assert.Single(Directory.EnumerateFiles(bundles));
+        var message = Assert.Single(logged);
+        Assert.Contains("skipped a purchase whose live resources had moved", message);
+        Assert.Contains("Auto Buy remains enabled", message);
+    }
+
+    [Fact]
     public void TheLoudLineNamesTheBundleItWrote()
     {
         var config = new EditableConfig(AutoBuyOperationMode.Active);
@@ -167,6 +183,66 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         Assert.Contains("World generation: 4", text);
         Assert.Contains("World collected at epoch: 12", text);
         Assert.Contains("Config generation: 3", text);
+    }
+
+    [Fact]
+    public void TheBundleNamesEveryLiveRowEarlierOverlapAndTimingDeltas()
+    {
+        var otherResource = Guid.Parse("abcdef02-0000-0000-0000-000000000000");
+        var live = AutoBuyLiveCostSnapshot.Complete(
+            new[]
+            {
+                new AutoBuyLiveCostRow(ResourceId, false, new BigDouble(2.0, 1), new BigDouble(1.9, 1)),
+                new AutoBuyLiveCostRow(otherResource, true, new BigDouble(4.0, 0), new BigDouble(3.0, 0)),
+            });
+        var diagnosis = new AutoBuyAdmissionDiagnosis(
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Refused,
+            in live);
+        var earlierCosts = AutoBuyLiveCostSnapshot.Complete(
+            new[]
+            {
+                new AutoBuyLiveCostRow(ResourceId, false, new BigDouble(1.0, 1), new BigDouble(3.0, 1)),
+            });
+        var baseReport = Report(diagnosis);
+        var report = new AutoBuyRefusalReport(
+            baseReport.Kind,
+            baseReport.Uuid,
+            baseReport.RequestedLevels,
+            baseReport.Belief,
+            baseReport.Diagnosis,
+            baseReport.WorldGeneration,
+            baseReport.CollectedAtEpoch,
+            baseReport.ConfigGeneration,
+            baseReport.LifecycleGeneration,
+            baseReport.CycleId,
+            batchId: 8,
+            actionIndex: 3,
+            worldCollectedAt: new MonotonicTimestamp(100),
+            admissionAttemptedAt: new MonotonicTimestamp(TimeSpan.TicksPerMillisecond * 2 + 100),
+            latestWorldGenerationReadable: true,
+            latestWorldGeneration: 6,
+            earlierPurchases: new[]
+            {
+                new AutoBuyEarlierPurchase(
+                    AutoBuyCandidateKind.Structure,
+                    Guid.Parse("99a0da46-0000-0000-0000-000000000000"),
+                    actionIndex: 1,
+                    committedLevels: 2,
+                    in earlierCosts),
+            });
+
+        var text = AutoBuyRefusalBundle.Render(in report, WrittenAt);
+
+        Assert.Contains("Classification: AffordabilityChanged", text);
+        Assert.Contains($"[1] Resource: {ResourceId:D}", text);
+        Assert.Contains($"[2] Resource: {otherResource:D}", text);
+        Assert.Contains("Action 1: Structure 99a0da46-0000-0000-0000-000000000000, committed 2 level(s)", text);
+        Assert.Contains("Collection-to-admission elapsed milliseconds: 2", text);
+        Assert.Contains("Latest world generation at admission: 6", text);
+        Assert.Contains("World generations elapsed: 2", text);
     }
 
     /// <summary>
@@ -255,6 +331,25 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
             AutoBuyAdmissionTerm.Unread,
             AutoBuyAdmissionTerm.Refused,
             AutoBuyAdmissionTerm.Passed);
+
+    private static AutoBuyAdmissionDiagnosis RefusedOnAffordability()
+    {
+        var live = AutoBuyLiveCostSnapshot.Complete(
+            new[]
+            {
+                new AutoBuyLiveCostRow(
+                    ResourceId,
+                    false,
+                    new BigDouble(2.0, 0),
+                    new BigDouble(1.0, 0)),
+            });
+        return new AutoBuyAdmissionDiagnosis(
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Passed,
+            AutoBuyAdmissionTerm.Refused,
+            in live);
+    }
 
     private static AutoBuyRefusalReport Report(AutoBuyAdmissionDiagnosis diagnosis) =>
         new(

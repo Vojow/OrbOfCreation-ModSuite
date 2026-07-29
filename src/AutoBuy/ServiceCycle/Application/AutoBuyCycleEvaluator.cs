@@ -19,9 +19,10 @@ namespace OrbAutomata;
 /// no conversion — exactly as the raw quantities and costs were captured.
 /// </summary>
 /// <remarks>
-/// Pillar A plans ONE action per eligible candidate per cycle: the batch cascade-terminates on the
-/// first native rejection, so planning a candidate twice is wasted work (the next cycle re-plans from
-/// fresh facts, and an already-queued slot is retained). One action is not one queue slot: a bulk
+/// Pillar A plans ONE action per eligible candidate per cycle: a structural native rejection
+/// cascade-terminates the batch, while an affordability-only refusal skips that candidate and makes
+/// Common wait for fresh facts. Planning a candidate twice is therefore wasted work, and an
+/// already-queued slot is retained. One action is not one queue slot: a bulk
 /// grouping mode raises that action's requested level <see cref="AutoBuyCycleAction.Count"/> to the
 /// game's own live count — the MultiBuy multiplier for an upgrade, the bulk-development count for a
 /// structure — so one action advances several levels. Nothing here bounds the plan by the queue.
@@ -169,7 +170,12 @@ internal static class AutoBuyCycleEvaluator
                 continue; // an earlier action in this batch already spent what this one needed
 
             var action = new AutoBuyCycleAction(
-                decision.Kind, decision.Uuid, frame.Global.CollectedAtEpoch, count, decision.Belief);
+                decision.Kind,
+                decision.Uuid,
+                frame.Global.CollectedAtEpoch,
+                count,
+                decision.Belief,
+                frame.Global.CollectedAt);
             actions.Add(in action);
             emitted++;
             requestedLevels = checked(requestedLevels + count);
