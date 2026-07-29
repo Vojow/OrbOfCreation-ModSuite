@@ -29,14 +29,15 @@ public sealed class NativeContractManifestTests
     /// terminator still keeps one call's literals from bleeding into the next.
     /// </remarks>
     private static readonly Regex LiteralSelectorPattern = new(
-        "(?:GetMethod|GetField|GetProperty|FindMethod|FindField|FindNoArgMethod|ResolveStaticNoArgMethod|InvokeNoArgs|TryInvokeBool|ReadMember|ReadBool|ReadInt|InvokeRequired|ReadStaticList)\\s*\\([^;]*?\"(?<target>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
+        "(?:GetMethod|GetField|GetProperty|FindMethod|FindField|FindNoArgMethod|ResolveStaticNoArgMethod|InvokeNoArgs|TryInvokeBool|ReadMember|ReadBool|ReadInt|InvokeRequired|ReadStaticList|RequireType|RequireField|RequireMethod|RequireMethodInHierarchy|RequireStaticMethod|ExactMethod)\\s*\\([^;]*?\"(?<target>[A-Za-z_][A-Za-z0-9_.+`]*)\"",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex ReflectionUsePattern = new(
         "(?:HarmonyPatch|AccessTools\\.(?:Method|TypeByName)|ReflectionUtil\\.FindLoadedType"
             + "|NativeAccessorBinder\\.|WorldMemberBinding"
             + "|\\.(?:GetMethod|GetMethods|GetField|GetFields|GetProperty|GetProperties)\\s*\\("
-            + "|\\b(?:FindMethod|FindField)\\s*\\()",
+            + "|\\b(?:FindMethod|FindField|RequireType|RequireField|RequireMethod"
+            + "|RequireMethodInHierarchy|RequireStaticMethod)\\s*\\()",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -69,10 +70,12 @@ public sealed class NativeContractManifestTests
     private static readonly Regex BinderTargetPattern = new(
         "(?:\\.(?:Call|Field|NestedField|EnumField)<[^<>()]*>\\s*\\([^;]*?\\)"
             + "|\\.(?:EnumField|NestedEnumField)\\s*\\([^;]*?\\)"
-            + "|\\.(?:CollectionCount|NestedCollectionCount|ReferenceGuid|CallReferenceGuid"
+            + "|\\.(?:CollectionCount|NestedCollectionCount|CollectionField"
+            + "|CollectionElementType|Reference|ReferenceGuid|CallReferenceGuid"
             + "|ModifierRecord)\\s*\\([^;]*?\\)"
             + "|NativeAccessorBinder\\.(?:Call|Field|NestedField|EnumField|NestedEnumField|StaticList"
-            + "|StaticDictionary|CollectionCount|NestedCollectionCount|ReferenceGuid|ModifierRecord)"
+            + "|StaticDictionary|CollectionCount|NestedCollectionCount|CollectionField"
+            + "|CollectionElementType|Reference|ReferenceGuid|ModifierRecord)"
             + "(?:<[^<>()]*>)?\\s*\\([^;]*?\\)"
             + "|(?:TypeName|RegistryMember)\\s*=>\\s*\"[^\"\\r\\n]*\")",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);

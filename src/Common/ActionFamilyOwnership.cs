@@ -13,6 +13,7 @@ public enum AutomationActionFamily
     SpellLevelPurchase = 201,
     ConceptAssignment = 300,
     HarvestAction = 400,
+    HarvestLevelAdjustment = 401,
     ScrollConsumption = 500,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,

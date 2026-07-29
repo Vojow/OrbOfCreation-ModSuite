@@ -1,6 +1,7 @@
 using System;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.World;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
@@ -105,6 +106,8 @@ internal sealed class AutoHarvestCycleActionAdapter : IAutoHarvestCycleActionPor
 #endif
             );
         var mapped = AutoHarvestActionResultMapper.FromMutation(result);
+        if (result.Verified)
+            WorldHarvestActionTriggerSource.AdvanceVerifiedHarvestSubmission();
         if (mapped.Code == AutoHarvestActionResultCodes.PairFaulted) _gates.Quarantine(action.Pair);
         return mapped;
     }

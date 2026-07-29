@@ -26,6 +26,7 @@ internal static class AutomataServiceCycleTraceRoster
 {
     private const string WorldCollectionId = "orbautomata.world-collection";
     private const string AutoHarvestId = "orbautomata.auto-harvest";
+    private const string AutoAgromancyId = "orbautomata.auto-agromancy";
     private const string AutoBuyId = "orbautomata.auto-buy";
     private const string SpellLevelId = "orbautomata.spell-level";
     private const string AutoCastId = "orbautomata.auto-cast";
@@ -60,6 +61,7 @@ internal static class AutomataServiceCycleTraceRoster
     {
         WorldCollectionId => "World collection",
         AutoHarvestId => "Auto Harvest",
+        AutoAgromancyId => "Auto Agromancy",
         AutoBuyId => "Auto Buy",
         SpellLevelId => "Spell Leveling",
         AutoCastId => "Auto Cast",

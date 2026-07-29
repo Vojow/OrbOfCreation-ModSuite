@@ -33,9 +33,10 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.NotReady, statuses.SpellLevel.Current.State);
         Assert.True(statuses.SpellLevel.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoAgromancy.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(7, status.LifecycleGeneration));
-        Assert.Equal(6, added);
+        Assert.Equal(7, added);
         Assert.Equal(0, changed);
     }
 
@@ -159,6 +160,7 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoAgromancy.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 
@@ -181,7 +183,7 @@ public sealed class AutomataFeatureStatusTests
             statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(9, status.LifecycleGeneration));
-        Assert.Equal(6, changes);
+        Assert.Equal(7, changes);
 
         for (var index = 0; index < 10_000; index++)
             statuses.ObserveLifecycleNotReady(
@@ -189,12 +191,13 @@ public sealed class AutomataFeatureStatusTests
                 9,
                 statuses.AutoBuy.ConfigurationGeneration);
 
-        Assert.Equal(6, changes);
+        Assert.Equal(7, changes);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.AutoBuy.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.SpellLevel.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoAgromancy.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 
@@ -506,5 +509,41 @@ public sealed class AutomataFeatureStatusTests
             statuses.AutoBuy.ConfigurationGeneration);
         Assert.False(statuses.AutoCast.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
+    }
+
+    [Theory]
+    [InlineData(
+        false, (int)AutoAgromancyDecisionKind.Idle, 0, false,
+        FeatureStatusState.NotReady, FeatureStatusReasonCode.GameplayNotReady)]
+    [InlineData(
+        true, (int)AutoAgromancyDecisionKind.CaptureUnavailable, 0, false,
+        FeatureStatusState.ContractUnavailable, FeatureStatusReasonCode.EvidenceUnavailable)]
+    [InlineData(
+        true, (int)AutoAgromancyDecisionKind.TriggerSweep, 1, false,
+        FeatureStatusState.TemporarilyBlocked, FeatureStatusReasonCode.TargetingInProgress)]
+    [InlineData(
+        true, (int)AutoAgromancyDecisionKind.AlreadyBalanced, 0, false,
+        FeatureStatusState.Operational, FeatureStatusReasonCode.None)]
+    [InlineData(
+        true, (int)AutoAgromancyDecisionKind.Idle, 0, true,
+        FeatureStatusState.Faulted, FeatureStatusReasonCode.PostconditionFailed)]
+    public void AutoAgromancyStatusUsesItsOwnProjectionAndFaultEvidence(
+        bool projectionObserved,
+        int decision,
+        int plannedActions,
+        bool faulted,
+        FeatureStatusState expectedState,
+        FeatureStatusReasonCode expectedReason)
+    {
+        var status = AutoAgromancyFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            projectionObserved,
+            (AutoAgromancyDecisionKind)decision,
+            plannedActions,
+            faulted);
+
+        Assert.Equal(expectedState, status.State);
+        Assert.Equal(expectedReason, status.Reason);
     }
 }

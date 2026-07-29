@@ -15,6 +15,9 @@ public sealed class AutomataWorldCapturePortTests
     public void AHealthyPassIsAnnouncedOnceEvenAsTheWorldGrows()
     {
         var announced = new List<string>();
+        var harvestActions = new global::HarvestActionInstanceListVariable();
+        global::IdScriptableObject.RuntimeLookup[harvestActions.GetGuid()] =
+            harvestActions;
         var port = new AutomataWorldCapturePort(
             new GameWorldCollector(),
             () => 1,
@@ -29,11 +32,15 @@ public sealed class AutomataWorldCapturePortTests
         try
         {
             var line = Assert.Single(announced);
-            Assert.StartsWith("World collection complete", line);
+            Assert.True(
+                line.StartsWith("World collection complete", System.StringComparison.Ordinal),
+                line);
         }
         finally
         {
             global::ResourceSO.All.Clear();
+            global::IdScriptableObject.RuntimeLookup.Remove(
+                harvestActions.GetGuid());
         }
     }
 

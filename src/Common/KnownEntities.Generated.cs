@@ -10,6 +10,7 @@ internal readonly struct ActionableListVariableContract { }
 internal readonly struct AlchemyInstanceListVariableContract { }
 internal readonly struct AlchemyRecipeListVariableContract { }
 internal readonly struct AlchemyTypeSOContract { }
+internal readonly struct HarvestActionInstanceListVariableContract { }
 internal readonly struct IntVariableContract { }
 internal readonly struct PlotNodeActionInstanceListVariableContract { }
 internal readonly struct PlotNodeActionSOContract { }
@@ -38,6 +39,7 @@ internal static class KnownEntities
 {
     public static readonly KnownEntity<ActionableListVariableContract> ActiveActionables = new(new Guid("2c4825f4-9869-41fc-84df-301638a097a5"), "ActionableListVariable", "ActiveActionables");
     public static readonly KnownEntity<AlchemyInstanceListVariableContract> ActiveConcepts = new(new Guid("9121924d-2692-428b-9599-165224ccd899"), "AlchemyInstanceListVariable", "ActiveConcepts");
+    public static readonly KnownEntity<HarvestActionInstanceListVariableContract> ActiveHarvestActions = new(new Guid("e4a9d4c3-61cc-4f94-bab9-7bc8e841cc32"), "HarvestActionInstanceListVariable", "ActiveHarvestActions");
     public static readonly KnownEntity<PlotNodeActionInstanceListVariableContract> ActivePlotNodeActions = new(new Guid("70871e86-100b-4ae0-ba9b-fc96e09b7e1f"), "PlotNodeActionInstanceListVariable", "ActivePlotNodeActions");
     public static readonly KnownEntity<SpellListVariableContract> ActiveSpells = new(new Guid("1614158d-6485-4995-90d0-79cc6b4dced4"), "SpellListVariable", "ActiveSpells");
     public static readonly KnownEntity<AlchemyTypeSOContract> Alchemy = new(new Guid("f9c93e42-e9e8-4fe3-a1f3-5aec5430b5c2"), "AlchemyTypeSO", "Alchemy");

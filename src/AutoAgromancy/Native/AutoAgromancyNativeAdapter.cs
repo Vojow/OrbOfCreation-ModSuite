@@ -72,6 +72,34 @@ internal readonly struct AutoAgromancyActiveLevel
     internal object Selected { get; }
 }
 
+internal enum AutoAgromancyExactMutationDisposition
+{
+    Committed = 1,
+    Rejected = 2,
+    ContractUnavailable = 3,
+    AttemptedUnverified = 4,
+}
+
+internal readonly struct AutoAgromancyExactMutationResult
+{
+    internal AutoAgromancyExactMutationResult(
+        AutoAgromancyExactMutationDisposition disposition,
+        int previousLevel,
+        int observedLevel,
+        string reason)
+    {
+        Disposition = disposition;
+        PreviousLevel = previousLevel;
+        ObservedLevel = observedLevel;
+        Reason = reason ?? string.Empty;
+    }
+
+    internal AutoAgromancyExactMutationDisposition Disposition { get; }
+    internal int PreviousLevel { get; }
+    internal int ObservedLevel { get; }
+    internal string Reason { get; }
+}
+
 internal sealed class AutoAgromancyNativeAdapter
 {
     internal const string ActiveHarvestActionsId =
@@ -258,6 +286,156 @@ internal sealed class AutoAgromancyNativeAdapter
         return results;
     }
 
+    /// <summary>
+    /// Applies an already-planned target. This method performs no level search
+    /// and reads no prospective scaling; it is the exact Unity-thread
+    /// transaction used by the ServiceCycle action boundary.
+    /// </summary>
+    internal AutoAgromancyExactMutationResult ApplyExactTarget(
+        Guid actionId,
+        Guid elementId,
+        int expectedCurrentLevel,
+        int targetLevel)
+    {
+        var contract = _contract;
+        if (contract is null)
+            return Exact(
+                AutoAgromancyExactMutationDisposition.ContractUnavailable,
+                expectedCurrentLevel,
+                expectedCurrentLevel,
+                _contractFailure);
+        if (actionId == Guid.Empty || elementId == Guid.Empty ||
+            expectedCurrentLevel < 0 || targetLevel < 0)
+            return Exact(
+                AutoAgromancyExactMutationDisposition.Rejected,
+                expectedCurrentLevel,
+                expectedCurrentLevel,
+                "the exact mutation request is invalid");
+
+        try
+        {
+            if (!TryResolveActiveList(contract, out var list, out var resolutionFailure))
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.Rejected,
+                    expectedCurrentLevel,
+                    expectedCurrentLevel,
+                    resolutionFailure);
+            if (contract.ListValuesField.GetValue(list) is not IList values)
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.ContractUnavailable,
+                    expectedCurrentLevel,
+                    expectedCurrentLevel,
+                    "the active Druidry entries are unavailable");
+
+            object? selected = null;
+            for (var index = 0; index < values.Count; index++)
+            {
+                var candidate = values[index];
+                if (candidate is null || !contract.InstanceType.IsInstanceOfType(candidate) ||
+                    !HasSamePairExact(
+                        contract,
+                        candidate,
+                        actionId,
+                        elementId))
+                    continue;
+                if (selected is not null)
+                    return Exact(
+                        AutoAgromancyExactMutationDisposition.Rejected,
+                        expectedCurrentLevel,
+                        expectedCurrentLevel,
+                        "the active Druidry pair is duplicated");
+                selected = candidate;
+            }
+
+            if (selected is null)
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.Rejected,
+                    expectedCurrentLevel,
+                    expectedCurrentLevel,
+                    "the active Druidry pair disappeared");
+            var current = ReadInt(contract.InstancesField, selected);
+            var maximum = InvokeInt(contract.GetMaximumInstances, selected);
+            if (current != expectedCurrentLevel || maximum <= 0 || targetLevel > maximum)
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.Rejected,
+                    current,
+                    current,
+                    "the current or maximum Druidry level changed");
+            if (contract.IsVisible.Invoke(selected, Array.Empty<object>()) is not true)
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.Rejected,
+                    current,
+                    current,
+                    "the active Druidry pair is no longer visible");
+            if (!_tryCaptureMutationPermit())
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.Rejected,
+                    current,
+                    current,
+                    "Druidry level-adjustment ownership is unavailable");
+
+            contract.ChangeInstance.Invoke(
+                selected,
+                new object[] { targetLevel - current });
+
+            var applied = FindPair(contract, list, actionId, elementId);
+            var observed = applied is null
+                ? 0
+                : ReadInt(contract.InstancesField, applied);
+            if (observed != targetLevel)
+                return Exact(
+                    AutoAgromancyExactMutationDisposition.AttemptedUnverified,
+                    current,
+                    observed,
+                    "the native Druidry level did not match the exact target");
+            return Exact(
+                AutoAgromancyExactMutationDisposition.Committed,
+                current,
+                observed,
+                "the exact native Druidry level was verified");
+        }
+        catch (Exception exception) when (IsExpectedNativeFailure(exception))
+        {
+            return Exact(
+                AutoAgromancyExactMutationDisposition.AttemptedUnverified,
+                expectedCurrentLevel,
+                -1,
+                "the exact native Druidry mutation threw: " +
+                exception.GetBaseException().Message);
+        }
+    }
+
+    private static object? FindPair(
+        Contract contract,
+        object list,
+        Guid actionId,
+        Guid elementId)
+    {
+        if (contract.ListValuesField.GetValue(list) is not IList values) return null;
+        object? found = null;
+        for (var index = 0; index < values.Count; index++)
+        {
+            var candidate = values[index];
+            if (candidate is null || !contract.InstanceType.IsInstanceOfType(candidate) ||
+                !HasSamePairExact(
+                    contract,
+                    candidate,
+                    actionId,
+                    elementId))
+                continue;
+            if (found is not null) return null;
+            found = candidate;
+        }
+        return found;
+    }
+
+    private static AutoAgromancyExactMutationResult Exact(
+        AutoAgromancyExactMutationDisposition disposition,
+        int previousLevel,
+        int observedLevel,
+        string reason) =>
+        new(disposition, previousLevel, observedLevel, reason);
+
     private AutoAgromancyBalanceResult BalanceSelection(
         object actionList,
         object selected,
@@ -326,8 +504,6 @@ internal sealed class AutoAgromancyNativeAdapter
                     currentPlan.TargetLevel);
             }
 
-            if (uiList is not null)
-                TryPresentSuccess(uiList, selected, current.Action);
             return Success(current, currentPlan);
         }
         catch (Exception exception) when (IsExpectedNativeFailure(exception))
@@ -873,6 +1049,22 @@ internal sealed class AutoAgromancyNativeAdapter
             string.Equals(actualElement, elementId, StringComparison.Ordinal);
     }
 
+    private static bool HasSamePairExact(
+        Contract contract,
+        object instance,
+        Guid actionId,
+        Guid elementId)
+    {
+        var action = contract.GetAction.Invoke(instance, Array.Empty<object>());
+        var element = contract.GetElement.Invoke(instance, Array.Empty<object>());
+        return action is not null &&
+            element is not null &&
+            contract.ActionGetGuid.Invoke(action, Array.Empty<object>()) is Guid actualAction &&
+            contract.ElementGetGuid.Invoke(element, Array.Empty<object>()) is Guid actualElement &&
+            actualAction == actionId &&
+            actualElement == elementId;
+    }
+
     private static bool TryMultiply(
         Contract contract,
         object left,
@@ -937,48 +1129,6 @@ internal sealed class AutoAgromancyNativeAdapter
         if (!Guid.TryParse(id, out var parsed)) return false;
         id = parsed.ToString();
         return true;
-    }
-
-    private static void TryPresentSuccess(object uiList, object selected, object action)
-    {
-        try
-        {
-            var sound = ReflectionUtil.ReadMember(action, "equipSound");
-            if (sound is not null) ReflectionUtil.InvokeNoArgs(sound, "Play");
-            if (uiList.GetType().Name == "UIHarvestAction")
-            {
-                ReflectionUtil.InvokeNoArgs(uiList, "Flash");
-            }
-            else
-            {
-                var rendered = InvokeCompatible(uiList, "GetRenderedItem", selected);
-                if (rendered is not null) ReflectionUtil.InvokeNoArgs(rendered, "Flash");
-            }
-        }
-        catch (Exception exception) when (IsExpectedNativeFailure(exception))
-        {
-            // Presentation is non-authoritative after the verified native mutation.
-        }
-    }
-
-    private static object? InvokeCompatible(object instance, string name, object argument)
-    {
-        for (var type = instance.GetType(); type is not null; type = type.BaseType)
-        {
-            foreach (var method in type.GetMethods(
-                         BindingFlags.Instance |
-                         BindingFlags.Public |
-                         BindingFlags.NonPublic |
-                         BindingFlags.DeclaredOnly))
-            {
-                var parameters = method.GetParameters();
-                if (method.Name == name &&
-                    parameters.Length == 1 &&
-                    parameters[0].ParameterType.IsInstanceOfType(argument))
-                    return method.Invoke(instance, new[] { argument });
-            }
-        }
-        return null;
     }
 
     private static bool IsExpectedNativeFailure(Exception exception) =>
@@ -1117,6 +1267,8 @@ internal sealed class AutoAgromancyNativeAdapter
             FieldInfo resourceField,
             MethodInfo getAction,
             MethodInfo getElement,
+            MethodInfo actionGetGuid,
+            MethodInfo elementGetGuid,
             MethodInfo getActionRef,
             MethodInfo isVisible,
             MethodInfo getMaximumInstances,
@@ -1159,6 +1311,8 @@ internal sealed class AutoAgromancyNativeAdapter
             ResourceField = resourceField;
             GetAction = getAction;
             GetElement = getElement;
+            ActionGetGuid = actionGetGuid;
+            ElementGetGuid = elementGetGuid;
             GetActionRef = getActionRef;
             IsVisible = isVisible;
             GetMaximumInstances = getMaximumInstances;
@@ -1202,6 +1356,8 @@ internal sealed class AutoAgromancyNativeAdapter
         internal FieldInfo ResourceField { get; }
         internal MethodInfo GetAction { get; }
         internal MethodInfo GetElement { get; }
+        internal MethodInfo ActionGetGuid { get; }
+        internal MethodInfo ElementGetGuid { get; }
         internal MethodInfo GetActionRef { get; }
         internal MethodInfo IsVisible { get; }
         internal MethodInfo GetMaximumInstances { get; }
@@ -1267,6 +1423,8 @@ internal sealed class AutoAgromancyNativeAdapter
                     RequireField(tuple, "resource", resource, false),
                     RequireMethod(instance, "GetAction", action),
                     RequireMethod(instance, "GetElement", element),
+                    RequireMethod(action, "GetGuid", typeof(Guid)),
+                    RequireMethod(element, "GetGuid", typeof(Guid)),
                     RequireMethod(instance, "GetActionRef", actionReference),
                     RequireMethod(instance, "IsVisible", typeof(bool)),
                     RequireMethod(instance, "GetMaximumInstances", typeof(int)),

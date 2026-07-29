@@ -6,7 +6,7 @@
 
 Unofficial BepInEx mods, tests, and reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current beta provides grouped queue-aware Auto Buy, progression-aware Spell Leveling, Auto Cast, opt-in Auto Concept, disabled-by-default Auto Harvest, Mentor progression sharing, and an optional native-styled configuration UI. Back up your save before using beta automation.
+The current beta provides grouped queue-aware Auto Buy, progression-aware Spell Leveling, Auto Cast, opt-in Auto Concept, disabled-by-default Auto Harvest and Auto Agromancy, Mentor progression sharing, and an optional native-styled configuration UI. Back up your save before using beta automation.
 
 ## Project status
 
@@ -14,7 +14,7 @@ The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.
 
 | Feature area | Status | Description |
 |---|---|---|
-| **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, and Auto Harvest. |
+| **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, Auto Harvest, and Auto Agromancy. |
 | **Mentor** | Beta | Progression-gated mastery sharing for spells, artifacts, and alchemy. |
 | **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and recent pump timing. |
 | **Shared runtime** | Bundled | ServiceCycle, world collection, diagnostics, and tracing behind every feature. |
@@ -26,7 +26,7 @@ The suite computes the game's economy math itself, transcribed from audited game
 
 ## Runtime foundation
 
-[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. World collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor are its seven registered services.
+[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. World collection, Auto Harvest, Auto Agromancy, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor are its eight registered services.
 
 Three separate diagnostics help investigate different problems:
 

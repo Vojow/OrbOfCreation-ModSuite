@@ -59,6 +59,7 @@ public sealed class Plugin : BaseUnityPlugin
     internal static readonly Type[] HarmonyPatchTypes =
     {
         typeof(SpellFirePatch),
+        typeof(AutoAgromancyPlotActionPatch),
         typeof(MentorSpellMasteryPatch),
         typeof(MentorAlchemyMasteryPatch),
         typeof(MentorArtifactTickPatch),
@@ -342,6 +343,19 @@ public sealed class Plugin : BaseUnityPlugin
                                     _automataActionFamilyOwnership!.TryCaptureHarvestMutationPermit(),
                                 runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
                                 featureStatus: featureStatuses.AutoHarvest)),
+                        new AutoAgromancyServiceCycleFeature(
+                            new AutoAgromancyFeatureDependencies(
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () =>
+                                    _automataActionFamilyOwnership!.OwnsAgromancy,
+                                tryCaptureMutationPermit: () =>
+                                    _automataActionFamilyOwnership!
+                                        .TryCaptureAgromancyMutationPermit(),
+                                readConfiguration: () =>
+                                    _configurationStore!.Current,
+                                readConfigurationGeneration: () =>
+                                    _configurationStore!.CurrentGeneration,
+                                featureStatus: featureStatuses.AutoAgromancy)),
                         new AutoBuyServiceCycleFeature(
                             new AutoBuyFeatureDependencies(
                                 readAutoHarvestLifecycleEpoch,
@@ -418,6 +432,7 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoHarvestMode={runtimeConfig.AutoHarvest.Mode}, " +
             $"AutoHarvestFruitTrees={runtimeConfig.AutoHarvest.CollectFruitTrees}, " +
             $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
+            $"AutoAgromancyMode={runtimeConfig.AutoAgromancy.Mode}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
             $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}.");
     }
@@ -888,6 +903,8 @@ public sealed class Plugin : BaseUnityPlugin
             if (config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
                 (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees))
                 result.Add("Auto Harvest");
+            if (config.AutoAgromancy.Mode == AutoAgromancyOperationMode.Active)
+                result.Add("Auto Agromancy");
         }
         if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
         return result;

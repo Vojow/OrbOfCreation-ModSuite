@@ -75,6 +75,7 @@ internal sealed class GameWorldCollector
     private readonly WorldActionQueueReader _actionQueues;
     private readonly WorldSpellSlotReader _spellSlots;
     private readonly WorldAlchemyInstanceReader _alchemyInstances;
+    private readonly WorldHarvestActionReader _harvestActions;
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
@@ -249,6 +250,10 @@ internal sealed class GameWorldCollector
             resolveType(KnownEntities.ActiveConcepts.ManagedTypeName),
             resolveType(KnownEntities.ConceptRecipes.ManagedTypeName),
             resolveType);
+        _harvestActions = new WorldHarvestActionReader(
+            resolveType("IdScriptableObject"),
+            resolveType(KnownEntities.ActiveHarvestActions.ManagedTypeName),
+            resolveType);
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
@@ -265,7 +270,8 @@ internal sealed class GameWorldCollector
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions, _entityEffects,
-            _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks, _entityRequirements,
+            _actionQueues, _spellSlots, _alchemyInstances, _harvestActions,
+            _plotAuthoring, _effectBlocks, _entityRequirements,
         };
 
         _isStructural = new bool[_readers.Length];
@@ -326,6 +332,9 @@ internal sealed class GameWorldCollector
 
         _claimed.Clear();
         frame.FixedDeltaTime = _readFixedDeltaTime();
+        frame.HarvestPlotActionEpoch = WorldHarvestActionTriggerSource.PlotActionEpoch;
+        frame.HarvestSubmissionEpoch =
+            WorldHarvestActionTriggerSource.VerifiedHarvestSubmissionEpoch;
         frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
         frame.MasteryExperience.Reset();
         _masteryExperience.CopyTo(frame.CollectedAtEpoch, frame.MasteryExperience);
@@ -365,6 +374,45 @@ internal sealed class GameWorldCollector
             _structuralFrame = frame;
             _structuralEpoch = frame.CollectedAtEpoch;
         }
+
+        var report = new WorldCollectionReport(reports);
+        frame.Report = report;
+        return report;
+    }
+
+    /// <summary>
+    /// Re-reads only the native facts required to admit or verify one Auto
+    /// Agromancy mutation. Unity thread only.
+    /// </summary>
+    /// <remarks>
+    /// The ordinary world publication remains the single shared full pass.
+    /// This bounded pass is reserved for the action boundary, where stale
+    /// admission facts must be revalidated immediately before and after a
+    /// mutation without rescanning unrelated gameplay categories.
+    /// </remarks>
+    internal WorldCollectionReport CollectAutoAgromancy(
+        GameWorldCycleFrame frame)
+    {
+        if (frame is null) throw new ArgumentNullException(nameof(frame));
+
+        _claimed.Clear();
+        frame.FixedDeltaTime = _readFixedDeltaTime();
+        frame.HarvestPlotActionEpoch =
+            WorldHarvestActionTriggerSource.PlotActionEpoch;
+        frame.HarvestSubmissionEpoch =
+            WorldHarvestActionTriggerSource.VerifiedHarvestSubmissionEpoch;
+        frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
+
+        var degradation = _rateGlobals.Degradation;
+        var reports = new WorldCategoryReport[
+            4 + (degradation.Length == 0 ? 0 : 1)];
+        reports[0] = _resources.Collect(_claimed, frame);
+        reports[1] = _harvestElements.Collect(_claimed, frame);
+        reports[2] = _harvestResources.Collect(_claimed, frame);
+        reports[3] = _harvestActions.Collect(_claimed, frame);
+        if (degradation.Length > 0)
+            reports[4] =
+                WorldCategoryReport.Missing("modifier folding", degradation);
 
         var report = new WorldCollectionReport(reports);
         frame.Report = report;

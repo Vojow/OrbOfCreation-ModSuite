@@ -33,6 +33,18 @@ internal static class WorldCategoryFakes
         ["ResourceTypeSO"] = typeof(FakeResourceType),
         ["CraftingRecipeTypeSO"] = typeof(FakeCraftingRecipeType),
         ["HarvestElementSO"] = typeof(FakeHarvestElement),
+        ["HarvestActionSO"] = typeof(FakeHarvestAction),
+        ["HarvestActionInstance"] = typeof(FakeActiveHarvestAction),
+        ["HarvestActionInstanceListVariable"] = typeof(FakeHarvestActionList),
+        ["HarvestElementSO+HarvestActionReference"] =
+            typeof(FakeHarvestActionReference),
+        ["ResourceDrain"] = typeof(FakeHarvestResourceDrain),
+        ["ResourceCostList"] = typeof(FakeResourceCostList),
+        ["ResourceTuple"] = typeof(FakeHarvestResourceTuple),
+        ["InstanceScalingRef"] = typeof(FakeInstanceScalingRef),
+        ["InstanceScalingSO"] = typeof(FakeInstanceScaling),
+        ["ScalingConversion"] = typeof(FakeScalingConversion),
+        ["ValueModifierList"] = typeof(FakeValueModifierList),
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
@@ -100,6 +112,10 @@ internal static class WorldCategoryFakes
         FakeTreasurePool.All.Clear();
         FakeModifierVariable.All.Clear();
         FakeIdRegistry.RuntimeLookup.Clear();
+        var harvestActions = new FakeHarvestActionList();
+        FakeIdRegistry.RuntimeLookup.Add(
+            harvestActions.GetGuid(),
+            harvestActions);
     }
 }
 
@@ -884,11 +900,93 @@ internal sealed class FakeHarvestElement
     /// resource registry and makes reading it through its owner the only path.
     /// </summary>
     private FakeResource harvestResource = new();
+    private FakeHarvestActionReference actionReference = new();
 
     internal FakeResource Resource => harvestResource;
+    internal FakeHarvestActionReference ActionReference => actionReference;
 
 
     public Guid GetGuid() => Identity;
+
+    public FakeResource GetInternalResource() => harvestResource;
+}
+
+internal sealed class FakeHarvestActionList
+{
+    private static readonly Guid ActiveHarvestActions =
+        Guid.Parse("e4a9d4c3-61cc-4f94-bab9-7bc8e841cc32");
+
+    public List<FakeActiveHarvestAction> value = new();
+
+    public Guid GetGuid() => ActiveHarvestActions;
+}
+
+internal sealed class FakeActiveHarvestAction
+{
+    public int instances;
+    public FakeHarvestResourceDrain resourceDrain = new();
+    public FakeHarvestAction action = new();
+    public FakeHarvestElement element = new();
+
+    public FakeHarvestAction GetAction() => action;
+    public FakeHarvestElement GetElement() => element;
+    public FakeHarvestActionReference GetActionRef() => element.ActionReference;
+    public bool IsVisible() => true;
+    public int GetMaximumInstances() => Math.Max(1, element.masteryLevel + 1);
+}
+
+internal sealed class FakeHarvestAction
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeModifierRecord costMod = new(100d);
+    public FakeModifierRecord speed = new(100d);
+    public FakeInstanceScalingRef instanceScaling = new();
+
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeHarvestActionReference
+{
+    public FakeResourceCostList actionCost = new();
+    public double elementCost;
+}
+
+internal sealed class FakeHarvestResourceDrain
+{
+    public FakeResourceCostList current = new();
+
+    public FakeResourceCostList GetCurrentDrain() => current;
+}
+
+internal sealed class FakeHarvestResourceTuple
+{
+    public FakeResource resource = new();
+    public BigDouble valueBig;
+}
+
+internal sealed class FakeInstanceScalingRef
+{
+    public FakeInstanceScaling scaling = new();
+}
+
+internal sealed class FakeInstanceScaling
+{
+    public FakeScalingConversion instanceScaling = new();
+}
+
+internal sealed class FakeScalingConversion
+{
+    public FakeValueModifierList cost = new();
+    public FakeValueModifierList speed = new();
+
+    public FakeValueModifierList GetCostMod() => cost;
+    public FakeValueModifierList GetSpeed() => speed;
+}
+
+internal sealed class FakeValueModifierList
+{
+    public List<FakeValueModifier> modifiers = new();
+    public List<FakeValueModifier> exponents = new();
 }
 
 internal sealed class FakeTimeRune

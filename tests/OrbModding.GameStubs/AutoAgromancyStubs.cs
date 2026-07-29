@@ -32,9 +32,33 @@ public sealed class AudioInstance
 public sealed class HarvestActionSO : IdScriptableObject
 {
     public AudioInstance equipSound = new AudioInstance();
+    public ValueModifierRecord costMod =
+        new ValueModifierRecord(new BigDouble(100, 0));
+    public ValueModifierRecord speed =
+        new ValueModifierRecord(new BigDouble(100, 0));
+    public InstanceScalingRef instanceScaling = new InstanceScalingRef();
     public Func<int, BigDouble> DrainMultiplierAtLevel { get; set; } =
         level => new BigDouble(level, 0);
     public Action<int>? AfterLevelChanged { get; set; }
+}
+
+public sealed class InstanceScalingRef
+{
+    public InstanceScalingSO scaling = new InstanceScalingSO();
+}
+
+public sealed class InstanceScalingSO
+{
+    public ScalingConversion instanceScaling = new ScalingConversion();
+}
+
+public sealed class ScalingConversion
+{
+    public ValueModifierList cost = new ValueModifierList();
+    public ValueModifierList speed = new ValueModifierList();
+
+    public ValueModifierList GetCostMod() => cost;
+    public ValueModifierList GetSpeed() => speed;
 }
 
 public sealed class HarvestActionInstance

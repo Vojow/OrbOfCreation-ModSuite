@@ -17,6 +17,8 @@ or action-family ownership is affected.
   mastery balancing, drain, and lifecycle behavior.
 - [Spell leveling](spell-leveling.md) — capability unlocks, single/all modes,
   costs, queueing, and completion semantics.
+- [Auto Agromancy](auto-agromancy.md) — active Druidry fact capture,
+  balancing, trigger sweeps, exact level mutation, and quarantine semantics.
 - [Automata integration](integration.md) — configuration, coordinator,
   ownership, feature health, Harmony bindings, and cross-feature scheduling.
 

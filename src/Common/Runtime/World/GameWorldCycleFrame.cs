@@ -91,6 +91,12 @@ internal sealed class GameWorldCycleFrame
     internal WorldAlchemyCostBuffer AlchemyCosts { get; } = new();
 
     /// <summary>
+    /// Active Druidry pairs and their ordered raw cost/scaling rows. One reader
+    /// owns the buffer so the three tables and their capture state are atomic.
+    /// </summary>
+    internal WorldHarvestActionBuffer HarvestActions { get; } = new();
+
+    /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
     /// carrying its identity, so the plot is claimed once.
     /// </summary>
@@ -174,6 +180,10 @@ internal sealed class GameWorldCycleFrame
     /// </remarks>
     internal long CollectedAtEpoch { get; set; }
 
+    internal long HarvestPlotActionEpoch { get; set; }
+
+    internal long HarvestSubmissionEpoch { get; set; }
+
     /// <summary>
     /// What the capture could and could not read. Carried on the frame so the worker can project it
     /// into the service's diagnostics without asking the Unity thread a second time.
@@ -218,6 +228,8 @@ internal static class GameWorldFrameDeriver
         {
             FixedDeltaTime = frame.FixedDeltaTime,
             CollectedAtEpoch = frame.CollectedAtEpoch,
+            HarvestPlotActionEpoch = frame.HarvestPlotActionEpoch,
+            HarvestSubmissionEpoch = frame.HarvestSubmissionEpoch,
             Resources = resources,
             Structures = structures,
             PurchaseCosts = purchaseCosts,
@@ -264,6 +276,11 @@ internal static class GameWorldFrameDeriver
             ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
             AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),
+            HarvestActions = WorldHarvestActionDeriver.BuildActions(frame.HarvestActions),
+            HarvestActionCosts = WorldHarvestActionDeriver.BuildCosts(frame.HarvestActions),
+            HarvestActionModifiers =
+                WorldHarvestActionDeriver.BuildModifiers(frame.HarvestActions),
+            HarvestActionCaptureState = frame.HarvestActions.State,
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

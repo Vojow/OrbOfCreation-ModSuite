@@ -18,7 +18,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         Assert.Equal(AutoAgromancyBalanceDisposition.Applied, result.Disposition);
         Assert.Equal(3, result.TargetLevel);
         Assert.Equal(3, fixture.ActiveLevel);
-        Assert.Equal(1, fixture.Action.equipSound.PlayCalls);
+        Assert.Equal(0, fixture.Action.equipSound.PlayCalls);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class AutoAgromancyNativeAdapterTests
         Assert.Equal(AutoAgromancyBalanceDisposition.Applied, result.Disposition);
         Assert.Equal(3, result.TargetLevel);
         Assert.Equal(3, fixture.ActiveLevel);
-        Assert.Equal(1, row.FlashCalls);
+        Assert.Equal(0, row.FlashCalls);
     }
 
     [Fact]
@@ -183,6 +183,27 @@ public sealed class AutoAgromancyNativeAdapterTests
                 result.Disposition));
         Assert.Equal(5, fixture.List.FindInstance(fixture.Selected)!.instances);
         Assert.Equal(5, fixture.List.FindInstance(second)!.instances);
+    }
+
+    [Fact]
+    public void ExactZeroTargetPreservesTheAuthoritativePairMembership()
+    {
+        var fixture = new Fixture(baseRate: 5.0, maximumLevel: 5);
+        fixture.List.AddInstance(fixture.Selected, 2);
+
+        var result = fixture.Adapter.ApplyExactTarget(
+            fixture.Action.GetGuid(),
+            fixture.Element.GetGuid(),
+            expectedCurrentLevel: 2,
+            targetLevel: 0);
+
+        Assert.Equal(
+            AutoAgromancyExactMutationDisposition.Committed,
+            result.Disposition);
+        var retained = Assert.Single(fixture.List.value);
+        Assert.Same(fixture.Action, retained.GetAction());
+        Assert.Same(fixture.Element, retained.GetElement());
+        Assert.Equal(0, retained.instances);
     }
 
     private sealed class Fixture
