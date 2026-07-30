@@ -19,6 +19,7 @@ internal enum ScrollCoverageState
     Covered = 2,
     ProductionNeeded = 3,
     ExternallyProducing = 4,
+    Unavailable = 5,
 }
 
 internal readonly record struct ScrollRoleCoverage(
@@ -139,13 +140,16 @@ internal static class ScrollCoveragePlanner
             !WorldScribeLookup.TryGetRecipe(world.ScribeRecipes, recipeId, out var recipe) ||
             recipe.RecipeTypeId != KnownEntities.ScribeCrafting.Uuid ||
             recipe.OutputConsumableId != role.Scroll.Uuid ||
-            !recipe.Visible ||
             !recipe.UsesQuantityAsLevel)
         {
             return Row(
                 role, targetLevel, 0, 0, 0, 0, strongest, usableCandidates,
                 ScrollUseDirective.BlockUnknown, ScrollCoverageState.EvidenceUnknown);
         }
+        if (!recipe.Visible)
+            return Row(
+                role, targetLevel, 0, 0, 0, 0, strongest, usableCandidates,
+                useDirective, ScrollCoverageState.Unavailable);
 
         var uncovered = CountUncovered(world, role, targetLevel, out var completeTargets);
         if (!completeTargets)
@@ -163,7 +167,11 @@ internal static class ScrollCoveragePlanner
         var pending = CountPendingUsesAtOrAbove(
             world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
         var automatic = CountAutomaticWork(world, recipeId, targetLevel);
-        var deficit = Math.Max(0, uncovered - owned - queued - pending);
+        var carryTarget = FindMaximumCarryLoad(world, role.Scroll.Uuid);
+        var desiredSupply = carryTarget > 0
+            ? Math.Max(uncovered, carryTarget)
+            : uncovered;
+        var deficit = Math.Max(0, desiredSupply - owned - queued - pending);
         var state = automatic > 0 && deficit > 0
             ? ScrollCoverageState.ExternallyProducing
             : deficit > 0
@@ -197,6 +205,15 @@ internal static class ScrollCoveragePlanner
         for (var index = 0; index < rows.Length; index++)
             if (rows[index].CraftingRecipeTypeId == KnownEntities.ScribeCrafting.Uuid)
                 return rows[index].MaxStartingLevel;
+        return 0;
+    }
+
+    private static int FindMaximumCarryLoad(GameWorldState world, Guid scrollId)
+    {
+        var rows = world.Consumables.AsSpan();
+        for (var index = 0; index < rows.Length; index++)
+            if (rows[index].ConsumableId == scrollId)
+                return Math.Max(0, rows[index].MaximumCarryLoad);
         return 0;
     }
 

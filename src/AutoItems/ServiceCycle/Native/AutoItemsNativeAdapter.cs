@@ -64,10 +64,12 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
         if (action.Family == AutoItemsConsumableFamily.Scroll &&
             _autoScribeIdentityProfile is not null &&
             _autoScribeIdentityProfile.TryFindByScroll(action.ItemId, out _) &&
-            !AutoItemsScrollTargetPreflight.TryHasValidTarget(
+            (!AutoItemsScrollTargetPreflight.TryCountValidTargetsAtLevel(
                 item,
                 action.PlannedLevel,
-                out reason))
+                out var liveCandidates,
+                out reason) ||
+             liveCandidates < action.RequestedQuantity))
         {
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.TargetUnavailable,
@@ -102,24 +104,29 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.MutationPermitUnavailable,
                 "Auto Items no longer owns the complete consumable-use transaction.");
-        if (!NativeMultiBuyScope.TryEnterOne(out var multiBuy, out reason))
+        if (!NativeMultiBuyScope.TryEnter(
+                action.RequestedQuantity,
+                out var multiBuy,
+                out reason))
             return AutoItemsSubmission.Reject(AutoItemsPreflight.MultiBuyUnavailable, reason);
 
         var itemId = action.ItemId;
         var family = action.Family;
+        var requestedQuantity = action.RequestedQuantity;
         NativeMutationEvidence<ItemState> evidence;
         using (multiBuy)
         {
             evidence = NativeMutationVerifier.Execute(
                 "Auto Items",
                 itemId.ToString("D"),
-                "one item leaves stock and one prepared usage enters the native queue",
+                $"one item starts preparation and {requestedQuantity} item(s) enter the native queue",
                 () => Capture(item, native),
                 () => Mutate(item, family, native),
                 (before, after) =>
                     after.Quantity == before.Quantity - 1 &&
-                    after.Queued == before.Queued + 1 &&
-                    (!temporary || after.Usages == before.Usages + 1) &&
+                    after.Queued == before.Queued + requestedQuantity &&
+                    (!temporary ||
+                     after.Usages == before.Usages + requestedQuantity) &&
                     (family != AutoItemsConsumableFamily.Scroll || after.Randomized));
         }
 

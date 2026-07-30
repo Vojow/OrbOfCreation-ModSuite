@@ -85,6 +85,18 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
     }
 
     [Fact]
+    public void SubmissionUsesHighestCurrentlyAffordableUnlockedLevel()
+    {
+        _recipe.MainType.maxStartingLevel = 12;
+        _recipe.MaximumAffordableLevel = 7;
+
+        var result = Execute();
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(7d, Assert.Single(_active.value).Quantity.ToDouble());
+    }
+
+    [Fact]
     public void InstantCraftCommitsOnlyWhenSameLevelStockIncreases()
     {
         _recipe.InstantCraftEnabled = true;

@@ -14,4 +14,7 @@ internal static class AutoItemsActionResultCodes
     internal static ServiceActionResultCode TemporaryEffectPresent => new(1108);
     internal static ServiceActionResultCode TemporaryCostChanged => new(1109);
     internal static ServiceActionResultCode TargetUnavailable => new(1110);
+    internal static ServiceActionResultCode ContractUnavailable => new(1111);
+    internal static ServiceActionResultCode MultiBuyUnavailable => new(1112);
+    internal static ServiceActionResultCode Quarantined => new(1113);
 }

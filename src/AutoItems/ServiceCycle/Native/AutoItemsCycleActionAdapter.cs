@@ -75,10 +75,12 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.TargetUnavailable,
             AutoItemsPreflight.MutationPermitUnavailable =>
                 AutoItemsActionResultCodes.MutationPermitUnavailable,
-            AutoItemsPreflight.ContractUnavailable or
-            AutoItemsPreflight.MultiBuyUnavailable or
+            AutoItemsPreflight.ContractUnavailable =>
+                AutoItemsActionResultCodes.ContractUnavailable,
+            AutoItemsPreflight.MultiBuyUnavailable =>
+                AutoItemsActionResultCodes.MultiBuyUnavailable,
             AutoItemsPreflight.Quarantined =>
-                CommonActionResultCodes.AdapterFault,
+                AutoItemsActionResultCodes.Quarantined,
             AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };

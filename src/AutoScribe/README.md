@@ -1,8 +1,9 @@
 # Auto Scribe
 
-Auto Scribe keeps the six audited producible Scroll roles supplied at the highest currently
-craftable Scribe level. It is disabled by default and runs only while Auto Items Scroll use is
-active and healthy.
+Auto Scribe keeps the six audited producible Scroll roles supplied at the strongest currently
+affordable unlocked Scribe level, replacing weaker stock until the game's native per-item carry
+limit is filled. It is disabled by default and runs only while Auto Items Scroll use is active and
+healthy.
 
 ## Responsibility boundaries
 
@@ -31,6 +32,9 @@ active and healthy.
 
 Unknown baseline identity, incomplete target evidence, dependency loss, action-family conflict,
 stale lifecycle, missing queue room, failed affordability, or ambiguous postconditions reject work.
+Locked recipe roles are dormant rather than degraded and are reconsidered from every fresh world
+publication. The native adapter caps a planned level to the live unlocked maximum and selects the
+highest affordable level without changing the player's manual starting-level selector.
 Auto Scribe does not write enchantments, invoke Scroll consumption, edit persistent automatic
 Scribe entries, change the player's selected Scribe level, discard inventory, or edit saves.
 

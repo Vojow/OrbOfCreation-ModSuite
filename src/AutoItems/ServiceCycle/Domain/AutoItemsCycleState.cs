@@ -28,6 +28,7 @@ internal readonly struct AutoItemsDecisionMetrics
         int eligibleRelics,
         int eligibleScrolls,
         int plannedActions,
+        int plannedQuantity,
         AutoItemsDecisionKind kind)
     {
         Captured = captured;
@@ -36,6 +37,7 @@ internal readonly struct AutoItemsDecisionMetrics
         EligibleRelics = eligibleRelics;
         EligibleScrolls = eligibleScrolls;
         PlannedActions = plannedActions;
+        PlannedQuantity = plannedQuantity;
         Kind = kind;
     }
 
@@ -45,6 +47,7 @@ internal readonly struct AutoItemsDecisionMetrics
     internal int EligibleRelics { get; }
     internal int EligibleScrolls { get; }
     internal int PlannedActions { get; }
+    internal int PlannedQuantity { get; }
     internal AutoItemsDecisionKind Kind { get; }
 }
 

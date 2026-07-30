@@ -28,9 +28,10 @@ The implemented boundary is deliberately split:
   receives one full configured evaluation interval before it can be replanned, preserving bounded
   failure behavior without adding the idle delay to healthy Scroll chains.
 - The main-thread adapter re-resolves exact identity and family, checks visibility, the shared
-  Inventory idle predicate, `CanFire()`, lifecycle and ownership, pins multi-buy to one, and verifies
-  the exact stock/queue submission edge. Temporary duration and toxicity-only cost vectors are
-  revalidated live before mutation.
+  Inventory idle predicate, `CanFire()`, lifecycle and ownership, and verifies the exact stock/queue
+  submission edge. A Scroll action may pin native multi-buy to an adaptive batch bounded by owned
+  stock, toxicity headroom, and live useful targets; every other family remains quantity one.
+  Temporary duration and toxicity-only cost vectors are revalidated live before mutation.
 - Scrolls require live randomization capability and call the game's own
   `SetRandomization(true)`/`IsRandomized()` path. Relics have first priority whenever the native
   readiness and toxicity-headroom checks admit them.
@@ -54,10 +55,11 @@ The implemented boundary is deliberately split:
   quarantines only that exact item for the lifecycle; ambiguous Scroll/Relic mutations retain
   feature-wide lifecycle quarantine.
 
-The native inventory remains authoritative and permits only one prepared consumable at a time, so
-Auto Items cannot submit every owned Scroll in one synthetic batch. Nonzero toxicity alone never
-starts recovery waiting: the latch begins only when an otherwise-eligible item would fit after full
-recovery but does not fit in current headroom.
+The native inventory remains authoritative and prepares one consumable at a time. Scroll batching
+therefore makes one player-equivalent `SelectAndFire()` call under native multi-buy, after which the
+game drains the accepted batch serially through its own preparation and target-selection pipeline.
+Nonzero toxicity alone never starts recovery waiting: the latch begins only when an
+otherwise-eligible item would fit after full recovery but does not fit in current headroom.
 
 Auto Items defaults to `Disabled`; `UseScrolls` and `UseRelics` default on behind it,
 `UseFruits`/`UsePotions`/`UseThreads` default off, and the temporary allowlist defaults empty. Its

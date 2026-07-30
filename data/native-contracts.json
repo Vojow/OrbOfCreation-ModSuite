@@ -3402,6 +3402,25 @@
       "place": "action"
     },
     {
+      "id": "consumable.get-maximum-carry-load",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaximumCarryLoad",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "consumable.usage-cost",
       "assembly": "assembly-csharp",
       "type": "ConsumableSO",
@@ -14868,6 +14887,21 @@
       "static": false,
       "returnType": "System.Boolean",
       "parameters": ["BigDouble"],
+      "owners": ["Automata Auto Scribe"],
+      "usages": ["reflection"],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.recipe.get-main-type",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMainType",
+      "visibility": "public",
+      "static": false,
+      "returnType": "CraftingRecipeTypeSO",
+      "parameters": [],
       "owners": ["Automata Auto Scribe"],
       "usages": ["reflection"],
       "place": "action"

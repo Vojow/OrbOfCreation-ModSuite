@@ -49,25 +49,34 @@ internal sealed class AutoScribeNativeAdapter
             var queueValues = Field(queue!, "value") as IList;
             if (queueValues is null || !Invoke<bool>(queue!, "HasEmptySpot"))
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
+            var liveMaximumLevel = ReadMaximumStartingLevel(recipe!);
+            var requestedLevel = Math.Min(action.Level, liveMaximumLevel);
+            var affordableLevel = FindHighestAffordableLevel(recipe!, requestedLevel);
+            if (affordableLevel <= 0)
+                return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             if (!AutoItemsScrollTargetPreflight.TryCountValidTargetsAtLevel(
                     scroll!,
-                    action.Level,
+                    affordableLevel,
                     out var liveCandidates,
-                    out _) ||
-                liveCandidates <= CountCurrentSupply(
+                    out _))
+                return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
+            var currentSupply = CountCurrentSupply(
                     scroll!,
                     queue!,
                     action.RecipeId,
-                    action.Level))
+                    affordableLevel);
+            var carryLimit = Invoke<int>(scroll!, "GetMaximumCarryLoad");
+            var inventoryUpgradeNeeded =
+                carryLimit > 0 && currentSupply < carryLimit;
+            if (!inventoryUpgradeNeeded && liveCandidates <= currentSupply)
             {
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             }
-            if (!Invoke<bool>(recipe!, "IsVisible") ||
-                !Invoke<bool>(recipe!, "CanBuyAt", typeof(BigDouble), new BigDouble(action.Level)))
+            if (!Invoke<bool>(recipe!, "IsVisible"))
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
 
             var before = queueValues.Count;
-            var beforeOwned = CountOwned(scroll!, action.Level);
+            var beforeOwned = CountOwned(scroll!, affordableLevel);
             var instanceType = ReflectionUtil.FindLoadedType("CraftingInstance");
             var recipeType = recipe!.GetType();
             var ctor = instanceType?.GetConstructor(
@@ -78,8 +87,8 @@ internal sealed class AutoScribeNativeAdapter
             nativeCallsAttempted++;
             InvokeVoid(recipe!, "PurchaseQuantity",
                 new[] { typeof(BigDouble), typeof(BigDouble) },
-                new object[] { new BigDouble(action.Level), BigDouble.Zero });
-            var instance = ctor.Invoke(new object[] { recipe, new BigDouble(action.Level) });
+                new object[] { new BigDouble(affordableLevel), BigDouble.Zero });
+            var instance = ctor.Invoke(new object[] { recipe, new BigDouble(affordableLevel) });
             nativeCallsAttempted++;
             InvokeVoid(instance, "Initiate");
             var instantCraft = Invoke<bool>(instance, "CheckInstantCraft");
@@ -90,7 +99,7 @@ internal sealed class AutoScribeNativeAdapter
                 InvokeVoid(queue!, "Add", new[] { instanceType! }, new[] { instance });
 
             var after = queueValues.Count;
-            var afterOwned = CountOwned(scroll!, action.Level);
+            var afterOwned = CountOwned(scroll!, affordableLevel);
             var verified = instantCraft
                 ? after == before && afterOwned == beforeOwned + 1
                 : after == before + 1 && afterOwned == beforeOwned;
@@ -124,6 +133,43 @@ internal sealed class AutoScribeNativeAdapter
 
     internal void InvalidateLifecycle() => _quarantine = null;
     internal bool IsQuarantined => _quarantine is not null;
+
+    private static int ReadMaximumStartingLevel(object recipe)
+    {
+        var mainType = recipe.GetType().GetMethod(
+                "GetMainType", Instance, null, Type.EmptyTypes, null)?
+            .Invoke(recipe, Array.Empty<object>()) ??
+            throw new MissingMethodException(recipe.GetType().Name, "GetMainType");
+        return Field(mainType, "maxStartingLevel") is int maximum
+            ? Math.Max(0, maximum)
+            : throw new InvalidOperationException(
+                "The Scribe maximum starting level changed type.");
+    }
+
+    private static int FindHighestAffordableLevel(object recipe, int maximum)
+    {
+        var low = 1;
+        var high = maximum;
+        var found = 0;
+        while (low <= high)
+        {
+            var level = low + ((high - low) / 2);
+            if (Invoke<bool>(
+                    recipe,
+                    "CanBuyAt",
+                    typeof(BigDouble),
+                    new BigDouble(level)))
+            {
+                found = level;
+                low = level + 1;
+            }
+            else
+            {
+                high = level - 1;
+            }
+        }
+        return found;
+    }
 
     private bool TryResolve(Guid id, string typeName, out object? value)
     {

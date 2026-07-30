@@ -119,11 +119,17 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool useQuantityAsLevel;
     public bool visible;
     public bool BuyAllowed = true;
+    public int MaximumAffordableLevel = int.MaxValue;
+    public CraftingRecipeTypeSO MainType =
+        new CraftingRecipeTypeSO { maxStartingLevel = 12 };
     public bool InstantCraftEnabled;
     public ConsumableSO? InstantOutput;
     public int PurchaseCalls;
     public bool IsVisible() => visible;
-    public bool CanBuyAt(BigDouble quantity) => BuyAllowed && quantity > BigDouble.Zero;
+    public bool CanBuyAt(BigDouble quantity) =>
+        BuyAllowed && quantity > BigDouble.Zero &&
+        quantity.ToDouble() <= MaximumAffordableLevel;
+    public CraftingRecipeTypeSO GetMainType() => MainType;
     public void PurchaseQuantity(BigDouble quantity, BigDouble previousQuantity) =>
         PurchaseCalls++;
 }
@@ -290,6 +296,7 @@ public sealed class ConsumableSO : TooltipableObject
     private int gainedSince;
     public bool FireAllowed = true;
     public bool SelectionNoOp;
+    public int MaximumCarryLoad;
 
     public void SetStock(int quantityN, int queuedN, int gainedSinceN)
     {
@@ -307,15 +314,19 @@ public sealed class ConsumableSO : TooltipableObject
     {
         if (!CanFire() || !Inventory.CanUseConsumable()) return;
         if (SelectionNoOp) return;
-        queuedQuantity++;
-        quantity--;
-        if (hasDuration)
-            consumableUsages.Add(new ConsumableUsage
-            {
-                en = false,
-                dr = new BigDouble(durationBase),
-                maxDr = new BigDouble(durationBase),
-            });
+        var accepted = Math.Min(GlobalVariables.GetMultiBuy().AsInt(), quantity);
+        queuedQuantity += accepted;
+        if (accepted > 0)
+        {
+            quantity--;
+            if (hasDuration)
+                consumableUsages.Add(new ConsumableUsage
+                {
+                    en = false,
+                    dr = new BigDouble(durationBase),
+                    maxDr = new BigDouble(durationBase),
+                });
+        }
         Inventory.BeginPreparing();
     }
 
@@ -326,6 +337,7 @@ public sealed class ConsumableSO : TooltipableObject
     public int GetQuantity() => quantity;
 
     public int GetQueued() => queuedQuantity;
+    public int GetMaximumCarryLoad() => MaximumCarryLoad;
     public ConsumableCount GetStrongest()
     {
         ConsumableCount? strongest = null;

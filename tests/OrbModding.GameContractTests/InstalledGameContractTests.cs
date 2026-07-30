@@ -268,6 +268,12 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "ConsumableSO", "IsVisible", false, "System.Boolean");
         AssertMethod(assembly, "ConsumableSO", "GetQuantity", false, "System.Int32");
         AssertMethod(assembly, "ConsumableSO", "GetQueued", false, "System.Int32");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetMaximumCarryLoad",
+            false,
+            "System.Int32");
         Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
         Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "dr"));
         Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "maxDr"));
@@ -323,6 +329,15 @@ public sealed class InstalledGameContractTests
             "System.Void",
             "BigDouble",
             "BigDouble");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "GetMainType",
+            false,
+            "CraftingRecipeTypeSO");
+        Assert.Equal(
+            "System.Int32",
+            assembly.GetFieldType("CraftingRecipeTypeSO", "maxStartingLevel"));
         AssertMethod(
             assembly,
             "CraftingInstance",

@@ -175,7 +175,7 @@ internal static class AutoItemsCycleEvaluator
     private static AutoItemsDecisionMetrics EmptyMetrics(
         GameWorldState world,
         AutoItemsDecisionKind kind) =>
-        new(world.Consumables.Count, 0, 0, 0, 0, 0, kind);
+        new(world.Consumables.Count, 0, 0, 0, 0, 0, 0, kind);
 
     private static WakePolicy Plan(
         in AutoItemsCycleAction action,
@@ -188,7 +188,10 @@ internal static class AutoItemsCycleEvaluator
         actions.Add(action);
         if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
             state.RecordPlannedTemporary(in action);
-        metrics = scan.ToMetrics(kind, plannedActions: 1);
+        metrics = scan.ToMetrics(
+            kind,
+            plannedActions: 1,
+            plannedQuantity: action.RequestedQuantity);
         return WakePolicy.Immediate;
     }
 }

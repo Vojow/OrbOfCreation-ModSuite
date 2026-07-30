@@ -45,6 +45,31 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
     }
 
     [Fact]
+    public void ScrollBatchUsesOneNativeSubmissionAndRestoresPlayerMultiBuy()
+    {
+        var scroll = Item(KnownEntities.ConsumableScrollType.Uuid, randomizable: true);
+        scroll.SetStock(4, 0, 0);
+        GlobalVariables.MultiBuy.Value = 5;
+        using var adapter = Adapter();
+        var action = new AutoItemsCycleAction(
+            scroll.GetGuid(),
+            AutoItemsConsumableFamily.Scroll,
+            collectedAtFrame: 1,
+            collectedAtEpoch: 1,
+            plannedLevel: 1,
+            requestedQuantity: 3);
+
+        var result = adapter.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(3, scroll.GetQuantity());
+        Assert.Equal(3, scroll.GetQueued());
+        Assert.Equal(5, GlobalVariables.MultiBuy.AsInt());
+        Assert.Equal(2, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(2, result.CallOutcome.MutationAttempts);
+    }
+
+    [Fact]
     public void RelicSubmissionCanUseAvailableToxicityHeadroom()
     {
         Toxicity(displayQuantity: 1d);
@@ -138,6 +163,23 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
 
         Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
         Assert.Equal(AutoItemsActionResultCodes.TargetUnavailable, result.Code);
+    }
+
+    [Theory]
+    [InlineData(1, 1111)]
+    [InlineData(9, 1112)]
+    [InlineData(10, 1113)]
+    public void FatalBoundaryFailuresKeepDistinctJournalCodes(
+        int preflightValue,
+        int expectedCode)
+    {
+        var preflight = (AutoItemsPreflight)preflightValue;
+        var submission = AutoItemsSubmission.Reject(preflight, "bounded diagnostic");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(new ServiceActionResultCode(expectedCode), result.Code);
     }
 
     [Fact]

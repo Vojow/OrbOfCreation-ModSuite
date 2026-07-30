@@ -1,6 +1,6 @@
 # Auto Items
 
-> **Lifecycle: Active.** Phases 1-16 are implemented through their automated gates.
+> **Lifecycle: Active.** Phases 1-17 are implemented through their automated gates.
 > Installed-game journal acceptance and interactive validation remain open.
 
 [Back to plans](README.md) | [Runtime architecture](../runtime-architecture/README.md)
@@ -17,7 +17,7 @@ Last updated: **2026-07-30**
 | 1. Evidence and exact native contracts | **Static slice complete** | Read-only taxonomy, toxicity/recovery/rest, queue, and use contracts are documented; live mutation probes remain mandatory in Phases 4–5 |
 | 2. Publication, taxonomy, and toxicity facts | **Complete** | Complete native-free facts publish through the shared world snapshot with portable tests |
 | 3. Read-only service, configuration, and diagnostics | **Complete** | Disabled-by-default service, bounded evaluator, status, configuration, and journal projection are registered |
-| 4. Scroll implementation | **Implemented; interactive gate open** | Scrolls use native random targeting through a guarded one-item submission and verified stock/queue postcondition |
+| 4. Scroll implementation | **Implemented; interactive gate open** | Scrolls use native random targeting through a guarded adaptive-batch submission and verified stock/queue postcondition |
 | 5. Relic-first implementation | **Implemented; interactive gate open** | Relics receive first priority whenever native readiness and toxicity headroom admit them |
 | 6. Combined validation and hardening | **Automated gates complete; interactive gate open** | Portable and installed-contract gates pass together; live manual-race, recovery, save/load, reset, and NG+ checks remain |
 | 7. Temporary-effect evidence and exact contracts | **Complete for implementation; interactive effect audit open** | Exact usage ownership, pending/engaged state, duration, expiry, save hydration, queue, and toxicity contracts are proven; serialized benefit graphs are not used as automated policy inputs |
@@ -30,15 +30,17 @@ Last updated: **2026-07-30**
 | 14. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Items shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Scribe |
 | 15. Scroll-consumption throughput | **Implemented; validation open** | Verified uses chain after fresh world publication, native-busy polling is bounded at 250 ms, and rejected work retains the configured cooldown |
 | 16. Full test pyramid | **Automated layers complete; runtime gates open** | Pure policy, collector/native-boundary, cross-feature convergence, installed-contract, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
+| 17. Adaptive Scroll batch | **Implemented; runtime validation open** | One native multi-buy submission is bounded by stock, toxicity headroom, and useful live targets; exact batch stock/queue postconditions and distinct boundary fault codes are tested |
 
 ### Current resume point
 
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: install only with explicit authorization, then capture a post-fix journal proving
-  the Scroll-throughput follow-up consumes successive useful Scrolls without an idle one-second
-  gap or a rejected-work loop, and confirm the Auto
+- Current task: review and verify the adaptive Scroll batch plus Auto Scribe carry-fill/unlock
+  follow-up. Do not install while the game is running; installation still requires explicit
+  authorization. The next live journal must prove exact multi-item stock/queue commits without a
+  boundary-fault loop, then confirm the Auto
   Items/Auto Scribe row survives a supported UI rebuild. Then exercise one
   explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
@@ -55,7 +57,8 @@ Last updated: **2026-07-30**
   additional native costs; disabled-by-default configuration; a bounded ServiceCycle evaluator;
   feature health and decision projection; shared action-family ownership; native Scroll and Relic
   submission with live identity, family, visibility, queue, readiness, targeting, toxicity, and
-  lifecycle revalidation; exact one-item multi-buy isolation; postcondition verification; and
+  lifecycle revalidation; exact one-item or adaptive Scroll-batch multi-buy isolation;
+  postcondition verification; and
   lifecycle-scoped quarantine after an ambiguous attempted mutation.
 - Temporary extension implemented: every native usage publishes source item, stable usage UUID,
   pending/engaged state, remaining duration, and maximum duration; Fruit/Potion family controls
@@ -101,11 +104,12 @@ Last updated: **2026-07-30**
   now assigns policy, native-boundary, convergence, installed-contract, retained-journal, and
   disposable-save evidence to explicit layers. Dump-derived scheduler and mutation regressions are
   permanent cases rather than one-off observations.
-- Verification on the current tree: the complete `script/test` gate passes in 36 seconds with
-  1,983 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. Release
-  production line coverage is 74.53% against the 73.40% floor. All 26
-  installed-game contract tests pass against the local Windows Steam assemblies, and the
-  real-reference Release build completes with zero warnings and errors. Interactive game
+- Verification on the current tree: the portable gate's three constituent commands pass with
+  1,992 ordinary tests, 90 profiler tests, and a successful profiler trace-tool build. The latest
+  measured Release production line coverage remains 74.53% against the 73.40% floor. All 26
+  installed-game contract tests pass against the local Windows Steam assemblies, including the
+  new carry-cap and Scribe-level members, and the real-reference Release build completes with zero
+  warnings and errors. Interactive game
   validation has not yet covered Threads, the retry/throughput fixes, or the new paired
   quick-control row.
 - Installed source: clean commit `67ea8214d97d028314369b08e32a611070d46f06` is pushed to draft
@@ -114,8 +118,9 @@ Last updated: **2026-07-30**
   The guarded installer backed up 12 save files to
   `backups/pre-modsuite-install-20260730T113751Z` and the previous DLL to
   `BepInEx/modsuite-backups/pre-modsuite-install-20260730T113751Z`.
-- Next action: run the Phase 11-16 journal and behavior checklists on a disposable save, beginning
-  with successive useful Scroll consumption under ample toxicity headroom.
+- Next action: after an explicitly authorized install, run the Phase 11-17 journal and behavior
+  checklists on a disposable save, beginning with adaptive Scroll consumption under ample toxicity
+  headroom, gradual recipe unlocks, and a live maximum-level increase.
 
 ### Locked decisions
 
@@ -186,7 +191,9 @@ The first playable Scroll/Relic slice was intentionally narrow:
    predicates immediately before mutation.
 6. Fruit and Potion facts may be published and diagnosed, but the evaluator emits no action for
    them.
-7. At most one item is submitted per bounded feature turn. Relics have priority under the
+7. At most one native submission is made per bounded feature turn. Relics and temporary items stay
+   single-item; an audited Scroll submission may reserve an adaptive batch bounded by owned stock,
+   useful targets, toxicity headroom, and an internal safety cap. Relics have priority under the
    recovery-preserving policy above; candidates within one family are ordered by stable UUID until
    benefit-aware policy exists.
 

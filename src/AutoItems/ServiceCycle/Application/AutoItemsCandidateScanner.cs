@@ -53,7 +53,8 @@ internal readonly struct AutoItemsCandidateScan
 
     internal AutoItemsDecisionMetrics ToMetrics(
         AutoItemsDecisionKind kind,
-        int plannedActions = 0) =>
+        int plannedActions = 0,
+        int plannedQuantity = 0) =>
         new(
             Captured,
             RejectedProfiles,
@@ -61,6 +62,7 @@ internal readonly struct AutoItemsCandidateScan
             EligibleRelics,
             EligibleScrolls,
             plannedActions,
+            plannedQuantity,
             kind);
 }
 
@@ -70,6 +72,8 @@ internal readonly struct AutoItemsCandidateScan
 /// </summary>
 internal static class AutoItemsCandidateScanner
 {
+    private const int MaximumScrollBatch = 64;
+
     internal static AutoItemsCandidateScan Scan(
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
@@ -185,7 +189,8 @@ internal static class AutoItemsCandidateScanner
                     world.CollectedAtEpoch,
                     WorldConsumableCountLookup.StrongestOwnedLevel(
                         world.ConsumableCounts,
-                        profile.Consumable.ConsumableId));
+                        profile.Consumable.ConsumableId),
+                    ScrollBatchSize(in profile, scribeProfile, coverage));
             }
         }
 
@@ -262,7 +267,8 @@ internal static class AutoItemsCandidateScanner
         in AutoItemsConsumableProfile profile,
         long collectedAtFrame,
         long collectedAtEpoch,
-        int plannedLevel = 0)
+        int plannedLevel = 0,
+        int requestedQuantity = 1)
     {
         if (first.ItemId != Guid.Empty) return;
         first = new AutoItemsCycleAction(
@@ -270,7 +276,36 @@ internal static class AutoItemsCandidateScanner
             profile.Family,
             collectedAtFrame,
             collectedAtEpoch,
-            plannedLevel);
+            plannedLevel,
+            requestedQuantity);
+    }
+
+    private static int ScrollBatchSize(
+        in AutoItemsConsumableProfile profile,
+        AutoScribeIdentityProfile? scribeProfile,
+        ScrollCoveragePlan? coverage)
+    {
+        var available = Math.Max(
+            1,
+            profile.Consumable.Quantity - profile.Consumable.QueuedQuantity);
+        var useful = 1;
+        if (scribeProfile is not null &&
+            scribeProfile.TryFindByScroll(profile.Consumable.ConsumableId, out _) &&
+            coverage is not null &&
+            coverage.TryFind(profile.Consumable.ConsumableId, out var role))
+        {
+            useful = Math.Max(1, role.UsableCandidates);
+        }
+
+        var limit = Math.Min(MaximumScrollBatch, Math.Min(available, useful));
+        var admitted = 1;
+        for (var quantity = 2; quantity <= limit; quantity++)
+        {
+            var cost = profile.ImmediateToxicityCost * quantity;
+            if (profile.Toxicity.TrueQuantity.CompareTo(cost) < 0) break;
+            admitted = quantity;
+        }
+        return admitted;
     }
 
     private static bool IsBaseEligible(in AutoItemsConsumableProfile profile) =>

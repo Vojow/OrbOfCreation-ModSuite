@@ -129,8 +129,9 @@ effects, applies duration effects, and completes the queue entry.
 
 Consequences for the adapter:
 
-1. `SelectAndFire()` uses the global multi-buy value. A one-item automation action enters the
-   already audited `NativeMultiBuyScope` at one under the suite's shared
+1. `SelectAndFire()` uses the global multi-buy value. Relics and temporary items enter the already
+   audited `NativeMultiBuyScope` at one. Scrolls may enter it at an adaptive quantity bounded by
+   owned stock, toxicity headroom, and live useful targets under the suite's shared
    `NativeMultiBuyOverride` lease.
 2. Acceptance immediately spends the consume cost and increments `queuedQuantity`.
 3. Stock decrements immediately only when this item starts preparation; it can remain unchanged
@@ -141,10 +142,11 @@ Consequences for the adapter:
    preserves manual queue ownership, makes stock and usage creation observable in the same
    boundary, and prevents automated work from waiting behind a manual item.
 
-The immediate submission postcondition requires an exact `queuedQuantity` increase
-of one, the accepted native consume-cost transition, and—under the proposed idle-only gate—one unit
-of stock moved into a non-engaged usage. The eventual effect needs a separate observation rather
-than being falsely reported as complete at submission time.
+The immediate submission postcondition requires an exact `queuedQuantity` increase by the accepted
+batch, the accepted native consume-cost transitions, and—under the idle-only gate—one unit of stock
+moved into the first non-engaged usage. The remaining batch is reserved by `queuedQuantity` and
+prepared serially by the game. Eventual effects need separate observations rather than being
+falsely reported as complete at submission time.
 
 ## Native random Scroll targeting
 
@@ -184,7 +186,7 @@ submission:
 - existing shared `WorldResource` recovery and rest facts;
 - `CanFire()` as the live native readiness predicate;
 - `SelectAndFire()` as the player-equivalent submission path;
-- global multi-buy isolation as mandatory for a one-item action.
+- global multi-buy isolation as mandatory for exact one-item or adaptive Scroll-batch actions.
 
 These contracts authorize only the guarded submission boundary described here. They do not prove
 which later random attribute or global Relic effect completed.
@@ -239,7 +241,8 @@ absence of another temporary usage.
 - the action boundary re-resolves identity and family, rechecks visibility, queue idleness,
   `CanFire()`, lifecycle, ownership, targeting capability, every temporary cost-vector entry, and
   the absence of any pending or active temporary usage before every family mutation;
-- one-item multi-buy isolation is restored synchronously; an ambiguous Scroll/Relic attempt
+- one-item or adaptive Scroll-batch multi-buy isolation is restored synchronously; an ambiguous
+  Scroll/Relic attempt
   quarantines Auto Items, while an ambiguous or unconfirmed temporary attempt quarantines only the
   exact item until lifecycle invalidation.
 

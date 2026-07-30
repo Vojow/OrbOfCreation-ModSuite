@@ -969,6 +969,9 @@ internal sealed class FakeConsumable
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+    public int maximumCarryLoad;
+
+    public int GetMaximumCarryLoad() => maximumCarryLoad;
 }
 
 internal sealed class FakeScribeRecipe

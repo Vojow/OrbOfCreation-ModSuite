@@ -11,6 +11,7 @@ internal static class AutoItemsServiceProjection
     internal const int EligibleScrollsKey = 14;
     internal const int PlannedActionsKey = 15;
     internal const int DecisionKindKey = 16;
+    internal const int PlannedQuantityKey = 17;
 
     internal static void Write(
         in AutoItemsCycleState state,
@@ -24,5 +25,6 @@ internal static class AutoItemsServiceProjection
         output.Add(new ServiceProjectionKey(EligibleScrollsKey), ServiceProjectionValue.FromInteger(decision.EligibleScrolls));
         output.Add(new ServiceProjectionKey(PlannedActionsKey), ServiceProjectionValue.FromInteger(decision.PlannedActions));
         output.Add(new ServiceProjectionKey(DecisionKindKey), ServiceProjectionValue.FromInteger((int)decision.Kind));
+        output.Add(new ServiceProjectionKey(PlannedQuantityKey), ServiceProjectionValue.FromInteger(decision.PlannedQuantity));
     }
 }

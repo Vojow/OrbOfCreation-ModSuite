@@ -24,7 +24,8 @@ internal readonly struct WorldConsumable : IWorldEntity
         bool canBeRandomized,
         bool hasDuration,
         double durationBase,
-        bool queueOnStart)
+        bool queueOnStart,
+        int maximumCarryLoad = 0)
     {
         ConsumableId = consumableId;
         Visible = visible;
@@ -42,6 +43,7 @@ internal readonly struct WorldConsumable : IWorldEntity
         HasDuration = hasDuration;
         DurationBase = durationBase;
         QueueOnStart = queueOnStart;
+        MaximumCarryLoad = maximumCarryLoad;
     }
 
     internal Guid ConsumableId { get; }
@@ -90,6 +92,11 @@ internal readonly struct WorldConsumable : IWorldEntity
     internal double DurationBase { get; }
 
     internal bool QueueOnStart { get; }
+
+    /// <summary>
+    /// Native per-consumable carry cap. Zero means the game reports no finite cap.
+    /// </summary>
+    internal int MaximumCarryLoad { get; }
 }
 
 /// <summary>A consumable's cached modifier records — what using one is currently worth.</summary>
@@ -144,6 +151,7 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
     private Func<object, bool>? _hasDuration;
     private Func<object, double>? _durationBase;
     private Func<object, bool>? _queueOnStart;
+    private Func<object, int>? _maximumCarryLoad;
 
     internal override string Category => "consumables";
 
@@ -172,6 +180,7 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
         _hasDuration = bind.Field<bool>("hasDuration");
         _durationBase = bind.Field<double>("durationBase");
         _queueOnStart = bind.Field<bool>("queueOnStart");
+        _maximumCarryLoad = bind.Call<int>("GetMaximumCarryLoad");
         return bind.Failure;
     }
 
@@ -197,5 +206,6 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
             _canBeRandomized!(entity),
             _hasDuration!(entity),
             _durationBase!(entity),
-            _queueOnStart!(entity));
+            _queueOnStart!(entity),
+            _maximumCarryLoad!(entity));
 }

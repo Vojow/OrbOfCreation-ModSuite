@@ -356,6 +356,59 @@ public sealed class ScrollCoveragePlannerTests
     }
 
     [Fact]
+    public void LockedRoleIsDormantAndBecomesProductionEligibleWhenUnlocked()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 0,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: Array.Empty<WorldScribeWork>());
+        var locked = world with
+        {
+            ScribeRecipes = Table(new WorldScribeRecipe(
+                KnownEntities.CraftScrollAdvancement.Uuid,
+                KnownEntities.ScribeCrafting.Uuid,
+                KnownEntities.ScrollAdvancement.Uuid,
+                visible: false,
+                usesQuantityAsLevel: true)),
+        };
+
+        var before = FindAdvancement(
+            ScrollCoveragePlanner.Build(locked, Profile()));
+        var after = FindAdvancement(
+            ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(ScrollCoverageState.Unavailable, before.State);
+        Assert.False(before.ShouldProduce);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, after.State);
+        Assert.True(after.ShouldProduce);
+    }
+
+    [Fact]
+    public void CompleteCoverageStillFillsHighestLevelStockToNativeCarryLimit()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 12,
+            owned: new[]
+            {
+                new WorldConsumableCount(
+                    KnownEntities.ScrollAdvancement.Uuid, 12, 2, 0),
+            },
+            work: Array.Empty<WorldScribeWork>()) with
+        {
+            Consumables = Table(Scroll(maximumCarryLoad: 5)),
+        };
+
+        var role = FindAdvancement(
+            ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(3, role.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, role.State);
+        Assert.Equal(ScrollUseDirective.BlockNoCandidate, role.UseDirective);
+    }
+
+    [Fact]
     public void CraftQueueStockPendingUseAndAppliedEnchantmentConvergeWithoutOverproduction()
     {
         var structure = Guid.NewGuid();
@@ -510,6 +563,31 @@ public sealed class ScrollCoveragePlannerTests
             efficiencyModModifiers: 0,
             autoPenaltyModModifiers: 0,
             multiPenaltyModModifiers: 0);
+
+    private static WorldConsumable Scroll(int maximumCarryLoad) =>
+        new(
+            KnownEntities.ScrollAdvancement.Uuid,
+            visible: true,
+            randomized: true,
+            quantity: 0,
+            queuedQuantity: 0,
+            gainedSince: 0,
+            maxCreatedLevel: 1,
+            currentPrepTime: BigDouble.Zero,
+            currentCooldown: BigDouble.Zero,
+            currentCooldownTime: BigDouble.Zero,
+            modifiers: new RawConsumableModifiers(
+                BigDouble.One,
+                BigDouble.One,
+                BigDouble.One,
+                BigDouble.One,
+                BigDouble.Zero),
+            preparationTime: 1d,
+            canBeRandomized: true,
+            hasDuration: false,
+            durationBase: 0d,
+            queueOnStart: false,
+            maximumCarryLoad: maximumCarryLoad);
 
     private static PublicationTable<T> Table<T>(T row) where T : struct =>
         PublicationTable<T>.Create(new[] { row }, 1);

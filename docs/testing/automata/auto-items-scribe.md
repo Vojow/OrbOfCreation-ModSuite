@@ -4,8 +4,8 @@
 [Auto Items plan](../../plans/auto-items.md) · [Auto Scribe plan](../../plans/auto-scribe.md)
 
 Auto Items and Auto Scribe are separate ServiceCycle services with one shared
-coverage policy. Auto Scribe prepares one highest-useful-level Scroll; Auto
-Items consumes it through the game's native random target path. Tests must
+coverage policy. Auto Scribe prepares the strongest currently affordable Scroll; Auto
+Items consumes an adaptive batch through the game's native random target path. Tests must
 therefore prove each service independently and also prove convergence across
 fresh world publications.
 
@@ -27,17 +27,22 @@ the model rather than being normalized away.
 ## Risk contract
 
 - Identity authority is UUID plus exact native type. Names are diagnostic only.
-- Auto Items never writes toxicity or effects. It submits one native item and
-  verifies stock/queue or pending-usage evidence.
+- Auto Items never writes toxicity or effects. It makes one native submission,
+  requests an adaptive Scroll batch bounded by stock, useful targets, toxicity
+  headroom, and an internal safety cap, then verifies stock/queue evidence.
+  Relics and temporary items remain one-at-a-time.
 - Nonzero toxicity does not pause Scrolls or Relics while current headroom
   admits them. Recovery latches only after an otherwise useful item cannot fit,
   and clears only at exact zero toxicity.
 - One prepared consumable blocks another native item submission. Healthy
   verified chains resume after a fresh world publication and poll native-busy
   state at no more than 250 ms.
-- Auto Scribe crafts at the exact native maximum starting level, reserves
-  same-or-higher stock, queued work, and pending use, and never edits persistent
-  player automation.
+- Auto Scribe re-reads the native maximum starting level and affordability at
+  every mutation boundary, then crafts the highest currently affordable level
+  up to that maximum. It fills each unlocked Scroll family to its native carry
+  cap even after current targets are covered, so stronger future Scrolls can
+  replace weaker stock. It reserves same-or-higher stock, queued work, and
+  pending use, and never edits persistent player automation.
 - Manual one-shot Scribe work is queued supply. Player-owned automatic work is
   external production pressure: it suppresses competing production but remains
   reported separately.
@@ -88,6 +93,8 @@ The retained 2026-07-30 run produced five concrete regression classes:
 | Auto Scribe produced 60,423 rejected decisions | rejected work returns the configured cadence rather than an immediate proposal loop |
 | Auto Scribe completed 164/164 mutations with 492 native calls | one healthy queue action commits one mutation with the expected three-call evidence |
 | Auto Items waited a full idle interval between healthy Scrolls | a committed Scroll chain continues immediately after fresh publication; native-busy polling is bounded at 250 ms |
+| A Scroll backlog outgrew serial single-item submissions | one native submission reserves the largest safe batch, restores the player's multi-buy setting, and projects the requested quantity into the journal |
+| Newly unlocked Scroll recipes and higher Scribe levels were missed | invisible recipes are dormant rather than degraded; every fresh publication reopens newly visible roles and the native boundary re-reads the maximum and highest affordable level |
 | Lifecycle readiness and the shared host were previously unavailable | stale epoch, lost ownership, lost Scroll consumption, and lost capture permit all reject before a native call |
 
 These are permanent regression cases. A future dump can add cases but cannot
@@ -124,6 +131,8 @@ Auto Items must cover:
   zero recovered, invalid capacity, and cost larger than full capacity;
 - Relic priority at zero and nonzero toxicity;
 - native-random Scroll requirement and no-candidate rejection;
+- adaptive Scroll batch limits for stock, useful targets, toxicity headroom,
+  and the internal cap; multi-buy restoration and batch-size projection;
 - exact temporary allowlist, family switch without allowlist, pending,
   engagement, expiry, no refresh, and exact-item quarantine;
 - disabled mode, emergency/lifecycle permit loss, native busy, manual stock
@@ -141,6 +150,8 @@ Auto Scribe must cover:
 - largest-deficit then stable-role selection, disabled roles, no starvation;
 - target level increase, structure appearance, zero targets, incomplete target
   evidence, recipe mismatch, and unknown baseline;
+- gradual recipe unlock, locked-role dormancy, native carry-cap stock fill,
+  lower-stock replacement pressure, and highest-affordable-level fallback;
 - queue and instant-craft success, stale epoch, dependency loss, full queue,
   live supply race, live target race, native refusal, and quarantine recovery.
 - feature-runtime status after evaluation, emergency stop, ownership loss,
@@ -165,7 +176,13 @@ For an isolated healthy Auto Items/Auto Scribe window:
   must resolve to later decisions;
 - repeated rejections occur no faster than the configured feature interval;
 - a Scroll backlog with ample headroom shows successive commits separated only
-  by native preparation and fresh publication, not by the idle interval.
+  by native preparation and fresh publication, not by the idle interval;
+- the Auto Items projection reports the requested batch quantity, and each
+  batch remains within observed stock, useful-target count, toxicity headroom,
+  and the safety cap;
+- unlocking another Scroll role or increasing the native Scribe maximum changes
+  the next fresh-world decision without a configuration toggle or lifecycle
+  restart.
 
 The compact journal carries numeric service IDs. Use a correlated dashboard or
 the runtime roster to attribute them; never permanently assume ordinal 3 or 4.
@@ -175,18 +192,22 @@ record is unknown rather than success.
 ## P5 disposable-save scenarios
 
 1. **Scroll backlog:** start with several useful Scrolls and ample toxicity
-   headroom. Confirm serial native uses continue faster than the Scribe supply
-   rate until stock is cleared, coverage completes, or actual saturation occurs.
+   headroom. Confirm one submission reserves a safe multi-item batch and the
+   game drains it serially until stock is cleared, coverage completes, or actual
+   saturation occurs. Confirm the player's multi-buy value is restored.
 2. **Recovery latch:** fill until the next useful item cannot fit. Partial
    recovery must not resume; exact zero must resume. An item larger than full
    capacity must not create an unreachable wait.
 3. **Relics:** confirm priority at zero and at nonzero toxicity when headroom
    fits. Confirm insufficient headroom falls through to a cheaper useful Scroll.
-4. **Coverage convergence:** observe missing coverage, one queued level-max
-   craft, stock, pending Scroll use, native enchantment replacement, and no
-   further production after all targets are covered.
-5. **Level and target changes:** unlock a higher Scribe level and a new valid
-   structure while active. Each must reopen only the exact affected deficit.
+4. **Coverage convergence and reserve:** observe missing coverage, one queued
+   highest-affordable craft, stock, pending Scroll use, native enchantment
+   replacement, and continued production until that Scroll family's native
+   carry cap is filled.
+5. **Unlock, level, and target changes:** unlock all Scroll recipes gradually,
+   then unlock a higher Scribe level and a new valid structure while active.
+   Each must alter the next fresh-world plan without a restart; stronger crafts
+   must replace weaker carried stock.
 6. **Player activity:** queue manual Scribe work, enable native Auto Scribe, use
    a Scroll manually, cancel targeting, and consume stock immediately before
    the suite boundary. The suite must reject or account without duplicating.

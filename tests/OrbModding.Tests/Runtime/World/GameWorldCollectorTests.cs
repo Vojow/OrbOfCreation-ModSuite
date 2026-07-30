@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbAutomata;
 using Xunit;
 using OrbModding.Common;
@@ -1923,6 +1924,88 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void AutoItemsBatchesAnAuditedScrollByStockUsefulTargetsAndToxicityHeadroom()
+    {
+        AddToxicity(rawHeadroom: 5d);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            toxicityCost: 1d,
+            identity: KnownEntities.ScrollAdvancement.Uuid);
+        scroll.quantity = 10;
+        scroll.consumableCounts.Add(new FakeConsumableCount
+        {
+            Level = 1,
+            Quantity = 10,
+        });
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var structures = Enumerable.Range(0, 8).Select(_ => Guid.NewGuid()).ToArray();
+        var world = collector.Build() with
+        {
+            CraftingRecipeTypes = PublicationTable<WorldCraftingRecipeType>.Create(
+                new[]
+                {
+                    new WorldCraftingRecipeType(
+                        KnownEntities.ScribeCrafting.Uuid,
+                        startingLevel: 1,
+                        maxStartingLevel: 12,
+                        craftVerb: "Scribe",
+                        isLevelType: true,
+                        initiated: true,
+                        magnitudeLoss: 0,
+                        magnitudeTime: 0,
+                        magnitudeIncrement: BigDouble.One,
+                        powerModifiers: 0,
+                        speedModifiers: 0,
+                        costModModifiers: 0,
+                        costIncrementModModifiers: 0,
+                        efficiencyModModifiers: 0,
+                        autoPenaltyModModifiers: 0,
+                        multiPenaltyModModifiers: 0),
+                },
+                1),
+            ScribeRecipes = PublicationTable<WorldScribeRecipe>.Create(
+                new[]
+                {
+                    new WorldScribeRecipe(
+                        KnownEntities.CraftScrollAdvancement.Uuid,
+                        KnownEntities.ScribeCrafting.Uuid,
+                        KnownEntities.ScrollAdvancement.Uuid,
+                        visible: true,
+                        usesQuantityAsLevel: true),
+                },
+                1),
+            ScrollTargets = PublicationTable<WorldScrollTarget>.Create(
+                structures.Select(id => new WorldScrollTarget(
+                    KnownEntities.ScrollAdvancement.Uuid,
+                    KnownEntities.EnchantAdvancement.Uuid,
+                    id)).ToArray(),
+                structures.Length),
+            ScrollTargetEvidence = PublicationTable<WorldScrollTargetEvidence>.Create(
+                new[]
+                {
+                    new WorldScrollTargetEvidence(
+                        KnownEntities.ScrollAdvancement.Uuid,
+                        KnownEntities.EnchantAdvancement.Uuid,
+                        structures.Length),
+                },
+                1),
+        };
+        Assert.True(new AutoScribeIdentityCatalog().TryGetProfile(
+            GameAssemblyAudit.WindowsV1052BaselineId,
+            out var profile));
+
+        var action = Assert.Single(PlanAutoItems(
+            world,
+            out var metrics,
+            autoScribeIdentityProfile: profile));
+
+        Assert.Equal(5, action.RequestedQuantity);
+        Assert.Equal(5, metrics.PlannedQuantity);
+    }
+
+    [Fact]
     public void AutoItemsUsesOnlyAnExactlyAllowlistedTemporaryItemAtZeroToxicity()
     {
         AddToxicity(rawHeadroom: 100d);
@@ -2351,7 +2434,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         bool useFruits = false,
         bool usePotions = false,
         bool useThreads = false,
-        string temporaryAllowlist = "")
+        string temporaryAllowlist = "",
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
         return PlanAutoItemsWithState(
@@ -2362,7 +2446,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             useFruits,
             usePotions,
             useThreads,
-            temporaryAllowlist);
+            temporaryAllowlist,
+            autoScribeIdentityProfile);
     }
 
     private static IReadOnlyList<AutoItemsCycleAction> PlanAutoItemsWithState(
@@ -2373,7 +2458,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         bool useFruits = false,
         bool usePotions = false,
         bool useThreads = false,
-        string temporaryAllowlist = "")
+        string temporaryAllowlist = "",
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         var config = new SuiteRuntimeConfiguration
         {
@@ -2401,7 +2487,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             ref state,
             new ServiceActionWriter<AutoItemsCycleAction>(store),
             state.TemporaryAllowlist,
-            autoScribeIdentityProfile: null,
+            autoScribeIdentityProfile,
             metrics: out metrics);
         var actions = new List<AutoItemsCycleAction>(store.Count);
         while (!store.IsComplete)
