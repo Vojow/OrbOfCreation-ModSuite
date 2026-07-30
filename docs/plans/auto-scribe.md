@@ -1,9 +1,10 @@
 # Auto Scribe
 
-> **Lifecycle: Release build installed; interactive validation ready.** The audited identity
+> **Lifecycle: Release build installed; repaired fresh-launch validation pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The reviewed release DLL
-> is installed with verified save and DLL backups; no live save has yet been opened for UAT.
+> is installed with verified save and DLL backups. Its first launch correctly failed closed on a
+> schema-7 config left by a newer Auto Concept branch; a compatible schema-5 config is now active.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -26,7 +27,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
-| 10. Interactive game validation | **Ready** | Disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
+| 10. Interactive game validation | **Ready** | A fresh launch confirms current config and the Mods button, then disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -35,8 +36,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: perform the interactive validation outline below on a disposable save, beginning
-  with load/configuration diagnostics before enabling Auto Scribe.
+- Current task: relaunch the game and confirm the Mods button plus a current-schema startup log,
+  then perform the interactive validation outline below on a disposable save before enabling
+  Auto Scribe.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -52,8 +54,15 @@ Last updated: **2026-07-30**
 - Rollback checkpoint:
   - save copies: `backups/pre-modsuite-install-20260730T094146Z` (12 files);
   - previous DLL: `BepInEx/modsuite-backups/pre-modsuite-install-20260730T094146Z` (1 file).
-- The installer did not edit an active save. No save has been opened and no live native mutation
-  has been attempted since installation.
+- The first post-install launch loaded the DLL but stopped the suite before UI or gameplay
+  mutation because the existing config carried future schema 7 while this branch supports schema
+  5. The schema-7 file is preserved as
+  `dev.vojow.orbofcreation.modsuite.cfg.pre-autoscribe-schema5-restore-20260730T115200Z.bak`.
+  The known `pre-schema-v6` schema-5 backup is active, with the player's 10-second Auto Concept
+  fallback and training values restored and `EnableButtonShell = true`.
+- The configuration repair ran only after exact executable-path detection confirmed that the game
+  was closed. No game save was edited, and the fail-closed launch attempted no ModSuite native
+  mutation.
 
 ## Goal
 
