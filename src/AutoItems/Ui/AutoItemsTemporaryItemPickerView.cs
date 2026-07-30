@@ -71,7 +71,8 @@ internal sealed class AutoItemsTemporaryItemPickerView
                 if (!known.Contains(itemId)) unavailable++;
             }
         }
-        return 88f + Math.Max(1, visible + unavailable) * ItemStride;
+        var notice = catalog.NoticeReason.Length > 0 ? 1 : 0;
+        return 88f + (notice + Math.Max(1, visible + unavailable)) * ItemStride;
     }
 
     internal void Render(
@@ -165,6 +166,17 @@ internal sealed class AutoItemsTemporaryItemPickerView
 
         var known = new HashSet<Guid>();
         var top = EditorTop;
+        if (catalog.NoticeReason.Length > 0)
+        {
+            CreateTopText(
+                "Notice",
+                parent,
+                top,
+                ItemHeight,
+                catalog.NoticeReason);
+            top += ItemStride;
+        }
+        var renderedItems = 0;
         for (var index = 0; index < catalog.Options.Count; index++)
         {
             var option = catalog.Options[index];
@@ -184,6 +196,7 @@ internal sealed class AutoItemsTemporaryItemPickerView
                 () => Toggle(edit, option.ItemId),
                 selectedNow);
             top += ItemStride;
+            renderedItems++;
         }
 
         if (AutoItemsTemporaryItemFiltering.ShowsUnavailable(_state.Filter))
@@ -202,10 +215,11 @@ internal sealed class AutoItemsTemporaryItemPickerView
                     () => Toggle(edit, captured),
                     active: true);
                 top += ItemStride;
+                renderedItems++;
             }
         }
 
-        if (top == EditorTop)
+        if (renderedItems == 0)
             CreateTopText(
                 "Empty",
                 parent,

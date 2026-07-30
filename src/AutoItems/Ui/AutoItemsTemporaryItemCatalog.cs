@@ -37,22 +37,26 @@ internal sealed class AutoItemsTemporaryItemCatalogSnapshot
 {
     private AutoItemsTemporaryItemCatalogSnapshot(
         IReadOnlyList<AutoItemsTemporaryItemOption> options,
-        string unavailableReason)
+        string unavailableReason,
+        string noticeReason)
     {
         Options = options;
         UnavailableReason = unavailableReason;
+        NoticeReason = noticeReason;
     }
 
     internal IReadOnlyList<AutoItemsTemporaryItemOption> Options { get; }
     internal string UnavailableReason { get; }
+    internal string NoticeReason { get; }
     internal bool IsAvailable => UnavailableReason.Length == 0;
 
     internal static AutoItemsTemporaryItemCatalogSnapshot Available(
-        IReadOnlyList<AutoItemsTemporaryItemOption> options) =>
-        new(options, string.Empty);
+        IReadOnlyList<AutoItemsTemporaryItemOption> options,
+        string noticeReason = "") =>
+        new(options, string.Empty, noticeReason);
 
     internal static AutoItemsTemporaryItemCatalogSnapshot Unavailable(string reason) =>
-        new(Array.Empty<AutoItemsTemporaryItemOption>(), reason);
+        new(Array.Empty<AutoItemsTemporaryItemOption>(), reason, string.Empty);
 }
 
 /// <summary>
@@ -75,13 +79,22 @@ internal static class AutoItemsTemporaryItemCatalog
 
             var options = new List<AutoItemsTemporaryItemOption>();
             var seen = new HashSet<Guid>();
+            var ambiguousItems = 0;
             foreach (var entry in native.Entries)
             {
                 if (entry is null || entry.GetType() != native.ConsumableType)
                     return AutoItemsTemporaryItemCatalogSnapshot.Unavailable(
                         "The native consumable catalog changed element type.");
                 if (!Invoke<bool>(native.IsVisible, entry)) continue;
-                if (!TryReadFamily(entry, native, out var family)) continue;
+                if (!TryReadFamily(
+                        entry,
+                        native,
+                        out var family,
+                        out var ambiguousFamily))
+                {
+                    if (ambiguousFamily) ambiguousItems++;
+                    continue;
+                }
 
                 var itemId = Invoke<Guid>(native.ItemGuid, entry);
                 if (itemId == Guid.Empty || !seen.Add(itemId))
@@ -105,7 +118,12 @@ internal static class AutoItemsTemporaryItemCatalog
             }
 
             options.Sort(Compare);
-            return AutoItemsTemporaryItemCatalogSnapshot.Available(options);
+            var notice = ambiguousItems > 0
+                ? ambiguousItems == 1
+                    ? "1 item was hidden because its native family is ambiguous."
+                    : $"{ambiguousItems} items were hidden because their native family is ambiguous."
+                : string.Empty;
+            return AutoItemsTemporaryItemCatalogSnapshot.Available(options, notice);
         }
         catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
         {
@@ -118,9 +136,11 @@ internal static class AutoItemsTemporaryItemCatalog
     private static bool TryReadFamily(
         object item,
         AutoItemsTemporaryItemCatalogBindings bindings,
-        out AutoItemsConsumableFamily family)
+        out AutoItemsConsumableFamily family,
+        out bool ambiguous)
     {
         family = AutoItemsConsumableFamily.Unknown;
+        ambiguous = false;
         if (bindings.Families.GetValue(item) is not IEnumerable entries)
             throw new InvalidOperationException("A consumable family list was unavailable.");
         var supported = 0;
@@ -135,8 +155,10 @@ internal static class AutoItemsTemporaryItemCatalog
             supported++;
         }
         if (supported > 1)
-            throw new InvalidOperationException(
-                "A consumable belongs to more than one supported Auto Items family.");
+        {
+            ambiguous = true;
+            return false;
+        }
         return supported == 1 &&
                AutoItemsConsumableFamilies.IsTemporary(family);
     }

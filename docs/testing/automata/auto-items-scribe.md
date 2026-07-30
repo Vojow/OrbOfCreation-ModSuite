@@ -139,7 +139,8 @@ Auto Items must cover:
   race, target race, changed family/cost, and ambiguous postcondition;
 - committed chain, rejected cooldown, fresh-world gate, and bounded busy poll.
 - picker expansion, filtering, exact selection and unavailable-selection
-  removal, defaults, raw editing, and status/rebuild callbacks.
+  removal, per-item ambiguous-family isolation, non-blocking notices, defaults,
+  raw editing, and status/rebuild callbacks.
 
 Auto Scribe must cover:
 

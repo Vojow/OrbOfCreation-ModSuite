@@ -41,8 +41,10 @@ The implemented boundary is deliberately split:
 - The Mods page provides an on-demand temporary-item picker with native names, family, stock,
   immediate toxicity cost, base duration, and All/Fruit/Potion/Thread/Owned/Selected filters. Selection
   persists as sorted exact UUIDs; unavailable selected identities are preserved and the raw UUID
-  editor remains available. Its consolidated rail entry uses the already-audited native Alchemy
-  top-bar icon.
+  editor remains available. A native consumable tagged with multiple supported families is hidden
+  with a non-blocking notice instead of disabling the complete catalog; runtime admission still
+  rejects that exact ambiguous item. Its consolidated rail entry uses the already-audited native
+  Alchemy top-bar icon.
 - A temporary submission verifies stock, queue, and pending-usage creation immediately, then waits
   for the service-cycle receipt and a later publication to prove engagement. Receipt, activation,
   and exact-item quarantine memory live only in lifecycle-scoped worker state; no lock, mutable

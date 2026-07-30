@@ -128,7 +128,8 @@ public sealed class AutoItemsScribePickerViewTests
                     ownedQuantity: 0,
                     durationSeconds: double.NaN,
                     toxicityCost: string.Empty),
-            });
+            },
+            "1 item was hidden because its native family is ambiguous.");
 
         Assert.True(AutoItemsTemporaryItemPickerView.AppliesTo(edit.Setting));
         Assert.Null(view.CaptureCatalog());
@@ -139,9 +140,12 @@ public sealed class AutoItemsScribePickerViewTests
         Assert.Equal(4, closed.childCount);
         Click(closed, "Items");
 
-        Assert.Equal(220f, view.Measure(edit, catalog, 64f));
+        Assert.Equal(264f, view.Measure(edit, catalog, 64f));
         var items = Parent();
         view.Render(items, edit, catalog);
+        Assert.Contains(
+            "family is ambiguous",
+            Child(items, "Notice").gameObject.GetComponent<TextMeshProUGUI>()!.text);
         Assert.Contains("owned 2", Label(Child(items, "Item." + fruit.ToString("N"))));
         Assert.Contains("15s", Label(Child(items, "Item." + fruit.ToString("N"))));
         Assert.Contains(

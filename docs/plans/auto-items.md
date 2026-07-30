@@ -1,6 +1,6 @@
 # Auto Items
 
-> **Lifecycle: Active.** Phases 1-17 are implemented through their automated gates.
+> **Lifecycle: Active.** Phases 1-18 are implemented through their automated gates.
 > Installed-game journal acceptance and interactive validation remain open.
 
 [Back to plans](README.md) | [Runtime architecture](../runtime-architecture/README.md)
@@ -25,22 +25,24 @@ Last updated: **2026-07-30**
 | 9. Conservative temporary-item policy | **Complete** | Separate opt-in Fruit/Potion controls, an exact allowlist, Relic priority, no refresh, fill-first recovery latching, and diagnostics are portable-tested |
 | 10. Guarded Fruit/Potion submission | **Complete** | Exact allowed items use the existing one-item native boundary and confirm both immediate pending-usage creation and later effect activation |
 | 11. Temporary-item validation and tuning | **Automated gates complete; interactive gate open** | Portable, profiler, source-contract, and installed-assembly gates pass; live expiry/recovery/lifecycle checks remain |
-| 12. Temporary-item picker UX | **Implemented; interactive layout gate open** | Mods configuration discovers visible Fruit/Potion items, shows names/stock/toxicity/duration, filters and toggles exact UUID selections, preserves unavailable selections, and retains a raw editor |
+| 12. Temporary-item picker UX | **Implemented; interactive layout gate open** | Mods configuration discovers visible Fruit/Potion items, shows names/stock/toxicity/duration, filters and toggles exact UUID selections, isolates ambiguous entries, preserves unavailable selections, and retains a raw editor |
 | 13. Thread family extension | **Implemented; interactive behavior gate open** | Threads use the same disabled-by-default exact-item picker and guarded temporary boundary only when native duration and toxicity contracts validate |
 | 14. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Items shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Scribe |
 | 15. Scroll-consumption throughput | **Implemented; validation open** | Verified uses chain after fresh world publication, native-busy polling is bounded at 250 ms, and rejected work retains the configured cooldown |
 | 16. Full test pyramid | **Automated layers complete; runtime gates open** | Pure policy, collector/native-boundary, cross-feature convergence, installed-contract, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
 | 17. Adaptive Scroll batch | **Implemented; runtime validation open** | One native multi-buy submission is bounded by stock, toxicity headroom, and useful live targets; exact batch stock/queue postconditions and distinct boundary fault codes are tested |
+| 18. Picker ambiguity isolation | **Implemented; runtime validation open** | One visible consumable with multiple supported family tags is hidden with a warning while the remaining exact-family temporary-item catalog stays usable |
 
 ### Current resume point
 
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: review and verify the adaptive Scroll batch plus Auto Scribe carry-fill/unlock
-  follow-up. Do not install while the game is running; installation still requires explicit
-  authorization. The next live journal must prove exact multi-item stock/queue commits without a
-  boundary-fault loop, then confirm the Auto
+- Current task: verify the temporary-item picker ambiguity-isolation fix together with the adaptive
+  Scroll batch and Auto Scribe carry-fill/unlock follow-up. Installation requires explicit
+  authorization. The next live session must confirm valid Fruit/Potion/Thread entries remain
+  selectable while the ambiguous item is reported but hidden, prove exact multi-item stock/queue
+  commits without a boundary-fault loop, then confirm the Auto
   Items/Auto Scribe row survives a supported UI rebuild. Then exercise one
   explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission

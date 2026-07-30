@@ -183,7 +183,7 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     }
 
     [Fact]
-    public void CatalogFailsClosedForAmbiguousTemporaryFamily()
+    public void CatalogHidesAmbiguousItemButKeepsValidTemporaryItemsAvailable()
     {
         var item = Item(
             KnownEntities.ConsumableFruitType.Uuid,
@@ -193,11 +193,18 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
         var potion = new ConsumableTypeSO();
         potion.SetGuid(KnownEntities.ConsumablePotionType.Uuid);
         item.consumableTypes.Add(potion);
+        var valid = Item(
+            KnownEntities.ConsumableThreadType.Uuid,
+            "Valid Thread",
+            visible: true,
+            quantity: 2);
 
         var snapshot = AutoItemsTemporaryItemCatalog.Capture();
 
-        Assert.False(snapshot.IsAvailable);
-        Assert.Contains("more than one supported", snapshot.UnavailableReason);
+        Assert.True(snapshot.IsAvailable, snapshot.UnavailableReason);
+        Assert.Equal(valid.GetGuid(), Assert.Single(snapshot.Options).ItemId);
+        Assert.Contains("1 item was hidden", snapshot.NoticeReason);
+        Assert.Contains("family is ambiguous", snapshot.NoticeReason);
     }
 
     [Fact]
