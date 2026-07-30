@@ -91,26 +91,49 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     }
 
     public void Refresh(SuiteRuntimeConfiguration config, bool lifecycleReady, long frame = 0)
+        => RefreshCore(config, lifecycleReady, frame, allowManualMcpActions: false);
+
+#if SERVICE_CYCLE_PROFILE
+    /// <summary>
+    /// Holds the same cooperative leases for explicit MCP requests without making an automation
+    /// feature operational. A conflicting owner still wins and every native boundary rechecks.
+    /// </summary>
+    internal void RefreshForGameMcp(
+        SuiteRuntimeConfiguration config,
+        bool lifecycleReady,
+        long frame = 0) =>
+        RefreshCore(config, lifecycleReady, frame, allowManualMcpActions: true);
+#endif
+
+    private void RefreshCore(
+        SuiteRuntimeConfiguration config,
+        bool lifecycleReady,
+        long frame,
+        bool allowManualMcpActions)
     {
         var suiteReady = lifecycleReady && config.General.Enabled;
         RefreshLease(ref _structures, ref _structuresRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeStructures,
+            suiteReady && (allowManualMcpActions ||
+                config.CanStartAutoBuyActively && config.AutoBuy.IncludeStructures),
             "AutoBuy.Structures", "Automata Auto Buy Structures", StructureFamilies);
         RefreshLease(ref _upgrades, ref _upgradesRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades,
+            suiteReady && (allowManualMcpActions ||
+                config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades),
             "AutoBuy.Upgrades", "Automata Auto Buy Upgrades", UpgradeFamilies);
         RefreshLease(ref _cast, ref _castRetryFrame, frame,
-            suiteReady && config.CanStartAutoCastActively,
+            suiteReady && (allowManualMcpActions || config.CanStartAutoCastActively),
             "AutoCast", "Automata Auto Cast", CastFamilies);
         RefreshLease(ref _concept, ref _conceptRetryFrame, frame,
-            suiteReady && config.CanStartAutoConceptActively,
+            suiteReady && (allowManualMcpActions || config.CanStartAutoConceptActively),
             "AutoConcept", "Automata Auto Concept", ConceptFamilies);
         RefreshLease(ref _spellLevel, ref _spellLevelRetryFrame, frame,
-            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.AutoLevelSpells,
+            suiteReady && (allowManualMcpActions ||
+                config.CanStartAutoBuyActively && config.AutoBuy.AutoLevelSpells),
             "SpellLevel", "Automata Spell Leveling", SpellLevelFamilies);
         RefreshLease(ref _harvest, ref _harvestRetryFrame, frame,
-            suiteReady && config.CanStartAutoHarvestActively &&
-            (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees),
+            suiteReady && (allowManualMcpActions ||
+                config.CanStartAutoHarvestActively &&
+                (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees)),
             "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
     }
 

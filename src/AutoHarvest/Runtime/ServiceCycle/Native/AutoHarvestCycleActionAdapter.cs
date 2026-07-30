@@ -51,9 +51,25 @@ internal sealed class AutoHarvestCycleActionAdapter : IAutoHarvestCycleActionPor
         in AutoHarvestCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: true);
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoHarvestCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: false);
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in AutoHarvestCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy)
     {
-        if (!AutoHarvestConfigurationPolicy.IsOperational(config) ||
-            !AutoHarvestConfigurationPolicy.IsSelected(config, action.Pair))
+        if (requireAutomationPolicy &&
+            (!AutoHarvestConfigurationPolicy.IsOperational(config) ||
+             !AutoHarvestConfigurationPolicy.IsSelected(config, action.Pair)))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
 
         if (_gates.IsQuarantined(action.Pair))

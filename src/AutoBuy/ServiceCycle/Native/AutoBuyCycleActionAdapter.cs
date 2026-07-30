@@ -46,6 +46,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     private ulong _journalBatch;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataProfileOperations _profileOperations;
+    private readonly Func<AutoBuyCandidateKind, bool> _gameMcpOwnership;
 #endif
 
     public AutoBuyCycleActionAdapter(
@@ -57,7 +58,11 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         , AutomataProfileOperations profileOperations
 #endif
         , IAutoBuyRefusalResponsePort refusals
-        , IServiceWorldGenerationSource? worldGenerations = null)
+        , IServiceWorldGenerationSource? worldGenerations = null
+#if SERVICE_CYCLE_PROFILE
+        , Func<AutoBuyCandidateKind, bool>? gameMcpOwnership = null
+#endif
+        )
     {
         _purchases = purchases ?? throw new ArgumentNullException(nameof(purchases));
         _queueRoom = queueRoom ?? throw new ArgumentNullException(nameof(queueRoom));
@@ -68,6 +73,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 #if SERVICE_CYCLE_PROFILE
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
+        _gameMcpOwnership = gameMcpOwnership ?? (_ => false);
 #endif
     }
 
@@ -75,14 +81,52 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         in AutoBuyCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(
+            in action,
+            in config,
+            in context,
+            requireAutomationPolicy: true,
+            manualOwnershipProven: false);
+
+#if SERVICE_CYCLE_PROFILE
+    /// <summary>
+    /// Executes one explicit strategist request through the same live native boundary as Auto Buy.
+    /// The request is not an automation decision, so only the worker's enable/selection policy is
+    /// omitted; ownership, lifecycle, queue reserve, identity, affordability, and mutation proof
+    /// remain mandatory below.
+    /// </summary>
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoBuyCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+    {
+        if (!_gameMcpOwnership(action.Kind))
+            return ServiceActionResult.Rejected(
+                AutoBuyActionResultCodes.ActionFamilyUnavailable);
+        return TryExecuteCore(
+            in action,
+            in config,
+            in context,
+            requireAutomationPolicy: false,
+            manualOwnershipProven: true);
+    }
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in AutoBuyCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy,
+        bool manualOwnershipProven)
     {
         BeginBatch(context.Batch.Value);
 
-        if (!AutoBuyConfigurationPolicy.IsOperational(config) ||
-            !AutoBuyConfigurationPolicy.IsSelected(config, action.Kind))
+        if (requireAutomationPolicy &&
+            (!AutoBuyConfigurationPolicy.IsOperational(config) ||
+             !AutoBuyConfigurationPolicy.IsSelected(config, action.Kind)))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
 
-        if (!Owns(action.Kind))
+        if (!manualOwnershipProven && !Owns(action.Kind))
             return ServiceActionResult.Rejected(AutoBuyActionResultCodes.ActionFamilyUnavailable);
 
         if (!NativeEpochMatches(action.CollectedAtEpoch))

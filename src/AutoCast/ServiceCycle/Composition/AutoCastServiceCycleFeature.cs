@@ -3,6 +3,7 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
@@ -35,7 +36,11 @@ internal sealed class AutoCastServiceCycleFeature : IAutomataServiceCycleFeature
             adapters.Natives,
             registration,
             context.LifecycleValue,
-            context.ConfigurationGeneration);
+            context.ConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+            , adapters.Actions
+#endif
+            );
     }
 
 }
@@ -58,6 +63,9 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
         AutoCastCycleAction> _registration;
     private readonly long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+    private readonly AutoCastCycleActionAdapter _actions;
+#endif
     private AutoCastServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoCastFeatureRuntime(
@@ -67,13 +75,20 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
             AutoCastCycleState,
             AutoCastCycleAction> registration,
         long lifecycleValue,
-        ConfigGeneration initialConfigurationGeneration)
+        ConfigGeneration initialConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+        , AutoCastCycleActionAdapter actions
+#endif
+        )
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _natives = natives ?? throw new ArgumentNullException(nameof(natives));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+#endif
     }
 
     public void ActivateDiagnostics()
@@ -111,4 +126,12 @@ internal sealed class AutoCastFeatureRuntime : IAutomataServiceCycleFeatureRunti
         _registration.Dispose();
         _natives.Dispose();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoCastCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context) =>
+        _actions.TryExecuteGameMcp(in action, in config, in context);
+#endif
 }

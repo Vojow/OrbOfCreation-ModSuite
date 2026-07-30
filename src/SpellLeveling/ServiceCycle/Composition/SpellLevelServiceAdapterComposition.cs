@@ -13,10 +13,12 @@ internal sealed class SpellLevelServiceAdapterComposition
         IAutomataServiceDefinition<
             SpellLevelCycleState,
             SpellLevelCycleAction> definition,
-        SpellLevelNativeAdapter natives)
+        SpellLevelNativeAdapter natives,
+        SpellLevelCycleActionAdapter actions)
     {
         Definition = definition;
         Natives = natives;
+        Actions = actions;
     }
 
     internal IAutomataServiceDefinition<
@@ -29,6 +31,7 @@ internal sealed class SpellLevelServiceAdapterComposition
     /// blocked for the probe too.
     /// </summary>
     internal SpellLevelNativeAdapter Natives { get; }
+    internal SpellLevelCycleActionAdapter Actions { get; }
 
     internal static SpellLevelServiceAdapterComposition Create(SpellLevelFeatureDependencies dependencies)
     {
@@ -40,6 +43,7 @@ internal sealed class SpellLevelServiceAdapterComposition
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
             dependencies.Capability.Observe);
-        return new SpellLevelServiceAdapterComposition(SpellLevelService.Define(actions), natives);
+        return new SpellLevelServiceAdapterComposition(
+            SpellLevelService.Define(actions), natives, actions);
     }
 }

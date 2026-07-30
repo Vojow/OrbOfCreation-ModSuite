@@ -33,9 +33,11 @@
 - Use the full Mods frame: the native title panel now spans the top edge, the rail and detail pane
   fill the middle, and the staged Apply/Revert footer occupies the bottom edge with only deliberate
   gutters between them.
-- Retain profile-build-only UI validation shortcuts: F12 invokes the audited native Continue
-  action on Start, F11 toggles Mods on Main, and F10 advances the Mods rail. These keys do not
-  mutate configuration or native gameplay state.
+- Replace the profile-only F10/F11/F12 validation shortcuts with the localhost MCP run and
+  closed-world navigation tools, and show build mode, MCP status, audit health, endpoint, and PID
+  in a native-styled card beneath the Start screen's game version. `game_continue` invokes the
+  audited native Continue action; the generic screen catalog exposes the Mods entry and its pages
+  without arbitrary keys or clicks.
 - Correct native visual capture against the production view state: the Magic/Scholar rail is sampled
   while its source view is inactive, and spell frames come only from direct children of the audited
   gameplay `CastingBar/SmallSpellList` instead of requiring unrelated active spell buttons to agree.

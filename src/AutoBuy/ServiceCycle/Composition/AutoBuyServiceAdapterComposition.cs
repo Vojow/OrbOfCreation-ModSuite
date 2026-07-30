@@ -18,14 +18,17 @@ internal sealed class AutoBuyServiceAdapterComposition
     private AutoBuyServiceAdapterComposition(
         IAutomataServiceDefinition<
             AutoBuyCycleState,
-            AutoBuyCycleAction> definition)
+            AutoBuyCycleAction> definition,
+        AutoBuyCycleActionAdapter actions)
     {
         Definition = definition;
+        Actions = actions;
     }
 
     internal IAutomataServiceDefinition<
         AutoBuyCycleState,
         AutoBuyCycleAction> Definition { get; }
+    internal AutoBuyCycleActionAdapter Actions { get; }
 
     internal static AutoBuyServiceAdapterComposition Create(
         AutoBuyFeatureDependencies dependencies,
@@ -47,7 +50,8 @@ internal sealed class AutoBuyServiceAdapterComposition
             dependencies.OwnershipMask,
             profileOperations,
             dependencies.RefusalResponse,
-            worldGenerations);
+            worldGenerations,
+            dependencies.GameMcpOwnership);
 #else
         var actions = new AutoBuyCycleActionAdapter(
             new AutoBuyNativePurchaseAdapter(),
@@ -57,6 +61,6 @@ internal sealed class AutoBuyServiceAdapterComposition
             dependencies.RefusalResponse,
             worldGenerations);
 #endif
-        return new AutoBuyServiceAdapterComposition(AutoBuyService.Define(actions));
+        return new AutoBuyServiceAdapterComposition(AutoBuyService.Define(actions), actions);
     }
 }

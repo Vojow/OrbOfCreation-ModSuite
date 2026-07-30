@@ -1,6 +1,9 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+#if SERVICE_CYCLE_PROFILE
+using OrbAutomata.GameMcp;
+#endif
 
 namespace OrbAutomata;
 
@@ -17,6 +20,10 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
         ConfigGeneration configurationGeneration);
     void CancelPreparedWork();
     void InvalidateLifecycle();
+#if SERVICE_CYCLE_PROFILE
+    GameMcpRuntimeState CaptureGameMcpState();
+    GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
+#endif
 }
 
 /// <summary>
@@ -101,6 +108,34 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
         if (_disposed) return;
         _runtime?.InvalidateLifecycle();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal bool TryCaptureGameMcpState(out GameMcpRuntimeState state)
+    {
+        if (_disposed || _runtime is null)
+        {
+            state = null!;
+            return false;
+        }
+        state = _runtime.CaptureGameMcpState();
+        return true;
+    }
+
+    internal bool TryExecuteGameMcp(
+        GameMcpCommand command,
+        out GameMcpCommandResult result)
+    {
+        if (_disposed || _runtime is null)
+        {
+            result = GameMcpCommandResult.Rejected(
+                "runtime_not_available",
+                "the ServiceCycle runtime is not active in this scene");
+            return false;
+        }
+        result = _runtime.ExecuteGameMcp(command);
+        return true;
+    }
+#endif
 
     public void Dispose()
     {

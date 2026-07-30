@@ -39,17 +39,19 @@ icons.
    Confirm the tray stays between the main-content boundary and native queue cells, never joins the
    expanding spell-slot row, and does not cover future/unlocked native controls.
 
-## Profile-build validation keys
+## Profile-build validation navigation
 
-The `perf-debug` profile build intentionally retains three unobtrusive UI-validation shortcuts.
-They are absent from the normal build:
+The `perf-debug` MCP server replaces the retired F10/F11/F12 validation shortcuts:
 
-1. On Start, F12 invokes the audited native `SaveStateManager.StartGame` Continue action.
-2. On Main, F11 toggles the suite Mods shell without clicking a native gameplay control.
-3. With Mods open, F10 advances to the next rail page.
+1. On Start, `game_continue` invokes the audited native `SaveStateManager.StartGame` action.
+2. On Main, `game_screen_catalog` lists native tabs plus the suite-owned Mods rail entry.
+3. `game_navigate` selects Mods and its live page catalog by exact name or index.
 
-These shortcuts are navigation aids only. They must not write configuration, click native gameplay
-actions, or bypass the suite's ordinary shell/page construction.
+The Start screen also carries a large native-styled ModSuite status card beneath the game's version
+number in both build modes. A screenshot must distinguish no mod, release (`MCP OFF`), perf-debug
+(`MCP READY`), compatibility-blocked or control-plane-failed state, and duplicate processes by PID
+without consulting a log. The card must use the native TMP font and the Mods dark-panel/status
+palette; a small IMGUI/debug overlay is not an acceptable substitute.
 
 ## Pixel ownership and icon states
 

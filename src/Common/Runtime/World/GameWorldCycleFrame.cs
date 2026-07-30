@@ -170,6 +170,12 @@ internal sealed class GameWorldCycleFrame
     internal long CollectedAtEpoch { get; set; }
 
     /// <summary>
+    /// UTC ticks from the same capture boundary as <see cref="CollectedAt"/>. Kept as a scalar so
+    /// the immutable publication contains no runtime clock or mutable date object.
+    /// </summary>
+    internal long CollectedAtUtcTicks { get; set; }
+
+    /// <summary>
     /// Monotonic time at which this collection began, carried to diagnostics so a native refusal can
     /// quantify how long its resource quantities had to move before admission.
     /// </summary>
@@ -221,8 +227,10 @@ internal static class GameWorldFrameDeriver
 
         return new GameWorldState
         {
+            CollectionCategories = WorldCollectionCategoryStatus.Build(frame.Report),
             FixedDeltaTime = frame.FixedDeltaTime,
             CollectedAtEpoch = frame.CollectedAtEpoch,
+            CollectedAtUtcTicks = frame.CollectedAtUtcTicks,
             CollectedAt = frame.CollectedAt,
             Resources = resources,
             Structures = structures,

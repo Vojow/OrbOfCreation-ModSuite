@@ -34,6 +34,13 @@ namespace OrbModding.Common.Runtime.World;
 /// </remarks>
 public sealed record GameWorldState
 {
+    /// <summary>
+    /// The result of attempting each world category in this exact collection. A zero-row category is
+    /// only a fact about the save when its matching row says it was collected cleanly.
+    /// </summary>
+    internal PublicationTable<WorldCollectionCategoryStatus> CollectionCategories { get; init; } =
+        PublicationTable<WorldCollectionCategoryStatus>.Empty;
+
     internal PublicationTable<WorldResource> Resources { get; init; } =
         PublicationTable<WorldResource>.Empty;
 
@@ -284,6 +291,13 @@ public sealed record GameWorldState
     /// gate: an epoch is not a frame and never participates in that comparison.
     /// </remarks>
     internal long CollectedAtEpoch { get; init; }
+
+    /// <summary>
+    /// UTC ticks captured beside <see cref="CollectedAt"/> on the Unity thread. This is diagnostic
+    /// publication data, not a scheduler clock; it gives external readers a wall-clock collection
+    /// time without asking them to interpret this process's monotonic origin.
+    /// </summary>
+    internal long CollectedAtUtcTicks { get; init; }
 
     /// <summary>
     /// Monotonic time at which the collection that produced this snapshot began.

@@ -1596,7 +1596,13 @@ public class HoverTooltip : UnityEngine.MonoBehaviour
 {
     public ITooltipable? tooltipItem;
     public TooltipableObject? setupObject;
-    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null) { tooltipItem = item; }
+    private List<ITooltipable> subTooltips = new();
+    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null)
+    {
+        tooltipItem = item;
+        this.subTooltips = subTooltips ?? new List<ITooltipable>();
+    }
+    public void OpenTooltip() { }
 }
 
 namespace BepInEx
@@ -2178,6 +2184,20 @@ namespace UnityEngine
 
     public class MonoBehaviour : Behaviour
     {
+        public Coroutine StartCoroutine(IEnumerator routine) => new Coroutine(routine);
+    }
+
+    public sealed class Coroutine
+    {
+        public Coroutine(IEnumerator routine) => Routine = routine;
+        public IEnumerator Routine { get; }
+    }
+
+    public sealed class WaitForEndOfFrame { }
+
+    public class Texture2D : Object
+    {
+        public byte[] EncodeToPNG() => new byte[] { 137, 80, 78, 71 };
     }
 
     public class GameObject : Object
@@ -2431,6 +2451,15 @@ namespace UnityEngine
         public static int frameCount { get; set; }
     }
 
+    public static class ScreenCapture
+    {
+        public static void CaptureScreenshot(string filename)
+        {
+        }
+
+        public static Texture2D CaptureScreenshotAsTexture() => new Texture2D();
+    }
+
     public static class Resources
     {
         public static Object[] FindObjectsOfTypeAll(Type type) => Array.Empty<Object>();
@@ -2542,6 +2571,11 @@ namespace UnityEngine.UI
             public void RemoveListener(UnityEngine.Events.UnityAction listener) => _listeners.Remove(listener);
 
             public void RemoveAllListeners() => _listeners.Clear();
+
+            public void Invoke()
+            {
+                foreach (var listener in _listeners.ToArray()) listener();
+            }
         }
     }
 

@@ -108,31 +108,34 @@ internal static class AutoConceptCycleEvaluator
         {
             ref readonly var concept = ref rows[index];
             var key = concept.RecipeId.ToString();
-            if (!WorldLookup.TryFind(world.AlchemyRecipes, concept.RecipeId, out var recipe) ||
-                !recipe.Discovered) continue;
-
-            var maximum = recipe.MaxUsageSlots.ToDouble();
-            if (!double.IsFinite(maximum)) maximum = 0;
+            if (!AutoConceptPlanBeliefProjection.TryCreate(
+                    world,
+                    concept.RecipeId,
+                    out var belief,
+                    out _))
+                continue;
+            if (!WorldLookup.TryFind(
+                    world.AlchemyRecipes,
+                    concept.RecipeId,
+                    out var recipe))
+                continue;
             var instanceFound = WorldAlchemyInstanceLookup.TryFind(
                 world.AlchemyInstances, concept.RecipeId, out var instance);
             var required = recipe.CachedRequiredXp.ToDouble();
             var progress = required > 0
                 ? Math.Clamp(recipe.MasteryXp.ToDouble() / required, 0.0, 1.0)
                 : 1.0;
-            WorldAlchemyCostLookup.TryFindRange(
-                world.AlchemyCosts, concept.RecipeId, WorldAlchemyCostKind.RecipeDrain,
-                out _, out var drainCount);
             result.Add(new Candidate
             {
                 Id = concept.RecipeId,
                 Key = key,
-                CoreTypeId = concept.CoreTypeId,
+                CoreTypeId = belief.CoreTypeId,
                 MasteryLevel = recipe.MasteryLevel,
                 MasteryProgress = progress,
-                MaximumQuantity = Math.Max(0, (int)Math.Min(int.MaxValue, Math.Floor(maximum))),
-                Quantity = instanceFound ? instance.Quantity : 0,
-                QueuedQuantity = instanceFound ? instance.QueuedQuantity : 0,
-                AuthoredDrainResources = drainCount,
+                MaximumQuantity = belief.MaximumQuantity,
+                Quantity = belief.Quantity,
+                QueuedQuantity = belief.QueuedQuantity,
+                AuthoredDrainResources = belief.AuthoredDrainResources,
                 HasInstance = instanceFound,
                 DrainSafe = !instanceFound || IsDrainSafe(world, in instance, config.AutoConcept.MinimumDrainRatio),
                 CanAddNow = concept.CanAddNow,

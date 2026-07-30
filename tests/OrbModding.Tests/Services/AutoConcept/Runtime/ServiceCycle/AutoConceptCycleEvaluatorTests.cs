@@ -70,6 +70,39 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
+    public void NativeBeliefProjectionUsesTheSamePublishedQuantityAndMasteryFacts()
+    {
+        var world = World(
+            new[] { Recipe(Alpha, maximum: 8) },
+            new[] { Instance(Alpha, quantity: 2, queued: 2) });
+
+        Assert.True(AutoConceptPlanBeliefProjection.TryCreate(
+            world,
+            Alpha,
+            out var belief,
+            out var reason), reason);
+        Assert.Equal(2, belief.Quantity);
+        Assert.Equal(2, belief.QueuedQuantity);
+        Assert.Equal(8, belief.MaximumQuantity);
+        Assert.Equal(Core, belief.CoreTypeId);
+        Assert.Equal(0, belief.AuthoredDrainResources);
+    }
+
+    [Fact]
+    public void NativeBeliefProjectionExplainsAnUnknownRecipe()
+    {
+        var unknown = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+        Assert.False(AutoConceptPlanBeliefProjection.TryCreate(
+            World(),
+            unknown,
+            out _,
+            out var reason));
+        Assert.Contains(unknown.ToString("D"), reason);
+        Assert.Contains("concept-recipes", reason);
+    }
+
+    [Fact]
     public void RotateAllRemovesTheHigherMasteryOccupantBeforeReplacingIt()
     {
         var world = World(

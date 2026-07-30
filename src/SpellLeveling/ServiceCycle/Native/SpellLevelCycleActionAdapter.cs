@@ -49,8 +49,23 @@ internal sealed class SpellLevelCycleActionAdapter : ISpellLevelCycleActionPort
         in SpellLevelCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: true);
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in SpellLevelCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: false);
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in SpellLevelCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy)
     {
-        if (!SpellLevelConfigurationPolicy.IsOperational(config))
+        if (requireAutomationPolicy && !SpellLevelConfigurationPolicy.IsOperational(config))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
 
         if (!Owns())

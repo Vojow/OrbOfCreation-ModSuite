@@ -135,6 +135,25 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return methods;
     }
 
+    public IReadOnlyList<MethodContract> GetMethods(string fullName)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        var methods = new List<MethodContract>();
+        foreach (var methodHandle in definition.GetMethods())
+        {
+            var method = Reader.GetMethodDefinition(methodHandle);
+            var signature = method.DecodeSignature(_typeProvider, null);
+            methods.Add(new MethodContract(
+                Reader.GetString(method.Name),
+                GetMethodVisibility(method.Attributes),
+                (method.Attributes & MethodAttributes.Static) != 0,
+                signature.ReturnType,
+                signature.ParameterTypes.ToArray()));
+        }
+
+        return methods;
+    }
+
     private static string GetTypeVisibility(TypeAttributes attributes) =>
         (attributes & TypeAttributes.VisibilityMask) switch
         {

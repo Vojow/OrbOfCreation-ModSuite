@@ -5,6 +5,11 @@ using BepInEx.Configuration;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbMentor;
+#if SERVICE_CYCLE_PROFILE
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OrbAutomata.GameMcp;
+#endif
 
 namespace OrbAutomata;
 
@@ -180,6 +185,111 @@ internal sealed class BepInExAutomataConfiguration
     }
 
     internal void SetEmergencyStop(bool stopped) => EmergencyDisable.Value = stopped;
+
+#if SERVICE_CYCLE_PROFILE
+    /// <summary>
+    /// Writes one allowlisted suite setting through its real BepInEx entry. The entry's ordinary
+    /// SettingChanged event refreshes <see cref="Current"/> and marks the configuration store's
+    /// single publication path pending.
+    /// </summary>
+    internal bool TrySetGameMcpSetting(
+        string section,
+        string key,
+        string serializedValue,
+        out string reason)
+    {
+        var entries = GameMcpWritableEntries();
+        ConfigEntryBase? selected = null;
+        for (var index = 0; index < entries.Length; index++)
+        {
+            var definition = entries[index].Definition;
+            if (!string.Equals(definition.Section, section, StringComparison.Ordinal) ||
+                !string.Equals(definition.Key, key, StringComparison.Ordinal))
+                continue;
+            selected = entries[index];
+            break;
+        }
+        if (selected is null)
+        {
+            reason =
+                "setting " + section + "/" + key +
+                " is not in the perf-debug MCP allowlist; compatibility acknowledgements, " +
+                "emergency state, and key bindings use dedicated authorities";
+            return false;
+        }
+        if (!GameMcpConfigurationValuePolicy.TryValidate(
+                selected,
+                serializedValue,
+                out reason))
+            return false;
+
+        try
+        {
+            selected.SetSerializedValue(serializedValue ?? string.Empty);
+            reason = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or FormatException or InvalidOperationException or
+                OverflowException)
+        {
+            reason =
+                "BepInEx rejected " + section + "/" + key + ": " +
+                exception.GetBaseException().Message;
+            return false;
+        }
+    }
+
+    internal string CaptureGameMcpWritableSettings()
+    {
+        var result = new JArray();
+        var entries = GameMcpWritableEntries();
+        for (var index = 0; index < entries.Length; index++)
+        {
+            var entry = entries[index];
+            result.Add(new JObject
+            {
+                ["section"] = entry.Definition.Section,
+                ["key"] = entry.Definition.Key,
+                ["settingType"] = entry.SettingType.FullName ?? entry.SettingType.Name,
+                ["serializedValue"] = entry.GetSerializedValue(),
+                ["description"] = entry.Description.Description ?? string.Empty,
+                ["constraints"] = GameMcpConfigurationValuePolicy.Describe(entry),
+            });
+        }
+        return result.ToString(Formatting.None);
+    }
+
+    private ConfigEntryBase[] GameMcpWritableEntries() =>
+        new ConfigEntryBase[]
+        {
+            Enabled,
+            AutoBuyMode,
+            AutoBuyAffordability,
+            UpgradeAffordability,
+            AutoBuyStructures,
+            AutoBuyUpgrades,
+            AutoLevelSpells,
+            LeaveQueueSlots,
+            AutoCastMode,
+            AutoCastShowToggleButton,
+            AutoCastStartResourcePercent,
+            AutoCastManualPauseSeconds,
+            AutoCastFullCharge,
+            AutoConceptMode,
+            AutoConceptSlotManagement,
+            AutoConceptShowToggleButton,
+            AutoConceptTrainingPeriodSeconds,
+            AutoConceptRateReservePercent,
+            AutoConceptMinimumResourcePercent,
+            AutoConceptMinimumDrainRatio,
+            AutoHarvestMode,
+            AutoHarvestFruitTrees,
+            AutoHarvestTreasureTrees,
+            AbsoluteReserve,
+            RelativeReserveMultiplier,
+        };
+#endif
 
     internal void SetAllowUnverifiedGameBuild(bool allowed) =>
         AllowUnverifiedGameBuild.Value = allowed;

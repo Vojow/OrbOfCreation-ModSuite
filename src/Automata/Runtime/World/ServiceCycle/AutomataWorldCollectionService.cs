@@ -96,6 +96,7 @@ internal static class AutomataWorldCollectionService
             }
 
             frame.CollectedAt = context.CapturedAt;
+            frame.CollectedAtUtcTicks = DateTime.UtcNow.Ticks;
             capture.Collect(frame);
             return ServiceCaptureResult.Captured(CommonServiceDecisionCodes.Captured);
         }

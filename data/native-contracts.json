@@ -10428,7 +10428,7 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Suite UI validation"
+        "Game MCP run transition"
       ],
       "usages": [
         "reflection"
@@ -14144,6 +14144,88 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "game-mcp-hover-tooltip.item",
+      "assembly": "assembly-csharp",
+      "type": "HoverTooltip",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "tooltipItem",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ITooltipable",
+      "owners": [
+        "Game MCP tooltip explorer"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "sourceTokens": [
+        "GetName",
+        "GetDisplayType",
+        "GetDescription",
+        "HasAltTooltips"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "game-mcp-hover-tooltip.open",
+      "assembly": "assembly-csharp",
+      "type": "HoverTooltip",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "OpenTooltip",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Game MCP tooltip explorer"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "game-mcp-hover-tooltip.sub-tooltips",
+      "assembly": "assembly-csharp",
+      "type": "HoverTooltip",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "subTooltips",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ITooltipable>",
+      "owners": [
+        "Game MCP tooltip explorer"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "ui-plot-node-list.on-node-click",
+      "assembly": "assembly-csharp",
+      "type": "UIPlotNodeList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "OnNodeClick",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "PlotNodeSO"
+      ],
+      "owners": [
+        "Game MCP performance-debug navigation"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "value-modifier.type",

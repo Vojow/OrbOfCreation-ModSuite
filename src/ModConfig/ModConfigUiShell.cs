@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using BepInEx.Logging;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
+using UnityEngine;
 
 namespace OrbModConfig;
 
@@ -114,7 +116,34 @@ internal sealed class ModConfigUiShell : IDisposable
 
     public void RefreshNavigation() => _navigation.RefreshNavigation();
 
-    internal void SelectNextPageForValidation() => _panel.SelectNextPageForValidation();
+#if SERVICE_CYCLE_PROFILE
+    internal bool IsOpenForGameMcp => _open && IsAlive;
+
+    internal IReadOnlyList<GameMcpNativeTab> CaptureNativeTabsForGameMcp() =>
+        _navigation.CaptureNativeTabsForGameMcp();
+
+    internal IReadOnlyList<string> CapturePagesForGameMcp() =>
+        _panel.CapturePagesForGameMcp();
+
+    internal bool IsNativeTabForGameMcp(Component component) =>
+        _navigation.IsNativeTabForGameMcp(component);
+
+    internal int NativeTabCountForGameMcp() =>
+        _navigation.NativeTabCountForGameMcp();
+
+    internal bool TrySelectNativeTabForGameMcp(int index, out string reason)
+    {
+        if (_open && index == _navigation.NativeTabCountForGameMcp() - 1)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        return _navigation.TrySelectNativeTabForGameMcp(index, out reason);
+    }
+
+    internal bool TrySelectPageForGameMcp(int index, out string reason) =>
+        _panel.TrySelectPageForGameMcp(index, out reason);
+#endif
 
     public bool ScheduleRefresh(float unscaledDeltaTime)
     {

@@ -175,6 +175,13 @@ public sealed class AutoHarvestContractTests
             false,
             "System.Void",
             "PlotNodeActionInstance");
+        AssertMethod(
+            assembly,
+            "UIPlotNodeList",
+            "OnNodeClick",
+            false,
+            "System.Void",
+            "PlotNodeSO");
     }
 
     [GameAssemblyFact]
