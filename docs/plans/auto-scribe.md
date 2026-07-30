@@ -40,6 +40,8 @@ Last updated: **2026-07-30**
 - Current task: after the game is closed, build and install the bounded-retry/Thread extension,
   confirm Auto Items no longer faults on `TargetUnavailable`, and confirm Auto Scribe native
   rejections retry only at the configured evaluation cadence.
+- Current source: commit `7c8875d` is pushed to draft PR #102 but is not installed while the game
+  remains open.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.

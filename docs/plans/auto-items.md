@@ -85,7 +85,8 @@ Last updated: **2026-07-30**
   was also run, but its combined build/test sequence exceeded the hard 60-second wall on the
   machine while the game was live; its three constituent gates pass separately. Interactive game
   validation has not yet covered Threads or the retry fixes.
-- Working tree: the extension and dump-backed fixes are ready to commit to draft PR #102.
+- Working tree: the extension and dump-backed fixes are committed as `7c8875d` and pushed to draft
+  PR #102.
 - Next action: after the game closes, install the new build and run the Phase 11-13 behavior and
   layout checklists on a disposable save.
 
