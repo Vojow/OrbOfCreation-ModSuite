@@ -142,6 +142,10 @@ internal static class ModConfigNativeRailFactory
                 icon = primitives.AdvancedIcon;
                 reason = string.Empty;
                 return true;
+            case "Auto Scribe":
+                icon = primitives.ConceptIcon;
+                reason = string.Empty;
+                return true;
             case "Mentor":
                 return NativeFeatureIconResolver.TryGetMentorIcon(out icon, out reason);
             case "Advanced":

@@ -334,6 +334,174 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoScribe_MatchesCompleteLifecycleBindingSet()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.True(assembly.HasType("CraftingRecipeSO"));
+        Assert.True(assembly.HasType("CraftingRecipeListVariable"));
+        Assert.True(assembly.HasType("CraftingInstance"));
+        Assert.True(assembly.HasType("CraftingInstanceListVariable"));
+        Assert.True(assembly.HasType("EnchantmentSO"));
+        Assert.True(assembly.HasType("EnchantmentSO+EnchantTable"));
+        Assert.True(assembly.HasType("EnchantmentInstance"));
+        Assert.True(assembly.HasType("ConsumableSO+ConsumableGainEffect"));
+        Assert.True(assembly.HasType("EnchantmentSO+EnchantItemScript"));
+
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
+            assembly.GetFieldType("IdScriptableObject", "RuntimeLookup"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<!0>",
+            assembly.GetFieldType("AbstractListVariable`1", "value"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<CraftingRecipeTypeSO>",
+            assembly.GetFieldType("CraftingRecipeSO", "craftingTypes"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<InstantEffectBlock>",
+            assembly.GetFieldType("CraftingRecipeSO", "completeEffects"));
+        Assert.Equal(
+            "System.Boolean",
+            assembly.GetFieldType("CraftingRecipeSO", "useQuantityAsLevel"));
+        Assert.Equal(
+            "System.Boolean",
+            assembly.GetFieldType("CraftingRecipeTypeSO", "isLevelType"));
+        Assert.Equal(
+            "System.Int32",
+            assembly.GetFieldType("CraftingRecipeTypeSO", "maxStartingLevel"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<IInstantEffectScript>",
+            assembly.GetFieldType("InstantEffectBlock", "effectScripts"));
+        Assert.Equal(
+            "ConsumableSO",
+            assembly.GetFieldType("ConsumableSO+ConsumableGainEffect", "consumable"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<InstantEffectBlock>",
+            assembly.GetFieldType("ConsumableSO", "onUseEffects"));
+        Assert.Equal(
+            "Targeting.TargetSelectOptions",
+            assembly.GetFieldType("RequestTargetEffectScript", "targetOptions"));
+        Assert.Equal(
+            "EnchantmentSO",
+            assembly.GetFieldType("EnchantmentSO+EnchantItemScript", "enchantment"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableCount>",
+            assembly.GetFieldType("ConsumableSO", "consumableCounts"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ResourceTuple>",
+            assembly.GetFieldType("ResourceCostList", "costs"));
+        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
+        Assert.Equal(
+            "System.Boolean",
+            assembly.GetFieldType("CraftingInstanceListVariable", "isAutoList"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<StructureSO>",
+            assembly.GetFieldType("StructureSO", "All"));
+        Assert.Equal(
+            "EnchantmentSO+EnchantTable",
+            assembly.GetFieldType("StructureSO", "enchantTable"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<EnchantmentInstance>",
+            assembly.GetFieldType("EnchantmentSO+EnchantTable", "enchantments"));
+
+        AssertMethod(assembly, "CraftingRecipeSO", "IsVisible", false, "System.Boolean");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "CanBuyAt",
+            false,
+            "System.Boolean",
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "GetTotalCost",
+            false,
+            "ResourceCostList",
+            "BigDouble",
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "GetMainType",
+            false,
+            "CraftingRecipeTypeSO");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "PurchaseQuantity",
+            false,
+            "System.Void",
+            "BigDouble",
+            "BigDouble");
+        AssertMethod(assembly, "ResourceCostList", "HasEnough", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
+        AssertMethod(assembly, "AbstractListVariable`1", "GetMax", false, "System.Int32");
+        AssertMethod(assembly, "GenericListVariable`1", "HasEmptySpot", false, "System.Boolean");
+        AssertMethod(
+            assembly,
+            "GenericListVariable`1",
+            "Add",
+            false,
+            "System.Void",
+            "!0");
+        AssertMethod(
+            assembly,
+            "AbstractRefInstance`1",
+            "GetGuidReference",
+            false,
+            "System.Guid");
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            ".ctor",
+            false,
+            "System.Void",
+            "CraftingRecipeSO",
+            "BigDouble");
+        AssertMethod(assembly, "CraftingInstance", "GetQuantity", false, "BigDouble");
+        AssertMethod(assembly, "CraftingInstance", "IsAuto", false, "System.Boolean");
+        AssertMethod(assembly, "CraftingInstance", "IsExpired", false, "System.Boolean");
+        AssertMethod(assembly, "CraftingInstance", "Initiate", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            "CheckInstantCraft",
+            false,
+            "System.Boolean");
+        AssertMethod(assembly, "CraftingInstance", "InstantCraft", false, "System.Void");
+        AssertMethod(assembly, "ConsumableCount", "GetLevel", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableCount", "GetQuantity", false, "System.Int32");
+        AssertMethod(
+            assembly,
+            "ScalingInfo",
+            "Basic",
+            true,
+            "ScalingInfo",
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetSelectOptions",
+            "GetTargeting",
+            false,
+            "Targeting.BaseTargetSelection");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetStructure",
+            "GetRandomList",
+            false,
+            "System.Collections.Generic.List`1<Targeting.ITargetable>",
+            "ScalingInfo");
+        AssertMethod(
+            assembly,
+            "EnchantmentInstance",
+            "GetLevel",
+            false,
+            "System.Int32");
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

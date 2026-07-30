@@ -14972,6 +14972,535 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "auto-scribe.consumable-gain.output",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO+ConsumableGainEffect",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumable",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ConsumableSO",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.consumable.on-use-effects",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "onUseEffects",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<InstantEffectBlock>",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.crafting-instance.type",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.enchant-script.enchantment",
+      "assembly": "assembly-csharp",
+      "type": "EnchantmentSO+EnchantItemScript",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "enchantment",
+      "visibility": "public",
+      "static": false,
+      "valueType": "EnchantmentSO",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.enchant-table.entries",
+      "assembly": "assembly-csharp",
+      "type": "EnchantmentSO+EnchantTable",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "enchantments",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<EnchantmentInstance>",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.enchantment-instance.level",
+      "assembly": "assembly-csharp",
+      "type": "EnchantmentInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.instance.auto",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsAuto",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.instance.check-instant",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CheckInstantCraft",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.instance.expired",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsExpired",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.instance.initiate",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Initiate",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.instance.instant",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "InstantCraft",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.instance.quantity",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.list.add",
+      "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Add",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "!0"
+      ],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.list.auto-flag",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstanceListVariable",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isAutoList",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.list.get-max",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMax",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.list.has-empty-spot",
+      "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasEmptySpot",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.list.value-capture",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "value",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<!0>",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.recipe.can-buy-at",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanBuyAt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [
+        "BigDouble"
+      ],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.recipe.complete-effects",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "completeEffects",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<InstantEffectBlock>",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.recipe.crafting-types",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "craftingTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<CraftingRecipeTypeSO>",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.recipe.get-main-type",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMainType",
+      "visibility": "public",
+      "static": false,
+      "returnType": "CraftingRecipeTypeSO",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.recipe.get-total-cost",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTotalCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "BigDouble",
+        "BigDouble"
+      ],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.recipe.levelled",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "useQuantityAsLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.recipe.purchase-quantity",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "PurchaseQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "BigDouble",
+        "BigDouble"
+      ],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.recipe.visible",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.ref-instance.guid-reference",
+      "assembly": "assembly-csharp",
+      "type": "AbstractRefInstance`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuidReference",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-scribe.scaling-info.basic",
+      "assembly": "assembly-csharp",
+      "type": "ScalingInfo",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Basic",
+      "visibility": "public",
+      "static": true,
+      "returnType": "ScalingInfo",
+      "parameters": [
+        "BigDouble"
+      ],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-scribe.structure.enchant-table",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "enchantTable",
+      "visibility": "public",
+      "static": false,
+      "valueType": "EnchantmentSO+EnchantTable",
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -14982,6 +15511,7 @@
       "src/AutoConcept",
       "src/AutoHarvest",
       "src/AutoItems",
+      "src/AutoScribe",
       "src/Automata",
       "src/Common",
       "src/Mentor",

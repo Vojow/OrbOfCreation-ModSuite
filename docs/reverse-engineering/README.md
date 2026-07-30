@@ -49,6 +49,12 @@ The findings come from assembly metadata and selected IL method bodies read with
   shared world facts, freshness-classified native validation, the consumable GameAction, and
   remaining live-evidence limits.
 
+## Auto Scribe dossier
+
+- [Native Scribe pipeline](auto-scribe-native-pipeline.md) — audited role relationships,
+  levelled coverage facts, freshness-classified preflights, exact payment/admission evidence,
+  partial commits, and remaining live-evidence limits.
+
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 
 ## Important discovered identifier

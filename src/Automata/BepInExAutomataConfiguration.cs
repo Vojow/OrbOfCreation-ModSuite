@@ -49,6 +49,10 @@ internal sealed class BepInExAutomataConfiguration
     {
         new ModConfigDependency("AutoItems", "Mode", "Active"),
     };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoScribeActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoScribe", "Mode", "Active"),
+    };
 
     private BepInExAutomataConfiguration(
         ConfigFile config,
@@ -79,6 +83,8 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<AutoItemsOperationMode> autoItemsMode,
         ConfigEntry<bool> autoItemsUseScrolls,
         ConfigEntry<bool> autoItemsUseRelics,
+        ConfigEntry<AutoScribeOperationMode> autoScribeMode,
+        ConfigEntry<string> autoScribeRoles,
         ConfigEntry<bool> allowUnverifiedGameBuild,
         ConfigEntry<string> acceptedUnverifiedBuildFingerprint,
         ConfigEntry<bool> emergencyDisable,
@@ -112,6 +118,8 @@ internal sealed class BepInExAutomataConfiguration
         AutoItemsMode = autoItemsMode;
         AutoItemsUseScrolls = autoItemsUseScrolls;
         AutoItemsUseRelics = autoItemsUseRelics;
+        AutoScribeMode = autoScribeMode;
+        AutoScribeRoles = autoScribeRoles;
         AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
         AcceptedUnverifiedBuildFingerprint = acceptedUnverifiedBuildFingerprint;
         EmergencyDisable = emergencyDisable;
@@ -171,6 +179,8 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<AutoItemsOperationMode> AutoItemsMode { get; }
     public ConfigEntry<bool> AutoItemsUseScrolls { get; }
     public ConfigEntry<bool> AutoItemsUseRelics { get; }
+    public ConfigEntry<AutoScribeOperationMode> AutoScribeMode { get; }
+    public ConfigEntry<string> AutoScribeRoles { get; }
     public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
 
     internal ConfigEntry<string> AcceptedUnverifiedBuildFingerprint { get; }
@@ -191,6 +201,7 @@ internal sealed class BepInExAutomataConfiguration
 
     internal void SetAutoHarvestMode(AutoHarvestOperationMode mode) => AutoHarvestMode.Value = mode;
     internal void SetAutoItemsMode(AutoItemsOperationMode mode) => AutoItemsMode.Value = mode;
+    internal void SetAutoScribeMode(AutoScribeOperationMode mode) => AutoScribeMode.Value = mode;
 
     internal void SetMentorMode(MentorOperationMode mode)
     {
@@ -303,6 +314,8 @@ internal sealed class BepInExAutomataConfiguration
             AutoItemsMode,
             AutoItemsUseScrolls,
             AutoItemsUseRelics,
+            AutoScribeMode,
+            AutoScribeRoles,
             AbsoluteReserve,
             RelativeReserveMultiplier,
         };
@@ -438,6 +451,8 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoItems", "Mode", AutoItemsOperationMode.Disabled, "Disabled performs no item work. Active uses one eligible Scroll or Relic from each fresh world publication.", 19, 0),
                 Bind(config, "AutoItems", "UseScrolls", true, "Use visible Scrolls with native randomized targeting after exact live target revalidation.", 19, 10, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "UseRelics", true, "Use visible Relics when live native preparation and firing checks permit.", 19, 20, dependencies: AutoItemsActiveDependencies),
+                Bind(config, "AutoScribe", "Mode", AutoScribeOperationMode.Disabled, "Disabled performs no Scribe work. Active produces at most one audited Scroll from each fresh world publication.", 20, 0),
+                Bind(config, "AutoScribe", "Roles", string.Empty, "Comma-separated semantic Scribe role keys. Empty selects every audited producible role; use none to select no roles.", 20, 10, dependencies: AutoScribeActiveDependencies),
                 Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
                 Bind(config, "Compatibility", "AcceptedUnverifiedBuildFingerprint", string.Empty, "Exact assembly-pair fingerprint accepted by the player. Managed by the suite.", 50, 10, hidden: true),
                 Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, consumable uses, and mastery sharing immediately.", 40, 0),
@@ -469,6 +484,7 @@ internal sealed class BepInExAutomataConfiguration
             "AutoConcept" => "Auto Concept",
             "AutoHarvest" => "Auto Harvest",
             "AutoItems" => "Auto Items",
+            "AutoScribe" => "Auto Scribe",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -479,6 +495,8 @@ internal sealed class BepInExAutomataConfiguration
             "Mode" when section == "AutoConcept" => "Auto Concept",
             "Mode" when section == "AutoHarvest" => "Auto Harvest",
             "Mode" when section == "AutoItems" => "Auto Items",
+            "Mode" when section == "AutoScribe" => "Auto Scribe",
+            "Roles" => "Roles",
             "UseScrolls" => "Use Scrolls",
             "UseRelics" => "Use Relics",
             "CollectFruitTrees" => "Collect fruit trees",
@@ -494,7 +512,7 @@ internal sealed class BepInExAutomataConfiguration
             "StartResourcePercent" => "Minimum resource percent",
             _ => null,
         };
-        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Items" ? 18 : 20;
+        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Items" ? 18 : displaySection == "Auto Scribe" ? 19 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

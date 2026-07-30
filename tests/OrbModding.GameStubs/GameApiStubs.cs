@@ -375,10 +375,17 @@ public class AbstractListVariable<T> : IdScriptableObject
 {
     public static List<AbstractListVariable<T>> All = new List<AbstractListVariable<T>>();
     public List<T> value = new List<T>();
+    public int Maximum = 4;
+    public int GetMax() => Maximum;
+    public List<T> ToList() => new List<T>(value);
 }
 
 public class GenericListVariable<T> : AbstractListVariable<T>
 {
+    public bool SuppressAdd;
+    public bool ThrowAfterAdd;
+    public int AddCalls;
+
     public int GetUsedSpots()
     {
         var used = 0;
@@ -390,7 +397,14 @@ public class GenericListVariable<T> : AbstractListVariable<T>
         return used;
     }
 
-    public bool HasEmptySpot() => GetUsedSpots() < value.Count;
+    public bool HasEmptySpot() => GetUsedSpots() < Maximum;
+
+    public void Add(T element)
+    {
+        AddCalls++;
+        if (!SuppressAdd) value.Add(element);
+        if (ThrowAfterAdd) throw new InvalidOperationException("injected failure after admission");
+    }
 
     protected virtual bool IsFilledElement(T element) => element is not null;
 }
@@ -482,10 +496,11 @@ public class UpgradeSO : IdScriptableObject
     }
 }
 
-public class StructureSO : UpgradeableObject
+public class StructureSO : UpgradeableObject, Targeting.ITargetable
 {
     public static List<StructureSO> All = new List<StructureSO>();
     public StructureTypeSO structureType = new StructureTypeSO();
+    public EnchantmentSO.EnchantTable enchantTable = new EnchantmentSO.EnchantTable();
 
     /// <summary>The standing effects the structure applies once built.</summary>
     public List<PersistentEffectDeprecated.Property> structureProperties =
@@ -494,6 +509,7 @@ public class StructureSO : UpgradeableObject
     public int queuedQuantity;
     public int quantity;
     public bool available = true;
+    public bool visible = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
 
@@ -541,6 +557,7 @@ public class StructureSO : UpgradeableObject
     public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
+    public bool IsVisible() => visible;
 
     // The game's own CanPurchase folds the price in alongside its other conditions, which is the
     // whole premise of reading those conditions apart when it refuses.
@@ -804,11 +821,16 @@ public class ResourceCostList
     public bool HasEnough()
     {
         if (!affordable || AffordableLevels <= 0) return false;
+        var totals = new Dictionary<ResourceSO, BigDouble>();
         for (var index = 0; index < costs.Count; index++)
         {
             var row = costs[index];
-            if (row.resource is null || !row.resource.HasAmount(row.GetValue())) return false;
+            if (row.resource is null) return false;
+            totals.TryGetValue(row.resource, out var current);
+            totals[row.resource] = current + row.GetValue();
         }
+        foreach (var pair in totals)
+            if (!pair.Key.HasAmount(pair.Value)) return false;
         return true;
     }
     public List<ResourceTuple> GetEntries() => costs;

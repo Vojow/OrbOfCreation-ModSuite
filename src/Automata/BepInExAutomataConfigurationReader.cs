@@ -57,6 +57,11 @@ internal static class BepInExAutomataConfigurationReader
                 UseScrolls = source.AutoItemsUseScrolls.Value,
                 UseRelics = source.AutoItemsUseRelics.Value,
             },
+            AutoScribe = new AutoScribeConfiguration
+            {
+                Mode = source.AutoScribeMode.Value,
+                Roles = source.AutoScribeRoles.Value ?? string.Empty,
+            },
             Mentor = source.Mentor is null
                 ? new OrbMentor.MentorConfiguration()
                 : OrbMentor.MentorConfiguration.Read(source.Mentor),

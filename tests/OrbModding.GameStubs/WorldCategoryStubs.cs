@@ -111,6 +111,132 @@ public sealed class CraftingRecipeTypeSO : IdScriptableObject
     public ModifierRecord multiPenaltyMod = new ModifierRecord();
 }
 
+public sealed class CraftingRecipeListVariable : GenericListVariable<CraftingRecipeSO>
+{
+}
+
+public class AbstractRefInstance<T> where T : IdScriptableObject
+{
+    public T reference = null!;
+    public Guid GetGuidReference() => reference.GetGuid();
+}
+
+public sealed class CraftingRecipeSO : IdScriptableObject
+{
+    public static List<CraftingRecipeSO> All = new List<CraftingRecipeSO>();
+    public List<CraftingRecipeTypeSO> craftingTypes = new List<CraftingRecipeTypeSO>();
+    public List<InstantEffectBlock> completeEffects = new List<InstantEffectBlock>();
+    public bool useQuantityAsLevel;
+    public bool visible;
+    public bool BuyAllowed = true;
+    public ResourceCostList TotalCost = new ResourceCostList();
+    public CraftingRecipeTypeSO MainType = new CraftingRecipeTypeSO
+    {
+        maxStartingLevel = 1,
+        isLevelType = true,
+    };
+    public bool InstantCraftEnabled;
+    public ConsumableSO? InstantOutput;
+    public bool ThrowAfterPurchase;
+    public bool ThrowDuringConstruction;
+    public bool ThrowAfterInitiation;
+    public bool ThrowAfterInstantAdmission;
+    public int PurchaseCalls;
+
+    public bool IsVisible() => visible;
+    public bool CanBuyAt(BigDouble quantity) =>
+        BuyAllowed && quantity > BigDouble.Zero && TotalCost.HasEnough();
+    public ResourceCostList GetTotalCost(BigDouble previousQuantity, BigDouble purchasedQuantity) =>
+        TotalCost;
+    public CraftingRecipeTypeSO GetMainType() => MainType;
+
+    public void PurchaseQuantity(BigDouble purchasedQuantity, BigDouble previousQuantity)
+    {
+        PurchaseCalls++;
+        TotalCost.PerformCost();
+        if (MainType.isLevelType)
+            MainType.maxStartingLevel =
+                purchasedQuantity.ToInt() + previousQuantity.ToInt();
+        if (ThrowAfterPurchase)
+            throw new InvalidOperationException("injected failure after purchase");
+    }
+}
+
+public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingInstance>
+{
+    public bool isAutoList;
+}
+
+public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
+{
+    public BigDouble Quantity = BigDouble.One;
+    public bool Automatic;
+    public bool Expired;
+    public bool Initiated;
+
+    public CraftingInstance()
+    {
+    }
+
+    public CraftingInstance(CraftingRecipeSO recipe, BigDouble quantity)
+    {
+        reference = recipe;
+        Quantity = quantity;
+        if (recipe.ThrowDuringConstruction)
+            throw new InvalidOperationException("injected failure during construction");
+    }
+
+    public void Initiate()
+    {
+        Initiated = true;
+        if (reference.ThrowAfterInitiation)
+            throw new InvalidOperationException("injected failure after initiation");
+    }
+
+    public bool CheckInstantCraft() => reference.InstantCraftEnabled;
+
+    public void InstantCraft()
+    {
+        if (reference.InstantOutput is not null)
+        {
+            var level = Quantity.ToInt();
+            var count = reference.InstantOutput.consumableCounts.Find(row => row.Level == level);
+            if (count is null)
+            {
+                count = new ConsumableCount { Level = level };
+                reference.InstantOutput.consumableCounts.Add(count);
+            }
+            count.Quantity++;
+        }
+        if (reference.ThrowAfterInstantAdmission)
+            throw new InvalidOperationException("injected failure after instant admission");
+    }
+
+    public BigDouble GetQuantity() => Quantity;
+    public bool IsAuto() => Automatic;
+    public bool IsExpired() => Expired;
+}
+
+public sealed class EnchantmentSO : IdScriptableObject
+{
+    public sealed class EnchantTable
+    {
+        public List<EnchantmentInstance> enchantments = new List<EnchantmentInstance>();
+    }
+
+    public sealed class EnchantItemScript : IInstantEffectScript
+    {
+        public EnchantmentSO enchantment = new EnchantmentSO();
+        public Targeting.TargetReference targetReference = new Targeting.TargetReference();
+    }
+}
+
+public sealed class EnchantmentInstance : AbstractRefInstance<EnchantmentSO>
+{
+    public int Level = 1;
+    public int GetLevel() => Level;
+}
+
 
 public sealed class HarvestElementSO : IdScriptableObject
 {
@@ -182,7 +308,7 @@ public sealed class ConsumableTypeSO : IdScriptableObject
 {
 }
 
-public sealed class ConsumableSO : IdScriptableObject
+public sealed partial class ConsumableSO : IdScriptableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();
     public bool visible;
@@ -292,6 +418,8 @@ public sealed class ScalingInfo
     public int Level = 1;
 
     public int GetLevelInt() => Level;
+    public static ScalingInfo Basic(BigDouble level) =>
+        new ScalingInfo { Level = level.ToInt() };
 }
 
 public interface IInstantEffectScript
@@ -309,6 +437,16 @@ public sealed class RequestTargetEffectScript : IInstantEffectScript
 
 namespace Targeting
 {
+    public enum TargetReferenceTypes
+    {
+        Target = 0,
+    }
+
+    public sealed class TargetReference
+    {
+        public TargetReferenceTypes refType;
+    }
+
     public interface ITargetable
     {
     }
@@ -330,6 +468,7 @@ namespace Targeting
         public BaseTargetSelection Targeting = new TargetStructure();
 
         public BaseTargetSelection GetTargeting() => Targeting;
+        public TargetReferenceTypes GetTargetRefType() => TargetReferenceTypes.Target;
     }
 }
 
@@ -520,6 +659,14 @@ public class EffectBlock
 public class InstantEffectBlock : EffectBlock
 {
     public List<IInstantEffectScript> effectScripts = new List<IInstantEffectScript>();
+}
+
+public partial class ConsumableSO
+{
+    public sealed class ConsumableGainEffect : IInstantEffectScript
+    {
+        public ConsumableSO consumable = new ConsumableSO();
+    }
 }
 
 public class PersistentEffectBlock : EffectBlock

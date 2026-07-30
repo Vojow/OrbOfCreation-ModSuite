@@ -116,7 +116,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         var world = collector.Build();
 
         Assert.True(report.IsComplete, report.Describe());
-        Assert.Equal(5, report.TotalSampled);
+        // Five primary entities plus two Scribe queues and eight complete zero-candidate
+        // Scroll-target evidence rows.
+        Assert.Equal(15, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -165,7 +167,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-four passes: the four categories
+        // The scope claim, asserted rather than described. Forty-five passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -177,7 +179,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(44, report.Categories.Length);
+        Assert.Equal(45, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
@@ -876,6 +878,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeCostList baseCost = new();
         public FakeModifierRef costPerQuantity = new();
         public FakePrerequisites prerequisitesPerLevel = new();
+        public FakeScribeEnchantTable enchantTable = new();
 
         public Guid GetGuid() => Identity;
 

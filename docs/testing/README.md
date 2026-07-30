@@ -52,6 +52,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
 | Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `AutoConceptReliability`, then `FullyQualifiedName~AutoConcept` |
 | Auto Items Scroll/Relic planner and GameAction | [Auto Items](automata/auto-items.md) | `FullyQualifiedName~AutoItems` |
+| Auto Scribe coverage planner and crafting GameAction | [Auto Scribe](automata/auto-scribe.md) | `FullyQualifiedName~AutoScribe` |
 | Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
 | Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |

@@ -98,6 +98,7 @@ public sealed class Plugin : BaseUnityPlugin
     private BepInExAutomataConfiguration? _automataConfig;
     private AutomataConfigurationStore? _configurationStore;
     private string? _shortcutAuditSignature;
+    private string _auditedBaselineId = string.Empty;
     private AutomataFeatureStatuses? _featureStatuses;
     private readonly SpellLevelCapabilityState _spellLevelCapability = new();
 
@@ -205,6 +206,7 @@ public sealed class Plugin : BaseUnityPlugin
         _mentorConfig = suite.Mentor;
         _modConfigSettings = suite.ModConfig;
         _auditedBuild = loadDecision.ShouldLoad;
+        _auditedBaselineId = loadDecision.BaselineId;
         _observedBuildFingerprint = loadDecision.ObservedBuildFingerprint;
         var compatibility = UnverifiedBuildCompatibilityPolicy.AtStartup(
             _auditedBuild,
@@ -328,6 +330,25 @@ public sealed class Plugin : BaseUnityPlugin
                 // that compiles and looks like a quiet game. The world publication is not
                 // here at all: the registry owns it, because there is one game.
                 Func<long> readFrameIdentity = static () => Time.frameCount;
+                var scribeCatalog = new AutoScribeIdentityCatalog();
+                IAutomataServiceCycleFeature autoScribeFeature =
+                    scribeCatalog.TryGetProfile(_auditedBaselineId, out var scribeProfile)
+                        ? new AutoScribeServiceCycleFeature(
+                            new AutoScribeFeatureDependencies(
+                                autoHarvestRegistryResolver,
+                                scribeProfile,
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () =>
+                                    _automataActionFamilyOwnership!.OwnsScribe,
+                                tryCaptureMutationPermit: () =>
+                                    _automataActionFamilyOwnership!
+                                        .TryCaptureScribeMutationPermit(),
+                                readOwnershipFailure: () =>
+                                    _automataActionFamilyOwnership!
+                                        .ScribeOwnershipFailure,
+                                featureStatus: featureStatuses.AutoScribe))
+                        : new AutoScribeUnavailableServiceCycleFeature(
+                            featureStatuses.AutoScribe);
                 return AutomataServiceCycleComposition.TryCreate(
                     configuration,
                     configurationGeneration,
@@ -372,6 +393,7 @@ public sealed class Plugin : BaseUnityPlugin
                                     _automataActionFamilyOwnership!
                                         .ItemsOwnershipFailure,
                                 featureStatus: featureStatuses.AutoItems)),
+                        autoScribeFeature,
                         new AutoHarvestServiceCycleFeature(
                             new AutoHarvestFeatureDependencies(
                                 autoHarvestRegistryResolver,
@@ -458,6 +480,8 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoItemsMode={runtimeConfig.AutoItems.Mode}, " +
             $"AutoItemsUseScrolls={runtimeConfig.AutoItems.UseScrolls}, " +
             $"AutoItemsUseRelics={runtimeConfig.AutoItems.UseRelics}, " +
+            $"AutoScribeMode={runtimeConfig.AutoScribe.Mode}, " +
+            $"AutoScribeRoles={runtimeConfig.AutoScribe.Roles}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
             "Auto Buy fills the available queue and groups structures by live Bulk Development.");
     }
@@ -999,6 +1023,8 @@ public sealed class Plugin : BaseUnityPlugin
             if (config.AutoItems.Mode == AutoItemsOperationMode.Active &&
                 AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems))
                 result.Add("Auto Items");
+            if (config.AutoScribe.Mode == AutoScribeOperationMode.Active)
+                result.Add("Auto Scribe");
         }
         if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
         return result;

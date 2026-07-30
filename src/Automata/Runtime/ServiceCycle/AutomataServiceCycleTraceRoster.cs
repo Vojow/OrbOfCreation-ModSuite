@@ -31,6 +31,7 @@ internal static class AutomataServiceCycleTraceRoster
     private const string AutoCastId = "orbautomata.auto-cast";
     private const string AutoConceptId = "orbautomata.auto-concept";
     private const string AutoItemsId = "orbautomata.auto-items";
+    private const string AutoScribeId = "orbautomata.auto-scribe";
     private const string MentorId = "orbmentor.mastery-sharing";
 
     /// <summary>
@@ -66,6 +67,7 @@ internal static class AutomataServiceCycleTraceRoster
         AutoCastId => "Auto Cast",
         AutoConceptId => "Auto Concept",
         AutoItemsId => "Auto Items",
+        AutoScribeId => "Auto Scribe",
         MentorId => "Mentor",
         _ => string.Empty,
     };

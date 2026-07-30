@@ -187,6 +187,34 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
+    public void AutoScribeClaimRequiresScrollConsumptionAndReleasesOnMasterDisable()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoScribeMode.Value = AutoScribeOperationMode.Active;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.True(ownership.OwnsScribe);
+        Assert.True(ownership.TryCaptureScribeMutationPermit());
+
+        config.AutoScribeMode.Value = AutoScribeOperationMode.Disabled;
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.False(ownership.OwnsScribe);
+        Assert.False(ownership.TryCaptureScribeMutationPermit());
+        Assert.Contains(
+            "Committed configuration no longer enables Auto Scribe",
+            ownership.ScribeOwnershipFailure);
+        using var replacement = Claim(
+            registry,
+            new FeatureStatusKey("tests", "replacement-scribe"),
+            AutomationActionFamily.CraftingQueueSubmission);
+        Assert.True(replacement.IsHeld);
+    }
+
+    [Fact]
     public void MentorDomainClaimsAreIndependentAndReleaseOnLifecycleTeardown()
     {
         var registry = new ActionFamilyOwnershipRegistry();

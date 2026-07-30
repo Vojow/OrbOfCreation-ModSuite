@@ -26,6 +26,8 @@ For Auto Buy, the manifest-to-implementation relationship is documented in the
 and [queue/completion model](../reverse-engineering/auto-buy-queue-and-completion.md).
 For Auto Items, see the
 [native Scroll and Relic pipeline](../reverse-engineering/auto-items-native-pipeline.md).
+For Auto Scribe, see the
+[native Scribe pipeline](../reverse-engineering/auto-scribe-native-pipeline.md).
 
 ## Enforcement layers
 

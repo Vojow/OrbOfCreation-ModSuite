@@ -82,7 +82,10 @@ public sealed class WorldIdentityWalkTests
     /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
     /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
     /// second entity namespace. <c>CollectionCategories</c> is availability evidence about one
-    /// collector pass, not a native row and not a second identity namespace.
+    /// collector pass, not a native row and not a second identity namespace. <c>ScribeWork</c>,
+    /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
+    /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
+    /// Scrolls, and enchantments whose owning tables already carry those identities.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -105,6 +108,10 @@ public sealed class WorldIdentityWalkTests
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",
+        "ScribeWork",
+        "StructureEnchantments",
+        "ScrollTargets",
+        "ScrollTargetEvidence",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",

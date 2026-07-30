@@ -9,9 +9,9 @@ The suite is one plugin with one identity (`dev.vojow.orbofcreation.modsuite`), 
 Important controls:
 
 The left rail contains Runtime, General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto
-Items, Mentor, and Advanced. The old Safety, Spells, Artifacts, Alchemy, and duplicate feature-tab
-row is gone. Mentor's spell, artifact, alchemy, source, percentage, and economy policies live
-together on the Mentor page.
+Items, Auto Scribe, Mentor, and Advanced. The old Safety, Spells, Artifacts, Alchemy, and duplicate
+feature-tab row is gone. Mentor's spell, artifact, alchemy, source, percentage, and economy
+policies live together on the Mentor page.
 
 Each feature page begins with one status card and an immediate **Turn on/Turn off** command. That command and the matching gameplay quick button are the only two feature-mode controls in the UI, and both publish through the committed configuration store before returning. Mode rows are not repeated in the staged settings list. Disabled feature modes lock their tuning fields. Nested controls unlock only when all of their committed or staged prerequisites are selected; these UI dependencies do not change or erase saved values.
 
@@ -28,12 +28,12 @@ Runtime footer reports whether the Mods refresh is pending and how long ago it l
 maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
 The Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor quick buttons, plus every
-feature-card command including Auto Items, publish the saved value through the same configuration
-store used by every other writer before the click returns, then render that committed intent. Auto
-Items deliberately has no gameplay quick button in this release. A button decides its next value
-from committed state, not from a raw file-watcher notification that the application has not
-accepted yet. Mods Apply and external edits join the same store at the start of the next
-main-thread frame.
+feature-card command including Auto Items and Auto Scribe, publish the saved value through the same
+configuration store used by every other writer before the click returns, then render that
+committed intent. Auto Items and Auto Scribe deliberately have no gameplay quick button in this
+release. A button decides its next value from committed state, not from a raw file-watcher
+notification that the application has not accepted yet. Mods Apply and external edits join the
+same store at the start of the next main-thread frame.
 
 Runtime waiting, pauses, blockers, and failures remain a separate health axis in the button tooltip and
 Mods Runtime page; a configured-On feature does not pretend to be Off merely because it cannot currently
@@ -52,7 +52,8 @@ If the shared automation host cannot start, desired-On features report that runt
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts; change it with the feature header or quick button.
 - `AutoHarvest.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick button. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
 - `AutoItems.Mode`: `Disabled` (default) or `Active`; change it with the feature header. `UseScrolls` and `UseRelics` both default to true behind the disabled master switch. Scrolls use native randomized targeting; Relics receive priority when both families are eligible.
-- The world collector publishes a fresh immutable reading every 250 milliseconds. Auto Buy, spell leveling, Auto Cast, Auto Concept, Auto Harvest, and Auto Items evaluate after every world publication and configuration publication. There are no per-service cadence settings or fallback polls; training periods, manual-cast pauses, and fault backoffs remain explicit waits for their own semantics.
+- `AutoScribe.Mode`: `Disabled` (default) or `Active`; change it with the feature header. `AutoScribe.Roles` accepts comma-separated semantic role keys (`scribe.advancement`, `scribe.power`, `scribe.learning`, `scribe.excellence`, `scribe.development`, `scribe.echo`). Empty selects all audited producible roles and `none` selects none. Native UUIDs are not configuration values.
+- The world collector publishes a fresh immutable reading every 250 milliseconds. Auto Buy, spell leveling, Auto Cast, Auto Concept, Auto Harvest, Auto Items, and Auto Scribe evaluate after every world publication and configuration publication. There are no per-service cadence settings or fallback polls; training periods, manual-cast pauses, and fault backoffs remain explicit waits for their own semantics.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates through every unlocked concept after each assignment has received the complete configured settled-active period; the game decides whether releasing an assignment opens an appropriate typed or typeless slot. `RotateAll` replaces active concepts to train a same-type strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
 - `AutoConcept.ShowToggleButton`: show the `CN ON/OFF` configured-intent button in the native Auto Buy-anchored control strip; runtime health remains in its tooltip; default true.
 - `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 30, range 10 to 3600. Schema 6 rewrites every serialized 300-second value — the former default — to 30, including a value deliberately saved by a player; all other customized values are preserved. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.
@@ -72,18 +73,20 @@ Default input inventory:
 - Auto Cast is polled once per Unity frame and defaults to `F8`; the central collision audit verifies that chord has no audited native default.
 - Mentor is polled once per Unity frame and defaults to `Left Alt + M`. It intentionally remains configurable and the audit warns that its modifier is also the native More Info modifier.
 - Differential verification has no key listener. Run it with **Run differential verification** on Mods -> Runtime.
-- Auto Buy, Auto Concept, Auto Harvest, Auto Items, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items has only its Mods feature-card command.
+- Auto Buy, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items and Auto Scribe have only their Mods feature-card commands.
 
 Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, Auto
-Harvest, and Auto Items default to Disabled. Auto Harvest queues quantity one, keeps at most one
-supported collect active, and runs only through the Common ServiceCycle engine. It may use the
-final free plot-action entry when the game's native capacity contract also reports room. Auto Items
-submits one eligible Relic or Scroll at a time through the native consumable queue and stops for the
-lifecycle if an attempted mutation cannot be verified. When enabled, Auto Cast fully charges
-charge-capable spells by default; turn off `Auto Cast > Full charge` to fire them immediately. Auto
-Concept uses a 10% positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native
-drain-ratio watchdog by default. Warnings and errors are always emitted. Use the Runtime page's
-explicit trace, event, journal, and verification actions when deeper evidence is needed; there is
-no global detailed-logging mode.
+Harvest, Auto Items, and Auto Scribe default to Disabled. Auto Harvest queues quantity one, keeps at
+most one supported collect active, and runs only through the Common ServiceCycle engine. It may use
+the final free plot-action entry when the game's native capacity contract also reports room. Auto
+Items submits one eligible Relic or Scroll at a time through the native consumable queue and stops
+for the lifecycle if an attempted mutation cannot be verified. Auto Scribe produces at most one
+audited Scroll per publication, yields to native automatic Scribe work, and quarantines after an
+unverified paid transaction. When enabled, Auto Cast fully charges charge-capable spells by
+default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10%
+positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by
+default. Warnings and errors are always emitted. Use the Runtime page's explicit trace, event,
+journal, and verification actions when deeper evidence is needed; there is no global
+detailed-logging mode.
 
 Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](../../src/Automata/README.md).

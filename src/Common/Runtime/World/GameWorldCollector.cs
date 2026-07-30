@@ -91,6 +91,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
     private readonly WorldCategoryReader<WorldGlyph, WorldGlyph> _glyphs;
     private readonly WorldConsumableReader _consumables;
+    private readonly WorldScribeRelationReader _scribeRelations;
     private readonly WorldCategoryReader<WorldRitual, WorldRitual> _rituals;
     private readonly WorldCategoryReader<WorldAchievement, WorldAchievement> _achievements;
     private readonly WorldCategoryReader<WorldAdvancement, WorldAdvancement> _advancements;
@@ -217,6 +218,7 @@ internal sealed class GameWorldCollector
         _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
         _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
         _consumables = new WorldConsumableReader(resolveType("ConsumableSO"));
+        _scribeRelations = new WorldScribeRelationReader(resolveType);
         _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
         _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);
@@ -259,6 +261,7 @@ internal sealed class GameWorldCollector
             _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellTypes,
             _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
+            _scribeRelations,
             _rituals, _achievements, _advancements, _challenges,
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,

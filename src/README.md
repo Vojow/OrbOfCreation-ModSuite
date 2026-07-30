@@ -15,7 +15,10 @@ $OOC_GAME_DIR/
 
 The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.csproj` at this directory's root, which compiles every feature folder below it. `Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by the features. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
-The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
+The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `AutoItems`,
+`AutoScribe`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and
+`SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration
+transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
 
 ## Shared configuration schemas
 
@@ -27,7 +30,11 @@ Migration code must use explicit known-key maps and closed safe failure codes. I
 
 `OrbModding.Common.Runtime` holds monotonic time, catalogs, configuration and strategy publications, the shared world collection, diagnostics, and tracing. The contracts contain no Unity objects or gameplay policy, and the configuration UI consumes their typed projections. The earlier R0 scheduler it once carried was deleted at the Auto Harvest cutover.
 
-`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, and Auto Concept. The ordinary runner through semantic export, snapshot export, and schema-v7 recording is verified by the portable suite. Replay was retired as a runtime system rather than rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
+`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it
+drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, Auto
+Items, and Auto Scribe. The ordinary runner through semantic export, snapshot export, and schema-v7
+recording is verified by the portable suite. Replay was retired as a runtime system rather than
+rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
 
 ## Shared automation decisions
 

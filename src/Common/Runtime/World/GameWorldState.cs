@@ -142,6 +142,30 @@ public sealed record GameWorldState
     internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
         PublicationTable<WorldConsumableCount>.Empty;
 
+    /// <summary>The complete contents of the audited Scribe recipe registry.</summary>
+    internal PublicationTable<WorldScribeRecipe> ScribeRecipes { get; init; } =
+        PublicationTable<WorldScribeRecipe>.Empty;
+
+    /// <summary>Occupancy of the player and game-owned Scribe production lists.</summary>
+    internal PublicationTable<WorldScribeQueue> ScribeQueues { get; init; } =
+        PublicationTable<WorldScribeQueue>.Empty;
+
+    /// <summary>
+    /// Existing Scribe work, including player-owned AutoScribeInstances as observed external
+    /// production pressure. The suite never edits that persistent automation list.
+    /// </summary>
+    internal PublicationTable<WorldScribeWork> ScribeWork { get; init; } =
+        PublicationTable<WorldScribeWork>.Empty;
+
+    internal PublicationTable<WorldStructureEnchantment> StructureEnchantments { get; init; } =
+        PublicationTable<WorldStructureEnchantment>.Empty;
+
+    internal PublicationTable<WorldScrollTarget> ScrollTargets { get; init; } =
+        PublicationTable<WorldScrollTarget>.Empty;
+
+    internal PublicationTable<WorldScrollTargetEvidence> ScrollTargetEvidence { get; init; } =
+        PublicationTable<WorldScrollTargetEvidence>.Empty;
+
     internal PublicationTable<WorldRitual> Rituals { get; init; } =
         PublicationTable<WorldRitual>.Empty;
 
@@ -294,6 +318,9 @@ public sealed record GameWorldState
     /// </para>
     /// </remarks>
     internal double FixedDeltaTime { get; init; }
+
+    /// <summary>The Unity frame at which this immutable world reading began.</summary>
+    internal long CollectedAtFrame { get; init; }
 
     /// <summary>
     /// Which run of the game this snapshot describes, as opposed to how new it is.

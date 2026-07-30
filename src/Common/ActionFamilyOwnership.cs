@@ -14,6 +14,7 @@ public enum AutomationActionFamily
     ConceptAssignment = 300,
     HarvestAction = 400,
     ConsumableUse = 500,
+    CraftingQueueSubmission = 501,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,

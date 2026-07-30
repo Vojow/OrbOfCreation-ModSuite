@@ -13,6 +13,13 @@
 - Recheck each item's exact family, visibility, inventory readiness, native firing decision,
   ownership, and Scroll targets before submission. An unverified attempted use stops Auto Items
   for the current game lifecycle and reports the exact reason on Runtime.
+- Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It consumes
+  complete role, recipe, Scroll, enchantment, levelled inventory, target, queue, and native
+  automatic-production facts and blocks the whole publication when any enabled role is unknown.
+- Re-drive the native one-shot Scribe transaction behind one lifecycle-bound GameAction. It proves
+  the live role relation and every preflight before payment, then verifies the exact resource
+  charge, progression ceiling, and queue or instant-stock outcome. A post-payment fault records the
+  partial commit, names its stage on Runtime, and quarantines Scribe until lifecycle replacement.
 - Put **Emergency disable** on the General page. Unknown but complete game builds now open in a safe
   compatibility mode, with all gameplay changes stopped until the player chooses to continue.
 - Keep incomplete game installations closed, bind an unverified-build choice to the exact two game

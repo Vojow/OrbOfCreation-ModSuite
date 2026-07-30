@@ -17,6 +17,8 @@ or action-family ownership is affected.
   mastery balancing, drain, and lifecycle behavior.
 - [Auto Items](auto-items.md) — Scroll/Relic policy, freshness-classified native
   submission, exact evidence, quarantine, and lifecycle behavior.
+- [Auto Scribe](auto-scribe.md) — coverage policy, complete-evidence blocking,
+  exact payment/admission receipts, partial commits, quarantine, and lifecycle behavior.
 - [Spell leveling](spell-leveling.md) — capability unlocks, single/all modes,
   costs, queueing, and completion semantics.
 - [Automata integration](integration.md) — configuration, coordinator,

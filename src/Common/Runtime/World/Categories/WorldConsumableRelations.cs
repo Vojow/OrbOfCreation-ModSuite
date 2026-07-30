@@ -246,6 +246,22 @@ internal static class WorldConsumableCountLookup
         }
         return level > 0;
     }
+
+    internal static int CountAtOrAbove(
+        PublicationTable<WorldConsumableCount> table,
+        Guid consumableId,
+        int level)
+    {
+        if (!TryFindRange(table, consumableId, out var start, out var count)) return 0;
+        var total = 0;
+        for (var index = 0; index < count; index++)
+        {
+            var row = table[start + index];
+            if (row.Level >= level && row.Quantity > 0)
+                total = checked(total + row.Quantity);
+        }
+        return total;
+    }
 }
 
 internal sealed class WorldConsumableTypeBuffer

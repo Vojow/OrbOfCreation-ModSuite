@@ -42,6 +42,7 @@ internal sealed class ModConfigFeatureCommands
             ["Auto Concept"] = new("Auto Concept", () => statuses.AutoConcept.Current, store.ToggleAutoConcept),
             ["Auto Harvest"] = new("Auto Harvest", () => statuses.AutoHarvest.Current, store.ToggleAutoHarvest),
             ["Auto Items"] = new("Auto Items", () => statuses.AutoItems.Current, store.ToggleAutoItems),
+            ["Auto Scribe"] = new("Auto Scribe", () => statuses.AutoScribe.Current, store.ToggleAutoScribe),
             ["Mentor"] = new("Orb Mentor", () => statuses.Mentor.Current, store.ToggleMentor),
         };
     }
