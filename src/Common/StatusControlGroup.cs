@@ -14,6 +14,8 @@ public static class StatusControlOrder
     public const int AutoConcept = 300;
     public const int AutoHarvest = 400;
     public const int Mentor = 500;
+    public const int AutoScribe = 600;
+    public const int AutoItems = 700;
 }
 
 /// <summary>

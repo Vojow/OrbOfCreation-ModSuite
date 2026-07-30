@@ -27,7 +27,8 @@ full trace, optional profiling, pump timing, the decision journal, and detailed 
 Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods
 maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
-The Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor quick buttons and feature-card commands publish the saved value through the
+The Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, and Mentor quick
+buttons and feature-card commands publish the saved value through the
 same configuration store used by every other writer before the click returns, then render that committed
 intent. The button decides its next value from committed state, not from a raw file-watcher notification
 that the application has not accepted yet. Mods Apply and external edits join the same store at the start

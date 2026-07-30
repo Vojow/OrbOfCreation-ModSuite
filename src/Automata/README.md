@@ -1,12 +1,12 @@
 # Automation
 
 This folder is the automation feature area of the suite: Auto Buy, Auto Cast, Auto Concept, Spell
-Leveling, Auto Harvest, and Auto Items. Auto Items is implemented and disabled by default while its
-interactive validation remains open. This is not a separate plugin and carries no version of its
+Leveling, Auto Harvest, Auto Items, and Auto Scribe. Auto Items and Auto Scribe are implemented and
+disabled by default while their interactive validation remains open. This is not a separate plugin and carries no version of its
 own; everything here compiles into
 `OrbModSuite.dll` and loads under the suite's single plugin GUID.
 
-Auto Buy, Auto Harvest, Auto Items, Spell Leveling, Auto Cast, and Auto Concept are registered
+Auto Buy, Auto Harvest, Auto Items, Auto Scribe, Spell Leveling, Auto Cast, and Auto Concept are registered
 ServiceCycle services and share the frame pump with world collection. Auto Buy receives a fixed
 16-action turn per Unity frame; the other feature services retain a bounded one-action turn. Fruit
 and treasure capabilities cannot mask an eligible sibling. A feature-neutral host owns the
@@ -40,11 +40,12 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades; progression-aware spell leveling is enabled within Auto Buy and can be disabled separately.
 - Auto Cast starts `Disabled` and can be toggled with `F8` or its queue-adjacent button.
-- Gameplay controls extend outward from the native Auto Buy queue switch as icon-only native spell frames: emergency stop, suite Auto Buy, Auto Cast, Auto Concept, Auto Harvest, then Mentor. STOP has one additional gap. The strip is outside the action queue and does not use the status-effects container.
+- Gameplay controls extend outward from the native Auto Buy queue switch as icon-only native spell frames: emergency stop, suite Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Auto Scribe, then Auto Items. STOP has one additional gap. Auto Items and Auto Scribe form the newest paired row at the top of the two-column tray. The strip is outside the action queue and does not use the status-effects container.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - Auto Harvest starts `Disabled`; its fruit-tree and treasure-tree selectors default on behind that master switch, and its native harvest-speed quick icon toggles the mode.
 - Auto Items starts `Disabled`; Scroll and Relic allows default on behind that switch. Scrolls use native random targeting, and Relics have first priority whenever native toxicity headroom permits them. Fruit/Potion/Thread controls default off and require selection in the Mods temporary-item picker, enough native toxicity headroom, and no other temporary usage. The picker shows native names, family, stock, toxicity cost, and duration while persisting exact UUIDs. Eligible items fill toxicity before a recovery latch waits to exact zero.
-- Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, and Mentor expose only `Disabled` and `Active`.
+- Auto Scribe starts `Disabled`; it prepares the highest craftable audited Scroll roles while target-aware Auto Items remains the only Scroll consumer.
+- Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, and Mentor expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - `PurchaseGrouping=BulkDevelopment` gives each ranked Structure one live Bulk Development-sized group and each Upgrade one level before the ranked pass repeats. Every submitted level is independently revalidated.
 - Queue admission uses the shared fail-closed `QueueCapacitySnapshot`: authoritative native total capacity and remaining room determine occupancy, then the Auto Buy usage limit and manual reservation are applied once to derive usable room.

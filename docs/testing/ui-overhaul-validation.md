@@ -34,8 +34,9 @@ icons.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
    At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
    the nine rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
-5. With the maximum unlocked native spell-slot count, confirm the five feature icons plus separated
-   STOP remain in their compact 2×3 tray inside the left lane of `RightSidebar/AttributeBar`.
+5. With the maximum unlocked native spell-slot count, confirm the seven feature icons plus separated
+   STOP remain in their compact two-column, four-row tray inside the left lane of
+   `RightSidebar/AttributeBar`. Auto Items and Auto Scribe must form the top paired row.
    Confirm the tray stays between the main-content boundary and native queue cells, never joins the
    expanding spell-slot row, and does not cover future/unlocked native controls.
 
@@ -53,7 +54,7 @@ actions, or bypass the suite's ordinary shell/page construction.
 
 ## Pixel ownership and icon states
 
-For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the five
+For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the seven
 quick icons, and STOP:
 
 1. Capture the idle appearance, then hover, press and hold, drag out, release, keyboard-select where
@@ -61,14 +62,15 @@ quick icons, and STOP:
 2. Confirm the suite-rendered frame/icon/text does not flicker to a native hover or pressed state
    after the suite paints it. Click actions must still fire exactly once.
 3. Check each quick icon in Off, On, unhealthy, and emergency-stopped states. Auto Concept must use
-   the `ScreenScholar` book glyph; Mentor must use mastery XP. Auto Harvest must use the
-   harvest-speed glyph.
+   the `ScreenScholar` book glyph; Mentor must use mastery XP; Auto Harvest must use the
+   harvest-speed glyph; Auto Items and Auto Scribe must use the Alchemy and Scholar top-bar
+   glyphs already used by their Mods rail pages.
 4. Confirm tooltips identify the feature, configured intent, runtime health, and reason without
    clipped text.
 
 ## Commands, staging, and conflicts
 
-1. For Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor, toggle once in the feature
+1. For Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, and Mentor, toggle once in the feature
    header and once in the quick strip. Confirm the other surface updates from the same committed
    value and no duplicate mode row exists.
 2. Stage policy changes on at least two feature pages without applying. Navigate through Runtime,
@@ -105,7 +107,8 @@ quick icons, and STOP:
 3. Click STOP once to arm resume. Confirm automation remains stopped and the tooltip still lists the
    resume set. Click again to resume and confirm only the listed configured-On features recover.
 4. Rebuild the game UI through an ordinary supported scene/UI transition, then return to Main.
-   Confirm exactly one Mods entry, one five-icon strip, and one STOP exist; ordering, gap, tooltips,
+   Confirm exactly one Mods entry, one seven-icon strip, and one STOP exist; ordering, paired top
+   row, gap, tooltips,
    listeners, staged navigation bookmark, and native-view restoration still work.
 
 ## Runtime actions

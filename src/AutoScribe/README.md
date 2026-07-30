@@ -23,6 +23,9 @@ active and healthy.
 - `Ui/AutoScribeRolePickerView` edits semantic roles with All, None, and Default controls. UUIDs are
   never shown or persisted. The consolidated Mods rail uses the already-audited native Scholar
   top-bar icon, matching Scribe's native parent view.
+- The gameplay quick button uses that same audited Scholar icon and the same committed mode command
+  as the Mods header. Configured intent remains visible while dependency, lifecycle, or emergency
+  state is reported separately in its tooltip.
 
 ## Safety behavior
 

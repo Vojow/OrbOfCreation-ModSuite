@@ -27,15 +27,16 @@ Last updated: **2026-07-30**
 | 11. Temporary-item validation and tuning | **Automated gates complete; interactive gate open** | Portable, profiler, source-contract, and installed-assembly gates pass; live expiry/recovery/lifecycle checks remain |
 | 12. Temporary-item picker UX | **Implemented; interactive layout gate open** | Mods configuration discovers visible Fruit/Potion items, shows names/stock/toxicity/duration, filters and toggles exact UUID selections, preserves unavailable selections, and retains a raw editor |
 | 13. Thread family extension | **Implemented; interactive behavior gate open** | Threads use the same disabled-by-default exact-item picker and guarded temporary boundary only when native duration and toxicity contracts validate |
+| 14. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Items shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Scribe |
 
 ### Current resume point
 
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: validate the Thread extension and the dump-backed retry fixes after the game is
-  closed and a new DLL can be installed. Exercise one explicitly allowlisted Fruit, Potion, and
-  Thread on a disposable save and record pending,
+- Current task: verify, commit, and install the Thread/retry and paired quick-control build. Confirm
+  the Auto Items/Auto Scribe row renders and survives a supported UI rebuild, then exercise one
+  explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
   at both zero and nonzero toxicity, save/load, reset, NG+, emergency-stop, and manual-race results.
   In the same session, verify picker scrolling, all six filters, long item names, toxicity/duration
@@ -71,6 +72,10 @@ Last updated: **2026-07-30**
   and planned Auto Items/Auto Scribe work requested immediate retries after native rejection.
   `TargetUnavailable` is now an expected rejection and both planners resume at their configured
   evaluation cadence.
+- The newest retained journal proves the sibling Auto Scribe mutation loop completed 164 verified
+  actions without a fault. Auto Items now also has the missing gameplay quick control: it uses the
+  same committed store as the Mods command, the audited native Alchemy icon, feature-health
+  tooltip evidence, emergency-stop preview, and lifecycle-safe reconstruction.
 - PR cleanup: picker rendering, picker state/selection, catalog parsing, and exact reflection
   binding are separated. Core taxonomy is centralized; pure candidate scanning is separated from
   lifecycle/recovery evaluation; native contract discovery is separated from live preflight and
@@ -78,13 +83,11 @@ Last updated: **2026-07-30**
   and reflection failures use one containment policy. The review also fixed temporary-only
   ownership/status, live temporary-cost revalidation, exact per-service evaluation status, and the
   rule that any pending or active temporary use blocks every automated item family.
-- Verification on the current tree: the focused changed-feature scope passes 167 tests; all 1,949
-  ordinary portable tests pass; all 90 profiler tests pass; the profiler trace tool builds; all 26
-  installed-game contract tests pass against the local Windows Steam assemblies; and the
-  real-reference Release build completes with zero warnings and errors. The `script/test` wrapper
-  was also run, but its combined build/test sequence exceeded the hard 60-second wall on the
-  machine while the game was live; its three constituent gates pass separately. Interactive game
-  validation has not yet covered Threads or the retry fixes.
+- Verification on the current tree: the complete `script/test` gate passes in 36 seconds with
+  1,951 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
+  installed-game contract tests pass against the local Windows Steam assemblies, and the
+  real-reference Release build completes with zero warnings and errors. Interactive game
+  validation has not yet covered Threads, the retry fixes, or the new paired quick-control row.
 - Working tree: the extension and dump-backed fixes are committed as `7c8875d` and pushed to draft
   PR #102.
 - Next action: after the game closes, install the new build and run the Phase 11-13 behavior and

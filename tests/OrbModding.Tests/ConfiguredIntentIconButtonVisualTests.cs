@@ -23,6 +23,7 @@ public sealed class ConfiguredIntentIconButtonVisualTests
             typeof(AutoCastToggleButton),
             typeof(AutoConceptToggleButton),
             typeof(AutoHarvestToggleButton),
+            typeof(AutomataFeatureToggleButton),
             typeof(MentorToggleButton),
         };
 
@@ -123,6 +124,36 @@ public sealed class ConfiguredIntentIconButtonVisualTests
     }
 
     [Fact]
+    public void AutoItemsAndAutoScribeQuickControlsUseTheCommittedConfigurationStore()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var publications = 0;
+        var store = new AutomataConfigurationStore(config, (_, _) => publications++);
+        var items = new AutoItemsToggleControl(
+            store,
+            () => Status(
+                AutomataFeatureStatuses.AutoItemsFeatureId,
+                "Auto Items",
+                store.Current.AutoItems.Mode == AutoItemsOperationMode.Active));
+        var scribe = new AutoScribeToggleControl(
+            store,
+            () => Status(
+                AutomataFeatureStatuses.AutoScribeFeatureId,
+                "Auto Scribe",
+                store.Current.AutoScribe.Mode == AutoScribeOperationMode.Active));
+
+        items.Toggle();
+        scribe.Toggle();
+
+        Assert.True(items.IsOn);
+        Assert.True(scribe.IsOn);
+        Assert.Equal(AutoItemsOperationMode.Active, config.AutoItemsMode.Value);
+        Assert.Equal(AutoScribeOperationMode.Active, config.AutoScribeMode.Value);
+        Assert.Equal(2, publications);
+        Assert.Equal(3UL, store.CurrentGeneration.Value);
+    }
+
+    [Fact]
     public void MentorCommandsPublishThroughTheCommittedStore()
     {
         var file = new ConfigFile();
@@ -143,4 +174,16 @@ public sealed class ConfiguredIntentIconButtonVisualTests
     private sealed class FakeImageEffects : Behaviour
     {
     }
+
+    private static FeatureStatusSnapshot Status(
+        string featureId,
+        string displayName,
+        bool configured) =>
+        new(
+            new FeatureStatusKey(PluginIds.SuiteGuid, featureId),
+            displayName,
+            configured,
+            configured
+                ? FeatureStatusState.Operational
+                : FeatureStatusState.ConfigurationDisabled);
 }

@@ -58,6 +58,36 @@ public sealed class StatusControlGroupTests
     }
 
     [Fact]
+    public void AutoItemsAndAutoScribeAddOnePairedRowWithoutMovingStopFromLast()
+    {
+        var rightSidebar = new GameObject("RightSidebar");
+        var attributeBar = new GameObject("AttributeBar");
+        attributeBar.transform.SetParent(rightSidebar.transform, false);
+        var native = CreateNative(attributeBar.transform);
+        var group = StatusControlGroup.GetOrCreate(native);
+        var items = AddControl(group, "Items", StatusControlOrder.AutoItems);
+        var scribe = AddControl(group, "Scribe", StatusControlOrder.AutoScribe);
+        AddControl(group, "Mentor", StatusControlOrder.Mentor);
+        AddControl(group, "Harvest", StatusControlOrder.AutoHarvest);
+        AddControl(group, "Concept", StatusControlOrder.AutoConcept);
+        AddControl(group, "Cast", StatusControlOrder.AutoCast);
+        var buy = AddControl(group, "Buy", StatusControlOrder.AutoBuy);
+        var stop = AddControl(group, "Stop", StatusControlOrder.EmergencyStop);
+        StatusControlGroup.RegisterControl(
+            stop,
+            StatusControlOrder.EmergencyStop,
+            StatusControlGroup.StopSeparation);
+
+        StatusControlGroup.Reflow(group, native);
+
+        Assert.Equal(new Vector2(78.0f, 148.0f), ((RectTransform)group).sizeDelta);
+        Assert.Equal(new Vector2(17.0f, 131.0f), ((RectTransform)items.transform).anchoredPosition);
+        Assert.Equal(new Vector2(55.0f, 131.0f), ((RectTransform)scribe.transform).anchoredPosition);
+        Assert.Equal(new Vector2(17.0f, 17.0f), ((RectTransform)buy.transform).anchoredPosition);
+        Assert.Equal(new Vector2(61.0f, 17.0f), ((RectTransform)stop.transform).anchoredPosition);
+    }
+
+    [Fact]
     public void ReflowOrdersRegisteredControlsByVisiblePriorityAndScalesThem()
     {
         var parent = new GameObject("AttributeBar");
@@ -103,6 +133,8 @@ public sealed class StatusControlGroupTests
             .Select(field => (int)field.GetRawConstantValue()!)
             .ToArray();
         Assert.Equal(orders.Length, orders.Distinct().Count());
+        Assert.True(StatusControlOrder.AutoItems > StatusControlOrder.AutoScribe);
+        Assert.True(StatusControlOrder.AutoScribe > StatusControlOrder.Mentor);
         Assert.True(StatusControlOrder.Mentor > StatusControlOrder.AutoHarvest);
         Assert.True(StatusControlOrder.AutoHarvest > StatusControlOrder.AutoConcept);
         Assert.True(StatusControlOrder.AutoConcept > StatusControlOrder.AutoCast);

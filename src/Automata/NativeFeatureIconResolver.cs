@@ -31,6 +31,32 @@ internal static class NativeFeatureIconResolver
     internal static bool TryGetMentorIcon(out Sprite? icon, out string reason) =>
         TryGetTooltipableIcon("GetMasteryExpAttr", out icon, out reason);
 
+    internal static bool TryGetItemsIcon(out Sprite? icon, out string reason) =>
+        TryGetFeatureRailIcon(useAdvancedIcon: true, out icon, out reason);
+
+    internal static bool TryGetScribeIcon(out Sprite? icon, out string reason) =>
+        TryGetFeatureRailIcon(useAdvancedIcon: false, out icon, out reason);
+
+    private static bool TryGetFeatureRailIcon(
+        bool useAdvancedIcon,
+        out Sprite? icon,
+        out string reason)
+    {
+        icon = null;
+        if (!NativeViewAdapter.TryCaptureFeatureRailVisuals(out var rail, out reason))
+            return false;
+        icon = useAdvancedIcon ? rail!.AdvancedIcon : rail!.ConceptIcon;
+        if (icon is not null)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = useAdvancedIcon
+            ? "audited Alchemy top-bar sprite is unavailable"
+            : "audited Scholar top-bar sprite is unavailable";
+        return false;
+    }
+
     private static bool TryGetTooltipableIcon(
         string accessorName,
         out Sprite? icon,

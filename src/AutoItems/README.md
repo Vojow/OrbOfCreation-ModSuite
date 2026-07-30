@@ -50,5 +50,7 @@ The implemented boundary is deliberately split:
   feature-wide lifecycle quarantine.
 
 Auto Items defaults to `Disabled`; `UseScrolls` and `UseRelics` default on behind it,
-`UseFruits`/`UsePotions`/`UseThreads` default off, and the temporary allowlist defaults empty. There is no
-gameplay quick button in this slice.
+`UseFruits`/`UsePotions`/`UseThreads` default off, and the temporary allowlist defaults empty. Its
+gameplay quick button uses the audited native Alchemy icon and the same committed mode command as
+the Mods header. Configured intent remains visible while lifecycle, dependency, or emergency state
+is reported separately in the tooltip.

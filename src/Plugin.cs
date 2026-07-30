@@ -107,6 +107,10 @@ public sealed class Plugin : BaseUnityPlugin
     private AutoConceptToggleButton? _autoConceptToggleButton;
     private AutoHarvestToggleControl? _autoHarvestToggleControl;
     private AutoHarvestToggleButton? _autoHarvestToggleButton;
+    private AutoItemsToggleControl? _autoItemsToggleControl;
+    private AutomataFeatureToggleButton? _autoItemsToggleButton;
+    private AutoScribeToggleControl? _autoScribeToggleControl;
+    private AutomataFeatureToggleButton? _autoScribeToggleButton;
     private EmergencyStopControl? _emergencyStopControl;
     private EmergencyStopButton? _emergencyStopButton;
     private AutomataDifferentialVerificationControl? _mathVerification;
@@ -114,10 +118,14 @@ public sealed class Plugin : BaseUnityPlugin
     private float _autoBuyUiRetrySeconds;
     private float _autoConceptUiRetrySeconds;
     private float _autoHarvestUiRetrySeconds;
+    private float _autoItemsUiRetrySeconds;
+    private float _autoScribeUiRetrySeconds;
     private string _autoBuyUiFailureReason = string.Empty;
     private string _autoCastUiFailureReason = string.Empty;
     private string _autoConceptUiFailureReason = string.Empty;
     private string _autoHarvestUiFailureReason = string.Empty;
+    private string _autoItemsUiFailureReason = string.Empty;
+    private string _autoScribeUiFailureReason = string.Empty;
     private string _mentorUiFailureReason = string.Empty;
     private string _emergencyStopUiFailureReason = string.Empty;
     private float _quickStripFailureSeconds;
@@ -293,6 +301,12 @@ public sealed class Plugin : BaseUnityPlugin
         _autoHarvestToggleControl = new AutoHarvestToggleControl(
             _configurationStore!,
             () => featureStatuses.AutoHarvest.Current);
+        _autoItemsToggleControl = new AutoItemsToggleControl(
+            _configurationStore!,
+            () => featureStatuses.AutoItems.Current);
+        _autoScribeToggleControl = new AutoScribeToggleControl(
+            _configurationStore!,
+            () => featureStatuses.AutoScribe.Current);
         Func<long> readLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
         var registryResolver = TypedRegistryResolver.Shared;
@@ -684,6 +698,8 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateAutoBuyControl(deltaTime);
         UpdateAutoConceptControl(deltaTime);
         UpdateAutoHarvestControl(deltaTime);
+        UpdateAutoItemsControl(deltaTime);
+        UpdateAutoScribeControl(deltaTime);
         if (!configuration.General.Enabled)
         {
             CancelPreparedAutomationForOwnershipRelease();
@@ -863,6 +879,12 @@ public sealed class Plugin : BaseUnityPlugin
         _autoHarvestToggleButton?.Dispose();
         _autoHarvestToggleButton = null;
         _autoHarvestToggleControl = null;
+        _autoItemsToggleButton?.Dispose();
+        _autoItemsToggleButton = null;
+        _autoItemsToggleControl = null;
+        _autoScribeToggleButton?.Dispose();
+        _autoScribeToggleButton = null;
+        _autoScribeToggleControl = null;
         _mathVerification = null;
         _featureStatuses?.Dispose();
         _featureStatuses = null;
@@ -934,6 +956,10 @@ public sealed class Plugin : BaseUnityPlugin
             if (config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
                 (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees))
                 result.Add("Auto Harvest");
+            if (config.AutoItems.Mode == AutoItemsOperationMode.Active)
+                result.Add("Auto Items");
+            if (config.AutoScribe.Mode == AutoScribeOperationMode.Active)
+                result.Add("Auto Scribe");
         }
         if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
         return result;
@@ -1175,13 +1201,91 @@ public sealed class Plugin : BaseUnityPlugin
             _autoHarvestUiFailureReason = reason;
     }
 
+    private void UpdateAutoItemsControl(float unscaledDeltaTime)
+    {
+        if (_autoItemsToggleControl is null) return;
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _autoItemsToggleButton?.Dispose();
+            _autoItemsToggleButton = null;
+            _autoItemsUiRetrySeconds = 0.0f;
+            _autoItemsUiFailureReason = string.Empty;
+            return;
+        }
+        if (_autoItemsToggleButton is not null && !_autoItemsToggleButton.IsAlive)
+        {
+            _autoItemsToggleButton.Dispose();
+            _autoItemsToggleButton = null;
+        }
+        if (_autoItemsToggleButton is not null)
+        {
+            _autoItemsToggleButton.Render();
+            return;
+        }
+        _autoItemsUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
+        if (_autoItemsUiRetrySeconds > 0.0f) return;
+        _autoItemsUiRetrySeconds = UiRetryIntervalSeconds;
+        if (AutomataFeatureToggleButton.TryCreate(
+                "OrbAutomata.AutoItemsToggle",
+                StatusControlOrder.AutoItems,
+                "Auto Items",
+                new AutoItemsTooltip(_autoItemsToggleControl),
+                NativeFeatureIconResolver.TryGetItemsIcon,
+                _autoItemsToggleControl.Toggle,
+                () => _autoItemsToggleControl.Status,
+                out _autoItemsToggleButton,
+                out var reason))
+            _autoItemsUiFailureReason = string.Empty;
+        else
+            _autoItemsUiFailureReason = reason;
+    }
+
+    private void UpdateAutoScribeControl(float unscaledDeltaTime)
+    {
+        if (_autoScribeToggleControl is null) return;
+        if (SceneManager.GetActiveScene().name != "Main")
+        {
+            _autoScribeToggleButton?.Dispose();
+            _autoScribeToggleButton = null;
+            _autoScribeUiRetrySeconds = 0.0f;
+            _autoScribeUiFailureReason = string.Empty;
+            return;
+        }
+        if (_autoScribeToggleButton is not null && !_autoScribeToggleButton.IsAlive)
+        {
+            _autoScribeToggleButton.Dispose();
+            _autoScribeToggleButton = null;
+        }
+        if (_autoScribeToggleButton is not null)
+        {
+            _autoScribeToggleButton.Render();
+            return;
+        }
+        _autoScribeUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
+        if (_autoScribeUiRetrySeconds > 0.0f) return;
+        _autoScribeUiRetrySeconds = UiRetryIntervalSeconds;
+        if (AutomataFeatureToggleButton.TryCreate(
+                "OrbAutomata.AutoScribeToggle",
+                StatusControlOrder.AutoScribe,
+                "Auto Scribe",
+                new AutoScribeTooltip(_autoScribeToggleControl),
+                NativeFeatureIconResolver.TryGetScribeIcon,
+                _autoScribeToggleControl.Toggle,
+                () => _autoScribeToggleControl.Status,
+                out _autoScribeToggleButton,
+                out var reason))
+            _autoScribeUiFailureReason = string.Empty;
+        else
+            _autoScribeUiFailureReason = reason;
+    }
+
     private void UpdateQuickStripSurface(float unscaledDeltaTime)
     {
         if (_uiSurfaceDiagnostics is null ||
             SceneManager.GetActiveScene().name != "Main")
             return;
 
-        var failures = new System.Collections.Generic.List<string>(6);
+        var failures = new System.Collections.Generic.List<string>(8);
         AddMissingUiControl(
             failures,
             "STOP",
@@ -1220,6 +1324,18 @@ public sealed class Plugin : BaseUnityPlugin
             _autoHarvestToggleControl is not null,
             _autoHarvestToggleButton is not null,
             _autoHarvestUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Items",
+            _autoItemsToggleControl is not null,
+            _autoItemsToggleButton is not null,
+            _autoItemsUiFailureReason);
+        AddMissingUiControl(
+            failures,
+            "Auto Scribe",
+            _autoScribeToggleControl is not null,
+            _autoScribeToggleButton is not null,
+            _autoScribeUiFailureReason);
 
         if (failures.Count == 0)
         {
@@ -1444,6 +1560,8 @@ public sealed class Plugin : BaseUnityPlugin
         _autoCastUiFailureReason = string.Empty;
         _autoConceptUiFailureReason = string.Empty;
         _autoHarvestUiFailureReason = string.Empty;
+        _autoItemsUiFailureReason = string.Empty;
+        _autoScribeUiFailureReason = string.Empty;
         _mentorUiFailureReason = string.Empty;
         _emergencyStopUiFailureReason = string.Empty;
         _uiMaintenanceDue = false;

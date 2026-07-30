@@ -1,11 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: Lifecycle healthy; bounded retry fix pending install validation.** The audited identity
+> **Lifecycle: Live crafting verified; UI and bounded retry build pending install validation.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
-> Worker-definition and status-publication boundary violations are fixed. The latest launch reaches
-> lifecycle readiness; its dump exposed an immediate-retry loop after rejected native work, which is
-> now fixed in source and awaits a safe post-close install.
+> Worker-definition and status-publication boundary violations are fixed. The latest retained run
+> proves 164 verified native completions with no Auto Scribe faults. Source also fixes the rejected-work
+> retry cadence and adds the missing gameplay quick control; that build still awaits installation.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -27,9 +27,10 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete after diagnostics fix** | `script/test` passes 1,944 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
-| 10. Interactive game validation | **In progress** | Lifecycle readiness is confirmed; install the bounded-retry fix after game close, then continue disposable-save scenarios |
+| 9. Automated verification | **Complete** | `script/test` passes 1,951 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
+| 10. Interactive game validation | **Core behavior verified; hardening open** | Live evidence proves verified Scribe completions; install the bounded-retry/UI build, confirm cadence, then continue disposable-save lifecycle scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
+| 12. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Scribe shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Items |
 
 ### Current resume point
 
@@ -37,11 +38,12 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: after the game is closed, build and install the bounded-retry/Thread extension,
-  confirm Auto Items no longer faults on `TargetUnavailable`, and confirm Auto Scribe native
-  rejections retry only at the configured evaluation cadence.
-- Current source: commit `7c8875d` is pushed to draft PR #102 but is not installed while the game
-  remains open.
+- Current task: verify, commit, and install the bounded-retry/Thread and paired quick-control build;
+  then confirm Auto Items no longer faults on `TargetUnavailable`, Auto Scribe native rejections
+  retry only at the configured evaluation cadence, and the Auto Items/Auto Scribe row renders and
+  survives a supported UI rebuild.
+- Current source: commit `f5a7b73` is pushed to draft PR #102; the quick-control changes are
+  currently uncommitted and not installed.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -125,10 +127,18 @@ Last updated: **2026-07-30**
 - Both planners returned `WakePolicy.Immediate` after emitting work. A transient native rejection
   therefore created a tight proposal loop. Planned work now uses each feature's configured
   `AfterDecision` cadence; focused regressions pin that policy for Auto Items and Auto Scribe.
-- Current-tree verification passes 1,949 ordinary portable tests, 90 profiler tests, the profiler
-  trace-tool build, all 26 installed-game contracts, and a zero-warning real-reference Release
-  build. The combined `script/test` wrapper exceeds its 60-second wall on the live-game machine;
-  the same three portable components pass when run separately.
+- The newest retained run `08deee25f4049578` proves Auto Scribe's guarded mutation path works:
+  service 4 completed 164 actions, with 164 committed mutations, 492 native calls, and zero
+  faulted observations. Its 60,423 rejected decisions also confirm that the installed pre-fix DLL
+  was reevaluating rejected work far too aggressively; the source cadence fix remains necessary.
+- Auto Items and Auto Scribe now have gameplay quick controls backed by the same committed
+  configuration store as their Mods commands. They form one new two-button row above the existing
+  Mentor/Harvest, Concept/Cast, and Buy/STOP rows, reuse the audited Alchemy and Scholar icons,
+  expose runtime health in native tooltips, and participate in emergency-stop resume preview and
+  quick-strip diagnostics.
+- Current-tree verification passes the complete `script/test` gate in 36 seconds: 1,951 ordinary
+  portable tests, 90 profiler tests, and the profiler trace-tool build. All 26 installed-game
+  contracts and the zero-warning real-reference Release build also pass.
 
 ## Goal
 

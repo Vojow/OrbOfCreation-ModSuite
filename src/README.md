@@ -43,13 +43,15 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 Suite buttons register with `OrbModding.Common.StatusControlGroup`, which owns a compact two-column
 tray in the audited empty lane at the left edge of `RightSidebar/AttributeBar`. Controls use
 34-pixel native spell frames with 4-pixel row/column spacing; STOP is last and has an additional
-6-pixel separation. Add a unique named assignment to `StatusControlOrder` and call
+6-pixel separation. Auto Items and Auto Scribe form the newest paired row above the existing
+controls. Add a unique named assignment to `StatusControlOrder` and call
 `RegisterControl` before `Reflow`; higher values appear first in row-major order. Current
 assignments are emergency stop `50`, Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, Auto
-Harvest `400`, and Mentor `500`. The emergency control is composed independently of the worker
-host and master automation switch. Do not add object names or a fixed button count to the layout
-helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored
-non-controls, invalid indexes, the exact native anchor, compact tray geometry, and STOP separation.
+Harvest `400`, Mentor `500`, Auto Scribe `600`, and Auto Items `700`. The emergency control is
+composed independently of the worker host and master automation switch. Do not add object names or
+a fixed button count to the layout helper. `StatusControlGroupTests` covers priority uniqueness,
+reordered creation, ignored non-controls, invalid indexes, the exact native anchor, compact tray
+geometry, the new paired row, and STOP separation.
 
 ## Shared alchemy gameplay-domain classifier
 
