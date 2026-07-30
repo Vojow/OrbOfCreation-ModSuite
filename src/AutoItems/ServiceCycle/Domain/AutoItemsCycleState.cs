@@ -16,6 +16,7 @@ internal enum AutoItemsDecisionKind
     AwaitingTemporaryActivation = 7,
     TemporaryEffectActive = 8,
     TemporaryItemQuarantined = 9,
+    RejectedActionCooldown = 10,
 }
 
 internal readonly struct AutoItemsDecisionMetrics

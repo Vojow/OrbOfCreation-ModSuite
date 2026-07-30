@@ -66,8 +66,9 @@ If the shared automation host cannot start, desired-On features report that runt
   using eligible Scrolls and temporary items until no safe use fits the remaining headroom, then latches
   a recovery wait until toxicity returns to exact zero. Relics have first priority whenever their
   cost fits the available headroom; they do not have a separate zero-toxicity restriction.
-- `AutoItems.EvaluationIntervalSeconds`: minimum time between Auto Items planning passes while
-  enabled; default 1.0, range 0.25 to 10 seconds.
+- `AutoItems.EvaluationIntervalSeconds`: idle and rejected-action planning interval; default 1.0,
+  range 0.25 to 10 seconds. Healthy verified item chains resume immediately after fresh world
+  publication, and a busy native consumable queue is checked at least every 0.25 seconds.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates compatible concepts only after each has received the complete configured settled-active period; `RotateAll` replaces active concepts to train a compatible strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
 - `AutoConcept.ShowToggleButton`: show the `CN ON/OFF` configured-intent button in the native Auto Buy-anchored control strip; runtime health remains in its tooltip; default true.
 - `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 300, range 10 to 3600. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.

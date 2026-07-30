@@ -22,6 +22,11 @@ The implemented boundary is deliberately split:
   The worker parses the temporary allowlist only when its configuration generation changes and
   stores the sorted identities in Common's audited immutable publication table; mutable collection
   storage never enters service state.
+- One verified native submission wakes the service immediately, but the shared world gate prevents
+  another decision until a post-mutation publication exists. While the game reports a prepared
+  consumable, Auto Items checks again after at most 250 ms. A rejected or faulted action instead
+  receives one full configured evaluation interval before it can be replanned, preserving bounded
+  failure behavior without adding the idle delay to healthy Scroll chains.
 - The main-thread adapter re-resolves exact identity and family, checks visibility, the shared
   Inventory idle predicate, `CanFire()`, lifecycle and ownership, pins multi-buy to one, and verifies
   the exact stock/queue submission edge. Temporary duration and toxicity-only cost vectors are
@@ -48,6 +53,11 @@ The implemented boundary is deliberately split:
   returns to exact zero, after which ordinary priority resumes. Missing or contradictory activation
   quarantines only that exact item for the lifecycle; ambiguous Scroll/Relic mutations retain
   feature-wide lifecycle quarantine.
+
+The native inventory remains authoritative and permits only one prepared consumable at a time, so
+Auto Items cannot submit every owned Scroll in one synthetic batch. Nonzero toxicity alone never
+starts recovery waiting: the latch begins only when an otherwise-eligible item would fit after full
+recovery but does not fit in current headroom.
 
 Auto Items defaults to `Disabled`; `UseScrolls` and `UseRelics` default on behind it,
 `UseFruits`/`UsePotions`/`UseThreads` default off, and the temporary allowlist defaults empty. Its

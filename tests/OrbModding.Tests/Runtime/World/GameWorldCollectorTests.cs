@@ -1578,7 +1578,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void PlannedAutoItemUsesConfiguredCadenceInsteadOfImmediateRetry()
+    public void PlannedAutoItemWakesImmediatelyToContinueAfterVerifiedWorldPublication()
     {
         AddToxicity(rawHeadroom: 90d);
         AddConsumable(
@@ -1612,8 +1612,101 @@ public sealed class GameWorldCollectorTests : IDisposable
             metrics: out _);
 
         Assert.Equal(1, store.Count);
+        Assert.Equal(WakePolicy.Immediate, wake);
+    }
+
+    [Fact]
+    public void RejectedAutoItemGetsOneConfiguredCooldownBeforeReplanning()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var interval = MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(3));
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+                EvaluationInterval = interval,
+            },
+        };
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var store = new ReusableActionStore<AutoItemsCycleAction>();
+        store.BeginWrite();
+        var previous = CycleContext().Identity;
+        var receipt = BatchReceipt.Terminated(
+            previous,
+            new BatchId(1),
+            actionCount: 1,
+            committedCount: 0,
+            terminalIndex: 0,
+            ServiceActionResult.Rejected(AutoItemsActionResultCodes.TargetUnavailable),
+            new ServiceNativeCallTotals(0, 0, 0),
+            new MonotonicTimestamp(2));
+        var context = CycleContext(receipt);
+
+        var wake = AutoItemsCycleEvaluator.Evaluate(
+            collector.Build(),
+            in config,
+            in context,
+            ref state,
+            new ServiceActionWriter<AutoItemsCycleAction>(store),
+            temporaryAllowlist: null,
+            autoScribeIdentityProfile: null,
+            out var metrics);
+
+        Assert.Equal(0, store.Count);
+        Assert.Equal(AutoItemsDecisionKind.RejectedActionCooldown, metrics.Kind);
         Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
         Assert.Equal(interval, wake.Delay);
+    }
+
+    [Fact]
+    public void PreparedNativeConsumableUsesBoundedFastPollInsteadOfIdleCadence()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true);
+        scroll.queuedQuantity = 1;
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+                EvaluationInterval =
+                    MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(3)),
+            },
+        };
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var store = new ReusableActionStore<AutoItemsCycleAction>();
+        store.BeginWrite();
+
+        var wake = AutoItemsCycleEvaluator.Evaluate(
+            collector.Build(),
+            in config,
+            CycleContext(),
+            ref state,
+            new ServiceActionWriter<AutoItemsCycleAction>(store),
+            temporaryAllowlist: null,
+            autoScribeIdentityProfile: null,
+            out var metrics);
+
+        Assert.Equal(0, store.Count);
+        Assert.Equal(AutoItemsDecisionKind.NativeBusy, metrics.Kind);
+        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(
+            MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250)),
+            wake.Delay);
     }
 
     [Fact]

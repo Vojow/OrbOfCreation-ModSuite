@@ -28,14 +28,16 @@ Last updated: **2026-07-30**
 | 12. Temporary-item picker UX | **Implemented; interactive layout gate open** | Mods configuration discovers visible Fruit/Potion items, shows names/stock/toxicity/duration, filters and toggles exact UUID selections, preserves unavailable selections, and retains a raw editor |
 | 13. Thread family extension | **Implemented; interactive behavior gate open** | Threads use the same disabled-by-default exact-item picker and guarded temporary boundary only when native duration and toxicity contracts validate |
 | 14. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Items shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Scribe |
+| 15. Scroll-consumption throughput | **Implemented; validation open** | Verified uses chain after fresh world publication, native-busy polling is bounded at 250 ms, and rejected work retains the configured cooldown |
 
 ### Current resume point
 
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: verify, commit, and install the Thread/retry and paired quick-control build. Confirm
-  the Auto Items/Auto Scribe row renders and survives a supported UI rebuild, then exercise one
+- Current task: verify and install the Scroll-throughput follow-up, confirm it consumes successive
+  useful Scrolls without an idle one-second gap or a rejected-work loop, and confirm the Auto
+  Items/Auto Scribe row survives a supported UI rebuild. Then exercise one
   explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
   at both zero and nonzero toxicity, save/load, reset, NG+, emergency-stop, and manual-race results.
@@ -76,6 +78,16 @@ Last updated: **2026-07-30**
   actions without a fault. Auto Items now also has the missing gameplay quick control: it uses the
   same committed store as the Mods command, the audited native Alchemy icon, feature-health
   tooltip evidence, emergency-stop preview, and lifecycle-safe reconstruction.
+- The 2026-07-30 13:17 retained window still came from the pre-fix installed DLL: Auto Items
+  recorded 240 faulted actions with no native calls, consistent with the already-fixed
+  `TargetUnavailable` mapper. It also exposed a separate throughput issue: every planned item used
+  the full idle interval. Source now wakes immediately after a planned action; successful mutations
+  still wait for the shared fresh-world gate, native-busy consumption polls at no more than 250 ms,
+  and an uncommitted receipt inserts one configured zero-action cooldown before replanning.
+- Toxicity recovery is not the cause of this backlog. The latch begins only when an
+  otherwise-eligible item cannot fit current headroom but can fit after full recovery. Nonzero
+  toxicity with enough headroom continues admitting Scrolls. The native inventory still allows
+  only one prepared consumable at a time, so throughput remains serial and game-authoritative.
 - PR cleanup: picker rendering, picker state/selection, catalog parsing, and exact reflection
   binding are separated. Core taxonomy is centralized; pure candidate scanning is separated from
   lifecycle/recovery evaluation; native contract discovery is separated from live preflight and
@@ -84,7 +96,7 @@ Last updated: **2026-07-30**
   ownership/status, live temporary-cost revalidation, exact per-service evaluation status, and the
   rule that any pending or active temporary use blocks every automated item family.
 - Verification on the current tree: the complete `script/test` gate passes in 36 seconds with
-  1,951 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
+  1,953 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
   installed-game contract tests pass against the local Windows Steam assemblies, and the
   real-reference Release build completes with zero warnings and errors. Interactive game
   validation has not yet covered Threads, the retry fixes, or the new paired quick-control row.
@@ -94,8 +106,8 @@ Last updated: **2026-07-30**
   The guarded installer backed up 12 save files to
   `backups/pre-modsuite-install-20260730T112441Z` and the previous DLL to
   `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
-- Next action: launch the game and run the Phase 11-14 behavior and layout checklists on a
-  disposable save.
+- Next action: install the throughput build, then run the Phase 11-15 behavior and layout
+  checklists on a disposable save.
 
 ### Locked decisions
 

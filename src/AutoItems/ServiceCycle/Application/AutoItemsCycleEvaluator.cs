@@ -32,6 +32,15 @@ internal static class AutoItemsCycleEvaluator
             return WakePolicy.AfterDecision(interval);
         }
 
+        // A planned action wakes immediately so a verified Scroll/Relic chain can continue as soon
+        // as the world source publishes the mutation. A rejected or faulted action gets one
+        // zero-action configured cooldown here, preventing stale native conditions from spinning.
+        if (ShouldCoolDownAfterPreviousAction(in previousReceipt))
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.RejectedActionCooldown);
+            return WakePolicy.AfterDecision(interval);
+        }
+
         if (state.HasPendingReceipt)
         {
             metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingTemporaryActivation);
@@ -61,7 +70,8 @@ internal static class AutoItemsCycleEvaluator
         if (HasPreparedConsumable(world))
         {
             metrics = EmptyMetrics(world, AutoItemsDecisionKind.NativeBusy);
-            return WakePolicy.AfterDecision(interval);
+            return WakePolicy.AfterDecision(
+                AutoItemsConfigurationPolicy.NativeBusyInterval(config));
         }
 
         var hasToxicityReading =
@@ -108,7 +118,6 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.Relic,
                 actions,
                 ref state,
-                interval,
                 out metrics);
         }
         if (scan.EligibleTemporaryItems > 0)
@@ -120,7 +129,6 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.TemporaryItem,
                 actions,
                 ref state,
-                interval,
                 out metrics);
         }
         if (scan.EligibleScrolls > 0)
@@ -132,7 +140,6 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.Scroll,
                 actions,
                 ref state,
-                interval,
                 out metrics);
         }
         if (scan.SaturationCandidate && hasToxicityReading && !toxicityAtZero)
@@ -160,6 +167,11 @@ internal static class AutoItemsCycleEvaluator
         return false;
     }
 
+    private static bool ShouldCoolDownAfterPreviousAction(in BatchReceipt receipt) =>
+        receipt.IsPresent &&
+        receipt.ActionCount > 0 &&
+        receipt.CommittedCount == 0;
+
     private static AutoItemsDecisionMetrics EmptyMetrics(
         GameWorldState world,
         AutoItemsDecisionKind kind) =>
@@ -171,13 +183,12 @@ internal static class AutoItemsCycleEvaluator
         AutoItemsDecisionKind kind,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         ref AutoItemsCycleState state,
-        MonotonicDuration interval,
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
         if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
             state.RecordPlannedTemporary(in action);
         metrics = scan.ToMetrics(kind, plannedActions: 1);
-        return WakePolicy.AfterDecision(interval);
+        return WakePolicy.Immediate;
     }
 }

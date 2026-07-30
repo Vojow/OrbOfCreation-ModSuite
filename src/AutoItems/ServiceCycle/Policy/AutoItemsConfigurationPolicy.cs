@@ -7,6 +7,9 @@ namespace OrbAutomata;
 
 internal static class AutoItemsConfigurationPolicy
 {
+    private static readonly MonotonicDuration ActiveQueuePollInterval =
+        MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250));
+
     internal static bool IsOperational(SuiteRuntimeConfiguration configuration) =>
         configuration.General.Enabled &&
         configuration.CanStartAutoItemsActively &&
@@ -26,6 +29,15 @@ internal static class AutoItemsConfigurationPolicy
         return configured.Ticks > 0
             ? configured
             : MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1));
+    }
+
+    internal static MonotonicDuration NativeBusyInterval(
+        SuiteRuntimeConfiguration configuration)
+    {
+        var configured = EvaluationInterval(configuration);
+        return configured <= ActiveQueuePollInterval
+            ? configured
+            : ActiveQueuePollInterval;
     }
 
     internal static bool Allows(
