@@ -17,6 +17,9 @@ currently cover:
   native grants, recursion prevention, and lifecycle cancellation;
 - Auto Buy ServiceCycle frame projection, worker policy, final native revalidation,
   queue-room enforcement, and verified Structure/Upgrade mutations;
+- Auto Concept rotation, replacement assignment, native settlement, safe depth,
+  rejected-candidate backoff, multi-slot independence, native-resolved
+  completion/speed progression, and bounded timed round-robin journeys;
 - automatic spell leveling before and after the native level-all upgrade, its
   boundary refusals for a locked or unaffordable level, and its refusal of a plan
   collected under a superseded lifecycle.
@@ -58,6 +61,7 @@ Run the focused native multi-buy safety contracts while iterating:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
 ```
 
 ## Determinism and performance budgets

@@ -212,6 +212,15 @@ The `CN ON/OFF` gameplay button toggles Auto Concept and represents configured i
 
 Before every add or rotation, Auto Concept reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. A 1 Hz watchdog checks only cached active assignments; if the native drain ratio falls below `MinimumDrainRatio`, a drained resource's live net rate becomes negative, or a drained resource reaches zero, it schedules removal of only the quantity recorded as suite-owned. The negative-rate check acts while stock remains, so an income source disappearing after assignment does not let automated depth silently exhaust the stored resource.
 
+A live slot or prospective-drain refusal defers only that candidate for
+`FallbackEvaluationIntervalSeconds`. Timed ordering immediately considers the next unlocked candidate;
+if every replacement is deferred, the active concept may still gain resource-safe quantity and the service
+sleeps until the bounded retry rather than resubmitting the same rejected rotation every frame. The tooltip
+and Runtime status identify this temporary native-safety retry. Verified quantity changes and rejected
+preflights are also written in plain language to `BepInEx/LogOutput.log`, with the affected recipe UUIDs and
+the native reason. Every accepted replacement then receives its own complete settled-active training period
+and moves to the back of the timed order; an automated depth change does not restart that period.
+
 Enabling the feature initializes the scoped shared classifier and snapshots current Active Concept quantities for ownership and rollback accounting. Disabled Auto Concept neither initializes nor rebuilds classifier/catalog evidence. Unexpected settled changes are rebaselined as player-owned. `PreserveManual` never replaces that baseline; `RotateAll` explicitly permits a complete settled assignment to be replaced for mastery balancing, but the drain watchdog still rolls back only Auto Concept-added quantity. Disabling the feature stops work and leaves native quantities unchanged. Save loads, scene changes, and manager lifecycle resets (including reset/NG+ manager restarts) invalidate classifier and runtime references and rebuild a new baseline only after Auto Concept is active again.
 
 ## Diagnostics

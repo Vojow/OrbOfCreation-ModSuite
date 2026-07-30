@@ -59,4 +59,19 @@ public sealed class AutoConceptFeatureStatusProjectorTests
             "No other unlocked, allowed concept can be assigned.",
             status.Summary);
     }
+
+    [Fact]
+    public void TemporarilyRefusedUnlockedReplacementsShowTheNativeSafetyRetry()
+    {
+        var status = AutoConceptFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            cycleObserved: true,
+            idleReason: AutoConceptIdleReason.WaitingForCandidateRetry);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
+        Assert.Equal(FeatureStatusReasonCode.NativeBusy, status.Reason);
+        Assert.Contains("slot or resource safety", status.Summary);
+        Assert.Contains("retry", status.Summary);
+    }
 }

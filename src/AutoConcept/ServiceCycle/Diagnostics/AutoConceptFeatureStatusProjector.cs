@@ -52,6 +52,11 @@ internal static class AutoConceptFeatureStatusProjector
                 FeatureStatusState.Locked,
                 FeatureStatusReasonCode.ProgressionLocked,
                 "No other unlocked, allowed concept can be assigned.");
+        if (idleReason == AutoConceptIdleReason.WaitingForCandidateRetry)
+            return new AutoConceptFeatureStatus(
+                FeatureStatusState.TemporarilyBlocked,
+                FeatureStatusReasonCode.NativeBusy,
+                "Unlocked replacements were refused by live slot or resource safety checks; Auto Concept will retry them after its fallback interval.");
         return new AutoConceptFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,

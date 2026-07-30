@@ -195,6 +195,7 @@ internal struct AutoConceptCycleState
         Ownership = new AutoConceptOwnershipStore();
         TrainingSessions = new AutoConceptTrainingStore();
         LastTimedAssignment = new AutoConceptAssignmentHistory();
+        CandidateDeferrals = new AutoConceptAssignmentHistory();
         BaselineCaptured = false;
         TimedSessionsInitialized = false;
         TimedAssignmentSequence = 0;
@@ -213,6 +214,7 @@ internal struct AutoConceptCycleState
     internal AutoConceptOwnershipStore Ownership;
     internal AutoConceptTrainingStore TrainingSessions;
     internal AutoConceptAssignmentHistory LastTimedAssignment;
+    internal AutoConceptAssignmentHistory CandidateDeferrals;
     internal bool BaselineCaptured;
     internal bool TimedSessionsInitialized;
     internal long TimedAssignmentSequence;
@@ -261,6 +263,7 @@ internal enum AutoConceptIdleReason
     None = 0,
     WaitingForTraining = 1,
     NoUnlockedAssignableReplacement = 2,
+    WaitingForCandidateRetry = 3,
 }
 
 internal readonly struct AutoConceptDecisionMetrics

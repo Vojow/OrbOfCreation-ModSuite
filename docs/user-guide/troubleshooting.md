@@ -42,6 +42,12 @@ Expected on the upgrade to 0.4.0. The suite has one configuration file named aft
 
 Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, capture the Runtime page's recent events and full trace, then include those records plus the affected resource name.
 
+If Auto Concept reports that unlocked replacements are waiting for a native-safety retry, inspect
+`BepInEx/LogOutput.log` for `Auto Concept did not complete`. The line names the active and proposed
+replacement UUIDs and says whether the live slot, quantity, or prospective resource drain refused the
+rotation. That candidate is retried only after the configured fallback interval; other unlocked candidates
+and safe depth remain eligible in the meantime.
+
 ## Checking the suite against the live game
 
 **Run differential verification** on Mods -> Runtime runs the diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.

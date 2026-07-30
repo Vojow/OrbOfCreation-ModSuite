@@ -4,6 +4,7 @@ param(
         'Fast',
         'Reliability',
         'AutoBuyReliability',
+        'AutoConceptReliability',
         'PerformanceAll',
         'Headless',
         'ExternalProcess',
@@ -23,8 +24,9 @@ $project = Join-Path $repositoryRoot 'tests/OrbModding.Tests/OrbModding.Tests.cs
 $resultDirectory = Join-Path $repositoryRoot "artifacts/test-results/$($Lane.ToLowerInvariant())"
 $filters = @{
     Fast = 'Category!=PerformanceSimulation&Category!=ExternalProcess'
-    Reliability = 'Category=Reliability|Category=AutoBuyReliability'
+    Reliability = 'Category=Reliability|Category=AutoBuyReliability|Category=AutoConceptReliability'
     AutoBuyReliability = 'Category=AutoBuyReliability'
+    AutoConceptReliability = 'Category=AutoConceptReliability'
     PerformanceAll = 'Category=PerformanceSimulation'
     Headless = 'Category=HeadlessIntegration|Category=HeadlessE2E'
     ExternalProcess = 'Category=ExternalProcess'

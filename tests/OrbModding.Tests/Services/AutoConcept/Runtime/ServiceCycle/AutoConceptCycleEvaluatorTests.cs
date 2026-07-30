@@ -182,6 +182,7 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
+    [Trait("Category", "AutoConceptReliability")]
     public void TimedCycleDepthSettlementDoesNotRestartTheActiveSession()
     {
         var initial = World(
@@ -236,6 +237,92 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void TimedCycleStartsAFullTrainingSessionAfterAnAutomatedReplacementSettles()
+    {
+        var recipes = new[]
+        {
+            Recipe(Alpha, maximum: 1),
+            Recipe(Beta, maximum: 3),
+            Recipe(Gamma, maximum: 1),
+        };
+        var initial = World(
+            recipes,
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var released = World(recipes, Array.Empty<WorldAlchemyInstance>());
+        var queued = World(
+            recipes,
+            new[] { Instance(Beta, quantity: 0, queued: 1) });
+        var settledFirstQuantity = World(
+            recipes,
+            new[] { Instance(Beta, quantity: 1, queued: 1) });
+        var queuedDepth = World(
+            recipes,
+            new[] { Instance(Beta, quantity: 1, queued: 3) });
+        var settledDepth = World(
+            recipes,
+            new[] { Instance(Beta, quantity: 3, queued: 3) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(
+            slotMode: AutoConceptSlotManagementMode.TimedCycle,
+            trainingSeconds: 10);
+
+        Assert.Empty(PlanAt(
+            initial, config, ref state, decisionAtTicks: 0, out _, out _));
+        var remove = Assert.Single(PlanAt(
+            initial, config, ref state, TimeSpan.FromSeconds(11).Ticks, out _, out _));
+        var add = Assert.Single(PlanAt(
+            released,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(11.1).Ticks,
+            out _,
+            out _,
+            previousCommitted: true));
+        Assert.Empty(PlanAt(
+            queued,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(11.2).Ticks,
+            out _,
+            out _,
+            previousCommitted: true));
+        var depth = Assert.Single(PlanAt(
+            settledFirstQuantity,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(12).Ticks,
+            out _,
+            out _));
+        Assert.Empty(PlanAt(
+            queuedDepth,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(12.1).Ticks,
+            out _,
+            out _,
+            previousCommitted: true));
+        Assert.Empty(PlanAt(
+            settledDepth, config, ref state, TimeSpan.FromSeconds(13).Ticks, out _, out var training));
+        Assert.Empty(PlanAt(
+            settledDepth, config, ref state, TimeSpan.FromSeconds(21).Ticks, out _, out _));
+        var nextRotation = Assert.Single(PlanAt(
+            settledDepth, config, ref state, TimeSpan.FromSeconds(22.1).Ticks, out _, out _));
+
+        Assert.Equal(AutoConceptActionKind.RotateOut, remove.Kind);
+        Assert.Equal(Beta, remove.ReplacementId);
+        Assert.Equal(AutoConceptActionKind.Add, add.Kind);
+        Assert.Equal(Beta, add.RecipeId);
+        Assert.Equal(AutoConceptActionKind.Add, depth.Kind);
+        Assert.Equal(Beta, depth.RecipeId);
+        Assert.Equal(3, depth.TargetOrDelta);
+        Assert.Equal(AutoConceptIdleReason.WaitingForTraining, training.IdleReason);
+        Assert.Equal(AutoConceptActionKind.RotateOut, nextRotation.Kind);
+        Assert.Equal(Beta, nextRotation.RecipeId);
+        Assert.Equal(Gamma, nextRotation.ReplacementId);
+    }
+
+    [Fact]
     public void NegativeLiveRateRollsBackOwnedDepthBeforeTheResourceReachesZero()
     {
         var currentDrain = new[]
@@ -285,6 +372,99 @@ public sealed class AutoConceptCycleEvaluatorTests
         Assert.Equal(AutoConceptActionKind.RotateOut, action.Kind);
         Assert.Equal(Alpha, action.RecipeId);
         Assert.Equal(Beta, action.ReplacementId);
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void TimedCycleSkipsANativelyRejectedReplacementInsteadOfRetryingItEveryFrame()
+    {
+        var world = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 1),
+                Recipe(Beta, maximum: 1),
+                Recipe(Gamma, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(
+            slotMode: AutoConceptSlotManagementMode.TimedCycle,
+            fallbackSeconds: 10,
+            trainingSeconds: 10);
+
+        Assert.Empty(PlanAt(
+            world, config, ref state, decisionAtTicks: 0, out _, out _));
+        var first = Assert.Single(PlanAt(
+            world, config, ref state, TimeSpan.FromSeconds(11).Ticks, out _, out _));
+        var second = Assert.Single(PlanAt(
+            world,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(11).Ticks,
+            out _,
+            out _,
+            previousResultCode: AutoConceptActionResultCodes.SlotUnavailable));
+        var none = PlanAt(
+            world,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(11).Ticks,
+            out var retryWake,
+            out var retrying,
+            previousResultCode: AutoConceptActionResultCodes.SlotUnavailable);
+
+        Assert.Equal(AutoConceptActionKind.RotateOut, first.Kind);
+        Assert.Equal(Beta, first.ReplacementId);
+        Assert.Equal(AutoConceptActionKind.RotateOut, second.Kind);
+        Assert.Equal(Gamma, second.ReplacementId);
+        Assert.Empty(none);
+        Assert.Equal(WakePolicyKind.AfterDecision, retryWake.Kind);
+        Assert.Equal(TimeSpan.FromSeconds(10), retryWake.Delay.ToTimeSpan());
+        Assert.Equal(AutoConceptIdleReason.WaitingForCandidateRetry, retrying.IdleReason);
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void RejectedTimedRotationDoesNotPreventDepthOnTheActiveConcept()
+    {
+        var initial = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 1),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var gainedCapacity = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 2),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(
+            slotMode: AutoConceptSlotManagementMode.TimedCycle,
+            fallbackSeconds: 10,
+            trainingSeconds: 10);
+
+        Assert.Empty(PlanAt(
+            initial, config, ref state, decisionAtTicks: 0, out _, out _));
+        var rotation = Assert.Single(PlanAt(
+            initial, config, ref state, TimeSpan.FromSeconds(11).Ticks, out _, out _));
+        var depth = Assert.Single(PlanAt(
+            gainedCapacity,
+            config,
+            ref state,
+            TimeSpan.FromSeconds(11).Ticks,
+            out _,
+            out _,
+            previousResultCode: AutoConceptActionResultCodes.SlotUnavailable));
+
+        Assert.Equal(AutoConceptActionKind.RotateOut, rotation.Kind);
+        Assert.Equal(AutoConceptDecisionKind.Depth, state.Decision.Kind);
+        Assert.Equal(AutoConceptActionKind.Add, depth.Kind);
+        Assert.Equal(Alpha, depth.RecipeId);
+        Assert.Equal(2, depth.TargetOrDelta);
     }
 
     [Fact]
@@ -463,7 +643,8 @@ public sealed class AutoConceptCycleEvaluatorTests
         out WakePolicy wake,
         out AutoConceptDecisionMetrics metrics,
         bool previousCommitted = false,
-        bool previousRejected = false)
+        bool previousRejected = false,
+        ServiceActionResultCode previousResultCode = default)
     {
         var store = new ReusableActionStore<AutoConceptCycleAction>();
         store.BeginWrite();
@@ -472,15 +653,25 @@ public sealed class AutoConceptCycleEvaluatorTests
             new ServiceId("auto-concept"), new LifecycleGeneration(1),
             new ConfigGeneration(1), StrategyGeneration.Initial,
             new WorldGeneration(1), new CycleId(1));
-        var receipt = previousCommitted || previousRejected
-            ? BatchReceipt.Completed(
+        var receipt = previousResultCode.IsValid
+            ? BatchReceipt.Terminated(
+                identity,
+                new BatchId(1),
+                1,
+                0,
+                0,
+                ServiceActionResult.Rejected(previousResultCode),
+                default,
+                new MonotonicTimestamp(decisionAtTicks))
+            : previousCommitted || previousRejected
+                ? BatchReceipt.Completed(
                 identity,
                 new BatchId(1),
                 1,
                 previousCommitted ? 1 : 0,
                 new ServiceNativeCallTotals(1, 1, previousCommitted ? 1 : 0),
                 new MonotonicTimestamp(decisionAtTicks))
-            : default;
+                : default;
         var context = new ServiceCycleContext(
             identity, receipt, new MonotonicTimestamp(decisionAtTicks));
         wake = AutoConceptCycleEvaluator.Evaluate(

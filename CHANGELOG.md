@@ -24,6 +24,20 @@
 - Keep Timed Cycle's settled-active deadline stable when an automated depth change finishes. Native
   queued quantity is now recorded as suite-owned immediately, so later settlement is not mistaken
   for a manual edit that repeatedly restarts training and postpones rotation.
+- When the live game refuses a planned Auto Concept replacement for slot or resource-safety reasons,
+  defer that candidate for the fallback interval and try the next unlocked candidate instead of
+  retrying the same rebalance every frame. Active concepts may continue gaining safe quantity while
+  replacements are deferred.
+- Start a new Timed Cycle training session when an automated replacement assignment is accepted, so
+  its full settled-active period elapses and its rotation-order history advances before it can be
+  replaced again.
+- Add a trace-derived Auto Concept reliability lane with native integration, queued-versus-settled
+  headless journeys, and deterministic simulations covering retry cadence, depth progression,
+  native-resolved speed and completion timing, multiple simultaneous active slots, and round-robin
+  rotation.
+- Log every verified Auto Concept quantity change and the exact native reason for every rejected
+  change, including both rotation identities, and highlight the bounded replacement-retry state in
+  the feature status.
 - Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
   rate, rather than waiting for that resource to reach zero.
 - Show whether Auto Concept is waiting for settled training or has no other unlocked, allowed
