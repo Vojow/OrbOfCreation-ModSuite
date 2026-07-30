@@ -42,7 +42,26 @@ internal static class AutoConceptCycleEvaluator
             return WakePolicy.OnPublication;
 
         var candidates = Project(world, in config);
-        ReconcileReceipt(candidates, in context, ref state);
+        ReconcileReceipt(candidates, in config, in context, ref state);
+        if (state.HasPendingReceipt)
+        {
+            var pendingActive = 0;
+            var pendingOwned = 0;
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Quantity > 0) pendingActive++;
+                if (state.Ownership.TryGet(candidate.Key, out var ownership) &&
+                    ownership.AutomatedDelta > 0) pendingOwned++;
+            }
+            metrics = new AutoConceptDecisionMetrics(
+                world.ConceptRecipes.Count,
+                candidates.Count,
+                pendingActive,
+                pendingOwned,
+                0,
+                AutoConceptDecisionKind.Idle);
+            return WakePolicy.OnPublication;
+        }
         ObserveOwnership(candidates, in config, in context, ref state);
         RefreshTrainingPolicy(in config, ref state);
         InitializeTimedSessions(candidates, in config, in context, ref state);
@@ -76,19 +95,19 @@ internal static class AutoConceptCycleEvaluator
                 : Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.PreferredReplacement,
                     actions, ref state, out metrics);
 
-        if (TryBreadth(ranked, byId, world, ref state, out action))
+        if (TryBreadth(ranked, byId, world, in context, ref state, out action))
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Breadth,
                 actions, ref state, out metrics);
 
-        if (TryRebalance(ranked, byId, world, in config, ref state, out action))
+        if (TryRebalance(ranked, byId, world, in config, in context, ref state, out action))
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Rebalance,
                 actions, ref state, out metrics);
 
-        if (TryDepth(ranked, byId, world, in config, ref state, out action))
+        if (TryDepth(ranked, byId, world, in config, in context, ref state, out action))
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Depth,
                 actions, ref state, out metrics);
 
-        var idleReason = ClassifyIdle(candidates, in config, ref state);
+        var idleReason = ClassifyIdle(candidates, in config, in context, ref state);
         metrics = new AutoConceptDecisionMetrics(
             world.ConceptRecipes.Count, candidates.Count, active, owned, 0,
             AutoConceptDecisionKind.Idle, idleReason);
@@ -161,7 +180,8 @@ internal static class AutoConceptCycleEvaluator
             var cost = world.AlchemyCosts[start + index];
             if (cost.Amount.CompareTo(default) <= 0) continue;
             if (!WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource) ||
-                resource.Reading.Quantity.CompareTo(default) <= 0)
+                resource.Reading.Quantity.CompareTo(default) <= 0 ||
+                resource.TrueRate.CompareTo(default) < 0)
                 return false;
         }
         return true;
@@ -169,40 +189,89 @@ internal static class AutoConceptCycleEvaluator
 
     private static void ReconcileReceipt(
         IReadOnlyList<Candidate> candidates,
+        in SuiteRuntimeConfiguration config,
         in ServiceCycleContext context,
         ref AutoConceptCycleState state)
     {
-        if (!state.HasPendingReceipt || !context.PreviousReceipt.IsPresent) return;
-        var planned = state.PendingReceiptAction;
-        if (context.PreviousReceipt.CommittedCount == 1)
+        if (!state.HasPendingReceipt) return;
+        if (!state.PendingReceiptCommitted)
         {
-            Candidate? current = null;
-            foreach (var candidate in candidates)
-                if (candidate.Id == planned.RecipeId) { current = candidate; break; }
-            if (current is not null)
+            if (!context.PreviousReceipt.IsPresent) return;
+            if (context.PreviousReceipt.CommittedCount != 1)
             {
-                if (planned.Kind == AutoConceptActionKind.Add)
-                {
-                    var delta = Math.Max(0, current.Quantity - planned.Belief.Quantity);
-                    if (delta > 0)
-                        state.Ownership.RecordAutomatedDelta(current.Key, current.Quantity, delta);
-                }
-                else if (planned.Kind == AutoConceptActionKind.RemoveOwned)
-                {
-                    var delta = Math.Max(0, planned.Belief.Quantity - current.Quantity);
-                    if (delta > 0)
-                        state.Ownership.RecordAutomatedDelta(current.Key, current.Quantity, -delta);
-                }
-                else
-                {
-                    state.Ownership.ObserveBaseline(current.Key, current.Quantity);
-                    state.PreferredReplacement = planned.ReplacementId;
-                    state.PreferredReplacementExpiresAtTicks =
-                        checked(context.DecisionAt.Ticks + TimeSpan.FromSeconds(5).Ticks);
-                }
+                var receipt = context.PreviousReceipt;
+                DeferRejectedCandidate(
+                    in state.PendingReceiptAction,
+                    in receipt,
+                    ref state);
+                state.ClearPendingReceipt();
+                return;
+            }
+            state.PendingReceiptCommitted = true;
+        }
+
+        var planned = state.PendingReceiptAction;
+        Candidate? current = null;
+        foreach (var candidate in candidates)
+            if (candidate.Id == planned.RecipeId) { current = candidate; break; }
+        if (current is null) return;
+
+        if (planned.Kind == AutoConceptActionKind.Add)
+        {
+            // The native mutation changes queued quantity before quantity settles. Account for
+            // that accepted queued target now so settlement cannot look like a manual edit.
+            var delta = Math.Max(
+                0,
+                current.QueuedQuantity - planned.Belief.QueuedQuantity);
+            if (delta <= 0) return;
+            state.Ownership.RecordAutomatedDelta(
+                current.Key,
+                current.QueuedQuantity,
+                delta);
+            if (planned.Belief.Quantity <= 0 &&
+                planned.Belief.QueuedQuantity <= 0)
+                BeginTraining(current, candidates, in config, ref state);
+        }
+        else
+        {
+            var delta = Math.Max(
+                0,
+                planned.Belief.QueuedQuantity - current.QueuedQuantity);
+            if (delta <= 0) return;
+            if (planned.Kind == AutoConceptActionKind.RemoveOwned)
+            {
+                state.Ownership.RecordAutomatedDelta(
+                    current.Key,
+                    current.QueuedQuantity,
+                    -delta);
+            }
+            else
+            {
+                state.Ownership.ObserveBaseline(current.Key, current.QueuedQuantity);
+                state.PreferredReplacement = planned.ReplacementId;
+                state.PreferredReplacementExpiresAtTicks =
+                    checked(context.DecisionAt.Ticks + TimeSpan.FromSeconds(5).Ticks);
             }
         }
         state.ClearPendingReceipt();
+    }
+
+    private static void DeferRejectedCandidate(
+        in AutoConceptCycleAction action,
+        in BatchReceipt receipt,
+        ref AutoConceptCycleState state)
+    {
+        if (receipt.ResultCode != AutoConceptActionResultCodes.SlotUnavailable &&
+            receipt.ResultCode != AutoConceptActionResultCodes.ProjectionRefused)
+            return;
+        var candidateId = action.Kind == AutoConceptActionKind.RotateOut
+            ? action.ReplacementId
+            : action.RecipeId;
+        if (candidateId == Guid.Empty) return;
+        state.CandidateDeferrals.Set(
+            candidateId.ToString(),
+            receipt.Cycle.World,
+            receipt.Cycle.Config);
     }
 
     private static void ObserveOwnership(
@@ -251,6 +320,7 @@ internal static class AutoConceptCycleEvaluator
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
+        in ServiceCycleContext context,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
     {
@@ -258,7 +328,8 @@ internal static class AutoConceptCycleEvaluator
         {
             var index = Normalize(state.CandidateCursor + offset, ranked.Count);
             var candidate = byId[ranked[index].Uuid];
-            if (!candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate)) continue;
+            if (IsDeferred(candidate, in context, ref state) ||
+                !candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate)) continue;
             action = Action(AutoConceptActionKind.Add, candidate, 1, Guid.Empty, world.CollectedAtEpoch);
             return true;
         }
@@ -271,6 +342,7 @@ internal static class AutoConceptCycleEvaluator
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
         in SuiteRuntimeConfiguration config,
+        in ServiceCycleContext context,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
     {
@@ -279,12 +351,13 @@ internal static class AutoConceptCycleEvaluator
             var desiredIndex = Normalize(state.CandidateCursor + desiredOffset, ranked.Count);
             var desiredProgress = ranked[desiredIndex];
             var desired = byId[desiredProgress.Uuid];
-            if (!desired.IsSettled || desired.Quantity != 0 ||
+            if (IsDeferred(desired, in context, ref state) ||
+                !desired.IsSettled || desired.Quantity != 0 ||
                 desired.CoreTypeId == Guid.Empty || desired.MaximumQuantity <= 0) continue;
             var timedCycle =
                 config.AutoConcept.SlotManagement == AutoConceptSlotManagementMode.TimedCycle;
             if (timedCycle &&
-                !IsNextTimed(desired, ranked, byId, ref state)) continue;
+                !IsNextTimed(desired, ranked, byId, in context, ref state)) continue;
 
             for (var activeIndex = ranked.Count - 1; activeIndex >= 0; activeIndex--)
             {
@@ -318,6 +391,7 @@ internal static class AutoConceptCycleEvaluator
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
         in SuiteRuntimeConfiguration config,
+        in ServiceCycleContext context,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
     {
@@ -325,7 +399,8 @@ internal static class AutoConceptCycleEvaluator
         {
             var index = Normalize(state.CandidateCursor + offset, ranked.Count);
             var candidate = byId[ranked[index].Uuid];
-            if (!candidate.IsSettled || candidate.Quantity <= 0 ||
+            if (IsDeferred(candidate, in context, ref state) ||
+                !candidate.IsSettled || candidate.Quantity <= 0 ||
                 candidate.Quantity >= candidate.MaximumQuantity) continue;
             var desired = candidate.MaximumQuantity;
             action = Action(AutoConceptActionKind.Add, candidate, desired, Guid.Empty, world.CollectedAtEpoch);
@@ -351,6 +426,11 @@ internal static class AutoConceptCycleEvaluator
         }
         if (!byId.TryGetValue(state.PreferredReplacement.ToString(), out var candidate) ||
             candidate.Quantity > 0)
+        {
+            state.PreferredReplacement = Guid.Empty;
+            return false;
+        }
+        if (IsDeferred(candidate, in context, ref state))
         {
             state.PreferredReplacement = Guid.Empty;
             return false;
@@ -396,6 +476,7 @@ internal static class AutoConceptCycleEvaluator
     private static AutoConceptIdleReason ClassifyIdle(
         IReadOnlyList<Candidate> candidates,
         in SuiteRuntimeConfiguration config,
+        in ServiceCycleContext context,
         ref AutoConceptCycleState state)
     {
         if (state.TrainingSessions.Count > 0)
@@ -404,6 +485,7 @@ internal static class AutoConceptCycleEvaluator
             return AutoConceptIdleReason.None;
 
         var hasActive = false;
+        var hasDeferredReplacement = false;
         foreach (var active in candidates)
         {
             if (!active.IsSettled || active.Quantity <= 0) continue;
@@ -414,10 +496,16 @@ internal static class AutoConceptCycleEvaluator
                     replacement.IsSettled &&
                     replacement.Quantity == 0 &&
                     replacement.MaximumQuantity > 0)
-                    return AutoConceptIdleReason.None;
+                {
+                    if (!IsDeferred(replacement, in context, ref state))
+                        return AutoConceptIdleReason.None;
+                    hasDeferredReplacement = true;
+                }
             }
         }
 
+        if (hasDeferredReplacement)
+            return AutoConceptIdleReason.WaitingForCandidateRetry;
         return hasActive
             ? AutoConceptIdleReason.NoUnlockedAssignableReplacement
             : AutoConceptIdleReason.None;
@@ -432,6 +520,7 @@ internal static class AutoConceptCycleEvaluator
         {
             state.TrainingSessions.Clear();
             state.LastTimedAssignment.Clear();
+            state.CandidateDeferrals.Clear();
             state.TimedAssignmentSequence = 0;
             state.TimedSessionsInitialized = false;
             state.LastSlotMode = mode;
@@ -493,7 +582,8 @@ internal static class AutoConceptCycleEvaluator
         {
             var key = state.TrainingSessions.KeyAt(index);
             var session = state.TrainingSessions.SessionAt(index);
-            if (!byId.TryGetValue(key, out var candidate) || candidate.Quantity <= 0)
+            if (!byId.TryGetValue(key, out var candidate) ||
+                candidate.Quantity <= 0 && candidate.QueuedQuantity <= 0)
             {
                 completed.Add(key);
                 continue;
@@ -513,6 +603,7 @@ internal static class AutoConceptCycleEvaluator
         Candidate candidate,
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, Candidate> byId,
+        in ServiceCycleContext context,
         ref AutoConceptCycleState state)
     {
         long? last = state.LastTimedAssignment.TryGet(candidate.Key, out var sequence)
@@ -521,7 +612,8 @@ internal static class AutoConceptCycleEvaluator
         foreach (var progress in ranked)
         {
             var other = byId[progress.Uuid];
-            if (!other.IsSettled || other.Quantity != 0 || other.MaximumQuantity <= 0) continue;
+            if (IsDeferred(other, in context, ref state) ||
+                !other.IsSettled || other.Quantity != 0 || other.MaximumQuantity <= 0) continue;
             long? otherLast = state.LastTimedAssignment.TryGet(other.Key, out var otherSequence)
                 ? otherSequence
                 : null;
@@ -530,6 +622,15 @@ internal static class AutoConceptCycleEvaluator
         }
         return true;
     }
+
+    private static bool IsDeferred(
+        Candidate candidate,
+        in ServiceCycleContext context,
+        ref AutoConceptCycleState state) =>
+        state.CandidateDeferrals.Contains(
+            candidate.Key,
+            context.Identity.World,
+            context.Identity.Config);
 
     private static MonotonicDuration TrainingWake(
         in SuiteRuntimeConfiguration config,

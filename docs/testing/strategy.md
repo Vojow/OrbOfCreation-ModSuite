@@ -56,6 +56,7 @@ filter expressions and writes a TRX result under `artifacts/test-results/`:
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane All
 ```
 
@@ -63,7 +64,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 and tests that launch an external process. CI runs those two exclusions as
 separate `PerformanceAll` and `ExternalProcess` partitions, so the union still
 executes the complete portable suite. `AutoBuyReliability` selects the focused
-native multi-buy safety contracts.
+native multi-buy safety contracts. `AutoConceptReliability` selects the receipt,
+settlement, publication-deferral, depth, and timed-rotation journeys.
 
 Run the versioned configuration-schema scope independently with:
 

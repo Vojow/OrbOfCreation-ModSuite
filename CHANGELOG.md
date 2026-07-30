@@ -12,17 +12,34 @@
   compatibility mode, with all gameplay changes stopped until the player chooses to continue.
 - Keep incomplete game installations closed, bind an unverified-build choice to the exact two game
   files, and reset that choice automatically after another game update.
-- Reduce Auto Concept's maximum idle fallback from five minutes to 10 seconds. Configuration schema
-  6 rewrites every serialized 300-second value, whether inherited or deliberately saved, while
-  preserving other customized intervals.
-- Reduce Auto Concept's default settled training period from five minutes to 30 seconds.
-  Configuration schema 7 likewise rewrites every serialized 300-second value, whether inherited or
-  deliberately saved, while preserving other customized periods.
-- Make Timed Cycle rotate through all unlocked, allowed concepts rather than partitioning its order
+- Drive ordinary automation from the shared 250-millisecond world publication and every committed
+  configuration publication, with no per-feature cadence settings or fallback polls. Configuration
+  schema 6 removes those retired keys and changes every serialized 300-second Auto Concept training
+  period to 30 seconds while preserving every other customized period.
+- Make Timed Cycle rotate through all unlocked concepts rather than partitioning its order
   by concept type. The game remains authoritative for whether releasing the active assignment opens
   a compatible typed or typeless slot, and locked concepts are revalidated again before mutation.
-- Show whether Auto Concept is waiting for settled training or has no other unlocked, allowed
-  assignment in its tooltip, Runtime status, decision journal, and trace dashboard.
+- Resolve each concept's native usage limit before planning. The raw `-1` modifier sentinel no
+  longer makes unlocked replacements look ineligible or prevents an active concept gaining levels.
+- Keep Timed Cycle's settled-active deadline stable when an automated depth change finishes. Native
+  queued quantity is recorded as suite-owned immediately, so later settlement is not mistaken for a
+  manual edit that restarts training.
+- When the live game refuses a planned Auto Concept replacement for slot or resource-safety reasons,
+  try the next unlocked candidate against the same published world instead of retrying the same
+  rebalance. The refused candidate becomes eligible again only after a newer world or configuration
+  publication, and safe depth remains available to the active concept.
+- Start a new Timed Cycle training session when an automated replacement assignment is accepted, so
+  its full settled-active period elapses and its rotation-order history advances before replacement.
+- Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
+  rate, rather than waiting for that resource to reach zero.
+- Add a trace-derived Auto Concept reliability lane with native integration, queued-versus-settled
+  headless journeys, and deterministic multi-slot and round-robin simulations. Journey publications
+  now model the runtime's one shared world generation across immediate receipt/action follow-ups.
+- Log every verified Auto Concept quantity change and the exact native reason for every rejected
+  change, including both rotation identities.
+- Show whether Auto Concept is waiting for settled training or has no other unlocked
+  assignment in its tooltip, Runtime status, decision journal, and trace dashboard. A refused set of
+  replacements is shown separately as waiting for another publication.
 
 ## Game-native UI overhaul — 2026-07-28
 
@@ -52,8 +69,8 @@
   scan cap, rejection cap, global logging switches, Mentor detailed logging, mastery event probe, and
   verifier shortcut. ServiceCycle plans from complete published snapshots; maintained diagnostics are
   explicit Runtime actions, traces, journals, warnings, and errors.
-- Keep cadence controls, but describe them as minimum service-planning intervals or maximum idle
-  fallback delays instead of per-frame scan budgets.
+- Replace per-service cadence controls with one shared world/configuration publication cadence, while
+  retaining explicit gameplay deadlines and fault backoffs for the semantics that need them.
 - Audit the game's native nested-navigation and spell-button visual contracts. The suite samples
   the exact inactive-capable `MainContentContainer/SubviewRadio` frame family, exact named top-bar
   icons, and bottom-bar spell-frame structural paths; a mismatch is a suite defect on the audited

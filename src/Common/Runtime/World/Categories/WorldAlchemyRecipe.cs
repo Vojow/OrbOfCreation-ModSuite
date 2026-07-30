@@ -64,7 +64,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         OverdriveDrainCostMod = overdriveDrainCostMod;
         OverdriveXpRate = overdriveXpRate;
         FreeUsageSlots = freeUsageSlots;
-        MaxUsageSlots = maxUsageSlots;
+        ResolvedMaxUsageSlots = maxUsageSlots;
         CachedCompletionTime = cachedCompletionTime;
         CachedRequiredXp = cachedRequiredXp;
     }
@@ -137,7 +137,11 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
 
     internal BigDouble FreeUsageSlots { get; }
 
-    internal BigDouble MaxUsageSlots { get; }
+    /// <summary>
+    /// The native resolved quantity limit. This is deliberately <c>GetMaxUsageSlots()</c>, not the
+    /// raw modifier record: the raw <c>-1</c> sentinel means mastery-derived or unlimited.
+    /// </summary>
+    internal BigDouble ResolvedMaxUsageSlots { get; }
 
     internal BigDouble CachedCompletionTime { get; }
 
@@ -173,7 +177,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
     private Func<object, BigDouble>? _overdriveDrainCostMod;
     private Func<object, BigDouble>? _overdriveXpRate;
     private Func<object, BigDouble>? _freeUsageSlots;
-    private Func<object, BigDouble>? _maxUsageSlots;
+    private Func<object, int>? _maxUsageSlots;
     private Func<object, BigDouble>? _cachedCompletionTime;
     private Func<object, BigDouble>? _cachedRequiredXp;
 
@@ -211,7 +215,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
         _overdriveDrainCostMod = bind.ModifierRecord("overdriveDrainCostMod");
         _overdriveXpRate = bind.ModifierRecord("overdriveXpRate");
         _freeUsageSlots = bind.ModifierRecord("freeUsageSlots");
-        _maxUsageSlots = bind.ModifierRecord("maxUsageSlots");
+        _maxUsageSlots = bind.Call<int>("GetMaxUsageSlots");
         _cachedCompletionTime = bind.Field<BigDouble>("cachedCompletionTime");
         _cachedRequiredXp = bind.Field<BigDouble>("cachedRequiredXp");
         return bind.Failure;
@@ -246,7 +250,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
             _overdriveDrainCostMod!(entity),
             _overdriveXpRate!(entity),
             _freeUsageSlots!(entity),
-            _maxUsageSlots!(entity),
+            new BigDouble(_maxUsageSlots!(entity)),
             _cachedCompletionTime!(entity),
             _cachedRequiredXp!(entity));
 }

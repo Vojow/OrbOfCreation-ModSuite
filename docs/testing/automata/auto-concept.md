@@ -28,7 +28,7 @@ next lifecycle.
   owns live re-identification, settled quantity checks, prospective drain parity,
   mastery clamping, verified mutations, and lifecycle recovery.
 - [AutoConceptServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Runtime/ServiceCycle/AutoConceptServiceCompositionTests.cs)
-  owns worker-to-action composition, fallback cadence, configuration wake-up,
+  owns worker-to-action composition, publication wake-up,
   idle-reason handoff to feature health, and structural worker-state safety.
 - [AutoConceptFeatureStatusProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Diagnostics/AutoConceptFeatureStatusProjectorTests.cs)
   owns feature health projection.
@@ -40,6 +40,7 @@ next lifecycle.
 ## Focused command
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~AutoConcept"
 ```
 
@@ -56,15 +57,52 @@ native-boundary change.
 - Same-name/different-UUID or wrong-type content never aliases.
 - Unsafe owned drain rolls back before any balancing action.
 - A recent rotation prefers its remembered compatible replacement.
+- A native slot or prospective-drain rejection defers only the refused candidate for the current
+  world/configuration publication, advances to another unlocked candidate, permits safe depth on the
+  active assignment, and cannot create an immediate same-world retry loop.
+- A successfully assigned Timed Cycle replacement starts its own complete settled-active training
+  period and moves to the back of the timed rotation order; depth settlement does not restart it.
+- Multi-slot scenarios fill every independently compatible acquired slot before depth, keep a
+  separate settled-training deadline for each active assignment, and permit one eligible slot to
+  rotate while another assignment is still training.
+- Progress simulations use the recipe's native-resolved completion requirement after completion-time
+  and time-scaling modifiers, then apply the active instance's resolved speed. Resource-safety
+  scenarios cover drain ratio separately.
 - Breadth precedes mastery rebalance, and rebalance precedes depth.
 - Manual-preservation policy removes only verified owned quantity.
 - Timed training starts only after assignment settlement.
+- A committed depth change records its queued target as suite-owned before native settlement; later
+  settlement must not restart the active Timed Cycle session.
 - Feature health distinguishes an active training wait from the post-training
   absence of another unlocked, assignable replacement.
-- Depth clamps to both configured quantity and the live mastery limit.
+- The world snapshot publishes `AlchemyRecipeSO.GetMaxUsageSlots()` rather than the raw
+  `maxUsageSlots` modifier, so the native `-1` sentinel resolves before breadth, rotation, or depth.
+- Depth clamps to the live native mastery limit.
 - Projection preserves the reserve test, quantity floor, and halving search.
+- The live drain watchdog rolls back owned depth while stock remains positive when a drained
+  resource's net rate has become negative.
 - A stale epoch, changed identity, unsettled quantity, or ambiguous mutation
   fails closed without touching an unrelated assignment.
+
+## Trace-to-regression workflow
+
+Treat a recent-event dump as the start of a reproducible scenario:
+
+1. Preserve the dump, `LogOutput.log`, exact DLL SHA-256, and effective Auto Concept settings.
+2. Decode the decision sequence by UUID, action kind, receipt result, queued quantity, settled
+   quantity, world/configuration generations, and monotonic time.
+3. Add the smallest failing evaluator regression. If it crosses a receipt, settlement, or more than
+   one native action, also add a `HeadlessE2E` journey.
+4. Extend a deterministic `PerformanceSimulation` invariant for churn, publication-bounded retry,
+   rotation fairness, and total action count.
+5. Run `AutoConceptReliability`, the complete Auto Concept scope, `./script/test`, and installed-game
+   contracts before any proportional runtime probe.
+
+`AutoConceptJourneyTests.cs` owns the cross-layer regression: a real native-adapter journey, the
+dump-shaped headless path, a 600-second deterministic round-robin simulation, and a three-active-slot
+simulation with distinct native-resolved completion requirements and quantity-dependent speeds. One
+scenario `RunAt` is one world publication; its immediate receipt and action follow-ups deliberately
+retain that same world generation.
 
 ## Runtime handoff
 

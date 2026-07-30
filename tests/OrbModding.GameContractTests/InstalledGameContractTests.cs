@@ -221,6 +221,19 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void WorldAlchemyRecipeCapture_MatchesResolvedUsageLimitContract()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        AssertMethod(
+            assembly,
+            "AlchemyRecipeSO",
+            "GetMaxUsageSlots",
+            false,
+            "System.Int32");
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

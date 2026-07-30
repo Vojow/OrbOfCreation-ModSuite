@@ -42,7 +42,7 @@ internal static class AutoConceptPlanBeliefProjection
             return false;
         }
 
-        var maximum = recipe.MaxUsageSlots.ToDouble();
+        var maximum = recipe.ResolvedMaxUsageSlots.ToDouble();
         if (!double.IsFinite(maximum)) maximum = 0;
         var maximumQuantity =
             Math.Max(0, (int)Math.Min(int.MaxValue, Math.Floor(maximum)));

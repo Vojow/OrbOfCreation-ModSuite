@@ -40,6 +40,7 @@ Run a focused risk lane with:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
 ```
 
 ## Module guides
@@ -49,7 +50,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Orb Automata | [Automata test map](automata/README.md) | select the changed feature below |
 | Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
 | Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
-| Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
+| Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `AutoConceptReliability`, then `FullyQualifiedName~AutoConcept` |
 | Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
 | Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |

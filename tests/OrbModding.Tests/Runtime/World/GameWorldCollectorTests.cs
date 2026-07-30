@@ -268,6 +268,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "AutoConceptReliability")]
     public void ConceptRecipesInstancesAndDrainVectorsArePublishedTogether()
     {
         var resource = Guid.NewGuid();
@@ -276,6 +277,15 @@ public sealed class GameWorldCollectorTests : IDisposable
         {
             Identity = Guid.NewGuid(),
             coreType = coreType,
+            isCompletionRecipe = true,
+            isAdvancementRecipe = true,
+            completionTime = 16d,
+            recipeTime = new BigDouble(2d),
+            speed = new FakeModifierRecord(200d),
+            timeReqMod = new FakeModifierRecord(25d),
+            timeScalingMod = new FakeModifierRecord(80d),
+            cachedCompletionTime = new BigDouble(4d),
+            cachedRequiredXp = new BigDouble(12d),
             drainCost = new FakeSpellCostList().With(resource, 7d),
         };
         FakeAlchemyRecipe.All.Add(recipe);
@@ -306,6 +316,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(concept.CanAddNow);
         Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var alchemyRecipe));
         Assert.Equal(coreType.Identity, alchemyRecipe.CoreTypeId);
+        Assert.Equal(16d, alchemyRecipe.CompletionTime);
+        Assert.Equal(2d, alchemyRecipe.RecipeTime.ToDouble());
+        Assert.Equal(200d, alchemyRecipe.Speed.ToDouble());
+        Assert.Equal(25d, alchemyRecipe.TimeReqMod.ToDouble());
+        Assert.Equal(80d, alchemyRecipe.TimeScalingMod.ToDouble());
+        Assert.Equal(4d, alchemyRecipe.CachedCompletionTime.ToDouble());
+        Assert.Equal(12d, alchemyRecipe.CachedRequiredXp.ToDouble());
 
         Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
         Assert.Equal(2, instance.Quantity);
@@ -332,6 +349,34 @@ public sealed class GameWorldCollectorTests : IDisposable
             out var currentCount));
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
+    }
+
+    [Fact]
+    public void AlchemyRecipeResolvesNativeUsageSentinelBeforeAutoConceptPlanning()
+    {
+        var coreType = new FakeAlchemyType
+        {
+            Identity = Guid.NewGuid(),
+            maxUsageByMastery = true,
+        };
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = coreType,
+            discovered = true,
+            masteryLevel = 4,
+            maxUsageSlots = new FakeModifierRecord(-1d),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var row));
+        Assert.Equal(-1d, recipe.maxUsageSlots.GetValue().ToDouble());
+        Assert.Equal(5d, row.ResolvedMaxUsageSlots.ToDouble());
     }
 
     [Fact]

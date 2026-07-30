@@ -44,7 +44,7 @@ public sealed class AutoConceptServiceCompositionTests
     }
 
     [Fact]
-    public void EnablingAfterDisabledStartDoesNotWaitForTheFallbackInterval()
+    public void EnablingAfterDisabledStartInvalidatesThePublicationWait()
     {
         var clock = new ThreadSafeTestClock(100);
         var actions = new ActionPort(Thread.CurrentThread.ManagedThreadId);
@@ -66,7 +66,7 @@ public sealed class AutoConceptServiceCompositionTests
 
         Assert.True(
             enabled.Queued,
-            "Publishing Active intent must wake Auto Concept instead of retaining its disabled-state fallback sleep.");
+            "Publishing Active intent must wake Auto Concept instead of retaining its disabled-state publication wait.");
     }
 
     [Fact]
