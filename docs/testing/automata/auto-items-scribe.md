@@ -49,8 +49,8 @@ the model rather than being normalized away.
 | Layer | Purpose | Required evidence |
 |---|---|---|
 | P0: pure policy and identity | Fast exhaustive rules, ordering, levels, allowlists, toxicity admission, coverage math | `ScrollCoveragePlannerTests`, identity catalog tests, picker tests, Auto Items profile/evaluator cases |
-| P1: collector and native boundary components | Exact publication shapes and final main-thread revalidation/postconditions | `GameWorldCollectorTests`, `AutoItemsNativeAdapterTests`, `AutoScribeNativeAdapterTests` |
-| P2: service and cross-feature integration | Receipts, wake policy, action ownership, lifecycle state, and craft → queue → stock → pending use → applied coverage convergence | worker/type-safety tests, `ActionFamilyIntegrationTests`, the convergence scenario in `ScrollCoveragePlannerTests` |
+| P1: collector and native boundary components | Exact publication shapes, final main-thread revalidation/postconditions, and semantic picker behavior | `GameWorldCollectorTests`, native-adapter tests, and `AutoItemsScribePickerViewTests` |
+| P2: service and cross-feature integration | Receipts, wake policy, action ownership, lifecycle/status state, and craft → queue → stock → pending use → applied coverage convergence | worker/type-safety tests, `AutoItemsScribeFeatureRuntimeTests`, `ActionFamilyIntegrationTests`, and the convergence scenario in `ScrollCoveragePlannerTests` |
 | P3: installed assembly contracts | Every reflected field, method, declaring type, constructor, target selector, queue, and levelled inventory contract | `AutoItems_MatchesReadOnlyWorldPublicationContracts` and `AutoScribe_MatchesOneShotQueueAndTargetPreflightContracts` |
 | P4: retained journal and trace acceptance | Real scheduler cadence, disposition, native-call, mutation, world-gate, and fault evidence | decoded OSJD report plus an optional correlated full trace/profile |
 | P5: Unity UAT | Actual target choice, visible enchantment replacement, toxicity/rest behavior, queues, controls, saves, lifecycle, and manual races | disposable-save scenarios below |
@@ -72,6 +72,11 @@ be substituted for the one above it.
 
 “Automated complete” means P0-P3 pass together. It is not a release claim:
 P4 and every affected P5 scenario remain mandatory.
+
+The current Release coverage run passes the repository production floor at
+74.53% line coverage (minimum 73.40%); branch coverage is 63.04% diagnostic.
+The picker views are covered through rendered controls and event callbacks,
+not through exclusions or a reduced threshold.
 
 ## Dump-derived regression map
 
@@ -124,6 +129,8 @@ Auto Items must cover:
 - disabled mode, emergency/lifecycle permit loss, native busy, manual stock
   race, target race, changed family/cost, and ambiguous postcondition;
 - committed chain, rejected cooldown, fresh-world gate, and bounded busy poll.
+- picker expansion, filtering, exact selection and unavailable-selection
+  removal, defaults, raw editing, and status/rebuild callbacks.
 
 Auto Scribe must cover:
 
@@ -136,6 +143,9 @@ Auto Scribe must cover:
   evidence, recipe mismatch, and unknown baseline;
 - queue and instant-craft success, stale epoch, dependency loss, full queue,
   live supply race, live target race, native refusal, and quarantine recovery.
+- feature-runtime status after evaluation, emergency stop, ownership loss,
+  Auto Items dependency loss, lifecycle replacement, identity-profile
+  unavailability, and mutation quarantine.
 
 ## P4 journal acceptance
 

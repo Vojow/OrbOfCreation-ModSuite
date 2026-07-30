@@ -101,8 +101,9 @@ Last updated: **2026-07-30**
   now assigns policy, native-boundary, convergence, installed-contract, retained-journal, and
   disposable-save evidence to explicit layers. Dump-derived scheduler and mutation regressions are
   permanent cases rather than one-off observations.
-- Verification on the current tree: the complete `script/test` gate passes in 33 seconds with
-  1,975 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
+- Verification on the current tree: the complete `script/test` gate passes in 36 seconds with
+  1,983 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. Release
+  production line coverage is 74.53% against the 73.40% floor. All 26
   installed-game contract tests pass against the local Windows Steam assemblies, and the
   real-reference Release build completes with zero warnings and errors. Interactive game
   validation has not yet covered Threads, the retry/throughput fixes, or the new paired

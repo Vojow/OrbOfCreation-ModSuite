@@ -2494,6 +2494,11 @@ namespace UnityEngine.UI
             public void RemoveListener(UnityEngine.Events.UnityAction listener) => _listeners.Remove(listener);
 
             public void RemoveAllListeners() => _listeners.Clear();
+
+            public void Invoke()
+            {
+                foreach (var listener in _listeners.ToArray()) listener();
+            }
         }
     }
 
@@ -2603,6 +2608,11 @@ namespace TMPro
             private readonly List<Action<string>> _listeners = new List<Action<string>>();
 
             public void AddListener(Action<string> listener) => _listeners.Add(listener);
+
+            public void Invoke(string value)
+            {
+                foreach (var listener in _listeners.ToArray()) listener(value);
+            }
         }
     }
 }

@@ -28,7 +28,7 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete** | `script/test` passes 1,975 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
+| 9. Automated verification | **Complete** | `script/test` passes 1,983 portable and 90 profile tests; Release production line coverage is 74.53%; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
 | 10. Interactive game validation | **Core behavior verified; hardening open** | Live evidence proves verified Scribe completions; install the bounded-retry/UI build, confirm cadence, then continue disposable-save lifecycle scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 | 12. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Scribe shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Items |
@@ -152,8 +152,9 @@ Last updated: **2026-07-30**
   ordinary queued supply, making `ExternallyProducing` unreachable. Manual one-shot work now
   reserves supply; unexpired player-owned automatic work is reported separately and suppresses
   competing suite production.
-- Current-tree verification passes the complete `script/test` gate in 33 seconds: 1,975 ordinary
-  portable tests, 90 profiler tests, and the profiler trace-tool build. All 26 installed-game
+- Current-tree verification passes the complete `script/test` gate in 36 seconds: 1,983 ordinary
+  portable tests, 90 profiler tests, and the profiler trace-tool build. Release production line
+  coverage is 74.53% against the 73.40% floor. All 26 installed-game
   contracts and the zero-warning real-reference Release build also pass.
 
 ## Goal
