@@ -11,6 +11,9 @@ namespace OrbAutomata;
 /// The six exclusion counters answer the question a bare "0 eligible of 180" cannot: which term
 /// refused them. Captured minus eligible equals their sum on every cycle, so an operator reading the
 /// journal can attribute every candidate that did not reach the plan without attaching a debugger.
+/// The four grouping counters then partition every eligible candidate into a full group, a reduced
+/// group with its requested-level total, or a zero-level ledger-starved result. Together these two
+/// histograms leave no silent gap between capture and emitted actions.
 /// The unaffordable bucket's binding resource does not ride here — the projection surface carries
 /// only booleans, integers, and doubles, and a resource identity is a GUID — so that detail stays in
 /// the purchase narration, which already prints the binding cost and holdings.
@@ -29,6 +32,10 @@ internal static class AutoBuyServiceProjection
     internal const int ExcludedTerminalKey = 21;
     internal const int ExcludedUnaffordableKey = 22;
     internal const int ExcludedUnpriceableKey = 23;
+    internal const int FullGroupsKey = 24;
+    internal const int ReducedGroupsKey = 25;
+    internal const int ReducedGroupLevelsKey = 26;
+    internal const int LedgerStarvedKey = 27;
 
     public static void Write(
         in AutoBuyCycleState state,
@@ -49,6 +56,12 @@ internal static class AutoBuyServiceProjection
         output.Add(Key(ExcludedTerminalKey), Integer(exclusions.Terminal));
         output.Add(Key(ExcludedUnaffordableKey), Integer(exclusions.Unaffordable));
         output.Add(Key(ExcludedUnpriceableKey), Integer(exclusions.Unpriceable));
+
+        var groups = decision.GroupOutcomes;
+        output.Add(Key(FullGroupsKey), Integer(groups.FullGroups));
+        output.Add(Key(ReducedGroupsKey), Integer(groups.ReducedGroups));
+        output.Add(Key(ReducedGroupLevelsKey), Integer(groups.ReducedGroupLevels));
+        output.Add(Key(LedgerStarvedKey), Integer(groups.LedgerStarved));
     }
 
     private static ServiceProjectionKey Key(int value) => new(value);

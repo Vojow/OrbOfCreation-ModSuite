@@ -84,6 +84,10 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(2, metrics.PlannedActions);
         Assert.Equal(5, metrics.RequestedLevels);
         Assert.Equal(actions.Count, metrics.PlannedActions);
+        Assert.Equal(2, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
     }
 
     [Fact]
@@ -98,7 +102,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         AutoBuyServiceProjection.Write(in state, output);
 
         var projection = output.CaptureSnapshot();
-        Assert.Equal(12, projection.Count);
+        Assert.Equal(16, projection.Count);
         Assert.Collection(
             Enumerable.Range(0, projection.Count).Select(projection.GetEntry),
             entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedCandidatesKey, 3),
@@ -112,7 +116,11 @@ public sealed class AutoBuyCycleEvaluatorTests
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedRequirementsUnmetKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedTerminalKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnaffordableKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnpriceableKey, 0));
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnpriceableKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.FullGroupsKey, 2),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupsKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupLevelsKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.LedgerStarvedKey, 0));
     }
 
     /// <summary>
@@ -259,6 +267,76 @@ public sealed class AutoBuyCycleEvaluatorTests
     }
 
     [Fact]
+    public void LiveMissedStructurePlansOneExactLevelAndRecordsReducedGroup()
+    {
+        // Alchemic Command's live Water arithmetic: one level was 77.4098% of stock, while the
+        // exact two-level sum was 174.2981%. One-level admission therefore must result in one action.
+        const double stock = 1.10713885171171e9;
+        const double nextCost = 8.5703445124987e8;
+        const double exactTwoLevelCost = 1.92972183318296e9;
+        var builder = new FrameBuilder().Bulk(2);
+        var resource = builder.Resource(stock);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost,
+            exactTwoLevelCost);
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(1, action.Count);
+        Assert.Equal(nextCost / stock, action.Belief.CostRatio, 6);
+        Assert.Equal(0, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroupLevels);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
+    }
+
+    [Fact]
+    public void CandidateSpentOutByEarlierActionRecordsLedgerStarved()
+    {
+        var builder = new FrameBuilder().Bulk(1);
+        var resource = builder.Resource(15);
+        builder.Structure(StructureA, new[] { (resource, 10.0) });
+        builder.Structure(StructureB, new[] { (resource, 10.0) });
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(StructureA, action.Uuid);
+        Assert.Equal(2, metrics.EligibleCandidates);
+        Assert.Equal(1, metrics.PlannedActions);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
+    }
+
+    [Fact]
+    public void FullyAffordableTwoLevelGroupRemainsFull()
+    {
+        const double stock = 3e9;
+        const double nextCost = 8.5703445124987e8;
+        const double exactTwoLevelCost = 1.92972183318296e9;
+        var builder = new FrameBuilder().Bulk(2);
+        var resource = builder.Resource(stock);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost,
+            exactTwoLevelCost);
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(2, action.Count);
+        Assert.Equal(exactTwoLevelCost / stock, action.Belief.CostRatio, 6);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroupLevels);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+    }
+
+    [Fact]
     public void FillAvailableQueueReservesTheExactRisingGroupedCost()
     {
         var builder = new FrameBuilder().Bulk(3);
@@ -285,7 +363,7 @@ public sealed class AutoBuyCycleEvaluatorTests
     }
 
     [Fact]
-    public void AGroupedRequestWithoutItsExactPublishedCurveIsRefused()
+    public void AGroupedRequestUsesOnlyAnExactPublishedReducedCurve()
     {
         var builder = new FrameBuilder().Bulk(3);
         var resource = builder.Resource(1_000);
@@ -296,7 +374,11 @@ public sealed class AutoBuyCycleEvaluatorTests
             exactGroupedCost: 30.0,
             publishedGroupedLevels: 2);
 
-        Assert.Empty(Plan(builder.Build(), Config(), out _));
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(2, action.Count);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(2, metrics.GroupOutcomes.ReducedGroupLevels);
     }
 
     // ---- Affordability threshold ----------------------------------------------------------------
@@ -512,6 +594,28 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(4, metrics.RequestedLevels);
     }
 
+    [Fact]
+    public void BulkDevelopmentOnePreservesTheSingleLevelActionBelief()
+    {
+        var builder = new FrameBuilder().Bulk(1);
+        var resource = builder.Resource(40);
+        builder.Structure(StructureA, new[] { (resource, 10.0) });
+        var frame = builder.Build();
+
+        var action = Assert.Single(Plan(frame, Config(), out _, out var metrics));
+
+        AssertSingleLevelAction(
+            action,
+            AutoBuyCandidateKind.Structure,
+            StructureA,
+            frame.Resources[resource].ResourceId,
+            cost: 10.0,
+            available: 40.0);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+    }
+
     /// <summary>One action stays readable: a hundred levels is the ceiling, as it was in legacy.</summary>
     [Fact]
     public void BulkDevelopmentIsCappedAtAHundredLevels()
@@ -543,14 +647,25 @@ public sealed class AutoBuyCycleEvaluatorTests
     }
 
     [Fact]
-    public void UpgradesAlwaysRequestOneLevel()
+    public void UpgradesRemainByteForByteSingleLevelRequests()
     {
         var builder = new FrameBuilder().Bulk(4);
         var resource = builder.Resource(1_000_000);
         builder.Upgrade(UpgradeA, new[] { (resource, 1.0) });
         var frame = builder.Build();
 
-        Assert.Equal(1, Assert.Single(Plan(frame, Config(), out _)).Count);
+        var action = Assert.Single(Plan(frame, Config(), out _, out var metrics));
+
+        AssertSingleLevelAction(
+            action,
+            AutoBuyCandidateKind.Upgrade,
+            UpgradeA,
+            frame.Resources[resource].ResourceId,
+            cost: 1.0,
+            available: 1_000_000.0);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
     }
 
     // ---- One action per candidate, room- and batch-bounded --------------------------------------
@@ -692,6 +807,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(
             metrics.CapturedCandidates,
             metrics.EligibleCandidates + metrics.Exclusions.Total);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
     }
 
     /// <summary>
@@ -922,6 +1038,36 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(expectedKey, entry.Key.Value);
         Assert.Equal(ServiceProjectionValueKind.Integer, entry.Value.Kind);
         Assert.Equal(expectedValue, entry.Value.Integer);
+    }
+
+    private static void AssertSingleLevelAction(
+        in AutoBuyCycleAction action,
+        AutoBuyCandidateKind expectedKind,
+        Guid expectedUuid,
+        Guid expectedResource,
+        double cost,
+        double available)
+    {
+        Assert.Equal(expectedKind, action.Kind);
+        Assert.Equal(expectedUuid, action.Uuid);
+        Assert.Equal(1, action.Count);
+        Assert.Equal(1, action.CollectedAtEpoch);
+
+        var belief = action.Belief;
+        Assert.True(belief.IsAvailable);
+        Assert.False(belief.HasFiniteLevels);
+        Assert.False(belief.IsMaxLevel);
+        Assert.False(belief.IsMaxQueuedLevel);
+        Assert.Equal(0, belief.CurrentLevel);
+        Assert.Equal(0, belief.QueuedLevels);
+        Assert.Equal(1, belief.CostResourceCount);
+        Assert.Equal(1, belief.PricedResourceCount);
+        Assert.Equal(cost / available, belief.CostRatio, 12);
+        Assert.Equal(expectedResource, belief.BindingResourceId);
+        Assert.False(belief.BindingIsBandwidth);
+        Assert.Equal(cost, belief.BindingCost.ToDouble(), 12);
+        Assert.Equal(available, belief.BindingAvailable.ToDouble(), 12);
+        Assert.Equal(0.0, belief.BindingReserveFloor.ToDouble(), 12);
     }
 
     private static SuiteRuntimeConfiguration Config(

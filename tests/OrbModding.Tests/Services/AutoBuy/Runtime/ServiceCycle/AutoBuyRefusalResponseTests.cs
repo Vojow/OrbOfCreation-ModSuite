@@ -179,7 +179,7 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         Assert.Contains("  IsMaxLevel(): could not be read", text);
         Assert.Contains("  CostRatio: 0.25", text);
         Assert.Contains("  Resource: abcdef01-0000-0000-0000-000000000000", text);
-        Assert.Contains("(TrueQuantity)", text);
+        Assert.Contains("(planned spendable TrueQuantity)", text);
         Assert.Contains("World generation: 4", text);
         Assert.Contains("World collected at epoch: 12", text);
         Assert.Contains("Config generation: 3", text);

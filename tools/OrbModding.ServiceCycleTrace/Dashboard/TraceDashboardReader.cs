@@ -666,6 +666,10 @@ internal static class TraceDashboardReader
                 AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
                 AutoBuyServiceProjection.ExcludedUnaffordableKey => "Excluded: unaffordable",
                 AutoBuyServiceProjection.ExcludedUnpriceableKey => "Excluded: unpriceable",
+                AutoBuyServiceProjection.FullGroupsKey => "Groups: full",
+                AutoBuyServiceProjection.ReducedGroupsKey => "Groups: reduced",
+                AutoBuyServiceProjection.ReducedGroupLevelsKey => "Reduced-group levels",
+                AutoBuyServiceProjection.LedgerStarvedKey => "Groups: ledger-starved",
                 _ => NeutralProjectionName(key),
             };
         if (string.Equals(

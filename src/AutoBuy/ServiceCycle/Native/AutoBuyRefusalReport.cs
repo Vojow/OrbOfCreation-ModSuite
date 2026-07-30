@@ -270,7 +270,9 @@ internal static class AutoBuyRefusalBundle
             text.Append("  IsBandwidth: ").Append(Flag(belief.BindingIsBandwidth)).AppendLine();
             text.Append("  Cost: ").Append(Magnitude(belief.BindingCost)).AppendLine();
             text.Append("  Available: ").Append(Magnitude(belief.BindingAvailable))
-                .Append(belief.BindingIsBandwidth ? " (room below the ceiling)" : " (TrueQuantity)")
+                .Append(belief.BindingIsBandwidth
+                    ? " (planned spendable room below the ceiling)"
+                    : " (planned spendable TrueQuantity)")
                 .AppendLine();
             text.Append("  Reserve floor applied: ").Append(Magnitude(belief.BindingReserveFloor)).AppendLine();
         }

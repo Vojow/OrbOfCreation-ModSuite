@@ -17,6 +17,24 @@ namespace OrbModding.ProfileTests;
 public sealed class TraceDashboardReaderTests
 {
     [Fact]
+    public void AutoBuyGroupingProjectionUsesItsRecordedServiceSchema()
+    {
+        using var fixture = new DashboardTraceFixture(
+            service: 3,
+            machineId: "orbautomata.auto-buy",
+            Projection((24, 7), (25, 3), (26, 4), (27, 2)));
+
+        var decision = fixture.ReadDecision();
+
+        Assert.Collection(
+            decision.Projection,
+            entry => Assert.Equal("Groups: full", entry.Name),
+            entry => Assert.Equal("Groups: reduced", entry.Name),
+            entry => Assert.Equal("Reduced-group levels", entry.Name),
+            entry => Assert.Equal("Groups: ledger-starved", entry.Name));
+    }
+
+    [Fact]
     public void SpellLevelingProjectionUsesItsRecordedServiceSchema()
     {
         using var fixture = new DashboardTraceFixture(

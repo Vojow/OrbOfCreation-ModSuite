@@ -23,10 +23,10 @@ namespace OrbAutomata;
 /// Pillar A plans ONE action per eligible candidate per cycle: a structural native rejection
 /// cascade-terminates the batch, while an affordability-only refusal skips that candidate and makes
 /// Common wait for fresh facts. Planning a candidate twice is therefore wasted work, and an
-/// already-queued slot is retained. One action is not one queue slot: a bulk
-/// grouping mode raises that action's requested level <see cref="AutoBuyCycleAction.Count"/> to the
-/// game's own live count — the MultiBuy multiplier for an upgrade, the bulk-development count for a
-/// structure — so one action advances several levels. Nothing here bounds the plan by the queue.
+/// already-queued slot is retained. One action is not one queue slot: a Structure prefers the
+/// game's live Bulk Development count, while an Upgrade stays at one level. The worker chooses the
+/// largest exactly priced positive Structure count the remaining batch ledger can fund. Nothing
+/// here bounds the plan by the queue.
 /// The action adapter is
 /// the real-time authority that re-validates and submits each call, stopping the cascade the moment
 /// one is rejected; pacing comes from world publication, not per-item backoff. The adapter re-reads the
@@ -34,8 +34,7 @@ namespace OrbAutomata;
 /// <see cref="AutoBuyConfiguration.LeaveQueueSlots"/> remain, and clamps a multi-level request to the
 /// room above that reserve, since the game queues one entry per level. So the plan is as long as the
 /// ranked list and the runtime stops it at the truth. The ledger reserves the exact ported cost-curve
-/// sum for the configured native group; choosing a new group size from affordability remains deferred
-/// to Pillar B.
+/// sum for the chosen group and never substitutes <c>levels x next-cost</c>.
 /// </remarks>
 internal static class AutoBuyCycleEvaluator
 {
@@ -103,7 +102,7 @@ internal static class AutoBuyCycleEvaluator
                     relativeMultiplier,
                     config,
                     out var costRatio,
-                    out var belief,
+                    out var admissionBelief,
                     out var refusal))
             {
                 excluded[(int)refusal]++;
@@ -116,7 +115,7 @@ internal static class AutoBuyCycleEvaluator
                 candidate.Uuid,
                 candidate.Uuid.ToString("D", CultureInfo.InvariantCulture),
                 costRatio,
-                in belief));
+                in admissionBelief));
         }
 
         if (eligible.Count == 0)
@@ -133,9 +132,9 @@ internal static class AutoBuyCycleEvaluator
 
         eligible.Sort(RankOrder);
 
-        // One action (one queue slot) per eligible candidate, in ranked order. Each action requests
-        // `count` levels via a single native call: no per-candidate overcommit, but a bulk grouping
-        // mode lets one call buy several levels.
+        // At most one action per eligible candidate, in ranked order. Each action requests `count`
+        // levels: one action may consume several queue slots when its preferred group is affordable,
+        // and may shrink to the largest positive exactly-priced count the batch can still fund.
         //
         // Nothing here bounds the plan by the queue. FillAvailableQueue means "keep going until only
         // LeaveQueueSlots remain", and only the action boundary can know when that is — it re-reads
@@ -151,21 +150,59 @@ internal static class AutoBuyCycleEvaluator
 
         var emitted = 0;
         var requestedLevels = 0;
+        var fullGroups = 0;
+        var reducedGroups = 0;
+        var reducedGroupLevels = 0;
+        var ledgerStarved = 0;
         for (var i = 0; i < eligible.Count; i++)
         {
             var decision = eligible[i];
-            var count = PerCandidateAmount(decision.Kind, frame.Global);
+            var preferredCount = PerCandidateAmount(decision.Kind, frame.Global);
             ref readonly var candidate = ref candidates[decision.CandidateIndex];
-            if (!TryCommitSpend(
-                    in candidate, costs, resources, committed, count, in absoluteReserve, relativeMultiplier))
-                continue; // an earlier action in this batch already spent what this one needed
+            var count = 0;
+            var belief = default(AutoBuyPlanBelief);
+            for (var candidateCount = preferredCount; candidateCount >= 1; candidateCount--)
+            {
+                if (!TryCommitSpend(
+                        in candidate,
+                        costs,
+                        resources,
+                        committed,
+                        candidateCount,
+                        in absoluteReserve,
+                        relativeMultiplier,
+                        out belief))
+                    continue;
+
+                count = candidateCount;
+                break;
+            }
+
+            if (count == 0)
+            {
+                // Admission proved one level against untouched quantities. Reaching zero here means
+                // earlier ranked actions consumed enough of a shared resource that even that exact
+                // one-level spend no longer clears the batch ledger.
+                ledgerStarved++;
+                continue;
+            }
+
+            if (count == preferredCount)
+            {
+                fullGroups++;
+            }
+            else
+            {
+                reducedGroups++;
+                reducedGroupLevels = checked(reducedGroupLevels + count);
+            }
 
             var action = new AutoBuyCycleAction(
                 decision.Kind,
                 decision.Uuid,
                 frame.Global.CollectedAtEpoch,
                 count,
-                decision.Belief,
+                preferredCount == 1 ? decision.Belief : belief,
                 frame.Global.CollectedAt);
             actions.Add(in action);
             emitted++;
@@ -178,7 +215,12 @@ internal static class AutoBuyCycleEvaluator
             eligible.Count,
             emitted,
             requestedLevels,
-            Histogram(excluded));
+            Histogram(excluded),
+            new AutoBuyGroupOutcomeHistogram(
+                fullGroups,
+                reducedGroups,
+                reducedGroupLevels,
+                ledgerStarved));
         return wake;
     }
 
@@ -294,16 +336,28 @@ internal static class AutoBuyCycleEvaluator
         BigDouble[] committed,
         int levels,
         in BigDouble absoluteReserve,
-        double relativeMultiplier)
+        double relativeMultiplier,
+        out AutoBuyPlanBelief belief)
     {
+        belief = default;
         var start = candidate.CostRowStart;
         var end = start + candidate.CostRowCount;
+        var maxRatio = 0.0;
+        var costResourceCount = 0;
+        var pricedResourceCount = 0;
+        var hasBinding = false;
+        var bindingResourceId = Guid.Empty;
+        var bindingIsBandwidth = false;
+        var bindingCost = default(BigDouble);
+        var bindingAvailable = default(BigDouble);
+        var bindingFloor = default(BigDouble);
 
         for (var i = start; i < end; i++)
         {
             if (!IsFirstRowForItsResource(costs, start, i))
                 continue;
 
+            costResourceCount++;
             var resourceIndex = costs[i].ResourceRowIndex;
             if (!TryCombinedExactCost(costs, start, end, resourceIndex, levels, out var cost))
                 return false;
@@ -311,14 +365,32 @@ internal static class AutoBuyCycleEvaluator
                 return false;
             if (IsZero(cost))
                 continue;
+            pricedResourceCount++;
             if ((uint)resourceIndex >= (uint)committed.Length)
                 return false;
 
             var remaining = resources[resourceIndex].Spendable - committed[resourceIndex];
-            var requiredBeforeSpend = cost + RequiredFloor(in cost, in absoluteReserve, relativeMultiplier);
+            var floor = RequiredFloor(in cost, in absoluteReserve, relativeMultiplier);
+            var requiredBeforeSpend = cost + floor;
             if (remaining.CompareTo(requiredBeforeSpend) < 0)
                 return false;
+
+            var ratio = (cost / remaining).ToDouble();
+            if (!hasBinding || ratio > maxRatio)
+            {
+                hasBinding = true;
+                bindingResourceId = resources[resourceIndex].ResourceId;
+                bindingIsBandwidth = resources[resourceIndex].IsBandwidth;
+                bindingCost = cost;
+                bindingAvailable = remaining;
+                bindingFloor = floor;
+            }
+            if (ratio > maxRatio)
+                maxRatio = ratio;
         }
+
+        if (pricedResourceCount == 0)
+            return false;
 
         for (var i = start; i < end; i++)
         {
@@ -331,6 +403,21 @@ internal static class AutoBuyCycleEvaluator
             committed[resourceIndex] += cost;
         }
 
+        belief = new AutoBuyPlanBelief(
+            candidate.IsAvailable,
+            candidate.HasFiniteLevels,
+            candidate.IsMaxLevel,
+            candidate.IsMaxQueuedLevel,
+            candidate.CurrentLevel,
+            candidate.QueuedLevels,
+            costResourceCount,
+            pricedResourceCount,
+            maxRatio,
+            bindingResourceId,
+            bindingIsBandwidth,
+            bindingCost,
+            bindingAvailable,
+            bindingFloor);
         return true;
     }
 
@@ -565,7 +652,7 @@ internal static class AutoBuyCycleEvaluator
         public string UuidText { get; }
         public double CostRatio { get; }
 
-        /// <summary>What this candidate was believed to be when it was ranked.</summary>
+        /// <summary>The one-level admission belief preserved for exact single-level parity.</summary>
         public AutoBuyPlanBelief Belief { get; }
     }
 }

@@ -16,9 +16,11 @@ namespace OrbAutomata;
 /// </para>
 /// <para>
 /// Only the binding resource is carried, not every cost row: it is the one that set
-/// <see cref="CostRatio"/>, so it is the row the plan actually turned on, and the two counts beside
-/// it say how many rows there were and how many of them were priced at all. Nought priced rows out of
-/// several is the shape of the game's uncooked boot prices, where every structure reads as free.
+/// <see cref="CostRatio"/> for the exact group this action requests. A preferred one-level action
+/// retains its original admission belief byte for byte; a multi-level or reduced action carries the
+/// exact group comparison against the remaining batch ledger. The two counts beside it say how many
+/// rows there were and how many of them were priced at all. Nought priced rows out of several is the
+/// shape of the game's uncooked boot prices, where every structure reads as free.
 /// </para>
 /// </remarks>
 internal readonly struct AutoBuyPlanBelief
@@ -67,7 +69,7 @@ internal readonly struct AutoBuyPlanBelief
     public int CostResourceCount { get; }
     public int PricedResourceCount { get; }
 
-    /// <summary>The worst cost-to-available ratio across those resources, which ranked the candidate.</summary>
+    /// <summary>The chosen group's worst exact-cost-to-remaining ratio across those resources.</summary>
     public double CostRatio { get; }
 
     /// <summary>The resource that produced that ratio, and what the plan compared for it.</summary>
@@ -75,7 +77,10 @@ internal readonly struct AutoBuyPlanBelief
     public bool BindingIsBandwidth { get; }
     public BigDouble BindingCost { get; }
 
-    /// <summary>Holdings for an ordinary resource, room below the ceiling for a bandwidth one.</summary>
+    /// <summary>
+    /// Spendable holdings for an ordinary resource, or room below the ceiling for a bandwidth one,
+    /// used by the exact group comparison the action carries.
+    /// </summary>
     public BigDouble BindingAvailable { get; }
     public BigDouble BindingReserveFloor { get; }
 }
