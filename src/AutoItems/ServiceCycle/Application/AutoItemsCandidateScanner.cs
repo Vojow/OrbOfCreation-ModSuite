@@ -1,8 +1,8 @@
 using System;
-using System.Collections.Generic;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.GameMath;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
@@ -74,7 +74,7 @@ internal static class AutoItemsCandidateScanner
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
         AutoItemsTemporaryActivationTracker temporaryActivations,
-        ISet<Guid>? temporaryAllowlist,
+        PublicationTable<Guid>? temporaryAllowlist,
         AutoScribeIdentityProfile? scribeProfile)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));

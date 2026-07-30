@@ -462,6 +462,45 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
+    public void AutoItemsAndAutoScribeRailEntriesUseAuditedNativeIcons()
+    {
+        var buttonObject = new GameObject("RailPrototype");
+        var prototype = buttonObject.AddComponent<FakeRailButton>();
+        var baseFrame = new Sprite();
+        var activeFrame = new Sprite();
+        var runtime = new Sprite();
+        var general = new Sprite();
+        var scholar = new Sprite();
+        var alchemy = new Sprite();
+        var primitives = new NativeFeatureRailVisualPrimitives(
+            prototype,
+            baseFrame,
+            activeFrame,
+            runtime,
+            general,
+            scholar,
+            alchemy);
+
+        Assert.True(
+            ModConfigNativeRailFactory.TryResolveIcon(
+                "Auto Items",
+                primitives,
+                out var autoItems,
+                out var autoItemsReason),
+            autoItemsReason);
+        Assert.Same(alchemy, autoItems);
+
+        Assert.True(
+            ModConfigNativeRailFactory.TryResolveIcon(
+                "Auto Scribe",
+                primitives,
+                out var autoScribe,
+                out var autoScribeReason),
+            autoScribeReason);
+        Assert.Same(scholar, autoScribe);
+    }
+
+    [Fact]
     public void OpeningUiSchedulesRefreshForCoordinatorInsteadOfRunningItInline()
     {
         var refresh = new ModConfigRefreshScheduler(0.1f);

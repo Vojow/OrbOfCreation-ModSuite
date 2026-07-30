@@ -19,7 +19,8 @@ active and healthy.
 - `ServiceCycle/AutoScribeServiceCycleFeature` owns registration and lifecycle wiring;
   `AutoScribeServiceCycleDiagnosticsBridge` owns feature-health projection.
 - `Ui/AutoScribeRolePickerView` edits semantic roles with All, None, and Default controls. UUIDs are
-  never shown or persisted.
+  never shown or persisted. The consolidated Mods rail uses the already-audited native Scholar
+  top-bar icon, matching Scribe's native parent view.
 
 ## Safety behavior
 

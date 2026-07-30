@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -52,7 +52,7 @@ internal static class AutoItemsConfigurationPolicy
         AutoItemsConfiguration configuration,
         AutoItemsConsumableFamily family,
         Guid itemId,
-        ISet<Guid>? temporaryAllowlist) =>
+        PublicationTable<Guid>? temporaryAllowlist) =>
         family switch
         {
             AutoItemsConsumableFamily.Scroll => configuration.UseScrolls,
@@ -60,11 +60,11 @@ internal static class AutoItemsConfigurationPolicy
             AutoItemsConsumableFamily.Fruit =>
                 configuration.UseFruits &&
                 itemId != Guid.Empty &&
-                temporaryAllowlist?.Contains(itemId) == true,
+                AutoItemsTemporaryItemAllowlist.Contains(temporaryAllowlist, itemId),
             AutoItemsConsumableFamily.Potion =>
                 configuration.UsePotions &&
                 itemId != Guid.Empty &&
-                temporaryAllowlist?.Contains(itemId) == true,
+                AutoItemsTemporaryItemAllowlist.Contains(temporaryAllowlist, itemId),
             _ => false,
         };
 }

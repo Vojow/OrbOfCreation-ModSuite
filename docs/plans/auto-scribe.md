@@ -1,10 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: Release build installed; repaired fresh-launch validation pending.** The audited identity
+> **Lifecycle: First-launch defects fixed; rebuilt installation pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
-> configuration, diagnostics, and semantic role picker are implemented. The reviewed release DLL
-> is installed with verified save and DLL backups. Its first launch correctly failed closed on a
-> schema-7 config left by a newer Auto Concept branch; a compatible schema-5 config is now active.
+> configuration, diagnostics, and semantic role picker are implemented. Live evidence found and
+> the branch now fixes an unaudited mutable Auto Items state collection plus missing consolidated
+> Auto Items/Auto Scribe rail icons. The previous release DLL remains installed until the game is
+> closed for safe replacement.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -27,7 +28,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
-| 10. Interactive game validation | **Ready** | A fresh launch confirms current config and the Mods button, then disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
+| 10. Interactive game validation | **Fix ready** | Install the corrected DLL and confirm a healthy ServiceCycle host plus Mods button, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -36,9 +37,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: relaunch the game and confirm the Mods button plus a current-schema startup log,
-  then perform the interactive validation outline below on a disposable save before enabling
-  Auto Scribe.
+- Current task: after Orb of Creation is fully closed, install the corrected release DLL, relaunch,
+  and confirm the Mods button plus a healthy ServiceCycle startup log. Then perform the interactive
+  validation outline below on a disposable save before enabling Auto Scribe.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -63,6 +64,16 @@ Last updated: **2026-07-30**
 - The configuration repair ran only after exact executable-path detection confirmed that the game
   was closed. No game save was edited, and the fail-closed launch attempted no ModSuite native
   mutation.
+- The 2026-07-30 11:52 launch accepted schema 5 and loaded ModSuite, then exposed two independent
+  code defects:
+  - Auto Items worker state retained a `HashSet<Guid>` temporary allowlist, so structural safety
+    rejected the state and disabled the Automata ServiceCycle host.
+  - the native Mods rail rejected the new `Auto Items` page before rendering because it had no
+    audited icon mapping; `Auto Scribe` would have failed for the same reason next.
+- The fixes store sorted allowlist identities in `PublicationTable<Guid>` and map Auto Items and
+  Auto Scribe to the already-audited native Alchemy and Scholar sprites. Direct regression tests
+  cover both failures. The complete portable gate passes 1,939 ordinary tests and 90 profile tests;
+  the profile build completes with zero warnings and zero errors.
 
 ## Goal
 

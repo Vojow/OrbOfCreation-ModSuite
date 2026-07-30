@@ -19,7 +19,9 @@ The implemented boundary is deliberately split:
   immediate toxicity cost, and retains evidence that other native costs exist.
 - `ServiceCycle/` registers a bounded one-action service. A pure candidate scanner selects from
   immutable world facts, while the evaluator owns lifecycle, activation, busy, and recovery gates.
-  The worker parses the temporary allowlist only when its configuration generation changes.
+  The worker parses the temporary allowlist only when its configuration generation changes and
+  stores the sorted identities in Common's audited immutable publication table; mutable collection
+  storage never enters service state.
 - The main-thread adapter re-resolves exact identity and family, checks visibility, the shared
   Inventory idle predicate, `CanFire()`, lifecycle and ownership, pins multi-buy to one, and verifies
   the exact stock/queue submission edge. Temporary duration and toxicity-only cost vectors are
@@ -33,7 +35,8 @@ The implemented boundary is deliberately split:
 - The Mods page provides an on-demand temporary-item picker with native names, family, stock,
   immediate toxicity cost, base duration, and All/Fruit/Potion/Owned/Selected filters. Selection
   persists as sorted exact UUIDs; unavailable selected identities are preserved and the raw UUID
-  editor remains available.
+  editor remains available. Its consolidated rail entry uses the already-audited native Alchemy
+  top-bar icon.
 - A temporary submission verifies stock, queue, and pending-usage creation immediately, then waits
   for a later publication to prove engagement. Any pending or active temporary usage blocks every
   automated family—including Relics—through expiry and is rechecked immediately before mutation.

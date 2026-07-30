@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -16,7 +15,7 @@ internal static class AutoItemsCycleEvaluator
         ref AutoItemsCycleState state,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         AutoItemsTemporaryActivationTracker temporaryActivations,
-        ISet<Guid>? temporaryAllowlist,
+        PublicationTable<Guid>? temporaryAllowlist,
         AutoScribeIdentityProfile? autoScribeIdentityProfile,
         out AutoItemsDecisionMetrics metrics)
     {

@@ -1731,22 +1731,22 @@ public sealed class GameWorldCollectorTests : IDisposable
             TemporaryItemAllowlist = fruit.ToString("D"),
         };
         state.ObserveConfiguration(new ConfigGeneration(1), first);
-        var original = Assert.IsType<HashSet<Guid>>(state.TemporaryAllowlist);
+        var original = Assert.IsType<PublicationTable<Guid>>(state.TemporaryAllowlist);
 
         state.ObserveConfiguration(
             new ConfigGeneration(1),
             first with { TemporaryItemAllowlist = potion.ToString("D") });
 
         Assert.Same(original, state.TemporaryAllowlist);
-        Assert.Contains(fruit, original);
-        Assert.DoesNotContain(potion, original);
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(original, fruit));
+        Assert.False(AutoItemsTemporaryItemAllowlist.Contains(original, potion));
 
         state.ObserveConfiguration(
             new ConfigGeneration(2),
             first with { TemporaryItemAllowlist = potion.ToString("D") });
 
         Assert.NotSame(original, state.TemporaryAllowlist);
-        Assert.Contains(potion, state.TemporaryAllowlist!);
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(state.TemporaryAllowlist, potion));
 
         state.ObserveConfiguration(
             new ConfigGeneration(3),

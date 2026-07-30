@@ -108,7 +108,7 @@ internal static class ModConfigNativeRailFactory
         }
     }
 
-    private static bool TryResolveIcon(
+    internal static bool TryResolveIcon(
         string label,
         NativeFeatureRailVisualPrimitives primitives,
         out Sprite? icon,
@@ -138,6 +138,18 @@ internal static class ModConfigNativeRailFactory
                 return true;
             case "Auto Harvest":
                 return NativeFeatureIconResolver.TryGetHarvestIcon(out icon, out reason);
+            case "Auto Items":
+                // The native Alchemy top-bar sprite is the audited inventory/consumable-adjacent
+                // vocabulary already captured with the rail primitives.
+                icon = primitives.AdvancedIcon;
+                reason = string.Empty;
+                return true;
+            case "Auto Scribe":
+                // Scribe is a native Scholar subview, so its consolidated page reuses the audited
+                // Scholar top-bar sprite instead of synthesizing an icon.
+                icon = primitives.ConceptIcon;
+                reason = string.Empty;
+                return true;
             case "Mentor":
                 return NativeFeatureIconResolver.TryGetMentorIcon(out icon, out reason);
             case "Advanced":

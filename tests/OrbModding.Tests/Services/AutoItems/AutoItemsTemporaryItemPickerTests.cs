@@ -80,6 +80,22 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     }
 
     [Fact]
+    public void RuntimePublicationMembershipIsSortedDeduplicatedAndExact()
+    {
+        var first = Guid.Parse("10000000-0000-0000-0000-000000000001");
+        var later = Guid.Parse("f0000000-0000-0000-0000-000000000002");
+        var absent = Guid.Parse("70000000-0000-0000-0000-000000000003");
+
+        var values = AutoItemsTemporaryItemAllowlist.ParsePublication(
+            $"{later:D}, invalid, {first:D}, {later:D}");
+
+        Assert.Equal(2, values.Count);
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(values, first));
+        Assert.True(AutoItemsTemporaryItemAllowlist.Contains(values, later));
+        Assert.False(AutoItemsTemporaryItemAllowlist.Contains(values, absent));
+    }
+
+    [Fact]
     public void FiltersCoverFamiliesOwnedAndSelectedItems()
     {
         var selected = new System.Collections.Generic.HashSet<Guid>();

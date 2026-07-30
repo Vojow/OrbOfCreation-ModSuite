@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
@@ -60,12 +59,12 @@ internal struct AutoItemsCycleState
     }
 
     private ConfigGeneration _allowlistConfiguration;
-    private HashSet<Guid>? _temporaryAllowlist;
+    private PublicationTable<Guid>? _temporaryAllowlist;
 
     internal LifecycleGeneration Lifecycle { get; }
     internal AutoItemsDecisionMetrics Decision { get; private set; }
     internal bool RecoveryWaitActive { get; private set; }
-    internal ISet<Guid>? TemporaryAllowlist => _temporaryAllowlist;
+    internal PublicationTable<Guid>? TemporaryAllowlist => _temporaryAllowlist;
 
     internal static AutoItemsCycleState Create(LifecycleGeneration lifecycle) => new(lifecycle);
     internal void RecordDecision(in AutoItemsDecisionMetrics decision) => Decision = decision;
@@ -79,7 +78,7 @@ internal struct AutoItemsCycleState
         if (_allowlistConfiguration == generation) return;
         _temporaryAllowlist =
             configuration.UseFruits || configuration.UsePotions
-                ? AutoItemsTemporaryItemAllowlist.Parse(
+                ? AutoItemsTemporaryItemAllowlist.ParsePublication(
                     configuration.TemporaryItemAllowlist)
                 : null;
         _allowlistConfiguration = generation;
