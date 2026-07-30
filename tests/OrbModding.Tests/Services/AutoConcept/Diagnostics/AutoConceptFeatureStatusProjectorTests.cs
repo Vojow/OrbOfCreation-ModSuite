@@ -60,18 +60,4 @@ public sealed class AutoConceptFeatureStatusProjectorTests
             status.Summary);
     }
 
-    [Fact]
-    public void TemporarilyRefusedUnlockedReplacementsWaitForAnotherPublication()
-    {
-        var status = AutoConceptFeatureStatusProjector.Project(
-            emergencyDisabled: false,
-            owned: true,
-            cycleObserved: true,
-            idleReason: AutoConceptIdleReason.WaitingForCandidateRetry);
-
-        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
-        Assert.Equal(FeatureStatusReasonCode.NativeBusy, status.Reason);
-        Assert.Contains("slot or resource safety", status.Summary);
-        Assert.Contains("publication", status.Summary);
-    }
 }

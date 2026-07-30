@@ -10,7 +10,7 @@
 
 The default automation workload is a strict service cycle, not a general asynchronous process runtime:
 
-1. Common identifies a waiting service whose wake policy is eligible and whose last change to the game is already reflected in the published world.
+1. Common identifies a waiting service whose wake policy is eligible and whose last game-facing action attempt predates the published world.
 2. Common pins one reading of each of the three publications — world, configuration, and strategy — and mints the cycle's identity from them.
 3. Common transfers that immutable cycle context to one dedicated service thread.
 4. The service evaluates synchronously and updates its private state.
@@ -270,7 +270,7 @@ do not admit feature actions and are not another scheduler.
 
 There is no `Deferred` outcome and no automatic retry of the old action. A skip emits one `ActionSkipped` fact and continues. The first rejection or fault preserves the processed prefix and discards the untouched suffix without executing it; one `BatchAborted` fact records the terminal index and suffix count rather than one event per untouched action.
 
-A later cycle may replan from a fresh frame. The rejected batch is never resumed. The next cycle receives a terminal receipt containing the batch identity, pinned context, committed count, derivable skipped count, terminal index, stable result code, native outcome evidence, and terminal timestamp.
+A later cycle may replan only after a world collected strictly after the attempt. The rejected batch is never resumed. The next cycle receives a terminal receipt containing the batch identity, pinned context, committed count, derivable skipped count, terminal index, stable result code, native outcome evidence, and terminal timestamp.
 
 ## Emergency stop
 
@@ -299,6 +299,11 @@ Action execution and continuation timing are separate response fields. Initial p
 - `Default`, resolved from explicit registration.
 
 The service never overlaps its active batch. If an `AfterDecision` or absolute deadline expires while the batch drains, the next cycle becomes eligible immediately when the batch terminates. `AfterBatch` intentionally starts its delay at termination.
+
+For an ordinary response that contains an action, `Immediate` cannot produce a same-world follow-up:
+the attempted dispatch raises the world-gate floor first. It is therefore equivalent to
+`OnPublication` for that continuation, while remaining a distinct generic wake contract for sources
+and zero-action responses.
 
 A zero-action response is terminal on publication. All timing uses a monotonic clock. Wall-clock or game-time inputs required by policy are explicit context fields, not ambient reads.
 
@@ -400,8 +405,8 @@ The pump never waits for the worker-owned handoff gate. Response acquisition, ca
 ### World-freshness gate
 
 A service does not start a cycle against a world collected before it went live, or before its own last
-change to the game. [Acting twice on one world](world-collection.md) specifies what arms the gate and
-why; what belongs here is where it sits in the frame.
+game-facing action attempt. [Acting twice on one world](world-collection.md) specifies what arms the
+gate and why; what belongs here is where it sits in the frame.
 
 The gate runs inside **StartCycles**, before any feature callback: a held service is skipped and asked
 again next frame, nothing is scheduled, and the hold is recorded as its own fact because holding a

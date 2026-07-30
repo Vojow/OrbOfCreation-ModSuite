@@ -101,8 +101,8 @@ public readonly struct ServiceWorldGateDeferralFact
     /// <summary>The pump frame the service was held on.</summary>
     public long FrameIdentity { get; }
     /// <summary>
-    /// The generation the service is waiting past: the frame it last changed the game on, or the one
-    /// that was live when it went live, whichever is later.
+    /// The generation the service is waiting past: the frame of its last game-facing action attempt,
+    /// or the one that was live when it went live, whichever is later.
     /// </summary>
     public long LastActionFrame { get; }
     /// <summary>The live generation at the time, or the invalid default when no source could answer.</summary>

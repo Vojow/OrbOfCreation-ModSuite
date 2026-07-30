@@ -24,10 +24,10 @@
 - Keep Timed Cycle's settled-active deadline stable when an automated depth change finishes. Native
   queued quantity is recorded as suite-owned immediately, so later settlement is not mistaken for a
   manual edit that restarts training.
-- When the live game refuses a planned Auto Concept replacement for slot or resource-safety reasons,
-  try the next unlocked candidate against the same published world instead of retrying the same
-  rebalance. The refused candidate becomes eligible again only after a newer world or configuration
-  publication, and safe depth remains available to the active concept.
+- End a service's work on the current world reading after every attempted game-facing action,
+  including a native rejection or fault. Auto Concept reconciles a rejected replacement on the next
+  world publication and plans again from those fresh facts; a persistently refused candidate remains
+  loud and may deliberately starve later candidates until collection exposes the missing constraint.
 - Start a new Timed Cycle training session when an automated replacement assignment is accepted, so
   its full settled-active period elapses and its rotation-order history advances before replacement.
 - Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net

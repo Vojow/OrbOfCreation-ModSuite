@@ -28,13 +28,14 @@ public enum ServiceShape
 {
     /// <summary>
     /// Reads the game and publishes the result. It changes no game state, so the world gate can
-    /// never close on it: only a committed native mutation arms that gate, and a Source commits none.
+    /// never close on it: publication attempts are the sole exemption from the game-facing attempt
+    /// rule, because gating a Source would make it wait on the reading only it can produce.
     /// </summary>
     Source = 1,
 
     /// <summary>
-    /// Consumes the publications and acts on the game, and must therefore not decide twice against a
-    /// snapshot its own action already invalidated.
+    /// Consumes the publications and acts on the game, and must therefore wait for a newer reading
+    /// after every attempted action regardless of its terminal result.
     /// </summary>
     Ordinary = 2,
 }

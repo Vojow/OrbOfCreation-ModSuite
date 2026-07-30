@@ -57,9 +57,10 @@ native-boundary change.
 - Same-name/different-UUID or wrong-type content never aliases.
 - Unsafe owned drain rolls back before any balancing action.
 - A recent rotation prefers its remembered compatible replacement.
-- A native slot or prospective-drain rejection defers only the refused candidate for the current
-  world/configuration publication, advances to another unlocked candidate, permits safe depth on the
-  active assignment, and cannot create an immediate same-world retry loop.
+- A native slot or prospective-drain rejection ends the current world round. Its receipt is observed
+  only with a strictly newer world, the candidate re-enters ordinary planning without deferral state,
+  and persistent refusal remains loud on every later publication rather than routing around a
+  collection gap.
 - A successfully assigned Timed Cycle replacement starts its own complete settled-active training
   period and moves to the back of the timed rotation order; depth settlement does not restart it.
 - Multi-slot scenarios fill every independently compatible acquired slot before depth, keep a

@@ -767,6 +767,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
                 value.CleanupAcknowledgementCount > faultedHandoff.CleanupAcknowledgementCount &&
                 value.WorkerWaitCount > faultedHandoff.WorkerWaitCount,
             "the action-fault cleanup handback");
+        TestWorldCollector.CollectedAt(registry, frame);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
         Assert.Equal(1, pump.PumpFrame(frame++).CyclesStarted);
         ServiceRunnerTestWait.ForHandoff(
@@ -785,6 +786,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
             registration.Runner.Snapshot.Fault.Category);
 
         definition.ActionCount = 1;
+        TestWorldCollector.CollectedAt(registry, frame);
         Assert.Equal(0, pump.PumpFrame(frame++).CyclesStarted);
         var returned = registration.Runner.ProbeHandoff();
         Assert.Equal(ServiceHandoffPhase.Empty, returned.Phase);
@@ -829,6 +831,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
         Drain(pump, ref cursor);
 
         definition.FaultAtIndex = -1;
+        TestWorldCollector.CollectedAt(registry, frame);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
         ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);

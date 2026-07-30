@@ -42,11 +42,11 @@ Expected on the upgrade to 0.4.0. The suite has one configuration file named aft
 
 Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, capture the Runtime page's recent events and full trace, then include those records plus the affected resource name.
 
-If Auto Concept reports that unlocked replacements are waiting for another publication, inspect
-`BepInEx/LogOutput.log` for `Auto Concept did not complete`. The line names the active and proposed
-replacement UUIDs and says whether the live slot, quantity, or prospective resource drain refused the
-rotation. Auto Concept tries other unlocked candidates immediately against the same published world;
-the refused candidate is reconsidered after a newer world or configuration publication.
+If Auto Concept repeatedly logs `Auto Concept did not complete`, the line names the active and
+proposed replacement UUIDs and says whether the live slot, quantity, or prospective resource drain
+refused the rotation. That rejection ends the current world round. The same candidate may be proposed
+and rejected again after each 250-millisecond collection; this is deliberate evidence that the world
+snapshot is missing a native constraint, not a reason to skip ahead or add a retry timer.
 
 ## Checking the suite against the live game
 

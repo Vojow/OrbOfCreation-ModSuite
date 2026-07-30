@@ -375,7 +375,7 @@ A service the world freshness gate holds closed reaches the journal as its own r
 and its active lifecycle generation. The gate is otherwise silent — a held service attempts nothing, which
 reads exactly like a service that had no work — and a stalled world collector holds every mutating service at
 once, so without the record a stalled suite is an absence of evidence rather than evidence. Transition code
-`1` means the live world was collected before the service's own last action; `2` means no source could answer
+`1` means the live world was collected before the service's own last action attempt; `2` means no source could answer
 at all. A hold is one record however long it lasts: the gate re-defers a held service every frame, and a
 further record follows only when the action being waited past changes or when the reason changes. A hold that
 never ends is therefore one record whose missing successor is the stall itself.

@@ -29,7 +29,8 @@ Read the maintained contracts in this order:
 - Each registered service is admitted at most once per accepted frame.
 - One collection service reads the game; ordinary services consume its published snapshot.
 - World collection runs at a hardcoded 250-millisecond cadence. Every ordinary service evaluates
-  after each world or configuration publication; explicit gameplay waits and fault backoffs remain.
+  after each world or configuration publication; after any game-facing attempt it waits for a world
+  collected strictly later. Explicit gameplay waits and fault backoffs remain.
 - Main-thread capture exists only for the source service; the ordinary contract has no capture member.
 - A service worker owns its mutable planning state and evaluates synchronously.
 - Returned actions are advisory until the main thread revalidates current native facts.

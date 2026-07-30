@@ -113,9 +113,9 @@ public sealed class AutoConceptHeadlessJourneyTests
 {
     [Fact]
     [Trait("Category", "HeadlessE2E")]
-    public void TraceDerivedJourneyCannotChurnAndAdvancesPastTwoConcepts()
+    public void TraceDerivedJourneyCannotChurnAndAdvancesAcrossFreshWorlds()
     {
-        var scenario = new AutoConceptScenario(safeCandidates: 5, unsafeCandidates: 1);
+        var scenario = new AutoConceptScenario(safeCandidates: 5, unsafeCandidates: 0);
 
         for (var second = 0; second <= 50; second++)
             scenario.RunAt(TimeSpan.FromSeconds(second));
@@ -153,11 +153,9 @@ public sealed class AutoConceptHeadlessJourneyTests
                     item.Result.Disposition == ServiceActionDisposition.Committed);
 
         Assert.All(
-            scenario.Events
-                .Where(item => item.Result.Code == AutoConceptActionResultCodes.SlotUnavailable)
-                .GroupBy(item => item.AtTicks),
-            group => Assert.Single(group));
-        Assert.True(scenario.Events.GroupBy(item => item.AtTicks).Max(group => group.Count()) <= 4);
+            scenario.ReceiptObservations,
+            observation => Assert.True(observation.ObservedWorld > observation.ReceiptWorld));
+        Assert.True(scenario.Events.GroupBy(item => item.AtTicks).Max(group => group.Count()) <= 1);
     }
 
     [Fact]
@@ -165,7 +163,7 @@ public sealed class AutoConceptHeadlessJourneyTests
     public void LargeTimedCycleSimulationIsRoundRobinAndActionBounded()
     {
         const int safeCandidates = 12;
-        const int unsafeCandidates = 3;
+        const int unsafeCandidates = 0;
         var scenario = new AutoConceptScenario(safeCandidates, unsafeCandidates);
 
         for (var second = 0; second <= 600; second++)
@@ -199,6 +197,43 @@ public sealed class AutoConceptHeadlessJourneyTests
         Assert.True(
             scenario.Events.Count <= 1 + 60 * (unsafeCandidates + 3),
             $"The bounded simulation emitted {scenario.Events.Count} actions.");
+        Assert.All(
+            scenario.ReceiptObservations,
+            observation => Assert.True(observation.ObservedWorld > observation.ReceiptWorld));
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessE2E")]
+    public void PersistentlyRejectedReplacementIsRetriedOnEveryLaterWorld()
+    {
+        var scenario = new AutoConceptScenario(safeCandidates: 2, unsafeCandidates: 1);
+
+        for (var second = 0; second <= 20; second++)
+            scenario.RunAt(TimeSpan.FromSeconds(second));
+
+        var rejections = scenario.Events
+            .Where(item => item.Result.Code == AutoConceptActionResultCodes.SlotUnavailable)
+            .ToArray();
+
+        Assert.True(rejections.Length >= 5);
+        Assert.All(
+            rejections,
+            item =>
+            {
+                Assert.Equal(AutoConceptActionKind.RotateOut, item.Action.Kind);
+                Assert.Contains(item.Action.ReplacementId, scenario.UnsafeIds);
+            });
+        Assert.Equal(
+            rejections.Length,
+            rejections.Select(item => item.WorldGeneration).Distinct().Count());
+        Assert.DoesNotContain(
+            scenario.Events,
+            item =>
+                item.Action.Kind == AutoConceptActionKind.RotateOut &&
+                item.Result.Disposition == ServiceActionDisposition.Committed);
+        Assert.All(
+            scenario.ReceiptObservations,
+            observation => Assert.True(observation.ObservedWorld > observation.ReceiptWorld));
     }
 
     [Fact]
@@ -269,6 +304,9 @@ public sealed class AutoConceptHeadlessJourneyTests
                 .Select(item => item.Action.RecipeId)
                 .Distinct()
                 .Count() >= activeSlots);
+        Assert.All(
+            scenario.ReceiptObservations,
+            observation => Assert.True(observation.ObservedWorld > observation.ReceiptWorld));
     }
 
     private sealed class AutoConceptScenario
@@ -284,7 +322,6 @@ public sealed class AutoConceptHeadlessJourneyTests
         private BatchReceipt _previousReceipt;
         private long? _lastRunAtTicks;
         private ulong _world;
-        private ulong _cycle;
         private ulong _batch;
         private ulong _action;
 
@@ -344,6 +381,7 @@ public sealed class AutoConceptHeadlessJourneyTests
         internal IReadOnlyList<Candidate> Candidates => _candidates;
         internal HashSet<Guid> UnsafeIds { get; }
         internal List<ScenarioEvent> Events { get; } = new();
+        internal List<(ulong ReceiptWorld, ulong ObservedWorld)> ReceiptObservations { get; } = new();
         internal List<int> SettledActiveCounts { get; } = new();
         internal int PeakSettledActiveCount { get; private set; }
 
@@ -357,10 +395,7 @@ public sealed class AutoConceptHeadlessJourneyTests
             SettledActiveCounts.Add(active);
             PeakSettledActiveCount = Math.Max(PeakSettledActiveCount, active);
             var world = BuildWorld();
-            for (var actionCount = 0; actionCount < 64; actionCount++)
-                if (!EvaluateAndExecute(at.Ticks, world)) return;
-            throw new InvalidOperationException(
-                "Auto Concept did not become quiescent within 64 actions at one timestamp.");
+            EvaluateAndExecute(at.Ticks, world);
         }
 
         private void AdvanceProgress(long atTicks)
@@ -377,7 +412,7 @@ public sealed class AutoConceptHeadlessJourneyTests
                 candidate.Advance(elapsedSeconds);
         }
 
-        private bool EvaluateAndExecute(long atTicks, GameWorldState world)
+        private void EvaluateAndExecute(long atTicks, GameWorldState world)
         {
             var store = new ReusableActionStore<AutoConceptCycleAction>();
             store.BeginWrite();
@@ -388,9 +423,11 @@ public sealed class AutoConceptHeadlessJourneyTests
                 new ConfigGeneration(1),
                 StrategyGeneration.Initial,
                 new WorldGeneration(_world),
-                new CycleId(++_cycle));
+                new CycleId(_world));
             var receipt = _previousReceipt;
             _previousReceipt = default;
+            if (receipt.IsPresent)
+                ReceiptObservations.Add((receipt.Cycle.World.Value, _world));
             var context = new ServiceCycleContext(
                 identity,
                 receipt,
@@ -404,7 +441,7 @@ public sealed class AutoConceptHeadlessJourneyTests
                 writer,
                 out var metrics);
             _state.RecordDecision(in metrics);
-            if (store.Count == 0) return false;
+            if (store.Count == 0) return;
             if (store.Count != 1)
                 throw new InvalidOperationException($"Expected one action, observed {store.Count}.");
 
@@ -420,7 +457,7 @@ public sealed class AutoConceptHeadlessJourneyTests
                 in planned,
                 in _configuration,
                 in actionContext);
-            Events.Add(new ScenarioEvent(atTicks, in planned, in result));
+            Events.Add(new ScenarioEvent(atTicks, _world, in planned, in result));
             _previousReceipt = result.Disposition == ServiceActionDisposition.Committed
                 ? BatchReceipt.Completed(
                     identity,
@@ -438,7 +475,6 @@ public sealed class AutoConceptHeadlessJourneyTests
                     result,
                     default,
                     new MonotonicTimestamp(atTicks));
-            return true;
         }
 
         private GameWorldState BuildWorld()
@@ -683,15 +719,18 @@ public sealed class AutoConceptHeadlessJourneyTests
     {
         internal ScenarioEvent(
             long atTicks,
+            ulong worldGeneration,
             in AutoConceptCycleAction action,
             in ServiceActionResult result)
         {
             AtTicks = atTicks;
+            WorldGeneration = worldGeneration;
             Action = action;
             Result = result;
         }
 
         internal long AtTicks { get; }
+        internal ulong WorldGeneration { get; }
         internal AutoConceptCycleAction Action { get; }
         internal ServiceActionResult Result { get; }
     }

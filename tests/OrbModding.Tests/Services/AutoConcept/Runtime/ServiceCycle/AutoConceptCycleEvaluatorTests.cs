@@ -384,63 +384,7 @@ public sealed class AutoConceptCycleEvaluatorTests
 
     [Fact]
     [Trait("Category", "AutoConceptReliability")]
-    public void TimedCycleDefersRejectedCandidatesForTheCurrentPublication()
-    {
-        var world = World(
-            new[]
-            {
-                Recipe(Alpha, maximum: 1),
-                Recipe(Beta, maximum: 1),
-                Recipe(Gamma, maximum: 1),
-            },
-            new[] { Instance(Alpha, quantity: 1, queued: 1) });
-        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
-        var config = Config(
-            slotMode: AutoConceptSlotManagementMode.TimedCycle,
-            trainingSeconds: 10);
-
-        Assert.Empty(PlanAt(
-            world, config, ref state, decisionAtTicks: 0, out _, out _));
-        var first = Assert.Single(PlanAt(
-            world, config, ref state, TimeSpan.FromSeconds(11).Ticks, out _, out _));
-        var second = Assert.Single(PlanAt(
-            world,
-            config,
-            ref state,
-            TimeSpan.FromSeconds(11).Ticks,
-            out _,
-            out _,
-            previousResultCode: AutoConceptActionResultCodes.SlotUnavailable));
-        var none = PlanAt(
-            world,
-            config,
-            ref state,
-            TimeSpan.FromSeconds(11).Ticks,
-            out var retryWake,
-            out var retrying,
-            previousResultCode: AutoConceptActionResultCodes.ProjectionRefused);
-        var nextPublication = Assert.Single(PlanAt(
-            world,
-            config,
-            ref state,
-            TimeSpan.FromSeconds(12).Ticks,
-            out _,
-            out _,
-            worldGeneration: 2));
-
-        Assert.Equal(AutoConceptActionKind.RotateOut, first.Kind);
-        Assert.Equal(Beta, first.ReplacementId);
-        Assert.Equal(AutoConceptActionKind.RotateOut, second.Kind);
-        Assert.Equal(Gamma, second.ReplacementId);
-        Assert.Empty(none);
-        Assert.Equal(WakePolicyKind.OnPublication, retryWake.Kind);
-        Assert.Equal(AutoConceptIdleReason.WaitingForCandidateRetry, retrying.IdleReason);
-        Assert.Equal(Beta, nextPublication.ReplacementId);
-    }
-
-    [Fact]
-    [Trait("Category", "AutoConceptReliability")]
-    public void RejectionFromThePriorPublicationDoesNotDeferTheNewerWorld()
+    public void RejectedCandidateReentersPlanningOnTheNextWorldPublication()
     {
         var world = World(
             new[]
@@ -466,55 +410,12 @@ public sealed class AutoConceptCycleEvaluatorTests
             TimeSpan.FromSeconds(12).Ticks,
             out _,
             out _,
-            previousResultCode: AutoConceptActionResultCodes.SlotUnavailable,
-            worldGeneration: 2,
-            receiptWorldGeneration: 1));
-
-        Assert.Equal(Beta, rejected.ReplacementId);
-        Assert.Equal(Beta, reconsidered.ReplacementId);
-    }
-
-    [Fact]
-    [Trait("Category", "AutoConceptReliability")]
-    public void RejectedTimedRotationDoesNotPreventDepthOnTheActiveConcept()
-    {
-        var initial = World(
-            new[]
-            {
-                Recipe(Alpha, maximum: 1),
-                Recipe(Beta, maximum: 1),
-            },
-            new[] { Instance(Alpha, quantity: 1, queued: 1) });
-        var gainedCapacity = World(
-            new[]
-            {
-                Recipe(Alpha, maximum: 2),
-                Recipe(Beta, maximum: 1),
-            },
-            new[] { Instance(Alpha, quantity: 1, queued: 1) });
-        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
-        var config = Config(
-            slotMode: AutoConceptSlotManagementMode.TimedCycle,
-            trainingSeconds: 10);
-
-        Assert.Empty(PlanAt(
-            initial, config, ref state, decisionAtTicks: 0, out _, out _));
-        var rotation = Assert.Single(PlanAt(
-            initial, config, ref state, TimeSpan.FromSeconds(11).Ticks, out _, out _));
-        var depth = Assert.Single(PlanAt(
-            gainedCapacity,
-            config,
-            ref state,
-            TimeSpan.FromSeconds(11).Ticks,
-            out _,
-            out _,
             previousResultCode: AutoConceptActionResultCodes.SlotUnavailable));
 
-        Assert.Equal(AutoConceptActionKind.RotateOut, rotation.Kind);
-        Assert.Equal(AutoConceptDecisionKind.Depth, state.Decision.Kind);
-        Assert.Equal(AutoConceptActionKind.Add, depth.Kind);
-        Assert.Equal(Alpha, depth.RecipeId);
-        Assert.Equal(2, depth.TargetOrDelta);
+        Assert.Equal(AutoConceptActionKind.RotateOut, rejected.Kind);
+        Assert.Equal(Beta, rejected.ReplacementId);
+        Assert.Equal(AutoConceptActionKind.RotateOut, reconsidered.Kind);
+        Assert.Equal(Beta, reconsidered.ReplacementId);
     }
 
     [Fact]
@@ -713,24 +614,19 @@ public sealed class AutoConceptCycleEvaluatorTests
         out WakePolicy wake,
         out AutoConceptDecisionMetrics metrics,
         bool previousCommitted = false,
-        ServiceActionResultCode previousResultCode = default,
-        ulong worldGeneration = 1,
-        ulong configGeneration = 1,
-        ulong? receiptWorldGeneration = null,
-        ulong? receiptConfigGeneration = null)
+        ServiceActionResultCode previousResultCode = default)
     {
         var store = new ReusableActionStore<AutoConceptCycleAction>();
         store.BeginWrite();
         var writer = new ServiceActionWriter<AutoConceptCycleAction>(store);
         var identity = new ServiceCycleIdentity(
             new ServiceId("auto-concept"), new LifecycleGeneration(1),
-            new ConfigGeneration(configGeneration), StrategyGeneration.Initial,
-            new WorldGeneration(worldGeneration), new CycleId(1));
+            new ConfigGeneration(1), StrategyGeneration.Initial,
+            new WorldGeneration(2), new CycleId(2));
         var receiptIdentity = new ServiceCycleIdentity(
             new ServiceId("auto-concept"), new LifecycleGeneration(1),
-            new ConfigGeneration(receiptConfigGeneration ?? configGeneration),
-            StrategyGeneration.Initial,
-            new WorldGeneration(receiptWorldGeneration ?? worldGeneration),
+            new ConfigGeneration(1), StrategyGeneration.Initial,
+            new WorldGeneration(1),
             new CycleId(1));
         var receipt = previousResultCode.IsValid
             ? BatchReceipt.Terminated(

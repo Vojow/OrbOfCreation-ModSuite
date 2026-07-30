@@ -1,6 +1,5 @@
 using System;
 using OrbModding.Common.Runtime;
-using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -187,57 +186,6 @@ internal sealed class AutoConceptAssignmentHistory
     }
 }
 
-internal sealed class AutoConceptPublicationDeferralStore
-{
-    private string[] _keys = new string[16];
-    private WorldGeneration[] _worlds = new WorldGeneration[16];
-    private ConfigGeneration[] _configs = new ConfigGeneration[16];
-    private int _count;
-
-    internal bool Contains(
-        string key,
-        WorldGeneration world,
-        ConfigGeneration config)
-    {
-        for (var index = 0; index < _count; index++)
-            if (string.Equals(_keys[index], key, StringComparison.Ordinal))
-                return _worlds[index] == world && _configs[index] == config;
-        return false;
-    }
-
-    internal void Set(
-        string key,
-        WorldGeneration world,
-        ConfigGeneration config)
-    {
-        for (var index = 0; index < _count; index++)
-        {
-            if (!string.Equals(_keys[index], key, StringComparison.Ordinal)) continue;
-            _worlds[index] = world;
-            _configs[index] = config;
-            return;
-        }
-        if (_count == _keys.Length)
-        {
-            Array.Resize(ref _keys, _keys.Length * 2);
-            Array.Resize(ref _worlds, _worlds.Length * 2);
-            Array.Resize(ref _configs, _configs.Length * 2);
-        }
-        _keys[_count] = key;
-        _worlds[_count] = world;
-        _configs[_count] = config;
-        _count++;
-    }
-
-    internal void Clear()
-    {
-        Array.Clear(_keys, 0, _count);
-        Array.Clear(_worlds, 0, _count);
-        Array.Clear(_configs, 0, _count);
-        _count = 0;
-    }
-}
-
 internal struct AutoConceptCycleState
 {
     private AutoConceptCycleState(LifecycleGeneration lifecycle)
@@ -246,7 +194,6 @@ internal struct AutoConceptCycleState
         Ownership = new AutoConceptOwnershipStore();
         TrainingSessions = new AutoConceptTrainingStore();
         LastTimedAssignment = new AutoConceptAssignmentHistory();
-        CandidateDeferrals = new AutoConceptPublicationDeferralStore();
         BaselineCaptured = false;
         TimedSessionsInitialized = false;
         TimedAssignmentSequence = 0;
@@ -265,7 +212,6 @@ internal struct AutoConceptCycleState
     internal AutoConceptOwnershipStore Ownership;
     internal AutoConceptTrainingStore TrainingSessions;
     internal AutoConceptAssignmentHistory LastTimedAssignment;
-    internal AutoConceptPublicationDeferralStore CandidateDeferrals;
     internal bool BaselineCaptured;
     internal bool TimedSessionsInitialized;
     internal long TimedAssignmentSequence;
@@ -314,7 +260,6 @@ internal enum AutoConceptIdleReason
     None = 0,
     WaitingForTraining = 1,
     NoUnlockedAssignableReplacement = 2,
-    WaitingForCandidateRetry = 3,
 }
 
 internal readonly struct AutoConceptDecisionMetrics

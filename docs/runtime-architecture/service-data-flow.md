@@ -68,9 +68,9 @@ read twice and no place to keep a capture even if a service wanted one.
 ## Ordinary service flow
 
 1. The pump asks whether this service may start: its own wake policy, **and** whether the world has
-   advanced past its last game mutation. A service that changed the game does not decide again until
-   the world has been re-read since — otherwise it re-decides against a world its own action already
-   invalidated and does the same thing twice.
+   advanced past its last game-facing action attempt. A commit is absent from the pinned snapshot;
+   a skip, rejection, or fault proves the live action boundary disagreed with it. In every case the
+   service waits for a later reading instead of planning again from facts just shown unreliable.
 2. If it may start, it is handed immutable references to world, configuration and strategy.
 3. The worker reads them freely. They are immutable, and anything newer is a *different object*, so
    there is no shared mutable state and nothing to synchronise.
