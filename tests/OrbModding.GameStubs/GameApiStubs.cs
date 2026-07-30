@@ -77,6 +77,9 @@ public sealed class IntVariable
 public static class GlobalVariables
 {
     private static IntVariable multiBuy = IntVariable.Register(KnownVariableIds.MultiBuy);
+    private static readonly TooltipableObject GlobalStructureType = new TooltipableObject();
+    private static readonly TooltipableObject HarvestSpeedAttribute = new TooltipableObject();
+    private static readonly TooltipableObject MasteryExperienceAttribute = new TooltipableObject();
 
     // Registered in IntVariable.All under the uuid the game ships, because world collection finds
     // these by identity in the registry rather than through the accessor beside them.
@@ -87,6 +90,9 @@ public static class GlobalVariables
     }
 
     public static IntVariable GetMultiBuy() => MultiBuy;
+    public static TooltipableObject GetGlobalStructureType() => GlobalStructureType;
+    public static TooltipableObject GetHarvestSpeedAttr() => HarvestSpeedAttribute;
+    public static TooltipableObject GetMasteryExpAttr() => MasteryExperienceAttribute;
 }
 
 public static class KnownVariableIds
@@ -644,6 +650,7 @@ public class Spell
     public int CurrentCharges { get; set; }
     public int MaximumCharges { get; set; }
     public BigDouble CooldownRemaining { get; set; }
+    public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
@@ -658,6 +665,7 @@ public class Spell
     public SpellRecipeSO? get_reference() => reference;
 
     public string GetName() => DisplayName;
+    public UnityEngine.Sprite GetIcon() => Icon;
     public bool IsChanneled() => Channeled;
     public bool IsToggledSpell() => false;
     public bool IsEmpty() => false;
@@ -1582,7 +1590,11 @@ public interface ITooltipable
     List<TooltipNode> GetAltTooltipNodes();
 }
 
-public class TooltipableObject : UnityEngine.ScriptableObject { }
+public class TooltipableObject : UnityEngine.ScriptableObject
+{
+    public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
+    public UnityEngine.Sprite GetIcon() => Icon;
+}
 
 public class TooltipNode
 {

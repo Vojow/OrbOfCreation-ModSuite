@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Configuration;
 using OrbAutomata;
 using OrbModConfig;
 using OrbModding.Common;
 using OrbMentor;
+using TMPro;
 using UnityEngine;
 using Xunit;
 
@@ -286,6 +288,59 @@ public sealed class ModConfigTests
             mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Items" or "Mentor"),
             section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
                 section.Settings.Single(setting => setting.Key == "Mode"))));
+    }
+
+    [Fact]
+    public void ModsRailBuildsEveryRegisteredConsolidatedPageWithAnAuditedIcon()
+    {
+        var config = new ConfigFile();
+        BepInExAutomataConfiguration.Bind(config);
+        MentorConfig.Bind(config);
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("suite", "Orb Of Creation ModSuite", "test", config),
+        });
+        var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
+        var prototypeObject = new GameObject("NativeRailPrototype");
+        var prototype = prototypeObject.AddComponent<Behaviour>();
+        var sprite = new Sprite();
+        var primitives = new NativeFeatureRailVisualPrimitives(
+            prototype,
+            sprite,
+            sprite,
+            sprite,
+            sprite,
+            sprite,
+            sprite);
+        var parent = (RectTransform)new GameObject("RailParent").transform;
+        var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
+        var owned = new List<GameObject>();
+        var previousSpellManager = global::SpellManager.instance;
+        global::SpellManager.instance = new global::SpellManager();
+        global::SpellManager.instance.activeSpells.Add(new global::Spell());
+        try
+        {
+            Assert.True(
+                ModConfigNativeRailFactory.TryBuild(
+                    parent,
+                    pages.Select(page => page.Label).ToArray(),
+                    selected: 0,
+                    owned,
+                    template,
+                    primitives,
+                    _ => { },
+                    out var reason),
+                reason);
+            Assert.Equal(pages.Count, owned.Count);
+        }
+        finally
+        {
+            global::SpellManager.instance = previousSpellManager;
+            foreach (var item in owned) UnityEngine.Object.Destroy(item);
+            UnityEngine.Object.Destroy(template.gameObject);
+            UnityEngine.Object.Destroy(prototypeObject);
+            UnityEngine.Object.Destroy(parent.gameObject);
+        }
     }
 
     [Fact]

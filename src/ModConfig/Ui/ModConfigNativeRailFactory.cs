@@ -138,6 +138,10 @@ internal static class ModConfigNativeRailFactory
                 return true;
             case "Auto Harvest":
                 return NativeFeatureIconResolver.TryGetHarvestIcon(out icon, out reason);
+            case "Auto Items":
+                icon = primitives.AdvancedIcon;
+                reason = string.Empty;
+                return true;
             case "Mentor":
                 return NativeFeatureIconResolver.TryGetMentorIcon(out icon, out reason);
             case "Advanced":
