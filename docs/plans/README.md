@@ -12,7 +12,7 @@ than marked done.
 | [Orb Insights](insights.md) | Planned | Read-only gameplay and diagnostic views. |
 | [Orb Toolbox](toolbox.md) | Planned | Explicit advanced player tools. |
 | [Auto Items](auto-items.md) | Active | Phases 1–10 and picker UX implemented; automated gates pass, interactive validation remains. |
-| [Auto Scribe](auto-scribe.md) | Validation ready | Mods rail is confirmed; shared-host worker-boundary fixes pass all gates and the corrected clean release is installed pending fresh-launch confirmation. |
+| [Auto Scribe](auto-scribe.md) | Validation ready | Shared-host and diagnostics fixes pass all gates; the corrected clean release is installed pending fresh-launch Auto Items/Auto Scribe health confirmation. |
 | [Auto Buy MVP deferrals](autobuy-servicecycle-mvp-deferrals.md) | Active | What the Auto Buy port deliberately left out, and what has to come back. |
 | [Full-trace world store](full-trace-world-store.md) | Open decision | The raw-capture stream of the full-trace mandate has no store: the volume and the codec are the ruling it waits on. |
 
