@@ -16,7 +16,7 @@ Last updated: **2026-07-30**
 
 | Phase | Status | Exit condition |
 |---|---|---|
-| 1. Product model and static native evidence | **In progress** | Exact recipe, scroll, enchantment, level, target-selection, inventory, and native automation relationships are accepted |
+| 1. Product model and static native evidence | **In progress** | The complete native Scribe recipe catalog and every accepted recipe, Scroll, enchantment, level, target-selection, inventory, and automation relationship are proven |
 | 2. Current-build compatibility audit | **Required before mutation** | The installed assembly pair is differentially verified and either trusted or rejected |
 | 3. Shared world publication | **Planned** | Scroll counts by level, structure enchantments, exact Scribe recipes, target level, native target eligibility, and automation instances publish atomically |
 | 4. Read-only demand planner | **Planned** | A native-free planner computes target-level deficits and bounded desired automation without emitting mutations |
@@ -34,9 +34,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: finish Phase 1 without authorizing mutation. Obtain serialized asset evidence for
-  the three recipe-to-scroll and scroll-to-enchantment/target graphs, then audit the new installed
-  assembly pair before adding native contracts.
+- Current task: finish Phase 1 without authorizing mutation. Enumerate every exact recipe registered
+  to the Scribe recipe type, then obtain serialized asset evidence for each accepted
+  recipe-to-Scroll and Scroll-to-enchantment/target graph before adding native contracts.
 - Installed candidate hashes observed on 2026-07-30:
   - `Assembly-CSharp.dll`: `436210E61D9F8B84658609D35E32BC274356170005AC15FE93FA36D4D9F7AA4C`
   - `Assembly-CSharp-firstpass.dll`: `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A`
@@ -47,8 +47,8 @@ Last updated: **2026-07-30**
 
 ## Goal
 
-Fully automate preparing the highest currently craftable Scroll set for every structure that the
-game considers a valid Scroll target.
+Fully automate preparing every highest-currently-craftable Scribe Scroll for every structure that
+the game considers a valid target for that exact Scroll.
 
 The completed loop is:
 
@@ -68,13 +68,35 @@ chooses a target structure, changes toxicity, edits a save, or reproduces an eff
 
 ## Product model
 
-The initial supported set is exact and closed:
+The screenshot's Advancement, Power, and Learning rows are a visible progression slice, not the
+catalog boundary. The checked-in identity extraction contains at least eight Scroll-named
+`ConsumableSO`/`EnchantmentSO` pairs and six Scroll-named `CraftingRecipeSO` candidates:
 
-| Role | Recipe UUID | Scroll UUID | Enchantment UUID |
+| Candidate role | Recipe UUID candidate | Scroll UUID | Enchantment UUID |
 |---|---|---|---|
 | Advancement | `a4a02a8f-6573-411c-a30c-6d9bcee12605` | `5f6aa08d-7da6-4c7a-89c9-aabcfe48e886` | `0796ee25-e1f6-4c5c-abba-aad46e02318b` |
-| Power | `9c0a2b96-45fa-4aca-83ba-8efad8895608` | `4bb8af50-fc7d-44a7-b1fc-937c390f8aec` | `b9d5f0f7-43fd-4bad-a8e2-8a73f2f1d1d6` |
+| Development | `b15690ab-828c-42b9-ad69-70f169a45961` | `09d6101a-460d-4ce9-b7d4-46c4abaeadb7` | `cb354ece-fd8c-4ffc-a67e-b24cc3fe5fa5` |
+| Echoing | `008ccaa9-da26-4b55-95a5-5bc5df9c62f0` | `164dbfa9-8b9f-4976-9d17-ad3ad6b07a62` | `d854b177-865f-45ee-97a3-23d904df1ba1` |
+| Excellence | `6c5c36ea-4736-46d2-b961-6227d4cce5d3` | `49057abe-fe54-481e-99bc-2b82c3995c6b` | `7b17670e-b3b6-401f-83f7-9c0e6d157852` |
+| Investment | None identified | `da5eab6d-ab4c-4b32-aca1-2e83b6d3a64b` | `f75cea6e-5d21-439f-bce4-79199b22434d` |
 | Learning | `49da8d21-0f6a-492e-bd9a-15531b1737d5` | `ec14ee5d-66a3-4b28-a271-25dca2414387` | `b74c2058-4113-4b6c-b11e-1c97304d236c` |
+| Power | `9c0a2b96-45fa-4aca-83ba-8efad8895608` | `4bb8af50-fc7d-44a7-b1fc-937c390f8aec` | `b9d5f0f7-43fd-4bad-a8e2-8a73f2f1d1d6` |
+| Speed | None identified | `b2232a7d-5c97-44c9-9520-686e99fa8293` | `9f068bad-f3a0-47de-84f4-407e67622fe1` |
+
+These rows are identity candidates, not accepted relationships. Names made the missing scope
+visible, but names never authorize automation.
+
+The production catalog is discovered from native relationships on every lifecycle:
+
+1. enumerate recipes registered to the exact Scribe recipe type;
+2. require an audited levelled-recipe shape;
+3. require exactly one output `ConsumableSO` belonging to the exact Scroll family;
+4. require an audited structure-target graph with an unambiguous enchantment identity;
+5. publish the resulting stable recipe/Scroll/enchantment role.
+
+An owned Scroll with no accepted Scribe recipe remains eligible for target-aware Auto Items use, but
+Auto Scribe reports it as coverage-only and does not invent a production path. A role contributes
+to Auto Scribe's completion goal only when its exact native Scribe recipe is proven.
 
 The exact Scribe recipe type is `ee001474-8209-4238-9566-84899a877226`
 (`CraftingRecipeTypeSO`, `ScribeCrafting`). Its native `maxStartingLevel` is the target level.
@@ -98,8 +120,9 @@ each craft, use, structure unlock, level unlock, save/load, reset, or NG+ transi
 2. **Highest currently craftable level.** The target is the exact native
    `ScribeCrafting.maxStartingLevel`, not the player's selected starting level and not a guessed
    level from an upgrade name.
-3. **Exact three-role set.** Only the accepted Advancement, Power, and Learning recipe/Scroll/
-   enchantment identity chains are supported. Names are diagnostics only.
+3. **Complete native catalog, not a screen list.** Every audited recipe registered to the exact
+   Scribe type is considered. A role is supported only when its recipe, Scroll family, structure
+   target, and enchantment relationship form one accepted graph. Names are diagnostics only.
 4. **Native-valid coverage.** "All structures" means every structure the exact Scroll target
    selection accepts at the target scaling. Visibility alone is not enough.
 5. **Higher replaces lower.** A structure is covered when the matching enchantment level is at
@@ -129,9 +152,9 @@ These are implementation questions, not permission to guess:
    serialized and how ownership can survive save/load without claiming a player's pre-existing
    instance. If durable ownership cannot be made unambiguous, use bounded one-shot native crafting
    instead of persistent automation.
-2. **Slot scarcity.** When fewer than three native Auto Scribe slots are available, choose and test
-   a deterministic fair rotation. The preferred policy is largest uncovered deficit, then oldest
-   served role, then stable role UUID.
+2. **Slot scarcity.** When fewer native Auto Scribe slots than deficient producible roles are
+   available, choose and test a deterministic fair rotation. The preferred policy is largest
+   uncovered deficit, then oldest served role, then stable Scroll UUID.
 3. **External automation accounting.** Determine whether a player-owned automation instance can be
    treated as eventual supply or only as a reason to avoid competing. The first safe behavior is
    to leave that role untouched and report external ownership.
@@ -178,24 +201,26 @@ the action. An ambiguous attempted mutation quarantines Auto Scribe for the life
 The proposed surface is intentionally small:
 
 - `AutoScribe.Mode`: `Disabled` by default, or `Active`;
-- `AutoScribe.Roles`: Advancement, Power, and Learning enabled by default behind the master switch;
+- `AutoScribe.Roles`: a discovered-role picker backed by exact Scroll UUIDs, with all audited
+  producible roles enabled by default behind the master switch;
 - `AutoScribe.EvaluationIntervalSeconds`: bounded planning cadence.
 
 The Mods page should show a read-only coverage summary per role:
 
 ```text
-Power: target Lv 12 · 28/41 covered · 2 supplied · producing
+Development: target Lv 12 · 28/41 covered · 2 supplied · producing
 ```
 
-It should also explain dependency and safety states: Auto Items Scrolls disabled, target evidence
-unavailable, no automation slot, player automation present, current build unaudited, lifecycle
-retired, or mutation quarantined. It must not expose UUID entry as the normal workflow because the
-supported set is exact and closed.
+It should also explain dependency and safety states: Auto Items Scrolls disabled, coverage-only
+Scroll with no Scribe recipe, target evidence unavailable, no automation slot, player automation
+present, current build unaudited, lifecycle retired, or mutation quarantined. UUIDs remain the
+persisted authority but are not the normal user-facing labels.
 
 ## Delivery sequence
 
 1. Finish serialized asset evidence and current-build compatibility audit.
-2. Add exact known entities and installed metadata contracts.
+2. Add the exact Scribe type and Scroll family identities plus installed metadata contracts;
+   discover individual role graphs from native relationships rather than a fixed screen list.
 3. Publish levelled Scroll counts, enchantment coverage, Scribe recipes, target eligibility, and
    automation instances through the shared world snapshot.
 4. Implement and portable-test the pure demand/supply planner with no action adapter.
@@ -211,7 +236,7 @@ supported set is exact and closed.
 
 The final UAT must include:
 
-- one, two, and three available native automation slots;
+- one, several, and enough native automation slots for every deficient producible role;
 - empty coverage, mixed lower levels, complete coverage, and a newly unlocked target level;
 - a structure becoming visible while active;
 - stock already covering demand and surplus lower-level stock;
