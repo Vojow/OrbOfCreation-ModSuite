@@ -35,8 +35,8 @@ Last updated: **2026-07-30**
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: verify and install the Scroll-throughput follow-up, confirm it consumes successive
-  useful Scrolls without an idle one-second gap or a rejected-work loop, and confirm the Auto
+- Current task: confirm the installed Scroll-throughput follow-up consumes successive useful
+  Scrolls without an idle one-second gap or a rejected-work loop, and confirm the Auto
   Items/Auto Scribe row survives a supported UI rebuild. Then exercise one
   explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
@@ -100,14 +100,14 @@ Last updated: **2026-07-30**
   installed-game contract tests pass against the local Windows Steam assemblies, and the
   real-reference Release build completes with zero warnings and errors. Interactive game
   validation has not yet covered Threads, the retry fixes, or the new paired quick-control row.
-- Installed source: clean commit `5698fbc6d55b490b9c122d7f5c19764dfa9c4b12` is pushed to draft
+- Installed source: clean commit `67ea8214d97d028314369b08e32a611070d46f06` is pushed to draft
   PR #102 and installed. The built and installed DLLs both have SHA-256
-  `340FE12EF23F1C0B11E1C4B012D623789EC5775EF797A2867543C6E39B3D7C4E`.
+  `0AACD74E41405D600FD07D9894912B4BF6C89D899E72D6C202FEEE959A39A1EB`.
   The guarded installer backed up 12 save files to
-  `backups/pre-modsuite-install-20260730T112441Z` and the previous DLL to
-  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
-- Next action: install the throughput build, then run the Phase 11-15 behavior and layout
-  checklists on a disposable save.
+  `backups/pre-modsuite-install-20260730T113751Z` and the previous DLL to
+  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T113751Z`.
+- Next action: run the Phase 11-15 behavior and layout checklists on a disposable save, beginning
+  with successive useful Scroll consumption under ample toxicity headroom.
 
 ### Locked decisions
 
