@@ -1,9 +1,9 @@
 # Auto Scribe
 
-> **Lifecycle: Implementation complete; interactive validation pending.** The audited identity
+> **Lifecycle: Release build installed; interactive validation ready.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
-> configuration, diagnostics, and semantic role picker are implemented. No DLL has been installed
-> and no live save has been opened for UAT.
+> configuration, diagnostics, and semantic role picker are implemented. The reviewed release DLL
+> is installed with verified save and DLL backups; no live save has yet been opened for UAT.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -26,7 +26,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
-| 10. Interactive game validation | **Pending authorization** | Disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
+| 10. Interactive game validation | **Ready** | Disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -35,8 +35,8 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: review the implementation in draft PR #102, then wait for explicit authorization
-  before installing a DLL or performing disposable-save UAT.
+- Current task: perform the interactive validation outline below on a disposable save, beginning
+  with load/configuration diagnostics before enabling Auto Scribe.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -46,8 +46,14 @@ Last updated: **2026-07-30**
 - `origin/main` accepts this exact pair as baseline `steam-windows-2026-07-29` in
   `GameAssemblyAudit` and `data/native-contracts.json`. The branch adds and passes the
   feature-specific relationship and mutation contracts for that accepted baseline.
-- Installed metadata contracts pass against this exact pair. No DLL was installed, no save was
-  opened or edited, and no live native mutation was attempted.
+- Installed metadata contracts pass against this exact pair. Release commit
+  `dd6b9895a35ca02a8b4c2291348000e41275c047` was installed on 2026-07-30 with SHA-256
+  `92bd54c1ab16d90968b9c392c1c30a69dcf1ac7fb85f4665f966c4a9d10004d5`.
+- Rollback checkpoint:
+  - save copies: `backups/pre-modsuite-install-20260730T094146Z` (12 files);
+  - previous DLL: `BepInEx/modsuite-backups/pre-modsuite-install-20260730T094146Z` (1 file).
+- The installer did not edit an active save. No save has been opened and no live native mutation
+  has been attempted since installation.
 
 ## Goal
 

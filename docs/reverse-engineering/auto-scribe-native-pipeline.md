@@ -1,10 +1,10 @@
 # Auto Scribe native pipeline
 
-> **Evidence status: implemented against an audited installed build; interactive validation
-> pending.** The installed assembly pair is accepted as `steam-windows-2026-07-29`. Exact source
+> **Evidence status: implemented and installed against an audited build; interactive validation
+> ready.** The installed assembly pair is accepted as `steam-windows-2026-07-29`. Exact source
 > contracts and installed metadata gates now cover the shared publication, target preflight, and
-> one-shot Scribe action. This evidence authorizes the guarded code path when configured, but no DLL
-> has been installed and no disposable-save UAT has yet been performed.
+> one-shot Scribe action. Release commit `dd6b989` is installed with verified rollback backups; no
+> disposable-save UAT has yet been performed.
 
 [Back to reverse-engineering index](README.md) | [Auto Scribe plan](../plans/auto-scribe.md)
 
