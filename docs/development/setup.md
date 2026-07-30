@@ -41,7 +41,9 @@ Debug assemblies with `EnableServiceCycleProfiler=true`. Both modes refuse to ru
 run the complete portable gate and installed-game contracts, build the one supported assembly,
 reject duplicate ModSuite DLLs and any retired per-plugin DLL still installed, back up active top-level saves and installed DLLs, install
 the verified outputs, and print their SHA-256 hashes. Set `OOC_GAME_DIR` or `OOC_SAVE_DIR` when local Steam
-discovery does not match the installation. The command never packages, tags, publishes, or launches the game.
+discovery does not match the installation. Windows paths are accepted when the command runs through Git
+for Windows; its bundled `sha256sum` and PowerShell process inspection are supported fallbacks. The command
+never packages, tags, publishes, or launches the game.
 
 From a clean commit, rehearse the complete supported-suite package on macOS or Linux with the same ignored
 staging root:

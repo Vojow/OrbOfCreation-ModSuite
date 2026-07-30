@@ -70,14 +70,23 @@ internal sealed class ScrollCoveragePlan
         return false;
     }
 
-    internal bool TryChooseProduction(out ScrollRoleCoverage coverage)
+    internal bool TryChooseProduction(out ScrollRoleCoverage coverage) =>
+        TryChooseProduction(enabledRoles: null, out coverage);
+
+    internal bool TryChooseProduction(
+        PublicationTable<ScrollRoleKey>? enabledRoles,
+        out ScrollRoleCoverage coverage)
     {
         coverage = default;
         var found = false;
         for (var index = 0; index < Roles.Length; index++)
         {
             var candidate = Roles[index];
-            if (!candidate.ShouldProduce) continue;
+            if (!candidate.ShouldProduce ||
+                !AutoScribeRoleSelection.Contains(enabledRoles, candidate.Role))
+            {
+                continue;
+            }
             if (!found ||
                 candidate.CraftCostOrder < coverage.CraftCostOrder ||
                 (candidate.CraftCostOrder == coverage.CraftCostOrder &&

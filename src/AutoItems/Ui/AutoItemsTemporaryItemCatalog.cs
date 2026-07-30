@@ -125,7 +125,7 @@ internal static class AutoItemsTemporaryItemCatalog
                 : string.Empty;
             return AutoItemsTemporaryItemCatalogSnapshot.Available(options, notice);
         }
-        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             return AutoItemsTemporaryItemCatalogSnapshot.Unavailable(
                 "The native temporary-item catalog could not be read: " +

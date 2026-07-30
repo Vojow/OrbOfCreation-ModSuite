@@ -195,9 +195,10 @@ public sealed class ScrollCoveragePlannerTests
             epoch: 2,
             new[] { disabled, enabled });
 
-        Assert.True(AutoScribeWorker.TryChooseEnabledProduction(
-            plan,
-            "scribe.power",
+        Assert.True(plan.TryChooseProduction(
+            AutoScribeRoleSelection.ParsePublication(
+                "scribe.power",
+                Profile().Roles),
             out var selected));
         Assert.Equal(new ScrollRoleKey("scribe.power"), selected.Role);
     }
@@ -214,9 +215,8 @@ public sealed class ScrollCoveragePlannerTests
             epoch: 2,
             new[] { expensive, cheapest });
 
-        Assert.True(AutoScribeWorker.TryChooseEnabledProduction(
-            plan,
-            configured: string.Empty,
+        Assert.True(plan.TryChooseProduction(
+            enabledRoles: null,
             out var selected));
         Assert.Equal(new ScrollRoleKey("scribe.advancement"), selected.Role);
     }

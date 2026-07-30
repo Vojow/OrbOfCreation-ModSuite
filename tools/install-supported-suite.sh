@@ -41,17 +41,47 @@ case "$1" in
 esac
 mode="$1"
 
-for command_name in dotnet git find cp cmp shasum awk grep pgrep; do
+for command_name in dotnet git find cp cmp awk grep; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
     fi
 done
+if ! command -v shasum >/dev/null 2>&1 &&
+    ! command -v sha256sum >/dev/null 2>&1; then
+    echo "Required SHA-256 command is unavailable: shasum or sha256sum" >&2
+    exit 1
+fi
+if ! command -v pgrep >/dev/null 2>&1 &&
+    ! command -v powershell.exe >/dev/null 2>&1; then
+    echo "Required process inspection is unavailable: pgrep or powershell.exe" >&2
+    exit 1
+fi
+
+normalize_directory() {
+    local candidate="$1"
+    if [[ -d "${candidate}" ]]; then
+        printf '%s\n' "${candidate}"
+        return 0
+    fi
+    if command -v cygpath >/dev/null 2>&1; then
+        local unix_candidate
+        unix_candidate="$(cygpath -u "${candidate}" 2>/dev/null || true)"
+        if [[ -n "${unix_candidate}" && -d "${unix_candidate}" ]]; then
+            printf '%s\n' "${unix_candidate}"
+            return 0
+        fi
+    fi
+    return 1
+}
 
 resolve_game_root() {
     if [[ -n "${OOC_GAME_DIR:-}" ]]; then
-        printf '%s\n' "${OOC_GAME_DIR}"
-        return
+        if normalize_directory "${OOC_GAME_DIR}"; then
+            return
+        fi
+        echo "OOC_GAME_DIR is not an existing directory: ${OOC_GAME_DIR}" >&2
+        exit 1
     fi
 
     local candidate
@@ -71,8 +101,11 @@ resolve_game_root() {
 
 resolve_save_root() {
     if [[ -n "${OOC_SAVE_DIR:-}" ]]; then
-        printf '%s\n' "${OOC_SAVE_DIR}"
-        return
+        if normalize_directory "${OOC_SAVE_DIR}"; then
+            return
+        fi
+        echo "OOC_SAVE_DIR is not an existing directory: ${OOC_SAVE_DIR}" >&2
+        exit 1
     fi
 
     local candidate
@@ -100,9 +133,16 @@ if [[ ! -d "${plugins_root}" || ! -f "${bepinex_core}/BepInEx.dll" ||
 fi
 
 game_is_running() {
-    pgrep -x "Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.exe" >/dev/null 2>&1
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -x "Orb Of Creation" >/dev/null 2>&1 ||
+            pgrep -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" >/dev/null 2>&1 ||
+            pgrep -f "[O]rb Of Creation\\.exe" >/dev/null 2>&1
+        return
+    fi
+
+    powershell.exe -NoProfile -NonInteractive -Command \
+        '$process = Get-Process -Name "Orb Of Creation" -ErrorAction SilentlyContinue; if ($null -ne $process) { exit 0 }; exit 1' \
+        >/dev/null 2>&1
 }
 
 if game_is_running; then
@@ -342,7 +382,11 @@ verify_install "${suite_source}" "${suite_target}"
 print_hash() {
     local installed_file="$1"
     local digest
-    digest="$(shasum -a 256 "${installed_file}" | awk '{print $1}')"
+    if command -v shasum >/dev/null 2>&1; then
+        digest="$(shasum -a 256 "${installed_file}" | awk '{print $1}')"
+    else
+        digest="$(sha256sum "${installed_file}" | awk '{print $1}')"
+    fi
     echo "  ${digest}  $(basename "${installed_file}")"
 }
 

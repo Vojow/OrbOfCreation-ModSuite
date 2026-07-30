@@ -121,9 +121,7 @@ internal sealed class AutoScribeNativeAdapter
                 ServiceNativeMutationEvidence.Observed(
                     NativeMutationOutcome.Verified, calls));
         }
-        catch (Exception ex) when (
-            ex is InvalidOperationException or TargetInvocationException or
-                MemberAccessException or MissingMemberException)
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             _quarantine = ex.GetBaseException().Message;
             return nativeCallsAttempted > 0

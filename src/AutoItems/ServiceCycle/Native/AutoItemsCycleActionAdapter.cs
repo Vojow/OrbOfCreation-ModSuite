@@ -44,7 +44,7 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         {
             submission = _native.Submit(in action);
         }
-        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Items failed at the native boundary: {ex.GetBaseException().Message}.");
@@ -123,7 +123,7 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             var current = _readLifecycleEpoch();
             return current > 0 && current == plannedEpoch;
         }
-        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             return false;
         }

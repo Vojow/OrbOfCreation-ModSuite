@@ -1,12 +1,13 @@
 # Auto Scribe
 
-> **Lifecycle: Live crafting verified; runtime validation remains open.** The audited identity
+> **Lifecycle: Live crafting verified; final reviewed build is ready to install.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
 > Worker-definition and status-publication boundary violations are fixed. The latest retained run
 > proves 164 verified native completions with no Auto Scribe faults. Source also fixes the
 > rejected-work retry cadence, external-automation coverage classification, and adds the missing
-> gameplay quick control; those changes still need post-fix runtime evidence.
+> gameplay quick control. The complete branch review and automated compatibility gates are green;
+> interactive progression and layout evidence remains open.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -42,21 +43,27 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: verify Scribe ceiling progression and cost-order priority. Native decompilation
-  confirms that `PurchaseQuantity(purchasedQuantity, previousQuantity)` raises
-  `maxStartingLevel` to their sum and that completed output raises the Scroll's `maxCreatedLv`.
-  Source now probes above the live ceiling for the highest affordable level, falls back to useful
-  lower production when the frontier is unaffordable, and chooses the cheapest enabled visible
-  recipe through the baseline identity facade. The complete portable gate passes 1,994 ordinary
-  and 90 profile tests, all 26 installed contracts pass, and the real-reference Release build has
-  zero warnings and errors. Installation and live validation still require explicit authorization.
-- Installed source remains clean commit `67ea8214d97d028314369b08e32a611070d46f06`,
-  pushed to draft PR #102. The installed DLL has SHA-256
-  `0AACD74E41405D600FD07D9894912B4BF6C89D899E72D6C202FEEE959A39A1EB`;
-  the current test-pyramid changes have not been installed.
-- The guarded installer confirmed the game was closed, reran all automated gates, backed up 12
-  save files to `backups/pre-modsuite-install-20260730T112441Z`, and backed up the previous DLL to
-  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
+- Current task: install and interactively validate the reviewed Scribe ceiling-progression build.
+  Native decompilation confirms that `PurchaseQuantity(purchasedQuantity, previousQuantity)`
+  raises `maxStartingLevel` to their sum and that completed output raises the Scroll's
+  `maxCreatedLv`. Source probes above the live ceiling for the highest affordable level, falls
+  back to useful lower production when the frontier is unaffordable, and chooses the cheapest
+  enabled visible recipe through the baseline identity facade.
+- The post-install branch review consolidated semantic role parsing and production ordering,
+  caches the immutable role selection by configuration generation, enforces lifecycle ownership
+  in both production workers, and shares one fail-closed reflection exception policy across Auto
+  Items and Auto Scribe. It also repairs the guarded installer's Git-for-Windows process and hash
+  fallbacks discovered during installation.
+- The reviewed tree passes 1,997 ordinary portable tests, 90 profiler tests, all 26 installed
+  contracts, and the real-reference Release build with zero warnings and errors. Differential
+  verification recognizes the exact installed assembly pair as the admitted
+  `steam-windows-2026-07-29` baseline.
+- Clean commit `8ccbb600b21a40cd019eb96ffe79e1bb74d3ca8f` is currently installed with
+  SHA-256 `B7C5A18D08115F98ED5872600222615FC0633E455BB84A2CA1E013DD73F80843`.
+  Its installer checkpoint contains 12 save copies at
+  `backups/pre-modsuite-install-20260730T133925Z` and the prior DLL at
+  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T133925Z`. The reviewed successor is
+  ready for the final guarded install.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.

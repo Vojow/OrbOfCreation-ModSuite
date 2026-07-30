@@ -50,7 +50,7 @@ internal static class AutoItemsScrollTargetPreflight
             return TryCount(native, targeting!, scaling, out var candidates, out reason) &&
                    RequireCandidate(candidates, out reason);
         }
-        catch (Exception ex) when (IsReflectionFailure(ex))
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             reason =
                 $"The live Scroll target preflight failed: {ex.GetBaseException().Message}";
@@ -82,7 +82,7 @@ internal static class AutoItemsScrollTargetPreflight
                 new object[] { new BigDouble(level) });
             return TryCount(native, targeting!, scaling, out candidates, out reason);
         }
-        catch (Exception ex) when (IsReflectionFailure(ex))
+        catch (Exception ex) when (AutomataReflectionAccess.IsExpectedFailure(ex))
         {
             reason =
                 $"The live Scroll target preflight failed: {ex.GetBaseException().Message}";
@@ -166,9 +166,6 @@ internal static class AutoItemsScrollTargetPreflight
             : "The live Scroll has no valid structure target at its strongest level.";
         return candidates > 0;
     }
-
-    private static bool IsReflectionFailure(Exception ex) =>
-        ex is TargetInvocationException or MemberAccessException or ArgumentException;
 
     private sealed class Bindings
     {

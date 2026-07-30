@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,7 +18,6 @@ internal sealed class AutoScribeRolePickerView
     private const float EditorTop = 76f;
     private const float RoleHeight = 40f;
     private const float RoleStride = 44f;
-    private const string NoneValue = "none";
 
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly Action _rebuildRequested;
@@ -48,7 +48,9 @@ internal sealed class AutoScribeRolePickerView
 
     internal void Render(Transform parent, ConfigEditValue edit)
     {
-        var selected = Parse(edit.StagedSerialized);
+        var selected = AutoScribeRoleSelection.ParseKnown(
+            edit.StagedSerialized,
+            Roles);
         CreateTopButton(
             "Roles",
             parent,
@@ -81,7 +83,7 @@ internal sealed class AutoScribeRolePickerView
             12f,
             52f,
             "None",
-            () => Stage(edit, NoneValue),
+            () => Stage(edit, AutoScribeRoleSelection.NoneValue),
             selected.Count == 0);
         CreateTopButton(
             "Default",
@@ -103,7 +105,7 @@ internal sealed class AutoScribeRolePickerView
         for (var index = 0; index < Roles.Count; index++)
         {
             var role = Roles[index];
-            var enabled = selected.Contains(role.Key.Value);
+            var enabled = selected.Contains(role.Key);
             CreateTopButton(
                 "Role." + role.Key.Value,
                 parent,
@@ -112,17 +114,19 @@ internal sealed class AutoScribeRolePickerView
                 top,
                 RoleHeight,
                 $"{(enabled ? "[x]" : "[ ]")} {role.DisplayName}",
-                () => Toggle(edit, role.Key.Value),
+                () => Toggle(edit, role.Key),
                 enabled);
             top += RoleStride;
         }
     }
 
-    private void Toggle(ConfigEditValue edit, string key)
+    private void Toggle(ConfigEditValue edit, ScrollRoleKey key)
     {
-        var selected = Parse(edit.StagedSerialized);
+        var selected = AutoScribeRoleSelection.ParseKnown(
+            edit.StagedSerialized,
+            Roles);
         if (!selected.Add(key)) selected.Remove(key);
-        Stage(edit, Serialize(selected));
+        Stage(edit, AutoScribeRoleSelection.Serialize(selected, Roles));
     }
 
     private void Stage(ConfigEditValue edit, string value)
@@ -130,48 +134,6 @@ internal sealed class AutoScribeRolePickerView
         edit.Stage(value);
         _statusChanged(edit);
         _rebuildRequested();
-    }
-
-    private static HashSet<string> Parse(string value)
-    {
-        var selected = new HashSet<string>(StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            for (var index = 0; index < Roles.Count; index++)
-                selected.Add(Roles[index].Key.Value);
-            return selected;
-        }
-        if (string.Equals(value.Trim(), NoneValue, StringComparison.OrdinalIgnoreCase))
-            return selected;
-        foreach (var entry in value.Split(','))
-        {
-            var normalized = entry.Trim();
-            if (IsKnownRole(normalized)) selected.Add(normalized);
-        }
-        return selected;
-    }
-
-    private static bool IsKnownRole(string key)
-    {
-        for (var index = 0; index < Roles.Count; index++)
-            if (string.Equals(Roles[index].Key.Value, key, StringComparison.Ordinal))
-                return true;
-        return false;
-    }
-
-    private static string Serialize(HashSet<string> selected)
-    {
-        if (selected.Count == 0) return NoneValue;
-        if (selected.Count == Roles.Count)
-        {
-            var all = true;
-            for (var index = 0; index < Roles.Count; index++)
-                all &= selected.Contains(Roles[index].Key.Value);
-            if (all) return string.Empty;
-        }
-        var ordered = new List<string>(selected);
-        ordered.Sort(StringComparer.Ordinal);
-        return string.Join(",", ordered);
     }
 
     private Button CreateTopButton(
@@ -201,21 +163,23 @@ internal sealed class AutoScribeRolePickerView
         return button;
     }
 
-    private static IReadOnlyList<AutoScribeRoleDescriptor> CreateRoles()
+    private static PublicationTable<AutoScribeRoleDescriptor> CreateRoles()
     {
         var catalog = new AutoScribeIdentityCatalog();
         if (!catalog.TryGetProfile(
                 GameAssemblyAudit.WindowsV1052BaselineId,
                 out var profile))
         {
-            return Array.Empty<AutoScribeRoleDescriptor>();
+            return PublicationTable<AutoScribeRoleDescriptor>.Empty;
         }
         var roles = new List<AutoScribeRoleDescriptor>();
         for (var index = 0; index < profile.Roles.Count; index++)
             if (profile.Roles[index].IsProducible) roles.Add(profile.Roles[index]);
-        return roles;
+        return PublicationTable<AutoScribeRoleDescriptor>.Create(
+            roles.ToArray(),
+            roles.Count);
     }
 
-    private static IReadOnlyList<AutoScribeRoleDescriptor> Roles { get; } =
+    private static PublicationTable<AutoScribeRoleDescriptor> Roles { get; } =
         CreateRoles();
 }

@@ -12,7 +12,8 @@ active and healthy.
   craft-cost order. Policy, configuration, and normal UI use stable `ScrollRoleKey` values.
   Worker-visible roles are copied into Common's audited immutable publication table.
 - `Coverage` owns the native-free plan shared by Auto Scribe production and Auto Items Scroll-use
-  admission.
+  admission. It also owns semantic role-list parsing and production ordering, so the UI and worker
+  cannot drift; worker state reparses that list only when the configuration generation changes.
 - shared world readers publish levelled inventory, pending uses, recipes, target evidence,
   enchantments, and active/automatic Scribe work. They never retain Unity objects in the snapshot.
 - `ServiceCycle/AutoScribeWorker` selects at most one enabled deficit from one immutable world
@@ -33,6 +34,7 @@ active and healthy.
 
 Unknown baseline identity, incomplete target evidence, dependency loss, action-family conflict,
 stale lifecycle, missing queue room, failed affordability, or ambiguous postconditions reject work.
+Worker state is tied to one lifecycle generation and rejects cross-lifecycle evaluation.
 Locked recipe roles are dormant rather than degraded and are reconsidered from every fresh world
 publication. The native adapter re-reads the live unlocked maximum, probes monotonically for the
 highest affordable level above it, and falls back below the frontier when progression is not yet

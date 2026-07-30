@@ -17,7 +17,7 @@ internal sealed class AutoScribeWorker :
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
 
     public AutoScribeCycleState CreateState(LifecycleGeneration lifecycle) =>
-        new() { Lifecycle = lifecycle };
+        AutoScribeCycleState.Create(lifecycle);
 
     public void ReleaseState(ref AutoScribeCycleState state) => state = default;
 
@@ -29,6 +29,13 @@ internal sealed class AutoScribeWorker :
         ref AutoScribeCycleState state,
         ServiceActionWriter<AutoScribeCycleAction> actions)
     {
+        if (state.Lifecycle != context.Identity.Lifecycle)
+            throw new InvalidOperationException(
+                "Auto Scribe state belongs to a different lifecycle.");
+        state.ObserveConfiguration(
+            context.Identity.Config,
+            config.AutoScribe,
+            _profile.Roles);
         var interval = AutoScribeServiceCycleFeature.Interval(config);
         var plan = ScrollCoveragePlanner.Build(world, _profile);
         ResetProjection(ref state);
@@ -36,7 +43,7 @@ internal sealed class AutoScribeWorker :
             ObserveRole(plan.Roles[index], ref state);
 
         if (!AutoScribeServiceCycleFeature.IsOperational(config) ||
-            !TryChooseEnabledProduction(plan, config.AutoScribe.Roles, out var selected))
+            !plan.TryChooseProduction(state.EnabledRoles, out var selected))
         {
             return WakePolicy.AfterDecision(interval);
         }
@@ -94,41 +101,4 @@ internal sealed class AutoScribeWorker :
             state.CoveredRoles++;
     }
 
-    private static bool RoleEnabled(string configured, ScrollRoleKey role)
-    {
-        if (string.IsNullOrWhiteSpace(configured)) return true;
-        var entries = configured.Split(',');
-        for (var index = 0; index < entries.Length; index++)
-        {
-            if (string.Equals(entries[index].Trim(), role.Value, StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
-    }
-
-    internal static bool TryChooseEnabledProduction(
-        ScrollCoveragePlan plan,
-        string configured,
-        out ScrollRoleCoverage selected)
-    {
-        selected = default;
-        var found = false;
-        for (var index = 0; index < plan.Roles.Length; index++)
-        {
-            var candidate = plan.Roles[index];
-            if (!candidate.ShouldProduce || !RoleEnabled(configured, candidate.Role))
-                continue;
-            if (!found ||
-                candidate.CraftCostOrder < selected.CraftCostOrder ||
-                (candidate.CraftCostOrder == selected.CraftCostOrder &&
-                 candidate.Role.CompareTo(selected.Role) < 0))
-            {
-                selected = candidate;
-                found = true;
-            }
-        }
-
-        return found;
-    }
 }
