@@ -190,7 +190,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "UseScrolls", "UseRelics", "UseFruits", "UsePotions", "TemporaryItemAllowlist", "EvaluationIntervalSeconds" },
+            new[] { "Mode", "UseScrolls", "UseRelics", "UseFruits", "UsePotions", "UseThreads", "TemporaryItemAllowlist", "EvaluationIntervalSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Items").Settings.Select(setting => setting.Key));
         Assert.Equal(
             new[] { "Mode", "Roles", "EvaluationIntervalSeconds" },

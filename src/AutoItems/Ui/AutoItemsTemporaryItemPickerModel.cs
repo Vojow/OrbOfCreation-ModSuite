@@ -8,6 +8,7 @@ internal enum AutoItemsTemporaryItemFilter
     All,
     Fruit,
     Potion,
+    Thread,
     Owned,
     Selected,
 }
@@ -48,7 +49,8 @@ internal static class AutoItemsTemporaryItemFiltering
         {
             AutoItemsTemporaryItemFilter.All => AutoItemsTemporaryItemFilter.Fruit,
             AutoItemsTemporaryItemFilter.Fruit => AutoItemsTemporaryItemFilter.Potion,
-            AutoItemsTemporaryItemFilter.Potion => AutoItemsTemporaryItemFilter.Owned,
+            AutoItemsTemporaryItemFilter.Potion => AutoItemsTemporaryItemFilter.Thread,
+            AutoItemsTemporaryItemFilter.Thread => AutoItemsTemporaryItemFilter.Owned,
             AutoItemsTemporaryItemFilter.Owned => AutoItemsTemporaryItemFilter.Selected,
             _ => AutoItemsTemporaryItemFilter.All,
         };
@@ -63,6 +65,8 @@ internal static class AutoItemsTemporaryItemFiltering
                 option.Family == AutoItemsConsumableFamily.Fruit,
             AutoItemsTemporaryItemFilter.Potion =>
                 option.Family == AutoItemsConsumableFamily.Potion,
+            AutoItemsTemporaryItemFilter.Thread =>
+                option.Family == AutoItemsConsumableFamily.Thread,
             AutoItemsTemporaryItemFilter.Owned => option.OwnedQuantity > 0,
             AutoItemsTemporaryItemFilter.Selected => selected.Contains(option.ItemId),
             _ => true,

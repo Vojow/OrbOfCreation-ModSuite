@@ -1,7 +1,11 @@
 using System;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding.Common.Runtime.Strategy;
 using OrbModding.Common.Runtime.World;
 using Xunit;
 
@@ -26,6 +30,60 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(12, selected.TargetLevel);
         Assert.Equal(1, selected.Deficit);
         Assert.Equal(ScrollCoverageState.ProductionNeeded, selected.State);
+    }
+
+    [Fact]
+    public void PlannedCraftUsesConfiguredCadenceInsteadOfImmediateRetry()
+    {
+        var profile = Profile();
+        var worker = new AutoScribeWorker(profile);
+        var state = worker.CreateState(new LifecycleGeneration(1));
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+            },
+            AutoScribe = new AutoScribeConfiguration
+            {
+                Mode = AutoScribeOperationMode.Active,
+                EvaluationInterval =
+                    MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(2)),
+            },
+        };
+        var identity = new ServiceCycleIdentity(
+            AutoScribeServiceCycleFeature.ServiceId,
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            StrategyGeneration.Initial,
+            new WorldGeneration(1),
+            new CycleId(1));
+        var context = new ServiceCycleContext(
+            identity,
+            default,
+            new MonotonicTimestamp(1));
+        var actions = new ReusableActionStore<AutoScribeCycleAction>();
+        actions.BeginWrite();
+
+        var wake = worker.Evaluate(
+            in config,
+            World(
+                Guid.NewGuid(),
+                enchantmentLevel: 4,
+                owned: Array.Empty<WorldConsumableCount>(),
+                work: Array.Empty<WorldScribeWork>()),
+            SuiteStrategyDefaults.Neutral,
+            in context,
+            ref state,
+            new ServiceActionWriter<AutoScribeCycleAction>(actions));
+
+        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(
+            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(2)),
+            wake.Delay);
+        Assert.Equal(1, actions.Count);
     }
 
     [Fact]

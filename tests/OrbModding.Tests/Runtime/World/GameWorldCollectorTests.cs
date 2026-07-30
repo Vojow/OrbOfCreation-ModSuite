@@ -1578,6 +1578,45 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void PlannedAutoItemUsesConfiguredCadenceInsteadOfImmediateRetry()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        AddConsumable(
+            KnownEntities.ConsumableRelicType.Uuid,
+            canBeRandomized: false);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var interval = MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(3));
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseRelics = true,
+                EvaluationInterval = interval,
+            },
+        };
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var store = new ReusableActionStore<AutoItemsCycleAction>();
+        store.BeginWrite();
+
+        var wake = AutoItemsCycleEvaluator.Evaluate(
+            collector.Build(),
+            in config,
+            CycleContext(),
+            ref state,
+            new ServiceActionWriter<AutoItemsCycleAction>(store),
+            temporaryAllowlist: null,
+            autoScribeIdentityProfile: null,
+            metrics: out _);
+
+        Assert.Equal(1, store.Count);
+        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(interval, wake.Delay);
+    }
+
+    [Fact]
     public void AutoItemsUsesACheaperScrollWhenARelicDoesNotFit()
     {
         AddToxicity(rawHeadroom: 10d);
@@ -1860,6 +1899,27 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void AnExactlyAllowlistedThreadUsesTheTemporaryPolicy()
+    {
+        AddToxicity(rawHeadroom: 90d);
+        var thread = AddConsumable(
+            KnownEntities.ConsumableThreadType.Uuid,
+            canBeRandomized: false);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+
+        var action = Assert.Single(PlanAutoItems(
+            collector.Build(),
+            out var metrics,
+            useThreads: true,
+            temporaryAllowlist: thread.Identity.ToString("D")));
+
+        Assert.Equal(thread.Identity, action.ItemId);
+        Assert.Equal(AutoItemsConsumableFamily.Thread, action.Family);
+        Assert.Equal(AutoItemsDecisionKind.TemporaryItem, metrics.Kind);
+    }
+
+    [Fact]
     public void AnActiveTemporaryUsageBlocksEveryFurtherAutoItem()
     {
         AddToxicity(rawHeadroom: 100d);
@@ -2069,10 +2129,12 @@ public sealed class GameWorldCollectorTests : IDisposable
             canBeRandomized = canBeRandomized,
             hasDuration =
                 family == KnownEntities.ConsumableFruitType.Uuid ||
-                family == KnownEntities.ConsumablePotionType.Uuid,
+                family == KnownEntities.ConsumablePotionType.Uuid ||
+                family == KnownEntities.ConsumableThreadType.Uuid,
             durationBase =
                 family == KnownEntities.ConsumableFruitType.Uuid ||
-                family == KnownEntities.ConsumablePotionType.Uuid
+                family == KnownEntities.ConsumablePotionType.Uuid ||
+                family == KnownEntities.ConsumableThreadType.Uuid
                     ? 60d
                     : 0d,
         };
@@ -2089,6 +2151,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         AutoItemsOperationMode mode = AutoItemsOperationMode.Active,
         bool useFruits = false,
         bool usePotions = false,
+        bool useThreads = false,
         string temporaryAllowlist = "")
     {
         var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
@@ -2099,6 +2162,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             mode,
             useFruits,
             usePotions,
+            useThreads,
             temporaryAllowlist);
     }
 
@@ -2109,6 +2173,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         AutoItemsOperationMode mode = AutoItemsOperationMode.Active,
         bool useFruits = false,
         bool usePotions = false,
+        bool useThreads = false,
         string temporaryAllowlist = "")
     {
         var config = new SuiteRuntimeConfiguration
@@ -2121,6 +2186,7 @@ public sealed class GameWorldCollectorTests : IDisposable
                 UseRelics = true,
                 UseFruits = useFruits,
                 UsePotions = usePotions,
+                UseThreads = useThreads,
                 TemporaryItemAllowlist = temporaryAllowlist,
                 EvaluationInterval = MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)),
             },

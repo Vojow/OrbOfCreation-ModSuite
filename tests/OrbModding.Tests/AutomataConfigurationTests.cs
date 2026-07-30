@@ -131,6 +131,7 @@ public sealed class AutomataConfigurationTests
         config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
         config.AutoItemsScrolls.Value = false;
         config.AutoItemsFruits.Value = true;
+        config.AutoItemsThreads.Value = true;
         config.AutoItemsTemporaryItemAllowlist.Value =
             "4ee6b1e1-1e7f-4a3b-9b3f-9ebc5a9339f1";
         config.EmergencyDisable.Value = true;
@@ -148,6 +149,7 @@ public sealed class AutomataConfigurationTests
         Assert.True(snapshot.AutoItems.UseRelics);
         Assert.True(snapshot.AutoItems.UseFruits);
         Assert.False(snapshot.AutoItems.UsePotions);
+        Assert.True(snapshot.AutoItems.UseThreads);
         Assert.Equal(
             "4ee6b1e1-1e7f-4a3b-9b3f-9ebc5a9339f1",
             snapshot.AutoItems.TemporaryItemAllowlist);

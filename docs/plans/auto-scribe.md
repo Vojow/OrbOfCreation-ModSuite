@@ -1,12 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: Live diagnostics fix installed; fresh-launch validation pending.** The audited identity
+> **Lifecycle: Lifecycle healthy; bounded retry fix pending install validation.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
-> Worker-definition boundary violations are fixed. A fresh launch now reaches the shared host, but
-> the first operational Auto Items diagnostics update throws before lifecycle readiness can
-> propagate. The dump-backed source fix passes all automated gates and is installed with verified
-> rollback backups.
+> Worker-definition and status-publication boundary violations are fixed. The latest launch reaches
+> lifecycle readiness; its dump exposed an immediate-retry loop after rejected native work, which is
+> now fixed in source and awaits a safe post-close install.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -29,7 +28,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete after diagnostics fix** | `script/test` passes 1,944 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
-| 10. Interactive game validation | **Ready** | Confirm lifecycle readiness and a healthy Auto Items/Auto Scribe status on a fresh launch, then continue disposable-save scenarios |
+| 10. Interactive game validation | **In progress** | Lifecycle readiness is confirmed; install the bounded-retry fix after game close, then continue disposable-save scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -38,8 +37,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: relaunch and confirm lifecycle readiness plus healthy Auto Items and Auto Scribe
-  status on the corrected installed DLL.
+- Current task: after the game is closed, build and install the bounded-retry/Thread extension,
+  confirm Auto Items no longer faults on `TargetUnavailable`, and confirm Auto Scribe native
+  rejections retry only at the configured evaluation cadence.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -114,6 +114,19 @@ Last updated: **2026-07-30**
   the installed and built hashes match. The installer created:
   - save copies: `backups/pre-modsuite-install-20260730T103147Z` (12 files);
   - previous DLL: `BepInEx/modsuite-backups/pre-modsuite-install-20260730T103147Z` (1 file).
+- The 2026-07-30 12:33 launch confirms the shared host registers, collection completes with 4,181
+  entities across 46 categories, and lifecycle readiness propagates. The user-triggered trace then
+  records two Auto Items actions faulting and 435 Auto Scribe boundary rejections in 15.6 seconds.
+- Auto Items' native adapter returned the expected `TargetUnavailable` preflight, but its action
+  mapper omitted that result and converted it to `AdapterFault`. The mapper now preserves it as an
+  expected rejection.
+- Both planners returned `WakePolicy.Immediate` after emitting work. A transient native rejection
+  therefore created a tight proposal loop. Planned work now uses each feature's configured
+  `AfterDecision` cadence; focused regressions pin that policy for Auto Items and Auto Scribe.
+- Current-tree verification passes 1,949 ordinary portable tests, 90 profiler tests, the profiler
+  trace-tool build, all 26 installed-game contracts, and a zero-warning real-reference Release
+  build. The combined `script/test` wrapper exceeds its 60-second wall on the live-game machine;
+  the same three portable components pass when run separately.
 
 ## Goal
 
@@ -157,6 +170,9 @@ catalog boundary. The checked-in identity extraction contains at least eight Scr
 These rows originally exposed the discovery scope. The implemented baseline profile accepts them
 only together with exact expected types, and the world reader revalidates each recipe/output/target
 graph from native references. Names remain diagnostics and never authorize automation.
+
+Threads are a separate `ConsumableTypeSO` family handled by Auto Items' exact-item temporary
+policy. They are not Scroll roles, Scribe recipe outputs, or Auto Scribe coverage inputs.
 
 The serialized `ScribeCraftingRecipes` registry contains exactly six entries, resolving to
 `CraftScrollAdvancement`, `CraftScrollDevelopment`, `CraftScrollEcho`,

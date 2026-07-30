@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -107,6 +108,7 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.Relic,
                 actions,
                 ref state,
+                interval,
                 out metrics);
         }
         if (scan.EligibleTemporaryItems > 0)
@@ -118,6 +120,7 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.TemporaryItem,
                 actions,
                 ref state,
+                interval,
                 out metrics);
         }
         if (scan.EligibleScrolls > 0)
@@ -129,6 +132,7 @@ internal static class AutoItemsCycleEvaluator
                 AutoItemsDecisionKind.Scroll,
                 actions,
                 ref state,
+                interval,
                 out metrics);
         }
         if (scan.SaturationCandidate && hasToxicityReading && !toxicityAtZero)
@@ -167,12 +171,13 @@ internal static class AutoItemsCycleEvaluator
         AutoItemsDecisionKind kind,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         ref AutoItemsCycleState state,
+        MonotonicDuration interval,
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
         if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
             state.RecordPlannedTemporary(in action);
         metrics = scan.ToMetrics(kind, plannedActions: 1);
-        return WakePolicy.Immediate;
+        return WakePolicy.AfterDecision(interval);
     }
 }

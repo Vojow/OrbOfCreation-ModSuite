@@ -15,6 +15,7 @@ internal sealed record AutoItemsConfiguration
     internal bool UseRelics { get; init; } = true;
     internal bool UseFruits { get; init; }
     internal bool UsePotions { get; init; }
+    internal bool UseThreads { get; init; }
     internal string TemporaryItemAllowlist { get; init; } = string.Empty;
     internal MonotonicDuration EvaluationInterval { get; init; }
 }

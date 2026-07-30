@@ -1,20 +1,20 @@
 # Auto Items
 
-> **Lifecycle: Scroll, Relic, Fruit, and Potion implementation complete; combined and interactive
+> **Lifecycle: Scroll, Relic, Fruit, Potion, and Thread implementation complete; combined and interactive
 > validation in progress.**
 
 [Plan](../../docs/plans/auto-items.md) |
 [Native pipeline evidence](../../docs/reverse-engineering/auto-items-native-pipeline.md)
 
 Auto Items automates exact native Scroll and Relic families and conservatively supports explicitly
-allowlisted Fruit and Potion UUIDs.
+allowlisted Fruit, Potion, and Thread UUIDs.
 
 The implemented boundary is deliberately split:
 
 - Common world collection publishes raw `ConsumableSO` scalars, every `ConsumableTypeSO`
   membership, both native resource-cost vectors, and every usage's stable UUID, pending/engaged
   state, and remaining/maximum duration.
-- `Policy/AutoItemsConsumableProfileBuilder.cs` maps those neutral facts to the four exact Auto Items
+- `Policy/AutoItemsConsumableProfileBuilder.cs` maps those neutral facts to the five exact Auto Items
   families. It requires exactly one supported family, a capped inverted toxicity resource, a valid
   immediate toxicity cost, and retains evidence that other native costs exist.
 - `ServiceCycle/` registers a bounded one-action service. A pure candidate scanner selects from
@@ -29,11 +29,11 @@ The implemented boundary is deliberately split:
 - Scrolls require live randomization capability and call the game's own
   `SetRandomization(true)`/`IsRandomized()` path. Relics have first priority whenever the native
   readiness and toxicity-headroom checks admit them.
-- Fruit and Potion controls default off and additionally require an exact UUID in
+- Fruit, Potion, and Thread controls default off and additionally require an exact UUID in
   `TemporaryItemAllowlist`, a finite positive native duration, toxicity-only cost vectors, enough
   native toxicity headroom, and no other pending or active temporary usage.
 - The Mods page provides an on-demand temporary-item picker with native names, family, stock,
-  immediate toxicity cost, base duration, and All/Fruit/Potion/Owned/Selected filters. Selection
+  immediate toxicity cost, base duration, and All/Fruit/Potion/Thread/Owned/Selected filters. Selection
   persists as sorted exact UUIDs; unavailable selected identities are preserved and the raw UUID
   editor remains available. Its consolidated rail entry uses the already-audited native Alchemy
   top-bar icon.
@@ -50,5 +50,5 @@ The implemented boundary is deliberately split:
   feature-wide lifecycle quarantine.
 
 Auto Items defaults to `Disabled`; `UseScrolls` and `UseRelics` default on behind it,
-`UseFruits`/`UsePotions` default off, and the temporary allowlist defaults empty. There is no
+`UseFruits`/`UsePotions`/`UseThreads` default off, and the temporary allowlist defaults empty. There is no
 gameplay quick button in this slice.

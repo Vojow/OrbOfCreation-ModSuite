@@ -109,6 +109,7 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<bool> autoItemsRelics,
         ConfigEntry<bool> autoItemsFruits,
         ConfigEntry<bool> autoItemsPotions,
+        ConfigEntry<bool> autoItemsThreads,
         ConfigEntry<string> autoItemsTemporaryItemAllowlist,
         ConfigEntry<float> autoItemsEvaluationIntervalSeconds,
         ConfigEntry<AutoScribeOperationMode> autoScribeMode,
@@ -163,6 +164,7 @@ internal sealed class BepInExAutomataConfiguration
         AutoItemsRelics = autoItemsRelics;
         AutoItemsFruits = autoItemsFruits;
         AutoItemsPotions = autoItemsPotions;
+        AutoItemsThreads = autoItemsThreads;
         AutoItemsTemporaryItemAllowlist = autoItemsTemporaryItemAllowlist;
         AutoItemsEvaluationIntervalSeconds = autoItemsEvaluationIntervalSeconds;
         AutoScribeMode = autoScribeMode;
@@ -253,6 +255,7 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<bool> AutoItemsRelics { get; }
     public ConfigEntry<bool> AutoItemsFruits { get; }
     public ConfigEntry<bool> AutoItemsPotions { get; }
+    public ConfigEntry<bool> AutoItemsThreads { get; }
     public ConfigEntry<string> AutoItemsTemporaryItemAllowlist { get; }
     public ConfigEntry<float> AutoItemsEvaluationIntervalSeconds { get; }
     public ConfigEntry<AutoScribeOperationMode> AutoScribeMode { get; }
@@ -447,7 +450,8 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoItems", "UseRelics", true, "Allow exact Relic-family items with first priority whenever native toxicity headroom permits.", 19, 20, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "UseFruits", false, "Allow Fruit-family items only when their exact UUID is listed in TemporaryItemAllowlist. Defaults off.", 19, 30, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "UsePotions", false, "Allow Potion-family items only when their exact UUID is listed in TemporaryItemAllowlist. Defaults off.", 19, 40, dependencies: AutoItemsActiveDependencies),
-                Bind(config, "AutoItems", "TemporaryItemAllowlist", string.Empty, "Choose exact Fruit and Potion items with the Mods item picker. The saved value is a comma-separated list of stable ConsumableSO UUIDs; empty disables temporary use even when a family switch is on.", 19, 50, dependencies: AutoItemsActiveDependencies),
+                Bind(config, "AutoItems", "UseThreads", false, "Allow Thread-family items only when their exact UUID is listed in TemporaryItemAllowlist. Defaults off.", 19, 45, dependencies: AutoItemsActiveDependencies),
+                Bind(config, "AutoItems", "TemporaryItemAllowlist", string.Empty, "Choose exact Fruit, Potion, and Thread items with the Mods item picker. The saved value is a comma-separated list of stable ConsumableSO UUIDs; empty disables temporary use even when a family switch is on.", 19, 50, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between Auto Items evaluations.", 19, 60, new AcceptableValueRange<float>(0.25f, 10.0f), AutoItemsActiveDependencies),
                 Bind(config, "AutoScribe", "Mode", AutoScribeOperationMode.Disabled, "Disabled prepares no Scrolls. Active keeps every enabled audited Scribe role supplied at the highest currently craftable level.", 20, 0),
                 Bind(config, "AutoScribe", "Roles", string.Empty, "Choose audited Scroll roles with the role picker. Empty enables all, and none disables every role. Stable semantic keys are persisted; native UUIDs remain behind the identity facade.", 20, 10, dependencies: AutoScribeActiveDependencies),
@@ -504,6 +508,7 @@ internal sealed class BepInExAutomataConfiguration
             "UseRelics" => "Use relics",
             "UseFruits" => "Use fruits",
             "UsePotions" => "Use potions",
+            "UseThreads" => "Use threads",
             "TemporaryItemAllowlist" => "Temporary items",
             "EvaluationIntervalSeconds" when section == "AutoItems" => "Evaluation interval (seconds)",
             "EvaluationIntervalSeconds" when section == "AutoScribe" => "Evaluation interval (seconds)",

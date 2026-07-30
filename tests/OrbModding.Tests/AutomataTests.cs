@@ -48,6 +48,7 @@ public sealed class AutomataTests
         Assert.True(config.AutoItemsRelics.Value);
         Assert.False(config.AutoItemsFruits.Value);
         Assert.False(config.AutoItemsPotions.Value);
+        Assert.False(config.AutoItemsThreads.Value);
         Assert.Empty(config.AutoItemsTemporaryItemAllowlist.Value);
         Assert.Equal(1.0f, config.AutoItemsEvaluationIntervalSeconds.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);

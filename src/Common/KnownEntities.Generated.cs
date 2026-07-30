@@ -61,6 +61,7 @@ internal static class KnownEntities
     public static readonly KnownEntity<ConsumableTypeSOContract> ConsumablePotionType = new(new Guid("8103dae4-6945-4d18-b562-d2ffcd7ef49e"), "ConsumableTypeSO", "Potion");
     public static readonly KnownEntity<ConsumableTypeSOContract> ConsumableRelicType = new(new Guid("5d27b76e-eed3-49cc-a069-b9106000ede4"), "ConsumableTypeSO", "Relic");
     public static readonly KnownEntity<ConsumableTypeSOContract> ConsumableScrollType = new(new Guid("70b36536-64e5-4f70-ad6f-af5787d719cc"), "ConsumableTypeSO", "ScrollConsumable");
+    public static readonly KnownEntity<ConsumableTypeSOContract> ConsumableThreadType = new(new Guid("66a50127-5210-4a3a-93f4-952287858b90"), "ConsumableTypeSO", "ThreadConsumable");
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollAdvancement = new(new Guid("a4a02a8f-6573-411c-a30c-6d9bcee12605"), "CraftingRecipeSO", "CraftScrollAdvancement");
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollDevelopment = new(new Guid("b15690ab-828c-42b9-ad69-70f169a45961"), "CraftingRecipeSO", "CraftScrollDevelopment");
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollEcho = new(new Guid("008ccaa9-da26-4b55-95a5-5bc5df9c62f0"), "CraftingRecipeSO", "CraftScrollEcho");

@@ -57,7 +57,7 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         return Map(in submission);
     }
 
-    private static ServiceActionResult Map(in AutoItemsSubmission submission)
+    internal static ServiceActionResult Map(in AutoItemsSubmission submission)
     {
         var code = submission.Preflight switch
         {
@@ -71,6 +71,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.TemporaryEffectPresent,
             AutoItemsPreflight.TemporaryCostChanged =>
                 AutoItemsActionResultCodes.TemporaryCostChanged,
+            AutoItemsPreflight.TargetUnavailable =>
+                AutoItemsActionResultCodes.TargetUnavailable,
             AutoItemsPreflight.MutationPermitUnavailable =>
                 AutoItemsActionResultCodes.MutationPermitUnavailable,
             AutoItemsPreflight.ContractUnavailable or
@@ -100,7 +102,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             AutoItemsPreflight.RandomizationUnavailable or
             AutoItemsPreflight.TemporaryEffectPresent or
             AutoItemsPreflight.MutationPermitUnavailable or
-            AutoItemsPreflight.TemporaryCostChanged;
+            AutoItemsPreflight.TemporaryCostChanged or
+            AutoItemsPreflight.TargetUnavailable;
 
     private bool Owns()
     {

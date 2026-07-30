@@ -1,6 +1,6 @@
 # Auto Items
 
-> **Lifecycle: Active.** Phases 1-10 and 12 are implemented; Phase 11 automated validation is
+> **Lifecycle: Active.** Phases 1-10 and 12-13 are implemented; Phase 11 automated validation is
 > complete. Installed-game interactive validation remains open.
 
 [Back to plans](README.md) | [Runtime architecture](../runtime-architecture/README.md)
@@ -10,7 +10,7 @@
 Keep this section current whenever a phase, decision, blocker, or resume point changes. A future
 session should be able to continue from this section without reconstructing earlier work.
 
-Last updated: **2026-07-29**
+Last updated: **2026-07-30**
 
 | Phase | Status | Exit condition |
 |---|---|---|
@@ -26,18 +26,19 @@ Last updated: **2026-07-29**
 | 10. Guarded Fruit/Potion submission | **Complete** | Exact allowed items use the existing one-item native boundary and confirm both immediate pending-usage creation and later effect activation |
 | 11. Temporary-item validation and tuning | **Automated gates complete; interactive gate open** | Portable, profiler, source-contract, and installed-assembly gates pass; live expiry/recovery/lifecycle checks remain |
 | 12. Temporary-item picker UX | **Implemented; interactive layout gate open** | Mods configuration discovers visible Fruit/Potion items, shows names/stock/toxicity/duration, filters and toggles exact UUID selections, preserves unavailable selections, and retains a raw editor |
+| 13. Thread family extension | **Implemented; interactive behavior gate open** | Threads use the same disabled-by-default exact-item picker and guarded temporary boundary only when native duration and toxicity contracts validate |
 
 ### Current resume point
 
-- Worktree: `.analysis/worktrees/auto-items-plan`
-- Branch: `agent/auto-items-plan`
-- Base: `main` at `7f07c16`
-- Current task: run interactive Phase 11 behavior validation and Phase 12 layout validation for the
-  conservative Fruit/Potion extension.
-  Exercise one explicitly allowlisted Fruit and Potion on a disposable save and record pending,
+- Worktree: `.analysis/worktrees/auto-scribe-plan`
+- Branch: `agent/auto-scribe-plan`
+- Draft PR: #102, stacked on the Auto Items work from draft PR #99.
+- Current task: validate the Thread extension and the dump-backed retry fixes after the game is
+  closed and a new DLL can be installed. Exercise one explicitly allowlisted Fruit, Potion, and
+  Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
   at both zero and nonzero toxicity, save/load, reset, NG+, emergency-stop, and manual-race results.
-  In the same session, verify picker scrolling, all five filters, long item names, toxicity/duration
+  In the same session, verify picker scrolling, all six filters, long item names, toxicity/duration
   labels, unavailable selections, raw editing, staging, apply, discard, and reopen behavior.
 - Static evidence recorded: `docs/reverse-engineering/auto-items-native-pipeline.md` now identifies
   exact family and toxicity UUIDs, the asynchronous native queue, rest/recovery mechanics,
@@ -60,6 +61,16 @@ Last updated: **2026-07-29**
   missing or contradictory activation quarantines only that exact item in the same worker state.
   No lock or mutable collection crosses the worker boundary. The Mods page exposes this allowlist
   as a discovered-item picker while persisting only exact stable UUIDs.
+- Thread extension implemented: the exact `ThreadConsumable` family identity is exposed through
+  `KnownEntities`; its family switch defaults off; the picker shows Thread items by native name;
+  and exact-item selection still persists only stable UUIDs. A Thread is admitted through the
+  temporary path only when live facts prove a finite positive duration and toxicity-only cost
+  vectors. Unknown or changed native contracts are rejected.
+- The 2026-07-30 runtime dump showed two scheduler defects after lifecycle readiness recovered:
+  an expected `TargetUnavailable` preflight result was incorrectly projected as an adapter fault,
+  and planned Auto Items/Auto Scribe work requested immediate retries after native rejection.
+  `TargetUnavailable` is now an expected rejection and both planners resume at their configured
+  evaluation cadence.
 - PR cleanup: picker rendering, picker state/selection, catalog parsing, and exact reflection
   binding are separated. Core taxonomy is centralized; pure candidate scanning is separated from
   lifecycle/recovery evaluation; native contract discovery is separated from live preflight and
@@ -67,14 +78,16 @@ Last updated: **2026-07-29**
   and reflection failures use one containment policy. The review also fixed temporary-only
   ownership/status, live temporary-cost revalidation, exact per-service evaluation status, and the
   rule that any pending or active temporary use blocks every automated item family.
-- Verification: 1,928 ordinary portable tests, 90 profiler tests, the profiler trace-tool build,
-  the 5-test native-contract source gate, and all 25 installed-game contract tests pass on the
-  current tree. The focused Auto Items/integration/ModConfig scope passes 169 tests. The installed
-  contract run used the local Windows Steam assemblies. Interactive game validation has not been
-  performed in this worktree.
-- Working tree: the original implementation and branch-wide cleanup are committed in draft PR #99.
-- Next action: run the Phase 11 behavior and Phase 12 layout checklists. The interactive checks still
-  require explicit install/live-session approval and a disposable save.
+- Verification on the current tree: the focused changed-feature scope passes 167 tests; all 1,949
+  ordinary portable tests pass; all 90 profiler tests pass; the profiler trace tool builds; all 26
+  installed-game contract tests pass against the local Windows Steam assemblies; and the
+  real-reference Release build completes with zero warnings and errors. The `script/test` wrapper
+  was also run, but its combined build/test sequence exceeded the hard 60-second wall on the
+  machine while the game was live; its three constituent gates pass separately. Interactive game
+  validation has not yet covered Threads or the retry fixes.
+- Working tree: the extension and dump-backed fixes are ready to commit to draft PR #102.
+- Next action: after the game closes, install the new build and run the Phase 11-13 behavior and
+  layout checklists on a disposable save.
 
 ### Locked decisions
 
@@ -94,7 +107,7 @@ Last updated: **2026-07-29**
 5. **Documentation and validation travel with behavior.** Publication, Scroll mutation, and Relic
    mutation each land with their own tests, native evidence, runtime validation, and behavior
    documentation. Phase 6 is a combined regression gate, not the first documentation pass.
-6. **Temporary families are exact-item opt-in.** Broad Fruit/Potion family membership is
+6. **Temporary families are exact-item opt-in.** Broad Fruit/Potion/Thread family membership is
    insufficient because effects can differ in target, value, duration, and safety. The player must
    list each accepted stable UUID; both family controls default off. Runtime admission still
    requires the exact family, a finite positive native duration, toxicity-only cost vectors, and
@@ -117,7 +130,7 @@ Last updated: **2026-07-29**
 Add a fail-closed ServiceCycle feature that can use owned items without competing with player
 control or guessing at game state.
 
-The game has four item families:
+The game has five item families:
 
 | Family | Effect lifetime | Current automation policy |
 |---|---|---|
@@ -125,6 +138,7 @@ The game has four item families:
 | Relic | Semi-permanent for the run; grants a global improvement | Use first whenever native toxicity headroom permits |
 | Fruit | Temporary buff | Exact-item opt-in; use with sufficient headroom and no temporary use pending or active |
 | Potion | Temporary buff | Exact-item opt-in; use with sufficient headroom and no temporary use pending or active |
+| Thread | Temporary speed buff family | Exact-item opt-in; use only when native duration and toxicity-only costs validate |
 
 Every use adds toxicity. Toxicity has a cap and a passive recovery rate, and recovery is boosted
 during the game's rest period after toxicity has stopped increasing. Auto Items must observe those
@@ -180,8 +194,8 @@ thrown call, or unobservable result quarantines Auto Items for the current lifec
 Before mutation code is written, inspect the installed game and record:
 
 1. The exact runtime taxonomy and stable identity evidence that separates Scroll, Relic, Fruit, and
-   Potion. `ConsumableSO` facts already exist in the shared world snapshot, but they do not publish
-   this four-way classification.
+   Potion, and Thread. `ConsumableSO` facts already exist in the shared world snapshot, but they do
+   not publish this five-way classification.
 2. Current toxicity, cap, ordinary recovery rate, boosted recovery rate, and the authoritative
    signal for the rest period. Establish their numeric types and zero/cap comparison semantics.
 3. The toxicity cost of each item and whether it varies by level, modifiers, family, or current
@@ -247,13 +261,13 @@ direct field write, save mutation, synthetic attribute choice, or toxicity adjus
 The initial configuration surface exposed an Auto Items mode and separate Scroll and Relic allows.
 Mode defaults to `Disabled`; both supported-family allows default on behind that master switch.
 
-The temporary extension adds separate `UseFruits` and `UsePotions` switches, both defaulting off,
-plus an empty-by-default `TemporaryItemAllowlist` of exact stable UUIDs. Enabling a family without
+The temporary extension adds separate `UseFruits`, `UsePotions`, and `UseThreads` switches, all
+defaulting off, plus an empty-by-default `TemporaryItemAllowlist` of exact stable UUIDs. Enabling a family without
 allowlisting an exact item does not make any temporary item eligible.
 
 The Mods page presents that persisted allowlist as a picker. It discovers currently visible
-Fruit/Potion items and displays their native name, family, owned count, immediate toxicity cost,
-and base duration. The filter cycles through All, Fruit, Potion, Owned, and Selected. Toggling an
+Fruit/Potion/Thread items and displays their native name, family, owned count, immediate toxicity
+cost, and base duration. The filter cycles through All, Fruit, Potion, Thread, Owned, and Selected. Toggling an
 item stages a normalized, sorted UUID list. Selected UUIDs not present in the current catalog stay
 selected and can be removed explicitly; the Raw editor remains available for diagnostics and
 forward compatibility. A picker contract failure disables the discovered list without changing
@@ -311,6 +325,10 @@ Do not add a gameplay quick button until the service behavior and configuration 
     fail-closed discovered-item picker. Keep stable UUID persistence and a raw fallback; add
     family/owned/selected filters, item details, unavailable-selection preservation, portable
     tests, metadata contracts, and an interactive layout checklist.
+13. **Thread family extension:** add the exact `ThreadConsumable` identity facade, a separate
+    disabled-by-default switch, picker filtering, and portable regressions. Reuse the guarded
+    temporary policy only when live duration and toxicity-only cost contracts validate; otherwise
+    fail closed.
 
 Keep publication, permanent-item use, temporary policy, and temporary mutation reviewable as
 separate behavior changes. Update the progress checkpoint before and after each phase.
@@ -332,7 +350,7 @@ return types, taxonomy evidence, and postcondition signals. Interactive validati
   priority, and is rejected when the native readiness predicate refuses it;
 - no item is used when the cap/readiness predicate rejects it;
 - recovery and boosted rest recovery remain entirely game-driven;
-- Fruit and Potion stock is never consumed by the first slice;
+- Fruit, Potion, and Thread stock is never consumed by the first slice;
 - a temporary item is consumed only when its exact UUID and family are enabled, native headroom
   covers its cost, and no other temporary usage exists;
 - a successful temporary submission first appears as one pending usage, later becomes engaged, and
@@ -342,7 +360,7 @@ return types, taxonomy evidence, and postcondition signals. Interactive validati
 - missing or contradictory activation evidence quarantines only the submitted item for the
   lifecycle;
 - lifecycle transitions and manual item use cannot execute stale prepared work.
-- picker labels and filters match visible native Fruit/Potion items, selection survives Apply and
+- picker labels and filters match visible native Fruit/Potion/Thread items, selection survives Apply and
   reopen by UUID, and unavailable selected UUIDs are not silently discarded.
 
 Run `./script/test` on each implementation change. Passing portable tests alone does not establish a

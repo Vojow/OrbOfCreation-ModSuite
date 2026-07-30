@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoItems.Runtime.ServiceCycle;
@@ -107,6 +108,36 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(0, potion.GetQuantity());
         Assert.Single(potion.consumableUsages);
+    }
+
+    [Fact]
+    public void AllowlistedThreadUsesTheGuardedTemporarySubmissionContract()
+    {
+        Toxicity(displayQuantity: 1d);
+        var thread = Item(KnownEntities.ConsumableThreadType.Uuid, randomizable: false);
+        thread.hasDuration = true;
+        thread.durationBase = 60d;
+        using var adapter = Adapter();
+        var action = Action(thread, AutoItemsConsumableFamily.Thread);
+
+        var result = adapter.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(0, thread.GetQuantity());
+        Assert.Single(thread.consumableUsages);
+    }
+
+    [Fact]
+    public void TargetUnavailableIsAnExpectedRejectionRatherThanAnAdapterFault()
+    {
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.TargetUnavailable,
+            "No target.");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.TargetUnavailable, result.Code);
     }
 
     [Fact]

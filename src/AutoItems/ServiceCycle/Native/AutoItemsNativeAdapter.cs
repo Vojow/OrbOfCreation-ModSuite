@@ -89,7 +89,7 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
         if (AnyTemporaryUsage(native))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.TemporaryEffectPresent,
-                "A native Fruit or Potion usage is already pending or active.");
+                "A native temporary-item usage is already pending or active.");
         if (!InvokeBool(native.CanUseConsumable, null))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.NativeBusy,

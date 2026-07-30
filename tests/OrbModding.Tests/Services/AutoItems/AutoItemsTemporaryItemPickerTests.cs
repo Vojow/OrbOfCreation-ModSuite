@@ -12,7 +12,7 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     public void Dispose() => ConsumableSO.All.Clear();
 
     [Fact]
-    public void CatalogShowsOnlyVisibleTemporaryFamiliesWithNamesAndStock()
+    public void CatalogShowsVisibleFruitAndThreadFamiliesWithNamesAndStock()
     {
         var fruit = Item(
             KnownEntities.ConsumableFruitType.Uuid,
@@ -29,17 +29,32 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
             "Ancient Relic",
             visible: true,
             quantity: 1);
+        var thread = Item(
+            KnownEntities.ConsumableThreadType.Uuid,
+            "Threads of Growth",
+            visible: true,
+            quantity: 2);
 
         var snapshot = AutoItemsTemporaryItemCatalog.Capture();
 
         Assert.True(snapshot.IsAvailable, snapshot.UnavailableReason);
-        var option = Assert.Single(snapshot.Options);
-        Assert.Equal(fruit.GetGuid(), option.ItemId);
-        Assert.Equal(AutoItemsConsumableFamily.Fruit, option.Family);
-        Assert.Equal("Star Apple", option.DisplayName);
-        Assert.Equal(3, option.OwnedQuantity);
-        Assert.Equal(90d, option.DurationSeconds);
-        Assert.Equal("12", option.ToxicityCost);
+        Assert.Collection(
+            snapshot.Options,
+            option =>
+            {
+                Assert.Equal(fruit.GetGuid(), option.ItemId);
+                Assert.Equal(AutoItemsConsumableFamily.Fruit, option.Family);
+                Assert.Equal("Star Apple", option.DisplayName);
+                Assert.Equal(3, option.OwnedQuantity);
+                Assert.Equal(90d, option.DurationSeconds);
+                Assert.Equal("12", option.ToxicityCost);
+            },
+            option =>
+            {
+                Assert.Equal(thread.GetGuid(), option.ItemId);
+                Assert.Equal(AutoItemsConsumableFamily.Thread, option.Family);
+                Assert.Equal("Threads of Growth", option.DisplayName);
+            });
     }
 
     [Fact]
@@ -113,6 +128,13 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
             2,
             20d,
             "2");
+        var thread = new AutoItemsTemporaryItemOption(
+            Guid.NewGuid(),
+            AutoItemsConsumableFamily.Thread,
+            "Thread",
+            1,
+            30d,
+            "3");
         selected.Add(fruit.ItemId);
 
         Assert.True(AutoItemsTemporaryItemFiltering.Matches(
@@ -134,6 +156,10 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
         Assert.True(AutoItemsTemporaryItemFiltering.Matches(
             potion,
             AutoItemsTemporaryItemFilter.Owned,
+            selected));
+        Assert.True(AutoItemsTemporaryItemFiltering.Matches(
+            thread,
+            AutoItemsTemporaryItemFilter.Thread,
             selected));
     }
 

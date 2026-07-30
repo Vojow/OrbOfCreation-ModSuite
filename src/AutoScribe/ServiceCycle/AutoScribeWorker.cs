@@ -29,6 +29,7 @@ internal sealed class AutoScribeWorker :
         ref AutoScribeCycleState state,
         ServiceActionWriter<AutoScribeCycleAction> actions)
     {
+        var interval = AutoScribeServiceCycleFeature.Interval(config);
         var plan = ScrollCoveragePlanner.Build(world, _profile);
         ResetProjection(ref state);
         for (var index = 0; index < plan.Roles.Length; index++)
@@ -37,7 +38,7 @@ internal sealed class AutoScribeWorker :
         if (!AutoScribeServiceCycleFeature.IsOperational(config) ||
             !TryChooseEnabledProduction(plan, config.AutoScribe.Roles, out var selected))
         {
-            return WakePolicy.AfterDecision(AutoScribeServiceCycleFeature.Interval(config));
+            return WakePolicy.AfterDecision(interval);
         }
 
         actions.Add(new AutoScribeCycleAction(
@@ -48,7 +49,7 @@ internal sealed class AutoScribeWorker :
             plan.CollectedAtEpoch));
         state.PlannedActions = 1;
         state.TargetLevel = selected.TargetLevel;
-        return WakePolicy.Immediate;
+        return WakePolicy.AfterDecision(interval);
     }
 
     public void ProjectState(

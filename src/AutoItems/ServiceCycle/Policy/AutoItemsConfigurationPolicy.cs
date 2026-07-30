@@ -16,7 +16,8 @@ internal static class AutoItemsConfigurationPolicy
         configuration.UseScrolls ||
         configuration.UseRelics ||
         configuration.UseFruits ||
-        configuration.UsePotions;
+        configuration.UsePotions ||
+        configuration.UseThreads;
 
     internal static MonotonicDuration EvaluationInterval(
         SuiteRuntimeConfiguration configuration)
@@ -45,6 +46,11 @@ internal static class AutoItemsConfigurationPolicy
                 AutoItemsTemporaryItemAllowlist.Contains(
                     configuration.TemporaryItemAllowlist,
                     itemId),
+            AutoItemsConsumableFamily.Thread =>
+                configuration.UseThreads &&
+                AutoItemsTemporaryItemAllowlist.Contains(
+                    configuration.TemporaryItemAllowlist,
+                    itemId),
             _ => false,
         };
 
@@ -63,6 +69,10 @@ internal static class AutoItemsConfigurationPolicy
                 AutoItemsTemporaryItemAllowlist.Contains(temporaryAllowlist, itemId),
             AutoItemsConsumableFamily.Potion =>
                 configuration.UsePotions &&
+                itemId != Guid.Empty &&
+                AutoItemsTemporaryItemAllowlist.Contains(temporaryAllowlist, itemId),
+            AutoItemsConsumableFamily.Thread =>
+                configuration.UseThreads &&
                 itemId != Guid.Empty &&
                 AutoItemsTemporaryItemAllowlist.Contains(temporaryAllowlist, itemId),
             _ => false,

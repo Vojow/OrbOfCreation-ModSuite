@@ -76,6 +76,7 @@ internal static class BepInExAutomataConfigurationReader
                 UseRelics = source.AutoItemsRelics.Value,
                 UseFruits = source.AutoItemsFruits.Value,
                 UsePotions = source.AutoItemsPotions.Value,
+                UseThreads = source.AutoItemsThreads.Value,
                 TemporaryItemAllowlist = source.AutoItemsTemporaryItemAllowlist.Value,
                 EvaluationInterval = ToDuration(
                     source.AutoItemsEvaluationIntervalSeconds.Value,

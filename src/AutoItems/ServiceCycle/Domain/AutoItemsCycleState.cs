@@ -139,7 +139,7 @@ internal struct AutoItemsCycleState
     {
         if (_allowlistConfiguration == generation) return;
         _temporaryAllowlist =
-            configuration.UseFruits || configuration.UsePotions
+            configuration.UseFruits || configuration.UsePotions || configuration.UseThreads
                 ? AutoItemsTemporaryItemAllowlist.ParsePublication(
                     configuration.TemporaryItemAllowlist)
                 : null;

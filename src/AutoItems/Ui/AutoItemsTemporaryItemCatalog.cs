@@ -56,7 +56,7 @@ internal sealed class AutoItemsTemporaryItemCatalogSnapshot
 }
 
 /// <summary>
-/// Captures a display-only Fruit/Potion catalog on the Unity main thread. Native objects never
+/// Captures a display-only Fruit/Potion/Thread catalog on the Unity main thread. Native objects never
 /// leave this call; staged configuration continues to store stable UUIDs only.
 /// </summary>
 internal static class AutoItemsTemporaryItemCatalog
@@ -138,7 +138,7 @@ internal static class AutoItemsTemporaryItemCatalog
             throw new InvalidOperationException(
                 "A consumable belongs to more than one supported Auto Items family.");
         return supported == 1 &&
-               family is AutoItemsConsumableFamily.Fruit or AutoItemsConsumableFamily.Potion;
+               AutoItemsConsumableFamilies.IsTemporary(family);
     }
 
     private static string ReadToxicityCost(

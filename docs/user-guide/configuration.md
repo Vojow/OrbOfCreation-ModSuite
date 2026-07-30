@@ -51,13 +51,13 @@ If the shared automation host cannot start, desired-On features report that runt
 - `AutoHarvest.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick button. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
 - `AutoHarvest.EvaluationIntervalSeconds`: minimum time between service-planning passes while enabled; default 1.0, range 0.25 to 10 seconds. Published readiness and lifecycle changes can wake the service earlier. Its native harvest-speed icon in the quick strip toggles the feature immediately.
 - `AutoItems.Mode`: `Disabled` (default) or `Active`; change it with the feature header. Scroll and
-  Relic use both default on behind this switch. Fruit and Potion controls default off.
-- `AutoItems.UseFruits` and `AutoItems.UsePotions`: opt in to each temporary family. A family switch
-  alone never admits an item.
+  Relic use both default on behind this switch. Fruit, Potion, and Thread controls default off.
+- `AutoItems.UseFruits`, `AutoItems.UsePotions`, and `AutoItems.UseThreads`: opt in to each
+  temporary family. A family switch alone never admits an item.
 - `AutoItems.TemporaryItemAllowlist`: shown as **Temporary items** in the Mods page and empty by
-  default. Open **Items** to choose discovered Fruit/Potion items by name. Each row shows family,
+  default. Open **Items** to choose discovered Fruit/Potion/Thread items by name. Each row shows family,
   owned quantity, immediate toxicity cost, and base duration; **Filter** cycles through All, Fruit,
-  Potion, Owned, and Selected. The picker stores sorted exact `ConsumableSO` UUIDs, preserves
+  Potion, Thread, Owned, and Selected. The picker stores sorted exact `ConsumableSO` UUIDs, preserves
   selected UUIDs that are not currently discoverable, and offers **Raw** editing as an advanced
   fallback. A listed item is considered only when its family switch is on, native toxicity
   headroom covers its cost, and no temporary effect is pending or active. While such an effect is

@@ -16,6 +16,7 @@ ConsumableFruitType	46e0ab83-df7c-4f35-8012-3d9a3c97b753	Fruit	ConsumableTypeSO
 ConsumablePotionType	8103dae4-6945-4d18-b562-d2ffcd7ef49e	Potion	ConsumableTypeSO
 ConsumableRelicType	5d27b76e-eed3-49cc-a069-b9106000ede4	Relic	ConsumableTypeSO
 ConsumableScrollType	70b36536-64e5-4f70-ad6f-af5787d719cc	ScrollConsumable	ConsumableTypeSO
+ConsumableThreadType	66a50127-5210-4a3a-93f4-952287858b90	ThreadConsumable	ConsumableTypeSO
 CraftScrollAdvancement	a4a02a8f-6573-411c-a30c-6d9bcee12605	CraftScrollAdvancement	CraftingRecipeSO
 CraftScrollDevelopment	b15690ab-828c-42b9-ad69-70f169a45961	CraftScrollDevelopment	CraftingRecipeSO
 CraftScrollEcho	008ccaa9-da26-4b55-95a5-5bc5df9c62f0	CraftScrollEcho	CraftingRecipeSO

@@ -19,7 +19,7 @@ Selected C# was decompiled read-only with ILSpy 10.1.0. No game binary or save w
 
 ## Identity and taxonomy
 
-All four product families are `ConsumableSO` objects. The family is serialized membership in the
+All five supported product families are `ConsumableSO` objects. The family is serialized membership in the
 public `ConsumableSO.consumableTypes` list, not a distinct managed subtype and not a safe inference
 from the display name.
 
@@ -31,15 +31,29 @@ The canonical extracted entity inventory identifies these exact `ConsumableTypeS
 | Potion | `8103dae4-6945-4d18-b562-d2ffcd7ef49e` | `Potion` |
 | Relic | `5d27b76e-eed3-49cc-a069-b9106000ede4` | `Relic` |
 | Scroll | `70b36536-64e5-4f70-ad6f-af5787d719cc` | `ScrollConsumable` |
+| Thread | `66a50127-5210-4a3a-93f4-952287858b90` | `ThreadConsumable` |
 
 Other serialized consumable types exist, including Food, PotionAugment, PotionResource,
-ThreadConsumable, Treasure, and the global aggregate type. Classification must therefore match the
+Treasure, and the global aggregate type. Classification must therefore match the
 exact UUID and exact `ConsumableTypeSO` runtime type. An object with no supported family or with more
 than one supported family is unknown and cannot be mutated.
 
 The shared publication now carries `consumableTypes` in a separate one-to-many
 `WorldConsumableType` relation rather than storing one guessed enum on the scalar row. It preserves
 unknown native types so policy can fail closed instead of silently reclassifying them.
+
+The 2026-07-30 entity dump contains four members of the Thread family:
+
+| Native item | UUID |
+|---|---|
+| Threads of Development | `36b6f51c-39cd-43b9-859b-51c752630216` |
+| Threads of Growth | `4b6a0964-450a-4289-8e60-b8017f95837b` |
+| Threads of Protection | `a11421b2-d11b-4661-9d62-c2908ff33009` |
+| Threads of Recharging | `6807a0c9-b3c4-4d1d-abce-dfe93a3da938` |
+
+These item UUIDs are discovered for the picker and stored only when the player selects them. The
+hard-coded family UUID is accessed through `KnownEntities`, so replacing an identity for a future
+accepted game baseline remains centralized rather than leaking UUIDs into policy or normal UX.
 
 ## Toxicity is a resource cost
 
@@ -163,7 +177,7 @@ completion; the live checklist must identify that later edge before release vali
 The following are strong enough to implement publication, fail-closed planning, and guarded
 submission:
 
-- exact four-family `ConsumableTypeSO` UUIDs;
+- exact five-family `ConsumableTypeSO` UUIDs;
 - exact `PotionToxicity` `ResourceSO` UUID;
 - `ConsumableSO.consumableTypes`, `consumeCost`, and `usageCost` as the relevant authored edges;
 - existing scalar stock, queue, randomization, cooldown, duration, and preparation facts;
@@ -190,20 +204,20 @@ stable `GetGuid()` UUID plus `en`, `dr`, and `maxDr`:
   usage, its duration effect.
 
 The native use path does not impose a general no-stacking rule; `IsUsing()` is a query rather than
-an admission guard. Auto Items therefore enforces one pending or active Fruit/Potion usage across
+an admission guard. Auto Items therefore enforces one pending or active Fruit/Potion/Thread usage across
 the temporary families. Submission must add exactly one pending usage, a later publication must
 observe that usage engaged, and its later disappearance is accepted as expiry only after engagement
 was seen.
 
 Serialized effect blocks determine each item's benefit and target. The current policy does not
 interpret or rank those graphs: a player must opt in each exact UUID. Runtime safety still proves
-the exact Fruit/Potion family, finite positive duration, toxicity-only cost vectors, sufficient
+the exact Fruit/Potion/Thread family, finite positive duration, toxicity-only cost vectors, sufficient
 native toxicity headroom, stock, visibility, cooldown, native readiness, queue ownership, and
 absence of another temporary usage.
 
 ## Implemented boundary
 
-- known entities now include the four exact family UUIDs and `PotionToxicity`;
+- known entities now include the five exact family UUIDs and `PotionToxicity`;
 - the consumable collector publishes every native type membership;
 - it publishes both raw resource-cost vectors, distinguished as immediate `Consume` and held
   `Usage`;
@@ -215,7 +229,7 @@ absence of another temporary usage.
   most one action per turn;
 - Scrolls use native random targeting; Relics receive first priority whenever native `CanFire()`
   and the published toxicity headroom admit them;
-- Fruit and Potion family switches default off and require an exact UUID allowlist entry; admitted
+- Fruit, Potion, and Thread family switches default off and require an exact UUID allowlist entry; admitted
   temporary items may use any native toxicity headroom that covers their cost;
 - positive toxicity does not itself reserve recovery. Scrolls and admitted temporary items continue
   filling headroom until no otherwise-eligible use fits, which latches recovery until the resource
@@ -243,8 +257,10 @@ absence of another temporary usage.
 5. For one Relic, record admission at both zero and nonzero toxicity when native headroom permits,
    rejection when it does not, preparation completion, and the durable global effect state.
 6. Race each live boundary with manual item use and lifecycle replacement.
-7. For one allowlisted Fruit and one allowlisted Potion, record pending usage creation, engagement,
-   duration countdown, expiry removal, toxicity recovery, and save/load hydration.
+7. For one allowlisted Fruit, Potion, and Thread, record pending usage creation, engagement,
+   duration countdown, expiry removal, toxicity recovery, and save/load hydration. Confirm the four
+   identified Thread items are finite-duration, toxicity-only consumables before enabling
+   them in a live configuration.
 
 Until those observations exist, Auto Items remains disabled by default and is not ready for a
 release claim of live effect completion.

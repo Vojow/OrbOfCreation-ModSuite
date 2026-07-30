@@ -3,7 +3,7 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-/// <summary>The four native consumable families Auto Items recognizes by exact stable identity.</summary>
+/// <summary>The native consumable families Auto Items recognizes by exact stable identity.</summary>
 internal enum AutoItemsConsumableFamily
 {
     Unknown = 0,
@@ -11,6 +11,7 @@ internal enum AutoItemsConsumableFamily
     Potion = 2,
     Relic = 3,
     Scroll = 4,
+    Thread = 5,
 }
 
 /// <summary>
@@ -29,9 +30,13 @@ internal static class AutoItemsConsumableFamilies
             return AutoItemsConsumableFamily.Relic;
         if (typeId == KnownEntities.ConsumableScrollType.Uuid)
             return AutoItemsConsumableFamily.Scroll;
+        if (typeId == KnownEntities.ConsumableThreadType.Uuid)
+            return AutoItemsConsumableFamily.Thread;
         return AutoItemsConsumableFamily.Unknown;
     }
 
     internal static bool IsTemporary(AutoItemsConsumableFamily family) =>
-        family is AutoItemsConsumableFamily.Fruit or AutoItemsConsumableFamily.Potion;
+        family is AutoItemsConsumableFamily.Fruit or
+            AutoItemsConsumableFamily.Potion or
+            AutoItemsConsumableFamily.Thread;
 }
