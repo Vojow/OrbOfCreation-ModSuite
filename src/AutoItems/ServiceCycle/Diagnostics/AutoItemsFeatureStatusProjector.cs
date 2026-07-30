@@ -44,6 +44,6 @@ internal static class AutoItemsFeatureStatusProjector
         return new AutoItemsFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,
-            "Auto Items is active; Relics have first priority when native headroom permits, Scrolls use native random targeting, and temporary items require exact opt-in.");
+            string.Empty);
     }
 }

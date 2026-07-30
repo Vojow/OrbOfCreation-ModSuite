@@ -132,7 +132,9 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
             DisplayName,
             configuredEnabled,
             state,
-            new FeatureStatusReason(reasonCode, summary),
+            reasonCode == FeatureStatusReasonCode.None
+                ? default
+                : new FeatureStatusReason(reasonCode, summary),
             lifecycleGeneration);
         var prior = Current;
         Current = status;

@@ -1,11 +1,12 @@
 # Auto Scribe
 
-> **Lifecycle: Corrected release installed; fresh-launch validation pending.** The audited identity
+> **Lifecycle: Live diagnostics fault fixed and verified; reinstall pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
-> Worker-definition boundary violations found on a later launch are fixed through lifecycle-owned
-> receipt state and audited immutable role storage. All gates pass and the clean build is installed
-> with verified rollback backups.
+> Worker-definition boundary violations are fixed. A fresh launch now reaches the shared host, but
+> the first operational Auto Items diagnostics update throws before lifecycle readiness can
+> propagate. The dump-backed source fix passes all automated gates and awaits a safe reinstall
+> after the game closes.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -27,8 +28,8 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete after startup fix** | `script/test` passes 1,942 portable and 90 profile tests; both production-worker separation audits and all 26 installed game-contract tests pass; the real-reference Release build has zero warnings and errors |
-| 10. Interactive game validation | **Ready** | Confirm a healthy ServiceCycle host on a fresh launch, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
+| 9. Automated verification | **Complete after diagnostics fix** | `script/test` passes 1,944 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
+| 10. Interactive game validation | **Blocked on diagnostics reinstall** | Reinstall after the game closes, confirm lifecycle readiness and a healthy Auto Items/Auto Scribe status, then continue disposable-save scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -37,8 +38,8 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: relaunch and confirm healthy Auto Items and Auto Scribe registrations on the
-  corrected installed DLL before running the interactive validation outline on a disposable save.
+- Current task: install the verified dump-backed diagnostics fix after the game closes, then
+  relaunch and confirm lifecycle readiness plus healthy Auto Items and Auto Scribe status.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -97,6 +98,18 @@ Last updated: **2026-07-30**
 - The installer created the latest rollback checkpoint after confirming the game was closed:
   - save copies: `backups/pre-modsuite-install-20260730T101946Z` (12 files);
   - previous DLL: `BepInEx/modsuite-backups/pre-modsuite-install-20260730T101946Z` (1 file).
+- The 2026-07-30 12:21 launch proves the shared host registers and world collection completes
+  (4,168 entities across 46 categories). The user-triggered 2.3 MiB dump and `Player.log` identify
+  the next blocker exactly: `AutoItemsFeatureStatusProjector` emitted
+  `Operational`/`None` with a non-empty reason summary, while lifecycle publication constructed a
+  `FeatureStatusReason` unconditionally. The resulting `ArgumentException` aborted every Automata
+  update before readiness could propagate, leaving Auto Items waiting and Auto Scribe correctly
+  blocked on its parent. Source now emits an empty operational reason and makes lifecycle
+  publication consistent with the existing non-lifecycle status path.
+- The current post-fix tree passes the 1,944-test portable gate, 90 profile tests, all 26
+  installed-game contracts, and the installed-reference Release build with zero warnings and
+  errors. The running game still has the prior DLL; installation remains intentionally blocked
+  until its exact executable process exits.
 
 ## Goal
 
