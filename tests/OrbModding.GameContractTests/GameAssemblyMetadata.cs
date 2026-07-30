@@ -220,12 +220,17 @@ internal sealed class GameAssemblyMetadata : IDisposable
 
     private string DecodeTypeHandle(EntityHandle handle)
     {
+        if (handle.IsNil)
+        {
+            return string.Empty;
+        }
+
         return handle.Kind switch
         {
             HandleKind.TypeDefinition => _typeProvider.GetTypeFromDefinition(Reader, (TypeDefinitionHandle)handle, 0),
             HandleKind.TypeReference => _typeProvider.GetTypeFromReference(Reader, (TypeReferenceHandle)handle, 0),
             HandleKind.TypeSpecification => _typeProvider.GetTypeFromSpecification(Reader, null, (TypeSpecificationHandle)handle, 0),
-            _ => handle.IsNil ? string.Empty : handle.Kind.ToString(),
+            _ => handle.Kind.ToString(),
         };
     }
 

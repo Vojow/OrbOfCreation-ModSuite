@@ -90,7 +90,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<RawHarvestResourceSample, WorldHarvestResource> _harvestResources;
     private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
     private readonly WorldCategoryReader<WorldGlyph, WorldGlyph> _glyphs;
-    private readonly WorldCategoryReader<WorldConsumable, WorldConsumable> _consumables;
+    private readonly WorldConsumableReader _consumables;
     private readonly WorldCategoryReader<WorldRitual, WorldRitual> _rituals;
     private readonly WorldCategoryReader<WorldAchievement, WorldAchievement> _achievements;
     private readonly WorldCategoryReader<WorldAdvancement, WorldAdvancement> _advancements;
@@ -216,7 +216,7 @@ internal sealed class GameWorldCollector
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
         _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
         _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
-        _consumables = Reader(new WorldConsumableBinder(), resolveType, static frame => frame.Consumables);
+        _consumables = new WorldConsumableReader(resolveType("ConsumableSO"));
         _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
         _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);

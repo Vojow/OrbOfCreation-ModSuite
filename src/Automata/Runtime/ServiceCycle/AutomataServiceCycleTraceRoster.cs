@@ -30,6 +30,7 @@ internal static class AutomataServiceCycleTraceRoster
     private const string SpellLevelId = "orbautomata.spell-level";
     private const string AutoCastId = "orbautomata.auto-cast";
     private const string AutoConceptId = "orbautomata.auto-concept";
+    private const string AutoItemsId = "orbautomata.auto-items";
     private const string MentorId = "orbmentor.mastery-sharing";
 
     /// <summary>
@@ -64,6 +65,7 @@ internal static class AutomataServiceCycleTraceRoster
         SpellLevelId => "Spell Leveling",
         AutoCastId => "Auto Cast",
         AutoConceptId => "Auto Concept",
+        AutoItemsId => "Auto Items",
         MentorId => "Mentor",
         _ => string.Empty,
     };

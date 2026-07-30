@@ -2083,7 +2083,8 @@
       "valueType": "System.Collections.Generic.List`1<IInstantEffectScript>",
       "owners": [
         "Automata Auto Harvest completion audit",
-        "Common world collection"
+        "Common world collection",
+        "Automata Auto Items action boundary"
       ],
       "usages": [
         "reflection"
@@ -3009,7 +3010,8 @@
       "static": false,
       "valueType": "System.Boolean",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Automata Auto Items action boundary"
       ],
       "usages": [
         "reflection"
@@ -12820,7 +12822,8 @@
       "static": false,
       "valueType": "Targeting.TargetSelectOptions",
       "owners": [
-        "Automata Auto Cast targeting"
+        "Automata Auto Cast targeting",
+        "Automata Auto Items action boundary"
       ],
       "usages": [
         "reflection"
@@ -14339,6 +14342,636 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "consumable.consumable-types",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumableTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ConsumableTypeSO>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.consumable-usages",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumableUsages",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ConsumableUsage>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.consume-cost",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumeCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.usage-cost",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "usageCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.get-maximum-carry-load",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaximumCarryLoad",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.engaged",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "en",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.get-guid",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.maximum-duration",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxDr",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-usage.remaining-duration",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "dr",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-type.type",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableTypeSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable-count.free-quantity",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableCount",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "fr",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-items.consumable.counts",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "consumableCounts",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ConsumableCount>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-items.consumable-usage.base-scaling",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableUsage",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseSi",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ScalingInfo",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-items.consumable-count.level",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableCount",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-items.consumable-count.quantity",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableCount",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "auto-items.scaling-info.get-level-int",
+      "assembly": "assembly-csharp",
+      "type": "ScalingInfo",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevelInt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "consumable.can-fire",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanFire",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.get-quantity",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.get-queued",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQueued",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.is-randomized",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsRandomized",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.select-and-fire",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SelectAndFire",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "consumable.set-randomization",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SetRandomization",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Boolean"
+      ],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "inventory.can-use-consumable",
+      "assembly": "assembly-csharp",
+      "type": "Inventory",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanUseConsumable",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.scaling-info.type",
+      "assembly": "assembly-csharp",
+      "type": "ScalingInfo",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.instant-effect-script.type",
+      "assembly": "assembly-csharp",
+      "type": "IInstantEffectScript",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.targetable.type",
+      "assembly": "assembly-csharp",
+      "type": "Targeting.ITargetable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.base-target-selection.type",
+      "assembly": "assembly-csharp",
+      "type": "Targeting.BaseTargetSelection",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.target-structure.type",
+      "assembly": "assembly-csharp",
+      "type": "Targeting.TargetStructure",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.consumable.on-use-effects",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "onUseEffects",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<InstantEffectBlock>",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.target-structure.get-random-list",
+      "assembly": "assembly-csharp",
+      "type": "Targeting.TargetStructure",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRandomList",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<Targeting.ITargetable>",
+      "parameters": [
+        "ScalingInfo"
+      ],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.consumable.strongest",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetStrongest",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ConsumableCount",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.consumable.strongest-level",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetStrongestLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.consumable.count-scaling",
+      "assembly": "assembly-csharp",
+      "type": "ConsumableSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCountScalingInfo",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ScalingInfo",
+      "parameters": [
+        "ConsumableCount"
+      ],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.target-options.get-targeting",
+      "assembly": "assembly-csharp",
+      "type": "Targeting.TargetSelectOptions",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTargeting",
+      "visibility": "public",
+      "static": false,
+      "returnType": "Targeting.BaseTargetSelection",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     }
   ],
   "sourceAudit": {
@@ -14348,6 +14981,7 @@
       "src/AutoCast",
       "src/AutoConcept",
       "src/AutoHarvest",
+      "src/AutoItems",
       "src/Automata",
       "src/Common",
       "src/Mentor",

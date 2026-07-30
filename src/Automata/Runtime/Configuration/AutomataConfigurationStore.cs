@@ -95,6 +95,15 @@ internal sealed class AutomataConfigurationStore
         PublishPending();
     }
 
+    internal void ToggleAutoItems()
+    {
+        _configuration.SetAutoItemsMode(
+            Current.AutoItems.Mode == AutoItemsOperationMode.Active
+                ? AutoItemsOperationMode.Disabled
+                : AutoItemsOperationMode.Active);
+        PublishPending();
+    }
+
     internal void ToggleMentor()
     {
         _configuration.SetMentorMode(

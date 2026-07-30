@@ -45,6 +45,10 @@ internal sealed class BepInExAutomataConfiguration
     {
         new ModConfigDependency("AutoHarvest", "Mode", "Active"),
     };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoItemsActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoItems", "Mode", "Active"),
+    };
 
     private BepInExAutomataConfiguration(
         ConfigFile config,
@@ -72,6 +76,9 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<AutoHarvestOperationMode> autoHarvestMode,
         ConfigEntry<bool> autoHarvestFruitTrees,
         ConfigEntry<bool> autoHarvestTreasureTrees,
+        ConfigEntry<AutoItemsOperationMode> autoItemsMode,
+        ConfigEntry<bool> autoItemsUseScrolls,
+        ConfigEntry<bool> autoItemsUseRelics,
         ConfigEntry<bool> allowUnverifiedGameBuild,
         ConfigEntry<string> acceptedUnverifiedBuildFingerprint,
         ConfigEntry<bool> emergencyDisable,
@@ -102,6 +109,9 @@ internal sealed class BepInExAutomataConfiguration
         AutoHarvestMode = autoHarvestMode;
         AutoHarvestFruitTrees = autoHarvestFruitTrees;
         AutoHarvestTreasureTrees = autoHarvestTreasureTrees;
+        AutoItemsMode = autoItemsMode;
+        AutoItemsUseScrolls = autoItemsUseScrolls;
+        AutoItemsUseRelics = autoItemsUseRelics;
         AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
         AcceptedUnverifiedBuildFingerprint = acceptedUnverifiedBuildFingerprint;
         EmergencyDisable = emergencyDisable;
@@ -158,6 +168,9 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<AutoHarvestOperationMode> AutoHarvestMode { get; }
     public ConfigEntry<bool> AutoHarvestFruitTrees { get; }
     public ConfigEntry<bool> AutoHarvestTreasureTrees { get; }
+    public ConfigEntry<AutoItemsOperationMode> AutoItemsMode { get; }
+    public ConfigEntry<bool> AutoItemsUseScrolls { get; }
+    public ConfigEntry<bool> AutoItemsUseRelics { get; }
     public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
 
     internal ConfigEntry<string> AcceptedUnverifiedBuildFingerprint { get; }
@@ -177,6 +190,7 @@ internal sealed class BepInExAutomataConfiguration
     internal void SetAutoConceptMode(AutoConceptOperationMode mode) => AutoConceptMode.Value = mode;
 
     internal void SetAutoHarvestMode(AutoHarvestOperationMode mode) => AutoHarvestMode.Value = mode;
+    internal void SetAutoItemsMode(AutoItemsOperationMode mode) => AutoItemsMode.Value = mode;
 
     internal void SetMentorMode(MentorOperationMode mode)
     {
@@ -286,6 +300,9 @@ internal sealed class BepInExAutomataConfiguration
             AutoHarvestMode,
             AutoHarvestFruitTrees,
             AutoHarvestTreasureTrees,
+            AutoItemsMode,
+            AutoItemsUseScrolls,
+            AutoItemsUseRelics,
             AbsoluteReserve,
             RelativeReserveMultiplier,
         };
@@ -418,9 +435,12 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoHarvest", "Mode", AutoHarvestOperationMode.Disabled, "Disabled performs no harvest work. Active queues one audited native fruit-tree or treasure-tree collect action at a time.", 18, 0),
                 Bind(config, "AutoHarvest", "CollectFruitTrees", true, "Collect ready fruit trees through their native plot action.", 18, 10, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
+                Bind(config, "AutoItems", "Mode", AutoItemsOperationMode.Disabled, "Disabled performs no item work. Active uses one eligible Scroll or Relic from each fresh world publication.", 19, 0),
+                Bind(config, "AutoItems", "UseScrolls", true, "Use visible Scrolls with native randomized targeting after exact live target revalidation.", 19, 10, dependencies: AutoItemsActiveDependencies),
+                Bind(config, "AutoItems", "UseRelics", true, "Use visible Relics when live native preparation and firing checks permit.", 19, 20, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
                 Bind(config, "Compatibility", "AcceptedUnverifiedBuildFingerprint", string.Empty, "Exact assembly-pair fingerprint accepted by the player. Managed by the suite.", 50, 10, hidden: true),
-                Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, and mastery sharing immediately.", 40, 0),
+                Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest submissions, consumable uses, and mastery sharing immediately.", 40, 0),
                 Bind(config, "Reserves", "AbsoluteReserve", "0", "Absolute amount of every resource to leave after each automated purchase or cast.", 20, 0),
                 Bind(config, "Reserves", "RelativeReserveMultiplier", 0.0f, "Additional amount to leave after each action, expressed as a multiple of that action's cost. Affordability modes remain separate.", 20, 10));
 
@@ -448,6 +468,7 @@ internal sealed class BepInExAutomataConfiguration
             "AutoCast" => "Auto Cast",
             "AutoConcept" => "Auto Concept",
             "AutoHarvest" => "Auto Harvest",
+            "AutoItems" => "Auto Items",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -457,6 +478,9 @@ internal sealed class BepInExAutomataConfiguration
             "Mode" when section == "AutoCast" => "Auto Cast",
             "Mode" when section == "AutoConcept" => "Auto Concept",
             "Mode" when section == "AutoHarvest" => "Auto Harvest",
+            "Mode" when section == "AutoItems" => "Auto Items",
+            "UseScrolls" => "Use Scrolls",
+            "UseRelics" => "Use Relics",
             "CollectFruitTrees" => "Collect fruit trees",
             "CollectTreasureTrees" => "Collect treasure trees",
             "SlotManagementMode" => "Slot management",
@@ -470,7 +494,7 @@ internal sealed class BepInExAutomataConfiguration
             "StartResourcePercent" => "Minimum resource percent",
             _ => null,
         };
-        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : 20;
+        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Items" ? 18 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

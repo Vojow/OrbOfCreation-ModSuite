@@ -13,7 +13,7 @@ unit test for the changed type.
 | Lifecycle generation/readiness | [GameLifecycleMonitorTests.cs](../../tests/OrbModding.Tests/GameLifecycleMonitorTests.cs) | Automata, Mentor, Mod Config |
 | Local frame-bounded delivery | [GameplayInvalidationBusTests.cs](../../tests/OrbModding.Tests/GameplayInvalidationBusTests.cs), [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) | gameplay invalidation and Mods maintenance |
 | Action-family ownership | [ActionFamilyOwnershipTests.cs](../../tests/OrbModding.Tests/ActionFamilyOwnershipTests.cs), [ActionFamilyIntegrationTests.cs](../../tests/OrbModding.Tests/ActionFamilyIntegrationTests.cs) | all native mutation features |
-| Native mutation verification | [NativeMutationVerifierTests.cs](../../tests/OrbModding.Tests/NativeMutationVerifierTests.cs) | Auto Buy, Auto Cast, Auto Concept, spell leveling, Mentor |
+| Native mutation verification | [NativeMutationVerifierTests.cs](../../tests/OrbModding.Tests/NativeMutationVerifierTests.cs) | Auto Buy, Auto Cast, Auto Concept, Auto Items, spell leveling, Mentor |
 | Queue-capacity arithmetic | [QueueCapacitySnapshotTests.cs](../../tests/OrbModding.Tests/QueueCapacitySnapshotTests.cs) | Auto Buy |
 | Typed registry resolution | [TypedRegistryResolverTests.cs](../../tests/OrbModding.Tests/TypedRegistryResolverTests.cs) | native feature adapters |
 | Structured decisions/status | [AutomationDecisionTests.cs](../../tests/OrbModding.Tests/AutomationDecisionTests.cs), [FeatureStatusTests.cs](../../tests/OrbModding.Tests/FeatureStatusTests.cs) | Automata, Mentor, and Mod Config projections |
@@ -21,7 +21,7 @@ unit test for the changed type.
 | Audited-build mutation gate | [AssemblyAuditGateTests.cs](../../tests/OrbModding.Tests/AssemblyAuditGateTests.cs) | every native mutation in the suite |
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
-| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | all seven production registrations and the frame pump |
+| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | all eight production registrations and the frame pump |
 | ServiceCycle semantic trace | [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing), [Runtime/ServiceCycle/Observation](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation) | all services, trace capture, and offline verification |
 | Trace segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle observation products and future service capture adapters |
 | Runtime architecture boundaries | [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs), [ServiceCycleArchitectureTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Registration/ServiceCycleArchitectureTests.cs) | Common and every future ServiceCycle service |

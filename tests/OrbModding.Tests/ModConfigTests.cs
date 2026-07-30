@@ -174,7 +174,7 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Items", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
@@ -189,6 +189,9 @@ public sealed class ModConfigTests
         Assert.Equal(
             new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "UseScrolls", "UseRelics" },
+            mod.Sections.Single(section => section.Name == "Auto Items").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
@@ -239,6 +242,11 @@ public sealed class ModConfigTests
                 setting.Key != "Mode"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoHarvest" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoItems" &&
+                setting.Key != "Mode"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoItems" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
 
         Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
         Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));
@@ -258,7 +266,7 @@ public sealed class ModConfigTests
     }
 
     [Fact]
-    public void SuiteCatalogConsolidatesTheNineLegacyTabsIntoSevenRailPages()
+    public void SuiteCatalogConsolidatesLegacyTabsIntoEightFeaturePages()
     {
         var config = new ConfigFile();
         BepInExAutomataConfiguration.Bind(config);
@@ -271,11 +279,11 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Mentor", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Items", "Mentor", "Advanced" },
             mod.Sections.Select(section => section.Name));
-        Assert.Equal(8, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.Equal(9, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
         Assert.All(
-            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Mentor"),
+            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Items" or "Mentor"),
             section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
                 section.Settings.Single(setting => setting.Key == "Mode"))));
     }

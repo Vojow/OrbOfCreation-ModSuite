@@ -128,6 +128,8 @@ public sealed class AutomataConfigurationTests
         config.AutoCastStartResourcePercent.Value = 37;
         config.AutoConceptTrainingPeriodSeconds.Value = 19;
         config.AutoHarvestTreasureTrees.Value = false;
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoItemsUseScrolls.Value = false;
         config.EmergencyDisable.Value = true;
         config.AbsoluteReserve.Value = "42";
 
@@ -138,6 +140,9 @@ public sealed class AutomataConfigurationTests
         Assert.Equal(37, snapshot.AutoCast.StartResourcePercent);
         Assert.Equal(19, snapshot.AutoConcept.TrainingPeriodSeconds);
         Assert.False(snapshot.AutoHarvest.CollectTreasureTrees);
+        Assert.Equal(AutoItemsOperationMode.Active, snapshot.AutoItems.Mode);
+        Assert.False(snapshot.AutoItems.UseScrolls);
+        Assert.True(snapshot.AutoItems.UseRelics);
         Assert.True(snapshot.Safety.EmergencyDisable);
         Assert.Equal("42", snapshot.Reserves.AbsoluteReserve);
 

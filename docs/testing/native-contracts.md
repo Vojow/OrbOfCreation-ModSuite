@@ -24,6 +24,8 @@ The manifest does not change runtime behavior. Existing adapters and Harmony tar
 For Auto Buy, the manifest-to-implementation relationship is documented in the
 [native purchase pipeline](../reverse-engineering/auto-buy-native-pipeline.md)
 and [queue/completion model](../reverse-engineering/auto-buy-queue-and-completion.md).
+For Auto Items, see the
+[native Scroll and Relic pipeline](../reverse-engineering/auto-items-native-pipeline.md).
 
 ## Enforcement layers
 

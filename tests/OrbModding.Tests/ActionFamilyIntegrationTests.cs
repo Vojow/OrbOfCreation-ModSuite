@@ -140,6 +140,53 @@ public sealed class ActionFamilyIntegrationTests
     }
 
     [Fact]
+    public void AutoItemsClaimFailurePreservesTheExactConflictingFamilyAndOwner()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        using var external = registry.RegisterKnownExternal(
+            new ActionFamilyOwner(
+                new FeatureStatusKey("tests.external", "Items"),
+                "External Items"),
+            new[] { AutomationActionFamily.ConsumableUse });
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.False(ownership.OwnsItems);
+        Assert.Contains("ConsumableUse", ownership.ItemsOwnershipFailure);
+        Assert.Contains("External Items", ownership.ItemsOwnershipFailure);
+    }
+
+    [Fact]
+    public void AutoItemsMasterDisableReleasesItsLeaseEvenWhenAutoBuyKeepsMultiBuyAlive()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        config.AutoBuyMode.Value = AutoBuyOperationMode.Active;
+        config.AutoBuyUpgrades.Value = true;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.Refresh(config.Current, lifecycleReady: true);
+        Assert.True(ownership.OwnsItems);
+
+        config.AutoItemsMode.Value = AutoItemsOperationMode.Disabled;
+        ownership.Refresh(config.Current, lifecycleReady: true);
+
+        Assert.False(ownership.OwnsItems);
+        Assert.False(ownership.TryCaptureItemMutationPermit());
+        Assert.Contains(
+            "Committed configuration no longer enables Auto Items",
+            ownership.ItemsOwnershipFailure);
+        using var replacement = Claim(
+            registry,
+            new FeatureStatusKey("tests", "replacement-items"),
+            AutomationActionFamily.ConsumableUse);
+        Assert.True(replacement.IsHeld);
+    }
+
+    [Fact]
     public void MentorDomainClaimsAreIndependentAndReleaseOnLifecycleTeardown()
     {
         var registry = new ActionFamilyOwnershipRegistry();

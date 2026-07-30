@@ -114,6 +114,10 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
     internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
+    internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
+    internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
+    internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
+    internal WorldConsumableCountBuffer ConsumableCounts { get; } = new();
     internal WorldSampleBuffer<WorldRitual, WorldRitual> Rituals { get; } = new();
     internal WorldSampleBuffer<WorldAchievement, WorldAchievement> Achievements { get; } = new();
     internal WorldSampleBuffer<WorldAdvancement, WorldAdvancement> Advancements { get; } = new();
@@ -254,6 +258,10 @@ internal static class GameWorldFrameDeriver
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
             Glyphs = frame.Glyphs.Build(WorldIdentityDeriver<WorldGlyph>.Shared),
             Consumables = frame.Consumables.Build(WorldIdentityDeriver<WorldConsumable>.Shared),
+            ConsumableTypes = WorldConsumableRelationDeriver.Build(frame.ConsumableTypes),
+            ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
+            ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
+            ConsumableCounts = WorldConsumableRelationDeriver.Build(frame.ConsumableCounts),
             Rituals = frame.Rituals.Build(WorldIdentityDeriver<WorldRitual>.Shared),
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),

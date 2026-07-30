@@ -15,6 +15,47 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Execution;
 public sealed class ServiceWakeConfigurationTests
 {
     [Fact]
+    public void ABatchContinuesUnderItsPinnedConfigurationWhenANewerGenerationCommits()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(1));
+        var definition = new ExecutionServiceDefinition(
+            "test.execution.config-intentionally-pinned")
+        {
+            ActionCount = 2,
+        };
+        var configurationAdvanced = false;
+        definition.ActionCallback = () =>
+        {
+            if (configurationAdvanced) return;
+            configurationAdvanced = true;
+            registry.Configuration.Publish(TestSuiteConfiguration.WithSetting(2));
+        };
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(1));
+        var runner = registration.Runner;
+
+        Assert.True(runner.TryStartCycle(clock.Now).Queued);
+        ServiceRunnerTestWait.ForPhase(runner, ServiceHandoffPhase.ResponseReady);
+        Assert.True(runner.TryAcquireResponse());
+
+        var prefix = runner.TryExecuteOne(clock.Now);
+        var terminal = runner.TryExecuteOne(clock.Now);
+
+        Assert.False(prefix.BatchTerminal);
+        Assert.True(terminal.BatchTerminal);
+        Assert.Equal(2, definition.ActionExecutionCount);
+        Assert.Equal(1, definition.LastExecutedSetting);
+        Assert.Equal(BatchTerminalDisposition.Completed, terminal.Receipt.Disposition);
+        Assert.Equal(2, terminal.Receipt.ActionCount);
+        Assert.Equal(2, terminal.Receipt.CommittedCount);
+        Assert.Equal(2, terminal.Receipt.NativeCallOutcome.MutationAttempts);
+        Assert.False(runner.Snapshot.Fault.IsValid);
+    }
+
+    [Fact]
     public void PublishingConfigurationInvalidatesAStartWaitFromThePreviousGeneration()
     {
         var clock = new ThreadSafeTestClock(100);

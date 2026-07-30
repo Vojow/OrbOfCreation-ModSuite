@@ -136,7 +136,7 @@ Every seam must pay rent. Scheduled for deletion because they don't:
   per-frame operation cap because those are local delivery bounds, not another scheduler.
 - the application-level service registry that once hosted ServiceCycle beside legacy engines.
   With those engines gone, `Plugin` owns one deferred ServiceCycle activation directly; Common's
-  typed seven-service registry remains the engine's ordering boundary.
+  typed eight-service registry remains the engine's ordering boundary.
 - per-feature configuration relays and cached mode/emergency facts. Feature diagnostics report
   runtime health; one application status join supplies saved intent and emergency state.
 

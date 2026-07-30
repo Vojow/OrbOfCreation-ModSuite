@@ -10,10 +10,12 @@ internal readonly struct ActionableListVariableContract { }
 internal readonly struct AlchemyInstanceListVariableContract { }
 internal readonly struct AlchemyRecipeListVariableContract { }
 internal readonly struct AlchemyTypeSOContract { }
+internal readonly struct ConsumableTypeSOContract { }
 internal readonly struct IntVariableContract { }
 internal readonly struct PlotNodeActionInstanceListVariableContract { }
 internal readonly struct PlotNodeActionSOContract { }
 internal readonly struct PlotNodeSOContract { }
+internal readonly struct ResourceSOContract { }
 internal readonly struct ScalingWeightSOContract { }
 internal readonly struct SpellListVariableContract { }
 internal readonly struct TreasurePoolSOContract { }
@@ -47,6 +49,8 @@ internal static class KnownEntities
     public static readonly KnownEntity<ScalingWeightSOContract> CompletionScalingWeight = new(new Guid("be446180-242f-40d2-910e-91e735fc20ad"), "ScalingWeightSO", "SpecialScaling");
     public static readonly KnownEntity<AlchemyRecipeListVariableContract> ConceptRecipes = new(new Guid("c8ff8e01-c042-49c2-86a2-e374f82c280c"), "AlchemyRecipeListVariable", "ConceptRecipes");
     public static readonly KnownEntity<AlchemyTypeSOContract> Conceptualization = new(new Guid("69842862-dfce-4a9e-a73b-f757c72e49dc"), "AlchemyTypeSO", "Conceptualization");
+    public static readonly KnownEntity<ConsumableTypeSOContract> ConsumableRelicType = new(new Guid("5d27b76e-eed3-49cc-a069-b9106000ede4"), "ConsumableTypeSO", "Relic");
+    public static readonly KnownEntity<ConsumableTypeSOContract> ConsumableScrollType = new(new Guid("70b36536-64e5-4f70-ad6f-af5787d719cc"), "ConsumableTypeSO", "ScrollConsumable");
     public static readonly KnownEntity<AlchemyTypeSOContract> Dismantle = new(new Guid("7b89d22c-75ae-4945-9356-833382c9a167"), "AlchemyTypeSO", "Dismantle");
     public static readonly KnownEntity<AlchemyTypeSOContract> Enchantment = new(new Guid("2ffcbbc4-49a7-45db-b3ae-4a3c57362255"), "AlchemyTypeSO", "Enchantment");
     public static readonly KnownEntity<PlotNodeActionSOContract> FruitTreeCollect = new(new Guid("60ea60a2-44e9-41c2-86d6-3935fae0b647"), "PlotNodeActionSO", "PNAFruitTreeCollect");
@@ -55,6 +59,7 @@ internal static class KnownEntities
     public static readonly KnownEntity<ViewSOContract> MagicSpellbook = new(new Guid("ca934900-0253-4f71-93e9-733fb91132b7"), "ViewSO", "MagicSpellbook");
     public static readonly KnownEntity<ViewSOContract> MasteriesEnabled = new(new Guid("07dfae7e-76b9-4b38-bf81-38abc40b9ed7"), "ViewSO", "MasteriesEnabled");
     public static readonly KnownEntity<IntVariableContract> MultiBuy = new(new Guid("37a84399-98b5-463c-b858-c1ecf2f9bf34"), "IntVariable", "MultiBuy");
+    public static readonly KnownEntity<ResourceSOContract> PotionToxicity = new(new Guid("4dd4e062-2015-4809-a50f-f37647bda339"), "ResourceSO", "PotionToxicity");
     public static readonly KnownEntity<AlchemyTypeSOContract> Reductive = new(new Guid("47b787b9-d4cd-43c8-a7e3-63a1e4e0ae94"), "AlchemyTypeSO", "Reductive");
     public static readonly KnownEntity<AlchemyTypeSOContract> Refinement = new(new Guid("32b6b099-19f2-4470-b47b-6c2a8b0388e1"), "AlchemyTypeSO", "Refinement");
     public static readonly KnownEntity<AlchemyTypeSOContract> Reflective = new(new Guid("8f258dcc-c39a-4d64-b915-4239e746c49d"), "AlchemyTypeSO", "Reflective");

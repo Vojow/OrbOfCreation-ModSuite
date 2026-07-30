@@ -1342,6 +1342,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             queuedQuantity = 2,
             gainedSince = 3,
             maxCreatedLv = 4,
+            maximumCarryLoad = 12,
             prepSpeed = new ValueModifierRecord(new BigDouble(150d)),
         });
 
@@ -1356,7 +1357,100 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(2, row.QueuedQuantity);
         Assert.Equal(3, row.GainedSince);
         Assert.Equal(4, row.MaxCreatedLevel);
+        Assert.Equal(12, row.MaximumCarryLoad);
         Assert.Equal(150d, row.Modifiers.PrepSpeed.ToDouble());
+    }
+
+    [Fact]
+    public void AConsumablePublishesEveryNativeFamilyCostUsageAndCount()
+    {
+        var item = Guid.NewGuid();
+        var extraFamily = Guid.NewGuid();
+        var toxicity = KnownEntities.PotionToxicity.Uuid;
+        var durationResource = Guid.NewGuid();
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableScrollType.Uuid });
+        consumable.consumableTypes.Add(new FakeConsumableType { Identity = extraFamily });
+        consumable.consumeCost.costs.Add(new FakeConsumableCost(toxicity, 2d));
+        consumable.usageCost.costs.Add(new FakeConsumableCost(durationResource, 3d));
+        var usage = new FakeConsumableUsage
+        {
+            baseSi = new FakeConsumableScalingInfo { Level = 7 },
+            en = true,
+            dr = new BigDouble(11d),
+            maxDr = new BigDouble(12d),
+        };
+        consumable.consumableUsages.Add(usage);
+        consumable.consumableCounts.Add(new FakeConsumableCount
+        {
+            Level = 7,
+            Quantity = 4,
+            fr = 3,
+        });
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldConsumableTypeLookup.TryFindRange(
+            world.ConsumableTypes, item, out var typeStart, out var typeCount));
+        Assert.Equal(2, typeCount);
+        var publishedTypes = new HashSet<Guid>();
+        for (var index = 0; index < typeCount; index++)
+            publishedTypes.Add(world.ConsumableTypes[typeStart + index].TypeId);
+        Assert.Contains(KnownEntities.ConsumableScrollType.Uuid, publishedTypes);
+        Assert.Contains(extraFamily, publishedTypes);
+
+        Assert.True(WorldConsumableCostLookup.TryFindRange(
+            world.ConsumableCosts,
+            item,
+            WorldConsumableCostKind.Consume,
+            out var consumeStart,
+            out var consumeCount));
+        Assert.Equal(1, consumeCount);
+        Assert.Equal(toxicity, world.ConsumableCosts[consumeStart].ResourceId);
+        Assert.Equal(2d, world.ConsumableCosts[consumeStart].Amount.ToDouble());
+
+        Assert.True(WorldConsumableUsageLookup.TryFindRange(
+            world.ConsumableUsages, item, out var usageStart, out var usageCount));
+        Assert.Equal(1, usageCount);
+        Assert.Equal(usage.Identity, world.ConsumableUsages[usageStart].UsageId);
+        Assert.Equal(7, world.ConsumableUsages[usageStart].Level);
+        Assert.True(world.ConsumableUsages[usageStart].Engaged);
+
+        Assert.True(WorldConsumableCountLookup.TryFindRange(
+            world.ConsumableCounts, item, out var countStart, out var countCount));
+        Assert.Equal(1, countCount);
+        Assert.Equal(7, world.ConsumableCounts[countStart].Level);
+        Assert.Equal(4, world.ConsumableCounts[countStart].Quantity);
+        Assert.Equal(3, world.ConsumableCounts[countStart].FreeQuantity);
+    }
+
+    [Fact]
+    public void AnUnreadableConsumableRelationSkipsTheWholeItem()
+    {
+        var item = Guid.NewGuid();
+        FakeConsumable.All.Add(new FakeConsumable
+        {
+            Identity = item,
+            quantity = 1,
+            consumableTypes = null!,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.False(report.IsComplete);
+        Assert.Contains("type list was null", report.For("consumables").FirstFailure);
+        Assert.False(WorldLookup.TryFind(world.Consumables, item, out _));
+        Assert.Equal(0, world.ConsumableTypes.Count);
+        Assert.Equal(0, world.ConsumableCosts.Count);
+        Assert.Equal(0, world.ConsumableUsages.Count);
+        Assert.Equal(0, world.ConsumableCounts.Count);
     }
 
     /// <summary>

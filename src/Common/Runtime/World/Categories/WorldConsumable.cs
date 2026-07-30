@@ -14,6 +14,7 @@ internal readonly struct WorldConsumable : IWorldEntity
         bool randomized,
         int quantity,
         int queuedQuantity,
+        int maximumCarryLoad,
         int gainedSince,
         int maxCreatedLevel,
         BigDouble currentPrepTime,
@@ -31,6 +32,7 @@ internal readonly struct WorldConsumable : IWorldEntity
         Randomized = randomized;
         Quantity = quantity;
         QueuedQuantity = queuedQuantity;
+        MaximumCarryLoad = maximumCarryLoad;
         GainedSince = gainedSince;
         MaxCreatedLevel = maxCreatedLevel;
         CurrentPrepTime = currentPrepTime;
@@ -64,6 +66,9 @@ internal readonly struct WorldConsumable : IWorldEntity
     /// <see cref="Quantity"/> minus this.
     /// </summary>
     internal int QueuedQuantity { get; }
+
+    /// <summary>The live maximum number of this consumable the inventory can carry.</summary>
+    internal int MaximumCarryLoad { get; }
 
     /// <summary>How many have been gained since the counter was last cleared.</summary>
     internal int GainedSince { get; }
@@ -129,6 +134,7 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
     private Func<object, bool>? _randomized;
     private Func<object, int>? _quantity;
     private Func<object, int>? _queuedQuantity;
+    private Func<object, int>? _maximumCarryLoad;
     private Func<object, int>? _gainedSince;
     private Func<object, int>? _maxCreatedLevel;
     private Func<object, BigDouble>? _prepTime;
@@ -157,6 +163,7 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
         _randomized = bind.Field<bool>("randomized");
         _quantity = bind.Field<int>("quantity");
         _queuedQuantity = bind.Field<int>("queuedQuantity");
+        _maximumCarryLoad = bind.Call<int>("GetMaximumCarryLoad");
         _gainedSince = bind.Field<int>("gainedSince");
         _maxCreatedLevel = bind.Field<int>("maxCreatedLv");
         _prepTime = bind.Field<BigDouble>("currentPrepTime");
@@ -182,6 +189,7 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
             _randomized!(entity),
             _quantity!(entity),
             _queuedQuantity!(entity),
+            _maximumCarryLoad!(entity),
             _gainedSince!(entity),
             _maxCreatedLevel!(entity),
             _prepTime!(entity),

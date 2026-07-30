@@ -51,6 +51,12 @@ internal static class BepInExAutomataConfigurationReader
                 CollectFruitTrees = source.AutoHarvestFruitTrees.Value,
                 CollectTreasureTrees = source.AutoHarvestTreasureTrees.Value,
             },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = source.AutoItemsMode.Value,
+                UseScrolls = source.AutoItemsUseScrolls.Value,
+                UseRelics = source.AutoItemsUseRelics.Value,
+            },
             Mentor = source.Mentor is null
                 ? new OrbMentor.MentorConfiguration()
                 : OrbMentor.MentorConfiguration.Read(source.Mentor),

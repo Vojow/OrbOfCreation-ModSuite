@@ -2,7 +2,11 @@
 
 [Back to documentation](../README.md)
 
-The supported suite is one BepInEx plugin, `OrbModSuite.dll`, containing every feature: Auto Buy, Auto Harvest, Auto Cast, Auto Concept, Spell Leveling, Mentor, and the in-game configuration UI. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx 5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is targeted through the Windows game under Proton and requires separate runtime validation.
+The supported suite is one BepInEx plugin, `OrbModSuite.dll`, containing every feature: Auto Buy,
+Auto Harvest, Auto Items, Auto Cast, Auto Concept, Spell Leveling, Mentor, and the in-game
+configuration UI. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx
+5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is targeted through
+the Windows game under Proton and requires separate runtime validation.
 
 The gameplay runtime starts normally only on an audited build. After a game update, a complete unknown assembly pair loads in compatibility quarantine so Mods and differential verification remain available while gameplay patches and services stay emergency-stopped. An incomplete assembly audit refuses the plugin and logs why.
 

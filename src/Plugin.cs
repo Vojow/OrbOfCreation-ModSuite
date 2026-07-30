@@ -359,6 +359,19 @@ public sealed class Plugin : BaseUnityPlugin
                             },
                             createCollector: () =>
                                 new GameWorldCollector(_mentorMasteryJournal)),
+                        new AutoItemsServiceCycleFeature(
+                            new AutoItemsFeatureDependencies(
+                                autoHarvestRegistryResolver,
+                                readAutoHarvestLifecycleEpoch,
+                                ownsActionFamily: () =>
+                                    _automataActionFamilyOwnership!.OwnsItems,
+                                tryCaptureMutationPermit: () =>
+                                    _automataActionFamilyOwnership!
+                                        .TryCaptureItemMutationPermit(),
+                                readOwnershipFailure: () =>
+                                    _automataActionFamilyOwnership!
+                                        .ItemsOwnershipFailure,
+                                featureStatus: featureStatuses.AutoItems)),
                         new AutoHarvestServiceCycleFeature(
                             new AutoHarvestFeatureDependencies(
                                 autoHarvestRegistryResolver,
@@ -442,6 +455,9 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoHarvestMode={runtimeConfig.AutoHarvest.Mode}, " +
             $"AutoHarvestFruitTrees={runtimeConfig.AutoHarvest.CollectFruitTrees}, " +
             $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
+            $"AutoItemsMode={runtimeConfig.AutoItems.Mode}, " +
+            $"AutoItemsUseScrolls={runtimeConfig.AutoItems.UseScrolls}, " +
+            $"AutoItemsUseRelics={runtimeConfig.AutoItems.UseRelics}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
             "Auto Buy fills the available queue and groups structures by live Bulk Development.");
     }
@@ -980,6 +996,9 @@ public sealed class Plugin : BaseUnityPlugin
             if (config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
                 (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees))
                 result.Add("Auto Harvest");
+            if (config.AutoItems.Mode == AutoItemsOperationMode.Active &&
+                AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems))
+                result.Add("Auto Items");
         }
         if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
         return result;

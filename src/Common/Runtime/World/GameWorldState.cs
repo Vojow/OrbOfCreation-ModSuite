@@ -126,6 +126,22 @@ public sealed record GameWorldState
     internal PublicationTable<WorldConsumable> Consumables { get; init; } =
         PublicationTable<WorldConsumable>.Empty;
 
+    /// <summary>Every native family assigned to each consumable.</summary>
+    internal PublicationTable<WorldConsumableType> ConsumableTypes { get; init; } =
+        PublicationTable<WorldConsumableType>.Empty;
+
+    /// <summary>Every immediate and held resource cost authored on each consumable.</summary>
+    internal PublicationTable<WorldConsumableCost> ConsumableCosts { get; init; } =
+        PublicationTable<WorldConsumableCost>.Empty;
+
+    /// <summary>Every pending or engaged native usage owned by each consumable.</summary>
+    internal PublicationTable<WorldConsumableUsage> ConsumableUsages { get; init; } =
+        PublicationTable<WorldConsumableUsage>.Empty;
+
+    /// <summary>Every levelled inventory bucket owned by each consumable.</summary>
+    internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
+        PublicationTable<WorldConsumableCount>.Empty;
+
     internal PublicationTable<WorldRitual> Rituals { get; init; } =
         PublicationTable<WorldRitual>.Empty;
 

@@ -8,6 +8,11 @@
   captured game state, and every action is checked again immediately before it changes the game.
 - Add Auto Harvest, spell leveling, clearer Runtime diagnostics, compact gameplay controls, and a
   Mods screen that uses the game's own visual style.
+- Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue,
+  native randomized Scroll targeting, and one fresh world publication per attempted use.
+- Recheck each item's exact family, visibility, inventory readiness, native firing decision,
+  ownership, and Scroll targets before submission. An unverified attempted use stops Auto Items
+  for the current game lifecycle and reports the exact reason on Runtime.
 - Put **Emergency disable** on the General page. Unknown but complete game builds now open in a safe
   compatibility mode, with all gameplay changes stopped until the player chooses to continue.
 - Keep incomplete game installations closed, bind an unverified-build choice to the exact two game

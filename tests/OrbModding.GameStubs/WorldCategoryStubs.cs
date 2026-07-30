@@ -178,6 +178,10 @@ public sealed class GlyphSO : IdScriptableObject
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
 }
 
+public sealed class ConsumableTypeSO : IdScriptableObject
+{
+}
+
 public sealed class ConsumableSO : IdScriptableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();
@@ -192,11 +196,20 @@ public sealed class ConsumableSO : IdScriptableObject
     public ValueModifierRecord special = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord prepSpeed = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public List<ConsumableTypeSO> consumableTypes = new List<ConsumableTypeSO>();
+    public List<InstantEffectBlock> onUseEffects = new List<InstantEffectBlock>();
+    public ResourceCostList consumeCost = new ResourceCostList();
+    public ResourceCostList usageCost = new ResourceCostList();
+    public List<ConsumableUsage> consumableUsages = new List<ConsumableUsage>();
+    public List<ConsumableCount> consumableCounts = new List<ConsumableCount>();
 
     /// <summary>Private in the game too, which is exactly why the save record hid the stock count.</summary>
     private int quantity;
     private int queuedQuantity;
     private int gainedSince;
+    public bool FireAllowed = true;
+    public bool SelectionNoOp;
+    public int MaximumCarryLoad;
 
     public void SetStock(int quantityN, int queuedN, int gainedSinceN)
     {
@@ -204,11 +217,129 @@ public sealed class ConsumableSO : IdScriptableObject
         queuedQuantity = queuedN;
         gainedSince = gainedSinceN;
     }
+
+    public bool CanFire() =>
+        FireAllowed && quantity > 0 && currentCooldown <= BigDouble.Zero;
+
+    public bool IsVisible() => visible;
+
+    public void SelectAndFire()
+    {
+        if (!CanFire() || !Inventory.CanUseConsumable()) return;
+        if (SelectionNoOp) return;
+
+        var accepted = Math.Min(GlobalVariables.GetMultiBuy().AsInt(), quantity);
+        queuedQuantity += accepted;
+        if (accepted > 0)
+            quantity--;
+        Inventory.BeginPreparing();
+    }
+
+    public void SetRandomization(bool randomizationN) => randomized = randomizationN;
+
+    public bool IsRandomized() => canBeRandomized && randomized;
+
+    public int GetQuantity() => quantity;
+
+    public int GetQueued() => queuedQuantity;
+
+    public int GetMaximumCarryLoad() => MaximumCarryLoad;
+
+    public ConsumableCount GetStrongest()
+    {
+        ConsumableCount? strongest = null;
+        foreach (var count in consumableCounts)
+            if (count.Quantity > 0 && (strongest is null || count.Level > strongest.Level))
+                strongest = count;
+        return strongest ?? new ConsumableCount();
+    }
+
+    public int GetStrongestLevel() => GetStrongest().GetLevel();
+
+    public ScalingInfo GetCountScalingInfo(ConsumableCount count) =>
+        new ScalingInfo { Level = count.GetLevel() };
+
     public double preparationTime;
     public bool canBeRandomized;
     public bool hasDuration;
     public double durationBase;
     private bool queueOnStart;
+}
+
+public sealed class ConsumableCount
+{
+    public int Level = 1;
+    public int Quantity;
+    public int fr;
+
+    public int GetLevel() => Level;
+    public int GetQuantity() => Quantity;
+}
+
+public sealed class ConsumableUsage
+{
+    public Guid Identity = Guid.NewGuid();
+    public ScalingInfo baseSi = new ScalingInfo();
+    public bool en;
+    public BigDouble dr;
+    public BigDouble maxDr;
+
+    public Guid GetGuid() => Identity;
+}
+
+public sealed class ScalingInfo
+{
+    public int Level = 1;
+
+    public int GetLevelInt() => Level;
+}
+
+public interface IInstantEffectScript
+{
+}
+
+public sealed class UnexpectedInstantEffectScript : IInstantEffectScript
+{
+}
+
+public sealed class RequestTargetEffectScript : IInstantEffectScript
+{
+    public Targeting.TargetSelectOptions targetOptions = new Targeting.TargetSelectOptions();
+}
+
+namespace Targeting
+{
+    public interface ITargetable
+    {
+    }
+
+    public class BaseTargetSelection
+    {
+    }
+
+    public sealed class TargetStructure : BaseTargetSelection
+    {
+        public List<ITargetable> Candidates = new List<ITargetable>();
+
+        public List<ITargetable> GetRandomList(ScalingInfo scaling) =>
+            new List<ITargetable>(Candidates);
+    }
+
+    public sealed class TargetSelectOptions
+    {
+        public BaseTargetSelection Targeting = new TargetStructure();
+
+        public BaseTargetSelection GetTargeting() => Targeting;
+    }
+}
+
+public sealed class Inventory
+{
+    public static bool Preparing { get; set; }
+
+    public static bool CanUseConsumable() => !Preparing;
+
+    public static void BeginPreparing() => Preparing = true;
 }
 
 public sealed class RitualSO : IdScriptableObject
@@ -388,7 +519,7 @@ public class EffectBlock
 
 public class InstantEffectBlock : EffectBlock
 {
-    public List<object> effectScripts = new List<object>();
+    public List<IInstantEffectScript> effectScripts = new List<IInstantEffectScript>();
 }
 
 public class PersistentEffectBlock : EffectBlock
@@ -651,7 +782,7 @@ public sealed class TreasurePoolSO : IdScriptableObject
     /// What one completed run draws out of a pool. The game nests this inside the pool type, which is
     /// why a consumer that wants to know it is a treasure payout compares the class name.
     /// </summary>
-    public sealed class TreasurePoolInstantEffect
+    public sealed class TreasurePoolInstantEffect : IInstantEffectScript
     {
         public TreasurePoolSO? treasurePool;
         public string effectType = string.Empty;

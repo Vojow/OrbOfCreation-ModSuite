@@ -39,7 +39,7 @@ Read the maintained contracts in this order:
 - Returned actions are advisory until the main thread revalidates current native facts.
 - Lifecycle replacement retires stale workers without blocking the Unity thread.
 - The game remains authoritative for availability, cost, quantity, queue room, completion, and mutation results.
-- World collection is the only source service. Auto Harvest, Auto Buy, Spell
+- World collection is the only source service. Auto Items, Auto Harvest, Auto Buy, Spell
   Leveling, Auto Cast, Auto Concept, and Mentor are ordinary services.
 
 There is one production path, no runtime selector, and no fallback implementation.

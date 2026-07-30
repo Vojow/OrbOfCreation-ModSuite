@@ -78,8 +78,11 @@ public sealed class WorldIdentityWalkTests
     /// purchasable categories already own. <c>ActionQueueSlots</c> is a position in a list, which is
     /// no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
     /// source identity points at a recipe or equipment row that already owns that identity.
-    /// <c>CollectionCategories</c> is availability evidence about one collector pass, not a native
-    /// row and not a second identity namespace.
+    /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
+    /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
+    /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
+    /// second entity namespace. <c>CollectionCategories</c> is availability evidence about one
+    /// collector pass, not a native row and not a second identity namespace.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -95,6 +98,10 @@ public sealed class WorldIdentityWalkTests
         "SpellSlots",
         "SpellCosts",
         "MasteryExperience",
+        "ConsumableTypes",
+        "ConsumableCosts",
+        "ConsumableUsages",
+        "ConsumableCounts",
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",

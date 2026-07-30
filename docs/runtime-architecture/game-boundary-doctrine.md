@@ -57,6 +57,16 @@ action protocol is therefore classified in its contract dossier:
 Every rejection names the check that refused, in the named-cache vocabulary
 (`UpgradeSO.cachedCostLevel` is the naming precedent). "The game said no" is not a reason.
 
+Action dispatch deliberately continues under the cycle-pinned configuration even when a newer
+committed generation appears while its batch drains. That staleness is bounded by the batch's
+one-or-two-frame execution (normally one or two publications), and configuration has one
+player-driven writer operating at human rate; adding a second configuration read or invalidation
+path would buy only an imperceptible narrowing window. A future design with long-running batches
+changes this invariant and must revisit the decision. Master-disable also releases feature
+ownership leases on committed-configuration refresh as a fast backstop, but that is not the
+policy-correctness mechanism. This bounded policy staleness does not relax live native
+revalidation: game facts can change every frame without bound.
+
 **Staleness probes.** Perf-debug capture QA may, for class-2 contracts, collect the cached
 value, force the declared revalidation, and compare. Divergence is a build-behavior finding.
 This is the detector for game updates that change caching behavior; a new game baseline

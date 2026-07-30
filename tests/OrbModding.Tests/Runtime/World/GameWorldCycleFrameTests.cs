@@ -129,6 +129,76 @@ public sealed class GameWorldCycleFrameTests
         Assert.Equal(0, world.ActionQueueSlots[firstStart].Index);
     }
 
+    [Fact]
+    public void ConsumableRelationsDeriveIntoContiguousSortedRanges()
+    {
+        var first = Guid.Parse("11111111-0000-0000-0000-000000000000");
+        var second = Guid.Parse("22222222-0000-0000-0000-000000000000");
+        var lowType = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
+        var highType = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
+        var lowResource = Guid.Parse("cccccccc-0000-0000-0000-000000000000");
+        var highResource = Guid.Parse("dddddddd-0000-0000-0000-000000000000");
+        var lowUsage = Guid.Parse("eeeeeeee-0000-0000-0000-000000000000");
+        var highUsage = Guid.Parse("ffffffff-0000-0000-0000-000000000000");
+        var frame = new GameWorldCycleFrame();
+
+        frame.ConsumableTypes.Append(new WorldConsumableType(second, highType));
+        frame.ConsumableTypes.Append(new WorldConsumableType(first, highType));
+        frame.ConsumableTypes.Append(new WorldConsumableType(first, lowType));
+        frame.ConsumableCosts.Append(new WorldConsumableCost(
+            second, WorldConsumableCostKind.Consume, highResource, new BigDouble(1d)));
+        frame.ConsumableCosts.Append(new WorldConsumableCost(
+            first, WorldConsumableCostKind.Usage, highResource, new BigDouble(2d)));
+        frame.ConsumableCosts.Append(new WorldConsumableCost(
+            first, WorldConsumableCostKind.Consume, highResource, new BigDouble(3d)));
+        frame.ConsumableCosts.Append(new WorldConsumableCost(
+            first, WorldConsumableCostKind.Consume, lowResource, new BigDouble(4d)));
+        frame.ConsumableUsages.Append(new WorldConsumableUsage(
+            second, highUsage, 3, engaged: false, new BigDouble(7d), new BigDouble(8d)));
+        frame.ConsumableUsages.Append(new WorldConsumableUsage(
+            first, highUsage, 2, engaged: true, new BigDouble(5d), new BigDouble(6d)));
+        frame.ConsumableUsages.Append(new WorldConsumableUsage(
+            first, lowUsage, 1, engaged: false, new BigDouble(3d), new BigDouble(4d)));
+        frame.ConsumableCounts.Append(new WorldConsumableCount(first, 7, 2, 1));
+        frame.ConsumableCounts.Append(new WorldConsumableCount(first, 3, 5, 4));
+        frame.ConsumableCounts.Append(new WorldConsumableCount(second, 2, 1, 1));
+
+        var world = GameWorldFrameDeriver.Build(frame);
+
+        Assert.True(WorldConsumableTypeLookup.TryFindRange(
+            world.ConsumableTypes, first, out var typeStart, out var typeCount));
+        Assert.Equal(2, typeCount);
+        Assert.Equal(lowType, world.ConsumableTypes[typeStart].TypeId);
+        Assert.Equal(highType, world.ConsumableTypes[typeStart + 1].TypeId);
+
+        Assert.True(WorldConsumableCostLookup.TryFindRange(
+            world.ConsumableCosts,
+            first,
+            WorldConsumableCostKind.Consume,
+            out var costStart,
+            out var costCount));
+        Assert.Equal(2, costCount);
+        Assert.Equal(lowResource, world.ConsumableCosts[costStart].ResourceId);
+        Assert.Equal(highResource, world.ConsumableCosts[costStart + 1].ResourceId);
+
+        Assert.True(WorldConsumableUsageLookup.TryFindRange(
+            world.ConsumableUsages, first, out var usageStart, out var usageCount));
+        Assert.Equal(2, usageCount);
+        Assert.Equal(lowUsage, world.ConsumableUsages[usageStart].UsageId);
+        Assert.True(world.ConsumableUsages[usageStart].Pending);
+        Assert.Equal(highUsage, world.ConsumableUsages[usageStart + 1].UsageId);
+        Assert.True(world.ConsumableUsages[usageStart + 1].Engaged);
+
+        Assert.True(WorldConsumableCountLookup.TryFindRange(
+            world.ConsumableCounts, first, out var countStart, out var countCount));
+        Assert.Equal(2, countCount);
+        Assert.Equal(3, world.ConsumableCounts[countStart].Level);
+        Assert.Equal(7, world.ConsumableCounts[countStart + 1].Level);
+        Assert.True(WorldConsumableCountLookup.TryGetStrongestOwnedLevel(
+            world.ConsumableCounts, first, out var strongest));
+        Assert.Equal(7, strongest);
+    }
+
     /// <summary>
     /// The frame's rate globals have to reach the rows the deriver publishes. Nothing else would
     /// notice if they did not: the chain still returns a number, just the wrong one.

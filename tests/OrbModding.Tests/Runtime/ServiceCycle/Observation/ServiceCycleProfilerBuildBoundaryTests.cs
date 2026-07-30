@@ -63,6 +63,13 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
             typeof(AutoHarvestActionSafety),
             typeof(AutoHarvestStableIdAccessor),
             typeof(AutoHarvestReflectionAccess),
+            typeof(AutoItemsServiceCycleFeature),
+            typeof(AutoItemsFeatureRuntime),
+            typeof(AutoItemsServiceAdapterComposition),
+            typeof(AutoItemsConsumableUseGameAction),
+            typeof(AutoItemsNativeBindings),
+            typeof(AutoItemsScrollTargetPreflight),
+            typeof(AutoItemsReflectionAccess),
             typeof(global::OrbModding.Plugin),
         };
         var violations = new List<string>();

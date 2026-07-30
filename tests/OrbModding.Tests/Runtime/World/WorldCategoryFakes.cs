@@ -894,13 +894,74 @@ internal sealed class FakeConsumable
     public ValueModifierRecord special = new(new BigDouble(0.0, 0));
     public ValueModifierRecord prepSpeed = new(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new(new BigDouble(0.0, 0));
+    public List<FakeConsumableType> consumableTypes = new();
+    public List<FakeConsumableUsage> consumableUsages = new();
+    public List<FakeConsumableCount> consumableCounts = new();
+    public FakeConsumableCostList consumeCost = new();
+    public FakeConsumableCostList usageCost = new();
+    public int maximumCarryLoad = 100;
 
     public Guid GetGuid() => Identity;
+    public int GetMaximumCarryLoad() => maximumCarryLoad;
     public double preparationTime;
     public bool canBeRandomized;
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+}
+
+internal sealed class FakeConsumableType
+{
+    public Guid Identity = Guid.NewGuid();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableCostList
+{
+    public List<FakeConsumableCost> costs = new();
+}
+
+internal sealed class FakeConsumableCost
+{
+    internal FakeConsumableCost(Guid resourceId, double amount)
+    {
+        resource = new FakeConsumableResource { Identity = resourceId };
+        valueBig = new BigDouble(amount);
+    }
+
+    public FakeConsumableResource resource;
+    public BigDouble valueBig;
+}
+
+internal sealed class FakeConsumableResource
+{
+    public Guid Identity = Guid.NewGuid();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableUsage
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool en;
+    public BigDouble dr;
+    public BigDouble maxDr;
+    public FakeConsumableScalingInfo baseSi = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableScalingInfo
+{
+    public int Level = 1;
+    public int GetLevelInt() => Level;
+}
+
+internal sealed class FakeConsumableCount
+{
+    public int Level = 1;
+    public int Quantity;
+    public int fr;
+    public int GetLevel() => Level;
+    public int GetQuantity() => Quantity;
 }
 
 internal sealed class FakeRitual

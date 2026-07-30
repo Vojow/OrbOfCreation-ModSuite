@@ -234,6 +234,106 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoItems_MatchesWorldAndActionBoundaryContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.True(assembly.HasType("ConsumableTypeSO"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableSO>",
+            assembly.GetFieldType("ConsumableSO", "All"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableTypeSO>",
+            assembly.GetFieldType("ConsumableSO", "consumableTypes"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableUsage>",
+            assembly.GetFieldType("ConsumableSO", "consumableUsages"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableCount>",
+            assembly.GetFieldType("ConsumableSO", "consumableCounts"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("ConsumableSO", "consumeCost"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("ConsumableSO", "usageCost"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ResourceTuple>",
+            assembly.GetFieldType("ResourceCostList", "costs"));
+        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ResourceTuple", "valueBig"));
+        AssertMethod(assembly, "ConsumableSO", "GetMaximumCarryLoad", false, "System.Int32");
+
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "dr"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "maxDr"));
+        Assert.Equal("ScalingInfo", assembly.GetFieldType("ConsumableUsage", "baseSi"));
+        AssertMethod(assembly, "ConsumableUsage", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "ScalingInfo", "GetLevelInt", false, "System.Int32");
+        Assert.Equal("System.Int32", assembly.GetFieldType("ConsumableCount", "fr"));
+        AssertMethod(assembly, "ConsumableCount", "GetLevel", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableCount", "GetQuantity", false, "System.Int32");
+
+        AssertMethod(assembly, "ConsumableSO", "CanFire", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "IsVisible", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "GetQuantity", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableSO", "GetQueued", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableSO", "IsRandomized", false, "System.Boolean");
+        AssertMethod(assembly, "ConsumableSO", "SelectAndFire", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "SetRandomization",
+            false,
+            "System.Void",
+            "System.Boolean");
+        AssertMethod(assembly, "Inventory", "CanUseConsumable", true, "System.Boolean");
+
+        Assert.True(assembly.HasType("ScalingInfo"));
+        Assert.True(assembly.HasType("IInstantEffectScript"));
+        Assert.True(assembly.HasType("Targeting.ITargetable"));
+        Assert.True(assembly.HasType("Targeting.BaseTargetSelection"));
+        Assert.True(assembly.HasType("Targeting.TargetStructure"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<InstantEffectBlock>",
+            assembly.GetFieldType("ConsumableSO", "onUseEffects"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<IInstantEffectScript>",
+            assembly.GetFieldType("InstantEffectBlock", "effectScripts"));
+        Assert.Equal(
+            "Targeting.TargetSelectOptions",
+            assembly.GetFieldType("RequestTargetEffectScript", "targetOptions"));
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetStrongest",
+            false,
+            "ConsumableCount");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetStrongestLevel",
+            false,
+            "System.Int32");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetCountScalingInfo",
+            false,
+            "ScalingInfo",
+            "ConsumableCount");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetSelectOptions",
+            "GetTargeting",
+            false,
+            "Targeting.BaseTargetSelection");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetStructure",
+            "GetRandomList",
+            false,
+            "System.Collections.Generic.List`1<Targeting.ITargetable>",
+            "ScalingInfo");
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
