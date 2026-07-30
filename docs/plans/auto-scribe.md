@@ -1,11 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: First-launch defects fixed; rebuilt installation pending.** The audited identity
+> **Lifecycle: Corrected release installed; fresh-launch validation pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. Live evidence found and
 > the branch now fixes an unaudited mutable Auto Items state collection plus missing consolidated
-> Auto Items/Auto Scribe rail icons. The previous release DLL remains installed until the game is
-> closed for safe replacement.
+> Auto Items/Auto Scribe rail icons. The corrected clean release is installed with verified
+> rollback backups.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -28,7 +28,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
-| 10. Interactive game validation | **Fix ready** | Install the corrected DLL and confirm a healthy ServiceCycle host plus Mods button, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
+| 10. Interactive game validation | **Ready** | Confirm a healthy ServiceCycle host plus Mods button on the corrected DLL, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -37,9 +37,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: after Orb of Creation is fully closed, install the corrected release DLL, relaunch,
-  and confirm the Mods button plus a healthy ServiceCycle startup log. Then perform the interactive
-  validation outline below on a disposable save before enabling Auto Scribe.
+- Current task: relaunch and confirm the Mods button plus a healthy ServiceCycle startup log on the
+  corrected DLL. Then perform the interactive validation outline below on a disposable save before
+  enabling Auto Scribe.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -74,6 +74,12 @@ Last updated: **2026-07-30**
   Auto Scribe to the already-audited native Alchemy and Scholar sprites. Direct regression tests
   cover both failures. The complete portable gate passes 1,939 ordinary tests and 90 profile tests;
   the profile build completes with zero warnings and zero errors.
+- Corrected release commit `2b8a243bd14fd8668107a30bd9f83dd9d8605a29` was installed from a
+  clean tree on 2026-07-30 with SHA-256
+  `6d84df24938ecf98ebff424acfaa4419b1f0d60aa0cf65197aed7e1107958b69`.
+  The installer reran the complete portable gate and all 26 installed game-contract tests, backed
+  up 12 save files to `backups/pre-modsuite-install-20260730T100334Z`, and backed up the previous
+  DLL to `BepInEx/modsuite-backups/pre-modsuite-install-20260730T100334Z`.
 
 ## Goal
 
