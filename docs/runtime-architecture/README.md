@@ -22,6 +22,9 @@ Read the maintained contracts in this order:
 5. [Architecture](architecture.md) explains component boundaries and data flow.
 6. [Engineering decisions](decisions.md) records durable design choices.
 7. [Shared world collection](world-collection.md) defines the one reader every service consumes.
+8. [Game boundary doctrine](game-boundary-doctrine.md) governs every touch of the game: owned
+   math, freshness-classified validators, GameActions as the only mutation path, and suite UI
+   that speaks the game's idiom.
 
 ## Production boundary
 
