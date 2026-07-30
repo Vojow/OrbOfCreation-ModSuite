@@ -55,10 +55,11 @@ Last updated: **2026-07-29**
   pending/engaged state, remaining duration, and maximum duration; Fruit/Potion family controls
   default off; an exact UUID allowlist defaults empty; Relics retain first priority;
   temporary items use available native toxicity headroom; one temporary use blocks all further
-  item automation until engagement and expiry; later activation
-  is confirmed from a fresh world publication; missing or contradictory activation quarantines
-  only that exact item for the lifecycle. The Mods page exposes this allowlist as a discovered-item
-  picker while persisting only exact stable UUIDs.
+  item automation until engagement and expiry; a verified service-cycle receipt starts
+  lifecycle-owned activation tracking, which is then confirmed from a fresh world publication;
+  missing or contradictory activation quarantines only that exact item in the same worker state.
+  No lock or mutable collection crosses the worker boundary. The Mods page exposes this allowlist
+  as a discovered-item picker while persisting only exact stable UUIDs.
 - PR cleanup: picker rendering, picker state/selection, catalog parsing, and exact reflection
   binding are separated. Core taxonomy is centralized; pure candidate scanning is separated from
   lifecycle/recovery evaluation; native contract discovery is separated from live preflight and

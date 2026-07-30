@@ -11,17 +11,11 @@ namespace OrbAutomata;
 internal sealed class AutoItemsWorkerDefinition :
     IServiceCycleWorkerDefinition<AutoItemsCycleState, AutoItemsCycleAction>
 {
-    private readonly AutoItemsTemporaryActivationTracker _temporaryActivations;
     private readonly AutoScribeIdentityProfile? _autoScribeIdentityProfile;
 
     internal AutoItemsWorkerDefinition(
-        AutoItemsTemporaryActivationTracker temporaryActivations,
-        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
-    {
-        _temporaryActivations = temporaryActivations ??
-            throw new ArgumentNullException(nameof(temporaryActivations));
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null) =>
         _autoScribeIdentityProfile = autoScribeIdentityProfile;
-    }
 
     public AutoItemsCycleState CreateState(LifecycleGeneration lifecycle) =>
         AutoItemsCycleState.Create(lifecycle);
@@ -42,9 +36,9 @@ internal sealed class AutoItemsWorkerDefinition :
         var wake = AutoItemsCycleEvaluator.Evaluate(
             world,
             in config,
+            in context,
             ref state,
             actions,
-            _temporaryActivations,
             state.TemporaryAllowlist,
             _autoScribeIdentityProfile,
             out var decision);

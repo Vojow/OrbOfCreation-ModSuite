@@ -25,7 +25,6 @@ internal sealed class AutoItemsServiceCycleFeature : IAutomataServiceCycleFeatur
         return new AutoItemsFeatureRuntime(
             _dependencies,
             adapters.Natives,
-            adapters.TemporaryActivations,
             registration,
             context.LifecycleValue,
             context.ConfigurationGeneration);
@@ -36,7 +35,6 @@ internal sealed class AutoItemsFeatureRuntime : IAutomataServiceCycleFeatureRunt
 {
     private readonly AutoItemsFeatureDependencies _dependencies;
     private readonly AutoItemsNativeAdapter _natives;
-    private readonly AutoItemsTemporaryActivationTracker _temporaryActivations;
     private readonly ServiceRegistration<AutoItemsCycleState, AutoItemsCycleAction> _registration;
     private readonly long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
@@ -45,14 +43,12 @@ internal sealed class AutoItemsFeatureRuntime : IAutomataServiceCycleFeatureRunt
     internal AutoItemsFeatureRuntime(
         AutoItemsFeatureDependencies dependencies,
         AutoItemsNativeAdapter natives,
-        AutoItemsTemporaryActivationTracker temporaryActivations,
         ServiceRegistration<AutoItemsCycleState, AutoItemsCycleAction> registration,
         long lifecycleValue,
         ConfigGeneration initialConfigurationGeneration)
     {
         _dependencies = dependencies;
         _natives = natives;
-        _temporaryActivations = temporaryActivations;
         _registration = registration;
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
@@ -78,7 +74,6 @@ internal sealed class AutoItemsFeatureRuntime : IAutomataServiceCycleFeatureRunt
         ConfigGeneration configurationGeneration)
     {
         _natives.InvalidateLifecycle();
-        _temporaryActivations.ResetLifecycle();
         _diagnostics?.ObserveLifecycle(
             nativeLifecycle,
             configurationGeneration,
@@ -91,6 +86,5 @@ internal sealed class AutoItemsFeatureRuntime : IAutomataServiceCycleFeatureRunt
     {
         _registration.Dispose();
         _natives.Dispose();
-        _temporaryActivations.ResetLifecycle();
     }
 }

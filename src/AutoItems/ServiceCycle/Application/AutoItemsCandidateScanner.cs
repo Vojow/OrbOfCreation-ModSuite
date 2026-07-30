@@ -73,13 +73,13 @@ internal static class AutoItemsCandidateScanner
     internal static AutoItemsCandidateScan Scan(
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
-        AutoItemsTemporaryActivationTracker temporaryActivations,
+        PublicationTable<Guid> quarantinedTemporaryItems,
         PublicationTable<Guid>? temporaryAllowlist,
         AutoScribeIdentityProfile? scribeProfile)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
-        if (temporaryActivations is null)
-            throw new ArgumentNullException(nameof(temporaryActivations));
+        if (quarantinedTemporaryItems is null)
+            throw new ArgumentNullException(nameof(quarantinedTemporaryItems));
 
         var rows = world.Consumables.AsSpan();
         var rejected = 0;
@@ -125,7 +125,9 @@ internal static class AutoItemsCandidateScanner
                         profile.Family,
                         profile.Consumable.ConsumableId,
                         temporaryAllowlist) ||
-                    temporaryActivations.IsQuarantined(profile.Consumable.ConsumableId) ||
+                    AutoItemsTemporaryItemAllowlist.Contains(
+                        quarantinedTemporaryItems,
+                        profile.Consumable.ConsumableId) ||
                     !IsBaseEligible(in profile) ||
                     !HasSafeTemporaryShape(in profile))
                 {

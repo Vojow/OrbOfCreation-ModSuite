@@ -101,7 +101,7 @@ internal static class ScrollCoveragePlanner
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (profile is null) throw new ArgumentNullException(nameof(profile));
-        var rows = new ScrollRoleCoverage[profile.Roles.Length];
+        var rows = new ScrollRoleCoverage[profile.Roles.Count];
         for (var index = 0; index < rows.Length; index++)
             rows[index] = BuildRole(world, profile.Roles[index]);
         return new ScrollCoveragePlan(

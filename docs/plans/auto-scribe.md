@@ -1,11 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: Corrected release installed; fresh-launch validation pending.** The audited identity
+> **Lifecycle: Shared-host startup fix implemented; verification and reinstall pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
-> configuration, diagnostics, and semantic role picker are implemented. Live evidence found and
-> the branch now fixes an unaudited mutable Auto Items state collection plus missing consolidated
-> Auto Items/Auto Scribe rail icons. The corrected clean release is installed with verified
-> rollback backups.
+> configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
+> A later launch exposed worker-definition boundary violations in both new services; source now
+> uses lifecycle-owned receipt state and audited immutable role storage, pending complete gates and
+> a safe reinstall after the game closes.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -27,8 +27,8 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
-| 10. Interactive game validation | **Ready** | Confirm a healthy ServiceCycle host plus Mods button on the corrected DLL, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
+| 9. Automated verification | **Complete after startup fix** | `script/test` passes 1,942 portable and 90 profile tests; both production-worker separation audits and all 26 installed game-contract tests pass; the real-reference Release build has zero warnings and errors |
+| 10. Interactive game validation | **Blocked on reinstall** | Install only after the game closes, confirm a healthy ServiceCycle host, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -37,9 +37,9 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: relaunch and confirm the Mods button plus a healthy ServiceCycle startup log on the
-  corrected DLL. Then perform the interactive validation outline below on a disposable save before
-  enabling Auto Scribe.
+- Current task: finish full verification of the shared-host startup fix. After the game closes,
+  install the reviewed DLL, relaunch, and confirm healthy Auto Items and Auto Scribe registrations
+  before running the interactive validation outline on a disposable save.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -80,6 +80,21 @@ Last updated: **2026-07-30**
   The installer reran the complete portable gate and all 26 installed game-contract tests, backed
   up 12 save files to `backups/pre-modsuite-install-20260730T100334Z`, and backed up the previous
   DLL to `BepInEx/modsuite-backups/pre-modsuite-install-20260730T100334Z`.
+- The 2026-07-30 12:05 launch confirmed both consolidated Mods rail entries render, then the shared
+  host failed closed before gameplay mutation because `AutoItemsWorkerDefinition` retained a
+  cross-thread activation tracker containing a lock and `HashSet<Guid>`. The same complete
+  separation audit also found the next latent failure: `AutoScribeWorker` retained a delegate and
+  an array-backed identity profile.
+- Source now reconciles verified temporary submissions through `PreviousReceipt` into
+  lifecycle-scoped `AutoItemsCycleState`, including activation and exact-item quarantine state.
+  Auto Scribe role identities use `PublicationTable<AutoScribeRoleDescriptor>`, and its worker no
+  longer retains a main-thread dependency delegate. Regression tests run the same complete
+  production-worker separation validator used by shared-host registration for both services.
+- The post-fix current tree passes 1,942 ordinary portable tests, 90 profile tests, all 26
+  installed-game contracts, and the installed-reference Release build with zero warnings and
+  errors. The reviewed Release DLL SHA-256 is
+  `45a8896fb952f9810fffc75100d19d9f6482876b5007bdd2857620f1eea692dd`;
+  it has not yet replaced the installed DLL.
 
 ## Goal
 

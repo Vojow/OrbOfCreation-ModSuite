@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -60,9 +61,10 @@ internal sealed class AutoScribeIdentityProfile
         RecipeRegistry = recipeRegistry;
         ActiveInstances = activeInstances;
         AutomaticInstances = automaticInstances;
-        Roles = roles ?? throw new ArgumentNullException(nameof(roles));
+        if (roles is null) throw new ArgumentNullException(nameof(roles));
         if (roles.Length == 0)
             throw new ArgumentException("At least one Scroll role is required.", nameof(roles));
+        Roles = PublicationTable<AutoScribeRoleDescriptor>.Create(roles, roles.Length);
     }
 
     internal string BaselineId { get; }
@@ -70,11 +72,11 @@ internal sealed class AutoScribeIdentityProfile
     internal AutoScribeNativeIdentity RecipeRegistry { get; }
     internal AutoScribeNativeIdentity ActiveInstances { get; }
     internal AutoScribeNativeIdentity AutomaticInstances { get; }
-    internal AutoScribeRoleDescriptor[] Roles { get; }
+    internal PublicationTable<AutoScribeRoleDescriptor> Roles { get; }
 
     internal bool TryFindByScroll(Guid scrollId, out AutoScribeRoleDescriptor role)
     {
-        for (var index = 0; index < Roles.Length; index++)
+        for (var index = 0; index < Roles.Count; index++)
         {
             if (Roles[index].Scroll.Uuid != scrollId) continue;
             role = Roles[index];
@@ -86,7 +88,7 @@ internal sealed class AutoScribeIdentityProfile
 
     internal bool TryFind(ScrollRoleKey key, out AutoScribeRoleDescriptor role)
     {
-        for (var index = 0; index < Roles.Length; index++)
+        for (var index = 0; index < Roles.Count; index++)
         {
             if (Roles[index].Key != key) continue;
             role = Roles[index];

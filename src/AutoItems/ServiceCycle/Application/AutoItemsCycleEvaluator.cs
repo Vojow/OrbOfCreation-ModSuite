@@ -12,14 +12,18 @@ internal static class AutoItemsCycleEvaluator
     internal static WakePolicy Evaluate(
         GameWorldState world,
         in SuiteRuntimeConfiguration config,
+        in ServiceCycleContext context,
         ref AutoItemsCycleState state,
         ServiceActionWriter<AutoItemsCycleAction> actions,
-        AutoItemsTemporaryActivationTracker temporaryActivations,
         PublicationTable<Guid>? temporaryAllowlist,
         AutoScribeIdentityProfile? autoScribeIdentityProfile,
         out AutoItemsDecisionMetrics metrics)
     {
         var interval = AutoItemsConfigurationPolicy.EvaluationInterval(config);
+        var previousReceipt = context.PreviousReceipt;
+        AutoItemsTemporaryActivationPolicy.ReconcileReceipt(
+            in previousReceipt,
+            ref state);
         if (!AutoItemsConfigurationPolicy.IsOperational(config))
         {
             state.EndRecoveryWait();
@@ -27,7 +31,16 @@ internal static class AutoItemsCycleEvaluator
             return WakePolicy.AfterDecision(interval);
         }
 
-        var activation = temporaryActivations.Observe(world, out _);
+        if (state.HasPendingReceipt)
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingTemporaryActivation);
+            return WakePolicy.AfterDecision(interval);
+        }
+
+        var activation = AutoItemsTemporaryActivationPolicy.Observe(
+            world,
+            ref state,
+            out _);
         if (activation is AutoItemsTemporaryActivationState.AwaitingActivation or
             AutoItemsTemporaryActivationState.Active)
         {
@@ -74,7 +87,7 @@ internal static class AutoItemsCycleEvaluator
         var scan = AutoItemsCandidateScanner.Scan(
             world,
             in config,
-            temporaryActivations,
+            state.QuarantinedTemporaryItems,
             temporaryAllowlist,
             autoScribeIdentityProfile);
 
@@ -93,6 +106,7 @@ internal static class AutoItemsCycleEvaluator
                 in scan,
                 AutoItemsDecisionKind.Relic,
                 actions,
+                ref state,
                 out metrics);
         }
         if (scan.EligibleTemporaryItems > 0)
@@ -103,6 +117,7 @@ internal static class AutoItemsCycleEvaluator
                 in scan,
                 AutoItemsDecisionKind.TemporaryItem,
                 actions,
+                ref state,
                 out metrics);
         }
         if (scan.EligibleScrolls > 0)
@@ -113,6 +128,7 @@ internal static class AutoItemsCycleEvaluator
                 in scan,
                 AutoItemsDecisionKind.Scroll,
                 actions,
+                ref state,
                 out metrics);
         }
         if (scan.SaturationCandidate && hasToxicityReading && !toxicityAtZero)
@@ -150,9 +166,12 @@ internal static class AutoItemsCycleEvaluator
         in AutoItemsCandidateScan scan,
         AutoItemsDecisionKind kind,
         ServiceActionWriter<AutoItemsCycleAction> actions,
+        ref AutoItemsCycleState state,
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
+        if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
+            state.RecordPlannedTemporary(in action);
         metrics = scan.ToMetrics(kind, plannedActions: 1);
         return WakePolicy.Immediate;
     }

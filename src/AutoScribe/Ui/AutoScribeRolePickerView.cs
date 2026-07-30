@@ -211,7 +211,7 @@ internal sealed class AutoScribeRolePickerView
             return Array.Empty<AutoScribeRoleDescriptor>();
         }
         var roles = new List<AutoScribeRoleDescriptor>();
-        for (var index = 0; index < profile.Roles.Length; index++)
+        for (var index = 0; index < profile.Roles.Count; index++)
             if (profile.Roles[index].IsProducible) roles.Add(profile.Roles[index]);
         return roles;
     }

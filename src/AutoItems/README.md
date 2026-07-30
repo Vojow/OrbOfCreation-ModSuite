@@ -38,8 +38,11 @@ The implemented boundary is deliberately split:
   editor remains available. Its consolidated rail entry uses the already-audited native Alchemy
   top-bar icon.
 - A temporary submission verifies stock, queue, and pending-usage creation immediately, then waits
-  for a later publication to prove engagement. Any pending or active temporary usage blocks every
-  automated family—including Relics—through expiry and is rechecked immediately before mutation.
+  for the service-cycle receipt and a later publication to prove engagement. Receipt, activation,
+  and exact-item quarantine memory live only in lifecycle-scoped worker state; no lock, mutable
+  collection, or native reference crosses the worker boundary. Any pending or active temporary
+  usage blocks every automated family—including Relics—through expiry and is rechecked
+  immediately before mutation.
   Scrolls and allowed temporary items keep filling toxicity while headroom permits. Once no
   otherwise-eligible item fits, a lifecycle-scoped recovery latch blocks new uses until toxicity
   returns to exact zero, after which ordinary priority resumes. Missing or contradictory activation

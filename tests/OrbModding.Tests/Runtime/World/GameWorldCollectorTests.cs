@@ -1613,12 +1613,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         var collector = Collector();
         Assert.True(collector.Collect().IsComplete);
         var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
-        var tracker = new AutoItemsTemporaryActivationTracker();
 
         var saturatedActions = PlanAutoItemsWithState(
             collector.Build(),
             ref state,
-            tracker,
             out var saturatedMetrics);
 
         Assert.Empty(saturatedActions);
@@ -1632,7 +1630,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         var recoveringActions = PlanAutoItemsWithState(
             collector.Build(),
             ref state,
-            tracker,
             out var recoveringMetrics);
 
         Assert.Empty(recoveringActions);
@@ -1646,7 +1643,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         var recoveredAction = Assert.Single(PlanAutoItemsWithState(
             collector.Build(),
             ref state,
-            tracker,
             out var recoveredMetrics));
 
         Assert.False(state.RecoveryWaitActive);
@@ -1942,7 +1938,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void TemporaryActivationTrackerConfirmsEngagementAndExpiry()
+    public void TemporaryActivationPolicyConfirmsEngagementAndExpiry()
     {
         var item = AddConsumable(
             KnownEntities.ConsumableFruitType.Uuid,
@@ -1956,24 +1952,38 @@ public sealed class GameWorldCollectorTests : IDisposable
         item.consumableUsages.Add(usage);
         var collector = Collector();
         Assert.True(collector.Collect().IsComplete);
-        var tracker = new AutoItemsTemporaryActivationTracker();
-        tracker.RecordSubmitted(item.Identity, 1);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var action = new AutoItemsCycleAction(
+            item.Identity,
+            AutoItemsConsumableFamily.Fruit,
+            collectedAtFrame: 1,
+            collectedAtEpoch: 1);
+        state.RecordSubmittedTemporary(in action);
 
         Assert.Equal(
             AutoItemsTemporaryActivationState.AwaitingActivation,
-            tracker.Observe(collector.Build() with { CollectedAtFrame = 2 }, out _));
+            AutoItemsTemporaryActivationPolicy.Observe(
+                collector.Build() with { CollectedAtFrame = 2 },
+                ref state,
+                out _));
 
         usage.en = true;
         Assert.True(collector.Collect().IsComplete);
         Assert.Equal(
             AutoItemsTemporaryActivationState.Active,
-            tracker.Observe(collector.Build() with { CollectedAtFrame = 3 }, out _));
+            AutoItemsTemporaryActivationPolicy.Observe(
+                collector.Build() with { CollectedAtFrame = 3 },
+                ref state,
+                out _));
 
         item.consumableUsages.Clear();
         Assert.True(collector.Collect().IsComplete);
         Assert.Equal(
             AutoItemsTemporaryActivationState.Completed,
-            tracker.Observe(collector.Build() with { CollectedAtFrame = 4 }, out _));
+            AutoItemsTemporaryActivationPolicy.Observe(
+                collector.Build() with { CollectedAtFrame = 4 },
+                ref state,
+                out _));
     }
 
     [Fact]
@@ -1987,15 +1997,49 @@ public sealed class GameWorldCollectorTests : IDisposable
             canBeRandomized: false);
         var collector = Collector();
         Assert.True(collector.Collect().IsComplete);
-        var tracker = new AutoItemsTemporaryActivationTracker();
-        tracker.RecordSubmitted(missing.Identity, 1);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        var action = new AutoItemsCycleAction(
+            missing.Identity,
+            AutoItemsConsumableFamily.Potion,
+            collectedAtFrame: 1,
+            collectedAtEpoch: 1);
+        state.RecordSubmittedTemporary(in action);
 
         Assert.Equal(
             AutoItemsTemporaryActivationState.Quarantined,
-            tracker.Observe(collector.Build() with { CollectedAtFrame = 2 }, out var itemId));
+            AutoItemsTemporaryActivationPolicy.Observe(
+                collector.Build() with { CollectedAtFrame = 2 },
+                ref state,
+                out var itemId));
         Assert.Equal(missing.Identity, itemId);
-        Assert.True(tracker.IsQuarantined(missing.Identity));
-        Assert.False(tracker.IsQuarantined(other.Identity));
+        Assert.True(state.IsTemporaryQuarantined(missing.Identity));
+        Assert.False(state.IsTemporaryQuarantined(other.Identity));
+    }
+
+    [Fact]
+    public void CommittedTemporaryReceiptStartsLifecycleOwnedActivationTracking()
+    {
+        var itemId = Guid.NewGuid();
+        var action = new AutoItemsCycleAction(
+            itemId,
+            AutoItemsConsumableFamily.Fruit,
+            collectedAtFrame: 41,
+            collectedAtEpoch: 1);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+        state.RecordPlannedTemporary(in action);
+        var cycle = CycleContext().Identity;
+        var receipt = BatchReceipt.Completed(
+            cycle,
+            new BatchId(1),
+            actionCount: 1,
+            new ServiceNativeCallTotals(1, 1, 1),
+            new MonotonicTimestamp(2));
+
+        AutoItemsTemporaryActivationPolicy.ReconcileReceipt(in receipt, ref state);
+
+        Assert.False(state.HasPendingReceipt);
+        Assert.Equal(itemId, state.PendingTemporaryItem);
+        Assert.Equal(41, state.TemporarySubmittedFromFrame);
     }
 
     private static FakeResource AddToxicity(double rawHeadroom)
@@ -2051,7 +2095,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         return PlanAutoItemsWithState(
             world,
             ref state,
-            new AutoItemsTemporaryActivationTracker(),
             out metrics,
             mode,
             useFruits,
@@ -2062,7 +2105,6 @@ public sealed class GameWorldCollectorTests : IDisposable
     private static IReadOnlyList<AutoItemsCycleAction> PlanAutoItemsWithState(
         GameWorldState world,
         ref AutoItemsCycleState state,
-        AutoItemsTemporaryActivationTracker tracker,
         out AutoItemsDecisionMetrics metrics,
         AutoItemsOperationMode mode = AutoItemsOperationMode.Active,
         bool useFruits = false,
@@ -2090,9 +2132,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         AutoItemsCycleEvaluator.Evaluate(
             world,
             in config,
+            CycleContext(),
             ref state,
             new ServiceActionWriter<AutoItemsCycleAction>(store),
-            tracker,
             state.TemporaryAllowlist,
             autoScribeIdentityProfile: null,
             metrics: out metrics);
@@ -2103,6 +2145,18 @@ public sealed class GameWorldCollectorTests : IDisposable
             store.CommitCurrentAndClear();
         }
         return actions;
+    }
+
+    private static ServiceCycleContext CycleContext(BatchReceipt previousReceipt = default)
+    {
+        var identity = new ServiceCycleIdentity(
+            AutoItemsServicePolicies.ServiceId,
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            StrategyGeneration.Initial,
+            new WorldGeneration(1),
+            new CycleId(1));
+        return new ServiceCycleContext(identity, previousReceipt, new MonotonicTimestamp(1));
     }
 
     /// <summary>

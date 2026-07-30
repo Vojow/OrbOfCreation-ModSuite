@@ -6,27 +6,22 @@ internal sealed class AutoItemsServiceAdapterComposition
 {
     private AutoItemsServiceAdapterComposition(
         IAutomataServiceDefinition<AutoItemsCycleState, AutoItemsCycleAction> definition,
-        AutoItemsNativeAdapter natives,
-        AutoItemsTemporaryActivationTracker temporaryActivations)
+        AutoItemsNativeAdapter natives)
     {
         Definition = definition;
         Natives = natives;
-        TemporaryActivations = temporaryActivations;
     }
 
     internal IAutomataServiceDefinition<AutoItemsCycleState, AutoItemsCycleAction> Definition { get; }
     internal AutoItemsNativeAdapter Natives { get; }
-    internal AutoItemsTemporaryActivationTracker TemporaryActivations { get; }
 
     internal static AutoItemsServiceAdapterComposition Create(
         AutoItemsFeatureDependencies dependencies)
     {
         if (dependencies is null) throw new ArgumentNullException(nameof(dependencies));
-        var temporaryActivations = new AutoItemsTemporaryActivationTracker();
         var natives = new AutoItemsNativeAdapter(
             dependencies.RegistryResolver,
             dependencies.TryCaptureMutationPermit,
-            temporaryActivations,
             dependencies.AutoScribeIdentityProfile);
         var actions = new AutoItemsCycleActionAdapter(
             natives,
@@ -35,9 +30,7 @@ internal sealed class AutoItemsServiceAdapterComposition
         return new AutoItemsServiceAdapterComposition(
             AutoItemsService.Define(
                 actions,
-                temporaryActivations,
                 dependencies.AutoScribeIdentityProfile),
-            natives,
-            temporaryActivations);
+            natives);
     }
 }

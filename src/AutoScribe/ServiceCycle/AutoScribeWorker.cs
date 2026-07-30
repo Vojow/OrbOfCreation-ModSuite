@@ -12,16 +12,9 @@ internal sealed class AutoScribeWorker :
     IServiceCycleWorkerDefinition<AutoScribeCycleState, AutoScribeCycleAction>
 {
     private readonly AutoScribeIdentityProfile _profile;
-    private readonly Func<bool> _canConsumeScrolls;
 
-    internal AutoScribeWorker(
-        AutoScribeIdentityProfile profile,
-        Func<bool> canConsumeScrolls)
-    {
+    internal AutoScribeWorker(AutoScribeIdentityProfile profile) =>
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
-        _canConsumeScrolls = canConsumeScrolls ??
-            throw new ArgumentNullException(nameof(canConsumeScrolls));
-    }
 
     public AutoScribeCycleState CreateState(LifecycleGeneration lifecycle) =>
         new() { Lifecycle = lifecycle };
@@ -42,7 +35,6 @@ internal sealed class AutoScribeWorker :
             ObserveRole(plan.Roles[index], ref state);
 
         if (!AutoScribeServiceCycleFeature.IsOperational(config) ||
-            !Safe(_canConsumeScrolls) ||
             !TryChooseEnabledProduction(plan, config.AutoScribe.Roles, out var selected))
         {
             return WakePolicy.AfterDecision(AutoScribeServiceCycleFeature.Interval(config));
@@ -137,11 +129,5 @@ internal sealed class AutoScribeWorker :
         }
 
         return found;
-    }
-
-    private static bool Safe(Func<bool> read)
-    {
-        try { return read(); }
-        catch (Exception) { return false; }
     }
 }

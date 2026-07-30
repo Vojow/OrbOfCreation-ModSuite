@@ -12,7 +12,7 @@ than marked done.
 | [Orb Insights](insights.md) | Planned | Read-only gameplay and diagnostic views. |
 | [Orb Toolbox](toolbox.md) | Planned | Explicit advanced player tools. |
 | [Auto Items](auto-items.md) | Active | Phases 1–10 and picker UX implemented; automated gates pass, interactive validation remains. |
-| [Auto Scribe](auto-scribe.md) | Validation ready | Corrected release DLL installed after all gates; fresh-launch ServiceCycle and Mods-rail confirmation remains. |
+| [Auto Scribe](auto-scribe.md) | Startup fix in verification | Mods rail is confirmed; a later launch exposed worker-boundary violations in Auto Items and Auto Scribe, now fixed in source pending full gates and reinstall. |
 | [Auto Buy MVP deferrals](autobuy-servicecycle-mvp-deferrals.md) | Active | What the Auto Buy port deliberately left out, and what has to come back. |
 | [Full-trace world store](full-trace-world-store.md) | Open decision | The raw-capture stream of the full-trace mandate has no store: the volume and the codec are the ruling it waits on. |
 

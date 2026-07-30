@@ -32,9 +32,7 @@ internal sealed class AutoScribeServiceCycleFeature : IAutomataServiceCycleFeatu
                 MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(10))));
         var definition = AutomataService.Define<AutoScribeCycleState, AutoScribeCycleAction>(
             in metadata,
-            () => new AutoScribeWorker(
-                _dependencies.Profile,
-                _dependencies.CanConsumeScrolls),
+            () => new AutoScribeWorker(_dependencies.Profile),
             ShouldStart,
             adapter.TryExecute);
         var registration = context.Registry.Register(

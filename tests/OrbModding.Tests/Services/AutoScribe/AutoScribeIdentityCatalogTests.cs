@@ -15,21 +15,22 @@ public sealed class AutoScribeIdentityCatalogTests
         Assert.True(catalog.TryGetProfile(
             GameAssemblyAudit.WindowsV1052BaselineId,
             out var profile));
-        Assert.Equal(8, profile.Roles.Length);
-        Assert.Equal(6, System.Array.FindAll(
-            profile.Roles,
-            static role => role.IsProducible).Length);
+        Assert.Equal(8, profile.Roles.Count);
 
         var keys = new HashSet<string>(System.StringComparer.Ordinal);
         var scrolls = new HashSet<System.Guid>();
         var enchantments = new HashSet<System.Guid>();
-        foreach (var role in profile.Roles)
+        var producible = 0;
+        for (var index = 0; index < profile.Roles.Count; index++)
         {
+            var role = profile.Roles[index];
+            if (role.IsProducible) producible++;
             Assert.StartsWith("scribe.", role.Key.Value);
             Assert.True(keys.Add(role.Key.Value));
             Assert.True(scrolls.Add(role.Scroll.Uuid));
             Assert.True(enchantments.Add(role.Enchantment.Uuid));
         }
+        Assert.Equal(6, producible);
     }
 
     [Fact]

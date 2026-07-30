@@ -7,13 +7,15 @@ active and healthy.
 ## Responsibility boundaries
 
 - `Identity` owns the baseline-specific UUID plus expected-type facade. Policy, configuration, and
-  normal UI use stable semantic `ScrollRoleKey` values.
+  normal UI use stable semantic `ScrollRoleKey` values. Worker-visible roles are copied into
+  Common's audited immutable publication table.
 - `Coverage` owns the native-free plan shared by Auto Scribe production and Auto Items Scroll-use
   admission.
 - shared world readers publish levelled inventory, pending uses, recipes, target evidence,
   enchantments, and active/automatic Scribe work. They never retain Unity objects in the snapshot.
 - `ServiceCycle/AutoScribeWorker` selects at most one enabled deficit from one immutable world
-  generation.
+  generation. It retains no delegate or other main-thread capability; dependency readiness is
+  checked by the service start boundary and revalidated by the native action adapter.
 - `ServiceCycle/AutoScribeNativeAdapter` owns main-thread revalidation, the bounded one-shot craft,
   postconditions, and lifecycle quarantine.
 - `ServiceCycle/AutoScribeServiceCycleFeature` owns registration and lifecycle wiring;

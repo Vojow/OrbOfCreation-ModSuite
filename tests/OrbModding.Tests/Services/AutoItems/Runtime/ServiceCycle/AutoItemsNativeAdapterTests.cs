@@ -314,8 +314,7 @@ public sealed class AutoItemsNativeAdapterTests : IDisposable
             });
         return new AutoItemsNativeAdapter(
             resolver,
-            mutationPermit ?? (static () => true),
-            new AutoItemsTemporaryActivationTracker());
+            mutationPermit ?? (static () => true));
     }
 
     private ConsumableSO Item(Guid family, bool randomizable)

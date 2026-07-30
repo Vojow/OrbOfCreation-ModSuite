@@ -12,7 +12,6 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
 
     private readonly TypedRegistryResolver _registryResolver;
     private readonly Func<bool> _tryCaptureMutationPermit;
-    private readonly AutoItemsTemporaryActivationTracker _temporaryActivations;
     private readonly AutoScribeIdentityProfile? _autoScribeIdentityProfile;
     private readonly HashSet<Guid> _itemQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
@@ -21,15 +20,12 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
     internal AutoItemsNativeAdapter(
         TypedRegistryResolver registryResolver,
         Func<bool> tryCaptureMutationPermit,
-        AutoItemsTemporaryActivationTracker temporaryActivations,
         AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         _registryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
         _tryCaptureMutationPermit = tryCaptureMutationPermit ??
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
-        _temporaryActivations = temporaryActivations ??
-            throw new ArgumentNullException(nameof(temporaryActivations));
         _autoScribeIdentityProfile = autoScribeIdentityProfile;
     }
 
@@ -135,8 +131,6 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
             attemptedCalls,
             evidence.IsVerified ? 1 : 0);
         QuarantineAmbiguousMutation(in action, temporary, in evidence);
-        if (temporary && evidence.IsVerified)
-            _temporaryActivations.RecordSubmitted(action.ItemId, action.CollectedAtFrame);
         return new AutoItemsSubmission(
             AutoItemsPreflight.Proceeded,
             evidence.Outcome,
