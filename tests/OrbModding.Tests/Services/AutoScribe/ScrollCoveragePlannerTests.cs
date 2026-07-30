@@ -200,6 +200,227 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(new ScrollRoleKey("scribe.power"), selected.Role);
     }
 
+    [Fact]
+    public void LowerLevelStockRemainsUsableButDoesNotReserveHighestLevelProduction()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 4,
+            owned: new[]
+            {
+                new WorldConsumableCount(
+                    KnownEntities.ScrollAdvancement.Uuid, 11, 3, 0),
+            },
+            work: Array.Empty<WorldScribeWork>());
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(11, role.StrongestOwnedLevel);
+        Assert.Equal(0, role.OwnedSupply);
+        Assert.Equal(1, role.Deficit);
+        Assert.Equal(ScrollUseDirective.AllowUse, role.UseDirective);
+        Assert.True(role.ShouldProduce);
+    }
+
+    [Fact]
+    public void SameOrHigherManualQueueWorkReservesDeficitButLowerWorkDoesNot()
+    {
+        var lower = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 4,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: new[]
+            {
+                new WorldScribeWork(
+                    KnownEntities.ActiveScribeInstances.Uuid,
+                    KnownEntities.CraftScrollAdvancement.Uuid,
+                    level: 11,
+                    isAutomatic: false,
+                    isExpired: false),
+            });
+        var matching = lower with
+        {
+            ScribeWork = Table(new WorldScribeWork(
+                KnownEntities.ActiveScribeInstances.Uuid,
+                KnownEntities.CraftScrollAdvancement.Uuid,
+                level: 12,
+                isAutomatic: false,
+                isExpired: false)),
+        };
+
+        var lowerRole = FindAdvancement(ScrollCoveragePlanner.Build(lower, Profile()));
+        var matchingRole = FindAdvancement(ScrollCoveragePlanner.Build(matching, Profile()));
+
+        Assert.Equal(1, lowerRole.Deficit);
+        Assert.True(lowerRole.ShouldProduce);
+        Assert.Equal(1, matchingRole.QueuedSupply);
+        Assert.Equal(0, matchingRole.Deficit);
+        Assert.False(matchingRole.ShouldProduce);
+    }
+
+    [Fact]
+    public void PlayerAutomaticWorkSuppressesCompetingProductionAndIsReportedSeparately()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 4,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: new[]
+            {
+                new WorldScribeWork(
+                    KnownEntities.AutoScribeInstances.Uuid,
+                    KnownEntities.CraftScrollAdvancement.Uuid,
+                    level: 12,
+                    isAutomatic: true,
+                    isExpired: false),
+            });
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(0, role.QueuedSupply);
+        Assert.Equal(1, role.Deficit);
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, role.State);
+        Assert.False(role.ShouldProduce);
+    }
+
+    [Fact]
+    public void ExpiredAutomaticWorkDoesNotSuppressNeededProduction()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 4,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: new[]
+            {
+                new WorldScribeWork(
+                    KnownEntities.AutoScribeInstances.Uuid,
+                    KnownEntities.CraftScrollAdvancement.Uuid,
+                    level: 12,
+                    isAutomatic: true,
+                    isExpired: true),
+            });
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, role.State);
+        Assert.Equal(1, role.Deficit);
+        Assert.True(role.ShouldProduce);
+    }
+
+    [Fact]
+    public void MissingTargetEvidenceBlocksBothUseAndProduction()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 4,
+            owned: new[]
+            {
+                new WorldConsumableCount(
+                    KnownEntities.ScrollAdvancement.Uuid, 12, 1, 0),
+            },
+            work: Array.Empty<WorldScribeWork>()) with
+        {
+            ScrollTargetEvidence = PublicationTable<WorldScrollTargetEvidence>.Empty,
+        };
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(ScrollCoverageState.EvidenceUnknown, role.State);
+        Assert.Equal(ScrollUseDirective.BlockUnknown, role.UseDirective);
+        Assert.False(role.ShouldProduce);
+    }
+
+    [Fact]
+    public void HigherUnlockedScribeLevelReopensCoverageThatWasComplete()
+    {
+        var structure = Guid.NewGuid();
+        var levelTwelve = World(
+            structure,
+            enchantmentLevel: 12,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: Array.Empty<WorldScribeWork>());
+        var levelThirteen = levelTwelve with
+        {
+            CraftingRecipeTypes = Table(RecipeType(maxStartingLevel: 13)),
+        };
+
+        var complete = FindAdvancement(
+            ScrollCoveragePlanner.Build(levelTwelve, Profile()));
+        var reopened = FindAdvancement(
+            ScrollCoveragePlanner.Build(levelThirteen, Profile()));
+
+        Assert.Equal(ScrollCoverageState.Covered, complete.State);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, reopened.State);
+        Assert.Equal(13, reopened.TargetLevel);
+        Assert.Equal(1, reopened.Deficit);
+    }
+
+    [Fact]
+    public void CraftQueueStockPendingUseAndAppliedEnchantmentConvergeWithoutOverproduction()
+    {
+        var structure = Guid.NewGuid();
+        var initial = World(
+            structure,
+            enchantmentLevel: 4,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: Array.Empty<WorldScribeWork>());
+        var queued = initial with
+        {
+            ScribeWork = Table(new WorldScribeWork(
+                KnownEntities.ActiveScribeInstances.Uuid,
+                KnownEntities.CraftScrollAdvancement.Uuid,
+                level: 12,
+                isAutomatic: false,
+                isExpired: false)),
+        };
+        var stocked = initial with
+        {
+            ConsumableCounts = Table(new WorldConsumableCount(
+                KnownEntities.ScrollAdvancement.Uuid,
+                level: 12,
+                quantity: 1,
+                freeQuantity: 0)),
+        };
+        var pendingUse = initial with
+        {
+            ConsumableUsages = Table(new WorldConsumableUsage(
+                KnownEntities.ScrollAdvancement.Uuid,
+                Guid.NewGuid(),
+                level: 12,
+                engaged: false,
+                remainingDuration: BigDouble.One,
+                maximumDuration: BigDouble.One)),
+        };
+        var applied = initial with
+        {
+            StructureEnchantments = Table(new WorldStructureEnchantment(
+                structure,
+                KnownEntities.EnchantAdvancement.Uuid,
+                level: 12)),
+        };
+
+        var missing = FindAdvancement(
+            ScrollCoveragePlanner.Build(initial, Profile()));
+        var reservedByQueue = FindAdvancement(
+            ScrollCoveragePlanner.Build(queued, Profile()));
+        var readyToUse = FindAdvancement(
+            ScrollCoveragePlanner.Build(stocked, Profile()));
+        var reservedByUse = FindAdvancement(
+            ScrollCoveragePlanner.Build(pendingUse, Profile()));
+        var complete = FindAdvancement(
+            ScrollCoveragePlanner.Build(applied, Profile()));
+
+        Assert.True(missing.ShouldProduce);
+        Assert.Equal(0, reservedByQueue.Deficit);
+        Assert.Equal(ScrollUseDirective.AllowUse, readyToUse.UseDirective);
+        Assert.Equal(0, reservedByUse.Deficit);
+        Assert.Equal(ScrollCoverageState.Covered, complete.State);
+        Assert.False(reservedByQueue.ShouldProduce);
+        Assert.False(readyToUse.ShouldProduce);
+        Assert.False(reservedByUse.ShouldProduce);
+        Assert.False(complete.ShouldProduce);
+    }
+
     private static ScrollRoleCoverage FindAdvancement(ScrollCoveragePlan plan)
     {
         Assert.True(plan.TryFind(
@@ -240,23 +461,7 @@ public sealed class ScrollCoveragePlannerTests
         WorldConsumableCount[] owned,
         WorldScribeWork[] work)
     {
-        var recipeType = new WorldCraftingRecipeType(
-            KnownEntities.ScribeCrafting.Uuid,
-            startingLevel: 10,
-            maxStartingLevel: 12,
-            craftVerb: "Scribe",
-            isLevelType: true,
-            initiated: true,
-            magnitudeLoss: 0,
-            magnitudeTime: 0,
-            magnitudeIncrement: BigDouble.One,
-            powerModifiers: 0,
-            speedModifiers: 0,
-            costModModifiers: 0,
-            costIncrementModModifiers: 0,
-            efficiencyModModifiers: 0,
-            autoPenaltyModModifiers: 0,
-            multiPenaltyModModifiers: 0);
+        var recipeType = RecipeType(maxStartingLevel: 12);
         return new GameWorldState
         {
             CollectedAtFrame = 8,
@@ -286,6 +491,25 @@ public sealed class ScrollCoveragePlannerTests
                 work, work.Length),
         };
     }
+
+    private static WorldCraftingRecipeType RecipeType(int maxStartingLevel) =>
+        new(
+            KnownEntities.ScribeCrafting.Uuid,
+            startingLevel: 10,
+            maxStartingLevel,
+            craftVerb: "Scribe",
+            isLevelType: true,
+            initiated: true,
+            magnitudeLoss: 0,
+            magnitudeTime: 0,
+            magnitudeIncrement: BigDouble.One,
+            powerModifiers: 0,
+            speedModifiers: 0,
+            costModModifiers: 0,
+            costIncrementModModifiers: 0,
+            efficiencyModModifiers: 0,
+            autoPenaltyModModifiers: 0,
+            multiPenaltyModModifiers: 0);
 
     private static PublicationTable<T> Table<T>(T row) where T : struct =>
         PublicationTable<T>.Create(new[] { row }, 1);

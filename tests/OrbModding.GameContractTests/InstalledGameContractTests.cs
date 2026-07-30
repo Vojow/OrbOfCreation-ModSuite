@@ -280,6 +280,49 @@ public sealed class InstalledGameContractTests
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
+        Assert.Equal(
+            "GenericListVariable`1<CraftingInstance>",
+            assembly.GetBaseType("CraftingInstanceListVariable"));
+        Assert.Equal(
+            "System.Boolean",
+            assembly.GetFieldType("CraftingInstanceListVariable", "isAutoList"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<!0>",
+            assembly.GetFieldType("AbstractListVariable`1", "value"));
+        AssertMethod(
+            assembly,
+            "GenericListVariable`1",
+            "HasEmptySpot",
+            false,
+            "System.Boolean");
+        AssertMethod(
+            assembly,
+            "GenericListVariable`1",
+            "Add",
+            false,
+            "System.Void",
+            "!0");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "IsVisible",
+            false,
+            "System.Boolean");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "CanBuyAt",
+            false,
+            "System.Boolean",
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "PurchaseQuantity",
+            false,
+            "System.Void",
+            "BigDouble",
+            "BigDouble");
         AssertMethod(
             assembly,
             "CraftingInstance",
@@ -296,6 +339,52 @@ public sealed class InstalledGameContractTests
             false,
             "System.Boolean");
         AssertMethod(assembly, "CraftingInstance", "InstantCraft", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            "GetQuantity",
+            false,
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            "IsExpired",
+            false,
+            "System.Boolean");
+        AssertMethod(
+            assembly,
+            "AbstractRefInstance`1",
+            "GetGuidReference",
+            false,
+            "System.Guid");
+        Assert.Equal(
+            "System.Collections.Generic.List`1<InstantEffectBlock>",
+            assembly.GetFieldType("ConsumableSO", "onUseEffects"));
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetStrongest",
+            false,
+            "ConsumableCount");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetStrongestLevel",
+            false,
+            "System.Int32");
+        AssertMethod(
+            assembly,
+            "ConsumableSO",
+            "GetCountScalingInfo",
+            false,
+            "ScalingInfo",
+            "ConsumableCount");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetSelectOptions",
+            "GetTargeting",
+            false,
+            "Targeting.BaseTargetSelection");
         AssertMethod(
             assembly,
             "Targeting.TargetStructure",

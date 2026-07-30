@@ -118,7 +118,14 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public List<InstantEffectBlock> completeEffects = new List<InstantEffectBlock>();
     public bool useQuantityAsLevel;
     public bool visible;
+    public bool BuyAllowed = true;
+    public bool InstantCraftEnabled;
+    public ConsumableSO? InstantOutput;
+    public int PurchaseCalls;
     public bool IsVisible() => visible;
+    public bool CanBuyAt(BigDouble quantity) => BuyAllowed && quantity > BigDouble.Zero;
+    public void PurchaseQuantity(BigDouble quantity, BigDouble previousQuantity) =>
+        PurchaseCalls++;
 }
 
 public sealed class CraftingInstanceListVariable : IdScriptableObject
@@ -126,7 +133,13 @@ public sealed class CraftingInstanceListVariable : IdScriptableObject
     public List<CraftingInstance> value = new List<CraftingInstance>();
     public bool isAutoList;
     public int Maximum = 4;
+    public bool SuppressAdd;
     public int GetMax() => Maximum;
+    public bool HasEmptySpot() => value.Count < Maximum;
+    public void Add(CraftingInstance instance)
+    {
+        if (!SuppressAdd) value.Add(instance);
+    }
 }
 
 public sealed class CraftingInstance
@@ -135,7 +148,34 @@ public sealed class CraftingInstance
     public BigDouble Quantity = BigDouble.One;
     public bool Automatic;
     public bool Expired;
-    public CraftingRecipeSO GetGuidReference() => Recipe;
+    public bool Initiated;
+
+    public CraftingInstance()
+    {
+    }
+
+    public CraftingInstance(CraftingRecipeSO recipe, BigDouble quantity)
+    {
+        Recipe = recipe;
+        Quantity = quantity;
+    }
+
+    public void Initiate() => Initiated = true;
+    public bool CheckInstantCraft() => Recipe.InstantCraftEnabled;
+    public void InstantCraft()
+    {
+        if (Recipe.InstantOutput is null) return;
+        var level = (int)Math.Floor(Quantity.ToDouble());
+        var count = Recipe.InstantOutput.consumableCounts.Find(row => row.Level == level);
+        if (count is null)
+        {
+            count = new ConsumableCount { Level = level };
+            Recipe.InstantOutput.consumableCounts.Add(count);
+        }
+        count.Quantity++;
+    }
+
+    public Guid GetGuidReference() => Recipe.GetGuid();
     public BigDouble GetQuantity() => Quantity;
     public bool IsAuto() => Automatic;
     public bool IsExpired() => Expired;
@@ -238,6 +278,7 @@ public sealed class ConsumableSO : TooltipableObject
     public ValueModifierRecord prepSpeed = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new ValueModifierRecord(new BigDouble(0.0, 0));
     public List<ConsumableTypeSO> consumableTypes = new List<ConsumableTypeSO>();
+    public List<InstantEffectBlock> onUseEffects = new List<InstantEffectBlock>();
     public ResourceCostList consumeCost = new ResourceCostList();
     public ResourceCostList usageCost = new ResourceCostList();
     public List<ConsumableUsage> consumableUsages = new List<ConsumableUsage>();
@@ -285,6 +326,18 @@ public sealed class ConsumableSO : TooltipableObject
     public int GetQuantity() => quantity;
 
     public int GetQueued() => queuedQuantity;
+    public ConsumableCount GetStrongest()
+    {
+        ConsumableCount? strongest = null;
+        foreach (var count in consumableCounts)
+            if (count.Quantity > 0 && (strongest is null || count.Level > strongest.Level))
+                strongest = count;
+        return strongest ?? new ConsumableCount();
+    }
+
+    public int GetStrongestLevel() => GetStrongest().GetLevel();
+    public ScalingInfo GetCountScalingInfo(ConsumableCount count) =>
+        new ScalingInfo { Level = count.GetLevel() };
     public double preparationTime;
     public bool canBeRandomized;
     public bool hasDuration;
@@ -318,6 +371,39 @@ public sealed class ScalingInfo
     public int Level = 1;
 
     public int GetLevelInt() => Level;
+    public static ScalingInfo Basic(BigDouble level) =>
+        new ScalingInfo { Level = (int)Math.Floor(level.ToDouble()) };
+}
+
+public sealed class RequestTargetEffectScript
+{
+    public Targeting.TargetSelectOptions targetOptions = new Targeting.TargetSelectOptions();
+}
+
+namespace Targeting
+{
+    public interface ITargetable
+    {
+    }
+
+    public class BaseTargetSelection
+    {
+    }
+
+    public sealed class TargetStructure : BaseTargetSelection
+    {
+        public List<ITargetable> Candidates = new List<ITargetable>();
+
+        public List<ITargetable> GetRandomList(ScalingInfo scaling) =>
+            new List<ITargetable>(Candidates);
+    }
+
+    public sealed class TargetSelectOptions
+    {
+        public BaseTargetSelection Targeting = new TargetStructure();
+
+        public BaseTargetSelection GetTargeting() => Targeting;
+    }
 }
 
 public sealed class Inventory

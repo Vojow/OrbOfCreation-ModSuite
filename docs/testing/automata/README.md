@@ -15,6 +15,9 @@ or action-family ownership is affected.
   mutation verification, and controls.
 - [Auto Concept](auto-concept.md) — catalog classification, slot policy,
   mastery balancing, drain, and lifecycle behavior.
+- [Auto Items and Auto Scribe](auto-items-scribe.md) — toxicity admission,
+  temporary effects, Scroll throughput, coverage convergence, native item use,
+  and bounded one-shot Scribe production.
 - [Spell leveling](spell-leveling.md) — capability unlocks, single/all modes,
   costs, queueing, and completion semantics.
 - [Automata integration](integration.md) — configuration, coordinator,

@@ -1,7 +1,7 @@
 # Auto Items
 
-> **Lifecycle: Active.** Phases 1-10 and 12-13 are implemented; Phase 11 automated validation is
-> complete. Installed-game interactive validation remains open.
+> **Lifecycle: Active.** Phases 1-16 are implemented through their automated gates.
+> Installed-game journal acceptance and interactive validation remain open.
 
 [Back to plans](README.md) | [Runtime architecture](../runtime-architecture/README.md)
 
@@ -29,14 +29,16 @@ Last updated: **2026-07-30**
 | 13. Thread family extension | **Implemented; interactive behavior gate open** | Threads use the same disabled-by-default exact-item picker and guarded temporary boundary only when native duration and toxicity contracts validate |
 | 14. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Items shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Scribe |
 | 15. Scroll-consumption throughput | **Implemented; validation open** | Verified uses chain after fresh world publication, native-busy polling is bounded at 250 ms, and rejected work retains the configured cooldown |
+| 16. Full test pyramid | **Automated layers complete; runtime gates open** | Pure policy, collector/native-boundary, cross-feature convergence, installed-contract, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
 
 ### Current resume point
 
 - Worktree: `.analysis/worktrees/auto-scribe-plan`
 - Branch: `agent/auto-scribe-plan`
 - Draft PR: #102, stacked on the Auto Items work from draft PR #99.
-- Current task: confirm the installed Scroll-throughput follow-up consumes successive useful
-  Scrolls without an idle one-second gap or a rejected-work loop, and confirm the Auto
+- Current task: install only with explicit authorization, then capture a post-fix journal proving
+  the Scroll-throughput follow-up consumes successive useful Scrolls without an idle one-second
+  gap or a rejected-work loop, and confirm the Auto
   Items/Auto Scribe row survives a supported UI rebuild. Then exercise one
   explicitly allowlisted Fruit, Potion, and Thread on a disposable save and record pending,
   engagement, expiry, fill-to-saturation, partial and complete toxicity recovery, Relic admission
@@ -95,18 +97,23 @@ Last updated: **2026-07-30**
   and reflection failures use one containment policy. The review also fixed temporary-only
   ownership/status, live temporary-cost revalidation, exact per-service evaluation status, and the
   rule that any pending or active temporary use blocks every automated item family.
-- Verification on the current tree: the complete `script/test` gate passes in 36 seconds with
-  1,953 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
+- The feature-owned [Auto Items and Auto Scribe test pyramid](../testing/automata/auto-items-scribe.md)
+  now assigns policy, native-boundary, convergence, installed-contract, retained-journal, and
+  disposable-save evidence to explicit layers. Dump-derived scheduler and mutation regressions are
+  permanent cases rather than one-off observations.
+- Verification on the current tree: the complete `script/test` gate passes in 33 seconds with
+  1,975 ordinary portable tests, 90 profiler tests, and the profiler trace-tool build. All 26
   installed-game contract tests pass against the local Windows Steam assemblies, and the
   real-reference Release build completes with zero warnings and errors. Interactive game
-  validation has not yet covered Threads, the retry fixes, or the new paired quick-control row.
+  validation has not yet covered Threads, the retry/throughput fixes, or the new paired
+  quick-control row.
 - Installed source: clean commit `67ea8214d97d028314369b08e32a611070d46f06` is pushed to draft
   PR #102 and installed. The built and installed DLLs both have SHA-256
   `0AACD74E41405D600FD07D9894912B4BF6C89D899E72D6C202FEEE959A39A1EB`.
   The guarded installer backed up 12 save files to
   `backups/pre-modsuite-install-20260730T113751Z` and the previous DLL to
   `BepInEx/modsuite-backups/pre-modsuite-install-20260730T113751Z`.
-- Next action: run the Phase 11-15 behavior and layout checklists on a disposable save, beginning
+- Next action: run the Phase 11-16 journal and behavior checklists on a disposable save, beginning
   with successive useful Scroll consumption under ample toxicity headroom.
 
 ### Locked decisions

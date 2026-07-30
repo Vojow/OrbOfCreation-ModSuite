@@ -1,11 +1,12 @@
 # Auto Scribe
 
-> **Lifecycle: Live crafting verified; UI and bounded retry build pending install validation.** The audited identity
+> **Lifecycle: Live crafting verified; runtime validation remains open.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
 > Worker-definition and status-publication boundary violations are fixed. The latest retained run
-> proves 164 verified native completions with no Auto Scribe faults. Source also fixes the rejected-work
-> retry cadence and adds the missing gameplay quick control; that build still awaits installation.
+> proves 164 verified native completions with no Auto Scribe faults. Source also fixes the
+> rejected-work retry cadence, external-automation coverage classification, and adds the missing
+> gameplay quick control; those changes still need post-fix runtime evidence.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -27,10 +28,11 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete** | `script/test` passes 1,953 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
+| 9. Automated verification | **Complete** | `script/test` passes 1,975 portable and 90 profile tests; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
 | 10. Interactive game validation | **Core behavior verified; hardening open** | Live evidence proves verified Scribe completions; install the bounded-retry/UI build, confirm cadence, then continue disposable-save lifecycle scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 | 12. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Scribe shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Items |
+| 13. Full test pyramid | **Automated layers complete; runtime gates open** | Direct guarded-adapter, coverage convergence, installed-reflection, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
 
 ### Current resume point
 
@@ -38,13 +40,15 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: launch the installed bounded-retry/Thread and paired quick-control build; confirm
+- Current task: install only with explicit authorization, then launch the bounded-retry,
+  external-automation, Thread, and paired quick-control build; confirm
   Auto Items no longer faults on `TargetUnavailable`, Auto Scribe native rejections
   retry only at the configured evaluation cadence, and the Auto Items/Auto Scribe row renders and
   survives a supported UI rebuild.
-- Current source: clean commit `5698fbc6d55b490b9c122d7f5c19764dfa9c4b12` is pushed to draft
-  PR #102 and installed. The built and installed DLLs both have SHA-256
-  `340FE12EF23F1C0B11E1C4B012D623789EC5775EF797A2867543C6E39B3D7C4E`.
+- Installed source remains clean commit `67ea8214d97d028314369b08e32a611070d46f06`,
+  pushed to draft PR #102. The installed DLL has SHA-256
+  `0AACD74E41405D600FD07D9894912B4BF6C89D899E72D6C202FEEE959A39A1EB`;
+  the current test-pyramid changes have not been installed.
 - The guarded installer confirmed the game was closed, reran all automated gates, backed up 12
   save files to `backups/pre-modsuite-install-20260730T112441Z`, and backed up the previous DLL to
   `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
@@ -140,7 +144,15 @@ Last updated: **2026-07-30**
   Mentor/Harvest, Concept/Cast, and Buy/STOP rows, reuse the audited Alchemy and Scholar icons,
   expose runtime health in native tooltips, and participate in emergency-stop resume preview and
   quick-strip diagnostics.
-- Current-tree verification passes the complete `script/test` gate in 36 seconds: 1,953 ordinary
+- The feature-owned [Auto Items and Auto Scribe test pyramid](../testing/automata/auto-items-scribe.md)
+  now covers policy, exact native boundaries, service coordination, installed reflection,
+  retained-journal acceptance, and disposable-save behavior. Direct Auto Scribe adapter tests pin
+  lifecycle, ownership, dependency, queue, live-race, postcondition, and quarantine behavior.
+- Those tests exposed and fixed a coordination defect: automatic Scribe work was included in
+  ordinary queued supply, making `ExternallyProducing` unreachable. Manual one-shot work now
+  reserves supply; unexpired player-owned automatic work is reported separately and suppresses
+  competing suite production.
+- Current-tree verification passes the complete `script/test` gate in 33 seconds: 1,975 ordinary
   portable tests, 90 profiler tests, and the profiler trace-tool build. All 26 installed-game
   contracts and the zero-warning real-reference Release build also pass.
 
@@ -370,9 +382,9 @@ user-facing labels.
 
 ## Remaining delivery
 
-1. Run the complete portable gate on the current tree and keep the draft PR green.
-2. With explicit user authorization, install the reviewed build and perform the disposable-save
-   scenarios below.
+1. Keep the complete portable and installed-contract gates green on every behavior change.
+2. With explicit user authorization, install the reviewed build, capture the P4 journal criteria,
+   and perform the P5 disposable-save scenarios below.
 3. Record observed native behavior, fix any contract disagreement, and only then move the feature
    from draft/validation status toward release.
 

@@ -158,7 +158,7 @@ internal static class ScrollCoveragePlanner
         var covered = Math.Max(0, targets - uncovered);
         var owned = WorldConsumableCountLookup.CountAtOrAbove(
             world.ConsumableCounts, role.Scroll.Uuid, targetLevel);
-        var queued = WorldScribeLookup.CountWorkAtOrAbove(
+        var queued = CountManualWorkAtOrAbove(
             world.ScribeWork, recipeId, targetLevel);
         var pending = CountPendingUsesAtOrAbove(
             world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
@@ -247,6 +247,24 @@ internal static class ScrollCoveragePlanner
                 rows[index].IsAutomatic &&
                 !rows[index].IsExpired)
                 count++;
+        return count;
+    }
+
+    private static int CountManualWorkAtOrAbove(
+        PublicationTable<WorldScribeWork> work,
+        Guid recipeId,
+        int level)
+    {
+        var count = 0;
+        var rows = work.AsSpan();
+        for (var index = 0; index < rows.Length; index++)
+            if (rows[index].RecipeId == recipeId &&
+                rows[index].Level >= level &&
+                !rows[index].IsAutomatic &&
+                !rows[index].IsExpired)
+            {
+                count++;
+            }
         return count;
     }
 

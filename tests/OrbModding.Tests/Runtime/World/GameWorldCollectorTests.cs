@@ -2195,6 +2195,112 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(41, state.TemporarySubmittedFromFrame);
     }
 
+    [Fact]
+    public void CommittedScrollChainContinuesAtNonZeroToxicityWithoutCooldown()
+    {
+        var toxicity = AddToxicity(rawHeadroom: 90d);
+        var first = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            identity: Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        var second = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            identity: Guid.Parse("00000000-0000-0000-0000-000000000002"));
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+
+        var firstAction = Assert.Single(PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            out _));
+        Assert.Equal(first.Identity, firstAction.ItemId);
+
+        first.quantity = 0;
+        toxicity.Quantity = new BigDouble(89d);
+        Assert.True(collector.Collect().IsComplete);
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+                EvaluationInterval =
+                    MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)),
+            },
+        };
+        var receipt = BatchReceipt.Completed(
+            CycleContext().Identity,
+            new BatchId(1),
+            actionCount: 1,
+            new ServiceNativeCallTotals(2, 1, 1),
+            new MonotonicTimestamp(2));
+        var store = new ReusableActionStore<AutoItemsCycleAction>();
+        store.BeginWrite();
+
+        var wake = AutoItemsCycleEvaluator.Evaluate(
+            collector.Build(),
+            in config,
+            CycleContext(receipt),
+            ref state,
+            new ServiceActionWriter<AutoItemsCycleAction>(store),
+            temporaryAllowlist: null,
+            autoScribeIdentityProfile: null,
+            out var metrics);
+
+        Assert.Equal(1, store.Count);
+        Assert.Equal(second.Identity, store.GetCurrent().ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Scroll, metrics.Kind);
+        Assert.Equal(WakePolicy.Immediate, wake);
+        Assert.False(state.RecoveryWaitActive);
+    }
+
+    [Fact]
+    public void NonZeroToxicityWithEnoughHeadroomNeverStartsRecoveryWait()
+    {
+        AddToxicity(rawHeadroom: 70d);
+        var scroll = AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            toxicityCost: 20d);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+
+        var action = Assert.Single(PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            out var metrics));
+
+        Assert.Equal(scroll.Identity, action.ItemId);
+        Assert.Equal(AutoItemsDecisionKind.Scroll, metrics.Kind);
+        Assert.False(state.RecoveryWaitActive);
+    }
+
+    [Fact]
+    public void ItemTooToxicForFullCapacityDoesNotCreateAnUnreachableRecoveryWait()
+    {
+        AddToxicity(rawHeadroom: 0d);
+        AddConsumable(
+            KnownEntities.ConsumableScrollType.Uuid,
+            canBeRandomized: true,
+            toxicityCost: 101d);
+        var collector = Collector();
+        Assert.True(collector.Collect().IsComplete);
+        var state = AutoItemsCycleState.Create(new LifecycleGeneration(1));
+
+        var actions = PlanAutoItemsWithState(
+            collector.Build(),
+            ref state,
+            out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(AutoItemsDecisionKind.Idle, metrics.Kind);
+        Assert.False(state.RecoveryWaitActive);
+    }
+
     private static FakeResource AddToxicity(double rawHeadroom)
     {
         var resource = new FakeResource

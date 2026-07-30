@@ -38,5 +38,11 @@ Auto Items remains the only Scroll consumer. Its shared-plan admission and immed
 preflight block a Scroll when no useful target remains and reopen it after a later world generation
 finds a candidate.
 
+Manual one-shot Scribe queue entries reserve matching deficits as queued supply. Player-owned
+automatic entries are classified separately as external production pressure: they suppress a
+competing suite craft without being misreported as a completed coverage reservation.
+
 See the [active validation plan](../../docs/plans/auto-scribe.md) and
-[native evidence](../../docs/reverse-engineering/auto-scribe-native-pipeline.md).
+[native evidence](../../docs/reverse-engineering/auto-scribe-native-pipeline.md). The maintained
+[Auto Items and Auto Scribe test pyramid](../../docs/testing/automata/auto-items-scribe.md) maps
+portable, installed-contract, journal, and Unity evidence.

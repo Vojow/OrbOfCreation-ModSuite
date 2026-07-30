@@ -95,6 +95,21 @@ Enable one capability at a time on a disposable save. Exercise its normal action
 - Confirm concept assignment does not churn compatible slots.
 - Confirm Spell Leveling remains governed by Auto Buy configuration and uses the audited native purchase behavior.
 
+### Auto Items and Auto Scribe
+
+- Begin with several useful Scrolls and ample toxicity headroom. Confirm native
+  serial consumption continues without the idle evaluation delay.
+- Fill toxicity until the next useful item cannot fit, observe partial recovery
+  without resumption, then exact-zero recovery and resumption.
+- Confirm Relic priority at both zero and nonzero toxicity when headroom fits.
+- Observe one missing-coverage Scribe craft progress through queue, stock,
+  pending Scroll use, native enchantment replacement, and covered state without
+  duplicate production.
+- Exercise a higher unlocked Scribe level, a newly valid structure, manual
+  Scribe work, player-owned native automation, and a manual Scroll race.
+- Run the exact-item Fruit, Potion, and Thread pending/engaged/expired cases
+  separately before combining them with Scroll production.
+
 ### Orb Mentor
 
 - Test spells, artifacts, and alchemy independently before combining them.
