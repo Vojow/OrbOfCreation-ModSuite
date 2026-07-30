@@ -1,11 +1,11 @@
 # Auto Scribe
 
-> **Lifecycle: Shared-host startup fix implemented; verification and reinstall pending.** The audited identity
+> **Lifecycle: Corrected release installed; fresh-launch validation pending.** The audited identity
 > facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
 > configuration, diagnostics, and semantic role picker are implemented. The Mods rail now renders.
-> A later launch exposed worker-definition boundary violations in both new services; source now
-> uses lifecycle-owned receipt state and audited immutable role storage, pending complete gates and
-> a safe reinstall after the game closes.
+> Worker-definition boundary violations found on a later launch are fixed through lifecycle-owned
+> receipt state and audited immutable role storage. All gates pass and the clean build is installed
+> with verified rollback backups.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -28,7 +28,7 @@ Last updated: **2026-07-30**
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
 | 9. Automated verification | **Complete after startup fix** | `script/test` passes 1,942 portable and 90 profile tests; both production-worker separation audits and all 26 installed game-contract tests pass; the real-reference Release build has zero warnings and errors |
-| 10. Interactive game validation | **Blocked on reinstall** | Install only after the game closes, confirm a healthy ServiceCycle host, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
+| 10. Interactive game validation | **Ready** | Confirm a healthy ServiceCycle host on a fresh launch, then run disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
@@ -37,9 +37,8 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: finish full verification of the shared-host startup fix. After the game closes,
-  install the reviewed DLL, relaunch, and confirm healthy Auto Items and Auto Scribe registrations
-  before running the interactive validation outline on a disposable save.
+- Current task: relaunch and confirm healthy Auto Items and Auto Scribe registrations on the
+  corrected installed DLL before running the interactive validation outline on a disposable save.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.
@@ -92,9 +91,12 @@ Last updated: **2026-07-30**
   production-worker separation validator used by shared-host registration for both services.
 - The post-fix current tree passes 1,942 ordinary portable tests, 90 profile tests, all 26
   installed-game contracts, and the installed-reference Release build with zero warnings and
-  errors. The reviewed Release DLL SHA-256 is
-  `45a8896fb952f9810fffc75100d19d9f6482876b5007bdd2857620f1eea692dd`;
-  it has not yet replaced the installed DLL.
+  errors. Clean commit `0c10a1cffa27bbf49642295b7c295ce82c17d759` is installed with
+  SHA-256 `4c3e72992f9ebc16483495ff386063092e9dc500a9be429c8f7fe7e912299cdc`;
+  the installed and built hashes match.
+- The installer created the latest rollback checkpoint after confirming the game was closed:
+  - save copies: `backups/pre-modsuite-install-20260730T101946Z` (12 files);
+  - previous DLL: `BepInEx/modsuite-backups/pre-modsuite-install-20260730T101946Z` (1 file).
 
 ## Goal
 
