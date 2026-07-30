@@ -49,6 +49,12 @@ The findings come from assembly metadata and selected IL method bodies read with
   mechanics, asynchronous item submission, native random targeting, and the evidence still required
   before Scroll or Relic mutation can ship.
 
+## Auto Scribe dossier
+
+- [Native Scribe pipeline](auto-scribe-native-pipeline.md) - Levelled Scroll recipes, native
+  automation instances, structure enchantment replacement, target selection, and the compatibility
+  and serialized evidence required before implementation.
+
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 
 ## Important discovered identifier
