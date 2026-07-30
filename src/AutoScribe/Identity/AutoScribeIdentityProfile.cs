@@ -27,13 +27,17 @@ internal readonly struct AutoScribeRoleDescriptor
         string displayName,
         in AutoScribeNativeIdentity scroll,
         in AutoScribeNativeIdentity enchantment,
-        AutoScribeNativeIdentity? recipe)
+        AutoScribeNativeIdentity? recipe,
+        int craftCostOrder)
     {
+        if (craftCostOrder < 0)
+            throw new ArgumentOutOfRangeException(nameof(craftCostOrder));
         Key = key;
         DisplayName = displayName ?? string.Empty;
         Scroll = scroll;
         Enchantment = enchantment;
         Recipe = recipe;
+        CraftCostOrder = craftCostOrder;
     }
 
     internal ScrollRoleKey Key { get; }
@@ -41,6 +45,7 @@ internal readonly struct AutoScribeRoleDescriptor
     internal AutoScribeNativeIdentity Scroll { get; }
     internal AutoScribeNativeIdentity Enchantment { get; }
     internal AutoScribeNativeIdentity? Recipe { get; }
+    internal int CraftCostOrder { get; }
     internal bool IsProducible => Recipe.HasValue;
 }
 
@@ -64,6 +69,20 @@ internal sealed class AutoScribeIdentityProfile
         if (roles is null) throw new ArgumentNullException(nameof(roles));
         if (roles.Length == 0)
             throw new ArgumentException("At least one Scroll role is required.", nameof(roles));
+        for (var index = 0; index < roles.Length; index++)
+        {
+            if (!roles[index].IsProducible) continue;
+            for (var previous = 0; previous < index; previous++)
+            {
+                if (roles[previous].IsProducible &&
+                    roles[previous].CraftCostOrder == roles[index].CraftCostOrder)
+                {
+                    throw new ArgumentException(
+                        "Producible Scroll roles require unique craft-cost ranks.",
+                        nameof(roles));
+                }
+            }
+        }
         Roles = PublicationTable<AutoScribeRoleDescriptor>.Create(roles, roles.Length);
     }
 
@@ -142,25 +161,29 @@ internal sealed class AutoScribeIdentityCatalog : IAutoScribeIdentityCatalog
                     "Advancement",
                     KnownEntities.ScrollAdvancement,
                     KnownEntities.EnchantAdvancement,
-                    KnownEntities.CraftScrollAdvancement),
+                    KnownEntities.CraftScrollAdvancement,
+                    craftCostOrder: 0),
                 Role(
                     "scribe.development",
                     "Development",
                     KnownEntities.ScrollDevelopment,
                     KnownEntities.EnchantDevelopment,
-                    KnownEntities.CraftScrollDevelopment),
+                    KnownEntities.CraftScrollDevelopment,
+                    craftCostOrder: 4),
                 Role(
                     "scribe.echo",
                     "Echoing",
                     KnownEntities.ScrollEcho,
                     KnownEntities.EnchantEcho,
-                    KnownEntities.CraftScrollEcho),
+                    KnownEntities.CraftScrollEcho,
+                    craftCostOrder: 5),
                 Role(
                     "scribe.excellence",
                     "Excellence",
                     KnownEntities.ScrollExcellence,
                     KnownEntities.EnchantExcellence,
-                    KnownEntities.CraftScrollExcellence),
+                    KnownEntities.CraftScrollExcellence,
+                    craftCostOrder: 3),
                 CoverageOnly(
                     "scribe.investment",
                     "Investment",
@@ -171,13 +194,15 @@ internal sealed class AutoScribeIdentityCatalog : IAutoScribeIdentityCatalog
                     "Learning",
                     KnownEntities.ScrollLearning,
                     KnownEntities.EnchantLearning,
-                    KnownEntities.CraftScrollLearning),
+                    KnownEntities.CraftScrollLearning,
+                    craftCostOrder: 2),
                 Role(
                     "scribe.power",
                     "Power",
                     KnownEntities.ScrollPower,
                     KnownEntities.EnchantPower,
-                    KnownEntities.CraftScrollPower),
+                    KnownEntities.CraftScrollPower,
+                    craftCostOrder: 1),
                 CoverageOnly(
                     "scribe.speed",
                     "Speed",
@@ -191,7 +216,8 @@ internal sealed class AutoScribeIdentityCatalog : IAutoScribeIdentityCatalog
         string displayName,
         KnownEntity<ConsumableSOContract> scroll,
         KnownEntity<EnchantmentSOContract> enchantment,
-        KnownEntity<CraftingRecipeSOContract> recipe)
+        KnownEntity<CraftingRecipeSOContract> recipe,
+        int craftCostOrder)
     {
         var scrollIdentity = Identity(scroll);
         var enchantmentIdentity = Identity(enchantment);
@@ -201,7 +227,8 @@ internal sealed class AutoScribeIdentityCatalog : IAutoScribeIdentityCatalog
             displayName,
             in scrollIdentity,
             in enchantmentIdentity,
-            recipeIdentity);
+            recipeIdentity,
+            craftCostOrder);
     }
 
     private static AutoScribeRoleDescriptor CoverageOnly(
@@ -217,7 +244,8 @@ internal sealed class AutoScribeIdentityCatalog : IAutoScribeIdentityCatalog
             displayName,
             in scrollIdentity,
             in enchantmentIdentity,
-            recipe: null);
+            recipe: null,
+            craftCostOrder: int.MaxValue);
     }
 
     private static AutoScribeNativeIdentity Identity<T>(KnownEntity<T> entity) =>

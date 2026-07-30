@@ -28,12 +28,13 @@ Last updated: **2026-07-30**
 | 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
 | 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
 | 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
-| 9. Automated verification | **Complete** | The portable gate constituents pass 1,992 ordinary and 90 profile tests plus the profiler-tool build; Release production line coverage was last measured at 74.53%; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
+| 9. Automated verification | **Complete** | The portable gate constituents pass 1,994 ordinary and 90 profile tests plus the profiler-tool build; Release production line coverage was last measured at 74.53%; all 26 installed game-contract tests and the zero-warning real-reference Release build pass |
 | 10. Interactive game validation | **Core behavior verified; hardening open** | Live evidence proves verified Scribe completions; install the bounded-retry/UI build, confirm cadence, then continue disposable-save lifecycle scenarios |
 | 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 | 12. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Scribe shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Items |
 | 13. Full test pyramid | **Automated layers complete; runtime gates open** | Direct guarded-adapter, coverage convergence, installed-reflection, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
-| 14. Carry-fill and live progression replanning | **Implemented; runtime validation open** | Locked roles remain dormant until visible, every fresh publication observes new roles and level ceilings, the native boundary chooses the highest affordable unlocked level, and stronger stock replaces weaker stock up to the native carry limit |
+| 14. Carry-fill and live progression replanning | **Implemented; runtime validation open** | Locked roles remain dormant until visible, every fresh publication observes new roles and level ceilings, the native boundary advances to the highest affordable level, and stronger stock replaces weaker stock up to the native carry limit |
+| 15. Scribe ceiling progression and cost order | **Implemented; runtime validation open** | A needed craft probes above `maxStartingLevel`, native purchase raises the ceiling, and the baseline facade prioritizes visible enabled recipes from cheapest to most expensive |
 
 ### Current resume point
 
@@ -41,12 +42,14 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: review and verify the carry-fill and live progression follow-up. The 14:38 dump
-  proves the planner already observed target-level changes `12 -> 15 -> 22 -> 28 -> 33` and a
-  deficient-role change `1 -> 4`; the remaining pre-fix failures were native-boundary rejections.
-  Source now treats invisible future roles as dormant, chooses the highest affordable level at
-  execution, and fills same-or-higher stock to the native carry cap. Automated verification is
-  complete; installation and live validation still require explicit authorization.
+- Current task: verify Scribe ceiling progression and cost-order priority. Native decompilation
+  confirms that `PurchaseQuantity(purchasedQuantity, previousQuantity)` raises
+  `maxStartingLevel` to their sum and that completed output raises the Scroll's `maxCreatedLv`.
+  Source now probes above the live ceiling for the highest affordable level, falls back to useful
+  lower production when the frontier is unaffordable, and chooses the cheapest enabled visible
+  recipe through the baseline identity facade. The complete portable gate passes 1,994 ordinary
+  and 90 profile tests, all 26 installed contracts pass, and the real-reference Release build has
+  zero warnings and errors. Installation and live validation still require explicit authorization.
 - Installed source remains clean commit `67ea8214d97d028314369b08e32a611070d46f06`,
   pushed to draft PR #102. The installed DLL has SHA-256
   `0AACD74E41405D600FD07D9894912B4BF6C89D899E72D6C202FEEE959A39A1EB`;
@@ -154,7 +157,7 @@ Last updated: **2026-07-30**
   ordinary queued supply, making `ExternallyProducing` unreachable. Manual one-shot work now
   reserves supply; unexpired player-owned automatic work is reported separately and suppresses
   competing suite production.
-- Current-tree verification passes the portable gate's three constituent commands: 1,992 ordinary
+- Current-tree verification passes the portable gate's three constituent commands: 1,994 ordinary
   tests, 90 profiler tests, and the profiler trace-tool build. Release production line coverage
   was last measured at 74.53% against the 73.40% floor. All 26 installed-game contracts, including
   the newly declared carry-cap and Scribe-level members, and the zero-warning real-reference
@@ -239,11 +242,13 @@ supply = owned Scroll counts at level >= L + matching queued crafts and pending 
 deficit = max(desired supply - supply, 0)
 ```
 
-One bounded craft is eligible only while `deficit > 0`. At the native boundary the requested
-ceiling is clamped to the live unlocked maximum and reduced to the highest currently affordable
-level. The game replaces weaker carried Scrolls when a stronger result arrives at the carry limit.
-A fresh snapshot recomputes demand after each craft, use, recipe unlock, structure unlock, level
-unlock, save/load, reset, or NG+ transition.
+One bounded craft is eligible only while `deficit > 0`. At the native boundary the live unlocked
+ceiling is re-read and used as the start of a bounded monotonic affordability probe. If a higher
+level is affordable, the one-shot purchase queues that level and native `PurchaseQuantity` raises
+`maxStartingLevel`; otherwise production falls back to the highest affordable useful level. The
+game replaces weaker carried Scrolls when a stronger result arrives at the carry limit. A fresh
+snapshot recomputes demand after each craft, use, recipe unlock, structure unlock, level unlock,
+save/load, reset, or NG+ transition.
 
 ## Identity facade
 
@@ -272,9 +277,11 @@ configuration, or Auto Items integration. An absent, ambiguous, or mismatched pr
 
 1. **Separate stacked feature.** Auto Scribe is an ordinary ServiceCycle service and a separate
    reviewable PR stacked on Auto Items. It does not enlarge Auto Items into a crafting service.
-2. **Highest currently affordable unlocked level.** The ceiling is the exact native
-   `ScribeCrafting.maxStartingLevel`; the native boundary chooses the highest affordable level at
-   or below it. The player's selected starting level and upgrade names are not policy inputs.
+2. **Advance the native Scribe ceiling.** The exact native
+   `ScribeCrafting.maxStartingLevel` is the current coverage target, not a production cap. A needed
+   craft probes above it and queues the highest affordable level. Native `PurchaseQuantity` then
+   raises the shared ceiling. If no frontier advance is affordable, the boundary falls back to the
+   highest affordable useful level. The player's selected starting level is not a policy input.
 3. **Complete native catalog, not a screen list.** Every audited recipe registered to the exact
    Scribe type is considered. A role is supported only when its recipe, Scroll family, structure
    target, and enchantment relationship form one accepted graph. Names are diagnostics only.
@@ -307,9 +314,10 @@ configuration, or Auto Items integration. An absent, ambiguous, or mismatched pr
 
 ## Implemented rulings
 
-1. **Deterministic selection.** The worker selects the largest enabled deficit, then stable
-   `ScrollRoleKey`. Disabled roles cannot starve enabled roles. The bounded one-action cycle and
-   fresh snapshot after every action provide natural rotation as deficits fall.
+1. **Deterministic cheapest-first selection.** The worker selects the enabled visible deficit with
+   the lowest semantic craft-cost rank, then stable `ScrollRoleKey`. The rank is stored in the
+   baseline identity facade rather than inferred from UUIDs or display names. Disabled or locked
+   cheaper roles cannot starve a later enabled role.
 2. **External automation accounting.** Active one-shot work reserves supply. Matching automatic
    work suppresses competing production and is reported as external production; Auto Scribe never
    creates or edits the player's persistent automatic entries.

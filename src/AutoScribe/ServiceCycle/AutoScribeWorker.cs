@@ -120,8 +120,8 @@ internal sealed class AutoScribeWorker :
             if (!candidate.ShouldProduce || !RoleEnabled(configured, candidate.Role))
                 continue;
             if (!found ||
-                candidate.Deficit > selected.Deficit ||
-                (candidate.Deficit == selected.Deficit &&
+                candidate.CraftCostOrder < selected.CraftCostOrder ||
+                (candidate.CraftCostOrder == selected.CraftCostOrder &&
                  candidate.Role.CompareTo(selected.Role) < 0))
             {
                 selected = candidate;

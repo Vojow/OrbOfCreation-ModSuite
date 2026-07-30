@@ -38,11 +38,13 @@ the model rather than being normalized away.
   verified chains resume after a fresh world publication and poll native-busy
   state at no more than 250 ms.
 - Auto Scribe re-reads the native maximum starting level and affordability at
-  every mutation boundary, then crafts the highest currently affordable level
-  up to that maximum. It fills each unlocked Scroll family to its native carry
-  cap even after current targets are covered, so stronger future Scrolls can
-  replace weaker stock. It reserves same-or-higher stock, queued work, and
-  pending use, and never edits persistent player automation.
+  every mutation boundary, probes above that frontier, and crafts the highest
+  currently affordable level. Native purchase advances the shared ceiling; an
+  unaffordable frontier falls back to useful lower production. It tries
+  deficient visible recipes in semantic cheapest-to-most-expensive order and
+  fills each unlocked Scroll family to its native carry cap, so stronger future
+  Scrolls can replace weaker stock. It reserves same-or-higher stock, queued
+  work, and pending use, and never edits persistent player automation.
 - Manual one-shot Scribe work is queued supply. Player-owned automatic work is
   external production pressure: it suppresses competing production but remains
   reported separately.
@@ -94,7 +96,7 @@ The retained 2026-07-30 run produced five concrete regression classes:
 | Auto Scribe completed 164/164 mutations with 492 native calls | one healthy queue action commits one mutation with the expected three-call evidence |
 | Auto Items waited a full idle interval between healthy Scrolls | a committed Scroll chain continues immediately after fresh publication; native-busy polling is bounded at 250 ms |
 | A Scroll backlog outgrew serial single-item submissions | one native submission reserves the largest safe batch, restores the player's multi-buy setting, and projects the requested quantity into the journal |
-| Newly unlocked Scroll recipes and higher Scribe levels were missed | invisible recipes are dormant rather than degraded; every fresh publication reopens newly visible roles and the native boundary re-reads the maximum and highest affordable level |
+| Newly unlocked Scroll recipes and higher Scribe levels were missed | invisible recipes are dormant rather than degraded; every fresh publication reopens newly visible roles, while the native boundary probes above the current maximum and cheapest-first selection drives ceiling progression |
 | Lifecycle readiness and the shared host were previously unavailable | stale epoch, lost ownership, lost Scroll consumption, and lost capture permit all reject before a native call |
 
 These are permanent regression cases. A future dump can add cases but cannot

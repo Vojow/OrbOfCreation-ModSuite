@@ -51,7 +51,10 @@ internal sealed class AutoScribeNativeAdapter
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             var liveMaximumLevel = ReadMaximumStartingLevel(recipe!);
             var requestedLevel = Math.Min(action.Level, liveMaximumLevel);
-            var affordableLevel = FindHighestAffordableLevel(recipe!, requestedLevel);
+            var affordableLevel = FindHighestAffordableLevel(
+                recipe!,
+                requestedLevel,
+                liveMaximumLevel);
             if (affordableLevel <= 0)
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             if (!AutoItemsScrollTargetPreflight.TryCountValidTargetsAtLevel(
@@ -146,7 +149,40 @@ internal sealed class AutoScribeNativeAdapter
                 "The Scribe maximum starting level changed type.");
     }
 
-    private static int FindHighestAffordableLevel(object recipe, int maximum)
+    private static int FindHighestAffordableLevel(
+        object recipe,
+        int requestedLevel,
+        int unlockedLevel)
+    {
+        var affordableFrontier = FindHighestAffordableAtOrBelow(
+            recipe,
+            Math.Max(requestedLevel, unlockedLevel));
+        if (affordableFrontier <= 0)
+            return 0;
+
+        var high = Math.Max(affordableFrontier, unlockedLevel);
+        if (!CanBuyAt(recipe, high))
+            return affordableFrontier;
+        if (high == int.MaxValue)
+            return high;
+
+        // Audited levelled Scribe costs grow monotonically. Bracket the first
+        // unaffordable level, then refine without an unbounded linear scan.
+        var low = high;
+        while (high < int.MaxValue)
+        {
+            var next = high > int.MaxValue / 2
+                ? int.MaxValue
+                : high * 2;
+            if (!CanBuyAt(recipe, next))
+                return FindHighestAffordableBetween(recipe, low, next - 1);
+            low = next;
+            high = next;
+        }
+        return high;
+    }
+
+    private static int FindHighestAffordableAtOrBelow(object recipe, int maximum)
     {
         var low = 1;
         var high = maximum;
@@ -154,11 +190,7 @@ internal sealed class AutoScribeNativeAdapter
         while (low <= high)
         {
             var level = low + ((high - low) / 2);
-            if (Invoke<bool>(
-                    recipe,
-                    "CanBuyAt",
-                    typeof(BigDouble),
-                    new BigDouble(level)))
+            if (CanBuyAt(recipe, level))
             {
                 found = level;
                 low = level + 1;
@@ -170,6 +202,37 @@ internal sealed class AutoScribeNativeAdapter
         }
         return found;
     }
+
+    private static int FindHighestAffordableBetween(
+        object recipe,
+        int affordable,
+        int unaffordable)
+    {
+        var low = affordable + 1;
+        var high = unaffordable;
+        var found = affordable;
+        while (low <= high)
+        {
+            var level = low + ((high - low) / 2);
+            if (CanBuyAt(recipe, level))
+            {
+                found = level;
+                low = level + 1;
+            }
+            else
+            {
+                high = level - 1;
+            }
+        }
+        return found;
+    }
+
+    private static bool CanBuyAt(object recipe, int level) =>
+        Invoke<bool>(
+            recipe,
+            "CanBuyAt",
+            typeof(BigDouble),
+            new BigDouble(level));
 
     private bool TryResolve(Guid id, string typeName, out object? value)
     {

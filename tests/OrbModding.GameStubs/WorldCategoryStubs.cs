@@ -130,8 +130,13 @@ public sealed class CraftingRecipeSO : IdScriptableObject
         BuyAllowed && quantity > BigDouble.Zero &&
         quantity.ToDouble() <= MaximumAffordableLevel;
     public CraftingRecipeTypeSO GetMainType() => MainType;
-    public void PurchaseQuantity(BigDouble quantity, BigDouble previousQuantity) =>
+    public void PurchaseQuantity(BigDouble quantity, BigDouble previousQuantity)
+    {
         PurchaseCalls++;
+        MainType.maxStartingLevel = Math.Max(
+            MainType.maxStartingLevel,
+            quantity.ToInt() + previousQuantity.ToInt());
+    }
 }
 
 public sealed class CraftingInstanceListVariable : IdScriptableObject

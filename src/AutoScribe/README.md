@@ -1,15 +1,16 @@
 # Auto Scribe
 
 Auto Scribe keeps the six audited producible Scroll roles supplied at the strongest currently
-affordable unlocked Scribe level, replacing weaker stock until the game's native per-item carry
-limit is filled. It is disabled by default and runs only while Auto Items Scroll use is active and
-healthy.
+affordable Scribe level, replacing weaker stock until the game's native per-item carry limit is
+filled. Each required craft first probes above the current unlocked ceiling so native Scribe
+progression can advance. It is disabled by default and runs only while Auto Items Scroll use is
+active and healthy.
 
 ## Responsibility boundaries
 
-- `Identity` owns the baseline-specific UUID plus expected-type facade. Policy, configuration, and
-  normal UI use stable semantic `ScrollRoleKey` values. Worker-visible roles are copied into
-  Common's audited immutable publication table.
+- `Identity` owns the baseline-specific UUID plus expected-type facade and the audited semantic
+  craft-cost order. Policy, configuration, and normal UI use stable `ScrollRoleKey` values.
+  Worker-visible roles are copied into Common's audited immutable publication table.
 - `Coverage` owns the native-free plan shared by Auto Scribe production and Auto Items Scroll-use
   admission.
 - shared world readers publish levelled inventory, pending uses, recipes, target evidence,
@@ -33,8 +34,10 @@ healthy.
 Unknown baseline identity, incomplete target evidence, dependency loss, action-family conflict,
 stale lifecycle, missing queue room, failed affordability, or ambiguous postconditions reject work.
 Locked recipe roles are dormant rather than degraded and are reconsidered from every fresh world
-publication. The native adapter caps a planned level to the live unlocked maximum and selects the
-highest affordable level without changing the player's manual starting-level selector.
+publication. The native adapter re-reads the live unlocked maximum, probes monotonically for the
+highest affordable level above it, and falls back below the frontier when progression is not yet
+affordable. The cheapest enabled visible recipe is tried first. This advances native
+`maxStartingLevel` without changing the player's manual starting-level selector.
 Auto Scribe does not write enchantments, invoke Scroll consumption, edit persistent automatic
 Scribe entries, change the player's selected Scribe level, discard inventory, or edit saves.
 

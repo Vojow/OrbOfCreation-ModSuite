@@ -35,7 +35,12 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
             new ScrollRoleKey("scribe.advancement"),
             out var role));
         _recipe = Register(
-            new CraftingRecipeSO { visible = true, useQuantityAsLevel = true },
+            new CraftingRecipeSO
+            {
+                visible = true,
+                useQuantityAsLevel = true,
+                MaximumAffordableLevel = 12,
+            },
             role.Recipe!.Value.Uuid);
         _scroll = Register(new ConsumableSO { visible = true }, role.Scroll.Uuid);
         _active = Register(
@@ -85,7 +90,20 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
     }
 
     [Fact]
-    public void SubmissionUsesHighestCurrentlyAffordableUnlockedLevel()
+    public void SubmissionAdvancesToHighestAffordableLevelBeyondUnlockedFrontier()
+    {
+        _recipe.MainType.maxStartingLevel = 12;
+        _recipe.MaximumAffordableLevel = 17;
+
+        var result = Execute();
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(17d, Assert.Single(_active.value).Quantity.ToDouble());
+        Assert.Equal(17, _recipe.MainType.maxStartingLevel);
+    }
+
+    [Fact]
+    public void SubmissionFallsBackBelowFrontierWhenFrontierIsNotAffordable()
     {
         _recipe.MainType.maxStartingLevel = 12;
         _recipe.MaximumAffordableLevel = 7;
@@ -94,6 +112,7 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
 
         Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
         Assert.Equal(7d, Assert.Single(_active.value).Quantity.ToDouble());
+        Assert.Equal(12, _recipe.MainType.maxStartingLevel);
     }
 
     [Fact]

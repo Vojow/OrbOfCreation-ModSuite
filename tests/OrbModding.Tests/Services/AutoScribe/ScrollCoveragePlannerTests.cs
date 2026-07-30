@@ -186,8 +186,10 @@ public sealed class ScrollCoveragePlannerTests
     [Fact]
     public void DisabledHighestDeficitDoesNotStarveAnEnabledRole()
     {
-        var disabled = Production("scribe.advancement", deficit: 4);
-        var enabled = Production("scribe.power", deficit: 1);
+        var disabled = Production(
+            "scribe.advancement", deficit: 4, craftCostOrder: 0);
+        var enabled = Production(
+            "scribe.power", deficit: 1, craftCostOrder: 5);
         var plan = new ScrollCoveragePlan(
             frame: 8,
             epoch: 2,
@@ -198,6 +200,25 @@ public sealed class ScrollCoveragePlannerTests
             "scribe.power",
             out var selected));
         Assert.Equal(new ScrollRoleKey("scribe.power"), selected.Role);
+    }
+
+    [Fact]
+    public void CheapestEnabledRecipeDrivesProgressionBeforeLargerDeficits()
+    {
+        var cheapest = Production(
+            "scribe.advancement", deficit: 1, craftCostOrder: 0);
+        var expensive = Production(
+            "scribe.power", deficit: 5, craftCostOrder: 5);
+        var plan = new ScrollCoveragePlan(
+            frame: 8,
+            epoch: 2,
+            new[] { expensive, cheapest });
+
+        Assert.True(AutoScribeWorker.TryChooseEnabledProduction(
+            plan,
+            configured: string.Empty,
+            out var selected));
+        Assert.Equal(new ScrollRoleKey("scribe.advancement"), selected.Role);
     }
 
     [Fact]
@@ -481,13 +502,17 @@ public sealed class ScrollCoveragePlannerTests
         return role;
     }
 
-    private static ScrollRoleCoverage Production(string role, int deficit) =>
+    private static ScrollRoleCoverage Production(
+        string role,
+        int deficit,
+        int craftCostOrder) =>
         new(
             new ScrollRoleKey(role),
             role,
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
+            CraftCostOrder: craftCostOrder,
             TargetLevel: 12,
             ValidTargets: deficit,
             CoveredTargets: 0,

@@ -28,6 +28,7 @@ internal readonly record struct ScrollRoleCoverage(
     Guid ScrollId,
     Guid EnchantmentId,
     Guid RecipeId,
+    int CraftCostOrder,
     int TargetLevel,
     int ValidTargets,
     int CoveredTargets,
@@ -78,8 +79,8 @@ internal sealed class ScrollCoveragePlan
             var candidate = Roles[index];
             if (!candidate.ShouldProduce) continue;
             if (!found ||
-                candidate.Deficit > coverage.Deficit ||
-                (candidate.Deficit == coverage.Deficit &&
+                candidate.CraftCostOrder < coverage.CraftCostOrder ||
+                (candidate.CraftCostOrder == coverage.CraftCostOrder &&
                  candidate.Role.CompareTo(coverage.Role) < 0))
             {
                 coverage = candidate;
@@ -179,8 +180,8 @@ internal static class ScrollCoveragePlanner
                 : ScrollCoverageState.Covered;
         return new ScrollRoleCoverage(
             role.Key, role.DisplayName, role.Scroll.Uuid, role.Enchantment.Uuid,
-            recipeId, targetLevel, targets, covered, owned, queued, pending, deficit,
-            strongest, usableCandidates, useDirective, state);
+            recipeId, role.CraftCostOrder, targetLevel, targets, covered, owned,
+            queued, pending, deficit, strongest, usableCandidates, useDirective, state);
     }
 
     private static ScrollRoleCoverage Row(
@@ -196,8 +197,9 @@ internal static class ScrollCoveragePlanner
         ScrollCoverageState state) =>
         new(
             role.Key, role.DisplayName, role.Scroll.Uuid, role.Enchantment.Uuid,
-            role.Recipe?.Uuid ?? Guid.Empty, targetLevel, targets, covered, owned,
-            queued, 0, 0, strongest, usable, directive, state);
+            role.Recipe?.Uuid ?? Guid.Empty, role.CraftCostOrder, targetLevel,
+            targets, covered, owned, queued, 0, 0, strongest, usable, directive,
+            state);
 
     private static int TargetLevel(GameWorldState world)
     {

@@ -85,8 +85,27 @@ an automated `CraftingInstance` stores its own `quantity`. For `useQuantityAsLev
 `CraftingInstance.SetAutomationQuantity(int)` sets that quantity directly and
 `GetAutomationQuantity()` returns it.
 
-The product's "highest possible Scroll" therefore maps to the exact Scribe type's
-`maxStartingLevel`. Auto Scribe does not need to change the player's `startingLevel`.
+The native progression mutation is in the manual queue contract:
+
+```text
+CraftingRecipeSO.PurchaseQuantity(purchasedQuantity, previousQuantity)
+  -> pay GetTotalCost(previousQuantity, purchasedQuantity)
+  -> CraftingRecipeTypeSO.SetMaxStartingLevel(
+       purchasedQuantity + previousQuantity)
+```
+
+`SetMaxStartingLevel` keeps the larger of the existing and proposed values. When the resulting
+Scroll is delivered, `ConsumableSO.Gain` separately raises that Scroll's `maxCreatedLv` to the
+created level. Therefore `maxStartingLevel` is the current coverage target but not a safe cap on
+an autonomous one-shot purchase: purchasing an affordable level above it is how the native
+ceiling advances. Auto Scribe probes upward through `CanBuyAt(BigDouble)`, uses the highest
+affordable level, and does not change the player's `startingLevel`.
+
+The observed player-facing unlock/cost sequence is represented as an explicit semantic cost rank
+in the baseline identity facade. Selection tries Advancement, Power, Learning, then Excellence
+for the four progressively exposed recipes; the additional audited Development and Echoing
+recipes follow if a lifecycle makes them visible. UUID order, serialized registry order, and
+localized names never decide production priority.
 
 ## Native Scribe lists and one-shot queue
 
