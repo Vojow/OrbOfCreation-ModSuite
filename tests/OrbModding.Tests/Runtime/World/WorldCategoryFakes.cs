@@ -445,6 +445,13 @@ internal sealed class FakeAlchemyRecipe
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
+
+    public int GetMaxUsageSlots()
+    {
+        if (coreType.maxUsageByMastery) return masteryLevel + 1;
+        var maximum = maxUsageSlots.GetValue().ToDouble();
+        return maximum < 0 ? int.MaxValue : (int)Math.Floor(maximum);
+    }
 }
 
 internal sealed class FakeAlchemyRecipeList

@@ -59,10 +59,17 @@ native-boundary change.
 - Breadth precedes mastery rebalance, and rebalance precedes depth.
 - Manual-preservation policy removes only verified owned quantity.
 - Timed training starts only after assignment settlement.
+- A committed depth change records its queued target as suite-owned before native settlement; the
+  later settled quantity must not restart Timed Cycle's active-session deadline.
 - Feature health distinguishes an active training wait from the post-training
   absence of another unlocked, assignable replacement.
+- The world snapshot publishes `AlchemyRecipeSO.GetMaxUsageSlots()` rather than
+  the raw `maxUsageSlots` modifier. Its native `-1` sentinel must resolve to the
+  mastery-derived or unlimited quantity before breadth, rotation, or depth runs.
 - Depth clamps to both configured quantity and the live mastery limit.
 - Projection preserves the reserve test, quantity floor, and halving search.
+- The live drain watchdog rolls back owned depth while stock remains positive when a drained
+  resource's net rate has become negative.
 - A stale epoch, changed identity, unsettled quantity, or ambiguous mutation
   fails closed without touching an unrelated assignment.
 

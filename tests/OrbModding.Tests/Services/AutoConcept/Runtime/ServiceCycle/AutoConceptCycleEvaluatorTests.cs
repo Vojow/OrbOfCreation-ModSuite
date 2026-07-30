@@ -17,6 +17,7 @@ public sealed class AutoConceptCycleEvaluatorTests
     private static readonly Guid Gamma = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid Core = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static readonly Guid OtherCore = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static readonly Guid Resource = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     [Fact]
     public void ReschedulesAtTheConfiguredFallbackWhenThereIsNoWork()
@@ -132,7 +133,14 @@ public sealed class AutoConceptCycleEvaluatorTests
         var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
 
         var first = Assert.Single(Plan(world, Config(), ref state, out _));
-        var second = Assert.Single(Plan(world, Config(), ref state, out _));
+        var second = Assert.Single(PlanAt(
+            world,
+            Config(),
+            ref state,
+            decisionAtTicks: 0,
+            out _,
+            out _,
+            previousRejected: true));
 
         Assert.Equal(Alpha, first.RecipeId);
         Assert.Equal(Beta, second.RecipeId);
@@ -171,6 +179,88 @@ public sealed class AutoConceptCycleEvaluatorTests
         Assert.Equal(AutoConceptActionKind.RotateOut, action.Kind);
         Assert.Equal(Alpha, action.RecipeId);
         Assert.Equal(Beta, action.ReplacementId);
+    }
+
+    [Fact]
+    public void TimedCycleDepthSettlementDoesNotRestartTheActiveSession()
+    {
+        var initial = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 4),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) });
+        var queued = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 4),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 1, queued: 4) });
+        var settled = World(
+            new[]
+            {
+                Recipe(Alpha, maximum: 4),
+                Recipe(Beta, maximum: 1),
+            },
+            new[] { Instance(Alpha, quantity: 4, queued: 4) });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var config = Config(
+            slotMode: AutoConceptSlotManagementMode.TimedCycle,
+            trainingSeconds: 30);
+
+        var depth = Assert.Single(PlanAt(
+            initial, config, ref state, decisionAtTicks: 0, out _, out _));
+        Assert.Equal(AutoConceptDecisionKind.Depth, state.Decision.Kind);
+        Assert.Equal(4, depth.TargetOrDelta);
+        Assert.Empty(PlanAt(
+            World(), config, ref state, TimeSpan.FromSeconds(1).Ticks,
+            out _, out _, previousCommitted: true));
+        Assert.True(state.HasPendingReceipt);
+        Assert.Empty(PlanAt(
+            queued, config, ref state, TimeSpan.FromSeconds(2).Ticks,
+            out _, out _));
+        Assert.False(state.HasPendingReceipt);
+        Assert.Empty(PlanAt(
+            settled, config, ref state, TimeSpan.FromSeconds(10).Ticks,
+            out _, out _));
+
+        var rotation = Assert.Single(PlanAt(
+            settled, config, ref state, TimeSpan.FromSeconds(31).Ticks,
+            out _, out _));
+
+        Assert.Equal(AutoConceptActionKind.RotateOut, rotation.Kind);
+        Assert.Equal(Alpha, rotation.RecipeId);
+        Assert.Equal(Beta, rotation.ReplacementId);
+    }
+
+    [Fact]
+    public void NegativeLiveRateRollsBackOwnedDepthBeforeTheResourceReachesZero()
+    {
+        var currentDrain = new[]
+        {
+            new WorldAlchemyCost(
+                Alpha,
+                WorldAlchemyCostKind.CurrentDrain,
+                Resource,
+                new BigDouble(1)),
+        };
+        var world = World(
+            new[] { Recipe(Alpha, maximum: 2) },
+            new[] { Instance(Alpha, quantity: 2, queued: 2) },
+            resources: new[] { DrainingResource(Resource, quantity: 50, capacity: 100, trueRate: -1) },
+            costs: currentDrain);
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        state.BaselineCaptured = true;
+        state.Ownership.ObserveBaseline(Alpha.ToString(), 1);
+        state.Ownership.RecordAutomatedDelta(Alpha.ToString(), 2, 1);
+
+        var rollback = Assert.Single(Plan(world, Config(), ref state, out _));
+
+        Assert.Equal(AutoConceptActionKind.RemoveOwned, rollback.Kind);
+        Assert.Equal(Alpha, rollback.RecipeId);
+        Assert.Equal(1, rollback.TargetOrDelta);
     }
 
     [Fact]
@@ -257,7 +347,9 @@ public sealed class AutoConceptCycleEvaluatorTests
         WorldAlchemyRecipe[] recipes,
         WorldAlchemyInstance[] instances,
         long collectedAtEpoch = 1,
-        Guid? cannotAddNow = null)
+        Guid? cannotAddNow = null,
+        WorldResource[]? resources = null,
+        WorldAlchemyCost[]? costs = null)
     {
         var concepts = new WorldConceptRecipeBuffer();
         foreach (var recipe in recipes)
@@ -286,8 +378,51 @@ public sealed class AutoConceptCycleEvaluatorTests
             AlchemyRecipes = WorldTable.Create(recipes),
             ConceptRecipes = WorldAlchemyRowDeriver.Build(concepts),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(active),
+            Resources = WorldTable.Create(resources ?? Array.Empty<WorldResource>()),
+            AlchemyCosts = PublicationTable<WorldAlchemyCost>.Create(
+                costs ?? Array.Empty<WorldAlchemyCost>()),
             CollectedAtEpoch = collectedAtEpoch,
         };
+    }
+
+    private static WorldResource DrainingResource(
+        Guid id,
+        double quantity,
+        double capacity,
+        double trueRate)
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            id,
+            new BigDouble(quantity),
+            new BigDouble(capacity),
+            new BigDouble(trueRate),
+            visible: true,
+            lifetimeQuantity: default,
+            discoveryTime: default,
+            quality: new BigDouble(100),
+            gainRate: new BigDouble(100),
+            drain: new BigDouble(-trueRate),
+            reservation: default,
+            usage: default,
+            inLossMode: false,
+            inRestMode: false,
+            inRallyMode: false,
+            appliedLevels: 0,
+            levelVariableId: Guid.Empty,
+            in rateInputs,
+            in traits,
+            in modifiers);
+        return new WorldResource(
+            in reading,
+            isCapped: true,
+            headroom: new BigDouble(capacity - quantity),
+            fillFraction: quantity / capacity,
+            isAtCapacity: false,
+            trueQuantity: new BigDouble(quantity),
+            trueRate: new BigDouble(trueRate));
     }
 
     private static SuiteRuntimeConfiguration Config(
@@ -296,7 +431,8 @@ public sealed class AutoConceptCycleEvaluatorTests
         AutoConceptOperationMode mode = AutoConceptOperationMode.Active,
         AutoConceptSlotManagementMode slotMode = AutoConceptSlotManagementMode.RotateAll,
         int fallbackSeconds = 30,
-        int quantityCap = 0) =>
+        int quantityCap = 0,
+        int trainingSeconds = 60) =>
         new()
         {
             General = new SuiteGeneralConfiguration { Enabled = enabled },
@@ -306,7 +442,7 @@ public sealed class AutoConceptCycleEvaluatorTests
                 Mode = mode,
                 SlotManagement = slotMode,
                 FallbackEvaluationIntervalSeconds = fallbackSeconds,
-                TrainingPeriodSeconds = 60,
+                TrainingPeriodSeconds = trainingSeconds,
                 QuantityCap = quantityCap,
                 MinimumDrainRatio = 0.25f,
             },
@@ -325,7 +461,9 @@ public sealed class AutoConceptCycleEvaluatorTests
         ref AutoConceptCycleState state,
         long decisionAtTicks,
         out WakePolicy wake,
-        out AutoConceptDecisionMetrics metrics)
+        out AutoConceptDecisionMetrics metrics,
+        bool previousCommitted = false,
+        bool previousRejected = false)
     {
         var store = new ReusableActionStore<AutoConceptCycleAction>();
         store.BeginWrite();
@@ -334,8 +472,17 @@ public sealed class AutoConceptCycleEvaluatorTests
             new ServiceId("auto-concept"), new LifecycleGeneration(1),
             new ConfigGeneration(1), StrategyGeneration.Initial,
             new WorldGeneration(1), new CycleId(1));
+        var receipt = previousCommitted || previousRejected
+            ? BatchReceipt.Completed(
+                identity,
+                new BatchId(1),
+                1,
+                previousCommitted ? 1 : 0,
+                new ServiceNativeCallTotals(1, 1, previousCommitted ? 1 : 0),
+                new MonotonicTimestamp(decisionAtTicks))
+            : default;
         var context = new ServiceCycleContext(
-            identity, default, new MonotonicTimestamp(decisionAtTicks));
+            identity, receipt, new MonotonicTimestamp(decisionAtTicks));
         wake = AutoConceptCycleEvaluator.Evaluate(
             world, in config, in context, ref state, writer, out metrics);
         state.RecordDecision(in metrics);

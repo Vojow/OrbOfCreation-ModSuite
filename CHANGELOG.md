@@ -19,6 +19,13 @@
 - Make Timed Cycle rotate through all unlocked, allowed concepts rather than partitioning its order
   by concept type. The game remains authoritative for whether releasing the active assignment opens
   a compatible typed or typeless slot, and locked concepts are revalidated again before mutation.
+- Resolve each concept's native usage limit before planning. The raw `-1` modifier sentinel no
+  longer makes unlocked replacements look ineligible or prevents an active concept gaining levels.
+- Keep Timed Cycle's settled-active deadline stable when an automated depth change finishes. Native
+  queued quantity is now recorded as suite-owned immediately, so later settlement is not mistaken
+  for a manual edit that repeatedly restarts training and postpones rotation.
+- Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
+  rate, rather than waiting for that resource to reach zero.
 - Show whether Auto Concept is waiting for settled training or has no other unlocked, allowed
   assignment in its tooltip, Runtime status, decision journal, and trace dashboard.
 

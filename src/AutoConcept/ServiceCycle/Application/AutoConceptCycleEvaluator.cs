@@ -44,6 +44,26 @@ internal static class AutoConceptCycleEvaluator
 
         var candidates = Project(world, in config);
         ReconcileReceipt(candidates, in context, ref state);
+        if (state.HasPendingReceipt)
+        {
+            var pendingActive = 0;
+            var pendingOwned = 0;
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Quantity > 0) pendingActive++;
+                if (state.Ownership.TryGet(candidate.Key, out var ownership) &&
+                    ownership.AutomatedDelta > 0) pendingOwned++;
+            }
+            metrics = new AutoConceptDecisionMetrics(
+                world.ConceptRecipes.Count,
+                candidates.Count,
+                pendingActive,
+                pendingOwned,
+                0,
+                AutoConceptDecisionKind.Idle);
+            return WakePolicy.AfterDecision(
+                MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250)));
+        }
         ObserveOwnership(candidates, in config, in context, ref state);
         RefreshTrainingPolicy(in config, ref state);
         InitializeTimedSessions(candidates, in config, in context, ref state);
@@ -112,7 +132,7 @@ internal static class AutoConceptCycleEvaluator
             if (!WorldLookup.TryFind(world.AlchemyRecipes, concept.RecipeId, out var recipe) ||
                 !recipe.Discovered) continue;
 
-            var maximum = recipe.MaxUsageSlots.ToDouble();
+            var maximum = recipe.ResolvedMaxUsageSlots.ToDouble();
             if (!double.IsFinite(maximum)) maximum = 0;
             var instanceFound = WorldAlchemyInstanceLookup.TryFind(
                 world.AlchemyInstances, concept.RecipeId, out var instance);
@@ -159,7 +179,8 @@ internal static class AutoConceptCycleEvaluator
             var cost = world.AlchemyCosts[start + index];
             if (cost.Amount.CompareTo(default) <= 0) continue;
             if (!WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource) ||
-                resource.Reading.Quantity.CompareTo(default) <= 0)
+                resource.Reading.Quantity.CompareTo(default) <= 0 ||
+                resource.TrueRate.CompareTo(default) < 0)
                 return false;
         }
         return true;
@@ -170,34 +191,58 @@ internal static class AutoConceptCycleEvaluator
         in ServiceCycleContext context,
         ref AutoConceptCycleState state)
     {
-        if (!state.HasPendingReceipt || !context.PreviousReceipt.IsPresent) return;
-        var planned = state.PendingReceiptAction;
-        if (context.PreviousReceipt.CommittedCount == 1)
+        if (!state.HasPendingReceipt) return;
+        if (!state.PendingReceiptCommitted)
         {
-            Candidate? current = null;
-            foreach (var candidate in candidates)
-                if (candidate.Id == planned.RecipeId) { current = candidate; break; }
-            if (current is not null)
+            if (!context.PreviousReceipt.IsPresent) return;
+            if (context.PreviousReceipt.CommittedCount != 1)
             {
-                if (planned.Kind == AutoConceptActionKind.Add)
-                {
-                    var delta = Math.Max(0, current.Quantity - planned.Belief.Quantity);
-                    if (delta > 0)
-                        state.Ownership.RecordAutomatedDelta(current.Key, current.Quantity, delta);
-                }
-                else if (planned.Kind == AutoConceptActionKind.RemoveOwned)
-                {
-                    var delta = Math.Max(0, planned.Belief.Quantity - current.Quantity);
-                    if (delta > 0)
-                        state.Ownership.RecordAutomatedDelta(current.Key, current.Quantity, -delta);
-                }
-                else
-                {
-                    state.Ownership.ObserveBaseline(current.Key, current.Quantity);
-                    state.PreferredReplacement = planned.ReplacementId;
-                    state.PreferredReplacementExpiresAtTicks =
-                        checked(context.DecisionAt.Ticks + TimeSpan.FromSeconds(5).Ticks);
-                }
+                state.ClearPendingReceipt();
+                return;
+            }
+            state.PendingReceiptCommitted = true;
+        }
+
+        var planned = state.PendingReceiptAction;
+        Candidate? current = null;
+        foreach (var candidate in candidates)
+            if (candidate.Id == planned.RecipeId) { current = candidate; break; }
+        if (current is null) return;
+
+        if (planned.Kind == AutoConceptActionKind.Add)
+        {
+            // Native concept quantities settle asynchronously. The committed mutation changes
+            // queuedQuantity immediately, while quantity can remain at the old value for
+            // several cycles. Account for that queued target now so its later settlement is
+            // not mistaken for a manual edit that restarts TimedCycle training.
+            var delta = Math.Max(
+                0,
+                current.QueuedQuantity - planned.Belief.QueuedQuantity);
+            if (delta <= 0) return;
+            state.Ownership.RecordAutomatedDelta(
+                current.Key,
+                current.QueuedQuantity,
+                delta);
+        }
+        else
+        {
+            var delta = Math.Max(
+                0,
+                planned.Belief.QueuedQuantity - current.QueuedQuantity);
+            if (delta <= 0) return;
+            if (planned.Kind == AutoConceptActionKind.RemoveOwned)
+            {
+                state.Ownership.RecordAutomatedDelta(
+                    current.Key,
+                    current.QueuedQuantity,
+                    -delta);
+            }
+            else
+            {
+                state.Ownership.ObserveBaseline(current.Key, current.QueuedQuantity);
+                state.PreferredReplacement = planned.ReplacementId;
+                state.PreferredReplacementExpiresAtTicks =
+                    checked(context.DecisionAt.Ticks + TimeSpan.FromSeconds(5).Ticks);
             }
         }
         state.ClearPendingReceipt();

@@ -335,6 +335,34 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void AlchemyRecipeResolvesNativeUsageSentinelBeforeAutoConceptPlanning()
+    {
+        var coreType = new FakeAlchemyType
+        {
+            Identity = Guid.NewGuid(),
+            maxUsageByMastery = true,
+        };
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = coreType,
+            discovered = true,
+            masteryLevel = 4,
+            maxUsageSlots = new FakeModifierRecord(-1d),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var row));
+        Assert.Equal(-1d, recipe.maxUsageSlots.GetValue().ToDouble());
+        Assert.Equal(5d, row.ResolvedMaxUsageSlots.ToDouble());
+    }
+
+    [Fact]
     public void AViewsComposedAvailabilityIsPublished()
     {
         var unlocked = Guid.NewGuid();

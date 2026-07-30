@@ -204,6 +204,7 @@ internal struct AutoConceptCycleState
         LastSlotMode = null;
         LastTrainingPeriod = null;
         HasPendingReceipt = false;
+        PendingReceiptCommitted = false;
         PendingReceiptAction = default;
         Decision = default;
     }
@@ -221,6 +222,7 @@ internal struct AutoConceptCycleState
     internal AutoConceptSlotManagementMode? LastSlotMode;
     internal int? LastTrainingPeriod;
     internal bool HasPendingReceipt;
+    internal bool PendingReceiptCommitted;
     internal AutoConceptCycleAction PendingReceiptAction;
     public AutoConceptDecisionMetrics Decision { get; private set; }
 
@@ -230,6 +232,7 @@ internal struct AutoConceptCycleState
     {
         PendingReceiptAction = action;
         HasPendingReceipt = true;
+        PendingReceiptCommitted = false;
         CandidateCursor = checked(CandidateCursor + 1);
     }
 
@@ -237,6 +240,7 @@ internal struct AutoConceptCycleState
     {
         PendingReceiptAction = default;
         HasPendingReceipt = false;
+        PendingReceiptCommitted = false;
     }
 
     internal void RecordDecision(in AutoConceptDecisionMetrics decision) => Decision = decision;
