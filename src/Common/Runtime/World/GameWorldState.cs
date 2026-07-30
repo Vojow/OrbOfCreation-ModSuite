@@ -141,6 +141,23 @@ public sealed record GameWorldState
     internal PublicationTable<WorldConsumableUsage> ConsumableUsages { get; init; } =
         PublicationTable<WorldConsumableUsage>.Empty;
 
+    /// <summary>Levelled native inventory buckets for every consumable.</summary>
+    internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
+        PublicationTable<WorldConsumableCount>.Empty;
+
+    internal PublicationTable<WorldScribeRecipe> ScribeRecipes { get; init; } =
+        PublicationTable<WorldScribeRecipe>.Empty;
+    internal PublicationTable<WorldScribeQueue> ScribeQueues { get; init; } =
+        PublicationTable<WorldScribeQueue>.Empty;
+    internal PublicationTable<WorldScribeWork> ScribeWork { get; init; } =
+        PublicationTable<WorldScribeWork>.Empty;
+    internal PublicationTable<WorldStructureEnchantment> StructureEnchantments { get; init; } =
+        PublicationTable<WorldStructureEnchantment>.Empty;
+    internal PublicationTable<WorldScrollTarget> ScrollTargets { get; init; } =
+        PublicationTable<WorldScrollTarget>.Empty;
+    internal PublicationTable<WorldScrollTargetEvidence> ScrollTargetEvidence { get; init; } =
+        PublicationTable<WorldScrollTargetEvidence>.Empty;
+
     internal PublicationTable<WorldRitual> Rituals { get; init; } =
         PublicationTable<WorldRitual>.Empty;
 

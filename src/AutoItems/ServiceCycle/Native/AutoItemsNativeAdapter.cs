@@ -13,6 +13,7 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
     private readonly TypedRegistryResolver _registryResolver;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly AutoItemsTemporaryActivationTracker _temporaryActivations;
+    private readonly AutoScribeIdentityProfile? _autoScribeIdentityProfile;
     private readonly HashSet<Guid> _itemQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
     private string? _quarantineReason;
@@ -20,7 +21,8 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
     internal AutoItemsNativeAdapter(
         TypedRegistryResolver registryResolver,
         Func<bool> tryCaptureMutationPermit,
-        AutoItemsTemporaryActivationTracker temporaryActivations)
+        AutoItemsTemporaryActivationTracker temporaryActivations,
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         _registryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
@@ -28,6 +30,7 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _temporaryActivations = temporaryActivations ??
             throw new ArgumentNullException(nameof(temporaryActivations));
+        _autoScribeIdentityProfile = autoScribeIdentityProfile;
     }
 
     internal AutoItemsSubmission Submit(in AutoItemsCycleAction action)
@@ -61,6 +64,18 @@ internal sealed class AutoItemsNativeAdapter : IDisposable
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.RandomizationUnavailable,
                 "The live Scroll does not support native random targeting.");
+        }
+        if (action.Family == AutoItemsConsumableFamily.Scroll &&
+            _autoScribeIdentityProfile is not null &&
+            _autoScribeIdentityProfile.TryFindByScroll(action.ItemId, out _) &&
+            !AutoItemsScrollTargetPreflight.TryHasValidTarget(
+                item,
+                action.PlannedLevel,
+                out reason))
+        {
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TargetUnavailable,
+                reason);
         }
 
         var temporary = AutoItemsConsumableFamilies.IsTemporary(action.Family);

@@ -126,6 +126,7 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _auditedBuild;
     private bool _runtimeActivationAllowed;
     private string _observedBuildFingerprint = string.Empty;
+    private string _baselineId = string.Empty;
     private bool _runtimeComposed;
     private bool _runtimeCompositionAttempted;
     private float _emergencyStopUiRetrySeconds;
@@ -191,6 +192,7 @@ public sealed class Plugin : BaseUnityPlugin
         _modConfigSettings = suite.ModConfig;
         _auditedBuild = loadDecision.ShouldLoad;
         _observedBuildFingerprint = loadDecision.ObservedBuildFingerprint;
+        _baselineId = loadDecision.BaselineId;
         var compatibility = UnverifiedBuildCompatibilityPolicy.AtStartup(
             _auditedBuild,
             _observedBuildFingerprint,
@@ -350,7 +352,11 @@ public sealed class Plugin : BaseUnityPlugin
                                     _automataActionFamilyOwnership!.OwnsItems,
                                 tryCaptureMutationPermit: () =>
                                     _automataActionFamilyOwnership!.TryCaptureItemMutationPermit(),
-                                featureStatus: featureStatuses.AutoItems)),
+                                featureStatus: featureStatuses.AutoItems,
+                                autoScribeIdentityProfile: ResolveAutoScribeIdentityProfile())),
+                        CreateAutoScribeFeature(
+                            registryResolver,
+                            readLifecycleEpoch),
                         new AutoBuyServiceCycleFeature(
                             new AutoBuyFeatureDependencies(
                                 readLifecycleEpoch,
@@ -429,6 +435,37 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoHarvestTreasureTrees={runtimeConfig.AutoHarvest.CollectTreasureTrees}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +
             $"PrioritizeCostAndQualityStructures={runtimeConfig.AutoBuy.PrioritizeCostAndQualityStructures}.");
+    }
+
+    private IAutomataServiceCycleFeature CreateAutoScribeFeature(
+        TypedRegistryResolver registryResolver,
+        Func<long> readLifecycleEpoch)
+    {
+        var profile = ResolveAutoScribeIdentityProfile();
+        if (profile is null)
+            return new AutoScribeUnavailableServiceCycleFeature(
+                _featureStatuses!.AutoScribe);
+        return new AutoScribeServiceCycleFeature(
+            new AutoScribeFeatureDependencies(
+                registryResolver,
+                profile,
+                readLifecycleEpoch,
+                owns: () => _automataActionFamilyOwnership!.OwnsScribe,
+                canConsumeScrolls: () =>
+                    _automataActionFamilyOwnership!.OwnsItems &&
+                    _featureStatuses!.AutoItems.Current.State ==
+                        FeatureStatusState.Operational,
+                capturePermit: () =>
+                    _automataActionFamilyOwnership!.TryCaptureScribeMutationPermit(),
+                featureStatus: _featureStatuses!.AutoScribe));
+    }
+
+    private AutoScribeIdentityProfile? ResolveAutoScribeIdentityProfile()
+    {
+        var catalog = new AutoScribeIdentityCatalog();
+        return catalog.TryGetProfile(_baselineId, out var profile)
+            ? profile
+            : null;
     }
 
     /// <summary>

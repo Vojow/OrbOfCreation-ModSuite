@@ -81,6 +81,14 @@ internal static class BepInExAutomataConfigurationReader
                     source.AutoItemsEvaluationIntervalSeconds.Value,
                     nameof(source.AutoItemsEvaluationIntervalSeconds)),
             },
+            AutoScribe = new AutoScribeConfiguration
+            {
+                Mode = source.AutoScribeMode.Value,
+                Roles = source.AutoScribeRoles.Value,
+                EvaluationInterval = ToDuration(
+                    source.AutoScribeEvaluationIntervalSeconds.Value,
+                    nameof(source.AutoScribeEvaluationIntervalSeconds)),
+            },
             Mentor = source.Mentor is null
                 ? new OrbMentor.MentorConfiguration()
                 : OrbMentor.MentorConfiguration.Read(source.Mentor),

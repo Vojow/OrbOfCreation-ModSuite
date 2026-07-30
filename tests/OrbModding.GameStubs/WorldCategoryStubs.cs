@@ -111,6 +111,47 @@ public sealed class CraftingRecipeTypeSO : IdScriptableObject
     public ModifierRecord multiPenaltyMod = new ModifierRecord();
 }
 
+public sealed class CraftingRecipeSO : IdScriptableObject
+{
+    public static List<CraftingRecipeSO> All = new List<CraftingRecipeSO>();
+    public List<CraftingRecipeTypeSO> craftingTypes = new List<CraftingRecipeTypeSO>();
+    public List<InstantEffectBlock> completeEffects = new List<InstantEffectBlock>();
+    public bool useQuantityAsLevel;
+    public bool visible;
+    public bool IsVisible() => visible;
+}
+
+public sealed class CraftingInstanceListVariable : IdScriptableObject
+{
+    public List<CraftingInstance> value = new List<CraftingInstance>();
+    public bool isAutoList;
+    public int Maximum = 4;
+    public int GetMax() => Maximum;
+}
+
+public sealed class CraftingInstance
+{
+    public CraftingRecipeSO Recipe = new CraftingRecipeSO();
+    public BigDouble Quantity = BigDouble.One;
+    public bool Automatic;
+    public bool Expired;
+    public CraftingRecipeSO GetGuidReference() => Recipe;
+    public BigDouble GetQuantity() => Quantity;
+    public bool IsAuto() => Automatic;
+    public bool IsExpired() => Expired;
+}
+
+public sealed class EnchantmentInstance
+{
+    public IdScriptableObject enchantment = new IdScriptableObject();
+    public BigDouble level = BigDouble.One;
+}
+
+public sealed class ConsumableGainEffect
+{
+    public ConsumableSO consumable = new ConsumableSO();
+}
+
 
 public sealed class HarvestElementSO : IdScriptableObject
 {
@@ -200,6 +241,7 @@ public sealed class ConsumableSO : TooltipableObject
     public ResourceCostList consumeCost = new ResourceCostList();
     public ResourceCostList usageCost = new ResourceCostList();
     public List<ConsumableUsage> consumableUsages = new List<ConsumableUsage>();
+    public List<ConsumableCount> consumableCounts = new List<ConsumableCount>();
 
     /// <summary>Private in the game too, which is exactly why the save record hid the stock count.</summary>
     private int quantity;
@@ -250,14 +292,32 @@ public sealed class ConsumableSO : TooltipableObject
     private bool queueOnStart;
 }
 
+public sealed class ConsumableCount
+{
+    public int Level = 1;
+    public int Quantity;
+    public int fr;
+
+    public int GetLevel() => Level;
+    public int GetQuantity() => Quantity;
+}
+
 public sealed class ConsumableUsage
 {
     public Guid Identity = Guid.NewGuid();
+    public ScalingInfo baseSi = new ScalingInfo();
     public bool en;
     public BigDouble dr;
     public BigDouble maxDr;
 
     public Guid GetGuid() => Identity;
+}
+
+public sealed class ScalingInfo
+{
+    public int Level = 1;
+
+    public int GetLevelInt() => Level;
 }
 
 public sealed class Inventory

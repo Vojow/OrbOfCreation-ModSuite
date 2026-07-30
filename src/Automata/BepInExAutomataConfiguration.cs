@@ -59,6 +59,10 @@ internal sealed class BepInExAutomataConfiguration
     {
         new ModConfigDependency("AutoItems", "Mode", "Active"),
     };
+    private static readonly IReadOnlyList<ModConfigDependency> AutoScribeActiveDependencies = new[]
+    {
+        new ModConfigDependency("AutoScribe", "Mode", "Active"),
+    };
 
     private BepInExAutomataConfiguration(
         ConfigFile config,
@@ -107,6 +111,9 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<bool> autoItemsPotions,
         ConfigEntry<string> autoItemsTemporaryItemAllowlist,
         ConfigEntry<float> autoItemsEvaluationIntervalSeconds,
+        ConfigEntry<AutoScribeOperationMode> autoScribeMode,
+        ConfigEntry<string> autoScribeRoles,
+        ConfigEntry<float> autoScribeEvaluationIntervalSeconds,
         ConfigEntry<bool> allowUnverifiedGameBuild,
         ConfigEntry<string> acceptedUnverifiedBuildFingerprint,
         ConfigEntry<bool> emergencyDisable,
@@ -158,6 +165,9 @@ internal sealed class BepInExAutomataConfiguration
         AutoItemsPotions = autoItemsPotions;
         AutoItemsTemporaryItemAllowlist = autoItemsTemporaryItemAllowlist;
         AutoItemsEvaluationIntervalSeconds = autoItemsEvaluationIntervalSeconds;
+        AutoScribeMode = autoScribeMode;
+        AutoScribeRoles = autoScribeRoles;
+        AutoScribeEvaluationIntervalSeconds = autoScribeEvaluationIntervalSeconds;
         AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
         AcceptedUnverifiedBuildFingerprint = acceptedUnverifiedBuildFingerprint;
         EmergencyDisable = emergencyDisable;
@@ -245,6 +255,9 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<bool> AutoItemsPotions { get; }
     public ConfigEntry<string> AutoItemsTemporaryItemAllowlist { get; }
     public ConfigEntry<float> AutoItemsEvaluationIntervalSeconds { get; }
+    public ConfigEntry<AutoScribeOperationMode> AutoScribeMode { get; }
+    public ConfigEntry<string> AutoScribeRoles { get; }
+    public ConfigEntry<float> AutoScribeEvaluationIntervalSeconds { get; }
 
     public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
 
@@ -267,6 +280,7 @@ internal sealed class BepInExAutomataConfiguration
     internal void SetAutoHarvestMode(AutoHarvestOperationMode mode) => AutoHarvestMode.Value = mode;
 
     internal void SetAutoItemsMode(AutoItemsOperationMode mode) => AutoItemsMode.Value = mode;
+    internal void SetAutoScribeMode(AutoScribeOperationMode mode) => AutoScribeMode.Value = mode;
 
     internal void SetMentorMode(MentorOperationMode mode)
     {
@@ -435,6 +449,9 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoItems", "UsePotions", false, "Allow Potion-family items only when their exact UUID is listed in TemporaryItemAllowlist. Defaults off.", 19, 40, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "TemporaryItemAllowlist", string.Empty, "Choose exact Fruit and Potion items with the Mods item picker. The saved value is a comma-separated list of stable ConsumableSO UUIDs; empty disables temporary use even when a family switch is on.", 19, 50, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between Auto Items evaluations.", 19, 60, new AcceptableValueRange<float>(0.25f, 10.0f), AutoItemsActiveDependencies),
+                Bind(config, "AutoScribe", "Mode", AutoScribeOperationMode.Disabled, "Disabled prepares no Scrolls. Active keeps every enabled audited Scribe role supplied at the highest currently craftable level.", 20, 0),
+                Bind(config, "AutoScribe", "Roles", string.Empty, "Choose audited Scroll roles with the role picker. Empty enables all, and none disables every role. Stable semantic keys are persisted; native UUIDs remain behind the identity facade.", 20, 10, dependencies: AutoScribeActiveDependencies),
+                Bind(config, "AutoScribe", "EvaluationIntervalSeconds", 1.0f, "Unscaled seconds between coverage and Scribe queue evaluations.", 20, 20, new AcceptableValueRange<float>(0.25f, 10.0f), AutoScribeActiveDependencies),
                 Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
                 Bind(config, "Compatibility", "AcceptedUnverifiedBuildFingerprint", string.Empty, "Exact assembly-pair fingerprint accepted by the player. Managed by the suite.", 50, 10, hidden: true),
                 Bind(config, "Safety", "EmergencyDisable", false, "Suite-wide emergency stop: halts new purchases, casts, concepts, spell levels, harvest and item submissions, and mastery sharing immediately.", 40, 0),
@@ -468,6 +485,7 @@ internal sealed class BepInExAutomataConfiguration
             "AutoConcept" when !advancedAutoConcept => "Auto Concept",
             "AutoHarvest" => "Auto Harvest",
             "AutoItems" => "Auto Items",
+            "AutoScribe" => "Auto Scribe",
             _ => "Advanced",
         };
         var displayName = key switch
@@ -478,6 +496,7 @@ internal sealed class BepInExAutomataConfiguration
             "Mode" when section == "AutoConcept" => "Auto Concept",
             "Mode" when section == "AutoHarvest" => "Auto Harvest",
             "Mode" when section == "AutoItems" => "Auto Items",
+            "Mode" when section == "AutoScribe" => "Auto Scribe",
             "CollectFruitTrees" => "Collect fruit trees",
             "CollectTreasureTrees" => "Collect treasure trees",
             "EvaluationIntervalSeconds" when section == "AutoHarvest" => "Evaluation interval (seconds)",
@@ -487,6 +506,7 @@ internal sealed class BepInExAutomataConfiguration
             "UsePotions" => "Use potions",
             "TemporaryItemAllowlist" => "Temporary items",
             "EvaluationIntervalSeconds" when section == "AutoItems" => "Evaluation interval (seconds)",
+            "EvaluationIntervalSeconds" when section == "AutoScribe" => "Evaluation interval (seconds)",
             "SlotManagementMode" => "Slot management",
             "TrainingPeriodSeconds" => "Training period (seconds)",
             "AutoLevelSpells" => "Auto-level spells",
@@ -501,7 +521,7 @@ internal sealed class BepInExAutomataConfiguration
             "BlockedUuids" => "Blocked UUIDs",
             _ => null,
         };
-        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Items" ? 18 : 20;
+        var presentationOrder = displaySection == "General" ? -10 : displaySection == "Auto Buy" ? 0 : displaySection == "Auto Cast" ? 10 : displaySection == "Auto Concept" ? 15 : displaySection == "Auto Harvest" ? 17 : displaySection == "Auto Items" ? 18 : displaySection == "Auto Scribe" ? 19 : 20;
         var metadata = dependencies is null
             ? new ModConfigMetadata(presentationOrder, settingOrder, hidden, displaySection, displayName, restartRequired)
             : new ModConfigMetadata(presentationOrder, settingOrder, dependencies, hidden, displaySection, displayName, restartRequired);

@@ -10,7 +10,8 @@ internal sealed class AutoItemsFeatureDependencies
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         Func<bool> tryCaptureMutationPermit,
-        AutomataFeatureStatusReporter featureStatus)
+        AutomataFeatureStatusReporter featureStatus,
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         RegistryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
@@ -22,6 +23,7 @@ internal sealed class AutoItemsFeatureDependencies
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         FeatureStatus = featureStatus ??
             throw new ArgumentNullException(nameof(featureStatus));
+        AutoScribeIdentityProfile = autoScribeIdentityProfile;
     }
 
     internal TypedRegistryResolver RegistryResolver { get; }
@@ -29,4 +31,5 @@ internal sealed class AutoItemsFeatureDependencies
     internal Func<bool> OwnsActionFamily { get; }
     internal Func<bool> TryCaptureMutationPermit { get; }
     internal AutomataFeatureStatusReporter FeatureStatus { get; }
+    internal AutoScribeIdentityProfile? AutoScribeIdentityProfile { get; }
 }

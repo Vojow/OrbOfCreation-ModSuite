@@ -181,7 +181,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(45, report.Categories.Length);
+        Assert.Equal(46, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
@@ -1333,12 +1333,14 @@ public sealed class GameWorldCollectorTests : IDisposable
         consumable.usageCost.costs.Add(new FakeConsumableCost(durationResource, 3d));
         var pendingUsage = new FakeConsumableUsage
         {
+            baseSi = new FakeScalingInfo { Level = 7 },
             en = false,
             dr = new BigDouble(11d),
             maxDr = new BigDouble(12d),
         };
         var engagedUsage = new FakeConsumableUsage
         {
+            baseSi = new FakeScalingInfo { Level = 5 },
             en = true,
             dr = new BigDouble(7d),
             maxDr = new BigDouble(10d),
@@ -1391,6 +1393,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             published.Add(usage.UsageId, usage);
         }
         Assert.True(published[pendingUsage.Identity].Pending);
+        Assert.Equal(7, published[pendingUsage.Identity].Level);
         Assert.Equal(11d, published[pendingUsage.Identity].RemainingDuration.ToDouble());
         Assert.True(published[engagedUsage.Identity].Engaged);
         Assert.Equal(10d, published[engagedUsage.Identity].MaximumDuration.ToDouble());
@@ -2091,7 +2094,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             new ServiceActionWriter<AutoItemsCycleAction>(store),
             tracker,
             state.TemporaryAllowlist,
-            out metrics);
+            autoScribeIdentityProfile: null,
+            metrics: out metrics);
         var actions = new List<AutoItemsCycleAction>(store.Count);
         while (!store.IsComplete)
         {

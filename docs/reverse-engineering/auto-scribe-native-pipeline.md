@@ -1,9 +1,10 @@
 # Auto Scribe native pipeline
 
-> **Evidence status: trusted-build static planning evidence.** The installed assembly pair is
-> accepted by `main` as `steam-windows-2026-07-29`. Auto Scribe's feature-specific serialized
-> relationships and mutation contracts remain incomplete, so this document authorizes no native
-> mutation.
+> **Evidence status: implemented against an audited installed build; interactive validation
+> pending.** The installed assembly pair is accepted as `steam-windows-2026-07-29`. Exact source
+> contracts and installed metadata gates now cover the shared publication, target preflight, and
+> one-shot Scribe action. This evidence authorizes the guarded code path when configured, but no DLL
+> has been installed and no disposable-save UAT has yet been performed.
 
 [Back to reverse-engineering index](README.md) | [Auto Scribe plan](../plans/auto-scribe.md)
 
@@ -17,9 +18,8 @@ Selected C# was decompiled read-only with ILSpy 10.1.0 from the locally installe
 | `Assembly-CSharp-firstpass.dll` | `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A` |
 
 `origin/main` records this exact pair in `GameAssemblyAudit` and `data/native-contracts.json` under
-baseline `steam-windows-2026-07-29`. Compatibility trust is therefore complete. New Auto Scribe
-members and serialized relationships still require their own source and installed-contract proof
-before mutation.
+baseline `steam-windows-2026-07-29`. Compatibility trust and the feature-specific reflected-member
+manifest pass against the installed pair.
 
 No binary or save was changed.
 
@@ -45,11 +45,11 @@ The common recipe type is:
 |---|---|---|
 | `ee001474-8209-4238-9566-84899a877226` | `CraftingRecipeTypeSO` | `ScribeCrafting` |
 
-Identity mappings do not prove serialized relationships. The paired rows above are name-correlated
-candidates only. A game-data extraction or read-only live probe still has to enumerate every recipe
-registered to `ScribeCrafting`, prove which recipes emit exact Scroll-family items, and prove which
-structure target and enchantment each Scroll uses. Investment and Speed demonstrate why neither
-recipe existence nor recipe identity may be inferred from a Scroll name.
+Identity mappings alone do not prove serialized relationships. The implementation therefore
+enumerates the exact registered recipes and accepts a role only when native references prove one
+levelled recipe output, one Scroll-family item, one request-target script, one target structure,
+and one matching enchantment graph. Investment and Speed demonstrate why neither recipe existence
+nor recipe identity is inferred from a Scroll name.
 
 ## Serialized Scribe registry
 
@@ -67,10 +67,10 @@ A read-only AssetRipper 1.3.14 export of the installed build resolved the exact
 
 This proves that the current Scribe production registry contains exactly these six assets.
 AssetRipper could not deserialize the recipe and target graphs because their
-`Prerequisites.Container.prerequisites` data uses `SerializeReference`. The recipe output,
-Scroll target, and enchantment edges therefore still require a capable read-only extractor or a
-read-only live correlation probe. Investment and Speed remain coverage-only identity candidates
-unless such evidence discovers a native Scribe production path.
+`Prerequisites.Container.prerequisites` data uses `SerializeReference`. The lifecycle-bound world
+reader closes that static-extraction gap by following the audited runtime references and publishing
+completeness evidence. Investment and Speed remain coverage-only unless a future audited baseline
+adds and proves a native Scribe production path.
 
 ## Level authority
 
@@ -112,8 +112,8 @@ UICraftingPage.ContextRecipeClick(recipe)
 
 For automatic instances, `CraftingInstance.Initiate()` configures an `EngagedEffectInstance` with
 the recipe's resource cost as a drain. Completion effects repeat instead of expiring the instance.
-For the Scribe recipes, those completion effects are expected to grant levelled Scroll inventory;
-the exact serialized edge remains to be captured.
+For each supported Scribe recipe, runtime publication requires exactly one audited
+`ConsumableGainEffect` output matching the role profile before it publishes the recipe edge.
 
 `CraftingInstanceListVariable` merges automation by recipe. It does not record which caller
 contributed a level change. Therefore a feature must not edit an instance merely because its recipe
@@ -130,8 +130,8 @@ UICraftingPage.QueueCraft(recipe, quantity)
      -> craftingQueueInstances.Add(instance)
 ```
 
-Auto Scribe will use the audited non-UI contract beneath this path to submit bounded one-shot work.
-It will observe player-owned `AutoScribeInstances` as external production pressure but will not
+Auto Scribe uses the audited non-UI contract beneath this path to submit bounded one-shot work.
+It observes player-owned `AutoScribeInstances` as external production pressure but does not
 create, edit, or remove persistent automatic instances. This avoids ambiguous cross-restart
 ownership and gives emergency stop the same terminal behavior as other ServiceCycle queue
 services: already accepted native work may finish, but the suite submits nothing new.
@@ -150,8 +150,8 @@ Aggregated `ConsumableSO.GetQuantity()` is insufficient for Auto Scribe demand a
 shared world publication needs the levelled counts.
 
 The created `ConsumableUsage` receives both effective and base scaling from the selected count.
-The exact fields that safely expose an in-flight Scroll's level must be added to the installed
-contract audit before policy reserves that use as supply.
+The world reader publishes `baseSi.GetLevelInt()` under installed contracts, so policy reserves an
+in-flight use only when its exact level is the requested level or higher.
 
 ## Higher enchantments replace lower ones
 
@@ -183,32 +183,23 @@ The candidate build's `Targeting.TargetStructure`:
   most deficient target;
 - reports no valid target when the filtered set is empty.
 
-This means native "random" targeting may already distribute a Scroll toward the structure with the
-largest level separation. That conclusion is conditional on each supported Scroll asset actually
-using this target-selection shape and an unambiguous matcher. Serialized asset evidence is still
-required per discovered role.
+This native "random" targeting distributes a supported Scroll toward a valid deficient structure.
+The collector accepts only an exact target-selection shape with an unambiguous matcher.
 
-Auto Items currently proves randomization capability but does not publish or revalidate target
-availability. Full coverage requires tightening that boundary: a surplus or obsolete Scroll must
-not be submitted merely because it is owned.
+Auto Items now consumes the shared coverage directive and repeats the exact native
+`TargetStructure.GetRandomList` check with the live strongest Scroll level immediately before use.
+A surplus or obsolete Scroll is therefore blocked when no upgrade target remains.
 
-## Contracts still required
+## Remaining runtime validation
 
-Before implementation can submit native Scribe work:
+The implementation now rejects unsupported multi-target or ambiguous graphs, publishes levelled
+owned/pending/queued/automatic supply, revalidates exact native candidates at action time, and
+verifies queue or instant-stock postconditions. The source-contract scan and installed metadata
+suite cover every reflected field, method, type, and the `CraftingInstance(CraftingRecipeSO,
+BigDouble)` constructor.
 
-1. For every one of the six registered recipes, prove
-   `useQuantityAsLevel`, output type and identity, cost, duration, and completion-effect shape.
-2. For every exact Scroll-family output, prove target reference type, `TargetStructure` condition,
-   enchantment matcher shape, and each applied enchantment. Reject unsupported multi-target or
-   ambiguous graphs instead of truncating them to one role.
-3. Prove the exact runtime registry/list surfaces for the active and automatic Scribe lists, active
-   queue capacity, and the non-UI one-shot submission path.
-4. Prove levelled `ConsumableCount`, queued `CraftingInstance`, and pending `ConsumableUsage`
-   publication across save/load.
-5. Add source and installed metadata contracts for every reflected field, method, constructor, and
-   return type.
-6. Perform a read-only live correlation between published structure coverage and the game's
-   visible enchantment table before enabling mutation.
-
-Missing or contradictory evidence leaves Auto Scribe disabled and keeps Auto Items' existing
-Scroll behavior unchanged until its own target-aware gate is separately proven.
+What remains is interactive evidence on a disposable save: correlate published coverage with the
+visible enchantment table, observe both queued and instant completion, exercise manual and
+persistent automatic competition, verify no-candidate Scroll blocking, and cross save/load, reset,
+NG+, scene replacement, shutdown, and restart. Any disagreement fails closed and must update this
+dossier before release.

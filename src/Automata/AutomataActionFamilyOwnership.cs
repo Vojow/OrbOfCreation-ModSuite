@@ -24,6 +24,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.HarvestAction };
     private static readonly AutomationActionFamily[] ItemFamilies =
         { AutomationActionFamily.ConsumableUse };
+    private static readonly AutomationActionFamily[] ScribeFamilies =
+        { AutomationActionFamily.CraftingQueueSubmission };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -36,6 +38,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private ActionFamilyLeaseSet? _spellLevel;
     private ActionFamilyLeaseSet? _harvest;
     private ActionFamilyLeaseSet? _items;
+    private ActionFamilyLeaseSet? _scribe;
     private IDisposable? _knownExternal;
     private int _pluginInventoryCount = -1;
     private long _structuresRetryFrame;
@@ -46,6 +49,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private long _spellLevelRetryFrame;
     private long _harvestRetryFrame;
     private long _itemsRetryFrame;
+    private long _scribeRetryFrame;
 
     internal int ClaimAttempts { get; private set; }
     public bool KnownAutoBuyLoaded { get; private set; }
@@ -76,10 +80,13 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;
     public bool OwnsHarvest => _harvest?.IsHeld == true;
     public bool OwnsItems => _items?.IsHeld == true && _multiBuy?.IsHeld == true;
+    public bool OwnsScribe => _scribe?.IsHeld == true;
     public bool TryCaptureHarvestMutationPermit() => _harvest?.TryCaptureMutationPermit() == true;
     public bool TryCaptureItemMutationPermit() =>
         _items?.TryCaptureMutationPermit() == true &&
         _multiBuy?.TryCaptureMutationPermit() == true;
+    public bool TryCaptureScribeMutationPermit() =>
+        _scribe?.TryCaptureMutationPermit() == true;
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -135,10 +142,15 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             suiteReady && config.CanStartAutoItemsActively &&
             AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems),
             "AutoItems", "Automata Auto Items", ItemFamilies);
+        RefreshLease(ref _scribe, ref _scribeRetryFrame, frame,
+            suiteReady && config.CanStartAutoScribeActively &&
+            config.CanStartAutoItemsActively && config.AutoItems.UseScrolls,
+            "AutoScribe", "Automata Auto Scribe", ScribeFamilies);
     }
 
     public void ReleaseLifecycleClaims()
     {
+        Release(ref _scribe);
         Release(ref _items);
         Release(ref _harvest);
         Release(ref _spellLevel);
@@ -204,5 +216,6 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _spellLevelRetryFrame = 0;
         _harvestRetryFrame = 0;
         _itemsRetryFrame = 0;
+        _scribeRetryFrame = 0;
     }
 }

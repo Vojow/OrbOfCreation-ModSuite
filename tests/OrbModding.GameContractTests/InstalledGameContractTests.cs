@@ -276,6 +276,49 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoScribe_MatchesOneShotQueueAndTargetPreflightContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            ".ctor",
+            false,
+            "System.Void",
+            "CraftingRecipeSO",
+            "BigDouble");
+        AssertMethod(assembly, "CraftingInstance", "Initiate", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "CraftingInstance",
+            "CheckInstantCraft",
+            false,
+            "System.Boolean");
+        AssertMethod(assembly, "CraftingInstance", "InstantCraft", false, "System.Void");
+        AssertMethod(
+            assembly,
+            "Targeting.TargetStructure",
+            "GetRandomList",
+            false,
+            "System.Collections.Generic.List`1<Targeting.ITargetable>",
+            "ScalingInfo");
+        AssertMethod(
+            assembly,
+            "ScalingInfo",
+            "Basic",
+            true,
+            "ScalingInfo",
+            "BigDouble");
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableCount>",
+            assembly.GetFieldType("ConsumableSO", "consumableCounts"));
+        Assert.Equal(
+            "ScalingInfo",
+            assembly.GetFieldType("ConsumableUsage", "baseSi"));
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

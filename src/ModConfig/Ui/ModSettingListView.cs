@@ -29,6 +29,7 @@ internal sealed class ModSettingListView : IDisposable
     private readonly Action<ConfigEditValue?> _statusChanged;
     private readonly List<GameObject> _rows = new();
     private readonly AutoItemsTemporaryItemPickerView _temporaryItemPicker;
+    private readonly AutoScribeRolePickerView _autoScribeRolePicker;
 
     public ModSettingListView(
         ConfigEditSession session,
@@ -44,6 +45,10 @@ internal sealed class ModSettingListView : IDisposable
             rebuildRequested ?? throw new ArgumentNullException(nameof(rebuildRequested));
         _statusChanged = statusChanged ?? throw new ArgumentNullException(nameof(statusChanged));
         _temporaryItemPicker = new AutoItemsTemporaryItemPickerView(
+            _labelTemplate,
+            _rebuildRequested,
+            _statusChanged);
+        _autoScribeRolePicker = new AutoScribeRolePickerView(
             _labelTemplate,
             _rebuildRequested,
             _statusChanged);
@@ -195,6 +200,14 @@ internal sealed class ModSettingListView : IDisposable
                     temporaryCatalog,
                     MinimumSettingRowHeight));
         }
+        if (AutoScribeRolePickerView.AppliesTo(setting) &&
+            _session.DependencySatisfied(setting) &&
+            !edit.HasExternalConflict)
+        {
+            rowHeight = Math.Max(
+                rowHeight,
+                _autoScribeRolePicker.Measure(MinimumSettingRowHeight));
+        }
         var visibleRowHeight = rowHeight - SettingRowGap;
         rowRect.sizeDelta = new Vector2(0f, visibleRowHeight);
         ModConfigUiFactory.SetTopAnchoredHeight(
@@ -225,7 +238,9 @@ internal sealed class ModSettingListView : IDisposable
         }
 
         CreateEditor(row.transform, setting, edit, temporaryCatalog);
-        if (edit.IsEditable && !AutoItemsTemporaryItemPickerView.AppliesTo(setting))
+        if (edit.IsEditable &&
+            !AutoItemsTemporaryItemPickerView.AppliesTo(setting) &&
+            !AutoScribeRolePickerView.AppliesTo(setting))
         {
             ModConfigUiFactory.CreateButton(
                 "Default",
@@ -289,6 +304,11 @@ internal sealed class ModSettingListView : IDisposable
         if (AutoItemsTemporaryItemPickerView.AppliesTo(setting))
         {
             _temporaryItemPicker.Render(parent, edit, temporaryCatalog);
+            return;
+        }
+        if (AutoScribeRolePickerView.AppliesTo(setting))
+        {
+            _autoScribeRolePicker.Render(parent, edit);
             return;
         }
         switch (setting.Kind)

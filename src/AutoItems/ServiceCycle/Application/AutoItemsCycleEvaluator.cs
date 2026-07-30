@@ -17,6 +17,7 @@ internal static class AutoItemsCycleEvaluator
         ServiceActionWriter<AutoItemsCycleAction> actions,
         AutoItemsTemporaryActivationTracker temporaryActivations,
         ISet<Guid>? temporaryAllowlist,
+        AutoScribeIdentityProfile? autoScribeIdentityProfile,
         out AutoItemsDecisionMetrics metrics)
     {
         var interval = AutoItemsConfigurationPolicy.EvaluationInterval(config);
@@ -75,7 +76,8 @@ internal static class AutoItemsCycleEvaluator
             world,
             in config,
             temporaryActivations,
-            temporaryAllowlist);
+            temporaryAllowlist,
+            autoScribeIdentityProfile);
 
         // An externally restored or manually started temporary effect has the same exclusion
         // strength as one submitted by this service. Check it before every family priority.

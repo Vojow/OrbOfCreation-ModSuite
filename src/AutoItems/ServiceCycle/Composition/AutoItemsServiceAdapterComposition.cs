@@ -26,13 +26,17 @@ internal sealed class AutoItemsServiceAdapterComposition
         var natives = new AutoItemsNativeAdapter(
             dependencies.RegistryResolver,
             dependencies.TryCaptureMutationPermit,
-            temporaryActivations);
+            temporaryActivations,
+            dependencies.AutoScribeIdentityProfile);
         var actions = new AutoItemsCycleActionAdapter(
             natives,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily);
         return new AutoItemsServiceAdapterComposition(
-            AutoItemsService.Define(actions, temporaryActivations),
+            AutoItemsService.Define(
+                actions,
+                temporaryActivations,
+                dependencies.AutoScribeIdentityProfile),
             natives,
             temporaryActivations);
     }

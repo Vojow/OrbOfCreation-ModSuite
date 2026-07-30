@@ -154,11 +154,11 @@ public sealed class GameWorldCycleFrameTests
         frame.ConsumableCosts.Append(new WorldConsumableCost(
             first, WorldConsumableCostKind.Consume, lowResource, new BigDouble(4d)));
         frame.ConsumableUsages.Append(new WorldConsumableUsage(
-            second, highUsage, engaged: false, new BigDouble(7d), new BigDouble(8d)));
+            second, highUsage, 3, engaged: false, new BigDouble(7d), new BigDouble(8d)));
         frame.ConsumableUsages.Append(new WorldConsumableUsage(
-            first, highUsage, engaged: true, new BigDouble(5d), new BigDouble(6d)));
+            first, highUsage, 2, engaged: true, new BigDouble(5d), new BigDouble(6d)));
         frame.ConsumableUsages.Append(new WorldConsumableUsage(
-            first, lowUsage, engaged: false, new BigDouble(3d), new BigDouble(4d)));
+            first, lowUsage, 1, engaged: false, new BigDouble(3d), new BigDouble(4d)));
 
         var world = GameWorldFrameDeriver.Build(frame);
 
@@ -183,6 +183,7 @@ public sealed class GameWorldCycleFrameTests
         Assert.Equal(2, usageCount);
         Assert.Equal(lowUsage, world.ConsumableUsages[usageStart].UsageId);
         Assert.True(world.ConsumableUsages[usageStart].Pending);
+        Assert.Equal(1, world.ConsumableUsages[usageStart].Level);
         Assert.Equal(highUsage, world.ConsumableUsages[usageStart + 1].UsageId);
         Assert.True(world.ConsumableUsages[usageStart + 1].Engaged);
         Assert.Equal(5d, world.ConsumableUsages[usageStart + 1].RemainingDuration.ToDouble());

@@ -8,7 +8,8 @@ internal readonly struct AutoItemsCycleAction
         Guid itemId,
         AutoItemsConsumableFamily family,
         long collectedAtFrame,
-        long collectedAtEpoch)
+        long collectedAtEpoch,
+        int plannedLevel = 0)
     {
         if (itemId == Guid.Empty)
             throw new ArgumentException("An Auto Items action requires an item identity.", nameof(itemId));
@@ -18,10 +19,12 @@ internal readonly struct AutoItemsCycleAction
         Family = family;
         CollectedAtFrame = collectedAtFrame;
         CollectedAtEpoch = collectedAtEpoch;
+        PlannedLevel = plannedLevel;
     }
 
     internal Guid ItemId { get; }
     internal AutoItemsConsumableFamily Family { get; }
     internal long CollectedAtFrame { get; }
     internal long CollectedAtEpoch { get; }
+    internal int PlannedLevel { get; }
 }

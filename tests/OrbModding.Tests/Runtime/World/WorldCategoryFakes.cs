@@ -36,6 +36,10 @@ internal static class WorldCategoryFakes
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
+        ["CraftingRecipeSO"] = typeof(FakeScribeRecipe),
+        ["CraftingInstanceListVariable"] = typeof(FakeScribeInstanceList),
+        ["CraftingInstance"] = typeof(FakeScribeInstance),
+        ["EnchantmentInstance"] = typeof(FakeEnchantmentInstance),
         ["RitualSO"] = typeof(FakeRitual),
         ["AchievementSO"] = typeof(FakeAchievement),
         ["AdvancementSO"] = typeof(FakeAdvancement),
@@ -72,6 +76,7 @@ internal static class WorldCategoryFakes
     /// <summary>Empties every registry, so one test cannot see another's entities.</summary>
     internal static void Clear()
     {
+        FakeScribeRecipe.All.Clear();
         FakeAlchemyRecipe.All.Clear();
         FakeAlchemyType.All.Clear();
         FakeSpellRecipe.All.Clear();
@@ -956,6 +961,7 @@ internal sealed class FakeConsumable
     public FakeConsumableCostList consumeCost = new();
     public FakeConsumableCostList usageCost = new();
     public List<FakeConsumableUsage> consumableUsages = new();
+    public List<FakeConsumableCount> consumableCounts = new();
 
     public Guid GetGuid() => Identity;
     public double preparationTime;
@@ -965,14 +971,52 @@ internal sealed class FakeConsumable
     public bool queueOnStart;
 }
 
+internal sealed class FakeScribeRecipe
+{
+    public static readonly List<FakeScribeRecipe> All = new();
+}
+
+internal sealed class FakeScribeInstanceList
+{
+    public List<FakeScribeInstance> value = new();
+    public bool isAutoList;
+    public int GetMax() => value.Count;
+}
+
+internal sealed class FakeScribeInstance
+{
+}
+
+internal sealed class FakeEnchantmentInstance
+{
+}
+
+internal sealed class FakeConsumableCount
+{
+    public int Level = 1;
+    public int Quantity;
+    public int fr;
+
+    public int GetLevel() => Level;
+    public int GetQuantity() => Quantity;
+}
+
 internal sealed class FakeConsumableUsage
 {
     public Guid Identity = Guid.NewGuid();
+    public FakeScalingInfo baseSi = new();
     public bool en;
     public BigDouble dr;
     public BigDouble maxDr;
 
     public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeScalingInfo
+{
+    public int Level = 1;
+
+    public int GetLevelInt() => Level;
 }
 
 internal sealed class FakeConsumableType

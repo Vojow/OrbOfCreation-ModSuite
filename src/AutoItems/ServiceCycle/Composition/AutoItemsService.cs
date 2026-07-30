@@ -9,7 +9,8 @@ internal static class AutoItemsService
 {
     internal static IAutomataServiceDefinition<AutoItemsCycleState, AutoItemsCycleAction> Define(
         IAutoItemsCycleActionPort actions,
-        AutoItemsTemporaryActivationTracker temporaryActivations)
+        AutoItemsTemporaryActivationTracker temporaryActivations,
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
     {
         if (actions is null) throw new ArgumentNullException(nameof(actions));
         if (temporaryActivations is null)
@@ -20,7 +21,9 @@ internal static class AutoItemsService
             AutoItemsServicePolicies.FaultRecoveryPolicy);
         return AutomataService.Define<AutoItemsCycleState, AutoItemsCycleAction>(
             in metadata,
-            () => new AutoItemsWorkerDefinition(temporaryActivations),
+            () => new AutoItemsWorkerDefinition(
+                temporaryActivations,
+                autoScribeIdentityProfile),
             ShouldStart,
             actions.TryExecute);
     }

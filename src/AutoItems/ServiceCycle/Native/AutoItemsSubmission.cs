@@ -16,6 +16,7 @@ internal enum AutoItemsPreflight
     Quarantined = 10,
     TemporaryEffectPresent = 11,
     TemporaryCostChanged = 12,
+    TargetUnavailable = 13,
 }
 
 internal readonly struct AutoItemsSubmission

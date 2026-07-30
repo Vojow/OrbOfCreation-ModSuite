@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.World;
@@ -73,7 +74,8 @@ internal static class AutoItemsCandidateScanner
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
         AutoItemsTemporaryActivationTracker temporaryActivations,
-        ISet<Guid>? temporaryAllowlist)
+        ISet<Guid>? temporaryAllowlist,
+        AutoScribeIdentityProfile? scribeProfile)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (temporaryActivations is null)
@@ -90,6 +92,9 @@ internal static class AutoItemsCandidateScanner
         AutoItemsCycleAction firstTemporary = default;
         AutoItemsCycleAction firstRelic = default;
         AutoItemsCycleAction firstScroll = default;
+        var coverage = scribeProfile is not null
+            ? ScrollCoveragePlanner.Build(world, scribeProfile)
+            : null;
 
         for (var index = 0; index < rows.Length; index++)
         {
@@ -162,7 +167,11 @@ internal static class AutoItemsCandidateScanner
                     profile.Family,
                     profile.Consumable.ConsumableId,
                     temporaryAllowlist) &&
-                profile.Consumable.CanBeRandomized)
+                profile.Consumable.CanBeRandomized &&
+                IsCoverageAllowed(
+                    profile.Consumable.ConsumableId,
+                    scribeProfile,
+                    coverage))
             {
                 saturationCandidate |= CanFitAfterFullRecovery(in profile);
                 if (!HasCurrentToxicityHeadroom(in profile)) continue;
@@ -171,7 +180,10 @@ internal static class AutoItemsCandidateScanner
                     ref firstScroll,
                     in profile,
                     world.CollectedAtFrame,
-                    world.CollectedAtEpoch);
+                    world.CollectedAtEpoch,
+                    WorldConsumableCountLookup.StrongestOwnedLevel(
+                        world.ConsumableCounts,
+                        profile.Consumable.ConsumableId));
             }
         }
 
@@ -187,6 +199,19 @@ internal static class AutoItemsCandidateScanner
             in firstTemporary,
             in firstRelic,
             in firstScroll);
+    }
+
+    private static bool IsCoverageAllowed(
+        Guid consumableId,
+        AutoScribeIdentityProfile? profile,
+        ScrollCoveragePlan? coverage)
+    {
+        // Scrolls outside the audited Scribe facade retain the existing generic random-use policy.
+        // Audited Scribe Scrolls are stricter: their shared target graph must prove a useful target.
+        if (profile is null || !profile.TryFindByScroll(consumableId, out _)) return true;
+        return coverage is not null &&
+               coverage.TryFind(consumableId, out var role) &&
+               role.UseDirective == ScrollUseDirective.AllowUse;
     }
 
     private static bool HasTemporaryFamily(GameWorldState world, Guid consumableId)
@@ -234,14 +259,16 @@ internal static class AutoItemsCandidateScanner
         ref AutoItemsCycleAction first,
         in AutoItemsConsumableProfile profile,
         long collectedAtFrame,
-        long collectedAtEpoch)
+        long collectedAtEpoch,
+        int plannedLevel = 0)
     {
         if (first.ItemId != Guid.Empty) return;
         first = new AutoItemsCycleAction(
             profile.Consumable.ConsumableId,
             profile.Family,
             collectedAtFrame,
-            collectedAtEpoch);
+            collectedAtEpoch,
+            plannedLevel);
     }
 
     private static bool IsBaseEligible(in AutoItemsConsumableProfile profile) =>

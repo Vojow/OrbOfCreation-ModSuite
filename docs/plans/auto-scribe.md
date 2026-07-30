@@ -1,8 +1,9 @@
 # Auto Scribe
 
-> **Lifecycle: Planning.** Product policy, current-build trust, and the first managed-code and
-> serialized-asset contract slices are recorded. Native mutation remains blocked on the incomplete
-> recipe/output/target relationship audit and one-shot action contracts described below.
+> **Lifecycle: Implementation complete; interactive validation pending.** The audited identity
+> facade, shared world evidence, planner, Auto Items coordination, guarded one-shot mutation,
+> configuration, diagnostics, and semantic role picker are implemented. No DLL has been installed
+> and no live save has been opened for UAT.
 
 [Back to plans](README.md) | [Auto Items plan](auto-items.md) |
 [Native evidence](../reverse-engineering/auto-scribe-native-pipeline.md)
@@ -16,17 +17,17 @@ Last updated: **2026-07-30**
 
 | Phase | Status | Exit condition |
 |---|---|---|
-| 1. Product model and static native evidence | **In progress** | Every registered Scribe recipe's output Scroll, enchantment, level, and target-selection relationships are proven |
+| 1. Product model and static native evidence | **Complete** | Every supported Scribe recipe's output Scroll, enchantment, level, and target-selection relationships are proven |
 | 2. Current-build compatibility audit | **Complete** | `steam-windows-2026-07-29` accepts the installed assembly pair on `main` |
-| 3. Shared world publication | **Planned** | Levelled Scroll stock, structure enchantments, exact Scribe recipes, target eligibility, and Scribe work publish atomically |
-| 4. Read-only coverage planner | **Planned** | A native-free planner publishes production demand and Scroll-use directives by opaque role and level without emitting mutations |
-| 5. Target-aware Auto Items integration | **Planned** | Auto Items submits a Scroll only when the shared plan and immediate native preflight both find a valid target for its strongest owned level |
-| 6. Guarded bounded Scribe mutation | **Planned** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue postcondition |
-| 7. Configuration and UX | **Planned** | Disabled-by-default controls explain coverage, target level, queue use, dependency state, and external production |
-| 8. Lifecycle, diagnostics, and observability | **Planned** | Emergency stop, disable, save/load, reset, NG+, shutdown, and manual edits have explicit terminal behavior and stable diagnostics |
-| 9. Automated verification | **Planned** | Focused, complete portable, profiler, source-contract, and installed-contract gates pass |
-| 10. Interactive game validation | **Planned** | Disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
-| 11. Documentation and cleanup | **Planned** | Behavior docs replace completed plan material and the stacked PR is reviewable |
+| 3. Shared world publication | **Complete** | Levelled Scroll stock, structure enchantments, exact Scribe recipes, target eligibility, and Scribe work publish atomically |
+| 4. Read-only coverage planner | **Complete** | A native-free planner publishes production demand and Scroll-use directives by opaque role and level without emitting mutations |
+| 5. Target-aware Auto Items integration | **Complete** | Auto Items submits a Scroll only when the shared plan and immediate native preflight both find a valid target for its strongest owned level |
+| 6. Guarded bounded Scribe mutation | **Complete** | The feature submits at most one revalidated one-shot native Scribe craft at a time and verifies its queue or instant-stock postcondition |
+| 7. Configuration and UX | **Complete** | Disabled-by-default controls and a semantic role picker avoid exposing or persisting UUIDs |
+| 8. Lifecycle, diagnostics, and observability | **Complete** | Emergency stop, dependency loss, lifecycle replacement, quarantine, and coverage state have explicit diagnostics |
+| 9. Automated verification | **Complete** | `script/test` passes 1,936 portable and 90 profile tests; all 26 installed game-contract tests pass |
+| 10. Interactive game validation | **Pending authorization** | Disposable-save coverage, upgrade, queue scarcity, manual-race, lifecycle, restart, and cleanup scenarios pass |
+| 11. Documentation and cleanup | **Complete** | Behavior documentation and responsibility boundaries are current and the stacked PR is reviewable |
 
 ### Current resume point
 
@@ -34,17 +35,19 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: finish Phase 1 without authorizing mutation. The serialized
-  `ScribeCraftingRecipes` registry is confirmed to contain exactly six recipes: Advancement,
-  Development, Echo, Excellence, Learning, and Power. Obtain read-only evidence for every
-  recipe-to-Scroll and Scroll-to-enchantment/target edge before adding those native contracts.
+- Current task: review the implementation in draft PR #102, then wait for explicit authorization
+  before installing a DLL or performing disposable-save UAT.
+- Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
+  Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
+  production recipe for them.
 - Installed hashes observed on 2026-07-30:
   - `Assembly-CSharp.dll`: `436210E61D9F8B84658609D35E32BC274356170005AC15FE93FA36D4D9F7AA4C`
   - `Assembly-CSharp-firstpass.dll`: `D14D52652591ED3CB5ACF55186478DD3873F3C836871E0F68AA861D1767F480A`
 - `origin/main` accepts this exact pair as baseline `steam-windows-2026-07-29` in
-  `GameAssemblyAudit` and `data/native-contracts.json`. Build trust is complete; it does not replace
-  the still-required feature-specific relationship and mutation contract audit.
-- No DLL was installed, no save was opened or edited, and no native mutation was attempted.
+  `GameAssemblyAudit` and `data/native-contracts.json`. The branch adds and passes the
+  feature-specific relationship and mutation contracts for that accepted baseline.
+- Installed metadata contracts pass against this exact pair. No DLL was installed, no save was
+  opened or edited, and no live native mutation was attempted.
 
 ## Goal
 
@@ -85,13 +88,15 @@ catalog boundary. The checked-in identity extraction contains at least eight Scr
 | Power | `9c0a2b96-45fa-4aca-83ba-8efad8895608` | `4bb8af50-fc7d-44a7-b1fc-937c390f8aec` | `b9d5f0f7-43fd-4bad-a8e2-8a73f2f1d1d6` |
 | Speed | None identified | `b2232a7d-5c97-44c9-9520-686e99fa8293` | `9f068bad-f3a0-47de-84f4-407e67622fe1` |
 
-These rows are identity candidates, not accepted relationships. Names made the missing scope
-visible, but names never authorize automation.
+These rows originally exposed the discovery scope. The implemented baseline profile accepts them
+only together with exact expected types, and the world reader revalidates each recipe/output/target
+graph from native references. Names remain diagnostics and never authorize automation.
 
 The serialized `ScribeCraftingRecipes` registry contains exactly six entries, resolving to
 `CraftScrollAdvancement`, `CraftScrollDevelopment`, `CraftScrollEcho`,
-`CraftScrollExcellence`, `CraftScrollLearning`, and `CraftScrollPower`. This proves the current
-registry boundary, but not yet the output and target edges in each graph.
+`CraftScrollExcellence`, `CraftScrollLearning`, and `CraftScrollPower`. Runtime publication now
+requires an exact output Scroll, one exact request-target script, one matching enchant script, and
+one unambiguous structure target graph before the role becomes usable.
 
 The production catalog is reconstructed from accepted native relationships on every lifecycle:
 
@@ -178,24 +183,23 @@ configuration, or Auto Items integration. An absent, ambiguous, or mismatched pr
 13. **Disabled by default.** The feature requires explicit activation and exposes why a role is
     producing, covered, queued, waiting, externally automated, or blocked.
 
-## Open design rulings
+## Implemented rulings
 
-These are implementation questions, not permission to guess:
-
-1. **Queue fairness.** When several roles are deficient, choose and test deterministic fair
-   scheduling. The preferred policy is largest uncovered deficit, then oldest served role, then
-   stable `ScrollRoleKey`.
-2. **External automation accounting.** Determine whether a player-owned automation instance can be
-   treated as eventual supply or only as a reason to avoid competing. The first safe behavior is
-   to avoid queueing the same role and report external production.
-3. **In-flight level evidence.** Confirm that queued Scribe work and pending Scroll usage preserve
-   their scaling strongly enough to reserve the correct level.
-4. **Canonical one-shot action.** Prove the non-UI native queue contract underlying
-   `UICraftingPage.QueueCraft`, including availability, cost, active-queue capacity, construction,
-   initiation, list insertion, and postcondition. Do not require the Scribe page to be open.
-5. **Completion wake.** Identify the narrow native invalidation signal for craft completion,
-   enchantment replacement, recipe-level unlock, and structure discovery. Polling remains a bounded
-   fallback, not an excuse for Harmony work in an unbounded path.
+1. **Deterministic selection.** The worker selects the largest enabled deficit, then stable
+   `ScrollRoleKey`. Disabled roles cannot starve enabled roles. The bounded one-action cycle and
+   fresh snapshot after every action provide natural rotation as deficits fall.
+2. **External automation accounting.** Active one-shot work reserves supply. Matching automatic
+   work suppresses competing production and is reported as external production; Auto Scribe never
+   creates or edits the player's persistent automatic entries.
+3. **Level-aware in-flight evidence.** Owned counts, pending uses, active work, and automatic work
+   are all counted only at the requested level or higher.
+4. **Canonical one-shot action.** The main-thread adapter revalidates lifecycle, ownership,
+   identity, capacity, targets, supply, visibility, affordability, and then uses the audited
+   `CraftingInstance(recipe, level)` path. It verifies either one queued entry or one same-or-higher
+   stock unit for instant craft and quarantines ambiguous mutations.
+5. **Bounded wake policy.** The worker uses the configured 0.25–10 second evaluation interval,
+   waking immediately only after emitting one useful action. Shared world invalidation and
+   lifecycle replacement provide earlier safe refreshes without an unbounded background scan.
 
 ## Required publication
 
@@ -251,43 +255,28 @@ ambiguous attempted mutation quarantines Auto Scribe for the lifecycle.
 
 ## Configuration and UX
 
-The proposed surface is intentionally small:
+The implemented surface is intentionally small:
 
 - `AutoScribe.Mode`: `Disabled` by default, or `Active`;
 - `AutoScribe.Roles`: a discovered-role picker persisted as stable `ScrollRoleKey` values, with all
   audited producible roles enabled by default behind the master switch;
 - `AutoScribe.EvaluationIntervalSeconds`: bounded planning cadence.
 
-The Mods page should show a read-only coverage summary per role:
+The Mods page presents the roles as named checkboxes with All, None, and Default controls. Runtime
+feature health explains dependency and safety states such as Auto Items Scrolls disabled, target
+evidence unavailable, identity profile unavailable, lifecycle retirement, action-family conflict,
+or mutation quarantine. Service diagnostics retain aggregate deficient, covered,
+externally-producing, evidence-unknown, planned-action, and target-level projections for deeper
+inspection. Exact UUIDs remain diagnostic native authority but are not persisted policy or normal
+user-facing labels.
 
-```text
-Development: target Lv 12 - 28/41 covered - 2 supplied - queued
-```
+## Remaining delivery
 
-It should also explain dependency and safety states: Auto Items Scrolls disabled, coverage-only
-Scroll with no Scribe recipe, target evidence unavailable, no queue room, player automation
-present, identity profile unavailable, lifecycle retired, or mutation quarantined. Exact UUIDs
-remain diagnostic native authority but are not persisted policy or normal user-facing labels.
-
-## Delivery sequence
-
-1. Finish serialized recipe/output/target relationship evidence. Current-build trust is complete.
-2. Add the baseline-specific identity profile, exact Scribe type and Scroll family identities, and
-   installed metadata contracts; discover individual role graphs from native relationships rather
-   than a fixed screen list.
-3. Publish levelled Scroll counts, enchantment coverage, Scribe recipes, target eligibility, and
-   active/automatic instances through the shared world snapshot.
-4. Implement and portable-test the pure coverage plan, use directives, and fair one-shot scheduler
-   with no action adapter.
-5. Tighten Auto Items Scroll eligibility and live preflight to consume the use directive and
-   require a valid upgrade target.
-6. Add disabled-by-default configuration, diagnostics, and service registration.
-7. Implement guarded one-shot native Scribe queue submission after its exact action contract is
-   proven.
-8. Add configuration UX and coverage summaries.
-9. Run focused and complete automated gates on the current tree.
-10. Perform interactive disposable-save validation and replace completed plan material with
-    maintained behavior documentation.
+1. Run the complete portable gate on the current tree and keep the draft PR green.
+2. With explicit user authorization, install the reviewed build and perform the disposable-save
+   scenarios below.
+3. Record observed native behavior, fix any contract disagreement, and only then move the feature
+   from draft/validation status toward release.
 
 ## Interactive validation outline
 

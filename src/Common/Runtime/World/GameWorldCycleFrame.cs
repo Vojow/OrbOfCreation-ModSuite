@@ -122,6 +122,13 @@ internal sealed class GameWorldCycleFrame
     internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
     internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
     internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
+    internal WorldConsumableCountBuffer ConsumableCounts { get; } = new();
+    internal WorldRelationBuffer<WorldScribeRecipe> ScribeRecipes { get; } = new();
+    internal WorldRelationBuffer<WorldScribeQueue> ScribeQueues { get; } = new();
+    internal WorldRelationBuffer<WorldScribeWork> ScribeWork { get; } = new();
+    internal WorldRelationBuffer<WorldStructureEnchantment> StructureEnchantments { get; } = new();
+    internal WorldRelationBuffer<WorldScrollTarget> ScrollTargets { get; } = new();
+    internal WorldRelationBuffer<WorldScrollTargetEvidence> ScrollTargetEvidence { get; } = new();
     internal WorldSampleBuffer<WorldRitual, WorldRitual> Rituals { get; } = new();
     internal WorldSampleBuffer<WorldAchievement, WorldAchievement> Achievements { get; } = new();
     internal WorldSampleBuffer<WorldAdvancement, WorldAdvancement> Advancements { get; } = new();
@@ -248,6 +255,49 @@ internal static class GameWorldFrameDeriver
             ConsumableTypes = WorldConsumableRelationDeriver.Build(frame.ConsumableTypes),
             ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
             ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
+            ConsumableCounts = WorldConsumableRelationDeriver.Build(frame.ConsumableCounts),
+            ScribeRecipes = WorldScribeRelationDeriver.Build(
+                frame.ScribeRecipes,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            ScribeQueues = WorldScribeRelationDeriver.Build(
+                frame.ScribeQueues,
+                static (left, right) => left.QueueId.CompareTo(right.QueueId)),
+            ScribeWork = WorldScribeRelationDeriver.Build(
+                frame.ScribeWork,
+                static (left, right) =>
+                {
+                    var queue = left.QueueId.CompareTo(right.QueueId);
+                    return queue != 0 ? queue : left.RecipeId.CompareTo(right.RecipeId);
+                }),
+            StructureEnchantments = WorldScribeRelationDeriver.Build(
+                frame.StructureEnchantments,
+                static (left, right) =>
+                {
+                    var structure = left.StructureId.CompareTo(right.StructureId);
+                    return structure != 0
+                        ? structure
+                        : left.EnchantmentId.CompareTo(right.EnchantmentId);
+                }),
+            ScrollTargets = WorldScribeRelationDeriver.Build(
+                frame.ScrollTargets,
+                static (left, right) =>
+                {
+                    var consumable = left.ConsumableId.CompareTo(right.ConsumableId);
+                    if (consumable != 0) return consumable;
+                    var enchantment = left.EnchantmentId.CompareTo(right.EnchantmentId);
+                    return enchantment != 0
+                        ? enchantment
+                        : left.StructureId.CompareTo(right.StructureId);
+                }),
+            ScrollTargetEvidence = WorldScribeRelationDeriver.Build(
+                frame.ScrollTargetEvidence,
+                static (left, right) =>
+                {
+                    var consumable = left.ConsumableId.CompareTo(right.ConsumableId);
+                    return consumable != 0
+                        ? consumable
+                        : left.EnchantmentId.CompareTo(right.EnchantmentId);
+                }),
             Rituals = frame.Rituals.Build(WorldIdentityDeriver<WorldRitual>.Shared),
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),

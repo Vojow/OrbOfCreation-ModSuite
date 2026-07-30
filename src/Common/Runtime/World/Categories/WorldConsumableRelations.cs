@@ -141,12 +141,14 @@ internal readonly struct WorldConsumableUsage
     internal WorldConsumableUsage(
         Guid consumableId,
         Guid usageId,
+        int level,
         bool engaged,
         BigDouble remainingDuration,
         BigDouble maximumDuration)
     {
         ConsumableId = consumableId;
         UsageId = usageId;
+        Level = level;
         Engaged = engaged;
         RemainingDuration = remainingDuration;
         MaximumDuration = maximumDuration;
@@ -154,6 +156,7 @@ internal readonly struct WorldConsumableUsage
 
     internal Guid ConsumableId { get; }
     internal Guid UsageId { get; }
+    internal int Level { get; }
     internal bool Engaged { get; }
     internal bool Pending => !Engaged;
     internal BigDouble RemainingDuration { get; }
@@ -189,6 +192,87 @@ internal static class WorldConsumableUsageLookup
         }
 
         return count > 0;
+    }
+}
+
+/// <summary>One levelled inventory bucket owned by a consumable.</summary>
+internal readonly struct WorldConsumableCount
+{
+    internal WorldConsumableCount(Guid consumableId, int level, int quantity, int freeQuantity)
+    {
+        ConsumableId = consumableId;
+        Level = level;
+        Quantity = quantity;
+        FreeQuantity = freeQuantity;
+    }
+
+    internal Guid ConsumableId { get; }
+    internal int Level { get; }
+    internal int Quantity { get; }
+    internal int FreeQuantity { get; }
+}
+
+internal static class WorldConsumableCountLookup
+{
+    internal static bool TryFindRange(
+        PublicationTable<WorldConsumableCount> table,
+        Guid consumableId,
+        out int start,
+        out int count)
+    {
+        var rows = table.AsSpan();
+        var low = 0;
+        var high = rows.Length - 1;
+        while (low <= high)
+        {
+            var middle = low + ((high - low) / 2);
+            if (rows[middle].ConsumableId.CompareTo(consumableId) < 0) low = middle + 1;
+            else high = middle - 1;
+        }
+
+        start = low;
+        count = 0;
+        while (start + count < rows.Length &&
+               rows[start + count].ConsumableId == consumableId)
+        {
+            count++;
+        }
+        return count > 0;
+    }
+
+    internal static bool TryGetStrongestOwnedLevel(
+        PublicationTable<WorldConsumableCount> table,
+        Guid consumableId,
+        out int level)
+    {
+        level = 0;
+        if (!TryFindRange(table, consumableId, out var start, out var count)) return false;
+        for (var index = 0; index < count; index++)
+        {
+            var row = table[start + index];
+            if (row.Quantity > 0 && row.Level > level) level = row.Level;
+        }
+        return level > 0;
+    }
+
+    internal static int StrongestOwnedLevel(
+        PublicationTable<WorldConsumableCount> table,
+        Guid consumableId) =>
+        TryGetStrongestOwnedLevel(table, consumableId, out var level) ? level : 0;
+
+    internal static int CountAtOrAbove(
+        PublicationTable<WorldConsumableCount> table,
+        Guid consumableId,
+        int level)
+    {
+        if (!TryFindRange(table, consumableId, out var start, out var count)) return 0;
+        var total = 0;
+        for (var index = 0; index < count; index++)
+        {
+            var row = table[start + index];
+            if (row.Level >= level && row.Quantity > 0) total += row.Quantity;
+        }
+        return total;
     }
 }
 
@@ -240,6 +324,22 @@ internal sealed class WorldConsumableUsageBuffer
     }
 }
 
+internal sealed class WorldConsumableCountBuffer
+{
+    private WorldConsumableCount[] _samples = new WorldConsumableCount[32];
+    private int _count;
+
+    internal int Count => _count;
+    internal ref readonly WorldConsumableCount this[int index] => ref _samples[index];
+    internal void Reset() => _count = 0;
+
+    internal void Append(in WorldConsumableCount sample)
+    {
+        if (_count >= _samples.Length) Array.Resize(ref _samples, _samples.Length * 2);
+        _samples[_count++] = sample;
+    }
+}
+
 internal static class WorldConsumableRelationDeriver
 {
     internal static PublicationTable<WorldConsumableType> Build(WorldConsumableTypeBuffer buffer)
@@ -270,6 +370,16 @@ internal static class WorldConsumableRelationDeriver
         for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
         Array.Sort(rows, ConsumableUsageComparer.Instance);
         return PublicationTable<WorldConsumableUsage>.Create(rows, rows.Length);
+    }
+
+    internal static PublicationTable<WorldConsumableCount> Build(WorldConsumableCountBuffer buffer)
+    {
+        if (buffer.Count == 0) return PublicationTable<WorldConsumableCount>.Empty;
+
+        var rows = new WorldConsumableCount[buffer.Count];
+        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
+        Array.Sort(rows, ConsumableCountComparer.Instance);
+        return PublicationTable<WorldConsumableCount>.Create(rows, rows.Length);
     }
 
     private sealed class ConsumableTypeComparer : IComparer<WorldConsumableType>
@@ -311,6 +421,18 @@ internal static class WorldConsumableRelationDeriver
                 : left.UsageId.CompareTo(right.UsageId);
         }
     }
+
+    private sealed class ConsumableCountComparer : IComparer<WorldConsumableCount>
+    {
+        internal static readonly IComparer<WorldConsumableCount> Instance =
+            new ConsumableCountComparer();
+
+        public int Compare(WorldConsumableCount left, WorldConsumableCount right)
+        {
+            var byConsumable = left.ConsumableId.CompareTo(right.ConsumableId);
+            return byConsumable != 0 ? byConsumable : left.Level.CompareTo(right.Level);
+        }
+    }
 }
 
 /// <summary>
@@ -338,6 +460,12 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
     private readonly Func<object, bool>? _usageEngaged;
     private readonly Func<object, BigDouble>? _usageRemainingDuration;
     private readonly Func<object, BigDouble>? _usageMaximumDuration;
+    private readonly Func<object, int>? _usageLevel;
+    private readonly Func<object, IList?>? _counts;
+    private readonly Type? _countType;
+    private readonly Func<object, int>? _countLevel;
+    private readonly Func<object, int>? _countQuantity;
+    private readonly Func<object, int>? _countFreeQuantity;
 
     internal WorldConsumableReader(Type? nativeType)
     {
@@ -370,6 +498,13 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         _usageEngaged = usageBind.Field<bool>("en");
         _usageRemainingDuration = usageBind.Field<BigDouble>("dr");
         _usageMaximumDuration = usageBind.Field<BigDouble>("maxDr");
+        _usageLevel = usageBind.Through("baseSi").Call<int>("GetLevelInt");
+        _counts = bind.CollectionField("consumableCounts");
+        _countType = bind.CollectionElementType("consumableCounts");
+        var countBind = bind.Elements(_countType, "ConsumableSO.consumableCounts[]");
+        _countLevel = countBind.Call<int>("GetLevel");
+        _countQuantity = countBind.Call<int>("GetQuantity");
+        _countFreeQuantity = countBind.Field<int>("fr");
 
         var relationFailure = bind.Failure;
         if (consumeCostType != usageCostType)
@@ -391,6 +526,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         frame.ConsumableTypes.Reset();
         frame.ConsumableCosts.Reset();
         frame.ConsumableUsages.Reset();
+        frame.ConsumableCounts.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
         var entities = NativeAccessorBinder.StaticList(_nativeType, "All");
@@ -429,11 +565,14 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
                 var consumeCosts = _consumeCosts!(entity);
                 var usageCosts = _usageCosts!(entity);
                 var usages = _usages!(entity);
+                var counts = _counts!(entity);
                 var typesValid = ValidateTypes(types, out var typeFailure);
                 var consumeCostsValid = ValidateCosts(consumeCosts, out var consumeFailure);
                 var usageCostsValid = ValidateCosts(usageCosts, out var usageFailure);
                 var usagesValid = ValidateUsages(usages, out var usagesFailure);
-                if (!typesValid || !consumeCostsValid || !usageCostsValid || !usagesValid)
+                var countsValid = ValidateCounts(counts, out var countsFailure);
+                if (!typesValid || !consumeCostsValid || !usageCostsValid || !usagesValid ||
+                    !countsValid)
                 {
                     Skip(
                         ref skipped,
@@ -442,7 +581,8 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
                             typeFailure,
                             consumeFailure,
                             usageFailure,
-                            usagesFailure));
+                            usagesFailure,
+                            countsFailure));
                     continue;
                 }
 
@@ -459,6 +599,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
                     usageCosts!,
                     frame.ConsumableCosts);
                 AppendUsages(id, usages!, frame.ConsumableUsages);
+                AppendCounts(id, counts!, frame.ConsumableCounts);
                 sampled++;
             }
             catch (Exception ex)
@@ -541,10 +682,46 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
                 failure = $"a consumable usage at position {index} had an empty identity";
                 return false;
             }
+            if (_usageLevel!(entry) <= 0)
+            {
+                failure =
+                    $"a consumable usage at position {index} had no positive base level";
+                return false;
+            }
             for (var prior = 0; prior < index; prior++)
             {
                 if (_usageId!(entries[prior]!) != id) continue;
                 failure = $"a consumable usage repeated identity {id:D}";
+                return false;
+            }
+        }
+
+        failure = string.Empty;
+        return true;
+    }
+
+    private bool ValidateCounts(IList? entries, out string failure)
+    {
+        if (entries is null)
+        {
+            failure = "a consumable's levelled count list was null";
+            return false;
+        }
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            if (entry is null || entry.GetType() != _countType)
+            {
+                failure =
+                    $"a consumable count at position {index} had an unexpected type";
+                return false;
+            }
+            if (_countLevel!(entry) <= 0 || _countQuantity!(entry) < 0 ||
+                _countFreeQuantity!(entry) < 0)
+            {
+                failure =
+                    $"a consumable count at position {index} carried invalid values";
                 return false;
             }
         }
@@ -590,9 +767,26 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
             destination.Append(new WorldConsumableUsage(
                 consumableId,
                 _usageId!(entry),
+                _usageLevel!(entry),
                 _usageEngaged!(entry),
                 _usageRemainingDuration!(entry),
                 _usageMaximumDuration!(entry)));
+        }
+    }
+
+    private void AppendCounts(
+        Guid consumableId,
+        IList entries,
+        WorldConsumableCountBuffer destination)
+    {
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index]!;
+            destination.Append(new WorldConsumableCount(
+                consumableId,
+                _countLevel!(entry),
+                _countQuantity!(entry),
+                _countFreeQuantity!(entry)));
         }
     }
 

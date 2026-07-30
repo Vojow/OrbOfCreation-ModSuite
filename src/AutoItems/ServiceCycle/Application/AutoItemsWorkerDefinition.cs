@@ -12,11 +12,16 @@ internal sealed class AutoItemsWorkerDefinition :
     IServiceCycleWorkerDefinition<AutoItemsCycleState, AutoItemsCycleAction>
 {
     private readonly AutoItemsTemporaryActivationTracker _temporaryActivations;
+    private readonly AutoScribeIdentityProfile? _autoScribeIdentityProfile;
 
     internal AutoItemsWorkerDefinition(
-        AutoItemsTemporaryActivationTracker temporaryActivations) =>
+        AutoItemsTemporaryActivationTracker temporaryActivations,
+        AutoScribeIdentityProfile? autoScribeIdentityProfile = null)
+    {
         _temporaryActivations = temporaryActivations ??
             throw new ArgumentNullException(nameof(temporaryActivations));
+        _autoScribeIdentityProfile = autoScribeIdentityProfile;
+    }
 
     public AutoItemsCycleState CreateState(LifecycleGeneration lifecycle) =>
         AutoItemsCycleState.Create(lifecycle);
@@ -41,6 +46,7 @@ internal sealed class AutoItemsWorkerDefinition :
             actions,
             _temporaryActivations,
             state.TemporaryAllowlist,
+            _autoScribeIdentityProfile,
             out var decision);
         state.RecordDecision(in decision);
         return wake;
