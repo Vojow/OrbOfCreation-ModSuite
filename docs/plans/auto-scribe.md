@@ -38,12 +38,16 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: verify, commit, and install the bounded-retry/Thread and paired quick-control build;
-  then confirm Auto Items no longer faults on `TargetUnavailable`, Auto Scribe native rejections
+- Current task: launch the installed bounded-retry/Thread and paired quick-control build; confirm
+  Auto Items no longer faults on `TargetUnavailable`, Auto Scribe native rejections
   retry only at the configured evaluation cadence, and the Auto Items/Auto Scribe row renders and
   survives a supported UI rebuild.
-- Current source: commit `f5a7b73` is pushed to draft PR #102; the quick-control changes are
-  currently uncommitted and not installed.
+- Current source: clean commit `5698fbc6d55b490b9c122d7f5c19764dfa9c4b12` is pushed to draft
+  PR #102 and installed. The built and installed DLLs both have SHA-256
+  `340FE12EF23F1C0B11E1C4B012D623789EC5775EF797A2867543C6E39B3D7C4E`.
+- The guarded installer confirmed the game was closed, reran all automated gates, backed up 12
+  save files to `backups/pre-modsuite-install-20260730T112441Z`, and backed up the previous DLL to
+  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
 - Implemented production roles: Advancement, Development, Echoing, Excellence, Learning, and
   Power. Investment and Speed remain coverage-only because the audited Scribe registry has no
   production recipe for them.

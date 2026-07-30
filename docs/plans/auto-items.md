@@ -88,10 +88,14 @@ Last updated: **2026-07-30**
   installed-game contract tests pass against the local Windows Steam assemblies, and the
   real-reference Release build completes with zero warnings and errors. Interactive game
   validation has not yet covered Threads, the retry fixes, or the new paired quick-control row.
-- Working tree: the extension and dump-backed fixes are committed as `7c8875d` and pushed to draft
-  PR #102.
-- Next action: after the game closes, install the new build and run the Phase 11-13 behavior and
-  layout checklists on a disposable save.
+- Installed source: clean commit `5698fbc6d55b490b9c122d7f5c19764dfa9c4b12` is pushed to draft
+  PR #102 and installed. The built and installed DLLs both have SHA-256
+  `340FE12EF23F1C0B11E1C4B012D623789EC5775EF797A2867543C6E39B3D7C4E`.
+  The guarded installer backed up 12 save files to
+  `backups/pre-modsuite-install-20260730T112441Z` and the previous DLL to
+  `BepInEx/modsuite-backups/pre-modsuite-install-20260730T112441Z`.
+- Next action: launch the game and run the Phase 11-14 behavior and layout checklists on a
+  disposable save.
 
 ### Locked decisions
 
