@@ -1,83 +1,55 @@
 # Changelog
 
-## Orb Of Creation ModSuite 0.5.0-beta.1 — 2026-08-01
+## Orb Of Creation ModSuite 0.5.0 — 2026-08-01
 
-- Back up every active save automatically on the first ModSuite run and after each ModSuite update,
-  before automation starts. Backups live under the game's save folder in
-  `backups/auto-modsuite-backup-<UTC timestamp>`; the five newest automatic backups are kept. If a
-  save cannot be copied and verified cleanly, automation stays blocked, the Start and Runtime
-  health surfaces name the failure, and the next launch tries again.
-- Drive ordinary automation from one shared 250-millisecond world publication and every committed
-  configuration publication, with no per-feature cadence settings or fallback polls. After any
-  attempted game-facing action—success, refusal, or fault—the service waits for a strictly newer
-  world reading before deciding again.
-- Make Auto Buy reserve the exact summed cost of every level in a grouped purchase, then buy the
-  largest exactly priced positive group the remaining batch budget can afford instead of dropping
-  an otherwise affordable candidate. If live affordability changes after collection, Auto Buy logs
-  the exact cost evidence, skips without changing the player's settings, and replans from the next
-  world publication; structural contradictions still fail closed.
-- Reduce Auto Concept's default settled training period from 300 seconds to 30 seconds.
-  Configuration schema 6 removes the retired cadence keys and rewrites every serialized 300-second
-  period, whether inherited or deliberately saved, while preserving every other customized period.
-- Make Auto Concept's Timed Cycle rotate through all unlocked concepts instead of partitioning them
-  by type. Resolve native usage limits before planning, keep settled-training deadlines stable
-  across owned depth changes, record queued depth as suite-owned immediately, and start a full new
-  training period after an accepted replacement.
-- Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
-  rate. Verified quantity changes and native refusals now name both rotation identities, while the
-  tooltip, Runtime page, journal, and trace dashboard distinguish settled training, no alternative
-  assignment, and a refusal that is waiting for fresh world facts.
-- Level every affordable spell when spell leveling levels all ready spells at once. One
-  unaffordable spell no longer blocks the whole batch, and when no ready spell has an affordable
-  level cost the Runtime page reports that the service is waiting instead of claiming success.
-- Let Auto Harvest work with the Agromancy screen closed. The game refreshes a plot action's
-  prerequisite flag only while its screen renders, so the suite now asks the game to validate
-  prerequisites directly, immediately before each harvest, and refuses without a penalty when they
-  are genuinely unmet.
-- Rank Auto Concept's mastery progress with the game's real required-experience values instead of
-  an unmaintained cached field, so training priority matches the progress the game displays.
-- Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue and
-  randomized Scroll targeting, rechecks exact family, visibility, inventory, readiness, ownership,
-  and targets immediately before submission, and stops for the current game lifecycle when an
-  attempted use cannot be verified.
-- Allow temporary Fruits, Potions, and Threads approved from a picker of the player's discovered
-  items on the Auto Items page. The picker shows native names, icons, families, current stock, and
-  an explicit approval count; unresolved stored UUIDs remain visible and removable. Temporary use
-  requires a finite duration and toxicity-only costs and headroom, excludes every other consumable
-  until one native usage has engaged and disappeared, and quarantines only the exact item when
-  activation evidence is ambiguous, doubled, premature, or missing.
-- Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It blocks a
-  publication when any enabled role is unknown, revalidates the live role and every preflight before
-  payment, and verifies the exact resource charge, progression ceiling, and queued or instant-stock
-  result. A post-payment fault records the partial commit and quarantines Scribe until the game
-  lifecycle changes.
-- Replace the compact gameplay tray with one native-width compound control below the native gear
-  and character buttons: an immediate emergency-stop toggle exactly matching their size, using the
-  game's `power-lightning` glyph and a full deep-green/deep-red native frame for clear/stopped
-  state, with a roomier 32-pixel separately framed disclosure footer. The two regions remain
-  independent hit targets. The disclosure opens
-  all seven feature toggles in a transient native-framed 4x2 panel below it. The closed disclosure
-  shows a structural exclamation marker plus red color when a contained feature is faulted or
-  blocked. Open/closed and OFF/ON states use the game's raised/recessed frame idiom, and the feature
-  glyphs remain the audited native icons shared with their Mods rail entries.
-- Add the localhost Game MCP server to performance-debug builds only, replacing the F10/F11/F12
-  validation shortcuts with closed-world run and navigation tools. In performance-debug builds, the
-  Start screen reports build mode, MCP status, audit health, endpoint, and process ID. Release builds
-  show only build mode and audit health and contain no MCP server.
-- Replace the Runtime page's pump-timing charts with an automation activity timeline: completed
-  actions per minute over the last thirty minutes, stacked and colored per feature, with a
-  selectable per-minute breakdown of completed, not applied, skipped, and failed outcomes and a
-  single quiet service-timing summary line.
-- Show the suite's controls together as soon as the game's own top-bar icons exist after a load,
-  instead of surfacing one surface at a time, and make the Mods tab follow the game's navigation:
-  selecting it again keeps it open, and selecting a native tab is what closes it.
-- Capture mouse-wheel scrolling reliably across every suite surface, and stop clicks on suite
-  panel padding from falling through to the game underneath.
-- Collapse repeated identical suite log lines into periodic summaries that name the exact line and
-  the span it repeated over, keeping the BepInEx log readable through long sessions.
-- Harden the installer for Windows Git-for-Windows/MSYS: normalize supplied game and save paths with
-  `cygpath -u`, accept either `shasum` or `sha256sum`, and query native Windows processes through
-  PowerShell before any POSIX fallback so an inspection failure cannot authorize installation.
+### New
+
+- Your saves are backed up automatically. On the first run and after every mod update, your save
+  files are copied into `backups/` inside the game's save folder before any automation starts, and
+  the five newest automatic backups are kept. If a backup cannot be completed and verified, all
+  automation stays off and the Start screen tells you why.
+- Auto Items (off by default) uses your Scrolls and Relics for you. You can also allow specific
+  temporary Fruits, Potions, and Threads by picking them from a list of items you have discovered —
+  nothing outside your picks is ever used.
+- Auto Scribe (off by default) crafts the levelled Scroll recipes for you, and only pays once every
+  requirement has been double-checked.
+- A new emergency stop sits directly under the game's gear and character buttons. One click stops
+  all automation instantly, one click resumes. The small fold-out panel beneath it has an on/off
+  switch for every automation feature.
+- The Runtime page shows a new activity chart: what the automation completed over the last thirty
+  minutes, minute by minute, colored per feature. Selecting a minute shows what each feature did,
+  including anything skipped or failed.
+
+### Fixed
+
+- Auto Buy no longer misses purchases it can afford. With bulk development it used to wait until it
+  could pay for the whole group of levels at once; it now buys as many levels as your resources
+  actually cover.
+- Spell leveling no longer gets stuck when one spell is too expensive. Every spell whose level-up
+  you can afford is levelled, and when none are affordable the mod shows that it is waiting instead
+  of claiming success.
+- Auto Harvest now works with the Agromancy screen closed. The game only refreshes a plot's
+  requirements while that screen is open, so harvesting used to quietly stall; the mod now checks
+  the requirements itself right before each harvest.
+- Auto Concept now reads the game's real experience requirements, so it trains the concept that is
+  genuinely furthest behind.
+- Mouse-wheel scrolling works everywhere in the mod's screens, and clicks no longer pass through
+  mod panels into the game underneath.
+- The mod's buttons appear together right after the game loads instead of popping in one at a
+  time, and the Mods tab behaves like the game's own tabs.
+
+### Improved
+
+- Auto Concept reacts faster: it settles into new training after 30 seconds instead of 5 minutes,
+  rotates through all unlocked concepts instead of grouping them by type, and steps back on its own
+  when a resource it needs starts draining.
+- All automation now runs on one shared rhythm, so there are no per-feature timing settings left to
+  tune. Your settings file is upgraded automatically.
+- The BepInEx log stays readable: endlessly repeated lines are collapsed into short summaries.
+- The Windows installer detects a running game more reliably and refuses to install while the game
+  is open.
+- Debug builds replace the old F10/F11/F12 shortcuts with a local control server for development
+  tooling; regular builds contain none of it.
 
 ## Orb Of Creation ModSuite 0.4.0 Beta 1 — 2026-07-29
 
