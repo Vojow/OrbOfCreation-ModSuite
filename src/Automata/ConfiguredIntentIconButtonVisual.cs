@@ -27,11 +27,14 @@ internal readonly record struct ConfiguredIntentPresentation(
     ConfiguredIntentIconState State,
     ConfiguredIntentFrameTreatment FrameTreatment,
     Color Color,
+    Color FrameColor,
     string TooltipLabel);
 
 /// <summary>
 /// Owns every pixel written by one suite-created quick control. The inactive/active frame pair is
-/// the audited <c>UIViewRadioButton.baseImage</c>/<c>activeImage</c> vocabulary; color is secondary.
+/// the audited <c>UIViewRadioButton.baseImage</c>/<c>activeImage</c> vocabulary. Feature color is
+/// secondary; the emergency compound intentionally tints the complete native frame as an
+/// additional state channel while retaining structural frame, glyph, and tooltip differences.
 /// </summary>
 internal sealed class ConfiguredIntentIconButtonVisual
 {
@@ -40,6 +43,10 @@ internal sealed class ConfiguredIntentIconButtonVisual
     internal static readonly Color UnhealthyColor = new(1.0f, 0.3f, 0.3f, 1.0f);
     internal static readonly Color StoppedColor = new(1.0f, 0.55f, 0.2f, 1.0f);
     internal static readonly Color ReadyColor = new(1.0f, 0.78f, 0.28f, 1.0f);
+    internal static readonly Color EmergencyClearColor = new(0.78f, 1.0f, 0.82f, 1.0f);
+    internal static readonly Color EmergencyStoppedColor = new(1.0f, 0.78f, 0.74f, 1.0f);
+    internal static readonly Color EmergencyClearFrameColor = new(0.18f, 0.72f, 0.28f, 1.0f);
+    internal static readonly Color EmergencyStoppedFrameColor = new(0.78f, 0.16f, 0.16f, 1.0f);
 
     private readonly Image _frame;
     private readonly IReadOnlyList<Image> _glyphs;
@@ -126,7 +133,7 @@ internal sealed class ConfiguredIntentIconButtonVisual
         _frame.sprite = presentation.FrameTreatment == ConfiguredIntentFrameTreatment.ActiveRaised
             ? _activeFrame
             : _inactiveFrame;
-        _frame.color = Color.white;
+        _frame.color = presentation.FrameColor;
         foreach (var glyph in _glyphs) glyph.color = presentation.Color;
     }
 
@@ -169,13 +176,15 @@ internal sealed class ConfiguredIntentIconButtonVisual
             ? Present(
                 ConfiguredIntentIconState.Stopped,
                 ConfiguredIntentFrameTreatment.ActiveRaised,
-                StoppedColor,
-                "STOPPED")
+                EmergencyStoppedColor,
+                "STOPPED",
+                EmergencyStoppedFrameColor)
             : Present(
                 ConfiguredIntentIconState.StopReady,
                 ConfiguredIntentFrameTreatment.InactiveRecessed,
-                ReadyColor,
-                "READY / STOP ALL");
+                EmergencyClearColor,
+                "READY / STOP ALL",
+                EmergencyClearFrameColor);
     }
 
     internal static string TooltipLabelFor(in FeatureStatusSnapshot status) =>
@@ -185,6 +194,7 @@ internal sealed class ConfiguredIntentIconButtonVisual
         ConfiguredIntentIconState state,
         ConfiguredIntentFrameTreatment frame,
         Color color,
-        string tooltipLabel) =>
-        new(state, frame, color, tooltipLabel);
+        string tooltipLabel,
+        Color? frameColor = null) =>
+        new(state, frame, color, frameColor ?? Color.white, tooltipLabel);
 }

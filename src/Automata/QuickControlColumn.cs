@@ -18,11 +18,13 @@ internal readonly record struct QuickControlDrawerPresentation(
     bool HasAttention,
     ConfiguredIntentFrameTreatment FrameTreatment,
     Color Color,
+    Color FrameColor,
     string TooltipLabel);
 
 /// <summary>
 /// Suite-owned emergency stop and disclosure under the audited native HelpButtons anchor. The
-/// disclosure opens the registered feature controls in one transient row to the right.
+/// disclosure footer opens the registered feature controls in a transient panel below the compound
+/// control.
 /// </summary>
 internal sealed class QuickControlColumn : IDisposable
 {
@@ -30,10 +32,22 @@ internal sealed class QuickControlColumn : IDisposable
     internal const string EmergencyStopId = "emergency-stop";
     internal const string DrawerControlId = "feature-drawer";
     internal const string DrawerObjectName = "FeatureDrawer";
-    internal const float ControlSize = 52f;
-    internal const float Spacing = 6f;
-    internal const float DrawerGap = 12f;
-    internal const float AnchorOffsetY = -158f;
+    internal const string DrawerFillObjectName = "PanelFill";
+    internal const float FeatureControlSize = 52f;
+    internal const float DisclosureHeight = 32f;
+    internal const float DisclosureOverlap = 4f;
+    internal const float DrawerGap = 4f;
+    internal const float DrawerPadding = 10f;
+    internal const float DrawerGridGap = 6f;
+    internal const float DrawerBorderInset = 4f;
+    internal const int DrawerColumnCount = 4;
+    internal static readonly Color DrawerBackgroundColor = ModConfigPalette.Background;
+    internal static readonly Color DisclosureClearFrameColor =
+        new(0.11f, 0.48f, 0.18f, 1.0f);
+    internal static readonly Color DisclosureStoppedFrameColor =
+        new(0.52f, 0.10f, 0.10f, 1.0f);
+    internal static readonly Color DisclosureAttentionFrameColor =
+        new(0.72f, 0.12f, 0.12f, 1.0f);
 
     private readonly GameObject _root;
     private readonly Dictionary<string, Entry> _entries;
@@ -92,6 +106,11 @@ internal sealed class QuickControlColumn : IDisposable
                 "audited UIViewRadioButton inactive/active state frame pair is unconstructible";
             return false;
         }
+        if (native.EmergencyStopIcon is null)
+        {
+            reason = "audited power-lightning emergency-stop sprite is unavailable";
+            return false;
+        }
 
         resolveIcon ??= ResolveNativeIcon;
         GameObject? root = null;
@@ -105,17 +124,21 @@ internal sealed class QuickControlColumn : IDisposable
                 return false;
             root.SetActive(false);
             rootRect.SetParent(native.Anchor, false);
-            rootRect.anchorMin = new Vector2(0f, 1f);
-            rootRect.anchorMax = new Vector2(0f, 1f);
-            rootRect.pivot = new Vector2(0f, 1f);
-            rootRect.anchoredPosition = new Vector2(0f, AnchorOffsetY);
+            rootRect.anchorMin = native.Geometry.AnchorMin;
+            rootRect.anchorMax = native.Geometry.AnchorMax;
+            rootRect.pivot = native.Geometry.Pivot;
+            rootRect.anchoredPosition = native.Geometry.AnchoredPosition;
+
+            var compoundHeight = native.Geometry.ControlSize.y +
+                                 DisclosureHeight - DisclosureOverlap;
 
             var entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
             var failures = new Dictionary<string, string>(StringComparer.Ordinal);
             if (!TryCreateEmergencyEntry(
                     rootRect,
-                    slot: 0,
+                    native.Geometry.ControlSize,
                     emergencyStop,
+                    native.EmergencyStopIcon,
                     native.StateVisuals,
                     out var stopEntry,
                     out var stopReason))
@@ -129,6 +152,8 @@ internal sealed class QuickControlColumn : IDisposable
             if (!TryCreateDrawerContainer(
                     rootRect,
                     registry.Features.Count,
+                    compoundHeight,
+                    native.StateVisuals.InactiveFrame,
                     out var drawerObject,
                     out var drawerRect,
                     out var drawerContainerReason))
@@ -170,9 +195,13 @@ internal sealed class QuickControlColumn : IDisposable
 
             if (!TryCreateDrawerEntry(
                     rootRect,
-                    slot: 1,
+                    new Vector2(
+                        0f,
+                        -(native.Geometry.ControlSize.y - DisclosureOverlap)),
+                    new Vector2(native.Geometry.ControlSize.x, DisclosureHeight),
                     drawerObject,
                     registry,
+                    emergencyStop,
                     allowFeatureControls,
                     native.StateVisuals,
                     out var drawer,
@@ -182,10 +211,11 @@ internal sealed class QuickControlColumn : IDisposable
                 reason = "feature drawer disclosure unavailable: " + drawerReason;
                 return false;
             }
+            stopEntry!.Button.onClick.AddListener(() => drawer!.Render(force: true));
 
             rootRect.sizeDelta = new Vector2(
-                ControlSize,
-                (2f * ControlSize) + Spacing);
+                native.Geometry.ControlSize.x,
+                compoundHeight);
             var drawerControlIds = registry.Features
                 .Where(feature => entries.ContainsKey(feature.FeatureId))
                 .Select(feature => feature.FeatureId)
@@ -284,6 +314,8 @@ internal sealed class QuickControlColumn : IDisposable
     private static bool TryCreateDrawerContainer(
         RectTransform parent,
         int featureCount,
+        float compoundHeight,
+        Sprite panelFrameSprite,
         out GameObject drawer,
         out RectTransform drawerRect,
         out string reason)
@@ -300,12 +332,39 @@ internal sealed class QuickControlColumn : IDisposable
         drawerRect.anchorMax = new Vector2(0f, 1f);
         drawerRect.pivot = new Vector2(0f, 1f);
         drawerRect.anchoredPosition = new Vector2(
-            ControlSize + DrawerGap,
-            -(ControlSize + Spacing));
+            0f,
+            -(compoundHeight + DrawerGap));
+        var rowCount = Math.Max(
+            1,
+            (featureCount + DrawerColumnCount - 1) / DrawerColumnCount);
         drawerRect.sizeDelta = new Vector2(
-            Math.Max(1f, (featureCount * ControlSize) +
-                (Math.Max(0, featureCount - 1) * Spacing)),
-            ControlSize);
+            (2f * DrawerPadding) + (DrawerColumnCount * FeatureControlSize) +
+                ((DrawerColumnCount - 1) * DrawerGridGap),
+            (2f * DrawerPadding) + (rowCount * FeatureControlSize) +
+                (Math.Max(0, rowCount - 1) * DrawerGridGap));
+
+        var frame = drawer.AddComponent<Image>();
+        frame.sprite = panelFrameSprite;
+        frame.type = Image.Type.Sliced;
+        frame.color = Color.white;
+        frame.raycastTarget = false;
+        if (!TryCreateGlyphObject(
+                DrawerFillObjectName,
+                drawerRect,
+                Vector2.zero,
+                Vector2.one,
+                out var fillObject,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(drawer);
+            return false;
+        }
+        var fillRect = (RectTransform)fillObject.transform;
+        fillRect.offsetMin = new Vector2(DrawerBorderInset, DrawerBorderInset);
+        fillRect.offsetMax = new Vector2(-DrawerBorderInset, -DrawerBorderInset);
+        var fill = fillObject.AddComponent<Image>();
+        fill.color = DrawerBackgroundColor;
+        fill.raycastTarget = false;
         reason = string.Empty;
         return true;
     }
@@ -322,7 +381,8 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateControlObject(
                 "Feature." + registration.FeatureId,
                 parent,
-                DrawerPositionFor(slot),
+                DrawerGridPositionFor(slot),
+                new Vector2(FeatureControlSize, FeatureControlSize),
                 out var root,
                 out reason))
         {
@@ -373,8 +433,9 @@ internal sealed class QuickControlColumn : IDisposable
 
     private static bool TryCreateEmergencyEntry(
         RectTransform parent,
-        int slot,
+        Vector2 size,
         EmergencyStopControl control,
+        Sprite iconSprite,
         NativeButtonStateVisualPrimitives stateVisuals,
         out Entry? entry,
         out string reason)
@@ -382,7 +443,8 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateControlObject(
                 "Safety.EmergencyStop",
                 parent,
-                ColumnPositionFor(slot),
+                Vector2.zero,
+                size,
                 out var root,
                 out reason))
         {
@@ -391,30 +453,23 @@ internal sealed class QuickControlColumn : IDisposable
         }
         var button = root.AddComponent<Button>();
         if (!TryCreateGlyphObject(
-                "ExclamationBar",
+                "PowerIcon",
                 root.transform,
-                new Vector2(0.44f, 0.27f),
-                new Vector2(0.56f, 0.73f),
-                out var barObject,
-                out reason) ||
-            !TryCreateGlyphObject(
-                "ExclamationDot",
-                root.transform,
-                new Vector2(0.42f, 0.13f),
-                new Vector2(0.58f, 0.24f),
-                out var dotObject,
+                new Vector2(0.14f, 0.14f),
+                new Vector2(0.86f, 0.86f),
+                out var iconObject,
                 out reason))
         {
             UnityEngine.Object.Destroy(root);
             entry = null;
             return false;
         }
-        var bar = barObject.AddComponent<Image>();
-        var dot = dotObject.AddComponent<Image>();
+        var icon = iconObject.AddComponent<Image>();
+        icon.sprite = iconSprite;
         if (!ConfiguredIntentIconButtonVisual.TryCreate(
                 root,
                 button,
-                new[] { bar, dot },
+                new[] { icon },
                 stateVisuals,
                 out var visual,
                 out reason))
@@ -440,9 +495,11 @@ internal sealed class QuickControlColumn : IDisposable
 
     private static bool TryCreateDrawerEntry(
         RectTransform parent,
-        int slot,
+        Vector2 position,
+        Vector2 size,
         GameObject drawerObject,
         AutomationFeatureControlRegistry registry,
+        EmergencyStopControl emergencyStop,
         bool allowFeatureControls,
         NativeButtonStateVisualPrimitives stateVisuals,
         out DrawerEntry? entry,
@@ -451,7 +508,8 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateControlObject(
                 "Drawer.Disclosure",
                 parent,
-                ColumnPositionFor(slot),
+                position,
+                size,
                 out var root,
                 out reason))
         {
@@ -507,6 +565,7 @@ internal sealed class QuickControlColumn : IDisposable
             openGlyph,
             attentionMarker,
             registry,
+            emergencyStop,
             allowFeatureControls);
         root.AddComponent<HoverTooltip>().Setup(new QuickControlDrawerTooltip(created));
         if (allowFeatureControls)
@@ -539,15 +598,15 @@ internal sealed class QuickControlColumn : IDisposable
         var anchors = closed
             ? new[]
             {
-                (new Vector2(0.34f, 0.58f), new Vector2(0.46f, 0.70f)),
-                (new Vector2(0.46f, 0.44f), new Vector2(0.58f, 0.56f)),
-                (new Vector2(0.34f, 0.30f), new Vector2(0.46f, 0.42f)),
+                (new Vector2(0.25f, 0.55f), new Vector2(0.41f, 0.75f)),
+                (new Vector2(0.42f, 0.30f), new Vector2(0.58f, 0.50f)),
+                (new Vector2(0.59f, 0.55f), new Vector2(0.75f, 0.75f)),
             }
             : new[]
             {
-                (new Vector2(0.54f, 0.58f), new Vector2(0.66f, 0.70f)),
-                (new Vector2(0.42f, 0.44f), new Vector2(0.54f, 0.56f)),
-                (new Vector2(0.54f, 0.30f), new Vector2(0.66f, 0.42f)),
+                (new Vector2(0.25f, 0.30f), new Vector2(0.41f, 0.50f)),
+                (new Vector2(0.42f, 0.55f), new Vector2(0.58f, 0.75f)),
+                (new Vector2(0.59f, 0.30f), new Vector2(0.75f, 0.50f)),
             };
         var created = new List<Image>(anchors.Length);
         for (var index = 0; index < anchors.Length; index++)
@@ -580,8 +639,8 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateGlyphObject(
                 "AttentionMarker",
                 parent,
-                new Vector2(0.66f, 0.60f),
-                new Vector2(0.92f, 0.90f),
+                new Vector2(0.78f, 0.10f),
+                new Vector2(0.96f, 0.90f),
                 out marker,
                 out reason))
         {
@@ -616,6 +675,7 @@ internal sealed class QuickControlColumn : IDisposable
         string name,
         Transform parent,
         Vector2 position,
+        Vector2 size,
         out GameObject root,
         out string reason)
     {
@@ -626,7 +686,7 @@ internal sealed class QuickControlColumn : IDisposable
         rect.anchorMax = new Vector2(0f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = position;
-        rect.sizeDelta = new Vector2(ControlSize, ControlSize);
+        rect.sizeDelta = size;
         root.AddComponent<Image>();
         reason = string.Empty;
         return true;
@@ -702,11 +762,12 @@ internal sealed class QuickControlColumn : IDisposable
         return false;
     }
 
-    private static Vector2 ColumnPositionFor(int slot) =>
-        new(0f, -(slot * (ControlSize + Spacing)));
-
-    private static Vector2 DrawerPositionFor(int slot) =>
-        new(slot * (ControlSize + Spacing), 0f);
+    private static Vector2 DrawerGridPositionFor(int slot) =>
+        new(
+            DrawerPadding +
+            ((slot % DrawerColumnCount) * (FeatureControlSize + DrawerGridGap)),
+            -(DrawerPadding +
+              ((slot / DrawerColumnCount) * (FeatureControlSize + DrawerGridGap))));
 
     private static bool ResolveNativeIcon(
         AutomationFeatureControlRegistration registration,
@@ -725,6 +786,7 @@ internal sealed class QuickControlColumn : IDisposable
         private readonly GameObject _openGlyph;
         private readonly GameObject _attentionMarker;
         private readonly AutomationFeatureControlRegistry _registry;
+        private readonly EmergencyStopControl _emergencyStop;
         private readonly bool _allowFeatureControls;
         private bool _isOpen;
 
@@ -736,6 +798,7 @@ internal sealed class QuickControlColumn : IDisposable
             GameObject openGlyph,
             GameObject attentionMarker,
             AutomationFeatureControlRegistry registry,
+            EmergencyStopControl emergencyStop,
             bool allowFeatureControls)
         {
             Button = button;
@@ -745,6 +808,7 @@ internal sealed class QuickControlColumn : IDisposable
             _openGlyph = openGlyph;
             _attentionMarker = attentionMarker;
             _registry = registry;
+            _emergencyStop = emergencyStop;
             _allowFeatureControls = allowFeatureControls;
         }
 
@@ -778,6 +842,7 @@ internal sealed class QuickControlColumn : IDisposable
                             : ConfiguredIntentIconState.Off,
                     presentation.FrameTreatment,
                     presentation.Color,
+                    presentation.FrameColor,
                     presentation.TooltipLabel),
                 force);
         }
@@ -785,6 +850,7 @@ internal sealed class QuickControlColumn : IDisposable
         internal QuickControlDrawerPresentation ReadPresentation()
         {
             var hasAttention = HasAttention();
+            var stopped = _emergencyStop.IsStopped;
             return new QuickControlDrawerPresentation(
                 _isOpen,
                 hasAttention,
@@ -793,9 +859,14 @@ internal sealed class QuickControlColumn : IDisposable
                     : ConfiguredIntentFrameTreatment.InactiveRecessed,
                 hasAttention
                     ? ConfiguredIntentIconButtonVisual.UnhealthyColor
-                    : _isOpen
-                        ? ConfiguredIntentIconButtonVisual.OnColor
-                        : ConfiguredIntentIconButtonVisual.ReadyColor,
+                    : stopped
+                        ? ConfiguredIntentIconButtonVisual.EmergencyStoppedColor
+                        : ConfiguredIntentIconButtonVisual.EmergencyClearColor,
+                hasAttention
+                    ? DisclosureAttentionFrameColor
+                    : stopped
+                        ? DisclosureStoppedFrameColor
+                        : DisclosureClearFrameColor,
                 !_allowFeatureControls
                     ? "FEATURES / UNAVAILABLE"
                     : _isOpen
@@ -835,8 +906,8 @@ internal sealed class QuickControlColumn : IDisposable
         public bool IsColoredIcon() => false;
         public bool HasAltTooltips() => false;
         public string GetDescription() => _drawer.IsOpen
-            ? "Closes the transient feature-toggle drawer."
-            : "Opens the seven automation feature toggles to the right.";
+            ? "Closes the transient automation feature panel."
+            : "Opens the registered automation feature controls in a panel.";
         public List<TooltipNode> GetTooltipNodes()
         {
             var presentation = _drawer.ReadPresentation();

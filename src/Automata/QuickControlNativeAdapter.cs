@@ -7,17 +7,28 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
+internal readonly record struct QuickControlNativeGeometry(
+    Vector2 AnchorMin,
+    Vector2 AnchorMax,
+    Vector2 Pivot,
+    Vector2 AnchoredPosition,
+    Vector2 ControlSize);
+
 internal sealed record QuickControlNativePrimitives(
     RectTransform Anchor,
-    NativeButtonStateVisualPrimitives StateVisuals);
+    NativeButtonStateVisualPrimitives StateVisuals,
+    Sprite EmergencyStopIcon,
+    QuickControlNativeGeometry Geometry);
 
 /// <summary>
 /// Resolves the top-left column from the scene-bound audited
-/// <c>UIContentArea.canvas</c> reference and exact native HelpButtons structure.
+/// <c>UIContentArea.canvas</c> reference, exact native HelpButtons structure, and the exact loaded
+/// <c>power-lightning</c> Sprite shipped in <c>sharedassets0.assets</c>.
 /// </summary>
 internal static class QuickControlNativeAdapter
 {
     internal const string AnchorPath = "Canvas/HelpButtons";
+    internal const string EmergencyStopIconName = "power-lightning";
 
     internal static bool TryCapture(
         out QuickControlNativePrimitives? primitives,
@@ -41,6 +52,11 @@ internal static class QuickControlNativeAdapter
                 reason = "audited top-left HelpButtons anchor unavailable: " + anchorReason;
                 return false;
             }
+            if (!TryResolveControlGeometry(anchor!, out var geometry, out var geometryReason))
+            {
+                reason = "audited top-left button geometry unavailable: " + geometryReason;
+                return false;
+            }
             if (!NativeViewAdapter.TryCaptureButtonStateVisuals(
                     out var stateVisuals,
                     out var stateReason))
@@ -48,7 +64,20 @@ internal static class QuickControlNativeAdapter
                 reason = "quick-control state visual unavailable: " + stateReason;
                 return false;
             }
-            primitives = new QuickControlNativePrimitives(anchor!, stateVisuals!);
+            var sprites = Resources.FindObjectsOfTypeAll(typeof(Sprite))
+                .OfType<Sprite>()
+                .OrderBy(sprite => sprite.name, StringComparer.Ordinal)
+                .ToArray();
+            if (!TryResolveEmergencyStopIcon(sprites, out var emergencyStopIcon, out var iconReason))
+            {
+                reason = "quick-control emergency-stop icon unavailable: " + iconReason;
+                return false;
+            }
+            primitives = new QuickControlNativePrimitives(
+                anchor!,
+                stateVisuals!,
+                emergencyStopIcon!,
+                geometry);
             reason = string.Empty;
             return true;
         }
@@ -57,10 +86,35 @@ internal static class QuickControlNativeAdapter
             var root = ex.GetBaseException();
             reason =
                 "quick-control native capture failed while checking UIContentArea.canvas and " +
-                "UIViewRadioButton state frames: " +
+                "UIViewRadioButton state frames plus the power-lightning Sprite: " +
                 $"{root.GetType().FullName}: {root.Message}";
             return false;
         }
+    }
+
+    internal static bool TryResolveEmergencyStopIcon(
+        IReadOnlyList<Sprite> sprites,
+        out Sprite? icon,
+        out string reason)
+    {
+        icon = null;
+        var matches = sprites
+            .Where(sprite => sprite is not null &&
+                             string.Equals(
+                                 sprite.name,
+                                 EmergencyStopIconName,
+                                 StringComparison.Ordinal))
+            .ToArray();
+        if (matches.Length != 1)
+        {
+            reason =
+                $"expected exactly one loaded UnityEngine.Sprite named " +
+                $"'{EmergencyStopIconName}', found {matches.Length} among {sprites.Count}";
+            return false;
+        }
+        icon = matches[0];
+        reason = string.Empty;
+        return true;
     }
 
     internal static bool TryResolveAnchor(
@@ -132,6 +186,85 @@ internal static class QuickControlNativeAdapter
         reason = string.Empty;
         return true;
     }
+
+    internal static bool TryResolveControlGeometry(
+        RectTransform anchor,
+        out QuickControlNativeGeometry geometry,
+        out string reason)
+    {
+        geometry = default;
+        if (anchor is null)
+        {
+            reason = $"{AnchorPath} is unavailable";
+            return false;
+        }
+        if (FindDirectChild(anchor, "SettingsButton") is not RectTransform settings)
+        {
+            reason = $"{AnchorPath}/SettingsButton type check failed: expected " +
+                     "UnityEngine.RectTransform";
+            return false;
+        }
+        if (FindDirectChild(anchor, "PlayerStatsButton") is not RectTransform playerStats)
+        {
+            reason = $"{AnchorPath}/PlayerStatsButton type check failed: expected " +
+                     "UnityEngine.RectTransform";
+            return false;
+        }
+
+        var settingsSize = new Vector2(settings.rect.width, settings.rect.height);
+        var playerSize = new Vector2(playerStats.rect.width, playerStats.rect.height);
+        if (settingsSize.x <= 0f || settingsSize.y <= 0f ||
+            playerSize.x <= 0f || playerSize.y <= 0f)
+        {
+            reason = $"{AnchorPath} button rect check failed: expected positive SettingsButton/" +
+                     $"PlayerStatsButton sizes, actual {Describe(settingsSize)}/" +
+                     Describe(playerSize);
+            return false;
+        }
+        if (!Same(settingsSize, playerSize))
+        {
+            reason = $"{AnchorPath} button size check failed: expected matching SettingsButton/" +
+                     $"PlayerStatsButton sizes, actual {Describe(settingsSize)}/" +
+                     Describe(playerSize);
+            return false;
+        }
+        if (!Same(settings.anchorMin, playerStats.anchorMin) ||
+            !Same(settings.anchorMax, playerStats.anchorMax) ||
+            !Same(settings.pivot, playerStats.pivot))
+        {
+            reason = $"{AnchorPath} button anchor/pivot check failed: SettingsButton and " +
+                     "PlayerStatsButton do not share one layout contract";
+            return false;
+        }
+
+        var step = new Vector2(
+            playerStats.anchoredPosition.x - settings.anchoredPosition.x,
+            playerStats.anchoredPosition.y - settings.anchoredPosition.y);
+        if (Math.Abs(step.x) > 0.01f || step.y > -playerSize.y)
+        {
+            reason = $"{AnchorPath} vertical-stack check failed: expected PlayerStatsButton " +
+                     $"directly below SettingsButton by at least {playerSize.y:0.###}, actual " +
+                     Describe(step);
+            return false;
+        }
+
+        geometry = new QuickControlNativeGeometry(
+            playerStats.anchorMin,
+            playerStats.anchorMax,
+            playerStats.pivot,
+            new Vector2(
+                playerStats.anchoredPosition.x + step.x,
+                playerStats.anchoredPosition.y + step.y),
+            playerSize);
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool Same(Vector2 left, Vector2 right) =>
+        Math.Abs(left.x - right.x) <= 0.01f &&
+        Math.Abs(left.y - right.y) <= 0.01f;
+
+    private static string Describe(Vector2 value) => $"({value.x:0.###}, {value.y:0.###})";
 
     private static Transform? FindDirectChild(Transform parent, string name)
     {

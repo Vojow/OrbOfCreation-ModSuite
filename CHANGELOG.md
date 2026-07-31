@@ -37,12 +37,15 @@
   payment, and verifies the exact resource charge, progression ceiling, and queued or instant-stock
   result. A post-payment fault records the partial commit and quarantines Scribe until the game
   lifecycle changes.
-- Replace the compact gameplay tray with exactly two top-left suite buttons below the native gear
-  and character buttons: an immediate emergency-stop toggle and a disclosure that opens all seven
-  feature toggles in a transient rightward drawer. The closed disclosure shows a structural
-  exclamation marker plus red color when a contained feature is faulted or blocked. Open/closed and
-  OFF/ON states use the game's raised/recessed frame idiom, and the feature glyphs remain the audited
-  native icons shared with their Mods rail entries.
+- Replace the compact gameplay tray with one native-width compound control below the native gear
+  and character buttons: an immediate emergency-stop toggle exactly matching their size, using the
+  game's `power-lightning` glyph and a full deep-green/deep-red native frame for clear/stopped
+  state, with a roomier 32-pixel separately framed disclosure footer. The two regions remain
+  independent hit targets. The disclosure opens
+  all seven feature toggles in a transient native-framed 4x2 panel below it. The closed disclosure
+  shows a structural exclamation marker plus red color when a contained feature is faulted or
+  blocked. Open/closed and OFF/ON states use the game's raised/recessed frame idiom, and the feature
+  glyphs remain the audited native icons shared with their Mods rail entries.
 - Add the localhost Game MCP server to performance-debug builds only, replacing the F10/F11/F12
   validation shortcuts with closed-world run and navigation tools. In performance-debug builds, the
   Start screen reports build mode, MCP status, audit health, endpoint, and process ID. Release builds

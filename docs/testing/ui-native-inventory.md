@@ -13,7 +13,7 @@ restyled. The PNG evidence is intentionally an untracked local validation artifa
 | Magic and Scholar | A second `SubviewRadio` level inside the active screen; live list items use the native subview frame and text vocabulary | Runtime `UIViewRadioButton` items are direct children of `Canvas/ContentArea/MainContentContainer/SubviewRadio`. Their root owns `buttonImage`; `baseImage` and `activeImage` are populated; `viewImage` is null. | Reuse the native subview frame pair as a vertical suite rail, with exact native icons rather than pretending the source list items contain icons. |
 | Settings | `Main`, `Game`, and `Graphics` horizontal text tabs inside a native framed modal | Native text-tab and framed-panel vocabulary | Retain as evidence that horizontal text tabs are native, but do not use them for nine suite sections. |
 | Main navigation | `Magic`, `Scholar`, `Time`, and `Mods` horizontal `ViewRadio` controls | Direct children of `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; these `UIViewRadioButton` instances populate `viewImage.sprite` and provide audited Time, Magic, Scholar, Alchemy, World, and Workshop icons. | Keep the Mods entry as the outer level and reuse named top-bar icons for Runtime, General, Concept, Advanced, Auto Items, and Auto Scribe. |
-| Help buttons | Gear and character buttons in one top-left group | The declared scene-bound `UIContentArea.canvas` field resolves the exact direct child `Canvas/HelpButtons`, whose direct `SettingsButton` and `PlayerStatsButton` children prove the expected anchor structure. | Parent exactly two closed suite buttons below the native pair: emergency stop and a disclosure whose transient feature drawer opens to the right. No exact anchor means no controls. |
+| Help buttons | Gear and character buttons in one top-left group | The declared scene-bound `UIContentArea.canvas` field resolves the exact direct child `Canvas/HelpButtons`, whose direct `SettingsButton` and `PlayerStatsButton` children prove the expected anchor structure. | Parent one native-size emergency square plus an attached disclosure footer below the native pair. The footer opens a transient panel below the compound control. No exact anchor means no controls. |
 
 Evidence:
 
@@ -44,14 +44,18 @@ The two-button shell and its transient feature drawer speak the same selected/un
 recessed/hollow OFF frame; `activeImage` is the solid, raised ON frame. The suite creates each
 button and icon itself, releases `Selectable.targetGraphic`, and swaps the audited frame sprite
 before applying its own gray, green, red, or orange glyph color. Thus configured intent cannot be
-color-only. The disclosure uses recessed/raised frames plus different closed/open chevrons, and a
-contained fault or block adds a separate exclamation marker plus red color while closed.
+color-only. The emergency compound additionally tints those full native frames deep green while
+clear and deep red while stopped. The disclosure uses recessed/raised frames plus different
+closed/open chevrons, and a contained fault or block adds a separate exclamation marker plus red
+color while closed.
 
 Frame capture requires every exact direct-child SubviewRadio candidate to own `buttonImage` and
 agree on both sprites. A failed capture includes the typed candidate census. A control is created
 only after the pair and its audited feature sprite are available, so a missing primitive cannot
-leave a clickable stateless object. The emergency stop uses a separately spaced suite-owned
-exclamation glyph, not a feature sprite.
+leave a clickable stateless object. The emergency stop uses the exact loaded native Sprite named
+`power-lightning`, audited in `sharedassets0.assets`; capture requires exactly one match and fails
+the complete surface closed on zero or duplicates. The Sprite occupies 72% of the unchanged native
+button square with aspect preserved.
 
 The live mastery-level and mastery-XP marks are readable next to their numbers on a full Scholar
 card, but their silhouettes collapse into similar small progression marks at quick-button size.
@@ -67,7 +71,8 @@ Evidence: `artifacts/ui-overhaul-evidence/native-mastery-icon-context.png`.
 
 ## Audited fields
 
-The native-contract manifest declares six visual/anchor fields and five icon accessors:
+The native-contract manifest declares six visual/anchor fields and five icon accessors. The
+emergency icon is a named loaded-asset capture, not a reflected managed member:
 
 - `UIContentArea`: `canvas`.
 - `UIViewRadioButton`: `viewText`, `viewImage`, `activeImage`, `buttonImage`, and `baseImage`.
@@ -75,6 +80,8 @@ The native-contract manifest declares six visual/anchor fields and five icon acc
   `GlobalVariables.GetHarvestSpeedAttr`,
   `GlobalVariables.GetMasteryExpAttr`, and
   `TooltipableObject.GetIcon`.
+- Loaded `UnityEngine.Sprite`: exact name `power-lightning`, audited source
+  `sharedassets0.assets`, exactly one match.
 
 The Auto Items temporary-item picker reuses the captured subview-radio base/active frame pair and
 the already-declared `TooltipableObject.GetIcon()` capture for each discovered item. Its one added

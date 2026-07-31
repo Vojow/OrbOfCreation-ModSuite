@@ -45,12 +45,19 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 ## Shared gameplay controls
 
 `AutomationFeatureControlRegistry` is the one ordered roster for the Mods feature headers and the
-gameplay quick controls. The closed surface is exactly two buttons under the native top-left gear
-and character buttons: the emergency stop and a disclosure. The disclosure enumerates the registry
-into one transient horizontal drawer opening to the right; it never maintains a second feature
-list. The closed disclosure carries a separate exclamation marker plus red color whenever a
-contained feature is faulted or blocked. The surface anchors through the declared, scene-bound
-`UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure.
+gameplay quick controls. The closed surface is one native-width compound control under the native
+top-left gear and character buttons: a full-size emergency stop followed by an attached,
+separately framed disclosure footer. The square's size, alignment, and vertical stack step are
+captured from the adjacent native buttons instead of guessed; its icon is the exact shipped
+`power-lightning` Sprite, enlarged inside that unchanged square rather than enlarging the control.
+The disclosure enumerates the
+registry into a transient, native-framed four-column panel below the compound control; it never
+maintains a second feature list. The closed disclosure carries a separate exclamation marker plus
+red color whenever a contained feature is faulted or blocked. The surface anchors through the
+declared, scene-bound `UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure. The
+32-pixel footer and panel reuse the audited recessed `UIViewRadioButton` frame as sliced border
+dressing;
+the panel surrounds an opaque suite-owned background.
 Every suite-created UI node requests `RectTransform` through
 `GameObject(string, Type[])`; a plain `GameObject(string)` exposes only the declared
 `Transform` contract and is never cast to a UI transform.
@@ -60,9 +67,11 @@ Each live feature control requires its audited native glyph plus both
 uses the raised active frame. Gray, green, red, and orange remain secondary health channels, and
 tooltips carry the same joined feature status as Mods Runtime. A missing anchor, glyph, or frame
 pair creates no corresponding live control and publishes the exact failure. STOP is separately
-visible and uses a suite-owned exclamation glyph with immediate press-to-stop and press-to-resume
-`Safety/EmergencyDisable` semantics. General uses that same command instead of staging the safety
-switch behind Apply. Capture/construction failures name the member plus expected
+visible and uses the exact audited `power-lightning` Sprite with immediate press-to-stop and
+press-to-resume `Safety/EmergencyDisable` semantics. Its native frame and the attached disclosure
+footer use deep green while clear and deep red while stopped; frame structure, glyphs, and tooltips
+keep state from depending on color alone. General uses that same command instead of staging the
+safety switch behind Apply. Capture/construction failures name the member plus expected
 and actual types, log that installation will retry on the shared five-second UI cadence, and become
 terminal diagnostics only on the third failed attempt, matching the Mods rail.
 

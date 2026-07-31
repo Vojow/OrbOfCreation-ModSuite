@@ -68,6 +68,7 @@ public sealed class ConfiguredIntentIconButtonVisualTests
                 _ => ConfiguredIntentIconButtonVisual.OffColor,
             },
             presentation.Color);
+        Assert.Equal(Color.white, presentation.FrameColor);
     }
 
     [Fact]
@@ -98,6 +99,33 @@ public sealed class ConfiguredIntentIconButtonVisualTests
             Status(true, FeatureStatusState.Operational)));
         Assert.Same(active, frame.sprite);
         Assert.NotSame(inactive, active);
+    }
+
+    [Fact]
+    public void EmergencyStopUsesDeepStateFrameColorsWithoutChangingItsNativeFrameIdiom()
+    {
+        var file = new ConfigFile();
+        var config = BepInExAutomataConfiguration.Bind(file);
+        var store = new AutomataConfigurationStore(config, (_, _) => { });
+        var control = new EmergencyStopControl(store, _ => { });
+
+        var clear = ConfiguredIntentIconButtonVisual.FromEmergencyStop(control);
+        Assert.Equal(ConfiguredIntentIconState.StopReady, clear.State);
+        Assert.Equal(ConfiguredIntentFrameTreatment.InactiveRecessed, clear.FrameTreatment);
+        Assert.Equal(ConfiguredIntentIconButtonVisual.EmergencyClearColor, clear.Color);
+        Assert.Equal(
+            ConfiguredIntentIconButtonVisual.EmergencyClearFrameColor,
+            clear.FrameColor);
+
+        control.Activate();
+
+        var stopped = ConfiguredIntentIconButtonVisual.FromEmergencyStop(control);
+        Assert.Equal(ConfiguredIntentIconState.Stopped, stopped.State);
+        Assert.Equal(ConfiguredIntentFrameTreatment.ActiveRaised, stopped.FrameTreatment);
+        Assert.Equal(ConfiguredIntentIconButtonVisual.EmergencyStoppedColor, stopped.Color);
+        Assert.Equal(
+            ConfiguredIntentIconButtonVisual.EmergencyStoppedFrameColor,
+            stopped.FrameColor);
     }
 
     [Fact]

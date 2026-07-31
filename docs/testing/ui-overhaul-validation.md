@@ -36,11 +36,13 @@ icons.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
    At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
    the ten rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
-5. Confirm the closed top-left suite footprint is exactly two buttons under the native gear and
-   character buttons: STOP first and the feature disclosure second. Nothing else from the suite may
-   occupy that left lane while closed. Open the disclosure and confirm one transient row containing
-   all seven feature icons extends to the right; press the disclosure again and confirm the row is
-   removed from the live layout.
+5. Confirm the closed top-left suite footprint is one compound control under the native gear and
+   character buttons: an emergency square exactly matching their size and alignment, plus a
+   shorter attached disclosure footer. The square must show the native `power-lightning` Sprite
+   centered at 72% of its unchanged size; the footer caret must have balanced space above and below.
+   Nothing else from the suite may occupy that left lane while closed. Open the disclosure and
+   confirm a native-framed 4x2 panel contains all seven feature icons below the compound control;
+   press the disclosure again and confirm the panel is removed from the live layout.
 
 ## Profile-build validation navigation
 
@@ -74,6 +76,10 @@ drawer icons, the disclosure, and STOP:
    clipped text.
 5. With the drawer closed, fault or safety-block one contained feature. Confirm the disclosure gains
    a visible exclamation marker and red color. Clear the condition and confirm both cues clear.
+6. Confirm the complete emergency square uses a deep green native frame while clear and a deep red
+   native frame while stopped; the footer follows the same state family using a darker tint. STOP
+   and RESUME must repaint both regions immediately while their separate frames, the lightning
+   glyph, the caret, and tooltips keep the state structurally legible.
 
 ## Commands, staging, and conflicts
 

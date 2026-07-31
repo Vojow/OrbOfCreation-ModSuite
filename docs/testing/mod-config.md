@@ -67,8 +67,11 @@ installation, recovery, or layout work changes.
 - Inactive audited rail candidates remain capturable while Mods is open. Quick controls reuse that
   family’s inactive/active frame pair rather than sampling spell buttons.
 - The closed gameplay hierarchy has exactly two live suite buttons; the seven feature controls are
-  live only under the open rightward drawer. A closed contained-feature fault or block changes the
-  disclosure's color and activates a separate marker, while open/closed uses different frames and glyphs.
+  live only under the open panel. The emergency square remains the exact captured native button
+  size, uses the audited `power-lightning` Sprite, and pairs with a 32-pixel disclosure footer.
+  Clear/stopped uses full deep-green/deep-red frame treatment on both regions. A closed
+  contained-feature fault or block changes the disclosure's color and activates a separate marker,
+  while open/closed uses different frames and glyphs.
 - Feature quick controls cannot retain or construct a text-rendering path or clone a native toggle.
   Suite-created UI nodes explicitly request `RectTransform`; a plain `GameObject` remains a
   `Transform` in the portable stub just as its installed Unity contract declares. Both UI surfaces
