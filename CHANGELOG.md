@@ -4,52 +4,33 @@
 
 ### New
 
-- Your saves are backed up automatically. On the first run and after every mod update, your save
-  files are copied into `backups/` inside the game's save folder before any automation starts, and
-  the five newest automatic backups are kept. If a backup cannot be completed and verified, all
-  automation stays off and the Start screen tells you why.
-- Auto Items (off by default) uses your Scrolls and Relics for you. You can also allow specific
-  temporary Fruits, Potions, and Threads by picking them from a list of items you have discovered —
-  nothing outside your picks is ever used.
-- Auto Scribe (off by default) crafts the levelled Scroll recipes for you, and only pays once every
-  requirement has been double-checked.
-- A new emergency stop sits directly under the game's gear and character buttons. One click stops
-  all automation instantly, one click resumes. The small fold-out panel beneath it has an on/off
-  switch for every automation feature.
-- The Runtime page shows a new activity chart: what the automation completed over the last thirty
-  minutes, minute by minute, colored per feature. Selecting a minute shows what each feature did,
-  including anything skipped or failed.
+- Automatic save backups: first run and every update copy your saves into `backups/` before
+  automation starts; the five newest are kept. A failed backup blocks automation.
+- Auto Items: automatic Scroll and Relic use, plus a picker to approve specific temporary Fruits,
+  Potions, and Threads.
+- Auto Scribe: automatic Scroll crafting.
+- Emergency stop below the game's gear and character buttons, with a fold-out panel of per-feature
+  switches.
+- Runtime activity chart: completed actions per minute, per feature, over the last thirty minutes.
 
 ### Fixed
 
-- Auto Buy no longer misses purchases it can afford. With bulk development it used to wait until it
-  could pay for the whole group of levels at once; it now buys as many levels as your resources
-  actually cover.
-- Spell leveling no longer gets stuck when one spell is too expensive. Every spell whose level-up
-  you can afford is levelled, and when none are affordable the mod shows that it is waiting instead
-  of claiming success.
-- Auto Harvest now works with the Agromancy screen closed. The game only refreshes a plot's
-  requirements while that screen is open, so harvesting used to quietly stall; the mod now checks
-  the requirements itself right before each harvest.
-- Auto Concept now reads the game's real experience requirements, so it trains the concept that is
-  genuinely furthest behind.
-- Mouse-wheel scrolling works everywhere in the mod's screens, and clicks no longer pass through
-  mod panels into the game underneath.
-- The mod's buttons appear together right after the game loads instead of popping in one at a
-  time, and the Mods tab behaves like the game's own tabs.
+- Auto Buy no longer skips bulk purchases it can afford; it buys every level it can pay for.
+- Spell leveling no longer stalls on one unaffordable spell.
+- Auto Harvest works with the Agromancy screen closed.
+- Auto Concept ranks training by the game's real experience requirements.
+- Mouse wheel works on all mod screens; clicks no longer fall through panels.
+- Mod controls appear together right after loading; the Mods tab behaves like the game's own tabs.
 
 ### Improved
 
-- Auto Concept reacts faster: it settles into new training after 30 seconds instead of 5 minutes,
-  rotates through all unlocked concepts instead of grouping them by type, and steps back on its own
-  when a resource it needs starts draining.
-- All automation now runs on one shared rhythm, so there are no per-feature timing settings left to
-  tune. Your settings file is upgraded automatically.
-- The BepInEx log stays readable: endlessly repeated lines are collapsed into short summaries.
-- The Windows installer detects a running game more reliably and refuses to install while the game
-  is open.
-- Debug builds replace the old F10/F11/F12 shortcuts with a local control server for development
-  tooling; regular builds contain none of it.
+- Auto Concept settles into new training in 30 seconds instead of 5 minutes and rotates through
+  all unlocked concepts.
+- One shared automation rhythm; the per-feature timing settings are gone. Settings migrate
+  automatically.
+- Repeated log lines collapse into short summaries.
+- The Windows installer refuses to run while the game is open.
+- Debug builds replace the F10/F11/F12 shortcuts with a local control server.
 
 ## Orb Of Creation ModSuite 0.4.0 Beta 1 — 2026-07-29
 
