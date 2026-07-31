@@ -32,22 +32,27 @@ names. The exact supported `ConsumableTypeSO` identities are:
 | Thread | `66a50127-5210-4a3a-93f4-952287858b90` | `ThreadConsumable` |
 
 The collector publishes all native type memberships rather than reducing them to one guessed
-family. That relation is a set, not a discriminator. A sole supported membership selects its
-operation. The accepted assets author four permanent fruits — Blitz Berry, Continuous Coconut,
-Frugal Fig, and Power Pear — as both `Fruit` and `Relic`; that exact supported set selects the Relic
-operation. Other multi-family rows pair one supported operation family with display/category
-metadata such as Food, Modification, Resource, or Treasure. No supported membership, a repeated
-stable family UUID, or any other combination spanning multiple supported operations fails closed.
+family. That relation is a set, not a discriminator, but the item's operation is single. In the
+eight authored family sets below, the second authored family — Fruit, Treasure, Modification,
+Resource, or Food — records an acquisition channel or category rather than another operation.
+Treasure relics and fruit relics are therefore both Relics; Treasure and Fruit describe how those
+Relics are acquired. A sole supported membership selects its operation. The accepted assets author
+four permanent fruits — Blitz Berry, Continuous Coconut, Frugal Fig, and Power Pear — as both
+`Fruit` and `Relic`; that exact supported set selects the Relic operation. Other multi-family rows
+pair one supported operation family with Food, Modification, Resource, or Treasure metadata. No
+supported membership, a repeated stable family UUID, or any other combination spanning multiple
+supported operations fails closed.
 
 The live read-only Game MCP resolved `a1799c52-f9ff-4556-b052-f577ac3e7270` as an exact visible
 `ConsumableSO` with quantity zero, `hasDuration=false`, and `durationBase=8`. Read-only type-tree
 inspection of the installed `sharedassets0.assets` identifies it as `Continuous Coconut` and its
 two `consumableTypes` references as Fruit
 (`46e0ab83-df7c-4f35-8012-3d9a3c97b753`) and Relic
-(`5d27b76e-eed3-49cc-a069-b9106000ede4`). The same asset census finds 68 consumables across both
-single- and multi-membership patterns; the only two-supported-operation topology is the four
-authored `Fruit + Relic` permanent fruits. This is why the resolver encodes that exact game-authored set
-rather than a general precedence rule.
+(`5d27b76e-eed3-49cc-a069-b9106000ede4`). The same asset census finds 68 consumables across exactly
+eight single- and multi-membership patterns; the only two-supported-operation topology is the four
+authored `Fruit + Relic` permanent fruits. This acquisition-channel meaning, together with their
+non-duration shape, is why the resolver encodes that exact game-authored set rather than a general
+precedence rule over unseen combinations.
 
 The shared world also publishes each consumable's quantity, queued quantity, preparation and
 cooldown readings, visibility, randomization capability, maximum carry, immediate `consumeCost`,
@@ -195,10 +200,14 @@ The Mods-page picker is UI over this unchanged serialized key. Its main-thread d
 `ConsumableSO.All`; exact `GetGuid()` identity; the `visible` discovery flag; the
 `consumableTypes` relationship and each type's `GetGuid()` and inherited native `GetName()`; the
 item's native `GetName()` and `GetIcon()`; and the current private `quantity` stock field. It retains
-immutable facts plus the captured sprite, never a consumable or native UI object. Any discovered
-row with Fruit, Potion, or Thread membership is listed, displays every authored family name in
-native order, sorts by temporary family, native item name, then UUID, and uses the same captured
-base/active frame pair as the Mods rail and quick controls.
+immutable facts plus the captured sprite, never a consumable or native UI object. The catalog feeds
+each row's supported membership set through the same exact-topology resolver used by worker policy
+and live boundary revalidation. Only rows whose resolved operation is Fruit, Potion, or Thread are
+listed. Blitz Berry, Continuous Coconut, Frugal Fig, and Power Pear consequently resolve as Relics
+and are excluded. Listed rows display every authored family name with the resolved operation first
+and remaining acquisition/category metadata in native order, sort by resolved operation, native
+item name, then UUID, and use the same captured base/active frame pair as the Mods rail and quick
+controls.
 
 The picker always renders `<approved> of <discovered> approved`. Unknown valid UUIDs and malformed
 hand-edited tokens remain explicit removable rows instead of being normalized away. A genuinely

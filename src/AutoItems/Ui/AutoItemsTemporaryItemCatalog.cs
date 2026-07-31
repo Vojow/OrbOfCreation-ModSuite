@@ -13,27 +13,12 @@ internal readonly record struct AutoItemsTemporaryItemFamily(
 
 internal readonly record struct AutoItemsTemporaryItemOption(
     Guid ItemId,
+    AutoItemsConsumableFamily ResolvedOperation,
     IReadOnlyList<AutoItemsTemporaryItemFamily> Families,
     string DisplayName,
     int Stock,
     Sprite Icon)
 {
-    internal AutoItemsConsumableFamily PrimaryTemporaryFamily
-    {
-        get
-        {
-            var primary = AutoItemsConsumableFamily.Unknown;
-            for (var index = 0; index < Families.Count; index++)
-            {
-                var candidate = Families[index].SupportedFamily;
-                if (!AutoItemsConsumableFamilies.IsTemporary(candidate)) continue;
-                if (primary == AutoItemsConsumableFamily.Unknown || candidate < primary)
-                    primary = candidate;
-            }
-            return primary;
-        }
-    }
-
     internal string FamilyDisplay
     {
         get
@@ -114,15 +99,21 @@ internal static class AutoItemsTemporaryItemCatalog
                         "The discovered consumable catalog contained an empty or duplicate stable UUID.");
 
                 var families = ReadFamilies(entry, itemId, native);
-                var temporaryFamily = AutoItemsConsumableFamily.Unknown;
+                var supportedFamilies = new AutoItemsConsumableFamilySet();
                 for (var index = 0; index < families.Count; index++)
                 {
                     var candidate = families[index].SupportedFamily;
-                    if (!AutoItemsConsumableFamilies.IsTemporary(candidate)) continue;
-                    temporaryFamily = candidate;
-                    break;
+                    if (candidate == AutoItemsConsumableFamily.Unknown) continue;
+                    if (supportedFamilies.TryAdd(candidate)) continue;
+                    return AutoItemsTemporaryItemCatalogSnapshot.Failed(
+                        $"Discovered consumable {itemId:D} repeated supported family {candidate}.");
                 }
-                if (temporaryFamily == AutoItemsConsumableFamily.Unknown) continue;
+                if (supportedFamilies.Count == 0) continue;
+                if (!supportedFamilies.TryResolveExecutionFamily(out var operation))
+                    return AutoItemsTemporaryItemCatalogSnapshot.Failed(
+                        $"Discovered consumable {itemId:D} has incoherent supported family " +
+                        $"memberships [{supportedFamilies.Describe()}].");
+                if (!AutoItemsConsumableFamilies.IsTemporary(operation)) continue;
 
                 var displayName = Invoke<string>(native.GetName, entry).Trim();
                 if (displayName.Length == 0)
@@ -137,7 +128,8 @@ internal static class AutoItemsTemporaryItemCatalog
 
                 options.Add(new AutoItemsTemporaryItemOption(
                     itemId,
-                    families,
+                    operation,
+                    OrderFamiliesForDisplay(families, operation),
                     displayName,
                     stock,
                     icon));
@@ -190,13 +182,34 @@ internal static class AutoItemsTemporaryItemCatalog
         AutoItemsTemporaryItemOption left,
         AutoItemsTemporaryItemOption right)
     {
-        var family = left.PrimaryTemporaryFamily.CompareTo(right.PrimaryTemporaryFamily);
+        var family = left.ResolvedOperation.CompareTo(right.ResolvedOperation);
         if (family != 0) return family;
         var name = string.Compare(
             left.DisplayName,
             right.DisplayName,
             StringComparison.OrdinalIgnoreCase);
         return name != 0 ? name : left.ItemId.CompareTo(right.ItemId);
+    }
+
+    private static IReadOnlyList<AutoItemsTemporaryItemFamily> OrderFamiliesForDisplay(
+        IReadOnlyList<AutoItemsTemporaryItemFamily> families,
+        AutoItemsConsumableFamily operation)
+    {
+        if (families.Count < 2 || families[0].SupportedFamily == operation) return families;
+
+        var ordered = new AutoItemsTemporaryItemFamily[families.Count];
+        var cursor = 0;
+        for (var index = 0; index < families.Count; index++)
+        {
+            if (families[index].SupportedFamily != operation) continue;
+            ordered[cursor++] = families[index];
+        }
+        for (var index = 0; index < families.Count; index++)
+        {
+            if (families[index].SupportedFamily == operation) continue;
+            ordered[cursor++] = families[index];
+        }
+        return ordered;
     }
 
     private static T Invoke<T>(MethodInfo method, object target) =>

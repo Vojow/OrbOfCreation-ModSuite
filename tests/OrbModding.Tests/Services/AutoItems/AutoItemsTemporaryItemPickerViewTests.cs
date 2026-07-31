@@ -42,6 +42,7 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
         {
             new AutoItemsTemporaryItemOption(
                 itemId,
+                AutoItemsConsumableFamily.Fruit,
                 new[]
                 {
                     new AutoItemsTemporaryItemFamily(

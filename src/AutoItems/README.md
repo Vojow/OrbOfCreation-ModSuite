@@ -36,9 +36,11 @@ configuration generation and pinned to the cycle; actions carry no configuration
 current-configuration reader in the adapter or GameAction. Committed master disable releases the
 ownership lease as a fast backstop.
 
-The Mods page is the only in-game editor for exact temporary-item approval. It lists only discovered
-Fruit, Potion, and Thread members, ordered by temporary family then native name, and shows each
-native icon, every authored family name, and current stock beside a raised/recessed approval row.
+The Mods page is the only in-game editor for exact temporary-item approval. It sends each discovered
+item through the worker's shared exact-topology family resolver and lists only resolved Fruit,
+Potion, and Thread operations, ordered by operation then native name. Fruit + Relic items therefore
+remain Relics and are not listed. Each row shows the native icon, its resolved operation followed by
+every other authored family name, and current stock beside a raised/recessed approval row.
 The state line always says how many
 discovered items are approved. Stored UUIDs that do not resolve remain explicit removable rows; a
 failed native discovery read is a red failure state and never masquerades as the healthy
