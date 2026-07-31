@@ -311,6 +311,9 @@ public sealed class GlyphSO : IdScriptableObject
 
 public sealed class ConsumableTypeSO : IdScriptableObject
 {
+    public string DisplayName = string.Empty;
+
+    public string GetName() => DisplayName;
 }
 
 public sealed partial class ConsumableSO : IdScriptableObject

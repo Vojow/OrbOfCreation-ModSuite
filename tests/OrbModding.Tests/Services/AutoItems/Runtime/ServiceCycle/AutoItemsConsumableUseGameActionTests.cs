@@ -60,6 +60,39 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
+    public void ContinuousCoconutFruitRelicTopologyRevalidatesAsPermanentRelic()
+    {
+        var relic = Item(
+            AutoItemsConsumableFamily.Relic,
+            itemId: Guid.Parse("a1799c52-f9ff-4556-b052-f577ac3e7270"));
+        var fruit = new ConsumableTypeSO();
+        fruit.SetGuid(KnownEntities.ConsumableFruitType.Uuid);
+        relic.consumableTypes.Insert(0, fruit);
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(0, relic.GetQuantity());
+        Assert.Equal(1, relic.GetQueued());
+        Assert.Empty(relic.consumableUsages);
+        Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
+
+        var incoherent = Item(AutoItemsConsumableFamily.Relic);
+        var potion = new ConsumableTypeSO();
+        potion.SetGuid(KnownEntities.ConsumablePotionType.Uuid);
+        incoherent.consumableTypes.Insert(0, potion);
+        var incoherentResult = gameAction.Submit(
+            Action(incoherent, AutoItemsConsumableFamily.Relic));
+
+        Assert.Equal(AutoItemsPreflight.FamilyChanged, incoherentResult.Preflight);
+        Assert.Contains("[Relic, Potion]", incoherentResult.Reason);
+        Assert.Equal(1, incoherent.GetQuantity());
+        Assert.Equal(0, incoherentResult.CallOutcome.NativeCallsAttempted);
+    }
+
+    [Fact]
     public void TemporarySubmissionModelsStockDurationToxicityAndUsageEvidence()
     {
         var temporary = Item(AutoItemsConsumableFamily.Thread);
@@ -177,7 +210,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         var result = gameAction.Submit(in action);
 
         Assert.Equal(AutoItemsPreflight.FamilyChanged, result.Preflight);
-        Assert.Contains("Expected exactly one live Scroll", result.Reason);
+        Assert.Contains("Expected live execution family Scroll", result.Reason);
         Assert.Equal(1, item.GetQuantity());
         Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
     }
@@ -320,7 +353,8 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
 
     private ConsumableSO Item(
         AutoItemsConsumableFamily family,
-        bool withTarget = true)
+        bool withTarget = true,
+        Guid? itemId = null)
     {
         var familyType = new ConsumableTypeSO();
         familyType.SetGuid(FamilyId(family));
@@ -329,7 +363,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
             visible = true,
             canBeRandomized = family == AutoItemsConsumableFamily.Scroll,
         };
-        item.SetGuid(Guid.NewGuid());
+        item.SetGuid(itemId ?? Guid.NewGuid());
         item.SetStock(1, 0, 0);
         item.consumableTypes.Add(familyType);
         if (family == AutoItemsConsumableFamily.Scroll)

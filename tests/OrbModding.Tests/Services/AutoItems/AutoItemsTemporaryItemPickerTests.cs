@@ -55,7 +55,9 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
             option =>
             {
                 Assert.Equal(fruit.GetGuid(), option.ItemId);
-                Assert.Equal(AutoItemsConsumableFamily.Fruit, option.Family);
+                var family = Assert.Single(option.Families);
+                Assert.Equal(AutoItemsConsumableFamily.Fruit, family.SupportedFamily);
+                Assert.Equal("Fruit", family.DisplayName);
                 Assert.Equal("Bright Fruit", option.DisplayName);
                 Assert.Equal(5, option.Stock);
                 Assert.Same(fruitIcon, option.Icon);
@@ -63,7 +65,9 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
             option =>
             {
                 Assert.Equal(potion.GetGuid(), option.ItemId);
-                Assert.Equal(AutoItemsConsumableFamily.Potion, option.Family);
+                var family = Assert.Single(option.Families);
+                Assert.Equal(AutoItemsConsumableFamily.Potion, family.SupportedFamily);
+                Assert.Equal("Potion", family.DisplayName);
                 Assert.Equal("Clear Potion", option.DisplayName);
                 Assert.Equal(2, option.Stock);
                 Assert.Same(potionIcon, option.Icon);
@@ -164,23 +168,59 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     }
 
     [Fact]
-    public void AmbiguousDiscoveredFamilyAndMissingIconFailTheWholeReadLoudly()
+    public void ContinuousCoconutShowsItsAuthoredFruitAndRelicMemberships()
     {
-        var ambiguous = Item(
+        var coconut = Item(
+            Guid.Parse("a1799c52-f9ff-4556-b052-f577ac3e7270"),
+            KnownEntities.ConsumableFruitType.Uuid,
+            "Continuous Coconut",
+            visible: true,
+            stock: 0,
+            new Sprite());
+        var secondFamily = new ConsumableTypeSO { DisplayName = "Relic" };
+        secondFamily.SetGuid(KnownEntities.ConsumableRelicType.Uuid);
+        coconut.consumableTypes.Add(secondFamily);
+
+        var snapshot = AutoItemsTemporaryItemCatalog.Capture();
+
+        Assert.True(snapshot.IsAvailable, snapshot.FailureReason);
+        var option = Assert.Single(snapshot.Options);
+        Assert.Equal(coconut.GetGuid(), option.ItemId);
+        Assert.Equal("Continuous Coconut", option.DisplayName);
+        Assert.Equal("Fruit · Relic", option.FamilyDisplay);
+        Assert.Equal(AutoItemsConsumableFamily.Fruit, option.PrimaryTemporaryFamily);
+        Assert.Collection(
+            option.Families,
+            family =>
+            {
+                Assert.Equal(KnownEntities.ConsumableFruitType.Uuid, family.TypeId);
+                Assert.Equal(AutoItemsConsumableFamily.Fruit, family.SupportedFamily);
+                Assert.Equal("Fruit", family.DisplayName);
+            },
+            family =>
+            {
+                Assert.Equal(KnownEntities.ConsumableRelicType.Uuid, family.TypeId);
+                Assert.Equal(AutoItemsConsumableFamily.Relic, family.SupportedFamily);
+                Assert.Equal("Relic", family.DisplayName);
+            });
+    }
+
+    [Fact]
+    public void DuplicateFamilyAndMissingIconFailTheWholeReadLoudly()
+    {
+        var duplicate = Item(
             Guid.NewGuid(),
             KnownEntities.ConsumableFruitType.Uuid,
-            "Ambiguous",
+            "Duplicate",
             visible: true,
             stock: 1,
             new Sprite());
-        var secondFamily = new ConsumableTypeSO();
-        secondFamily.SetGuid(KnownEntities.ConsumablePotionType.Uuid);
-        ambiguous.consumableTypes.Add(secondFamily);
+        duplicate.consumableTypes.Add(duplicate.consumableTypes[0]);
 
-        var ambiguousSnapshot = AutoItemsTemporaryItemCatalog.Capture();
+        var duplicateSnapshot = AutoItemsTemporaryItemCatalog.Capture();
 
-        Assert.False(ambiguousSnapshot.IsAvailable);
-        Assert.Contains("ambiguous supported family", ambiguousSnapshot.FailureReason);
+        Assert.False(duplicateSnapshot.IsAvailable);
+        Assert.Contains("duplicate family UUID", duplicateSnapshot.FailureReason);
 
         ConsumableSO.All.Clear();
         Item(
@@ -200,7 +240,13 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
     private static AutoItemsTemporaryItemOption Option(Guid id, string name) =>
         new(
             id,
-            AutoItemsConsumableFamily.Fruit,
+            new[]
+            {
+                new AutoItemsTemporaryItemFamily(
+                    KnownEntities.ConsumableFruitType.Uuid,
+                    AutoItemsConsumableFamily.Fruit,
+                    "Fruit"),
+            },
             name,
             Stock: 1,
             new Sprite());
@@ -213,7 +259,7 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
         int stock,
         Sprite icon)
     {
-        var family = new ConsumableTypeSO();
+        var family = new ConsumableTypeSO { DisplayName = FamilyName(familyId) };
         family.SetGuid(familyId);
         var item = new ConsumableSO
         {
@@ -226,5 +272,15 @@ public sealed class AutoItemsTemporaryItemPickerTests : IDisposable
         item.consumableTypes.Add(family);
         ConsumableSO.All.Add(item);
         return item;
+    }
+
+    private static string FamilyName(Guid familyId)
+    {
+        if (familyId == KnownEntities.ConsumableFruitType.Uuid) return "Fruit";
+        if (familyId == KnownEntities.ConsumablePotionType.Uuid) return "Potion";
+        if (familyId == KnownEntities.ConsumableRelicType.Uuid) return "Relic";
+        if (familyId == KnownEntities.ConsumableScrollType.Uuid) return "Scroll";
+        if (familyId == KnownEntities.ConsumableThreadType.Uuid) return "Thread";
+        return "Unknown family";
     }
 }

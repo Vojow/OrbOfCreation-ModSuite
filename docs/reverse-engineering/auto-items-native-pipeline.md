@@ -1,7 +1,8 @@
 # Auto Items native pipeline
 
-> **Evidence status: accepted metadata contracts and guarded Scroll/Relic/temporary submission.**
-> Serialized asset topology and live effect completion have not been validated in a running game.
+> **Evidence status: accepted metadata contracts, serialized consumable topology, live read-only
+> item evidence, and guarded Scroll/Relic/temporary submission.** Live effect completion has not
+> been validated.
 
 [Back to reverse-engineering index](README.md) ·
 [Game boundary doctrine](../runtime-architecture/game-boundary-doctrine.md)
@@ -31,8 +32,22 @@ names. The exact supported `ConsumableTypeSO` identities are:
 | Thread | `66a50127-5210-4a3a-93f4-952287858b90` | `ThreadConsumable` |
 
 The collector publishes all native type memberships rather than reducing them to one guessed
-family. Policy accepts exactly one supported family; no supported membership and conflicting
-supported memberships both fail closed.
+family. That relation is a set, not a discriminator. A sole supported membership selects its
+operation. The accepted assets author four permanent fruits — Blitz Berry, Continuous Coconut,
+Frugal Fig, and Power Pear — as both `Fruit` and `Relic`; that exact supported set selects the Relic
+operation. Other multi-family rows pair one supported operation family with display/category
+metadata such as Food, Modification, Resource, or Treasure. No supported membership, a repeated
+stable family UUID, or any other combination spanning multiple supported operations fails closed.
+
+The live read-only Game MCP resolved `a1799c52-f9ff-4556-b052-f577ac3e7270` as an exact visible
+`ConsumableSO` with quantity zero, `hasDuration=false`, and `durationBase=8`. Read-only type-tree
+inspection of the installed `sharedassets0.assets` identifies it as `Continuous Coconut` and its
+two `consumableTypes` references as Fruit
+(`46e0ab83-df7c-4f35-8012-3d9a3c97b753`) and Relic
+(`5d27b76e-eed3-49cc-a069-b9106000ede4`). The same asset census finds 68 consumables across both
+single- and multi-membership patterns; the only two-supported-operation topology is the four
+authored `Fruit + Relic` permanent fruits. This is why the resolver encodes that exact game-authored set
+rather than a general precedence rule.
 
 The shared world also publishes each consumable's quantity, queued quantity, preparation and
 cooldown readings, visibility, randomization capability, maximum carry, immediate `consumeCost`,
@@ -96,7 +111,7 @@ The protocol applies these classes from the
 | Native check or operation | Class | Protocol consequence |
 |---|---|---|
 | Stable UUID plus exact `ConsumableSO` resolution | Pure | Resolve from the lifecycle-stamped native registry immediately before use; a missing or differently typed object rejects. |
-| `consumableTypes` plus `ConsumableTypeSO.GetGuid()` | Pure | Re-read the complete live membership and require exactly one supported family matching the plan. |
+| `consumableTypes` plus `ConsumableTypeSO.GetGuid()` | Pure | Re-read the complete live membership set, resolve a sole supported operation or the exact authored `Fruit + Relic -> Relic` topology, and require that operation to match the plan. Every other cross-operation set rejects. |
 | `IsVisible()`, `canBeRandomized`, `IsRandomized()` | Pure | Read live. Randomized mode is confirmed again after `SetRandomization(true)`. |
 | `hasDuration` and `durationBase` | Pure | Re-read the live fields for a temporary item and require a finite positive duration immediately before admission. |
 | `consumeCost.costs` and `usageCost.costs`, exact `ResourceTuple.resource` UUID/type, and `valueBig` | Pure | Traverse both complete live vectors. Immediate cost must contain Toxicity; neither vector may contain another resource or an invalid magnitude. `CanFire()` remains the affordability oracle. |
@@ -178,10 +193,12 @@ configuration key, and neither adapter nor GameAction has a current-configuratio
 
 The Mods-page picker is UI over this unchanged serialized key. Its main-thread display capture reads
 `ConsumableSO.All`; exact `GetGuid()` identity; the `visible` discovery flag; the
-`consumableTypes` relationship and each type's `GetGuid()`; the native `GetName()` and `GetIcon()`;
-and the current private `quantity` stock field. It retains immutable facts plus the captured sprite,
-never a consumable or native UI object. Fruit, Potion, and Thread rows sort by family, native name,
-then UUID and use the same captured base/active frame pair as the Mods rail and quick controls.
+`consumableTypes` relationship and each type's `GetGuid()` and inherited native `GetName()`; the
+item's native `GetName()` and `GetIcon()`; and the current private `quantity` stock field. It retains
+immutable facts plus the captured sprite, never a consumable or native UI object. Any discovered
+row with Fruit, Potion, or Thread membership is listed, displays every authored family name in
+native order, sorts by temporary family, native item name, then UUID, and uses the same captured
+base/active frame pair as the Mods rail and quick controls.
 
 The picker always renders `<approved> of <discovered> approved`. Unknown valid UUIDs and malformed
 hand-edited tokens remain explicit removable rows instead of being normalized away. A genuinely
@@ -207,7 +224,8 @@ mutual exclusion in both directions, native stock/duration/Toxicity/usage eviden
 quarantine, and injected double-usage, premature-expiry, and missing-engagement publications. The
 target stub injects a candidate list and therefore does not reproduce the game's complete
 structure-eligibility calculation or eventual random choice. The installed-contract gate proves
-the exact members and signatures, not authored item topology or any durable effect.
+the exact members and signatures. The read-only installed asset census and live Game MCP reading
+cover the authored Continuous Coconut topology; they do not prove any durable effect.
 
 Before claiming live gameplay completion, a runtime validation lane must observe at least one
 Scroll and one Relic on the accepted game build: idle/busy admission, consume-cost and stock/queue

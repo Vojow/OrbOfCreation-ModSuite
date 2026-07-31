@@ -87,13 +87,13 @@ internal static class AutoItemsCandidateScanner
         for (var index = 0; index < rows.Length; index++)
         {
             var itemId = rows[index].ConsumableId;
-            if (HasTemporaryFamily(world, itemId))
+            var profile = AutoItemsConsumableProfileBuilder.Build(world, itemId);
+            if (AutoItemsConsumableFamilies.IsTemporary(profile.Family))
             {
                 temporary++;
                 temporaryUsagePresent |= HasPendingOrActiveUsage(world, itemId);
             }
 
-            var profile = AutoItemsConsumableProfileBuilder.Build(world, itemId);
             if (!profile.IsReady)
             {
                 rejected++;
@@ -178,29 +178,6 @@ internal static class AutoItemsCandidateScanner
             in firstTemporary,
             in firstRelic,
             in firstScroll);
-    }
-
-    private static bool HasTemporaryFamily(GameWorldState world, Guid itemId)
-    {
-        if (!WorldConsumableTypeLookup.TryFindRange(
-                world.ConsumableTypes,
-                itemId,
-                out var start,
-                out var count))
-        {
-            return false;
-        }
-
-        for (var index = 0; index < count; index++)
-        {
-            if (AutoItemsConsumableFamilies.IsTemporary(
-                    AutoItemsConsumableFamilies.FromTypeId(
-                        world.ConsumableTypes[start + index].TypeId)))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static bool HasPendingOrActiveUsage(GameWorldState world, Guid itemId)

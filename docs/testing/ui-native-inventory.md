@@ -86,8 +86,16 @@ emergency icon is a named loaded-asset capture, not a reflected managed member:
 The Auto Items temporary-item picker reuses the captured subview-radio base/active frame pair and
 the already-declared `TooltipableObject.GetIcon()` capture for each discovered item. Its one added
 capture contract is `TooltipableObject.GetName()` in the picker boundary; identity, discovery,
-family, registry, and stock reads reuse the existing world-capture contracts. The picker creates
-its own row and `Image` objects and never captures a native UI object.
+family, registry, and stock reads reuse the existing world-capture contracts. Multi-membership rows
+also invoke that same inherited `GetName()` contract for each `ConsumableTypeSO`; the existing type
+contract now pins its `UpgradeableObject` base so this receiver relationship is audited without a
+new contract entry. The picker creates its own row and `Image` objects and never captures a native
+UI object.
+
+Discovery-failure pixels use the same suite-owned frame and text primitives. Their state line and
+failure panel are measured from the actual editor width and rendered font size before the setting
+row height is committed, so wrapped text cannot overlap the panel or the Default button at any
+settings-page width.
 
 The installed gate also pins the inheritance that makes those accessor results tooltipable
 (`AttributeSO -> TooltipableObject` and

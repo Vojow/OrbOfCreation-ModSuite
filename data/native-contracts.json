@@ -14496,6 +14496,7 @@
       "type": "ConsumableTypeSO",
       "typeVisibility": "public",
       "kind": "type",
+      "baseType": "UpgradeableObject",
       "owners": [
         "Automata world collection",
         "Auto Items temporary-item picker"

@@ -10,7 +10,7 @@ internal enum AutoItemsConsumableProfileStatus
     Ready = 0,
     ConsumableMissing = 1,
     NoSupportedFamily = 2,
-    AmbiguousSupportedFamily = 3,
+    IncoherentSupportedFamilies = 3,
     ToxicityResourceMissing = 4,
     ToxicityResourceNotInverted = 5,
     ToxicityCapacityUnavailable = 6,
@@ -131,23 +131,35 @@ internal static class AutoItemsConsumableProfileBuilder
             return AutoItemsConsumableFamily.Unknown;
         }
 
-        var family = AutoItemsConsumableFamily.Unknown;
-        var supported = 0;
+        var families = new AutoItemsConsumableFamilySet();
         for (var index = 0; index < count; index++)
         {
-            var candidate = AutoItemsConsumableFamilies.FromTypeId(types[start + index].TypeId);
+            var typeId = types[start + index].TypeId;
+            if (typeId == Guid.Empty)
+            {
+                status = AutoItemsConsumableProfileStatus.IncoherentSupportedFamilies;
+                return AutoItemsConsumableFamily.Unknown;
+            }
+            for (var previous = 0; previous < index; previous++)
+            {
+                if (types[start + previous].TypeId != typeId) continue;
+                status = AutoItemsConsumableProfileStatus.IncoherentSupportedFamilies;
+                return AutoItemsConsumableFamily.Unknown;
+            }
+            var candidate = AutoItemsConsumableFamilies.FromTypeId(typeId);
             if (candidate == AutoItemsConsumableFamily.Unknown) continue;
-            family = candidate;
-            supported++;
+            if (families.TryAdd(candidate)) continue;
+            status = AutoItemsConsumableProfileStatus.IncoherentSupportedFamilies;
+            return AutoItemsConsumableFamily.Unknown;
         }
-        if (supported == 0)
+        if (families.Count == 0)
         {
             status = AutoItemsConsumableProfileStatus.NoSupportedFamily;
             return AutoItemsConsumableFamily.Unknown;
         }
-        if (supported != 1)
+        if (!families.TryResolveExecutionFamily(out var family))
         {
-            status = AutoItemsConsumableProfileStatus.AmbiguousSupportedFamily;
+            status = AutoItemsConsumableProfileStatus.IncoherentSupportedFamilies;
             return AutoItemsConsumableFamily.Unknown;
         }
         status = AutoItemsConsumableProfileStatus.Ready;

@@ -24,6 +24,7 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
         MethodInfo itemGuid,
         MethodInfo familyGuid,
         MethodInfo getName,
+        MethodInfo familyName,
         MethodInfo getIcon)
     {
         ConsumableType = consumableType;
@@ -35,6 +36,7 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
         ItemGuid = itemGuid;
         FamilyGuid = familyGuid;
         GetName = getName;
+        FamilyName = familyName;
         GetIcon = getIcon;
     }
 
@@ -47,6 +49,7 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
     internal MethodInfo ItemGuid { get; }
     internal MethodInfo FamilyGuid { get; }
     internal MethodInfo GetName { get; }
+    internal MethodInfo FamilyName { get; }
     internal MethodInfo GetIcon { get; }
 
     internal static bool TryCreate(
@@ -71,6 +74,7 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
         var itemGuid = ExactMethod(consumable, "GetGuid", typeof(Guid));
         var familyGuid = ExactMethod(family, "GetGuid", typeof(Guid));
         var getName = ExactMethod(consumable, "GetName", typeof(string));
+        var familyName = ExactMethod(family, "GetName", typeof(string));
         var getIcon = ExactMethod(consumable, "GetIcon", typeof(Sprite));
 
         if (all?.GetValue(null) is not IEnumerable entries ||
@@ -99,9 +103,9 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
             reason = "The item or family GetGuid() contract is unavailable.";
             return false;
         }
-        if (getName is null)
+        if (getName is null || familyName is null)
         {
-            reason = "ConsumableSO.GetName() : String is unavailable.";
+            reason = "ConsumableSO or ConsumableTypeSO GetName() : String is unavailable.";
             return false;
         }
         if (getIcon is null)
@@ -120,6 +124,7 @@ internal sealed class AutoItemsTemporaryItemCatalogBindings
             itemGuid,
             familyGuid,
             getName,
+            familyName,
             getIcon);
         reason = string.Empty;
         return true;

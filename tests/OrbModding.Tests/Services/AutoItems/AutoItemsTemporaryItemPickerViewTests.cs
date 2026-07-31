@@ -42,7 +42,13 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
         {
             new AutoItemsTemporaryItemOption(
                 itemId,
-                AutoItemsConsumableFamily.Fruit,
+                new[]
+                {
+                    new AutoItemsTemporaryItemFamily(
+                        KnownEntities.ConsumableFruitType.Uuid,
+                        AutoItemsConsumableFamily.Fruit,
+                        "Fruit"),
+                },
                 "Bright Fruit",
                 Stock: 4,
                 icon),
@@ -55,7 +61,7 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
             value => changed = value);
 
         var parent = Parent();
-        view.Render(parent, edit, catalog);
+        view.Render(parent, edit, catalog, editorWidth: 392f);
 
         Assert.Equal("0 of 1 approved", Text(Child(parent, "PickerStateLine")));
         var item = Child(parent, "PickerItem." + itemId.ToString("N"));
@@ -97,13 +103,15 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
             healthyParent,
             emptyEdit,
             AutoItemsTemporaryItemCatalogSnapshot.Available(
-                Array.Empty<AutoItemsTemporaryItemOption>()));
+                Array.Empty<AutoItemsTemporaryItemOption>()),
+            editorWidth: 392f);
         var failedParent = Parent();
         view.Render(
             failedParent,
             failedEdit,
             AutoItemsTemporaryItemCatalogSnapshot.Failed(
-                "ConsumableSO.All was unreadable."));
+                "ConsumableSO.All was unreadable."),
+            editorWidth: 392f);
 
         Assert.Equal(
             "No discovered temporary items yet.",
@@ -122,6 +130,78 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
         Assert.Equal(string.Empty, failedEdit.StagedSerialized);
     }
 
+    [Theory]
+    [InlineData(640f)]
+    [InlineData(1000f)]
+    [InlineData(1440f)]
+    public void FailureCompositionMeasuresDisjointStateAndPanelRects(float contentWidth)
+    {
+        var file = new ConfigFile();
+        var automata = BepInExAutomataConfiguration.Bind(file);
+        automata.AutoItemsMode.Value = AutoItemsOperationMode.Active;
+        var family = new ConsumableTypeSO { DisplayName = string.Empty };
+        family.SetGuid(KnownEntities.ConsumableFruitType.Uuid);
+        var nativeItem = new ConsumableSO
+        {
+            DisplayName = "Continuous Coconut",
+            Icon = new Sprite(),
+            visible = true,
+        };
+        nativeItem.SetGuid(Guid.Parse("a1799c52-f9ff-4556-b052-f577ac3e7270"));
+        nativeItem.consumableTypes.Add(family);
+        ConsumableSO.All.Add(nativeItem);
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource(
+                PluginIds.SuiteGuid,
+                "Orb Of Creation ModSuite",
+                "test",
+                file),
+        });
+        var settings = catalog.Mods.Single().Sections
+            .Single(section => section.Name == "Auto Items")
+            .Settings
+            .Where(setting => !ModSettingsPage.IsImmediateCommandSetting(setting))
+            .ToArray();
+        var contentObject = new GameObject("content", typeof(RectTransform));
+        var content = (RectTransform)contentObject.transform;
+        content.rect = new Rect(0f, 0f, contentWidth, 800f);
+        var session = new ConfigEditSession(catalog);
+        using var list = new ModSettingListView(
+            session,
+            content,
+            LabelTemplate(),
+            () => { },
+            _ => { });
+
+        list.Render(settings);
+
+        var editorWidth = AutoItemsTemporaryItemPickerView.CalculateEditorWidth(contentWidth);
+        var row = (RectTransform)Child(content, "Setting.TemporaryItemAllowlist");
+        var state = (RectTransform)Child(row, "PickerStateLine");
+        var defaultButton = (RectTransform)Child(row, "Default");
+        var panel = (RectTransform)Child(row, "PickerDiscoveryFailure");
+        Assert.True(Bottom(state) <= Top(panel));
+        Assert.True(Bottom(defaultButton) <= Top(panel));
+        Assert.True(state.anchorMax.x <= defaultButton.anchorMin.x);
+        Assert.True(Bottom(panel) <= row.sizeDelta.y);
+
+        var stateText = state.gameObject.GetComponent<TextMeshProUGUI>()!;
+        var statePreferred = stateText.GetPreferredValues(
+            stateText.text,
+            editorWidth * 0.7f,
+            0f).y;
+        Assert.True(statePreferred <= state.sizeDelta.y);
+
+        var reasonText = Child(panel, "Reason").gameObject.GetComponent<TextMeshProUGUI>()!;
+        Assert.Contains("returned an empty native name", reasonText.text);
+        var reasonPreferred = reasonText.GetPreferredValues(
+            reasonText.text,
+            editorWidth * 0.93f,
+            0f).y;
+        Assert.True(reasonPreferred <= panel.sizeDelta.y * 0.84f + 0.01f);
+    }
+
     [Fact]
     public void AutoItemsPageComposesPickerInsteadOfGenericTextInput()
     {
@@ -129,7 +209,7 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
         var automata = BepInExAutomataConfiguration.Bind(file);
         automata.AutoItemsMode.Value = AutoItemsOperationMode.Active;
         var itemId = Guid.Parse("40000000-0000-0000-0000-000000000001");
-        var family = new ConsumableTypeSO();
+        var family = new ConsumableTypeSO { DisplayName = "Fruit" };
         family.SetGuid(KnownEntities.ConsumableFruitType.Uuid);
         var nativeItem = new ConsumableSO
         {
@@ -214,4 +294,8 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
 
     private static string Text(Transform transform) =>
         transform.gameObject.GetComponent<TextMeshProUGUI>()!.text;
+
+    private static float Top(RectTransform rect) => -rect.anchoredPosition.y;
+
+    private static float Bottom(RectTransform rect) => Top(rect) + rect.sizeDelta.y;
 }

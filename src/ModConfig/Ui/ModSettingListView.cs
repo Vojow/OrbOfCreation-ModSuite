@@ -61,7 +61,11 @@ internal sealed class ModSettingListView : IDisposable
         if (featureCommand is not null)
             contentHeight += CreateFeatureHeader(featureCommand, contentHeight);
         foreach (var setting in settings)
-            contentHeight += CreateRow(setting, contentHeight, MeasuredDescriptionWidth);
+            contentHeight += CreateRow(
+                setting,
+                contentHeight,
+                MeasuredDescriptionWidth,
+                _content.rect.width);
         contentHeight = Math.Max(1f, contentHeight);
         _content.sizeDelta = new Vector2(0f, contentHeight);
         return contentHeight;
@@ -129,7 +133,8 @@ internal sealed class ModSettingListView : IDisposable
     private float CreateRow(
         ConfigSettingDescriptor setting,
         float topOffset,
-        float descriptionWidth)
+        float descriptionWidth,
+        float contentWidth)
     {
         var edit = _session.Get(setting);
         var row = new GameObject(
@@ -187,7 +192,11 @@ internal sealed class ModSettingListView : IDisposable
             temporaryCatalog = _temporaryItemPicker.CaptureCatalog();
             rowHeight = Math.Max(
                 rowHeight,
-                _temporaryItemPicker.Measure(edit, temporaryCatalog, MinimumSettingRowHeight));
+                _temporaryItemPicker.Measure(
+                    edit,
+                    temporaryCatalog,
+                    AutoItemsTemporaryItemPickerView.CalculateEditorWidth(contentWidth),
+                    MinimumSettingRowHeight));
         }
         var visibleRowHeight = rowHeight - SettingRowGap;
         rowRect.sizeDelta = new Vector2(0f, visibleRowHeight);
@@ -284,7 +293,8 @@ internal sealed class ModSettingListView : IDisposable
                 parent,
                 edit,
                 temporaryCatalog ?? AutoItemsTemporaryItemCatalogSnapshot.Failed(
-                    "The picker catalog was not captured for this setting."));
+                    "The picker catalog was not captured for this setting."),
+                AutoItemsTemporaryItemPickerView.CalculateEditorWidth(_content.rect.width));
             return;
         }
         switch (setting.Kind)

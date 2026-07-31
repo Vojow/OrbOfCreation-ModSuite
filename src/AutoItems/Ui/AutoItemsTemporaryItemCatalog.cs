@@ -6,12 +6,48 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
+internal readonly record struct AutoItemsTemporaryItemFamily(
+    Guid TypeId,
+    AutoItemsConsumableFamily SupportedFamily,
+    string DisplayName);
+
 internal readonly record struct AutoItemsTemporaryItemOption(
     Guid ItemId,
-    AutoItemsConsumableFamily Family,
+    IReadOnlyList<AutoItemsTemporaryItemFamily> Families,
     string DisplayName,
     int Stock,
-    Sprite Icon);
+    Sprite Icon)
+{
+    internal AutoItemsConsumableFamily PrimaryTemporaryFamily
+    {
+        get
+        {
+            var primary = AutoItemsConsumableFamily.Unknown;
+            for (var index = 0; index < Families.Count; index++)
+            {
+                var candidate = Families[index].SupportedFamily;
+                if (!AutoItemsConsumableFamilies.IsTemporary(candidate)) continue;
+                if (primary == AutoItemsConsumableFamily.Unknown || candidate < primary)
+                    primary = candidate;
+            }
+            return primary;
+        }
+    }
+
+    internal string FamilyDisplay
+    {
+        get
+        {
+            var value = string.Empty;
+            for (var index = 0; index < Families.Count; index++)
+            {
+                if (value.Length != 0) value += " · ";
+                value += Families[index].DisplayName;
+            }
+            return value;
+        }
+    }
+}
 
 internal sealed class AutoItemsTemporaryItemCatalogSnapshot
 {
@@ -77,8 +113,16 @@ internal static class AutoItemsTemporaryItemCatalog
                     return AutoItemsTemporaryItemCatalogSnapshot.Failed(
                         "The discovered consumable catalog contained an empty or duplicate stable UUID.");
 
-                var family = ReadFamily(entry, itemId, native);
-                if (!AutoItemsConsumableFamilies.IsTemporary(family)) continue;
+                var families = ReadFamilies(entry, itemId, native);
+                var temporaryFamily = AutoItemsConsumableFamily.Unknown;
+                for (var index = 0; index < families.Count; index++)
+                {
+                    var candidate = families[index].SupportedFamily;
+                    if (!AutoItemsConsumableFamilies.IsTemporary(candidate)) continue;
+                    temporaryFamily = candidate;
+                    break;
+                }
+                if (temporaryFamily == AutoItemsConsumableFamily.Unknown) continue;
 
                 var displayName = Invoke<string>(native.GetName, entry).Trim();
                 if (displayName.Length == 0)
@@ -93,7 +137,7 @@ internal static class AutoItemsTemporaryItemCatalog
 
                 options.Add(new AutoItemsTemporaryItemOption(
                     itemId,
-                    family,
+                    families,
                     displayName,
                     stock,
                     icon));
@@ -110,7 +154,7 @@ internal static class AutoItemsTemporaryItemCatalog
         }
     }
 
-    private static AutoItemsConsumableFamily ReadFamily(
+    private static IReadOnlyList<AutoItemsTemporaryItemFamily> ReadFamilies(
         object item,
         Guid itemId,
         AutoItemsTemporaryItemCatalogBindings bindings)
@@ -119,31 +163,34 @@ internal static class AutoItemsTemporaryItemCatalog
             throw new InvalidOperationException(
                 $"ConsumableSO.consumableTypes was unavailable for {itemId:D}.");
 
-        var family = AutoItemsConsumableFamily.Unknown;
-        var supported = 0;
+        var families = new List<AutoItemsTemporaryItemFamily>();
+        var seen = new HashSet<Guid>();
         foreach (var entry in entries)
         {
             if (entry is null || entry.GetType() != bindings.FamilyType)
                 throw new InvalidOperationException(
                     $"ConsumableSO.consumableTypes contained the wrong exact native type for {itemId:D}.");
-            var candidate = AutoItemsConsumableFamilies.FromTypeId(
-                Invoke<Guid>(bindings.FamilyGuid, entry));
-            if (candidate == AutoItemsConsumableFamily.Unknown) continue;
-            family = candidate;
-            supported++;
+            var typeId = Invoke<Guid>(bindings.FamilyGuid, entry);
+            if (typeId == Guid.Empty || !seen.Add(typeId))
+                throw new InvalidOperationException(
+                    $"ConsumableSO.consumableTypes contained an empty or duplicate family UUID for {itemId:D}.");
+            var displayName = Invoke<string>(bindings.FamilyName, entry).Trim();
+            if (displayName.Length == 0)
+                throw new InvalidOperationException(
+                    $"Consumable family {typeId:D} returned an empty native name for {itemId:D}.");
+            families.Add(new AutoItemsTemporaryItemFamily(
+                typeId,
+                AutoItemsConsumableFamilies.FromTypeId(typeId),
+                displayName));
         }
-
-        if (supported > 1)
-            throw new InvalidOperationException(
-                $"Discovered consumable {itemId:D} has an ambiguous supported family.");
-        return supported == 1 ? family : AutoItemsConsumableFamily.Unknown;
+        return families;
     }
 
     private static int Compare(
         AutoItemsTemporaryItemOption left,
         AutoItemsTemporaryItemOption right)
     {
-        var family = left.Family.CompareTo(right.Family);
+        var family = left.PrimaryTemporaryFamily.CompareTo(right.PrimaryTemporaryFamily);
         if (family != 0) return family;
         var name = string.Compare(
             left.DisplayName,

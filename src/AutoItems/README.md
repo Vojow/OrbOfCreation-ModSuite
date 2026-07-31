@@ -4,10 +4,12 @@ Auto Items is the disabled-by-default Scroll, Relic, and temporary-item automati
 `OrbModSuite.dll`. It has no independent plugin identity, cadence, or configuration store. Its one
 feature-wide quick control is owned by the shared automation control registry.
 
-The worker consumes immutable shared-world consumable facts, requires exactly one supported native
-family, gives eligible Relics priority over exact-UUID-approved temporary items and Scrolls, and
-plans at most one action per publication. All evaluator paths wait for another world or
-configuration publication; the engine prevents a second attempt against the same world reading.
+The worker consumes immutable shared-world consumable facts and preserves native family membership
+as a set. A sole supported membership selects its operation; the game's authored `Fruit + Relic`
+topology selects the permanent Relic operation, while every other cross-operation combination
+fails closed. Eligible Relics have priority over exact-UUID-approved temporary items and Scrolls,
+and the worker plans at most one action per publication. All evaluator paths wait for another world
+or configuration publication; the engine prevents a second attempt against the same world reading.
 
 `AutoItemsConsumableUseGameAction` owns the native boundary. It validates its complete reflection
 schema at lifecycle scope, re-resolves stable UUID plus exact type, rechecks family, visibility,
@@ -35,8 +37,9 @@ current-configuration reader in the adapter or GameAction. Committed master disa
 ownership lease as a fast backstop.
 
 The Mods page is the only in-game editor for exact temporary-item approval. It lists only discovered
-Fruit, Potion, and Thread items, ordered by family then native name, and shows each native icon,
-family, and current stock beside a raised/recessed approval row. The state line always says how many
+Fruit, Potion, and Thread members, ordered by temporary family then native name, and shows each
+native icon, every authored family name, and current stock beside a raised/recessed approval row.
+The state line always says how many
 discovered items are approved. Stored UUIDs that do not resolve remain explicit removable rows; a
 failed native discovery read is a red failure state and never masquerades as the healthy
 `No discovered temporary items yet` state; stored entries remain visible and removable alongside

@@ -12,10 +12,16 @@ internal sealed class AutoItemsTemporaryItemPickerView
 {
     private const float StateTop = 5f;
     private const float StateHeight = 30f;
-    private const float ItemTop = 42f;
+    private const float StateContentGap = 7f;
     private const float ItemHeight = 48f;
     private const float ItemStride = 53f;
     private const float BottomInset = 5f;
+    private const float EditorAnchorSpan = 0.4f;
+    private const float RowAnchorSpan = 0.98f;
+    private const float StateWidthFraction = 0.7f;
+    private const float FailureTextWidthFraction = 0.93f;
+    private const float FailureTextHeightFraction = 0.84f;
+    private const float FailureTextSizeScale = 0.55f;
 
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly Action _rebuildRequested;
@@ -42,31 +48,48 @@ internal sealed class AutoItemsTemporaryItemPickerView
     internal AutoItemsTemporaryItemCatalogSnapshot CaptureCatalog() =>
         AutoItemsTemporaryItemCatalog.Capture();
 
+    internal static float CalculateEditorWidth(float contentWidth) =>
+        Math.Max(1f, contentWidth * RowAnchorSpan * EditorAnchorSpan);
+
     internal float Measure(
         ConfigEditValue edit,
         AutoItemsTemporaryItemCatalogSnapshot catalog,
+        float editorWidth,
         float minimumHeight)
     {
         if (edit is null) throw new ArgumentNullException(nameof(edit));
         var presentation = AutoItemsTemporaryItemPickerModel.Compose(
             catalog ?? throw new ArgumentNullException(nameof(catalog)),
             edit.StagedSerialized);
+        var layout = CalculateLayout(presentation, editorWidth);
         var rows = presentation.ContentState == AutoItemsTemporaryItemPickerContentState.DiscoveryReadFailed
-            ? 1 + presentation.UnresolvableEntries.Count
+            ? presentation.UnresolvableEntries.Count
             : Math.Max(1, presentation.Items.Count) + presentation.UnresolvableEntries.Count;
-        return Math.Max(minimumHeight, ItemTop + rows * ItemStride + BottomInset);
+        var contentHeight = presentation.ContentState ==
+            AutoItemsTemporaryItemPickerContentState.DiscoveryReadFailed
+                ? layout.FailureHeight + rows * ItemStride
+                : rows * ItemStride;
+        return Math.Max(
+            minimumHeight,
+            layout.ContentTop + contentHeight + BottomInset +
+            (presentation.ContentState ==
+                AutoItemsTemporaryItemPickerContentState.DiscoveryReadFailed
+                    ? ItemStride - ItemHeight
+                    : 0f));
     }
 
     internal void Render(
         Transform parent,
         ConfigEditValue edit,
-        AutoItemsTemporaryItemCatalogSnapshot catalog)
+        AutoItemsTemporaryItemCatalogSnapshot catalog,
+        float editorWidth)
     {
         if (parent is null) throw new ArgumentNullException(nameof(parent));
         if (edit is null) throw new ArgumentNullException(nameof(edit));
         var presentation = AutoItemsTemporaryItemPickerModel.Compose(
             catalog ?? throw new ArgumentNullException(nameof(catalog)),
             edit.StagedSerialized);
+        var layout = CalculateLayout(presentation, editorWidth);
 
         var state = CreateTopText(
             "PickerStateLine",
@@ -74,7 +97,7 @@ internal sealed class AutoItemsTemporaryItemPickerView
             0.58f,
             0.86f,
             StateTop,
-            StateHeight,
+            layout.StateHeight,
             presentation.ApprovalStateLine,
             TextAlignmentOptions.MidlineLeft,
             0.62f);
@@ -101,8 +124,13 @@ internal sealed class AutoItemsTemporaryItemPickerView
         if (presentation.ContentState ==
             AutoItemsTemporaryItemPickerContentState.DiscoveryReadFailed)
         {
-            CreateFailureState(parent, presentation.ContentMessage);
-            var failureTop = ItemTop + ItemStride;
+            CreateFailureState(
+                parent,
+                layout.ContentTop,
+                layout.FailureHeight,
+                presentation.ContentMessage);
+            var failureTop = layout.ContentTop + layout.FailureHeight +
+                (ItemStride - ItemHeight);
             for (var index = 0; index < presentation.UnresolvableEntries.Count; index++)
             {
                 CreateUnresolvableRow(
@@ -116,7 +144,7 @@ internal sealed class AutoItemsTemporaryItemPickerView
             return;
         }
 
-        var top = ItemTop;
+        var top = layout.ContentTop;
         if (presentation.Items.Count == 0)
         {
             CreateTopText(
@@ -163,7 +191,7 @@ internal sealed class AutoItemsTemporaryItemPickerView
             0.98f,
             top,
             ItemHeight,
-            $"{option.DisplayName}\n{option.Family} · Stock {option.Stock}",
+            $"{option.DisplayName}\n{option.FamilyDisplay} · Stock {option.Stock}",
             () =>
             {
                 edit.Stage(AutoItemsTemporaryItemPickerModel.Toggle(
@@ -246,7 +274,11 @@ internal sealed class AutoItemsTemporaryItemPickerView
         remove.color = ModConfigPalette.Invalid;
     }
 
-    private void CreateFailureState(Transform parent, string reason)
+    private void CreateFailureState(
+        Transform parent,
+        float top,
+        float height,
+        string reason)
     {
         var panel = ModConfigUiFactory.CreateRectObject(
             "PickerDiscoveryFailure",
@@ -256,8 +288,8 @@ internal sealed class AutoItemsTemporaryItemPickerView
             Color.white);
         ModConfigUiFactory.SetTopAnchoredHeight(
             (RectTransform)panel.transform,
-            ItemTop,
-            ItemHeight);
+            top,
+            height);
         var frame = panel.GetComponent<Image>()!;
         frame.sprite = ModConfigUiFactory.NativeVisuals.FeatureRailActiveFrame;
         frame.color = Color.white;
@@ -269,10 +301,54 @@ internal sealed class AutoItemsTemporaryItemPickerView
             new Vector2(0.965f, 0.92f),
             _labelTemplate,
             reason,
-            TextAlignmentOptions.MidlineLeft,
-            0.55f,
+            TextAlignmentOptions.TopLeft,
+            FailureTextSizeScale,
             TextOverflowModes.Overflow);
         text.color = ModConfigPalette.Invalid;
+    }
+
+    private PickerLayout CalculateLayout(
+        AutoItemsTemporaryItemPickerPresentation presentation,
+        float editorWidth)
+    {
+        if (editorWidth <= 0f || float.IsNaN(editorWidth) || float.IsInfinity(editorWidth))
+            throw new ArgumentOutOfRangeException(nameof(editorWidth));
+        if (presentation.ContentState !=
+            AutoItemsTemporaryItemPickerContentState.DiscoveryReadFailed)
+        {
+            return new PickerLayout(
+                StateHeight,
+                StateTop + StateHeight + StateContentGap,
+                ItemHeight);
+        }
+
+        var statePreferred = MeasureTextHeight(
+            presentation.ApprovalStateLine,
+            editorWidth * StateWidthFraction,
+            0.62f);
+        var measuredStateHeight = Math.Max(StateHeight, statePreferred + 2f);
+        var failurePreferred = MeasureTextHeight(
+            presentation.ContentMessage,
+            editorWidth * FailureTextWidthFraction,
+            FailureTextSizeScale);
+        var measuredFailureHeight = Math.Max(
+            ItemHeight,
+            failurePreferred / FailureTextHeightFraction);
+        return new PickerLayout(
+            measuredStateHeight,
+            StateTop + measuredStateHeight + StateContentGap,
+            measuredFailureHeight);
+    }
+
+    private float MeasureTextHeight(string value, float width, float sizeScale)
+    {
+        var templateSize = Math.Max(1f, _labelTemplate.fontSize);
+        var renderedSize = Math.Max(12f, _labelTemplate.fontSize * sizeScale);
+        var scale = renderedSize / templateSize;
+        return _labelTemplate.GetPreferredValues(
+            value,
+            Math.Max(1f, width / scale),
+            0f).y * scale;
     }
 
     private Button CreateTopButton(
@@ -341,4 +417,9 @@ internal sealed class AutoItemsTemporaryItemPickerView
         }
         throw new InvalidOperationException($"{name} was not created.");
     }
+
+    private readonly record struct PickerLayout(
+        float StateHeight,
+        float ContentTop,
+        float FailureHeight);
 }

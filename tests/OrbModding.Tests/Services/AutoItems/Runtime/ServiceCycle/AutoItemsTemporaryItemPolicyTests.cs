@@ -152,6 +152,72 @@ public sealed class AutoItemsTemporaryItemPolicyTests
     }
 
     [Fact]
+    public void ContinuousCoconutFruitRelicTopologyPlansAsPermanentRelic()
+    {
+        var itemId = Guid.Parse("a1799c52-f9ff-4556-b052-f577ac3e7270");
+        var world = new GameWorldState
+        {
+            Consumables = WorldTable.Create(
+                Consumable(itemId, hasDuration: false, duration: 8)),
+            ConsumableTypes = PublicationTable<WorldConsumableType>.Create(
+                new[]
+                {
+                    new WorldConsumableType(
+                        itemId,
+                        KnownEntities.ConsumableFruitType.Uuid),
+                    new WorldConsumableType(
+                        itemId,
+                        KnownEntities.ConsumableRelicType.Uuid),
+                }),
+            ConsumableCosts = PublicationTable<WorldConsumableCost>.Create(
+                new[] { ToxicityCost(itemId) }),
+            Resources = WorldTable.Create(Toxicity(new BigDouble(100))),
+            CollectedAtFrame = 10,
+            CollectedAtEpoch = 1,
+        };
+
+        var action = Assert.Single(Plan(
+            world,
+            Configuration(string.Empty, useRelics: true),
+            out var wake));
+
+        Assert.Equal(itemId, action.ItemId);
+        Assert.Equal(AutoItemsConsumableFamily.Relic, action.Family);
+        Assert.Equal(WakePolicy.OnPublication, wake);
+    }
+
+    [Fact]
+    public void DuplicateAndUnsupportedCrossOperationMembershipsRemainFailClosed()
+    {
+        var duplicateId = Guid.NewGuid();
+        var crossOperationId = Guid.NewGuid();
+
+        var duplicate = Plan(
+            TemporaryWorld(
+                duplicateId,
+                familyIds: new[]
+                {
+                    KnownEntities.ConsumableThreadType.Uuid,
+                    KnownEntities.ConsumableThreadType.Uuid,
+                }),
+            Configuration(duplicateId.ToString("D")),
+            out _);
+        var crossOperation = Plan(
+            TemporaryWorld(
+                crossOperationId,
+                familyIds: new[]
+                {
+                    KnownEntities.ConsumablePotionType.Uuid,
+                    KnownEntities.ConsumableRelicType.Uuid,
+                }),
+            Configuration(crossOperationId.ToString("D"), useRelics: true),
+            out _);
+
+        Assert.Empty(duplicate);
+        Assert.Empty(crossOperation);
+    }
+
+    [Fact]
     public void FollowUpRequiresOneObservedEngagementBeforeDisappearance()
     {
         var itemId = Guid.NewGuid();
@@ -349,7 +415,8 @@ public sealed class AutoItemsTemporaryItemPolicyTests
         double cooldown = 0,
         double duration = 60,
         BigDouble? toxicity = null,
-        bool addHeldNonToxicityCost = false)
+        bool addHeldNonToxicityCost = false,
+        Guid[]? familyIds = null)
     {
         var toxicityQuantity = toxicity ?? new BigDouble(100);
         var costs = addHeldNonToxicityCost
@@ -363,6 +430,10 @@ public sealed class AutoItemsTemporaryItemPolicyTests
                     new BigDouble(1)),
             }
             : new[] { ToxicityCost(itemId) };
+        var selectedFamilies = familyIds ?? new[] { KnownEntities.ConsumableThreadType.Uuid };
+        var types = new WorldConsumableType[selectedFamilies.Length];
+        for (var index = 0; index < types.Length; index++)
+            types[index] = new WorldConsumableType(itemId, selectedFamilies[index]);
         return new GameWorldState
         {
             Consumables = WorldTable.Create(
@@ -375,12 +446,7 @@ public sealed class AutoItemsTemporaryItemPolicyTests
                     preparation,
                     cooldown)),
             ConsumableTypes = PublicationTable<WorldConsumableType>.Create(
-                new[]
-                {
-                    new WorldConsumableType(
-                        itemId,
-                        KnownEntities.ConsumableThreadType.Uuid),
-                }),
+                types),
             ConsumableCosts = PublicationTable<WorldConsumableCost>.Create(costs),
             Resources = WorldTable.Create(Toxicity(toxicityQuantity)),
             CollectedAtFrame = 10,

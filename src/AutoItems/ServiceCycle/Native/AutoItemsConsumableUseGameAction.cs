@@ -248,23 +248,20 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         if (!TryReadSupportedFamilyEvidence(
                 item,
                 native,
-                out var actual,
-                out var supportedCount,
-                out var hasTemporaryFamily,
+                out var families,
                 out reason))
         {
             return false;
         }
-        if (supportedCount == 1 && actual == expected)
+        if (families.TryResolveExecutionFamily(out var actual) && actual == expected)
         {
             reason = string.Empty;
             return true;
         }
 
         reason =
-            $"Expected exactly one live {expected} family for the planned consumable, but " +
-            $"observed {supportedCount} supported families, resolved {actual}, and " +
-            $"temporary-family membership was {hasTemporaryFamily}.";
+            $"Expected live execution family {expected} for the planned consumable, but " +
+            $"observed supported memberships [{families.Describe()}] and resolved {actual}.";
         return false;
     }
 
@@ -411,19 +408,25 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             if (!TryReadSupportedFamilyEvidence(
                     candidate,
                     native,
-                    out var family,
-                    out var supportedCount,
-                    out var hasTemporaryFamily,
+                    out var families,
                     out reason))
             {
                 return false;
             }
-            if (!hasTemporaryFamily) continue;
+            if (families.Count == 0) continue;
+            if (!families.TryResolveExecutionFamily(out var family))
+            {
+                reason =
+                    "A live consumable has incoherent supported family memberships [" +
+                    families.Describe() + "].";
+                return false;
+            }
+            if (!AutoItemsConsumableFamilies.IsTemporary(family)) continue;
             if (native.Usages.GetValue(candidate) is not ICollection usages)
             {
                 reason =
                     $"Temporary-family consumable family={family}, " +
-                    $"supportedFamilies={supportedCount} did not expose " +
+                    $"supportedFamilies=[{families.Describe()}] did not expose " +
                     "ConsumableSO.consumableUsages as ICollection.";
                 return false;
             }
@@ -431,7 +434,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             present = true;
             reason =
                 "A native temporary-item usage is already pending or active: " +
-                $"family={family}, supportedFamilies={supportedCount}, usages={usages.Count}.";
+                $"family={family}, supportedFamilies=[{families.Describe()}], usages={usages.Count}.";
             return true;
         }
 
@@ -442,34 +445,45 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     private static bool TryReadSupportedFamilyEvidence(
         object item,
         AutoItemsNativeBindings native,
-        out AutoItemsConsumableFamily family,
-        out int supportedCount,
-        out bool hasTemporaryFamily,
+        out AutoItemsConsumableFamilySet families,
         out string reason)
     {
-        family = AutoItemsConsumableFamily.Unknown;
-        supportedCount = 0;
-        hasTemporaryFamily = false;
-        if (native.Families.GetValue(item) is not IEnumerable families)
+        families = new AutoItemsConsumableFamilySet();
+        if (native.Families.GetValue(item) is not IList entries)
         {
             reason = "ConsumableSO.consumableTypes was unavailable on the live item.";
             return false;
         }
 
-        foreach (var entry in families)
+        for (var index = 0; index < entries.Count; index++)
         {
+            var entry = entries[index];
             if (entry is null || entry.GetType() != native.FamilyType)
             {
                 reason =
                     "ConsumableSO.consumableTypes contained a non-ConsumableTypeSO value.";
                 return false;
             }
-            var candidate = AutoItemsConsumableFamilies.FromTypeId(
-                Invoke<Guid>(native.FamilyGuid, entry));
+            var familyId = Invoke<Guid>(native.FamilyGuid, entry);
+            if (familyId == Guid.Empty)
+            {
+                reason =
+                    "ConsumableSO.consumableTypes contained an empty or duplicate stable family UUID.";
+                return false;
+            }
+            for (var previous = 0; previous < index; previous++)
+            {
+                if (Invoke<Guid>(native.FamilyGuid, entries[previous]!) != familyId) continue;
+                reason =
+                    "ConsumableSO.consumableTypes contained an empty or duplicate stable family UUID.";
+                return false;
+            }
+            var candidate = AutoItemsConsumableFamilies.FromTypeId(familyId);
             if (candidate == AutoItemsConsumableFamily.Unknown) continue;
-            family = candidate;
-            supportedCount++;
-            hasTemporaryFamily |= AutoItemsConsumableFamilies.IsTemporary(candidate);
+            if (families.TryAdd(candidate)) continue;
+            reason =
+                $"ConsumableSO.consumableTypes repeated supported family {candidate}.";
+            return false;
         }
         reason = string.Empty;
         return true;

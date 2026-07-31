@@ -19,15 +19,20 @@ action-adapter result mapping, one-attempt publication planning, and exact healt
 Temporary-item coverage additionally requires exact and near-miss allowlists, visibility/stock/
 preparation/cooldown/duration/cost/Toxicity guard failures, stock/queue/usage/Toxicity mutation
 evidence, mutual exclusion in both directions, exact-item mutation quarantine, and publication
-injections for double usage, premature expiry, and missing engagement evidence. Cross-feature
+injections for double usage, premature expiry, and missing engagement evidence. The real
+Continuous Coconut regression preserves its authored `Fruit + Relic` set, proves Relic planning
+and live boundary revalidation, and keeps unsupported cross-operation sets fail-closed. Cross-feature
 action-family tests prove that committed master disable releases consumable ownership even when
 Auto Buy keeps the shared multi-buy lease.
 
-Picker coverage additionally requires discovered-only family/name/stock/icon enumeration and
-ordering, exact staged serialization through Apply, an always-visible approval count, removable
+Picker coverage additionally requires discovered-only family/name/stock/icon enumeration, every
+authored family name on multi-membership rows, family/name ordering, exact staged serialization
+through Apply, an always-visible approval count, removable
 unresolvable stored entries, visually distinct healthy-empty and discovery-failure states, and a
-composition assertion that the allowlist has no text input. Filters, family toggles, select-all,
-blacklists, and raw editing are forbidden regressions.
+composition assertion that the allowlist has no text input. Failure composition is also pinned at
+the narrow, ordinary, and wide settings-page widths: the measured state line, Default button,
+failure panel, and wrapped reason occupy disjoint honest rectangles. Filters, family toggles,
+select-all, blacklists, and raw editing are forbidden regressions.
 
 Run the complete portable gate after the focused scope. Any reflected member or exact native type
 change also requires both the portable contract project and the installed contract project against
