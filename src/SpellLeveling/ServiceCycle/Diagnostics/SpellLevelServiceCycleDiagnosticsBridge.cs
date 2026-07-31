@@ -7,13 +7,13 @@ namespace OrbAutomata;
 
 /// <summary>
 /// Keeps the Spell Leveling feature-status line describing the running feature, and seeds the
-/// capability the toggle-button tooltip reads.
+/// capability and ordinary boundary wait state the toggle-button tooltip reads.
 /// </summary>
 /// <remarks>
 /// Spell Leveling has no button of its own; Auto Buy's tooltip carries its line. That makes the status
 /// registry the only thing standing between the player and a stale claim, and it is written here
-/// rather than by the worker because everything it reports — ownership, emergency stop, progression —
-/// is main-thread state.
+/// rather than by the worker because everything it reports — ownership, emergency stop, progression,
+/// and the last live affordability refusal — is main-thread state.
 /// <para>
 /// The capability probe runs once per lifecycle, on the first cycle the service completes, and never
 /// per frame. Before it runs the capability reads <see cref="AutoSpellLevelCapability.Locked"/>, which
@@ -25,6 +25,7 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
 {
     private readonly AutomataFeatureStatusReporter _featureStatus;
     private readonly SpellLevelCapabilityState _capability;
+    private readonly SpellLevelBoundaryStatusState _boundaryStatus;
     private readonly ISpellLevelCapabilityPort _capabilityPort;
     private long _lifecycle;
     private ConfigGeneration _configurationGeneration;
@@ -33,18 +34,21 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
     private bool _cycleObserved;
     private bool _evaluationRefreshPending;
     private AutoSpellLevelCapability _reportedCapability;
+    private string? _reportedWaitingReason;
 
     public SpellLevelServiceCycleDiagnosticsBridge(
         long lifecycle,
         ConfigGeneration configurationGeneration,
         bool owned,
         SpellLevelCapabilityState capability,
+        SpellLevelBoundaryStatusState boundaryStatus,
         ISpellLevelCapabilityPort capabilityPort,
         AutomataFeatureStatusReporter featureStatus)
     {
         _featureStatus = featureStatus ?? throw new ArgumentNullException(nameof(featureStatus));
-        _capability = capability;
-        _capabilityPort = capabilityPort;
+        _capability = capability ?? throw new ArgumentNullException(nameof(capability));
+        _boundaryStatus = boundaryStatus ?? throw new ArgumentNullException(nameof(boundaryStatus));
+        _capabilityPort = capabilityPort ?? throw new ArgumentNullException(nameof(capabilityPort));
         _lifecycle = lifecycle;
         _configurationGeneration = configurationGeneration;
         _owned = owned;
@@ -56,7 +60,8 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
         var conditionsChanged =
             _emergencyDisabled != pump.IsEmergencyStopEngaged ||
             _owned != owned ||
-            _reportedCapability != _capability.Current;
+            _reportedCapability != _capability.Current ||
+            !string.Equals(_reportedWaitingReason, _boundaryStatus.WaitingReason, StringComparison.Ordinal);
         _emergencyDisabled = pump.IsEmergencyStopEngaged;
         _owned = owned;
         if (report.ResponsesAcquired != 0) _evaluationRefreshPending = true;
@@ -76,6 +81,7 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
     {
         if (configurationGeneration.Value < _configurationGeneration.Value) return;
         _configurationGeneration = configurationGeneration;
+        _boundaryStatus.Reset();
         _cycleObserved = false;
         _evaluationRefreshPending = false;
     }
@@ -92,6 +98,7 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
         // Nothing survives a lifecycle boundary. The capability the last generation reached says
         // nothing about this one, and the worker has not evaluated against the new world yet.
         _capability.Reset();
+        _boundaryStatus.Reset();
         _cycleObserved = false;
         _evaluationRefreshPending = false;
         PublishFeatureStatus();
@@ -110,11 +117,13 @@ internal sealed class SpellLevelServiceCycleDiagnosticsBridge
     private void PublishFeatureStatus()
     {
         _reportedCapability = _capability.Current;
+        _reportedWaitingReason = _boundaryStatus.WaitingReason;
         var health = SpellLevelFeatureStatusProjector.Project(
             _emergencyDisabled,
             _owned,
             _cycleObserved,
-            _reportedCapability);
+            _reportedCapability,
+            _reportedWaitingReason);
         _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,

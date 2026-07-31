@@ -14,11 +14,13 @@ internal sealed class SpellLevelServiceAdapterComposition
             SpellLevelCycleState,
             SpellLevelCycleAction> definition,
         SpellLevelNativeAdapter natives,
-        SpellLevelCycleActionAdapter actions)
+        SpellLevelCycleActionAdapter actions,
+        SpellLevelBoundaryStatusState boundaryStatus)
     {
         Definition = definition;
         Natives = natives;
         Actions = actions;
+        BoundaryStatus = boundaryStatus;
     }
 
     internal IAutomataServiceDefinition<
@@ -32,18 +34,21 @@ internal sealed class SpellLevelServiceAdapterComposition
     /// </summary>
     internal SpellLevelNativeAdapter Natives { get; }
     internal SpellLevelCycleActionAdapter Actions { get; }
+    internal SpellLevelBoundaryStatusState BoundaryStatus { get; }
 
     internal static SpellLevelServiceAdapterComposition Create(SpellLevelFeatureDependencies dependencies)
     {
         if (dependencies is null) throw new ArgumentNullException(nameof(dependencies));
 
         var natives = new SpellLevelNativeAdapter();
+        var boundaryStatus = new SpellLevelBoundaryStatusState();
         var actions = new SpellLevelCycleActionAdapter(
             natives,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
-            dependencies.Capability.Observe);
+            dependencies.Capability.Observe,
+            boundaryStatus.Observe);
         return new SpellLevelServiceAdapterComposition(
-            SpellLevelService.Define(actions), natives, actions);
+            SpellLevelService.Define(actions), natives, actions, boundaryStatus);
     }
 }

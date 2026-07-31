@@ -1246,6 +1246,7 @@ public class SpellManager
     public static bool NativeCanCast { get; set; } = true;
     public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
     public SpellListVariable activeSpells = new SpellListVariable();
+    public int TryLevelAllCalls { get; private set; }
 
     public static bool CanCastASpell() => NativeCanCast;
 
@@ -1262,6 +1263,7 @@ public class SpellManager
 
     public void TryLevelAllSpells()
     {
+        TryLevelAllCalls++;
         foreach (var recipe in availableSpellRecipes.value)
         {
             while (recipe.IsDiscovered() && recipe.levelingPrerequisites.Check() &&

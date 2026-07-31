@@ -136,6 +136,12 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
 
         try
         {
+            // A native batch is admitted from the live set, not from the one ranked identity the
+            // worker carries for filing evidence. In particular, one unaffordable head spell must
+            // not veto a later spell that the game's own batch can level.
+            if (kind == SpellLevelActionKind.All)
+                return SubmitAll(uuid);
+
             if (!TryResolveRecipe(uuid, out var recipe))
             {
                 return SpellLevelSubmission.Rejected(
@@ -172,9 +178,7 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
                     SpellLevelPreflight.NotAffordable, "the spell-level cost is no longer affordable");
             }
 
-            return kind == SpellLevelActionKind.All
-                ? SubmitAll(uuid)
-                : SubmitSingle(uuid, recipe, cost);
+            return SubmitSingle(uuid, recipe, cost);
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
@@ -270,6 +274,37 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
                 "the level-all upgrade is no longer committed");
         }
 
+        var discovered = false;
+        var prerequisitePassed = false;
+        foreach (var recipe in ReadRecipes())
+        {
+            if (recipe is null || recipe.GetType() != _recipeType) continue;
+            if (_isDiscovered!.Invoke(recipe, Array.Empty<object>()) is not true) continue;
+            discovered = true;
+            if (!PrerequisitesPass(recipe)) continue;
+            prerequisitePassed = true;
+            if (_isReady!.Invoke(recipe, Array.Empty<object>()) is not true) continue;
+
+            var cost = _getLevelCost!.Invoke(recipe, Array.Empty<object>());
+            if (cost is null || _costHasEnough!.Invoke(cost, Array.Empty<object>()) is not true) continue;
+
+            return SubmitAllVerified(uuid);
+        }
+
+        if (discovered && !prerequisitePassed)
+        {
+            return SpellLevelSubmission.Rejected(
+                SpellLevelPreflight.ProgressionLocked,
+                "spell leveling is not unlocked");
+        }
+
+        return SpellLevelSubmission.Rejected(
+            SpellLevelPreflight.NotAffordable,
+            "no ready spell has an affordable level cost");
+    }
+
+    private SpellLevelSubmission SubmitAllVerified(Guid uuid)
+    {
         var evidence = NativeMutationVerifier.Execute(
             "Spell level all",
             uuid.ToString("D"),

@@ -34,6 +34,7 @@ internal sealed class SpellLevelServiceCycleFeature : IAutomataServiceCycleFeatu
         return new SpellLevelFeatureRuntime(
             _dependencies,
             adapters.Natives,
+            adapters.BoundaryStatus,
             registration,
             context.LifecycleValue,
             context.ConfigurationGeneration
@@ -57,6 +58,7 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
 {
     private readonly SpellLevelFeatureDependencies _dependencies;
     private readonly SpellLevelNativeAdapter _natives;
+    private readonly SpellLevelBoundaryStatusState _boundaryStatus;
     private readonly ServiceRegistration<
         SpellLevelCycleState,
         SpellLevelCycleAction> _registration;
@@ -70,6 +72,7 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
     internal SpellLevelFeatureRuntime(
         SpellLevelFeatureDependencies dependencies,
         SpellLevelNativeAdapter natives,
+        SpellLevelBoundaryStatusState boundaryStatus,
         ServiceRegistration<
             SpellLevelCycleState,
             SpellLevelCycleAction> registration,
@@ -82,6 +85,7 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _natives = natives ?? throw new ArgumentNullException(nameof(natives));
+        _boundaryStatus = boundaryStatus ?? throw new ArgumentNullException(nameof(boundaryStatus));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
@@ -97,6 +101,7 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
             _initialConfigurationGeneration,
             _dependencies.OwnsActionFamily(),
             _dependencies.Capability,
+            _boundaryStatus,
             _natives,
             _dependencies.FeatureStatus);
     }
