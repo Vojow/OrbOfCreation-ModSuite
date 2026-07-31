@@ -20,6 +20,7 @@ than a request for alternate chrome.
 | Catalog, typed values, apply/revert/default | [ModConfigTests.cs](../../tests/OrbModding.Tests/ModConfigTests.cs) |
 | Responsive row/layout behavior | [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
 | Runtime health/status projection | [ModRuntimeStatusProjectionTests.cs](../../tests/OrbModding.Tests/ModRuntimeStatusProjectionTests.cs), [ConfigurationSchemaStatusProjectionTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaStatusProjectionTests.cs) |
+| Runtime action outcomes and per-flavor copy | [ActionOutcomeSurfacePresentationTests.cs](../../tests/OrbModding.Tests/OrbModConfig/ActionOutcomeSurfacePresentationTests.cs), [profile presentation tests](../../tests/OrbModding.ProfileTests/ActionOutcomeSurfacePresentationTests.cs) |
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
 | Native tab selection, first-install trigger, navigation cadence, and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
@@ -50,6 +51,11 @@ installation, recovery, or layout work changes.
   exact bytes on failures.
 - Subscriber exceptions do not stop other settings or plugins.
 - Runtime status never claims that a saved value is already active.
+- Runtime action copy claims completion only from committed journal evidence. Source-shaped
+  infrastructure is absent, every ordinary service remains visible while idle, and release copy contains
+  no counts, numeric reason codes, or ServiceCycle jargon. Waiting, completed, quiet non-completion, and
+  fault states remain distinct without relying on color alone; performance-debug adds exact counts and the
+  last boundary reason. The timing chart types remain absent and one average/worst line remains.
 - A quick control consumes exactly one pending saved snapshot synchronously; the next frame must
   not publish an echo of the same change.
 - A quick control resolves its next value from committed state even if a raw external edit is pending.

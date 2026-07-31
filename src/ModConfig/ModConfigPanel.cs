@@ -97,6 +97,7 @@ internal sealed class ModConfigPanel : IDisposable
                 runtimeSources.HostTraceDump,
                 runtimeSources.DifferentialVerification,
                 runtimeSources.DecisionJournal,
+                runtimeSources.ActionOutcomes,
                 runtimeSources.PumpTiming
 #if SERVICE_CYCLE_PROFILE
                 , runtimeSources.PerformanceProfile
@@ -369,7 +370,7 @@ internal sealed class ModConfigPanel : IDisposable
     public void RefreshRuntimeDashboardIfNeeded()
     {
         if (_disposed) return;
-        if (IsRuntimeSelected) _runtimePage.RefreshPumpTiming();
+        if (IsRuntimeSelected) _runtimePage.RefreshActivity();
         // Consume both latches independently. Short-circuiting here would leave an
         // overflow pending and force the same authoritative rebuild on the next pass.
         var fullDashboardDirty = _fullDashboardDirty.TryConsume();

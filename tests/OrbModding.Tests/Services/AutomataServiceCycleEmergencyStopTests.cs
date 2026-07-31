@@ -6,6 +6,7 @@ using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
@@ -25,7 +26,8 @@ public sealed class AutomataServiceCycleEmergencyStopTests
             new ConfigGeneration(1),
             new AutomataServiceCycleHostDependencies(
                 () => ++frame,
-                () => 1),
+                () => 1,
+                new ServiceActionOutcomeWindowRegistry()),
             new IAutomataServiceCycleFeature[] { feature },
             new ManualLogSource());
         var store = new AutomataConfigurationStore(

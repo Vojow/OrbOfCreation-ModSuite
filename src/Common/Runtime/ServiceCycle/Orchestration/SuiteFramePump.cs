@@ -3,6 +3,7 @@ using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Lifecycle;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 #endif
@@ -27,17 +28,26 @@ public sealed class SuiteFramePump : IDisposable
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder)
 #if SERVICE_CYCLE_PROFILE
-        : this(registry, semanticRecorder, new ServiceCycleProfileProbe()) { }
+        : this(registry, semanticRecorder, null, new ServiceCycleProfileProbe()) { }
 
     internal SuiteFramePump(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
+        ServiceActionOutcomeWindowRegistry? outcomeWindows,
         ServiceCycleProfileProbe profileProbe)
+#else
+        : this(registry, semanticRecorder, null) { }
+
+    internal SuiteFramePump(
+        ServiceCycleRegistry registry,
+        ServiceCycleSemanticRecorder? semanticRecorder,
+        ServiceActionOutcomeWindowRegistry? outcomeWindows)
 #endif
     {
         _state = new SuiteFramePumpState(
             registry,
-            semanticRecorder
+            semanticRecorder,
+            outcomeWindows
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif

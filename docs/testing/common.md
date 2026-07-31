@@ -21,8 +21,9 @@ unit test for the changed type.
 | Audited-build mutation gate | [AssemblyAuditGateTests.cs](../../tests/OrbModding.Tests/AssemblyAuditGateTests.cs) | every native mutation in the suite |
 | Configuration transaction | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) | all supported plugin binders |
 | Generated known identities | [KnownEntitiesGenerationTests.cs](../../tests/OrbModding.Tests/KnownEntitiesGenerationTests.cs), [KnowledgeMapTests.cs](../../tests/OrbModding.Tests/KnowledgeMapTests.cs) | all consumers of `KnownEntities` |
-| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | all eight production registrations and the frame pump |
+| ServiceCycle execution and lifecycle | [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) | all production registrations and the frame pump |
 | ServiceCycle semantic trace | [Runtime/ServiceCycle/Tracing](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Tracing), [Runtime/ServiceCycle/Observation](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation) | all services, trace capture, and offline verification |
+| ServiceCycle rolling action outcomes | [ServiceActionOutcomeWindowProjectionTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Observation/Journal/ServiceActionOutcomeWindowProjectionTests.cs) | every registered service and the Mod Config Runtime action surface |
 | Trace segment storage and lifecycle catalog | [FileTraceSegmentStorageTests.cs](../../tests/OrbModding.Tests/Runtime/Tracing/FileTraceSegmentStorageTests.cs), [LifecycleDefinitionCatalogTests.cs](../../tests/OrbModding.Tests/Runtime/Catalog/LifecycleDefinitionCatalogTests.cs) | ServiceCycle observation products and future service capture adapters |
 | Runtime architecture boundaries | [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs), [ServiceCycleArchitectureTests.cs](../../tests/OrbModding.Tests/Runtime/ServiceCycle/Registration/ServiceCycleArchitectureTests.cs) | Common and every future ServiceCycle service |
 

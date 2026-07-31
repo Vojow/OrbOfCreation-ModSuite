@@ -6,6 +6,7 @@ using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime;
 using OrbModding.Common;
 using OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
@@ -27,6 +28,7 @@ public sealed class AutoHarvestServiceCycleRuntimeTests
         var hostDependencies = new AutomataServiceCycleHostDependencies(
             readFrameIdentity,
             readLifecycleEpoch,
+            new ServiceActionOutcomeWindowRegistry(),
             observability: observability);
         var feature = new AutoHarvestServiceCycleFeature(
             new AutoHarvestFeatureDependencies(

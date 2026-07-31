@@ -3,6 +3,7 @@ using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing.Emission;
@@ -23,15 +24,30 @@ internal sealed class AutomataServiceCycleHost : IDisposable
     private Func<bool>? _disposeClaimedPump;
     private bool _disposed;
 
+#if SERVICE_CYCLE_PROFILE
     internal AutomataServiceCycleHost(
         ServiceCycleRegistry registry,
         Func<long> readFrameIdentity,
         IServiceCyclePumpTimingSink? pumpTiming,
-        ServiceCycleSemanticRecorder? semanticTrace
-#if SERVICE_CYCLE_PROFILE
-        , ServiceCycleProfileProbe profileProbe
+        ServiceCycleSemanticRecorder? semanticTrace,
+        ServiceCycleProfileProbe profileProbe)
+        : this(registry, readFrameIdentity, pumpTiming, semanticTrace, null, profileProbe) { }
+
+    internal AutomataServiceCycleHost(
+        ServiceCycleRegistry registry,
+        Func<long> readFrameIdentity,
+        IServiceCyclePumpTimingSink? pumpTiming,
+        ServiceCycleSemanticRecorder? semanticTrace,
+        ServiceActionOutcomeWindowRegistry? actionOutcomes,
+        ServiceCycleProfileProbe profileProbe)
+#else
+    internal AutomataServiceCycleHost(
+        ServiceCycleRegistry registry,
+        Func<long> readFrameIdentity,
+        IServiceCyclePumpTimingSink? pumpTiming,
+        ServiceCycleSemanticRecorder? semanticTrace,
+        ServiceActionOutcomeWindowRegistry? actionOutcomes = null)
 #endif
-        )
     {
         if (registry is null) throw new ArgumentNullException(nameof(registry));
         _readFrameIdentity = readFrameIdentity ??
@@ -44,7 +60,8 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         registry.Seal();
         _pump = new SuiteFramePump(
             registry,
-            semanticTrace
+            semanticTrace,
+            actionOutcomes
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif

@@ -15,13 +15,19 @@ public sealed class ObservabilityPortArchitectureTests
     private const string DecisionJournalNamespace =
         "OrbModding.Common.Runtime.ServiceCycle.Observation.Journal";
     private const string DecisionJournalStatusNamespace = DecisionJournalNamespace + ".Status";
+    private const string ActionOutcomesNamespace = DecisionJournalNamespace + ".Outcomes";
     private const string HostTraceNamespace =
         "OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace";
     private const string HostTraceControlNamespace = HostTraceNamespace + ".Control";
     private static readonly string[] ForbiddenNamespaces =
         { FullTraceNamespace, DecisionJournalNamespace, HostTraceNamespace };
     private static readonly string[] AllowedNamespaces =
-        { ControlNamespace, DecisionJournalStatusNamespace, HostTraceControlNamespace };
+        {
+            ControlNamespace,
+            DecisionJournalStatusNamespace,
+            ActionOutcomesNamespace,
+            HostTraceControlNamespace,
+        };
     private const BindingFlags DeclaredMembers =
         BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public |
         BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
@@ -33,7 +39,7 @@ public sealed class ObservabilityPortArchitectureTests
         var violations = new List<string>();
         // One DLL now holds the ports and their implementations alike, so the scan is scoped to
         // the namespace this rule was always about: Mod Config may only see observability through
-        // the public control and status ports.
+        // the public control, status, and read-only projection ports.
         var modConfigTypes = SuiteAssembly.GetTypes()
             .Where(type => (type.Namespace ?? string.Empty)
                 .StartsWith("OrbModConfig", StringComparison.Ordinal));

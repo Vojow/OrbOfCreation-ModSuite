@@ -25,6 +25,7 @@ using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.World;
 #if SERVICE_CYCLE_PROFILE
@@ -393,10 +394,11 @@ public sealed class Plugin : BaseUnityPlugin
                     configuration,
                     configurationGeneration,
                     new AutomataServiceCycleHostDependencies(
-                        readFrameIdentity,
-                        readAutoHarvestLifecycleEpoch,
-                        pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
-                        observability: new AutomataServiceCycleObservabilityOptions(
+                            readFrameIdentity,
+                            readAutoHarvestLifecycleEpoch,
+                            ServiceActionOutcomeWindowRegistry.Shared,
+                            pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
+                            observability: new AutomataServiceCycleObservabilityOptions(
                             AutomataFullTracePathPolicy.Create(
                                 ManualFullTraceControlRegistry.Shared),
                             AutomataDecisionJournalPathPolicy.Create(
@@ -540,6 +542,7 @@ public sealed class Plugin : BaseUnityPlugin
             ConfigurationSchemaStatusRegistry.Shared,
             FeatureStatusRegistry.Shared,
             RuntimeDiagnosticsRegistry.Shared,
+            ServiceActionOutcomeWindowSources.Shared,
             ServiceCyclePumpTimingRegistry.Shared,
             ManualFullTraceControlRegistry.Shared,
             HostTraceDumpRegistry.Shared,

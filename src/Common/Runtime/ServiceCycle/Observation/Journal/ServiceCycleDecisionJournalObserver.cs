@@ -11,7 +11,7 @@ internal sealed partial class ServiceCycleDecisionJournalObserver : IServiceCycl
 {
     private const string CoalescerSite = "DecisionJournalCoalescer";
 
-    private readonly DecisionJournalCoalescer _journal;
+    private readonly IDecisionJournalObservationSink _journal;
     private readonly DecisionJournalServiceCursor[] _services;
     private readonly DecisionJournalLifecycleObservation _lifecycle;
     private ConfigGeneration _configuration;
@@ -21,7 +21,7 @@ internal sealed partial class ServiceCycleDecisionJournalObserver : IServiceCycl
     private bool _faulted;
 
     internal ServiceCycleDecisionJournalObserver(
-        DecisionJournalCoalescer journal,
+        IDecisionJournalObservationSink journal,
         int serviceCapacity)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));

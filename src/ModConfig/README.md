@@ -92,10 +92,15 @@ It presents:
 - explicit start/stop controls for manual full traces;
 - start/stop controls for profiling builds;
 - read-only rolling decision-journal health; and
-- a bounded 1,200-frame ServiceCycle pump chart rendered directly into the available plot as one exact-frame
-  mesh, without paging or creating one Unity object per frame.
+- a per-automation recent-action surface showing completed, skipped, not-completed, waiting, and
+  needs-attention outcomes, followed by one quiet average/worst processing-time line.
 
-The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. The health grid is a presentation over the same joined feature snapshots used elsewhere; detailed plugin cards remain sorted by severity. Cards update through the existing open-page cadence. Pending refresh work has a hard 30-frame admission bound and the Runtime footer exposes pending and last-refresh age. Pre-created chart bars are reused rather than allocated per sample.
+The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. The health grid is a presentation over the same joined feature snapshots used elsewhere; detailed plugin cards remain sorted by severity. Cards update through the existing open-page cadence. Pending refresh work has a hard 30-frame admission bound and the Runtime footer exposes pending and last-refresh age.
+The action surface excludes `Source`-shaped infrastructure such as World collection and retains
+every `Ordinary` automation service, including quiet rows that have no recent work. Release copy
+uses only the exact player-facing outcome words; performance-debug copy adds counts and the last
+numeric journal boundary reason. Outcome rails reuse their Unity objects and encode completion,
+quiet non-completion, and faults with shape/copy as well as color.
 
 ## Configuration behavior
 

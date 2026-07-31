@@ -643,18 +643,24 @@ all, because the profiler is compiled out of one. A missing product leaves its p
 that the dashboard renders as a banner under the header, so the reader is told what is not there instead of
 being refused a dashboard.
 
-Common also exposes a separate 1,200-frame owner-thread timing projection for the in-game Runtime page,
-approximately 20 seconds at 60 FPS or 40 seconds at 30 FPS. It copies the existing pump report after the pump returns; it does not
-start a trace, retain semantic payloads, perform a second service poll, or write to disk. Mod Config redraws
-one fitted mesh through its existing open-only 0.1-second maintenance cadence. Every retained accepted pump
-frame contributes one bar across the available plot, without paging, aggregation, or 1,200 Unity objects.
-Height scales to the ninety-ninth percentile of the retained window rather than to its maximum, and frames
-above that scale are drawn full height in red. One warm-up frame costs a couple of hundred milliseconds
-against a steady frame of a fraction of one, so scaling to the maximum flattened every ordinary frame to
-nothing for the whole twenty seconds that one sample stayed retained; a percentile absorbs a scene load, a
-save, or a collection the same way, which a "first N frames" rule would not. The true maximum, the p95, and
-the count of clipped frames stay in the summary line. Retention is frame-count based rather than wall-clock
-based.
+Common also exposes one owner-thread rolling action-outcome projection for the in-game Runtime page. It
+consumes the same assembled `DecisionJournalObservation` and lifecycle-transition evidence as the rolling
+journal, before storage coalescing, and therefore retains exact planned, committed, skipped, rejected, and
+faulted totals plus the latest real boundary reason per registered service. It adds no feature bookkeeping,
+native read, second service poll, storage path, or disk I/O. The live projection is composed in both build
+flavors and remains available if journal storage cannot initialize; optional disk recording and the
+always-on in-memory projection receive the same evidence through one fan-out observer.
+
+The projection carries the registration's typed action-dispatch shape. Mod Config includes every
+`Ordinary` automation row and excludes `Source` infrastructure by that shape, never by matching a display
+name. Each service retains its newest 32 assembled observations as whole entries; eviction subtracts that
+entry's outcome totals and recomputes the latest surviving boundary. A registered idle or disabled service
+still has a zeroed row. Release presents only calm outcome words and non-color cues; performance-debug may
+also present the exact counts and numeric last-boundary reason.
+
+The existing 1,200-frame owner-thread pump-timing projection remains, but the Runtime page now reduces it
+to one average/worst line. The former 224-pixel percentile column chart, per-frame phase colors, p95, clipped
+frame count, and plot scale are removed. Full performance analysis remains the offline trace dashboard.
 
 **What a profile's numbers may and may not be used for.** They are diagnostic elapsed time, not an
 uncontaminated CPU or allocation claim, and a profile recorded with the semantic trace active is
