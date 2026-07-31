@@ -14,6 +14,12 @@ public sealed class AutomaticSaveBackupTests
     private static readonly DateTime FirstRun =
         new(2026, 7, 31, 10, 11, 12, DateTimeKind.Utc);
 
+    // Fixture paths are written in POSIX form; P maps them to the platform form the
+    // production code and the fake both normalize to (on Windows "/save" becomes "D:\save").
+    private static string P(string posixPath) =>
+        Path.GetFullPath(posixPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
     [Fact]
     public void FreshInstallCreatesVerifiedCountedBackupAndStamp()
     {
@@ -29,7 +35,7 @@ public sealed class AutomaticSaveBackupTests
         Assert.Equal(AutomaticSaveBackupTrigger.FreshInstall, status.Trigger);
         Assert.Equal(2, status.FileCount);
         Assert.Equal(
-            "/save/backups/auto-modsuite-backup-20260731T101112Z",
+            P("/save/backups/auto-modsuite-backup-20260731T101112Z"),
             status.BackupPath);
         Assert.Equal("slot zero", files.ReadText(status.BackupPath + "/ooc_save_0.sav"));
         Assert.Equal(
@@ -89,14 +95,14 @@ public sealed class AutomaticSaveBackupTests
         var files = NewFileSystem();
         files.AddFile("/save/ooc_save_0.sav", "first");
         files.AddFile("/save/ooc_save_1.sav", "second");
-        const string previousBackup =
-            "/save/backups/auto-modsuite-backup-20260730T101112Z";
+        var previousBackup =
+            P("/save/backups/auto-modsuite-backup-20260730T101112Z");
         files.AddDirectory(previousBackup);
         files.AddFile(
             "/config/modsuite.stamp",
             AutomaticSaveBackupStampCodec.Encode(new AutomaticSaveBackupStamp(
                 "0.4.0-beta.1",
-                "/save",
+                P("/save"),
                 previousBackup,
                 fileCount: 2)));
         var stampBefore = files.ReadRaw("/config/modsuite.stamp");
@@ -124,9 +130,9 @@ public sealed class AutomaticSaveBackupTests
     {
         var files = NewFileSystem();
         var owned = Enumerable.Range(1, 7)
-            .Select(day => "/save/backups/auto-modsuite-backup-202607" +
-                           day.ToString("00") +
-                           "T000000Z")
+            .Select(day => P("/save/backups/auto-modsuite-backup-202607" +
+                             day.ToString("00") +
+                             "T000000Z"))
             .ToArray();
         foreach (var path in owned) files.AddDirectory(path);
         files.AddDirectory("/save/backups/pre-modsuite-install-20260701T000000Z");
@@ -137,7 +143,7 @@ public sealed class AutomaticSaveBackupTests
             "/config/modsuite.stamp",
             AutomaticSaveBackupStampCodec.Encode(new AutomaticSaveBackupStamp(
                 Version,
-                "/save",
+                P("/save"),
                 owned[^1],
                 fileCount: 1)));
 
@@ -148,11 +154,11 @@ public sealed class AutomaticSaveBackupTests
         Assert.Equal(AutomaticSaveBackup.RetainedBackups, files.OwnedBackupDirectories.Count);
         Assert.DoesNotContain(owned[0], files.Directories);
         Assert.DoesNotContain(owned[1], files.Directories);
-        Assert.Contains("/save/backups/pre-modsuite-install-20260701T000000Z", files.Directories);
-        Assert.Contains("/save/backups/auto-modsuite-backup-not-a-timestamp", files.Directories);
-        Assert.Contains("/save/backups/auto-modsuite-backup-20261399T999999Z", files.Directories);
+        Assert.Contains(P("/save/backups/pre-modsuite-install-20260701T000000Z"), files.Directories);
+        Assert.Contains(P("/save/backups/auto-modsuite-backup-not-a-timestamp"), files.Directories);
+        Assert.Contains(P("/save/backups/auto-modsuite-backup-20261399T999999Z"), files.Directories);
         Assert.Contains(
-            "/save/backups/auto-modsuite-backup-20260701T000000Z.partial-abcd",
+            P("/save/backups/auto-modsuite-backup-20260701T000000Z.partial-abcd"),
             files.Directories);
         Assert.All(
             files.DeletedDirectories,
@@ -198,7 +204,10 @@ public sealed class AutomaticSaveBackupTests
         Assert.True(status.AllowsAutomation);
         Assert.True(status.BackupCreated);
         Assert.Equal(AutomaticSaveBackupTrigger.SaveRootChanged, status.Trigger);
-        Assert.StartsWith("/other-save/backups/", status.BackupPath, StringComparison.Ordinal);
+        Assert.StartsWith(
+            Path.Combine(P("/other-save"), "backups") + Path.DirectorySeparatorChar,
+            status.BackupPath,
+            StringComparison.Ordinal);
         Assert.Equal("new context", files.ReadText(status.BackupPath + "/ooc_save_0.sav"));
     }
 
@@ -214,7 +223,7 @@ public sealed class AutomaticSaveBackupTests
                 day.ToString("00") +
                 "T000000Z");
         }
-        files.RefuseDeletePath = "/save/backups/auto-modsuite-backup-20260701T000000Z";
+        files.RefuseDeletePath = P("/save/backups/auto-modsuite-backup-20260701T000000Z");
 
         var status = Run(files, FirstRun);
 
@@ -226,7 +235,7 @@ public sealed class AutomaticSaveBackupTests
         Assert.True(files.FileExists("/config/modsuite.stamp"));
         Assert.Equal(AutomaticSaveBackup.RetainedBackups, files.OwnedBackupDirectories.Count);
         Assert.DoesNotContain(
-            "/save/backups/auto-modsuite-backup-20260702T000000Z",
+            P("/save/backups/auto-modsuite-backup-20260702T000000Z"),
             files.Directories);
     }
 
@@ -269,7 +278,7 @@ public sealed class AutomaticSaveBackupTests
         internal IReadOnlyList<string> OwnedBackupDirectories => _directories
             .Where(path => string.Equals(
                 Path.GetDirectoryName(path),
-                _sourceRoot + "/backups",
+                Path.Combine(_sourceRoot, "backups"),
                 StringComparison.Ordinal))
             .Where(path => AutomaticSaveBackup.IsOwnedBackupName(Path.GetFileName(path)))
             .OrderBy(path => path, StringComparer.Ordinal)
@@ -371,12 +380,17 @@ public sealed class AutomaticSaveBackupTests
         internal void AddDirectory(string path)
         {
             var current = Normalize(path);
-            while (current.Length > 1)
+            while (true)
             {
                 _directories.Add(current);
-                current = Path.GetDirectoryName(current) ?? "/";
+                var parent = Path.GetDirectoryName(current);
+                if (string.IsNullOrEmpty(parent) ||
+                    string.Equals(parent, current, StringComparison.Ordinal))
+                {
+                    break;
+                }
+                current = parent;
             }
-            _directories.Add("/");
         }
 
         internal void AddFile(string path, string contents, bool overwrite = false) =>
@@ -396,7 +410,7 @@ public sealed class AutomaticSaveBackupTests
 
         private static bool IsAtOrBelow(string path, string directory) =>
             string.Equals(path, directory, StringComparison.Ordinal) ||
-            path.StartsWith(directory + "/", StringComparison.Ordinal);
+            path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
         private static string Normalize(string path) =>
             Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
