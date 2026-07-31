@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OrbModding.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -42,6 +43,7 @@ internal static class ModConfigStartStatusPresenter
         bool controlPlaneReady,
         bool auditedBuild,
         bool runtimeActivationAllowed,
+        AutomaticSaveBackupStatus saveBackup,
         bool gameMcpServerReady,
         int processId)
     {
@@ -57,38 +59,58 @@ internal static class ModConfigStartStatusPresenter
         var endpoint = gameMcpServerReady
             ? "Agent: 127.0.0.1:19106/mcp"
             : "Agent endpoint unavailable · see log";
-        var tone = !controlPlaneReady
-            ? ModConfigStartStatusTone.Failure
-            : auditedBuild && runtimeActivationAllowed && gameMcpServerReady
-                ? ModConfigStartStatusTone.Ready
-                : ModConfigStartStatusTone.Attention;
+        var tone = Tone(
+            controlPlaneReady,
+            auditedBuild,
+            runtimeActivationAllowed,
+            saveBackup,
+            gameMcpServerReady);
         return new ModConfigStartStatusPresentation(
             tone,
             Headline(releaseVersion),
             "Performance-debug build",
             mcpStatus + "  ·  " + compatibility,
-            endpoint,
-            "PID " + processId + "  ·  Localhost only");
+            AutomaticSaveBackupWording.StartSummary(saveBackup),
+            endpoint + "  ·  PID " + processId + "  ·  Localhost only");
     }
 #else
     internal static ModConfigStartStatusPresentation Build(
         string releaseVersion,
         bool controlPlaneReady,
         bool auditedBuild,
-        bool runtimeActivationAllowed)
+        bool runtimeActivationAllowed,
+        AutomaticSaveBackupStatus saveBackup)
     {
-        var tone = !controlPlaneReady
-            ? ModConfigStartStatusTone.Failure
-            : auditedBuild && runtimeActivationAllowed
-                ? ModConfigStartStatusTone.Ready
-                : ModConfigStartStatusTone.Attention;
+        var tone = Tone(
+            controlPlaneReady,
+            auditedBuild,
+            runtimeActivationAllowed,
+            saveBackup,
+            auxiliarySurfaceReady: true);
         return new ModConfigStartStatusPresentation(
             tone,
             Headline(releaseVersion),
             "Release build",
-            Compatibility(controlPlaneReady, auditedBuild, runtimeActivationAllowed));
+            Compatibility(controlPlaneReady, auditedBuild, runtimeActivationAllowed),
+            AutomaticSaveBackupWording.StartSummary(saveBackup));
     }
 #endif
+
+    private static ModConfigStartStatusTone Tone(
+        bool controlPlaneReady,
+        bool auditedBuild,
+        bool runtimeActivationAllowed,
+        AutomaticSaveBackupStatus saveBackup,
+        bool auxiliarySurfaceReady)
+    {
+        if (!controlPlaneReady || !saveBackup.AllowsAutomation)
+            return ModConfigStartStatusTone.Failure;
+        if (saveBackup.HasRetentionFailure)
+            return ModConfigStartStatusTone.Attention;
+        return auditedBuild && runtimeActivationAllowed && auxiliarySurfaceReady
+            ? ModConfigStartStatusTone.Ready
+            : ModConfigStartStatusTone.Attention;
+    }
 
     private static string Headline(string releaseVersion) =>
         "Orb ModSuite  ·  v" + (releaseVersion ?? string.Empty);

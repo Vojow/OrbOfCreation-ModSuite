@@ -118,6 +118,7 @@ public sealed class Plugin : BaseUnityPlugin
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
     private bool _auditedBuild;
+    private bool _buildCompatibilityRuntimeAllowed;
     private bool _runtimeActivationAllowed;
     private string _observedBuildFingerprint = string.Empty;
     private bool _runtimeComposed;
@@ -142,6 +143,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigRuntimeSources? _runtimeSources;
     private ModConfigFeatureCommands? _modConfigFeatureCommands;
     private SuiteUiSurfaceDiagnostics? _uiSurfaceDiagnostics;
+    private AutomaticSaveBackupHealth? _automaticSaveBackupHealth;
     private Action? _runUiMaintenance;
 
     // One lifecycle generation, one lease and one invalidation bus for the whole suite: the three
@@ -156,6 +158,7 @@ public sealed class Plugin : BaseUnityPlugin
     private int _processId;
 #endif
     private string _controlPlaneFailure = string.Empty;
+    private AutomaticSaveBackupStatus _automaticSaveBackup = AutomaticSaveBackupStatus.NotRun;
 
     internal static Plugin? Instance { get; private set; }
 
@@ -166,9 +169,12 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
 
-        // First, before configuration or anything else. An incomplete audit refuses everything. A
-        // complete unknown pair may load only the control plane; mutation remains quarantined until
-        // the exact pair is explicitly accepted.
+        RunAutomaticSaveBackup();
+
+        // The read-only save backup above is the first startup gate. The assembly audit is next,
+        // still before configuration, Harmony, lifecycle subscriptions, or feature composition. An
+        // incomplete audit refuses everything; a complete unknown pair may load only the control
+        // plane until the exact pair is explicitly accepted.
         var loadDecision = SuiteLoadGate.Evaluate(Paths.GameRootPath);
         if (!loadDecision.CanLoadControlPlane)
         {
@@ -200,7 +206,10 @@ public sealed class Plugin : BaseUnityPlugin
             _automataConfig.SetAllowUnverifiedGameBuild(false);
         if (compatibility.EngageEmergencyStop)
             _automataConfig.SetEmergencyStop(true);
-        _runtimeActivationAllowed = compatibility.RuntimeAllowed;
+        _buildCompatibilityRuntimeAllowed = compatibility.RuntimeAllowed;
+        _runtimeActivationAllowed = SuiteStartupAdmission.AllowsRuntime(
+            _buildCompatibilityRuntimeAllowed,
+            _automaticSaveBackup);
         _nativeContractsAvailable = _runtimeActivationAllowed;
         foreach (var diagnostic in configuration.Diagnostics)
             Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
@@ -230,10 +239,11 @@ public sealed class Plugin : BaseUnityPlugin
         else
         {
             Log.LogAutomataWarning(loadDecision.Message);
-            if (_runtimeActivationAllowed)
+            if (_buildCompatibilityRuntimeAllowed)
             {
-                Log.LogAutomataWarning(
-                    "A persisted acknowledgement matches this exact unverified assembly pair. Runtime composition is permitted at the player's own risk.");
+                Log.LogAutomataWarning(_automaticSaveBackup.AllowsAutomation
+                    ? "A persisted acknowledgement matches this exact unverified assembly pair. Runtime composition is permitted at the player's own risk."
+                    : "A persisted acknowledgement matches this exact unverified assembly pair, but automatic save-backup failure still blocks runtime composition.");
             }
         }
         GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
@@ -246,12 +256,12 @@ public sealed class Plugin : BaseUnityPlugin
         {
             EnsureRuntimeComposition();
         }
-        else if (!_runtimeActivationAllowed)
+        else if (!_runtimeActivationAllowed && _automaticSaveBackup.AllowsAutomation)
         {
             Log.LogAutomataWarning(
                 "Compatibility emergency stop is active. Press Resume all in Mods > General or the top-left STOP control to accept and resume, or use Advanced to accept while keeping STOP engaged.");
         }
-        else
+        else if (_runtimeActivationAllowed)
         {
             Log.LogAutomataInfo(
                 "Orb Of Creation automation is disabled by General/Enabled; configuration and emergency recovery remain available.");
@@ -266,6 +276,59 @@ public sealed class Plugin : BaseUnityPlugin
             message => Logger.LogInfo(message),
             message => Logger.LogError(message));
 #endif
+    }
+
+    private void RunAutomaticSaveBackup()
+    {
+        try
+        {
+            var stampPath = AutomaticSaveBackupPathPolicy.ResolveStampPath(
+                Config.ConfigFilePath,
+                Paths.ConfigPath);
+            _automaticSaveBackup = AutomaticSaveBackup.Run(
+                PluginIds.ReleaseVersion,
+                Application.persistentDataPath,
+                stampPath,
+                DateTime.UtcNow);
+        }
+        catch (Exception exception) when (!AutomaticSaveBackup.IsProcessFatal(exception))
+        {
+            _automaticSaveBackup = AutomaticSaveBackupStatus.Failed(
+                AutomaticSaveBackupTrigger.FreshInstall,
+                exception.GetBaseException().Message);
+        }
+
+        _automaticSaveBackupHealth = new AutomaticSaveBackupHealth(
+            _automaticSaveBackup,
+            FeatureStatusRegistry.Shared,
+            RuntimeDiagnosticsRegistry.Shared,
+            GameLifecycleMonitor.Shared.Current.Generation);
+        if (!_automaticSaveBackup.AllowsAutomation)
+        {
+            Logger.LogError(AutomaticSaveBackupWording.BlockingReason(_automaticSaveBackup));
+            return;
+        }
+
+        Logger.LogInfo(
+            "Automatic save backup " +
+            (_automaticSaveBackup.BackupCreated ? "created" : "ready") +
+            ": " +
+            _automaticSaveBackup.BackupPath +
+            " (" +
+            _automaticSaveBackup.FileCount +
+            " files)." +
+            (_automaticSaveBackup.BackupCreated
+                ? " Trigger: " + _automaticSaveBackup.Trigger + "."
+                : string.Empty));
+        if (_automaticSaveBackup.PrunedBackupCount > 0)
+        {
+            Logger.LogInfo(
+                "Automatic save-backup retention pruned " +
+                _automaticSaveBackup.PrunedBackupCount +
+                " owned backup directories.");
+        }
+        foreach (var failure in _automaticSaveBackup.RetentionFailures)
+            Logger.LogWarning("Automatic save-backup retention warning: " + failure);
     }
 
     private void EnsureRuntimeComposition()
@@ -555,7 +618,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (_auditedBuild || _automataConfig is null) return;
 
         var emergencyClearRequested = _automataConfig.TryTakeEmergencyClearRequest();
-        if (emergencyClearRequested && !_runtimeActivationAllowed)
+        if (emergencyClearRequested && !_buildCompatibilityRuntimeAllowed)
             _automataConfig.SetAllowUnverifiedGameBuild(true);
 
         var decision = UnverifiedBuildCompatibilityPolicy.AfterExplicitChange(
@@ -573,17 +636,22 @@ public sealed class Plugin : BaseUnityPlugin
             _automataConfig.SetEmergencyStop(true);
         }
 
-        if (decision.RuntimeAllowed == _runtimeActivationAllowed) return;
+        if (decision.RuntimeAllowed == _buildCompatibilityRuntimeAllowed) return;
         if (decision.RuntimeAllowed && !emergencyClearRequested)
             _automataConfig.SetEmergencyStop(true);
-        _runtimeActivationAllowed = decision.RuntimeAllowed;
-        _nativeContractsAvailable = decision.RuntimeAllowed;
+        _buildCompatibilityRuntimeAllowed = decision.RuntimeAllowed;
+        _runtimeActivationAllowed = SuiteStartupAdmission.AllowsRuntime(
+            _buildCompatibilityRuntimeAllowed,
+            _automaticSaveBackup);
+        _nativeContractsAvailable = _runtimeActivationAllowed;
 
         if (decision.RuntimeAllowed)
         {
-            Logger.LogWarning(emergencyClearRequested
-                ? "The player cleared the emergency stop and accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk."
-                : "The player accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk; the emergency stop remains engaged until explicitly resumed.");
+            Logger.LogWarning(!_automaticSaveBackup.AllowsAutomation
+                ? "The player accepted this exact unverified game assembly pair, but automatic save-backup failure still blocks runtime composition until the next launch succeeds."
+                : emergencyClearRequested
+                    ? "The player cleared the emergency stop and accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk."
+                    : "The player accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk; the emergency stop remains engaged until explicitly resumed.");
             return;
         }
 
@@ -614,6 +682,7 @@ public sealed class Plugin : BaseUnityPlugin
             controlPlaneReady,
             _auditedBuild,
             _runtimeActivationAllowed,
+            _automaticSaveBackup,
             _gameMcpServer is not null,
             _processId);
 #else
@@ -621,7 +690,8 @@ public sealed class Plugin : BaseUnityPlugin
             PluginIds.ReleaseVersion,
             controlPlaneReady,
             _auditedBuild,
-            _runtimeActivationAllowed);
+            _runtimeActivationAllowed,
+            _automaticSaveBackup);
 #endif
         _startStatusView ??= new ModConfigStartStatusView();
         if (_startStatusView.TryRender(
@@ -693,7 +763,9 @@ public sealed class Plugin : BaseUnityPlugin
             _featureStatuses?.ObserveContractUnavailable(
                 configuration,
                 _lifecycleGeneration,
-                "Installed game assemblies are quarantined pending an exact-build acknowledgement.",
+                !_automaticSaveBackup.AllowsAutomation
+                    ? AutomaticSaveBackupWording.BlockingReason(_automaticSaveBackup)
+                    : "Installed game assemblies are quarantined pending an exact-build acknowledgement.",
                 _configurationStore.CurrentGeneration);
             return;
         }
@@ -848,6 +920,8 @@ public sealed class Plugin : BaseUnityPlugin
         _modConfigFeatureCommands = null;
         _uiSurfaceDiagnostics?.Dispose();
         _uiSurfaceDiagnostics = null;
+        _automaticSaveBackupHealth?.Dispose();
+        _automaticSaveBackupHealth = null;
         _configurationStore = null;
 
         _mentorActionFamilyOwnership?.Dispose();
@@ -1159,7 +1233,9 @@ public sealed class Plugin : BaseUnityPlugin
         {
             return GameMcpCommandResult.Rejected(
                 "runtime_activation_blocked",
-                "the emergency stop cannot resume while exact-build compatibility blocks runtime activation",
+                !_automaticSaveBackup.AllowsAutomation
+                    ? "the emergency stop cannot resume while automatic save-backup failure blocks runtime activation"
+                    : "the emergency stop cannot resume while exact-build compatibility blocks runtime activation",
                 observedLifecycleGeneration: _lifecycleGeneration,
                 observedConfigurationGeneration: before.Value);
         }

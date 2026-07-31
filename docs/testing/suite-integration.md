@@ -10,6 +10,9 @@ feature health, configuration status, and combined runtime compatibility.
 
 - [ActionFamilyIntegrationTests.cs](../../tests/OrbModding.Tests/ActionFamilyIntegrationTests.cs) — ownership loss/recovery across real
   feature action boundaries.
+- [AutomaticSaveBackupTests.cs](../../tests/OrbModding.Tests/AutomaticSaveBackupTests.cs) and
+  [AutomaticSaveBackupHealthTests.cs](../../tests/OrbModding.Tests/OrbModConfig/AutomaticSaveBackupHealthTests.cs) — fresh/version/root triggers,
+  verified-copy failure atomicity, exact retention ownership, and Start/Runtime health composition.
 - [Runtime/ServiceCycle](../../tests/OrbModding.Tests/Runtime/ServiceCycle) — fair typed-service turns, lifecycle replacement, emergency stop, and bounded trace/profile evidence.
 - [ArchitectureBoundaryTests.cs](../../tests/OrbModding.Tests/Services/ArchitectureBoundaryTests.cs) — every feature uses the one accepted runtime and workers cannot reach native state.
 - [ModRuntimeStatusProjectionTests.cs](../../tests/OrbModding.Tests/ModRuntimeStatusProjectionTests.cs) and [ConfigurationSchemaStatusProjectionTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaStatusProjectionTests.cs) —
@@ -19,6 +22,7 @@ feature health, configuration status, and combined runtime compatibility.
 
 ```powershell
 dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~ActionFamilyIntegration|FullyQualifiedName~ServiceCycle"
+dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~AutomaticSaveBackup|FullyQualifiedName~ModConfigStartStatusPresentation"
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane PerformanceAll
 ```
@@ -33,8 +37,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 - Emergency disable stops every supported automation feature immediately.
 - Disabled modules perform no background scans or catalog rebuilds.
 - Failure, quarantine, or absence in one plugin/domain remains isolated.
-- Status and diagnostics remain bounded and contain no save path or private
-  content.
+- A fresh install, suite-version change, or save-root change cannot compose feature automation
+  until a complete verified save backup has been published and stamped.
+- Status and diagnostics remain bounded and contain no save contents. The automatic-backup health
+  entry deliberately reports its backup directory path so the player can find the safety copy.
 
 ## Runtime handoff
 

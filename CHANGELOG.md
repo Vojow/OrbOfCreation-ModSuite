@@ -2,6 +2,11 @@
 
 ## Orb Of Creation ModSuite 0.5.0-beta.1 — 2026-07-31
 
+- Back up every active save automatically on the first ModSuite run and after each ModSuite update,
+  before automation starts. Backups live under the game's save folder in
+  `backups/auto-modsuite-backup-<UTC timestamp>`; the five newest automatic backups are kept. If a
+  save cannot be copied and verified cleanly, automation stays blocked, the Start and Runtime
+  health surfaces name the failure, and the next launch tries again.
 - Drive ordinary automation from one shared 250-millisecond world publication and every committed
   configuration publication, with no per-feature cadence settings or fallback polls. After any
   attempted game-facing action—success, refusal, or fault—the service waits for a strictly newer

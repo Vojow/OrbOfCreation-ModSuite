@@ -2496,6 +2496,11 @@ namespace UnityEngine
         public static int frameCount { get; set; }
     }
 
+    public static class Application
+    {
+        public static string persistentDataPath { get; set; } = string.Empty;
+    }
+
     public static class ScreenCapture
     {
         public static void CaptureScreenshot(string filename)

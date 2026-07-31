@@ -20,6 +20,30 @@ The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `Au
 `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration
 transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
 
+## Automatic save backup
+
+`Plugin.Awake` runs the automatic save-backup gate before the assembly audit, configuration bind,
+Harmony patches, lifecycle subscriptions, feature controls, or ServiceCycle composition. The save
+root is Unity's runtime `Application.persistentDataPath`; no platform-specific user path is
+embedded. The gate reads only top-level `*.sav` files and `steam_autocloud.vdf`, matching the
+supported installer, and opens each file for reading without write sharing. It reads each source
+twice, verifies the copied bytes, rechecks the complete source set and contents, and publishes the
+backup directory only after every file agrees.
+
+Completed backups are `<save root>/backups/auto-modsuite-backup-yyyyMMddTHHmmssZ`. Incomplete work
+uses a distinct `.partial-*` staging name and cannot be mistaken for a completed backup. Retention
+keeps five completed directories and deletes only names that match that exact automatic-backup
+grammar; installer, manual, malformed, and partial directories are never candidates. A pruning
+failure is a visible degraded-health warning but does not disarm automation because the new backup
+already exists.
+
+The last successful suite version, normalized save root, verified backup path, and file count are
+stored in a strict stamp beside the BepInEx suite configuration. A missing, unreadable, malformed,
+wrong-version, wrong-root, or missing-backup stamp triggers another backup. Copy or stamp failure
+leaves automation disarmed for the launch and does not publish a success stamp, so the next launch
+retries. The Start card and Runtime health show the completed path or the exact blocking failure;
+accepting an unverified game build and clearing STOP cannot bypass this gate.
+
 ## Shared configuration schemas
 
 `OrbModding.Common.ConfigurationSchemaTransaction` is the supported pre-bind configuration boundary. A plugin declares ordered one-version steps and a hidden `[OrbModding] ConfigurationSchemaVersion`; the transaction snapshots the original file, creates a non-overwriting sibling backup, disables `SaveOnConfigSet`, consumes only reviewed source keys, runs normal typed binding, writes the marker last, and saves once. Current schema files bypass mutation. Malformed, negative, future, bind, and save failures return no usable configuration and restore the original file exactly before publishing a sanitized exact-GUID status.
