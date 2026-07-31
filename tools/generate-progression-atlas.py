@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Generate an ignored local progression atlas from data/progression-graph.json."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Any
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_SOURCE = REPOSITORY_ROOT / "data" / "progression-graph.json"
+DEFAULT_OUTPUT = REPOSITORY_ROOT / "docs" / "reverse-engineering" / "progression-atlas.md"
+VALUE_OPERATORS = {
+    "AdvLevel",
+    "AtLeast",
+    "Count",
+    "InvestmentLevel",
+    "Level",
+    "MasteryLevel",
+    "MasteryLevelReady",
+    "MasteryLv",
+    "MaxQuantity",
+    "PeakLevel",
+    "Quantity",
+    "ReachLevel",
+    "ReachedLevel",
+    "RecipeLevel",
+    "SpellLevel",
+    "Tier",
+    "TotalLevel",
+    "TotalPurchasedLevel",
+    "Value",
+}
+
+
+def clean_markdown(value: object) -> str:
+    return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
+def normalized_path(path: str) -> str:
+    return re.sub(r"\[\d+\]", "[]", path)
+
+
+class AtlasWriter:
+    def __init__(self, graph: dict[str, Any]):
+        self.graph = graph
+        self.entities = {entity["id"]: entity for entity in graph["entities"]}
+        self.link_tiers: dict[tuple[str, int], str] = {}
+        for link in graph["unlockLinks"]:
+            for tier in link["tiers"]:
+                self.link_tiers[(link["link"], int(tier["index"]))] = tier["name"]
+
+    def entity_label(self, entity_id: str, include_type: bool = False) -> str:
+        entity = self.entities.get(entity_id)
+        if not entity:
+            return f"unknown `{entity_id}`"
+        visible = entity["displayName"] or entity["name"]
+        label = clean_markdown(visible)
+        internal = clean_markdown(entity["name"])
+        if visible != entity["name"]:
+            label += f" (`{internal}`)"
+        if include_type:
+            label += f" — `{entity['type']}`"
+        return label
+
+    @staticmethod
+    def modifier_is_empty(modifier: object) -> bool:
+        if not isinstance(modifier, dict):
+            return True
+        try:
+            return float(modifier.get("adjust") or 0) == 0
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def number(value: object) -> str:
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
+
+    def value_text(self, condition: dict[str, Any]) -> str:
+        value = condition.get("value")
+        if not isinstance(value, dict):
+            return ""
+        base = self.number(value.get("base", 0))
+        if self.modifier_is_empty(value.get("perLevel")) and self.modifier_is_empty(value.get("modifierPerLevel")):
+            return base
+        per_level = value.get("perLevel") or {}
+        modifier_per_level = value.get("modifierPerLevel") or {}
+        return (
+            f"base {base}; scales by serialized modifiers "
+            f"`perLevel(type={per_level.get('type')}, adjust={self.number(per_level.get('adjust', 0))})`, "
+            f"`modifierPerLevel(type={modifier_per_level.get('type')}, "
+            f"adjust={self.number(modifier_per_level.get('adjust', 0))})`"
+        )
+
+    def condition_text(self, condition: dict[str, Any]) -> str:
+        children = condition.get("conditions")
+        if isinstance(children, list):
+            operator = " AND " if condition.get("mode") == "all" else " OR "
+            return "(" + operator.join(self.condition_text(child) for child in children) + ")"
+
+        requirement_type = condition.get("type", "UnknownRequirement")
+        operator = condition.get("operator", "Unknown")
+        target_id = condition.get("target")
+        target = self.entity_label(target_id) if target_id else "unresolved target"
+        value = self.value_text(condition)
+        if requirement_type == "PrerequisiteLinkRequirement" and target_id:
+            tier = 0 if operator == "Base" else int((condition.get("value") or {}).get("base") or 0)
+            tier_name = self.link_tiers.get((target_id, tier), f"tier {tier}")
+            return f"unlock link {target} / **{clean_markdown(tier_name)}**"
+        if operator in VALUE_OPERATORS:
+            return f"{target}: **{operator} {value}**"
+        return f"{target}: **{operator}**"
+
+    def conditions_text(self, conditions: list[dict[str, Any]]) -> str:
+        if not conditions:
+            return "none"
+        return " AND ".join(self.condition_text(condition) for condition in conditions)
+
+    def write_header(self, lines: list[str]) -> None:
+        metadata = self.graph["metadata"]
+        baseline = metadata.get("auditBaseline") or {}
+        build_label = baseline.get("gameBuild") or "an unaudited assembly pair"
+        lines.extend([
+            "# Exhaustive progression atlas",
+            "",
+            "[Progression mind map](progression-map.md) · [Reverse-engineering index](README.md)",
+            "",
+            "> Generated by `tools/generate-progression-atlas.py` from",
+            "> [`data/progression-graph.json`](../../data/progression-graph.json). Do not edit the tables by hand.",
+            "> Both files are local reverse-engineering artifacts and must not be committed.",
+            "",
+            "This is the exhaustive companion to the visual progression map. It records every serialized",
+            "requirement container and every reusable prerequisite-link tier in the scanned asset set:",
+            f"**{build_label}**. A row describes authored data, not a live save's current unlock state.",
+            "",
+            "| Measure | Count |",
+            "|---|---:|",
+            f"| Serialized entities | {metadata['entityCount']:,} |",
+            f"| Entity-to-entity references | {metadata['relationshipCount']:,} |",
+            f"| Requirement gates | {metadata['requirementGateCount']:,} |",
+            f"| Reusable prerequisite links | {metadata['unlockLinkCount']:,} |",
+            "",
+            "Containers combine their top-level conditions with **AND**. Explicit `OrRequirement` and",
+            "`AndRequirement` nodes retain their grouping below. `prerequisitesPerLevel` values are",
+            "evaluated at the level/quantity the game is about to buy; a serialized scaling formula is",
+            "shown verbatim instead of being flattened into one misleading threshold.",
+            "",
+        ])
+
+    def write_unlock_links(self, lines: list[str]) -> None:
+        lines.extend([
+            "## Reusable unlock links",
+            "",
+            "A link tier is enabled only when **all** bound owners are level 1+ and all intrinsic",
+            "conditions pass. Most tiers have no bound owner and are driven entirely by their intrinsic",
+            "condition. `ScribeTiers/Base` is the notable multi-owner AND gate.",
+            "",
+        ])
+        for link in sorted(self.graph["unlockLinks"], key=lambda row: self.entities[row["link"]]["name"]):
+            entity = self.entities[link["link"]]
+            lines.extend([
+                f"### {clean_markdown(entity['name'])}",
+                "",
+                f"`{entity['id']}`",
+                "",
+                "| Tier | Becomes enabled when | Direct consumers |",
+                "|---|---|---|",
+            ])
+            for tier in link["tiers"]:
+                owner_text = ""
+                if tier["owners"]:
+                    owners = ", ".join(self.entity_label(owner) for owner in tier["owners"])
+                    owner_text = f"all bound owners are level 1+: {owners}; AND "
+                activation = owner_text + self.conditions_text(tier["intrinsicConditions"])
+                consumer_text = ", ".join(
+                    self.entity_label(consumer["entity"], include_type=True)
+                    + f" (`{clean_markdown(consumer['gate'])}`)"
+                    for consumer in tier["consumers"]
+                ) or "none"
+                tier_label = f"{tier['index']}: {clean_markdown(tier['name'])}"
+                lines.append(f"| {tier_label} | {activation} | {consumer_text} |")
+            lines.append("")
+
+    def write_gate_inventory(self, lines: list[str]) -> None:
+        lines.extend([
+            "## Every serialized requirement gate",
+            "",
+            "The exact field path matters. For example, a structure's `prerequisites` controls hard",
+            "availability, `prerequisitesSoft` controls disclosure, and `prerequisitesPerLevel` gates the",
+            "specific quantity being purchased. Effect-block and challenge-goal gates are included",
+            "because they also change when downstream content or rewards become active.",
+            "",
+        ])
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for gate in self.graph["requirements"]:
+            grouped[self.entities[gate["owner"]]["type"]].append(gate)
+
+        for managed_type in sorted(grouped):
+            gates = sorted(
+                grouped[managed_type],
+                key=lambda gate: (
+                    (self.entities[gate["owner"]]["displayName"] or self.entities[gate["owner"]]["name"]).lower(),
+                    gate["path"],
+                    gate["owner"],
+                ),
+            )
+            lines.extend([
+                f"### {managed_type}",
+                "",
+                "| Entity | Gate field | Required condition |",
+                "|---|---|---|",
+            ])
+            for gate in gates:
+                lines.append(
+                    f"| {self.entity_label(gate['owner'])} | `{clean_markdown(gate['path'])}` | "
+                    f"{self.conditions_text(gate['conditions'])} |"
+                )
+            lines.append("")
+
+    def write_summary(self, lines: list[str]) -> None:
+        by_path = Counter(normalized_path(gate["path"]) for gate in self.graph["requirements"])
+        by_kind = Counter(relation["kind"] for relation in self.graph["relationships"])
+        lines.extend([
+            "## Graph coverage summaries",
+            "",
+            "### Requirement fields",
+            "",
+            "| Normalized field path | Gates |",
+            "|---|---:|",
+        ])
+        for path, count in sorted(by_path.items(), key=lambda item: (-item[1], item[0])):
+            lines.append(f"| `{clean_markdown(path)}` | {count:,} |")
+        lines.extend([
+            "",
+            "### Entity relationship kinds",
+            "",
+            "| Relationship kind | Edges |",
+            "|---|---:|",
+        ])
+        for kind, count in sorted(by_kind.items(), key=lambda item: (-item[1], item[0])):
+            lines.append(f"| {kind} | {count:,} |")
+        lines.extend([
+            "",
+            "The complete edge list—including exact serialized field paths—is intentionally kept in",
+            "the machine-readable graph rather than expanded into another 19,000-row Markdown table.",
+            "",
+        ])
+
+    def render(self) -> str:
+        lines: list[str] = []
+        self.write_header(lines)
+        self.write_unlock_links(lines)
+        self.write_gate_inventory(lines)
+        self.write_summary(lines)
+        return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--verify", action="store_true", help="fail if the checked-in atlas differs")
+    arguments = parser.parse_args()
+    graph = json.loads(arguments.source.read_text(encoding="utf-8"))
+    rendered = AtlasWriter(graph).render()
+    current = arguments.output.read_text(encoding="utf-8") if arguments.output.exists() else None
+    if arguments.verify:
+        if current != rendered:
+            raise SystemExit("Generated progression atlas is stale. Regenerate and commit it.")
+        print(f"Verified {arguments.output}")
+        return
+    arguments.output.parent.mkdir(parents=True, exist_ok=True)
+    arguments.output.write_text(rendered, encoding="utf-8", newline="\n")
+    print(f"Wrote {arguments.output}")
+
+
+if __name__ == "__main__":
+    main()

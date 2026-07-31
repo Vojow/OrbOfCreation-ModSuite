@@ -8,10 +8,10 @@ The normalized mapping currently contains:
 
 | Measure | Count |
 |---|---:|
-| Entity rows | 2,792 |
-| Unique UUIDs | 2,792 |
+| Entity rows | 2,818 |
+| Unique UUIDs | 2,818 |
 | Managed runtime types | 141 |
-| Unique internal names | 2,751 |
+| Unique internal names | 2,777 |
 | Name labels used by more than one entity | 39 |
 | Rows participating in a name collision | 80 |
 
@@ -23,10 +23,10 @@ The mapped objects divide into four structural layers:
 
 ```mermaid
 flowchart LR
-    Assets["Gameplay assets<br/>2,312 rows / 64 *SO types"] --> Types["Domain type assets"]
+    Assets["Gameplay assets<br/>2,332 rows / 64 *SO types"] --> Types["Domain type assets"]
     Assets --> Relations["Prerequisites, recipes, effects"]
-    Lists["List variables<br/>206 rows / 60 types"] --> Assets
-    Scalars["Scalar/reference variables<br/>274 rows / 17 types"] --> Assets
+    Lists["List variables<br/>208 rows / 60 types"] --> Assets
+    Scalars["Scalar/reference variables<br/>278 rows / 17 types"] --> Assets
     Assets --> Registry["IdScriptableObject.RuntimeLookup"]
     Registry --> UUID["Stable UUID identity"]
 ```
@@ -60,13 +60,13 @@ This distinction matters for mods:
 
 | Entity family | Mapped count | Primary role |
 |---|---:|---|
-| `UpgradeSO` | 223 | Purchasable upgrades and modifier/effect delivery |
+| `UpgradeSO` | 229 | Purchasable upgrades and modifier/effect delivery |
 | `ResearchSO` / `ResearchTypeSO` | 148 / 11 | Research progression, levels, dependencies, and categories |
 | `ChallengeSO` / `ChallengeTypeSO` | 98 / 7 | Challenge state, rewards, and categories |
 | `TimeRuneSO` / `TimeRuneTypeSO` | 62 / 6 | Persistent/meta progression and rune categories |
 | `AchievementSO` | 50 | Achievement completion, strength, and completion effects |
 | `AdvancementSO` | 48 | Advancement power and progression effects |
-| `PrerequisiteLinkSO` | 40 | Reusable dependency links |
+| `PrerequisiteLinkSO` | 41 | Reusable dependency links |
 | `RecipeBookSO` | 34 | Recipe grouping/unlock presentation |
 | `DiscoveryTreeSO` | 7 | Choice trees, rerolls, unlock presentation, and research links |
 | `ThoughtStreamSO` | 1 | Thought-stream progression state |
@@ -78,7 +78,7 @@ This distinction matters for mods:
 | `StructureSO` / `StructureTypeSO` | 180 / 32 | Purchasable structures and shared type modifiers |
 | `ResourceSO` / `ResourceTypeSO` | 80 / 21 | Quantities, rates, capacity, and resource-wide merged modifiers |
 | `EquipmentSO` / `EquipmentTypeSO` | 71 / 19 | Equipment progression and type-wide power |
-| `ConsumableSO` / `ConsumableTypeSO` | 67 / 10 | Consumable actions, costs, and shared type effects |
+| `ConsumableSO` / `ConsumableTypeSO` | 68 / 10 | Consumable actions, costs, and shared type effects |
 | `CraftingRecipeSO` / `CraftingRecipeTypeSO` | 14 / 2 | Crafting recipes and shared recipe modifiers |
 | `CraftingStructureSO` | 1 | Crafting-instance controller and type-wide numeric variables |
 | `EnchantmentSO` | 8 | Structure/equipment enchantment definitions |
@@ -88,11 +88,11 @@ This distinction matters for mods:
 
 | Entity family | Mapped count | Primary role |
 |---|---:|---|
-| `AlchemyRecipeSO` / `AlchemyTypeSO` | 124 / 9 | Alchemy recipes, categories, overdrive, and usage slots |
-| `SpellRecipeSO` / `SpellTypeSO` | 64 / 15 | Spell recipes, spell categories, and shared casting modifiers |
+| `AlchemyRecipeSO` / `AlchemyTypeSO` | 125 / 9 | Alchemy recipes, categories, overdrive, and usage slots |
+| `SpellRecipeSO` / `SpellTypeSO` | 65 / 15 | Spell recipes, spell categories, and shared casting modifiers |
 | `GlyphSO` / `GlyphTypeSO` | 47 / 6 | Spell composition, elemental typing, and generated passives |
 | `RitualSO` / `RitualTypeSO` | 32 / 4 | Ritual execution, power, ratings, and categories |
-| `PassiveAbilitySO` / `PassiveAbilityTypeSO` | 61 / 10 | Passive effects, stacks, durations, cooldowns, and categories |
+| `PassiveAbilitySO` / `PassiveAbilityTypeSO` | 63 / 10 | Passive effects, stacks, durations, cooldowns, and categories |
 | `RuneStoneSO` | 4 | Rune-stone definitions |
 
 Concepts do not have a separate `ConceptSO` class in this build. Reductive, Reflective, and Conceptualization are `AlchemyTypeSO` assets; Study/Learning concepts are `AlchemyRecipeSO` assets; `ConceptRecipes` and `ActiveConcepts` provide the concept-specific recipe and live-instance registries. Mods must filter those registries rather than treating every alchemy recipe as a concept.
@@ -123,12 +123,12 @@ Concepts do not have a separate `ConceptSO` class in this build. Reductive, Refl
 
 | Entity family | Mapped count | Primary role |
 |---|---:|---|
-| `AttributeSO` | 205 | Named modifier concepts and tooltip references |
-| `ScalingWeightSO` | 54 | Reusable effect-scaling weights |
+| `AttributeSO` | 211 | Named modifier concepts and tooltip references |
+| `ScalingWeightSO` | 55 | Reusable effect-scaling weights |
 | `AttributeGroupSO` | 24 | Broad merged modifier targets |
 | `InstanceScalingSO` | 11 | Instance-level scaling definitions |
 | `DisplayTypeSO` | 3 | Numeric/display formatting definitions |
-| `ViewSO` | 97 | UI navigation and view unlock state |
+| `ViewSO` | 98 | UI navigation and view unlock state |
 | `LocalizedStringSO` | 61 | Localized text references |
 | `TutorialSO` | 34 | Tutorial state and triggers |
 | `AnimationEffectSO` / `AnimationSO` | 23 / 13 | Visual action/effect presentation |
@@ -137,7 +137,7 @@ Concepts do not have a separate `ConceptSO` class in this build. Reductive, Refl
 
 ## Registry and variable assets
 
-The mapping includes 206 list-variable assets across 60 managed types. Important examples are:
+The mapping includes 208 list-variable assets across 60 managed types. Important examples are:
 
 - `ResourceListVariable`, `ResourceTypeListVariable`
 - `StructureListVariable`, `StructureTypeListVariable`
@@ -148,15 +148,15 @@ The mapping includes 206 list-variable assets across 60 managed types. Important
 - `ViewListVariable`, `RecipeBookListVariable`, `UpgradeListVariable`
 - runtime-state collections such as `StatusEffectListVariable`, `EngagedEffectListVariable`, and instance/snapshot lists
 
-The remaining 274 rows across 17 managed types are the scalar/reference assets. The largest are:
+The remaining 278 rows across 17 managed types are the scalar/reference assets. The largest are:
 
 | Type | Count | Typical use |
 |---|---:|---|
-| `DoubleVariable` | 80 | Global numeric stats and timers |
-| `IntVariable` | 69 | Levels, slots, limits, counters, and selections |
+| `DoubleVariable` | 82 | Global numeric stats and timers |
+| `IntVariable` | 70 | Levels, slots, limits, counters, and selections |
 | `KeyBindingVariable` | 52 | Input bindings and attached views |
 | `ValueModifierVariable` | 33 | Reusable single modifier/scaling values |
-| `BoolVariable` | 12 | Saved or observable flags |
+| `BoolVariable` | 13 | Saved or observable flags |
 | `StringVariable` | 7 | Observable text state |
 | `GuidVariable` | 6 | Persistent/reference UUID state |
 | `FilterVariable` | 4 | Filter state |
@@ -187,12 +187,17 @@ Never select an entity by name alone. For configuration, store the UUID and opti
 
 ## Coverage boundaries
 
-The mapping proves that an asset UUID, internal name, and managed type exist. It does not by itself prove:
+The mapping proves that an asset UUID, internal name, and managed type exist. It does not by itself
+prove the following; the separate serialized [progression graph](progression-map.md) now proves the
+authored relationships for the audited v1.0.5-2 assets where noted:
 
-- which assets reference one another in serialized data;
+- which assets reference one another in serialized data (**covered by the progression graph**);
 - whether an entity is currently unlocked, visible, or registered in a loaded save;
-- the members of an `AttributeGroupSO`;
-- the contents of list variables at a specific lifecycle phase;
+- the authored members of an `AttributeGroupSO` (**covered by the progression graph**);
+- the authored contents of list variables (**covered by the graph**), or their runtime contents at a
+  specific lifecycle phase (**not covered**);
 - the direction or balance impact of every modifier.
 
-Those relationships come from managed field metadata, decompiled methods, serialized asset inspection, or runtime logging. See [Entity correlations](entity-correlations.md) for the currently verified relationship model.
+Those relationships come from managed field metadata, decompiled methods, serialized asset inspection,
+or runtime logging. See [Entity correlations](entity-correlations.md) for the verified relationship model
+and generate the local progression graph when an exhaustive decoded requirement inventory is needed.

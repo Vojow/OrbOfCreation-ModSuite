@@ -61,6 +61,7 @@ id	type	name	displayName
 05589125-5a98-4e74-a1ae-2b2146ea68c4	AlchemyRecipeSO	RefineTemperedEssence	Refine Tempered
 055aa68c-16c6-441e-aec7-4637da26371d	UpgradeSO	WisdomThaumicGreater	Greater Thaumic Wisdom
 057314a6-a333-4216-90e8-8372f48a3282	CraftingInstanceListVariable	AutoCraftInstances	
+0577e841-23fb-4366-8f24-863d1a14e574	TutorialSO	TutorialOre	
 0578693a-93d3-49c7-bbeb-a0ea07f147f0	ResearchSO	GreaterCombat	Greater Combat
 05895bef-ee78-4ca1-9e6a-34696ef5dabd	ViewSO	MagicCasting	Casting
 05c06263-25a7-4e7d-ac8c-ae83b3a92dc8	KeyBindingVariable	GoToTimeRunes	Go To Time Runes
@@ -73,6 +74,7 @@ id	type	name	displayName
 06889e58-ebee-4618-9fe0-67731e30658f	AttributeSO	HarvestSize	Size
 068c6512-08ec-4957-88f5-692b14b09501	AlchemyRecipeSO	RefineElementia	Refine Elementia
 06a032a1-f7ae-4e7b-9155-4162357afd1f	RecipeBookSO	EvokeRecipeBook	Evoke
+06cad0f7-ffe6-4f4f-a3a9-1e29a2052abe	ViewSO	AutoBuyerView	
 06ea55a2-e580-4591-8d63-edd7c77a6446	PassiveAbilitySO	LearnedTokenPassive	Learned
 06f77823-fd0f-479a-a0f6-377b37fa99e3	StructureSO	Authorism	Authorism
 072045cf-724e-4dcb-9cbd-2a59793c9a7a	AdvancementSO	AdvEnrichDarkThistle	Enrich Dark Thistle
@@ -269,6 +271,7 @@ id	type	name	displayName
 1a847485-25e7-44bf-8770-19e573c40fa5	HarvestElementListVariable	AllHarvestElements	
 1aa20c6a-dae9-4bc2-a780-0541f0fbb982	ChallengeSO	WeakenedCapacities	Weakened Capacities
 1aa82a80-8d0f-4827-bf6b-0be51cf9c5fa	AttributeSO	ResearchShowCompleted	Show Completed
+1ab06404-18d4-4bca-b86f-f0a8b4552755	AttributeSO	AdditionalInformation	Additional Info
 1adf3986-e6e4-4760-ae83-bb0d14cfe9c2	ChallengeSO	FocusImprovedResources	Focus: Improved Resources
 1af6f9d1-46e9-4d58-b541-133f4d39e71d	UpgradeSO	FocusAuraWater	Peaceful Focus
 1b128968-0672-4a9e-8792-06aa78bc1244	PrerequisiteLinkSO	InnovationTiers	
@@ -287,8 +290,10 @@ id	type	name	displayName
 1c02a78c-35d8-442b-b9eb-c70504aadae0	UpgradeSO	GrowFruitTrees	Create Fruit Trees
 1c3ffe77-c46b-4a38-8dce-3e6bb6f62fb3	AttributeSO	EmptyRender	--
 1c4a291f-8381-40f2-8d0b-574ea2b710da	ResourceSO	TemperedEssence	Tempered Essence
+1c55ec7a-7076-4368-b29c-5b4574b75bdb	UpgradeSO	ImprovedDevelopment	Improved Development
 1c577a4e-8a53-4367-98c0-985629cfdfda	AttributeSO	AttributeCostMod	Attribute Cost
 1c6da5b3-041b-40a8-a45a-feb174cde507	UpgradeSO	RaiseMaxDruidryLevel	Raise Druidry Lv
+1c75afe4-aa60-4118-8900-fddde585788e	AlchemyRecipeSO	BrewProtectionPotion	Brew Protection Potion
 1c91d95e-3ee8-4167-aa8a-287ed74a6cda	PrerequisiteLinkSO	TimerRituals	
 1c9e052a-d288-4b86-aabf-8011163ca0c8	CharacterListVariable	EnemyBackLine	
 1ce0c1ed-35f1-45d3-8151-4e988a52c101	GlyphSO	Flow	Flow
@@ -336,7 +341,6 @@ id	type	name	displayName
 20cd5bab-9a3c-4dde-b8e5-4e65919ee3c1	DoubleVariable	ParallelCraftPower	Parallel Crafting Power
 20d02e67-03cc-43d4-992b-2c0098e9a1e7	TimeRuneSO	TimeAdvancementAccelerate	Advancement Accelerant
 20d29fa7-2bd1-4508-9858-03f0620dcd6a	KeyBindingVariable	GoToDruidry	Go To Druidry
-20e72dbe-ee32-4aa3-aa7a-a4071b52d6ef	TutorialSO	TutorialDreamberry	
 20f01743-4fcf-4f8e-8c1e-e7ab8034b94f	CraftingRecipeSO	CraftCognitiveDisk	Cognitive Disc
 20fb94dd-dd10-4da5-8d0c-a4e6d311e438	StructureSO	Machinery	Machinery
 2108c118-a1c4-4cc7-ba1f-73b0cc01cf5f	SpellRecipeSO	ArcaneAura	Arcane Aura
@@ -386,6 +390,7 @@ id	type	name	displayName
 25167ed4-3ce0-4f35-8198-4a7afc9810c3	UpgradeSO	UpgradedConversions	Dreamberry Conversions
 2519e676-a28a-4882-83b8-9eabfd4b37d7	ChallengeSO	WeakenedGenerators	Weakened Generators
 251da5b5-1403-4ffe-a88a-16448cdfaae7	ResourceTypeSO	SpacialResourceType	Spacial
+2522b1c1-bbe0-430d-b19b-e51f5b29087b	UpgradeSO	AutoBuyAttributes	Auto Buy Attributes
 2533331a-97b7-46e6-8c2d-2737b5887f3c	StructureSO	WorldBreaker	World Breaker
 2538acae-9561-4b5e-b16a-3963325c3f18	CharacterActionSO	BasicAttack	Attack
 2547d6c2-6659-46dc-ad3e-7f46e80fbf0e	AttributeSO	DecayRating	Decay
@@ -500,6 +505,7 @@ id	type	name	displayName
 2f7fcef7-70ec-40f0-87d9-77c333d59a7f	StructureTypeSO	TalentStructures	Talent
 2fa66381-76be-42d5-a25b-31cb5790f03a	UpgradeSO	UpgradeSpellBookLoadout	Duplicate Spellbook
 2faa5a3c-6a34-46ec-ac8c-f0a49049a721	UpgradeSO	DimensionalShaperMetal	Metalic Shaper
+2fb1c5a4-0736-4b55-8b93-8528153632cd	ValueModifierVariable	ScalingMaxQuantityTiny	
 2fbe8274-5409-49a4-95e8-f6e27c6775ec	ResearchSO	ExpandedGlyphTable	Expanded Glyph Table
 2fc88d26-8529-4395-90dd-a706c21a6fb8	ResearchSO	ConstructReinforced	Learn Reinforcement
 2fe23b32-c69a-4232-9b07-6e2a7a8262b2	KeyBindingVariable	Loadouts	Open Loadouts
@@ -567,11 +573,13 @@ id	type	name	displayName
 354126ed-f502-4fa6-892c-27be7c202746	HarvestTypeSO	TreeHarvestType	Tree
 3559f6a0-c6e3-4c9f-bd26-35ac9dc904f6	CharacterAttributeSO	ActionPower	Power
 355c9d24-2984-4d90-8aea-85afe1d1af6a	KeyBindingListVariable	AllKeyBindings	
+355f3f1c-f9dc-48f5-bfaa-79d54dae7a2b	ConditionalTextList	SpellCastingTips	
 35803827-d208-4ddf-9c41-c50529c6ebe2	TimeRuneSO	TimeConstructionScaling	Construction Scaling
 359345d8-87a4-46e4-846f-ded52a54dda1	PrerequisiteLinkSO	ElementiaUnlocked	
 35a8a47e-c5e0-4910-88d0-5711712fbb26	SpellRecipeSO	ConjureLife	Conjure Life
 35b6ce96-c66e-4a5b-993e-36a740d99acd	AlchemyRecipeSO	BrewMetalworkPotion	Brew Metalwork Potion
 35bd3d91-d5dd-4652-be67-8728d5bfc22a	StructureSO	RapidShot	Rapid Shot
+35df1446-4035-4c76-a32b-f7963bfb400b	TutorialSO	TutorialDarkThistle	
 35f4a4dc-45ed-4e19-b9e2-e37f2805ac0d	AttributeSO	TreasurePoolUnknown	Unknown Item
 35f6e6b5-b5c9-4c48-981f-9b5ac4ba06f3	UpgradeSO	MysticHexsteel	Mystic Hexsteel
 362889fd-803f-4330-a390-c84fd3b91dd6	GlyphTypeSO	ForgingGlyph	Forging
@@ -585,6 +593,7 @@ id	type	name	displayName
 36dff868-512c-4194-a27d-879876c39392	UpgradeSO	MysticIngots	Metalic Spirit
 36ffdd61-3b8a-4353-8246-b122daf4cd54	ResearchSO	GreaterDurations	Greater Durations
 37163239-1364-4003-9f62-aee3aab86bc1	ResourceSO	Arcanum	Arcanum
+37171f2f-70e0-4f36-9bdb-c9e38489eae3	ResearchSO	ZealRecovery	Zeal Recovery
 37213cc8-17a8-48ec-94a7-45667afecb7d	UpgradeSO	NoviceSpells	Novice Spells
 3728f4ed-a2a2-4833-84e2-768728f0b34d	AlchemyRecipeSO	TransmuteSpark	Transmute Spark
 377d1839-7191-4175-af77-2b22520f48a7	TutorialSO	TutorialDruidryLevel	
@@ -598,6 +607,7 @@ id	type	name	displayName
 37d19c63-b4fb-47dd-94eb-e0dcad44c400	PrerequisiteLinkSO	ScribeTiers	
 380b1256-02c1-4eb6-9c50-c379c1bcc78c	RitualSO	Faith	Faith
 38110288-aee6-46e3-bfbd-557e1804ab2f	KeyBindingVariable	GoToLoadout	Go To Loadout
+38589d40-9271-45e8-9caa-13a1b903789d	UpgradeSO	AutoBuyAttributes2	Auto Buy Attributes II
 3888ff9a-dc86-4327-b3d3-61c64dae08a3	LocalizedStringSO	Glyph	
 388bfe38-15f0-4264-86a1-c83cc8fbcf3f	AttributeSO	Equilibrium	Equilibrium
 38ad89c0-851c-4da2-a3e6-5f819bbc683a	StringVariable	ErrorMessageTrace	
@@ -670,6 +680,7 @@ id	type	name	displayName
 3ee502aa-8d21-4b5d-9893-398eadbd9d38	UpgradeSO	LearnFormation	Learn Formation
 3f03ab93-9741-490c-98cd-876316353576	ChallengeSO	BoonSpeed	Boon: Speed
 3f1fcf6d-da72-4397-9cc7-0e92254b78d3	ResourceSO	ExpArtificer	Artificer Xp
+3f65b62a-f16a-48f3-b667-09cc50c694a2	ScalingWeightSO	ChallengeBalanceEffect	
 3f6d0184-7833-45fd-9d4d-04855b67bd69	ConsumableSO	TransmutationOil	Transmutation Oil
 3f6eff9a-fda5-4ea8-b481-6fdcb93d4184	KeyBindingVariable	GoToDimensional	Go To Dimensional
 3f7c37d8-054a-4886-8413-d25459d954bc	ScalingWeightSO	FruitEffectScaling	
@@ -780,7 +791,6 @@ id	type	name	displayName
 48a1e2ae-aceb-4bf2-936d-417703435481	ResearchSO	ImprovedAuras	Improved Auras
 48a37f9e-6ae5-4665-b500-a97f4f785897	StructureTypeSO	BattleStructures	Battle
 48a4a5cd-db80-4dee-9aaf-d47d378a741f	DoubleVariable	TreasureRatingWorkshop	Workshop Treasure Rating
-48a76718-1bcc-47d7-9755-7a21bdefa9bd	TutorialSO	TutorialMagebloom	
 48dfa4f3-680d-4ca2-b83e-e65d852becbf	ChallengeSO	WeakenedCharms	Weakened Charms
 4903e6d0-47f6-45a4-855a-d8cee8d9bd6b	AttributeSO	LoadoutAlchemy	Alchemy
 49057abe-fe54-481e-99bc-2b82c3995c6b	ConsumableSO	ScrollExcellence	Scroll of Excellence
@@ -837,6 +847,7 @@ id	type	name	displayName
 4d2a6a8b-a291-4b32-8216-292c69e3016a	RecipeBookSO	HelmRecipeBook	Helm
 4d6cf429-c9a5-4d9f-ae36-18f89a785f69	AchievementSO	MasterDragon	Master Dragon
 4d9b799f-b155-48e1-91e8-457a7414a73d	UpgradeSO	UpgradeGlyphs	Upgrade Glyphs
+4da39fb6-68af-453c-9c21-f8428f3f902a	AttributeSO	ResourceRally	Resource Rally
 4db0bce1-05f7-45a0-893f-b339d6e63b9a	UpgradeSO	MysticOre	Grounded Mystic
 4dc9302c-27b2-4735-ad17-db1105195c24	UpgradeSO	ShapeLandMining	Shape Craggy Spire
 4dd4e062-2015-4809-a50f-f37647bda339	ResourceSO	PotionToxicity	Toxicity
@@ -880,6 +891,7 @@ id	type	name	displayName
 512c9ca7-87d1-4ede-8117-fba7f19f494e	ViewSO	IsInCombat	Is In Combat
 51764ba3-a4cb-4931-83a0-a7f55ef741ce	LocalizedStringSO	DamageType	
 5191c2a9-4111-4267-a994-b33997969ea9	AttributeSO	LoadoutSnapshotLoad	Load Snapshot
+51950c84-630e-498f-a13d-22c8e6ad8bfe	PlayerCharacter	PlayerCharacter	
 51b6e5e2-d4a5-463f-bd00-479a2d9b8860	EquipmentSO	VerdantGloves	Verdant Gloves
 51fa323c-aaee-46e1-b542-ac94606093fe	StructureSO	AutomagicTome	Automagic Tome
 51fce088-54b5-4bd6-9428-8d465175e59f	GlyphTypeSO	SpellElementalGlyph	Spell Elemental
@@ -899,9 +911,11 @@ id	type	name	displayName
 531c7a47-8eee-4792-9ae3-9471a1ee2d68	AlchemyRecipeSO	BrewFuryPotion	Brew Fury Potion
 534d8a27-7320-4ca1-8d8c-7eaf0ade385c	IntVariable	AchievementStrength	Achievement Strength
 5362c2ed-1cff-4ecb-9f34-d66d672f764e	ResourceListVariable	AlchemyResources	
+53691c41-2d86-4b30-bbdc-6ae35402152a	InstanceScalingSO	PlotNodeSpecialOnlyPassiveScaling	
 537f91e1-0fcf-441f-a8c8-7272a8c3b02b	EquipmentTypeListVariable	AllUpgradeableTypes	
 53b4b824-55e2-46d7-8625-6f110a0f2a42	InstanceScalingSO	HarvestActionInstanceScaling	
 53b93fc0-32de-4449-932e-9ac6d40871a0	ResourceSO	ExpAlchemy	Alchemy Xp
+53baed99-b2e4-4430-b726-3bc0cb28e8dd	AttributeSO	AvailableTargets	Available Targets
 53c4279e-3043-4414-8866-65608967ee30	PassiveAbilitySO	CeremonialDaggerPassive	Ceremonial Dagger
 53cc813a-3e07-4519-9da7-2bda92dc2307	AttributeSO	DiscoveryTreeGlyphcraft	Glyphcraft
 53de0892-e188-40a3-987b-386b829b147e	LocalizedStringSO	Research	
@@ -1055,6 +1069,7 @@ id	type	name	displayName
 619f37c6-0d2d-48c8-8686-d0954cb9e8ec	AttributeSO	RitualEchoPower	Ritual Echo Power
 61a10b57-4311-407b-ab23-a8c8fa4c54a3	StructureSO	TransmuteEfficiency	Transmute Efficiency
 61bbd600-2c8a-490e-9f43-47e5768cb80e	PassiveAbilitySO	ExhuastionTokenPassive	Exhuastion
+61de81d5-8331-49bb-9bcc-338fda5d2771	AttributeSO	AttributeAutoBuyerOn	Auto Buy On
 61ee89dd-f896-4863-b3ff-1d07e7cf8896	GlyphTypeSO	ElementalGlyph	Elemental
 62355aa2-2b5d-4f0e-b8e4-15f92521b965	RitualVariable	SelectedRitual	
 62438f29-e8ab-4176-9816-ca880ffb76e9	HarvestTypeListVariable	AllHarvestTypes	
@@ -1095,6 +1110,7 @@ id	type	name	displayName
 6583df5a-8346-427b-ad73-48ec09082139	StructureListVariable	WorkshopStructures	
 65fcd863-e0ac-445c-bbf0-23689390f79f	AlchemyRecipeSO	BrewTransmutationOil	Brew Transmutation Oil
 6605634b-ed12-41e9-a4c0-10066b562599	ScalingWeightSO	RitualModifierEffect	
+6616da3e-7e89-4666-bd34-2710ee97c953	ValueModifierVariable	Scaling_Tend	
 6628c5b7-f83b-40fe-92c9-631105d7f3fe	AlchemyRecipeSO	DismantleThaumicScrolls	Extract Thaumic Scrolls
 66476391-5c59-4eb6-a307-8108a4a8eb52	StructureSO	FiniteEncryptor	Finite Encryptor
 665cf03d-b1c2-451a-9f9d-b3dd41236207	PrerequisiteLinkSO	HerbTiers	
@@ -1112,7 +1128,7 @@ id	type	name	displayName
 676478fa-612a-4f93-94f3-7a5f64e2ccd1	KeyBindingListVariable	ConsumableKeyBindings	
 676dacfd-763b-40f3-a4ca-e296c87a766b	AttributeSO	ExperienceRate	Experience Rate
 67737b66-cffa-42d3-87e2-6409cdea9c4a	ResourceSO	Magebloom	Magebloom
-67759ff1-4b76-4375-bfa6-7693ab9f2912	SpellRecipeSO	ShapeWorld	Shape Nature
+67759ff1-4b76-4375-bfa6-7693ab9f2912	SpellRecipeSO	ShapeNature	Shape Nature
 6782dd13-e229-4385-a1aa-8ed86e6ea1ed	PlotNodeSO	PlotFruitTree	Fruit Tree
 67907ba8-19cd-40ba-8c96-c51bc158c4a4	PassiveAbilitySO	DistortedFusionPassive	Distorted Fusion
 67acd892-8a8a-455a-aa71-3fb06e75bf38	ResourceSO	AlchemicScroll	Alchemic Scroll
@@ -1131,6 +1147,7 @@ id	type	name	displayName
 687371be-71bc-4344-b0f5-58c736a3c72c	SpellRecipeSO	PurifyOrb	Purify Orb
 6876f0d2-2f42-489f-898d-045804bac12a	ScalingWeightSO	CharStatSmallScaling	
 68775824-5d29-43c6-973b-83948c03cbef	AlchemyRecipeSO	AnalyzeTempered	Analyze Tempered
+687d7cf8-e727-49b3-b2b3-92db516d0604	ResearchSO	ToxicityRecovery	Toxic Recovery
 68831cb3-86b9-4c3d-9144-292cd9ae91b7	RecipeBookSO	OcculticRecipeBook	Occultic
 6891b327-d307-4faf-a128-f716ca20f112	BoolVariable	PersistenceHasFetchedNewChallenges	
 68d3b345-1fca-472c-b97c-2c268c961621	UpgradeSO	ImbueAmber	Imbue Amber
@@ -1156,6 +1173,7 @@ id	type	name	displayName
 6a5974f2-4838-483a-80b2-71f479f342a7	ScalingWeightSO	AlchemyScalingAug	
 6a64e217-0078-43c6-b5f3-37092adb993b	AlchemyRecipeSO	TransmuteControl	Transmute Control
 6a9480c0-958c-4f7e-8703-e84c3c7a2dc1	ResourceSO	CombatStability	Stability
+6a9a3401-da00-4686-9761-a2535b87ef20	PassiveAbilitySO	PropagatingTokenPassive	Propagating
 6aa1d39c-a558-43a9-bcfc-76ac99b6c2f1	UpgradeSO	UnlockDruidryLevel	Unlock Druidry Levels
 6aa2b39e-16df-461d-8995-08cbe69ff86a	AttributeSO	GenerationRateTime	Rate Time Generation
 6accc1ac-0432-4edd-8766-7b60c635c2b8	RitualTypeSO	GlobalRitual	All
@@ -1183,7 +1201,6 @@ id	type	name	displayName
 6ca92b42-e3c4-48b7-abc7-9cd8554c89f6	KeyBindingVariable	CastSpell2	Spell 2
 6cbeec6f-39da-4b39-9723-0dd4c2bf3873	StructureSO	ResinHandling	Resin Handling
 6cdf8168-237c-4eee-a32c-3c1659c1d89f	SpellTypeSO	Storm	Storm
-6ceece34-deb2-4227-aba9-58f642cc1375	TutorialSO	TutorialOre	
 6cf53d69-aa02-4c28-bdb1-38ae896206a0	ValueModifierVariable	StructureCodeModReinforced	
 6d14566c-8e53-4897-a900-cd9b9391f152	StructureSO	Capability	Capability
 6d1962c7-4bb3-4c5f-ac88-776fd8bbd415	IntVariable	DiscoveryTreeChoiceCount	Discovery Options
@@ -1282,6 +1299,7 @@ id	type	name	displayName
 75e2d397-b056-4e0b-b8ef-6d34df396c9f	AlchemyRecipeSO	TransmutePsi	Transmute Psi
 75e6b029-ecf1-4c2c-a7da-d8c21f0ade21	RitualSO	Belief	Belief
 75f7df45-c3cc-432f-8d73-81e18a2f1378	AttributeSO	BonusLevel	Bonus Level
+763b1bc5-6ca9-479a-ae02-69d51136896d	DoubleVariable	AutoBuyQueueSpeed	Auto Buy Speed
 765179d4-fc9c-469b-82d8-f6def418feb6	ChallengeSO	WeakenedArtificer	Weakened Artificer
 766c4dbf-04db-4a0c-bc41-582cfc17ea5a	UpgradeSO	DiscoverElementia	Discover Elementia
 7685eb4c-9926-43a6-8c26-5b85efdb7a17	StructureSO	EchoMage	Echo Mage
@@ -1301,6 +1319,7 @@ id	type	name	displayName
 785dd679-6b9e-42b7-b5e8-6ff337588a1c	AttributeSO	RelatedSubTypes	Sub Types
 788734de-f8c6-4380-8021-b23b767ad13b	AttributeSO	Persistent	Persistent
 78995edc-209b-49cc-a1d9-9590ec60f5c8	IntVariable	MaxConceptSlots	Parallel Concept Slots
+78aa9267-32d1-42d7-8a80-1f9d0d68153b	IntVariable	AutoBuyQueueSize	Auto Buy Queue Size
 78c3a1ab-9212-40fb-a80f-709ffccee1fd	AlchemyRecipeSO	AnalyzeLiquid	Analyze Liquid
 78d1cca0-2290-4932-a221-489158cb7758	UpgradeSO	DruidryBeacons	Shining Druidry
 78e0b08f-a3b1-41f0-925c-44bc71c7f118	ModifierListVariable	ConceptAdvCost	
@@ -1399,6 +1418,7 @@ id	type	name	displayName
 819a23e9-bdc0-4bb8-a93a-d5d475eb298b	CombatEffectInstanceListVariable	ActiveCombatEffects	
 819e3d5f-cc06-42ff-be02-0870232edccf	KeyBindingVariable	GoToChallenges	Go To Challenges
 81aa0df4-403c-4fc2-93f7-17975e7ed005	AlchemyRecipeSO	StudyWorld	Study World
+81d21ccd-94bd-43bd-882d-6d3b01a7918e	AttributeSO	ObjectDisable	Disable
 81ec2d60-d123-4112-a0d3-feb7d86d9fd2	UpgradeSO	ConstructionDimensionCore	Dimensional Crafting
 8203cd1c-70ee-427b-b3a0-d96c9d9007d0	AttributeSO	RitualResources	Resource Loot
 82047a67-9d57-438c-b5b1-99377e242e32	ViewSO	TimeTimeRuneCreate	Create
@@ -1421,6 +1441,7 @@ id	type	name	displayName
 83b924e1-175c-49c5-ab22-e38d2a1835e7	LocalizedStringSO	Requirements	
 83caa0f0-7add-440d-87cb-6b3a5f69bd26	LocalizedStringSO	StructureType	
 83e5d4d7-4524-4f5b-9e4f-2198fe972829	ValueModifierVariable	ConceptReductive	
+84032aed-62ab-4795-a888-9fa94c9b6fbe	UpgradeSO	UpgradePropagation	Upgrade Propagation
 84094552-4b5f-4c44-85ed-31610a76dabb	ValueModifierVariable	ScalingAura	
 8412b4e4-1c4c-418b-b3cf-066f889ec8f3	ChallengeSO	WeakenedLuck	Weakened Luck
 841aead8-2657-4341-a396-69e897168e5b	GlyphSO	Efficient	Efficient
@@ -1451,6 +1472,7 @@ id	type	name	displayName
 8586ce00-1006-4803-8d3e-3216b8cb2540	ScalingWeightSO	TimeRuneInstantScaling	
 858e7640-e973-4c58-8288-8e01821051bd	UpgradeSO	ImbueOccultic	Imbue Occultic
 85d81c0b-7c1e-4ed7-8b59-46c9ed240b56	ChallengeSO	WeakenedMachines	Weakened Machines
+85dea277-7588-45cc-8655-6cb226bd7b0a	UpgradeSO	AutoBuyAttributes3	Auto Buy Attributes III
 85e36b1a-a1e6-44b4-b86c-e2f8409b73dc	LocalizedStringSO	LoadoutSpellError	
 85f85504-cc66-45db-8606-47f57a7b3275	StructureSO	StudyMagic	Study Magic
 8613c5b4-8d15-4bca-9e3d-62a049e00ce3	RecipeBookSO	TransmuteRecipeBook	Transmute
@@ -1507,6 +1529,7 @@ id	type	name	displayName
 8ae52543-1217-4465-8686-6ecd67ceb62a	SpellRecipeListVariable	AllAvailableSpellRecipes	
 8af5a156-4a5c-4faa-b8eb-6f34f2ec304c	AdvancementSO	AdvEnrichTreasureTree	Enrich Treasure
 8aff1c67-4209-4156-87e6-78a288dae39b	AlchemyRecipeSO	RefineInk	Refine Ink
+8b06f842-eb8c-40ef-83b6-587553a51fab	TutorialSO	TutorialIronwood	
 8b244f18-2904-46ae-b691-dc052b140951	RecipeBookListVariable	AlchemyRecipeBooks	
 8b552790-00a9-4618-aab2-76bfbd76b06e	AnimationSO	HealingRayAnim	
 8b574bf3-3238-423e-9f38-faab7f53b06a	ResearchSO	WeaveMastery	Weave Mastery
@@ -1553,6 +1576,7 @@ id	type	name	displayName
 8e979307-706c-4187-a165-e52f63090e87	UpgradeSO	AmberPaperMill	Amber Mill
 8ea19922-be93-4e50-a0b1-65a14fb68ea5	ViewSO	MagicGlyphs	Augments
 8ea70fd6-40da-43fc-aafa-86e1d09586b7	StructureSO	BookOfHolding	Book of Holding
+8eaba3d7-3bf8-4416-b010-096ec6448e49	TutorialSO	TutorialMagebloom	
 8ead5f36-ecfa-4332-b0ae-f1fb51542b0a	HarvestActionSO	PlantHarvestAction	Plant
 8edacf96-deb8-4113-8437-006cecdc4a2b	ResourceSO	BandwidthElectrical	Electrical Capacity
 8f19b483-97a7-4579-97da-3e89af05d47e	IntVariable	NumActiveRituals	Active Rituals
@@ -1601,6 +1625,7 @@ id	type	name	displayName
 9284a330-4ea4-4c69-a992-191e1a43bdef	ResearchSO	SuperMetabolism	Super Metabolism
 9293f4b3-49dd-4fd4-b13c-2bc3573c9e95	SpellRecipeSO	Crucible	Crucible
 92a015c9-2231-45a8-afaa-a8feda459239	StructureSO	AuraCore	Aura Core
+92aa8fd0-921e-4e77-b523-5b3decf162b6	PrerequisiteLinkSO	ResearchDependenciesVisible	
 92c437e8-00a0-43af-8e70-4586537d9e4d	ValueModifierVariable	StructureCostModWorkshop	
 92cdbfbe-262c-4298-97d1-1d8af6ef8c88	AttributeSO	ResearchReqTooLow	Negligible requirements
 92deba7f-63df-46f8-b379-fb7c9457293c	ResourceSO	Ingots	Ingots
@@ -1643,7 +1668,6 @@ id	type	name	displayName
 9607f752-f1e5-41d6-9c7d-c8cc3ede5eb4	UpgradeSO	DiscoverSoulshards	Discover Soulshards
 963deef7-78c1-44e8-b7c8-f13081fbf310	LocalizedStringSO	EquipmentType	
 9644849d-b7f8-44e8-887e-b7a2b95cd60d	ModifierListVariable	ConceptAdvTime	
-9653fa42-0de9-44bf-a679-cbbbed6604fa	TutorialSO	TutorialIronwood	
 965ce715-1acf-4202-84b7-d24b72d35539	PlotNodeTypeSO	PlantNodeType	Plant
 9691552e-4646-48fc-b883-1c04fceb1c24	UpgradeSO	DimensionalShaper	Dimensional Shaper
 9693082a-9776-4e48-a20c-62de743fe7bc	AttributeGroupSO	LuckPenaltyGroup	Luck Penalty
@@ -1684,7 +1708,6 @@ id	type	name	displayName
 9ab31b94-df24-43c0-9e92-dbad163ef76d	UpgradeSO	LearnRefinement	Learn Refinement
 9ac43103-ce35-4469-976e-501594e19873	AdvancementSO	AdvBlitzBerry	Blitz'd Up!
 9adcfce4-2190-4737-836d-28461e064595	EquipmentSO	AmuletOfAgility	Amulet of Agility
-9b14e7c1-56f1-4ead-b001-a874f8c24ee5	TutorialSO	TutorialDarkThistle	
 9b1d3e2d-3e13-41a0-bb96-7a720a033ebf	ScalingWeightSO	SpellAugEffectGreater	
 9b25629a-0cb7-4137-b5df-3fd0d3032e1c	AttributeSO	CancelResearch	Cancel Research
 9b27c5ea-a8eb-4716-a7d9-16673d65287b	ResearchSO	ArtifactWeapons	Artifact: Weapons
@@ -1748,6 +1771,7 @@ a0ca2120-e4fa-4e5f-99c7-4eedb8227789	RecipeBookSO	BiologicRecipeBook	Biotic
 a0d7fbff-a2cb-4c85-91d1-b7537de0aad4	UpgradeSO	GravityUrns	Gravity Urns
 a0db7e00-3691-4a5a-9a60-5405beb071bb	StructureSO	Metabolism	Metabolism
 a0ef70dc-80d6-4902-b055-5cc37973cbd6	AlchemyRecipeSO	RefineOcculticEssence	Refine Occultic
+a106a9fc-dd1f-46ca-a005-4cec5d67a52d	UpgradeSO	DiscoverPropagation	Discover: Propagation
 a11421b2-d11b-4661-9d62-c2908ff33009	ConsumableSO	ThreadsOfProtection	Threads of Protection
 a1615742-d153-46ca-9ca2-8b4e624d4ee2	LocalizedStringSO	LThoughtAwakening	
 a16c0b44-a720-411b-ad53-4b8e407dce7f	TutorialSO	TutorialWorldAspect2	
@@ -1760,7 +1784,6 @@ a1a9ffc2-c629-49dc-968f-db364fb99fbf	StructureListVariable	AllStructures
 a1afb6eb-bc9b-4e93-8ad8-33d642c8056e	ViewSO	MagicSpellbookManage	Spells
 a1c340c2-ab55-4a91-9f66-6bcdd7802ac3	EquipmentSO	ReplenishingCask	Replenishing Cask
 a1c865ab-5fe3-47f3-9c71-0292d9f9cb7b	ResourceSO	BandwidthOccultic	Occultic Capacity
-a1d56fa5-84e6-478d-be5a-9c652a95d173	TutorialSO	TutorialForceTree	
 a2015dca-451f-43f6-af36-4d78c76e2765	AttributeSO	TimerSingle	Sequential
 a205b198-a586-4a62-8790-22f84fa600e1	ChallengeTypeSO	BalanceChallengeType	
 a230689b-f9bd-40d2-bfdb-411e9ec64699	AlchemyRecipeSO	StudyTalent	Study Talent
@@ -1869,6 +1892,7 @@ aca35250-c746-46fc-bc68-2674bf1cee1c	StructureSO	Dowsing	Dowsing
 acba511b-f079-4ea8-9ad7-3d1f34af5346	PlotNodeSO	PlotCraggySpire	Craggy Spire
 acca6fce-f198-49c0-8506-54d1be23f73a	ResearchSO	GreaterBrewing	Greater Brewing
 accf9abb-d916-4fdf-96d7-1b1d5fdd548c	ViewSO	MagicSpellbookLoadout	Loadout
+ad06ec04-971a-42b2-a87a-79a1a679161b	UpgradeSO	DiscoverProtectionPotion	Discover Protection Potion
 ad490ed1-804a-4d42-8f00-2e61b4871dd1	UpgradeSO	CreateWorldPillar	Create World Pillar
 ad5fedf6-9208-4058-84bc-ecee8adb9104	UpgradeSO	ScribeScroll2	Scribism Scrolls II
 ad826e3d-be4e-407f-a7dd-1658d14f9f5d	AlchemyRecipeSO	TransmuteArcanum	Transmute Arcanum
@@ -1893,6 +1917,7 @@ af77a3ea-f2f7-41f9-9b63-a118a6073a76	RecipeBookSO	ArcaneRecipeBook	Arcane
 af88a1f9-9880-44f8-81f7-2d776586ac7f	GlyphListVariable	AllGlyphs	Known Glyphs
 afa55b4b-2ab7-4a1a-824d-e3a009f15fbc	ConsumableSO	ManaPotion	Mana Potion
 afabf1ff-84b2-4282-8bd3-8cb83d863d7a	InstanceScalingSO	EquipmentExpInstanceScaling	
+aff0170a-1d3e-4117-a62f-cd37f5bac4a8	PrerequisiteLinkSO	AutoBuyerUnlocked	
 aff4657b-1499-4cdf-9902-f28e29925622	CombatTargetSO	TargetEnemy	
 b00dee3d-5095-484e-9226-439d9ed7d2d1	CombatStatusSO	Slowed	Slowed
 b01f50d6-8e24-4a55-98a7-43c32baff8e4	StructureSO	Clearcutting	Clearcutting
@@ -1901,6 +1926,7 @@ b0387ddd-2bd8-4799-8cd0-f8c624458930	GlyphSO	Magnified	Magnified
 b03e7e6e-399e-4afd-b5c1-01e4b12cb6db	AttributeSO	ReverberateTime	Reverberation Time
 b0406c07-0717-409c-9e07-61631157e507	StructureSO	InfusionEnergetic	Infuse Spark
 b055a3db-639f-455a-ae21-c81e6ccf95aa	EquipmentTypeSO	SearingEquipmentType	Searing
+b06412ca-0902-4e64-8f60-b47b95417dd4	AttributeSO	AttributeAutoBuyerOff	Auto Buy Off
 b06cf01e-8d4d-49f4-9486-2602c7819b35	ConsumableSO	MagicMango	Magic Mango
 b096ccd2-7ff4-4ac2-8cc8-da215677e299	AttributeGroupSO	AllDurationGroup	All Duration
 b0b05d7d-3dca-41e4-a4fd-6ac31a9c324f	AdvancementSO	AdvLoadStone	Loaded
@@ -1919,6 +1945,7 @@ b1b7d331-587a-4b4c-87cf-4a8f57c8256b	CraftingRecipeSO	CraftSigils	Sigil
 b1cc592c-b923-4a3b-b107-28fcfd8cffcf	AttributeSO	ArtifactLevel	Artifact Level
 b1cf414e-ae5a-425d-8a0e-4ce11b79017a	StructureSO	AlchemicAbility	Alchemic Ability
 b1dba771-bbad-481c-978b-b0a899cdfbfb	ScalingWeightSO	GlyphOnCastToken	
+b1f57c7c-0da2-4941-be3d-2d8c451d400b	ConsumableSO	ProtectionPotion	Protection Potion
 b2232a7d-5c97-44c9-9520-686e99fa8293	ConsumableSO	ScrollSpeed	Scroll of Speed
 b24ed4bc-875e-464e-aaa3-0f0b38333c06	GuidVariable	SelectedEnemy	
 b254b829-6e5a-4ef6-941e-ff86e7779eda	AttributeSO	HarvestErraticQuantity	Naturally Occuring
@@ -1949,6 +1976,7 @@ b4505524-ad2f-4a5a-9d28-df0c30937748	PrerequisiteLinkSO	InventoryUnlocked
 b4880870-a9d8-4999-86a8-fe3b508f05d8	AlchemyRecipeSO	BrewSparkPotion	Brew Spark Potion
 b4d22a59-30d6-4de3-8437-f3ea8cbc3c12	AlchemyRecipeSO	AnalyzeBuilding	Analyze Building
 b4ea15fb-8933-4095-8d8c-84e0bcb13cec	AchievementSO	PerfectSanctuary	Perfect Sanctuary
+b4f5923d-cde5-432a-8c6c-1b61c541929c	TutorialSO	TutorialDreamberry	
 b4f61a61-0e0b-4e3d-9fc6-f17a81024cf0	ConsumableTypeSO	PotionAugment	Modification
 b4fbec0e-2cfe-4101-876b-11d38c86cbce	ResearchSO	AugmentResonance	Augment Resonance
 b5096677-1e3d-4a17-9330-fb584402f286	StructureSO	ScholarAura	Scholar's Aura
@@ -1967,6 +1995,7 @@ b5efd19a-9655-4359-ad27-f391bb86c2e4	UpgradeSO	UnlockLevelAllSpells	Unlock Level
 b5fe7176-901e-4ec3-9982-23e7270a282d	EquipmentTypeSO	CerebralEquipmentType	Cerebral
 b6079b18-b962-4cc1-a3e5-62eafaacf4b8	ResourceListVariable	MaterialResources	
 b62a347c-408a-4267-a1f0-39df4f4ad57b	ConsumableSO	ExperienceElixir	Experience Elixir
+b63f136d-f84e-466e-8731-f2a3dc5f6297	PassiveAbilitySO	LingeringBarrierTokenPassive	Lingering Protection
 b64e9b9e-6c4b-47b8-be5c-9573c413a77e	UpgradeSO	RaiseMaxReserveLevel	Raise Reserve Lv
 b660d2ae-37e0-484f-be94-7dcb9c9237ed	AttributeSO	InstanceScaling	Instance Scaling
 b6852547-e120-475b-8146-a31f9e576eff	AdvancementSO	AdvVoidStone	Voided
@@ -2031,6 +2060,7 @@ bb6a1f2e-e676-48e5-b3c6-3c373004d16a	AnimationSO	LightningSpear
 bb866f09-3ce1-4067-a05a-a4bb94784961	StructureSO	MentalistsBook	Mentalist's Book
 bb8c6b62-1aac-4305-b4d6-daf58b85c695	ConsumableSO	DeconstructorsSalve	Deconstructor's Salve
 bba5d70c-02a9-4f77-b418-47b3cc6dc524	StructureSO	RitualEndurance	Endurance
+bbab7750-eb7c-4b5e-92ad-a2d49a5ac22d	AttributeSO	ResourceRallyMod	Rally Mod
 bbb6037a-6769-4bfa-a6bf-c8bbc3a05872	StructureSO	Aptitude	Aptitude
 bbd3dda0-7cde-41f2-a667-6f826a238b67	TimeRuneSO	TimeConstructionPersist	Construction Persist
 bbd686af-161b-4dd6-be97-fdc9da66870c	LocalizedStringSO	CraftingRecipeType	
@@ -2143,6 +2173,7 @@ c5f53567-7c5e-4c27-9d06-e20c266c90e5	ViewSO	Hotbar
 c5fccdef-0e64-4324-8287-71d4bcbfa76f	GlyphSO	Transmute	Transmute
 c6037fb1-eaa9-45a5-a553-ab7b7a0f94e7	DamageTypeSO	AreaDamage	Area
 c608e1c8-e5f5-4de3-becc-87f3174987d3	DamageTypeSO	FireDamage	Fire
+c6220064-6e68-45fa-8485-ec90b2d48f67	TutorialSO	TutorialForceTree	
 c625b07a-ac5e-463a-a047-b101a73e41c5	CombatStatusSO	Blind	Blind
 c6583ffe-2eac-4818-932f-c8e94ef73fd4	AdvancementSO	AdvEnrichCraggySpire	Enrich Craggy Spires
 c65f0991-5359-483b-a6b4-7aaeebdc85ba	MusicTrackSO	TheVoid	The Void
@@ -2227,6 +2258,7 @@ cd79034d-f5f7-46e7-b8c8-e7055a3a6f1e	PassiveAbilitySO	AmbiatorPassive	Ambiator
 cd8e6408-da1c-4247-8311-367edf38d17d	AchievementSO	PerfectCasting	Perfect Casting
 cdaffbdb-dcf8-48f4-85cf-2bcdcdebe445	ResearchSO	AscendArcane	Ascend Arcane
 cdea3761-b871-48c1-9ff2-de419b8a5ec3	AttributeSO	MasteryExperience	Mastery Experience
+cdeef71f-844e-4bd5-be9c-33f58b0c9c4f	SpellRecipeSO	Propagation	Propagation
 cdeff67a-a025-4086-b883-4e6078841557	AdvancementSO	AdvEnrichMagebloom	Enrich Magebloom
 cdf5c8d0-c9a3-4284-ac53-89cff39d7105	ChallengeSO	FocusImprovedSpeed	Focus: Improved Speed
 cdfbbee5-7fa2-41fe-a6aa-903beb692fb2	ViewSO	MagicSpellbookLearn	Unlock
@@ -2259,6 +2291,7 @@ cf9a36e7-9f10-4f1e-b4d1-3e1b56ba4370	IntVariable	TimePersistValue	Starting Time 
 cfa7f40d-6417-457f-bbf9-30ac9d16484e	ResearchSO	AscendExpansion	Ascend Expansion
 d016f5d9-e848-4827-a8d3-f8b9aac4a20f	AlchemyRecipeSO	AnalyzeEnergetic	Analyze Energetic
 d037d4db-b0f7-4df9-8c64-d3916839c5b7	EquipmentSO	EnergizedCloak	Energized Cloak
+d04c3997-f9f0-4a2f-883d-f94a9b56c679	AttributeSO	ResourceRallyThreshold	Rally Threshold
 d057eb7e-9e20-4f98-b35d-3ae03b197897	ResearchSO	ExpertStorm	Expert Storm
 d059582a-ec2e-4be9-93eb-e86b63256568	PassiveAbilitySO	ReflectiveRestorativeLearning	Restorative Learning
 d07d202e-28f4-4649-87d8-54c44fd7c4b3	PlotNodeTypeListVariable	AllPlotNodeTypes	
@@ -2439,6 +2472,8 @@ e123a9ab-1d30-4371-88ce-be976b8f9290	UpgradeSO	MysticSoul	Spirituality
 e134d672-bf16-44d3-bc5e-12cf92381b4d	GlyphSO	Evoke	Evoke
 e16d4797-4d30-4748-9547-a1091d1efe6e	KeyBindingVariable	GoToConcepts	Go To Concepts
 e180b669-0cfc-4f78-bc53-186c3e66e79d	AlchemyRecipeSO	BrewStarBrew	Brew Star Brew
+e199d242-d153-452d-a35a-4f7ad10fe3cd	AttributeSO	ObjectEnable	Enable
+e1a1c46c-bd16-4ac7-bdff-952a2d0953fc	DoubleVariable	UpgradeBuildSpeed	Upgrade Build Speed
 e1a5df1c-cad9-404e-8da1-39e12d55e809	AchievementSO	PerfectCharms	Perfect Charms
 e1d18491-ab1d-43d6-a2df-069b54cbf057	IntVariable	MaxHarvestSlots	Parallel Agromancy Slots
 e1e2f794-43ef-4506-b1c6-5d5d4703be8c	UpgradeSO	LabratoryEquipment	Laboratory Equipment
@@ -2512,6 +2547,7 @@ e8d3c23c-3ffc-40a0-80a7-e097f43370e6	ResearchSO	ConvertCognitive	Convert Cogniti
 e8e2bfec-5ccb-488f-b50b-c11778fbbfef	RitualSO	Productivity	Productivity
 e9096448-39bb-499b-981b-14bc895b8cb8	StringVariable	GameVersion	
 e92345c1-753a-40a0-b4bd-6fdfc75feb74	RitualSO	Restoration	Restoration
+e924ca26-c6a4-40bd-b6d0-2df3b554b8f8	AttributeSO	RandomizeTarget	Randomize
 e92930e1-97ab-4e14-a87d-01f3c9d3adba	StructureSO	HydroAura	Hydro Aura
 e966f87f-d71e-4c72-9835-561609305aa1	UpgradeSO	ImprovedHerbalism	Improved Herbalism
 e9990507-98c6-4470-9d1e-a04c3a4cdfd4	EquipmentTypeSO	ThaumuicEquipmentType	Thaumuic
@@ -2629,6 +2665,7 @@ f1dcd018-69dc-4cd7-b7f7-6dd3a1b18183	StructureSO	Fossilization	Fossilization
 f1e20146-50b5-4bae-a1e9-1eb85737c875	ResearchSO	ResourceDecay	Resource Decay
 f1e96530-7fb2-4166-b5dc-27a9ad1b5384	ScalingWeightSO	EquipmentEffectGreater	
 f1f7a9bd-72ed-4bfc-b2c2-ab8431af9b0c	LocalizedStringSO	PersistentReset	
+f20265d6-b6fd-48cd-8fb4-77af929f9f01	BoolVariable	AutoBuyerEnabled	
 f2143cd2-b9de-4d83-b67c-a8f9fc2a67e7	ChallengeSO	FocusImprovedRunes	Focus: Improved Runes
 f21c37e9-a4d2-4536-aae5-29bab636a307	ChallengeSO	FocusImprovedLabratory	Focus: Improved Labratory
 f2436069-5044-47b6-82f1-2a6c8419ac9d	AttributeSO	SpecialEffect	Special
@@ -2689,6 +2726,7 @@ f715f3de-3168-4f1e-b358-333798d33ecd	AttributeSO	LoadoutSnapshotClear	Clear Snap
 f73fbe8c-394b-4602-a8f6-95b324b2a793	AttributeGroupSO	AlchemySpeedGroup	Alchemy Speed
 f75cea6e-5d21-439f-bce4-79199b22434d	EnchantmentSO	EnchantInvestment	Investment
 f7601d2a-89d5-4ffa-b81b-b30ac3551e73	AttributeSO	PersistenceNewChallenges	New Challenges
+f7a2991e-b23a-4aa4-a3f3-4d3ee7f6f227	ResearchSO	ProlongedRituals	Prolonged Rituals
 f7a66540-cc47-4396-b673-e2ffa5f8304f	StructureSO	HexsteelPlating	Hexsteel Plating
 f7b30e77-b0f2-4678-a433-04aa4fee0941	AlchemyRecipeSO	ChannelSpark	Channel Spark
 f8000ef4-69f2-4ea6-bf24-a3de6128e310	AlchemyRecipeSO	BrewExperienceElixir	Brew Experience Elixir

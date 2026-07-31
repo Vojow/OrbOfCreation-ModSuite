@@ -49,7 +49,9 @@ A runtime test should wait until game initialization has populated `RuntimeLooku
 
 ## Mapping identity rules
 
-The current mapping contains 2,792 rows and 2,792 unique UUIDs across 141 managed types. It contains only 2,751 unique internal names: 39 labels are reused, covering 80 rows.
+The current mapping contains 2,818 rows and 2,818 unique UUIDs across 141 managed types. It contains
+only 2,777 unique internal names: 39 labels are reused, covering 80 rows. The current serialized scan
+and its catalog delta are documented in the [progression mind map](progression-map.md).
 
 Examples include `SpellDuration` across `DoubleVariable`, `ModifierListVariable`, and `ScalingWeightSO`, and `WorkshopStructures` across `StructureListVariable`, `StructureTypeSO`, and `ViewSO`.
 

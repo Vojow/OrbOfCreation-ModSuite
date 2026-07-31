@@ -25,7 +25,11 @@ The audited hashes and active runtime-resolved member contracts are mirrored in 
 
 ## Mind-map result
 
-The high-level map for the audited baseline is:
+The architecture-level map for the audited baseline is below. The serialized assets have now also
+been scanned to produce the reviewed [progression mind map](progression-map.md): 2,818 entities,
+19,077 exact entity references, 1,804 non-empty requirement containers, and 41 reusable prerequisite
+links. The exhaustive machine-readable extraction is reproducible with the checked-in tools but is
+intentionally not committed.
 
 ```mermaid
 flowchart TD

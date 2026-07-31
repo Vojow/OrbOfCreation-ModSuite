@@ -2,10 +2,14 @@
 .analysis/
 artifacts/
 traces/
+data/progression-graph.json
+docs/reverse-engineering/progression-atlas.md
 
 # .NET build output
 bin/
 obj/
+__pycache__/
+*.py[cod]
 bin-stubs/
 obj-stubs/
 bin-profile/

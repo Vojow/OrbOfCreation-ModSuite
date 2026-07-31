@@ -2,7 +2,9 @@
 
 [Back to documentation](../README.md)
 
-These notes describe the managed-code architecture of the installed Orb of Creation build. The current main assembly was re-audited on 2026-07-13; see the [reverse-engineering audit](audit.md) for hashes, corrections, and confidence boundaries.
+These notes describe the managed-code and serialized-asset architecture of the installed Orb of
+Creation build. The current Windows main assembly and asset set were re-audited on 2026-07-29; see
+the [reverse-engineering audit](audit.md) for hashes, corrections, and confidence boundaries.
 
 ## Examined build
 
@@ -20,16 +22,17 @@ The findings come from assembly metadata and selected IL method bodies read with
 1. [Architecture](architecture.md)
 2. [Identity and registries](identity-and-registries.md)
 3. [Entity catalog and taxonomy](entity-catalog.md)
-4. [Entity correlations](entity-correlations.md)
-5. [In-game vocabulary](in-game-vocabulary.md) — what players call each managed type;
+4. [Progression mind map](progression-map.md) — milestone branches and unlock topology.
+5. [Entity correlations](entity-correlations.md)
+6. [In-game vocabulary](in-game-vocabulary.md) — what players call each managed type;
    `StructureSO` is shown on screen as "Attribute".
-6. [Evidence strength](evidence-strength.md)
-7. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
-8. [Resources and large numbers](resources-and-bigdouble.md)
-9. [Economy mechanics](economy-mechanics.md)
-10. [Save system](save-system.md)
-11. [Modding hooks](modding-hooks.md)
-12. [Reverse-engineering audit](audit.md)
+7. [Evidence strength](evidence-strength.md)
+8. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
+9. [Resources and large numbers](resources-and-bigdouble.md)
+10. [Economy mechanics](economy-mechanics.md)
+11. [Save system](save-system.md)
+12. [Modding hooks](modding-hooks.md)
+13. [Reverse-engineering audit](audit.md)
 
 ## Auto Buy dossier
 

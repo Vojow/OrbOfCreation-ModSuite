@@ -29,6 +29,7 @@ Choose the path that matches what you are trying to do.
 - [Examined build and reading order](reverse-engineering/README.md)
 - [Architecture](reverse-engineering/architecture.md)
 - [Entity catalog](reverse-engineering/entity-catalog.md)
+- [Progression mind map](reverse-engineering/progression-map.md)
 - [Latest assembly audit](reverse-engineering/audit.md)
 
 Research pages distinguish **Verified**, **Inferred**, and **Candidate** findings. They document the supported installed-game baseline and do not include game binaries.

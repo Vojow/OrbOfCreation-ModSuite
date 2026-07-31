@@ -4,12 +4,19 @@
 
 ## Reading this map
 
-This page combines two evidence sources:
+This page combines three evidence sources:
 
 - **Mapped:** UUID, internal name, and runtime type from `entity-mappings.tsv`.
 - **Verified in code:** managed fields, registration methods, interfaces, and modifier accessors decompiled from the current assembly.
+- **Serialized-asset verified:** a read-only local scan found 19,077 exact entity-to-entity reference
+  paths, including type membership, recipes, costs, effects, and decoded requirements. The exhaustive
+  extraction is reproducible with `tools/extract-progression-graph.py` but is not committed.
 
-The code proves that a relationship can exist. Exact per-asset membership is serialized data and should be logged at runtime before a mod assumes coverage or exclusivity.
+The code proves that a relationship can exist; the graph proves which exact references were authored
+in the audited v1.0.5-2 assets. Runtime registration, active instances, current unlock state, and
+lifecycle-sensitive replacement still have to be observed in the running game before a mod assumes
+coverage or exclusivity. See the [progression mind map](progression-map.md) for the reviewed unlock
+topology.
 
 ## Common domain pattern
 
@@ -222,5 +229,9 @@ Use this order when exploring a system:
 5. Inspect contributing modifier records and stable modifier UUIDs.
 6. Observe related list variables for live instances and state.
 7. Use names only for logging and human-readable configuration.
+
+For a static dependency question, generate `progression-graph.json` locally and retain the serialized
+field path as evidence. For a live-state question, use the same UUID/type pair to find the runtime object
+and revalidate its native availability or registry membership on the Unity main thread.
 
 This approach supports Toolbox, Insights, Automata, and future modules without maintaining separate hard-coded relationship lists for each plugin.
