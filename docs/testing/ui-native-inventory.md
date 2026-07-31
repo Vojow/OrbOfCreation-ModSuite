@@ -34,11 +34,19 @@ Live census proved that these runtime list items exist while inactive and are no
 close. It also proved their real field population: owned `buttonImage`, populated `baseImage` and
 `activeImage`, and null `viewImage`. The named top-bar icon instances are direct children of
 `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`. Assembly IL establishes their exact
-startup point: `UIGenericPlainList.RegisterStart` calls `UIViewRadio.PostRegisterStart`, whose
-`Setup` renders the button children during Unity Start. The suite schedules its first capture from
-`Main` scene load across the first end-of-frame boundary, then uses the next update; bounded retry
-begins only if that attempt actually fails. Once present, inactive objects such as
-`ScreenAlchemy` remain valid sources.
+startup point. `GameManager.InitGame` records `startTime`; `GameManager.IsStillStarting` remains
+true while `Time.time - startTime < 0.3`. `UIRenderGroupElement.Update` waits for that predicate to
+clear, then calls its one-shot virtual `DelayedRegisterStart`. The `UIGenericPlainList` override
+calls `EnsureRendered`; `RenderChildren` instantiates each button, and
+`UIGenericItem.Setup`/`UIViewRadioButton.RenderContent` synchronously populate its `ViewSO` and
+`viewImage.sprite`. This is later than Unity Start and independent of fade completion, and the game
+publishes no event for it.
+
+The suite therefore starts a bounded readiness window after Main's first end-of-frame boundary. It
+checks the six required icon candidates at 100 ms cadence for at most two seconds. A zero or
+partial-zero set is still loading; duplicates, null icons, and structural mismatches are failures.
+All six ready icons release quick controls and Mods together in one suite Update. Once present,
+inactive objects such as `ScreenAlchemy` remain valid sources.
 
 The same IL establishes the interaction grammar. `UIViewRadio.PostSetupItem` wires each button to
 `SwapToView`; `ViewListVariable.SwapToView` writes the selected `ViewSO` active and every sibling

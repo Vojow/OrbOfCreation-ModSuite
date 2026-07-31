@@ -7,10 +7,11 @@
 Mod Config must project supported configuration without changing serialized
 meaning, preserve staged edits and scroll/navigation state, isolate plugin and
 subscriber failures, display saved configuration separately from runtime
-health, and select like a native tab. Its first install is triggered after the native top-tab Start
-boundary; retry startup remains bounded for genuine failures. Once the supported game baseline has
-created its UI objects, a missing audited shape is a surfaced suite failure rather than a request
-for alternate chrome.
+health, and select like a native tab. Its first install is admitted by one shared readiness gate
+after the native delayed-list renderer has populated every required top-bar icon. A short bounded
+startup lane distinguishes zero-count loading from genuine failure. Once the supported game
+baseline has created its UI objects, a missing audited shape is a surfaced suite failure rather
+than a request for alternate chrome.
 
 ## Test ownership
 
@@ -58,9 +59,12 @@ installation, recovery, or layout work changes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
 - Selecting Mods requests open state whether it was inactive or already active. Only selecting a
   native sibling closes it, and MCP tab selection invokes that same button path.
-- Elapsed seconds alone cannot authorize the first Mods install. The first attempt becomes eligible
-  at the end-of-frame boundary after `Main` scene load, when the native `UIViewRadio` Start path has
-  generated its children; only a failed attempt enters the five-second retry cadence.
+- After the first `Main` end-of-frame boundary, one shared gate inspects all six required direct
+  top-bar icon candidates at most every 100 ms for at most two seconds. Zero or partial-zero counts
+  stay on that bounded startup lane without incrementing either surface's failure state. Once all
+  six populated icons exist, quick controls and Mods are admitted in the same Update. Duplicates,
+  null icons, type/field mismatches, and absence after the window enter the existing five-second,
+  terminal-after-three failure path immediately.
 - Native-skinned panel frames remain raycast targets. Wheel delivery is continuous across the
   settings viewport, including row gutters, runtime-card text, and blank padding; the open feature
   drawer also blocks wheel input across its padding and grid gaps rather than passing it to native UI.
@@ -83,10 +87,11 @@ installation, recovery, or layout work changes.
   while open/closed uses different frames and glyphs.
 - Feature quick controls cannot retain or construct a text-rendering path or clone a native toggle.
   Suite-created UI nodes explicitly request `RectTransform`; a plain `GameObject` remains a
-  `Transform` in the portable stub just as its installed Unity contract declares. Both UI surfaces
-  log the first failed attempt as retrying on their shared cadence. The third consecutive failure
-  publishes a Runtime failure and an error log naming the exact member/check and
-  expected-versus-actual types where applicable.
+  `Transform` in the portable stub just as its installed Unity contract declares. Startup
+  zero-count observations are not failures and produce no per-surface retry tick. Both UI surfaces
+  log their first genuine failed attempt as retrying on the five-second cadence. The third
+  consecutive genuine failure publishes a Runtime failure and an error log naming the exact
+  member/check and expected-versus-actual types where applicable.
 
 ## Runtime handoff
 

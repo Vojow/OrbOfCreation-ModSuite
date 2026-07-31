@@ -7,7 +7,8 @@ internal readonly record struct UiInstallationRetryObservation(
 
 /// <summary>
 /// Shared retry-reporting discipline for the Mods rail and quick-controls surface.
-/// Capture cadence remains owned by the plugin's single UI retry interval.
+/// The bounded zero-count startup gate precedes this state; only genuine or post-window failures
+/// enter the plugin-owned five-second cadence and count toward terminal status.
 /// </summary>
 internal sealed class UiInstallationRetryState
 {

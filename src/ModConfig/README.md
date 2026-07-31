@@ -40,13 +40,18 @@ Runtime. There is no cloned native toggle, text quick-control, or alternate shel
 [native UI inventory](../../docs/testing/ui-native-inventory.md).
 
 Suite-owned UI objects request `RectTransform` explicitly from the native
-`GameObject(string, Type[])` constructor. Both the quick-control surface and Mods rail use the same
-five-second retry cadence and three-attempt waiting-to-terminal diagnostic policy; the first
-failure logs that installation will retry, and type failures name the member plus expected and
-actual managed types. The Mods rail's first attempt is not a retry tick: `Main` scene load schedules
-it across one end-of-frame boundary, after the native `UIViewRadio` Start path has generated the
-top tabs. Normal appearance is therefore the next update after the native tabs; five seconds is
-used only after a real capture or construction failure.
+`GameObject(string, Type[])` constructor. Quick controls and Mods share one startup-readiness gate.
+After Main's first end-of-frame boundary it checks the six required direct top-bar icon candidates
+at 100 ms cadence for at most two seconds. The game's own delayed list renderer creates and
+populates those entries only after `GameManager.IsStillStarting()` clears, not during Start. Zero or
+partial-zero counts remain startup waiting and do not increment either failure state. All six
+populated icons admit both suite surfaces in the same Update, so normal appearance is within
+100 ms of native icon readiness.
+
+Duplicates, null icons, wrong fields/types, or continued absence after that bounded window bypass
+the startup lane. Each surface then retains the same five-second retry cadence and three-attempt
+waiting-to-terminal diagnostic policy; the first genuine failure logs that installation will
+retry, and type failures name the member plus expected and actual managed types.
 
 The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.

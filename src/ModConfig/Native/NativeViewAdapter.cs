@@ -153,6 +153,65 @@ internal static class NativeViewAdapter
         }
     }
 
+    internal static NativeUiStartupReadinessObservation ObserveTopBarStartupReadiness()
+    {
+        try
+        {
+            var viewButtonType = Type.GetType("UIViewRadioButton, Assembly-CSharp", false);
+            if (viewButtonType is null)
+                return new NativeUiStartupReadinessObservation(
+                    NativeUiStartupReadinessKind.Mismatch,
+                    "native view-radio type unavailable");
+
+            var topBarCandidates = Resources.FindObjectsOfTypeAll(viewButtonType)
+                .OfType<Component>()
+                .Where(component => IsAuditedTopBarPath(NativeObjectPath.Build(component)))
+                .OrderBy(component => NativeObjectPath.Build(component), StringComparer.Ordinal)
+                .ToArray();
+            var facts = new List<NativeTopBarCandidateFact>(
+                NativeTopBarReadinessPolicy.RequiredItemNames.Count);
+            var missing = new List<string>();
+            var mismatches = new List<string>();
+            foreach (var itemName in NativeTopBarReadinessPolicy.RequiredItemNames)
+            {
+                var matches = topBarCandidates
+                    .Where(candidate => string.Equals(
+                        ReadNativeItemName(candidate),
+                        itemName,
+                        StringComparison.Ordinal))
+                    .ToArray();
+                var hasIcon = matches.Length == 1 &&
+                              (GetButtonContract(matches[0].GetType())
+                                  .ViewImageField?.GetValue(matches[0]) as Image)?.sprite is not null;
+                facts.Add(new NativeTopBarCandidateFact(itemName, matches.Length, hasIcon));
+                if (matches.Length == 0)
+                    missing.Add(itemName);
+                else if (matches.Length != 1)
+                    mismatches.Add(
+                        $"{itemName}: expected one top-bar candidate, found {matches.Length}");
+                else if (!hasIcon)
+                    mismatches.Add($"{itemName}: viewImage sprite is null");
+            }
+
+            var kind = NativeTopBarReadinessPolicy.Classify(facts);
+            var reason = kind switch
+            {
+                NativeUiStartupReadinessKind.Ready => string.Empty,
+                NativeUiStartupReadinessKind.NotYetPresent =>
+                    "required top-bar candidates are not yet present: " +
+                    string.Join(", ", missing),
+                _ => string.Join("; ", mismatches),
+            };
+            return new NativeUiStartupReadinessObservation(kind, reason);
+        }
+        catch (Exception ex)
+        {
+            return new NativeUiStartupReadinessObservation(
+                NativeUiStartupReadinessKind.Mismatch,
+                DescribeCaptureException("UIViewRadioButton top-bar readiness capture", ex));
+        }
+    }
+
     public static bool TryCaptureNamedTopBarIcon(
         string itemName,
         out Sprite? icon,

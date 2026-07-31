@@ -2,6 +2,7 @@ using OrbModConfig;
 using OrbModding.Common;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Xunit;
@@ -18,12 +19,97 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
-    public void FirstInstallationWaitsForNativeStartBoundaryRatherThanElapsedSeconds()
+    public void ZeroCandidatesDuringStartupRetryFastAndAdmitBothWhenReady()
     {
-        Assert.False(ModConfigFirstInstallationPolicy.CanAttempt(
-            nativeUiStartBoundaryReached: false));
-        Assert.True(ModConfigFirstInstallationPolicy.CanAttempt(
-            nativeUiStartBoundaryReached: true));
+        var missing = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 0, HasIcon: false))
+            .ToArray();
+        var ready = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 1, HasIcon: true))
+            .ToArray();
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        Assert.True(gate.ShouldInspect(0f));
+        Assert.Equal(
+            NativeUiStartupReadinessKind.NotYetPresent,
+            NativeTopBarReadinessPolicy.Classify(missing));
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.False(waiting.QuickControls);
+        Assert.False(waiting.ModsRail);
+        Assert.False(gate.ShouldInspect(0.05f));
+        Assert.True(gate.ShouldInspect(0.05f));
+
+        Assert.Equal(
+            NativeUiStartupReadinessKind.Ready,
+            NativeTopBarReadinessPolicy.Classify(ready));
+        var admitted = gate.Observe(NativeUiStartupReadinessKind.Ready);
+        Assert.True(admitted.QuickControls);
+        Assert.True(admitted.ModsRail);
+        Assert.False(admitted.UsesSlowFailureCadence);
+    }
+
+    [Fact]
+    public void GenuineCaptureMismatchUsesSlowTerminalPathImmediately()
+    {
+        var candidates = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 1, HasIcon: true))
+            .ToArray();
+        candidates[2] = candidates[2] with { MatchCount = 2 };
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        Assert.Equal(
+            NativeUiStartupReadinessKind.Mismatch,
+            NativeTopBarReadinessPolicy.Classify(candidates));
+        var admission = gate.Observe(NativeUiStartupReadinessKind.Mismatch);
+        Assert.True(admission.QuickControls);
+        Assert.True(admission.ModsRail);
+        Assert.True(admission.UsesSlowFailureCadence);
+
+        var quickControls = new UiInstallationRetryState();
+        var modsRail = new UiInstallationRetryState();
+        for (var attempt = 1; attempt < UiInstallationRetryState.TerminalAttempt; attempt++)
+        {
+            Assert.False(quickControls.ObserveFailure().IsTerminal);
+            Assert.False(modsRail.ObserveFailure().IsTerminal);
+        }
+        Assert.True(quickControls.ObserveFailure().IsTerminal);
+        Assert.True(modsRail.ObserveFailure().IsTerminal);
+    }
+
+    [Fact]
+    public void SharedReadinessGateNeverAdmitsOnlyOneSurface()
+    {
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.Equal(waiting.QuickControls, waiting.ModsRail);
+
+        gate.Reset();
+        gate.Begin();
+        var ready = gate.Observe(NativeUiStartupReadinessKind.Ready);
+        Assert.Equal(ready.QuickControls, ready.ModsRail);
+
+        gate.Reset();
+        gate.Begin();
+        var mismatch = gate.Observe(NativeUiStartupReadinessKind.Mismatch);
+        Assert.Equal(mismatch.QuickControls, mismatch.ModsRail);
+    }
+
+    [Fact]
+    public void StartupFastLaneExpiresIntoTheSlowFailurePath()
+    {
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+        Assert.True(gate.ShouldInspect(UiStartupReadinessGate.StartupWindowSeconds));
+
+        var admission = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+
+        Assert.True(admission.QuickControls);
+        Assert.True(admission.ModsRail);
+        Assert.True(admission.UsesSlowFailureCadence);
     }
 
     [Fact]

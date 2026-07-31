@@ -132,8 +132,8 @@ public sealed class Plugin : BaseUnityPlugin
     private readonly UiInstallationRetryState _modsUiRetry = new();
     private bool _uiMaintenanceDue;
     private bool _uiIntegrityDue;
-    private bool _nativeUiStartBoundaryReached;
-    private bool _nativeUiStartBoundaryScheduled;
+    private bool _uiStartupReadinessScheduled;
+    private readonly UiStartupReadinessGate _uiStartupReadiness = new();
     private int _uiSceneEpoch;
     private int _deferInstallUntilFrame;
     private ModConfigUiShell? _uiShell;
@@ -561,7 +561,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork = new ModConfigFrameWork(() => Time.frameCount);
         var activeScene = SceneManager.GetActiveScene();
         ResetSceneState(activeScene);
-        if (activeScene.name == "Main") ScheduleFirstUiInstallation(activeScene);
+        if (activeScene.name == "Main") ScheduleUiStartupReadiness(activeScene);
     }
 
     private void Update()
@@ -605,6 +605,7 @@ public sealed class Plugin : BaseUnityPlugin
         DrainGameMcpCommands();
 #endif
         UpdateMentor();
+        UpdateUiStartupReadiness(Time.unscaledDeltaTime);
         UpdateQuickControls(Time.unscaledDeltaTime);
         UpdateModConfig();
 #if SERVICE_CYCLE_PROFILE
@@ -847,7 +848,7 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
-        if (!ModConfigFirstInstallationPolicy.CanAttempt(_nativeUiStartBoundaryReached))
+        if (!_uiStartupReadiness.Admission.ModsRail)
         {
             _uiWork?.SetState(true, false);
             return;
@@ -983,6 +984,8 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
+        if (!_uiStartupReadiness.Admission.QuickControls) return;
+
         _quickControlsUiRetrySeconds -= Math.Max(0f, unscaledDeltaTime);
         if (_quickControlsUiRetrySeconds > 0f) return;
         _quickControlsUiRetrySeconds = UiRetryIntervalSeconds;
@@ -1050,6 +1053,23 @@ public sealed class Plugin : BaseUnityPlugin
         _quickControlsRetry.Reset();
     }
 
+    private void UpdateUiStartupReadiness(float unscaledDeltaTime)
+    {
+        if (SceneManager.GetActiveScene().name != "Main" ||
+            !_uiStartupReadiness.ShouldInspect(unscaledDeltaTime))
+            return;
+        var readiness = NativeViewAdapter.ObserveTopBarStartupReadiness();
+        var before = _uiStartupReadiness.Admission;
+        var after = _uiStartupReadiness.Observe(readiness.Kind);
+        if (before == after || !after.QuickControls || !after.ModsRail) return;
+        // One gate releases both suite surfaces in the same Update. Ready means the six shared
+        // icon candidates exist; slow-failure admission means the startup grace ended or a real
+        // structural mismatch must enter the ordinary five-second/terminal discipline now.
+        _quickControlsUiRetrySeconds = 0f;
+        _uiRetrySeconds = 0f;
+        _uiMaintenanceDue = true;
+    }
+
     private void OnEmergencyStopChanged(bool stopped)
     {
         CancelPreparedAutomationForOwnershipRelease();
@@ -1065,35 +1085,33 @@ public sealed class Plugin : BaseUnityPlugin
     {
         ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
-        if (next.name == "Main") ScheduleFirstUiInstallation(next);
+        if (next.name == "Main") ScheduleUiStartupReadiness(next);
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (scene.name == "Main") ScheduleFirstUiInstallation(scene);
+        if (scene.name == "Main") ScheduleUiStartupReadiness(scene);
     }
 
-    private void ScheduleFirstUiInstallation(Scene scene)
+    private void ScheduleUiStartupReadiness(Scene scene)
     {
-        if (_nativeUiStartBoundaryScheduled) return;
-        _nativeUiStartBoundaryScheduled = true;
+        if (_uiStartupReadinessScheduled) return;
+        _uiStartupReadinessScheduled = true;
         var sceneEpoch = _uiSceneEpoch;
-        StartCoroutine(ObserveNativeUiStartBoundary(scene, sceneEpoch));
+        StartCoroutine(ObserveUiStartupReadinessBoundary(scene, sceneEpoch));
     }
 
-    private IEnumerator ObserveNativeUiStartBoundary(Scene scene, int sceneEpoch)
+    private IEnumerator ObserveUiStartupReadinessBoundary(Scene scene, int sceneEpoch)
     {
-        // UIViewRadio creates the native top tabs from its Unity Start path. sceneLoaded runs
-        // before Start, so the first end-of-frame boundary is the earliest point at which the
-        // complete native rail can be captured without polling for its children.
+        // Scene load precedes the native UI lifecycle. Start the bounded shared-readiness window
+        // after the first frame; UIViewRadio's icon entries are actually instantiated later by
+        // UIGenericPlainList.DelayedRegisterStart once GameManager's startup predicate clears.
         yield return new WaitForEndOfFrame();
         if (sceneEpoch != _uiSceneEpoch ||
             scene.name != "Main" ||
             SceneManager.GetActiveScene().name != "Main")
             yield break;
-        _nativeUiStartBoundaryReached = true;
-        _uiRetrySeconds = 0f;
-        _uiMaintenanceDue = true;
+        _uiStartupReadiness.Begin();
     }
 
     private void OnLifecycleTransition(GameLifecycleTransition transition)
@@ -2271,8 +2289,8 @@ public sealed class Plugin : BaseUnityPlugin
     private void ResetSceneState(Scene scene)
     {
         _uiSceneEpoch++;
-        _nativeUiStartBoundaryReached = false;
-        _nativeUiStartBoundaryScheduled = false;
+        _uiStartupReadinessScheduled = false;
+        _uiStartupReadiness.Reset();
         _uiRetrySeconds = 0f;
         _uiIntegritySeconds = 0f;
         _modsUiRetry.Reset();

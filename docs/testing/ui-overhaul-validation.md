@@ -27,8 +27,9 @@ icons.
 
 ## Native shell and responsive layout
 
-0. Enter Main and watch the first top-bar render. Confirm Mods appears on the next update after the
-   native tabs, with no player-visible two- or seven-second delay.
+0. Enter Main and watch the progressive top-bar render. Confirm quick controls and Mods appear
+   together no more than 100 ms after all six native icon tabs are present, with no five-second
+   quantization or staggered pop-in.
 1. Open Mods from each unlocked top-level native view. Click the active Mods tab again and confirm
    it stays open. Confirm Mods remains last and selecting Magic, Scholar, or Time closes Mods and
    selects that native view.
