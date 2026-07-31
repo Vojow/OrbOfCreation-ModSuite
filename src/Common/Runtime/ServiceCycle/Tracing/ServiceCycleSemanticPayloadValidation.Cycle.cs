@@ -35,7 +35,8 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             case ServiceCycleSemanticEventKind.CaptureUnavailable:
                 Require(IsDecisionCode(payload.Code, CommonServiceDecisionCodes.CaptureUnavailable.Value) &&
                     payload.ActionCount == 0 && payload.Strategy == 0 && payload.TryGetReturnedWake(out var captureWake) &&
-                    captureWake.Kind is WakePolicyKind.AfterDecision or WakePolicyKind.At, nameof(payload));
+                    captureWake.Kind is WakePolicyKind.AfterDecision or WakePolicyKind.At or
+                        WakePolicyKind.OnPublication, nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.CaptureFaulted:
                 Require(IsActionCode(payload.Code, CommonActionResultCodes.AdapterFault.Value) &&

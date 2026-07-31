@@ -34,7 +34,8 @@ internal static class SpellLevelFeatureStatusProjector
         bool emergencyDisabled,
         bool owned,
         bool cycleObserved,
-        AutoSpellLevelCapability capability)
+        AutoSpellLevelCapability capability,
+        string? waitingReason = null)
     {
         if (emergencyDisabled)
         {
@@ -69,6 +70,16 @@ internal static class SpellLevelFeatureStatusProjector
                 FeatureStatusState.NotReady,
                 FeatureStatusReasonCode.RegistryNotReady,
                 "Spell leveling is waiting for its first evaluation.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(waitingReason))
+        {
+            var summary = "Spell leveling is waiting: " + waitingReason.Trim();
+            if (!summary.EndsWith(".", System.StringComparison.Ordinal)) summary += ".";
+            return new SpellLevelFeatureStatus(
+                FeatureStatusState.NotReady,
+                FeatureStatusReasonCode.GameplayNotReady,
+                summary);
         }
 
         return new SpellLevelFeatureStatus(

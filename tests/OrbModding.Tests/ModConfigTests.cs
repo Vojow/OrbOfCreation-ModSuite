@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Configuration;
 using OrbAutomata;
 using OrbModConfig;
 using OrbModding.Common;
 using OrbMentor;
+using TMPro;
 using UnityEngine;
 using Xunit;
 
@@ -174,41 +176,52 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Items", "Auto Scribe", "Advanced" },
             mod.Sections.Select(section => section.Name));
         Assert.DoesNotContain(mod.Sections, section => section.Name == "Research" || section.Name == "ActiveMode");
         Assert.Equal(
-            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "BatchSizingMode" },
+            new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "LeaveQueueSlots" },
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(7).Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "EvaluationIntervalSeconds", "StartResourcePercent", "ManualPauseSeconds" },
+            new[] { "Mode", "FullCharge", "ToggleShortcut", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "PerConceptQuantityCap", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio", "AllowedUuids", "BlockedUuids" },
+            new[] { "Mode", "SlotManagementMode", "TrainingPeriodSeconds", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees", "EvaluationIntervalSeconds" },
+            new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "UseScrolls", "UseRelics", "TemporaryItemAllowlist" },
+            mod.Sections.Single(section => section.Name == "Auto Items").Settings.Select(setting => setting.Key));
+        Assert.Equal(
+            new[] { "Mode", "Roles" },
+            mod.Sections.Single(section => section.Name == "Auto Scribe").Settings.Select(setting => setting.Key));
         Assert.DoesNotContain(
             mod.Sections.SelectMany(section => section.Settings),
             setting => setting.Key.Contains("RuntimeProbe", StringComparison.Ordinal) ||
                        setting.Key.Contains("PurchaseLimitPerSession", StringComparison.Ordinal));
-        Assert.Contains(
-            mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key == "PurchaseGrouping");
         Assert.DoesNotContain(
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings,
-            setting => setting.Key is "RespectActionMultiplier" or "RepeatWhileAffordable" or "StructureRepeatMode");
+            setting => setting.Key is "PurchaseGrouping" or "FixedGroupSize" or
+                "BatchSizingMode" or "MaxPurchasesPerBatch" or
+                "PrioritizeCostAndQualityStructures" or "AllowedUuids" or "BlockedUuids");
 
         Assert.Contains(mod.Sections.SelectMany(section => section.Settings), setting => setting.SourceSection == "General" && setting.Key == "Enabled");
         Assert.Contains(mod.Sections.Single(section => section.Name == "General").Settings, setting => setting.Key == "EmergencyDisable");
-        Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "FallbackEvaluationIntervalSeconds");
+        Assert.DoesNotContain(
+            mod.Sections.SelectMany(section => section.Settings),
+            setting => setting.Key is "EvaluationIntervalSeconds" or
+                "FallbackEvaluationIntervalSeconds" or "PerConceptQuantityCap");
         Assert.Contains(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "AllowUnverifiedGameBuild");
         Assert.DoesNotContain(mod.Sections.Single(section => section.Name == "Advanced").Settings, setting => setting.Key == "EmergencyDisable");
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.Key == "AcceptedUnverifiedBuildFingerprint");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
-        Assert.True(ModSettingsPage.IsImmediateModeSetting(autoBuyMode));
+        Assert.True(ModSettingsPage.IsImmediateCommandSetting(autoBuyMode));
+        var emergencyDisable = mod.Sections.Single(section => section.Name == "General")
+            .Settings.Single(setting => setting.Key == "EmergencyDisable");
+        Assert.True(ModSettingsPage.IsImmediateCommandSetting(emergencyDisable));
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
         var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
@@ -224,12 +237,12 @@ public sealed class ModConfigTests
                 dependency.Section == "AutoBuy" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
             settings.Values.Where(setting => setting.SourceSection == "AutoCast" &&
-                setting.Key is not ("Mode" or "ToggleShortcut" or "ShowToggleButton")),
+                setting.Key is not ("Mode" or "ToggleShortcut")),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoCast" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
             settings.Values.Where(setting => setting.SourceSection == "AutoConcept" &&
-                setting.Key is not ("Mode" or "ShowToggleButton")),
+                setting.Key != "Mode"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoConcept" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
@@ -237,37 +250,29 @@ public sealed class ModConfigTests
                 setting.Key != "Mode"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoHarvest" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
+        Assert.All(
+            settings.Values.Where(setting => setting.SourceSection == "AutoItems" &&
+                setting.Key != "Mode"),
+            setting => Assert.Contains(setting.Dependencies, dependency =>
+                dependency.Section == "AutoItems" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
 
         Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
         Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));
-        Assert.True(session.DependencySatisfied(settings["AutoCast.ShowToggleButton"]));
         Assert.True(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
         session.Get(settings["AutoBuy.Mode"]).Stage("Disabled");
         Assert.False(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
         session.Get(settings["AutoBuy.Mode"]).Stage("Active");
         Assert.False(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
         Assert.False(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
-        Assert.True(session.DependencySatisfied(settings["AutoConcept.ShowToggleButton"]));
-        Assert.False(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
 
         session.Get(settings["AutoCast.Mode"]).Stage("Active");
         session.Get(settings["AutoConcept.Mode"]).Stage("Active");
         Assert.True(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
         Assert.True(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
-        Assert.True(session.DependencySatisfied(settings["AutoConcept.FallbackEvaluationIntervalSeconds"]));
-
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
-        session.Get(settings["AutoBuy.BatchSizingMode"]).Stage("Fixed");
-        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("Fixed");
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.MaxPurchasesPerBatch"]));
-        Assert.True(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
-        session.Get(settings["AutoBuy.PurchaseGrouping"]).Stage("ActionMultiplier");
-        Assert.False(session.DependencySatisfied(settings["AutoBuy.FixedGroupSize"]));
     }
 
     [Fact]
-    public void SuiteCatalogConsolidatesTheNineLegacyTabsIntoSevenRailPages()
+    public void SuiteCatalogConsolidatesLegacyTabsIntoNineFeaturePages()
     {
         var config = new ConfigFile();
         BepInExAutomataConfiguration.Bind(config);
@@ -280,13 +285,146 @@ public sealed class ModConfigTests
             .Mods.Single();
 
         Assert.Equal(
-            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Mentor", "Advanced" },
+            new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Items", "Auto Scribe", "Mentor", "Advanced" },
             mod.Sections.Select(section => section.Name));
-        Assert.Equal(8, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.Equal(10, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
         Assert.All(
-            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Mentor"),
-            section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
+            mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Items" or "Auto Scribe" or "Mentor"),
+            section => Assert.True(ModSettingsPage.IsImmediateCommandSetting(
                 section.Settings.Single(setting => setting.Key == "Mode"))));
+    }
+
+    [Fact]
+    public void GeneralEmergencyCommandUsesTheSameImmediateToggleInBothDirections()
+    {
+        var file = new ConfigFile();
+        var config = BepInExAutomataConfiguration.Bind(file);
+        var mentor = MentorConfig.Bind(file);
+        config.AttachMentor(mentor);
+        var store = new AutomataConfigurationStore(config, (_, _) => { });
+        using var statuses = new AutomataFeatureStatuses(
+            store.Current,
+            lifecycleGeneration: 1,
+            registry: new FeatureStatusRegistry(),
+            configurationGeneration: store.CurrentGeneration);
+        var registry = AutomationFeatureControlRegistry.Create(
+            store,
+            statuses,
+            new SpellLevelCapabilityState(),
+            mentor);
+        var emergency = new EmergencyStopControl(store, _ => { });
+        var commands = new ModConfigFeatureCommands(registry, emergency);
+
+        Assert.True(commands.TryGet(PluginIds.SuiteGuid, "General", out var command));
+        Assert.Equal("Stop all", command.Presentation.ButtonLabel);
+
+        command.Toggle();
+
+        Assert.True(store.Current.Safety.EmergencyDisable);
+        Assert.Equal("Resume all", command.Presentation.ButtonLabel);
+
+        command.Toggle();
+
+        Assert.False(store.Current.Safety.EmergencyDisable);
+        Assert.Equal("Stop all", command.Presentation.ButtonLabel);
+    }
+
+    [Fact]
+    public void ModsRailBuildsEveryRegisteredConsolidatedPageWithDistinctAuditedIconsWithoutAnEquippedSpell()
+    {
+        var config = new ConfigFile();
+        BepInExAutomataConfiguration.Bind(config);
+        MentorConfig.Bind(config);
+        var catalog = ConfigCatalog.Build(new[]
+        {
+            new ConfigPluginSource("suite", "Orb Of Creation ModSuite", "test", config),
+        });
+        var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
+        var prototypeObject = new GameObject(
+            "NativeRailPrototype",
+            typeof(RectTransform));
+        var prototype = prototypeObject.AddComponent<Behaviour>();
+        var inactive = new Sprite();
+        var active = new Sprite();
+        var primitives = new NativeFeatureRailVisualPrimitives(
+            prototype,
+            inactive,
+            active,
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite());
+        var parent = (RectTransform)new GameObject(
+            "RailParent",
+            typeof(RectTransform)).transform;
+        var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
+        var owned = new List<GameObject>();
+        var previousSpellManager = global::SpellManager.instance;
+        global::SpellManager.instance = new global::SpellManager();
+        try
+        {
+            Assert.Empty(global::SpellManager.instance.activeSpells.value);
+            Assert.True(
+                ModConfigNativeRailFactory.TryBuild(
+                    parent,
+                    pages.Select(page => page.Label).ToArray(),
+                    selected: 0,
+                    owned,
+                    template,
+                    primitives,
+                    _ => { },
+                    out var reason),
+                reason);
+            Assert.Equal(pages.Count, owned.Count);
+        }
+        finally
+        {
+            global::SpellManager.instance = previousSpellManager;
+            foreach (var item in owned) UnityEngine.Object.Destroy(item);
+            UnityEngine.Object.Destroy(template.gameObject);
+            UnityEngine.Object.Destroy(prototypeObject);
+            UnityEngine.Object.Destroy(parent.gameObject);
+        }
+    }
+
+    [Fact]
+    public void ModsRailRejectsAnyDuplicateRegisteredPageGlyph()
+    {
+        var prototypeObject = new GameObject(
+            "NativeRailPrototype",
+            typeof(RectTransform));
+        var prototype = prototypeObject.AddComponent<Behaviour>();
+        var duplicate = new Sprite();
+        var primitives = new NativeFeatureRailVisualPrimitives(
+            prototype,
+            new Sprite(),
+            new Sprite(),
+            duplicate,
+            duplicate,
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite());
+        var parent = (RectTransform)new GameObject(
+            "RailParent",
+            typeof(RectTransform)).transform;
+        var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
+        var owned = new List<GameObject>();
+
+        Assert.False(
+            ModConfigNativeRailFactory.TryBuild(
+                parent,
+                new[] { "Runtime", "General" },
+                selected: 0,
+                owned,
+                template,
+                primitives,
+                _ => { },
+                out var reason));
+        Assert.Empty(owned);
+        Assert.Contains("resolve the same sprite", reason);
     }
 
     [Fact]

@@ -645,12 +645,17 @@ fit" has no reading below none, so it is clamped.
 
 ## W37 — Auto Harvest decides from the snapshot
 
-**Live, with one superseded part.** Auto Harvest's facts come from the world snapshot through
+**Live, with two explicit action-boundary exceptions.** Auto Harvest's facts come from the world snapshot through
 `AutoHarvestWorldFacts`, a pure function of an immutable `GameWorldState`. The `ReadFacts` routine
 this entry described has gone entirely: what the action boundary genuinely cannot be handed — the
 live instance it submits into — is `ReadPrototype`, and the six live reads it took to re-ask the
 decision come off the snapshot (W54). One of those six reached `Prerequisites.Container.Check()` and
-*wrote*, so re-checking was mutating.
+*wrote*, so the broad fact re-read stayed deleted. The plot-action latch is now published as
+`NativeLatchedTrue`, `UnknownNeedsNativeValidation`, or `Unknown`; a false latch no longer claims that
+prerequisites failed. An otherwise-ready `UnknownNeedsNativeValidation` candidate reaches the
+GameAction, which resolves the exact current UUID/type/lifecycle binding and calls only the parameterless
+domain validator once before quantity mutation. Fresh false and unreadable returns are exact penalty-free
+refusals; true continues the existing admission and mutation path.
 
 **The split is between deciding and acting, not between old and new.** `ReadFacts` was on the capture
 port and the submission port at once and the two callers wanted different things; they moved apart
@@ -731,7 +736,7 @@ plots but not this pair. Collapsing the two would report a loading game when an 
 
 ## W42 — Authored effects become a world category, and the property travels as its name
 
-**Live.** `EntityEffects` publishes, per structure, what its purchase does to another entity's named
+**Historical; retired with the configurable structure-priority heuristic.** `EntityEffects` published, per structure, what its purchase does to another entity's named
 property: the two identities, the property's name, and what the modifier does to a value of one. It
 is a classification of the build's authored content, which is a fact about the game and therefore the
 snapshot's job; the ranking that reads it stays Automata policy (W43).
@@ -753,8 +758,9 @@ object is decided from whatever applies the effect, so the object it names is no
 
 ## W43 — Auto Buy classifies economic priority from the snapshot
 
-**Live.** `AutoBuyEconomicPriorityPolicy` reads the published `EntityEffects` rows for a candidate and
-decides which are worth preferring. The reflecting classifier and its tests are deleted.
+**Historical; retired.** Auto Buy now ranks by cost ratio and stable UUID. The configuration key,
+policy, world category, native reads, and tests for the structure-effect priority tier were deleted
+together.
 
 **Two paths became one rule per target kind, behaviour-preserving on this build.** The classifier
 asked different questions of a resource effect and an object effect; the table has one column for the
@@ -1217,8 +1223,11 @@ service's.
 reason to collect it, and this is that decision.
 
 **Why a call and not a comparison.** Every other mastery track publishes both halves and lets the
-worker subtract: `WorldAlchemyRecipe` carries `MasteryXp` and `CachedRequiredXp`, and readiness is
-arithmetic. A spell has no such pair. The threshold lives in a `masteryXpContainer` the snapshot does
+worker subtract: `WorldAlchemyRecipe` carries `MasteryXp` and `RequiredExperience`, read through
+`AlchemyRecipeSO.GetRequiredExperience()`, and readiness is arithmetic. The recipe accessor is the
+game's own pure read of the nested, lifecycle/setter-maintained `ExperienceContainer` cache; the
+orphan `AlchemyRecipeSO.cachedRequiredXp` field is not a source. A spell has no such pair. The
+threshold lives in a `masteryXpContainer` the snapshot does
 not publish and whose members are not in the manifest at all, so `MasteryXp` has nothing to be
 compared against. Publishing the composed boolean is not a shortcut around a number that exists; it is
 the only readable form of the fact.

@@ -77,6 +77,10 @@ public sealed class IntVariable
 public static class GlobalVariables
 {
     private static IntVariable multiBuy = IntVariable.Register(KnownVariableIds.MultiBuy);
+    private static readonly StructureTypeSO GlobalStructureType = new StructureTypeSO();
+    private static readonly AttributeSO CastingSpeedAttribute = new AttributeSO();
+    private static readonly AttributeSO HarvestSpeedAttribute = new AttributeSO();
+    private static readonly AttributeSO MasteryExperienceAttribute = new AttributeSO();
 
     // Registered in IntVariable.All under the uuid the game ships, because world collection finds
     // these by identity in the registry rather than through the accessor beside them.
@@ -87,6 +91,10 @@ public static class GlobalVariables
     }
 
     public static IntVariable GetMultiBuy() => MultiBuy;
+    public static StructureTypeSO GetGlobalStructureType() => GlobalStructureType;
+    public static AttributeSO GetCastingSpeedAttr() => CastingSpeedAttribute;
+    public static AttributeSO GetHarvestSpeedAttr() => HarvestSpeedAttribute;
+    public static AttributeSO GetMasteryExpAttr() => MasteryExperienceAttribute;
 }
 
 public static class KnownVariableIds
@@ -276,6 +284,7 @@ public sealed class AlchemyTypeSO : IdScriptableObject
 public sealed class AlchemyRecipeSO : IdScriptableObject
 {
     public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
+    private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
 
     public AlchemyRecipeSO()
     {
@@ -318,7 +327,7 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public bool IsAvailable() => discovered;
     public int GetExperienceLevel() => masteryLevel;
     public BigDouble GetExperience() => masteryXp;
-    public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
+    public BigDouble GetRequiredExperience() => experienceContainer.GetRequiredExperience();
     public int GetMaxUsageSlots() => maxUsageSlots.GetValue().ToInt();
     public AlchemyTypeSO GetCoreType() => coreType;
     public string GetName() => name;
@@ -369,10 +378,17 @@ public class AbstractListVariable<T> : IdScriptableObject
 {
     public static List<AbstractListVariable<T>> All = new List<AbstractListVariable<T>>();
     public List<T> value = new List<T>();
+    public int Maximum = 4;
+    public int GetMax() => Maximum;
+    public List<T> ToList() => new List<T>(value);
 }
 
 public class GenericListVariable<T> : AbstractListVariable<T>
 {
+    public bool SuppressAdd;
+    public bool ThrowAfterAdd;
+    public int AddCalls;
+
     public int GetUsedSpots()
     {
         var used = 0;
@@ -384,7 +400,14 @@ public class GenericListVariable<T> : AbstractListVariable<T>
         return used;
     }
 
-    public bool HasEmptySpot() => GetUsedSpots() < value.Count;
+    public bool HasEmptySpot() => GetUsedSpots() < Maximum;
+
+    public void Add(T element)
+    {
+        AddCalls++;
+        if (!SuppressAdd) value.Add(element);
+        if (ThrowAfterAdd) throw new InvalidOperationException("injected failure after admission");
+    }
 
     protected virtual bool IsFilledElement(T element) => element is not null;
 }
@@ -476,10 +499,11 @@ public class UpgradeSO : IdScriptableObject
     }
 }
 
-public class StructureSO : UpgradeableObject
+public class StructureSO : UpgradeableObject, Targeting.ITargetable
 {
     public static List<StructureSO> All = new List<StructureSO>();
     public StructureTypeSO structureType = new StructureTypeSO();
+    public EnchantmentSO.EnchantTable enchantTable = new EnchantmentSO.EnchantTable();
 
     /// <summary>The standing effects the structure applies once built.</summary>
     public List<PersistentEffectDeprecated.Property> structureProperties =
@@ -488,6 +512,7 @@ public class StructureSO : UpgradeableObject
     public int queuedQuantity;
     public int quantity;
     public bool available = true;
+    public bool visible = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
 
@@ -535,6 +560,7 @@ public class StructureSO : UpgradeableObject
     public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
+    public bool IsVisible() => visible;
 
     // The game's own CanPurchase folds the price in alongside its other conditions, which is the
     // whole premise of reading those conditions apart when it refuses.
@@ -644,6 +670,7 @@ public class Spell
     public int CurrentCharges { get; set; }
     public int MaximumCharges { get; set; }
     public BigDouble CooldownRemaining { get; set; }
+    public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public ResourceCostList Cost { get; } = new ResourceCostList();
 
     public Spell()
@@ -658,6 +685,7 @@ public class Spell
     public SpellRecipeSO? get_reference() => reference;
 
     public string GetName() => DisplayName;
+    public UnityEngine.Sprite GetIcon() => Icon;
     public bool IsChanneled() => Channeled;
     public bool IsToggledSpell() => false;
     public bool IsEmpty() => false;
@@ -698,12 +726,14 @@ public class Prerequisites
 {
     /// <summary>
     /// Named as the game names it. `available` is a latch, not a question: Check() evaluates the
-    /// conditions and leaves it set once they pass, which is why the suite reads the field and never
-    /// calls Check().
+    /// conditions and leaves it set once they pass. Collection reads the latch; action boundaries
+    /// that require current native truth may call Check().
     /// </summary>
     public class Container
     {
         public bool available;
+        public bool NativeCheckResult { get; set; }
+        public int CheckCalls { get; private set; }
 
         /// <summary>
         /// The conditions themselves. The suite reads how many there are — none is what an
@@ -711,7 +741,13 @@ public class Prerequisites
         /// </summary>
         public List<object> prerequisites = new List<object>();
 
-        public bool Check() => available;
+        public bool Check()
+        {
+            CheckCalls++;
+            if (available) return true;
+            if (NativeCheckResult) available = true;
+            return available;
+        }
 
         /// <summary>
         /// The per-level overload, which takes the level being bought and neither stamps nor latches.
@@ -735,7 +771,7 @@ public class Prerequisites
 /// The base every entity an effect can point at derives from, modelled only as far as the reference
 /// edge reads it: the identity a published row carries instead of the object.
 /// </summary>
-public abstract class UpgradeableObject
+public abstract class UpgradeableObject : TooltipableObject
 {
     /// <summary>One effect's modification of one named property of one upgradeable object.</summary>
     /// <remarks>
@@ -751,9 +787,10 @@ public abstract class UpgradeableObject
         public bool useTargetRef;
     }
 
-    public string uuid = Guid.NewGuid().ToString();
+    public new string uuid = Guid.NewGuid().ToString();
 
-    public Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetGuid() => Guid.Parse(uuid);
+
 }
 
 /// <summary>
@@ -792,10 +829,30 @@ public class ResourceCostList
     // holdings go rather than reaching in and flipping a flag mid-call.
     public int AffordableLevels = int.MaxValue;
     public int PerformCalls { get; private set; }
-    public bool HasEnough() => affordable && AffordableLevels > 0;
+    public bool HasEnough()
+    {
+        if (!affordable || AffordableLevels <= 0) return false;
+        var totals = new Dictionary<ResourceSO, BigDouble>();
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var row = costs[index];
+            if (row.resource is null) return false;
+            totals.TryGetValue(row.resource, out var current);
+            totals[row.resource] = current + row.GetValue();
+        }
+        foreach (var pair in totals)
+            if (!pair.Key.HasAmount(pair.Value)) return false;
+        return true;
+    }
+    public List<ResourceTuple> GetEntries() => costs;
     public void PerformCost()
     {
         PerformCalls++;
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var row = costs[index];
+            row.resource?.Spend(row.GetValue());
+        }
         if (AffordableLevels is > 0 and < int.MaxValue) AffordableLevels--;
     }
 }
@@ -834,7 +891,7 @@ public class ResourceSO : UpgradeableObject
     // The per-type registry the game keeps for every entity category, and the traversal entry point
     // world collection uses. Tests populate it directly.
     public static List<ResourceSO> All = new List<ResourceSO>();
-    public string name = "Resource";
+    public new string name = "Resource";
     public BigDouble quantity = new BigDouble(1.0, 3);
     public BigDouble trueRate = new BigDouble(0.0, 0);
     public bool available = true;
@@ -924,6 +981,22 @@ public class ResourceSO : UpgradeableObject
     public bool IsAvailable() => available;
     public bool IsVisible() => visible;
     public bool IsBandwidthResource() => bandwidthResource;
+    public BigDouble GetMissing() => BigDouble.Max(maxQuantity.GetValue() - quantity, 0);
+    public bool HasAmount(BigDouble amount) =>
+        bandwidthResource ? GetMissing() >= amount : GetTrueQuantity() >= amount;
+    public void Spend(BigDouble amount)
+    {
+        if (bandwidthResource)
+        {
+            quantity += amount;
+            return;
+        }
+
+        var normalizedQuality = BigDouble.Normalize(
+            quality.GetValue().Mantissa,
+            quality.GetValue().Exponent - 2);
+        quantity -= amount / normalizedQuality;
+    }
     public BigDouble GetTrueAmount(BigDouble amount) => amount;
 }
 
@@ -1182,6 +1255,7 @@ public class SpellManager
     public static bool NativeCanCast { get; set; } = true;
     public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
     public SpellListVariable activeSpells = new SpellListVariable();
+    public int TryLevelAllCalls { get; private set; }
 
     public static bool CanCastASpell() => NativeCanCast;
 
@@ -1198,6 +1272,7 @@ public class SpellManager
 
     public void TryLevelAllSpells()
     {
+        TryLevelAllCalls++;
         foreach (var recipe in availableSpellRecipes.value)
         {
             while (recipe.IsDiscovered() && recipe.levelingPrerequisites.Check() &&
@@ -1271,7 +1346,7 @@ public sealed class ExperienceContainer
 {
     private BigDouble experience;
     private int currentLevel;
-    private BigDouble experiencePerLevel = new BigDouble(1, 100);
+    private BigDouble cachedRequiredXp = new BigDouble(1, 100);
     public List<BigDouble> Grants { get; } = new List<BigDouble>();
     public Action? AfterGainExperience { get; set; }
     public bool SuppressGain { get; set; }
@@ -1280,7 +1355,7 @@ public sealed class ExperienceContainer
     {
         currentLevel = level;
         experience = currentExperience;
-        experiencePerLevel = requiredPerLevel;
+        cachedRequiredXp = requiredPerLevel;
     }
 
     public void GainExperience(BigDouble amount)
@@ -1293,9 +1368,9 @@ public sealed class ExperienceContainer
     public int GetGainedLevels()
     {
         var gained = 0;
-        while (Compare(experience, experiencePerLevel) >= 0 && gained < 10000)
+        while (Compare(experience, cachedRequiredXp) >= 0 && gained < 10000)
         {
-            experience = Subtract(experience, experiencePerLevel);
+            experience = Subtract(experience, cachedRequiredXp);
             currentLevel++;
             gained++;
         }
@@ -1304,12 +1379,14 @@ public sealed class ExperienceContainer
 
     public BigDouble GetExperience() => experience;
 
+    public BigDouble GetRequiredExperience() => cachedRequiredXp;
+
     public int GetLevel() => currentLevel;
 
     public ExperienceContainer Clone()
     {
         var clone = new ExperienceContainer();
-        clone.SetState(currentLevel, experience, experiencePerLevel);
+        clone.SetState(currentLevel, experience, cachedRequiredXp);
         return clone;
     }
 
@@ -1345,15 +1422,37 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public List<AlchemyInstance> value = new List<AlchemyInstance>();
     public bool SuppressAddMutation { get; set; }
     public bool SuppressRemoveMutation { get; set; }
+    public bool ThrowOnCanAdd { get; set; }
+    public int TypelessSlots { get; set; } = 16;
+    public Dictionary<AlchemyTypeSO, int> TypeSlots { get; } =
+        new Dictionary<AlchemyTypeSO, int>();
 
     public bool CanAddInstance(AlchemyRecipeSO recipe)
     {
+        if (ThrowOnCanAdd) throw new InvalidOperationException("CanAddInstance failed");
         var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
         if (instance is not null && instance.queuedQuantity >= recipe.GetMaxUsageSlots()) return false;
-        return value.All(item =>
-            ReferenceEquals(item.reference, recipe) ||
-            Math.Max(item.quantity, item.queuedQuantity) == 0 ||
-            !string.Equals(item.reference.GetCoreType().uuid, recipe.GetCoreType().uuid, StringComparison.Ordinal));
+        if (instance is not null) return true;
+        return recipe.alchemyTypes.Any(type =>
+            GetNumEmptyTypelessSlots() + Math.Max(GetSlotsOnlyForType(type) - GetNumOfType(type), 0) > 0);
+    }
+
+    public int GetNumOfType(AlchemyTypeSO type) =>
+        value.Count(item =>
+            Math.Max(item.quantity, item.queuedQuantity) > 0 &&
+            item.reference.alchemyTypes.Contains(type));
+
+    public int GetSlotsOnlyForType(AlchemyTypeSO type) =>
+        TypeSlots.TryGetValue(type, out var slots) ? slots : 0;
+
+    public int GetNumEmptyTypelessSlots()
+    {
+        var totalSlots = TypelessSlots + TypeSlots.Values.Sum();
+        var emptySlots = Math.Max(0, totalSlots - value.Count(item =>
+            Math.Max(item.quantity, item.queuedQuantity) > 0));
+        var reservedTyped = TypeSlots.Sum(entry =>
+            Math.Max(entry.Value - GetNumOfType(entry.Key), 0));
+        return emptySlots - reservedTyped;
     }
 
     public void AddAlchemyInstances(AlchemyRecipeSO recipe, int delta)
@@ -1528,7 +1627,15 @@ public interface ITooltipable
     List<TooltipNode> GetAltTooltipNodes();
 }
 
-public class TooltipableObject : UnityEngine.ScriptableObject { }
+public class TooltipableObject : IdScriptableObject
+{
+    public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
+    public UnityEngine.Sprite GetIcon() => Icon;
+}
+
+public sealed class AttributeSO : TooltipableObject
+{
+}
 
 public class TooltipNode
 {
@@ -1542,7 +1649,13 @@ public class HoverTooltip : UnityEngine.MonoBehaviour
 {
     public ITooltipable? tooltipItem;
     public TooltipableObject? setupObject;
-    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null) { tooltipItem = item; }
+    private List<ITooltipable> subTooltips = new();
+    public void Setup(ITooltipable item, List<ITooltipable>? subTooltips = null)
+    {
+        tooltipItem = item;
+        this.subTooltips = subTooltips ?? new List<ITooltipable>();
+    }
+    public void OpenTooltip() { }
 }
 
 namespace BepInEx
@@ -2088,7 +2201,10 @@ namespace UnityEngine
 
         public static T Instantiate<T>(T original, Transform parent, bool worldPositionStays) where T : Object, new()
         {
-            var clone = new T();
+            var clone = original is GameObject originalGameObject &&
+                        originalGameObject.transform is RectTransform
+                ? (T)(Object)new GameObject(original.name, typeof(RectTransform))
+                : new T();
             if (clone is GameObject gameObject)
             {
                 gameObject.transform.SetParent(parent, worldPositionStays);
@@ -2124,6 +2240,20 @@ namespace UnityEngine
 
     public class MonoBehaviour : Behaviour
     {
+        public Coroutine StartCoroutine(IEnumerator routine) => new Coroutine(routine);
+    }
+
+    public sealed class Coroutine
+    {
+        public Coroutine(IEnumerator routine) => Routine = routine;
+        public IEnumerator Routine { get; }
+    }
+
+    public sealed class WaitForEndOfFrame { }
+
+    public class Texture2D : Object
+    {
+        public byte[] EncodeToPNG() => new byte[] { 137, 80, 78, 71 };
     }
 
     public class GameObject : Object
@@ -2138,7 +2268,9 @@ namespace UnityEngine
         public GameObject(string name, params Type[] components)
         {
             this.name = name;
-            transform = new RectTransform { gameObject = this, name = name };
+            transform = components.Contains(typeof(RectTransform))
+                ? new RectTransform { gameObject = this, name = name }
+                : new Transform { gameObject = this, name = name };
             transform.transform = transform;
             _components.Add(transform);
             foreach (var type in components.Where(type => type != typeof(RectTransform) && typeof(Component).IsAssignableFrom(type)))
@@ -2377,6 +2509,20 @@ namespace UnityEngine
         public static int frameCount { get; set; }
     }
 
+    public static class Application
+    {
+        public static string persistentDataPath { get; set; } = string.Empty;
+    }
+
+    public static class ScreenCapture
+    {
+        public static void CaptureScreenshot(string filename)
+        {
+        }
+
+        public static Texture2D CaptureScreenshotAsTexture() => new Texture2D();
+    }
+
     public static class Resources
     {
         public static Object[] FindObjectsOfTypeAll(Type type) => Array.Empty<Object>();
@@ -2420,7 +2566,7 @@ namespace UnityEngine.UI
     public class Graphic : UnityEngine.Behaviour
     {
         public UnityEngine.Color color { get; set; } = UnityEngine.Color.white;
-        public bool raycastTarget { get; set; }
+        public bool raycastTarget { get; set; } = true;
         public UnityEngine.RectTransform rectTransform =>
             (UnityEngine.RectTransform)transform;
 
@@ -2488,6 +2634,11 @@ namespace UnityEngine.UI
             public void RemoveListener(UnityEngine.Events.UnityAction listener) => _listeners.Remove(listener);
 
             public void RemoveAllListeners() => _listeners.Clear();
+
+            public void Invoke()
+            {
+                foreach (var listener in _listeners.ToArray()) listener();
+            }
         }
     }
 

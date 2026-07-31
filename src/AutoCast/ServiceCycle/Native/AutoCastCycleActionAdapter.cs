@@ -54,8 +54,23 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
         in AutoCastCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: true);
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoCastCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: false);
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in AutoCastCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy)
     {
-        if (!AutoCastConfigurationPolicy.IsOperational(config))
+        if (requireAutomationPolicy && !AutoCastConfigurationPolicy.IsOperational(config))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
 
         if (!Owns())

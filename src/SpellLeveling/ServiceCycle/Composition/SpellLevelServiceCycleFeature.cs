@@ -3,6 +3,7 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
@@ -33,9 +34,14 @@ internal sealed class SpellLevelServiceCycleFeature : IAutomataServiceCycleFeatu
         return new SpellLevelFeatureRuntime(
             _dependencies,
             adapters.Natives,
+            adapters.BoundaryStatus,
             registration,
             context.LifecycleValue,
-            context.ConfigurationGeneration);
+            context.ConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+            , adapters.Actions
+#endif
+            );
     }
 
 }
@@ -52,27 +58,40 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
 {
     private readonly SpellLevelFeatureDependencies _dependencies;
     private readonly SpellLevelNativeAdapter _natives;
+    private readonly SpellLevelBoundaryStatusState _boundaryStatus;
     private readonly ServiceRegistration<
         SpellLevelCycleState,
         SpellLevelCycleAction> _registration;
     private readonly long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+    private readonly SpellLevelCycleActionAdapter _actions;
+#endif
     private SpellLevelServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal SpellLevelFeatureRuntime(
         SpellLevelFeatureDependencies dependencies,
         SpellLevelNativeAdapter natives,
+        SpellLevelBoundaryStatusState boundaryStatus,
         ServiceRegistration<
             SpellLevelCycleState,
             SpellLevelCycleAction> registration,
         long lifecycleValue,
-        ConfigGeneration initialConfigurationGeneration)
+        ConfigGeneration initialConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+        , SpellLevelCycleActionAdapter actions
+#endif
+        )
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _natives = natives ?? throw new ArgumentNullException(nameof(natives));
+        _boundaryStatus = boundaryStatus ?? throw new ArgumentNullException(nameof(boundaryStatus));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+#endif
     }
 
     public void ActivateDiagnostics()
@@ -82,6 +101,7 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
             _initialConfigurationGeneration,
             _dependencies.OwnsActionFamily(),
             _dependencies.Capability,
+            _boundaryStatus,
             _natives,
             _dependencies.FeatureStatus);
     }
@@ -110,4 +130,12 @@ internal sealed class SpellLevelFeatureRuntime : IAutomataServiceCycleFeatureRun
         _registration.Dispose();
         _natives.Dispose();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in SpellLevelCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context) =>
+        _actions.TryExecuteGameMcp(in action, in config, in context);
+#endif
 }

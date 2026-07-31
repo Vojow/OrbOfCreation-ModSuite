@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using OrbAutomata;
 using Xunit;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.World;
@@ -116,7 +120,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         var world = collector.Build();
 
         Assert.True(report.IsComplete, report.Describe());
-        Assert.Equal(5, report.TotalSampled);
+        // Five primary entities plus two Scribe queues and eight complete zero-candidate
+        // Scroll-target evidence rows.
+        Assert.Equal(15, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -165,7 +171,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-four passes: the four categories
+        // The scope claim, asserted rather than described. Forty-five passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -183,7 +189,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "entity effects", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -268,6 +274,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "AutoConceptReliability")]
     public void ConceptRecipesInstancesAndDrainVectorsArePublishedTogether()
     {
         var resource = Guid.NewGuid();
@@ -276,6 +283,19 @@ public sealed class GameWorldCollectorTests : IDisposable
         {
             Identity = Guid.NewGuid(),
             coreType = coreType,
+            isCompletionRecipe = true,
+            isAdvancementRecipe = true,
+            completionTime = 16d,
+            recipeTime = new BigDouble(2d),
+            speed = new FakeModifierRecord(200d),
+            timeReqMod = new FakeModifierRecord(25d),
+            timeScalingMod = new FakeModifierRecord(80d),
+            cachedCompletionTime = new BigDouble(4d),
+            cachedRequiredXp = default,
+            experienceContainer = new FakeExperienceContainer
+            {
+                cachedRequiredXp = new BigDouble(12d),
+            },
             drainCost = new FakeSpellCostList().With(resource, 7d),
         };
         FakeAlchemyRecipe.All.Add(recipe);
@@ -303,8 +323,17 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(report.IsComplete, report.Describe());
         Assert.True(WorldConceptRecipeLookup.TryFind(world.ConceptRecipes, recipe.Identity, out var concept));
         Assert.Equal(coreType.Identity, concept.CoreTypeId);
+        Assert.True(concept.CanAddNow);
         Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var alchemyRecipe));
         Assert.Equal(coreType.Identity, alchemyRecipe.CoreTypeId);
+        Assert.Equal(16d, alchemyRecipe.CompletionTime);
+        Assert.Equal(2d, alchemyRecipe.RecipeTime.ToDouble());
+        Assert.Equal(200d, alchemyRecipe.Speed.ToDouble());
+        Assert.Equal(25d, alchemyRecipe.TimeReqMod.ToDouble());
+        Assert.Equal(80d, alchemyRecipe.TimeScalingMod.ToDouble());
+        Assert.Equal(4d, alchemyRecipe.CachedCompletionTime.ToDouble());
+        Assert.Equal(0d, recipe.cachedRequiredXp.ToDouble());
+        Assert.Equal(12d, alchemyRecipe.RequiredExperience.ToDouble());
 
         Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
         Assert.Equal(2, instance.Quantity);
@@ -331,6 +360,120 @@ public sealed class GameWorldCollectorTests : IDisposable
             out var currentCount));
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void ConceptRankingUsesTheNestedRequiredExperienceWhenTheOrphanAliasesAreDefault()
+    {
+        var alphaId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var betaId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var coreType = new FakeAlchemyType { Identity = Guid.NewGuid() };
+        var alpha = RankedRecipe(alphaId, coreType, masteryXp: 90d, requiredExperience: 100d);
+        var beta = RankedRecipe(betaId, coreType, masteryXp: 10d, requiredExperience: 100d);
+        FakeAlchemyRecipe.All.AddRange(new[] { alpha, beta });
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.AddRange(new[] { alpha, beta });
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] =
+            new FakeAlchemyInstanceList();
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.Equal(0d, alpha.cachedRequiredXp.ToDouble());
+        Assert.Equal(0d, beta.cachedRequiredXp.ToDouble());
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, alphaId, out var alphaRow));
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, betaId, out var betaRow));
+        Assert.Equal(100d, alphaRow.RequiredExperience.ToDouble());
+        Assert.Equal(100d, betaRow.RequiredExperience.ToDouble());
+
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoConcept = new AutoConceptConfiguration
+            {
+                Mode = AutoConceptOperationMode.Active,
+                SlotManagement = AutoConceptSlotManagementMode.RotateAll,
+                TrainingPeriodSeconds = 60,
+                MinimumDrainRatio = 0.25f,
+            },
+        };
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var actions = new ReusableActionStore<AutoConceptCycleAction>();
+        actions.BeginWrite();
+        var writer = new ServiceActionWriter<AutoConceptCycleAction>(actions);
+        var identity = new ServiceCycleIdentity(
+            new ServiceId("auto-concept"),
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            StrategyGeneration.Initial,
+            new WorldGeneration(1),
+            new CycleId(1));
+        var context = new ServiceCycleContext(
+            identity,
+            default,
+            new MonotonicTimestamp(1));
+
+        AutoConceptCycleEvaluator.Evaluate(
+            world,
+            in config,
+            in context,
+            ref state,
+            writer,
+            out _);
+
+        Assert.Equal(1, actions.Count);
+        Assert.Equal(betaId, actions.GetCurrent().RecipeId);
+    }
+
+    private static FakeAlchemyRecipe RankedRecipe(
+        Guid id,
+        FakeAlchemyType coreType,
+        double masteryXp,
+        double requiredExperience) =>
+        new()
+        {
+            Identity = id,
+            discovered = true,
+            coreType = coreType,
+            masteryXp = new BigDouble(masteryXp),
+            maxUsageSlots = new FakeModifierRecord(1d),
+            cachedRequiredXp = default,
+            experienceContainer = new FakeExperienceContainer
+            {
+                cachedRequiredXp = new BigDouble(requiredExperience),
+            },
+        };
+
+    [Fact]
+    public void AlchemyRecipeResolvesNativeUsageSentinelBeforeAutoConceptPlanning()
+    {
+        var coreType = new FakeAlchemyType
+        {
+            Identity = Guid.NewGuid(),
+            maxUsageByMastery = true,
+        };
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = coreType,
+            discovered = true,
+            masteryLevel = 4,
+            maxUsageSlots = new FakeModifierRecord(-1d),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var row));
+        Assert.Equal(-1d, recipe.maxUsageSlots.GetValue().ToDouble());
+        Assert.Equal(5d, row.ResolvedMaxUsageSlots.ToDouble());
     }
 
     [Fact]
@@ -829,8 +972,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRecord powerBuildRating = new(0d);
         public FakeCostList baseCost = new();
         public FakeModifierRef costPerQuantity = new();
-        public List<FakeEffectProperty> structureProperties = new();
         public FakePrerequisites prerequisitesPerLevel = new();
+        public FakeScribeEnchantTable enchantTable = new();
 
         public Guid GetGuid() => Identity;
 
@@ -1297,6 +1440,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             queuedQuantity = 2,
             gainedSince = 3,
             maxCreatedLv = 4,
+            maximumCarryLoad = 12,
             prepSpeed = new ValueModifierRecord(new BigDouble(150d)),
         });
 
@@ -1311,7 +1455,100 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(2, row.QueuedQuantity);
         Assert.Equal(3, row.GainedSince);
         Assert.Equal(4, row.MaxCreatedLevel);
+        Assert.Equal(12, row.MaximumCarryLoad);
         Assert.Equal(150d, row.Modifiers.PrepSpeed.ToDouble());
+    }
+
+    [Fact]
+    public void AConsumablePublishesEveryNativeFamilyCostUsageAndCount()
+    {
+        var item = Guid.NewGuid();
+        var extraFamily = Guid.NewGuid();
+        var toxicity = KnownEntities.PotionToxicity.Uuid;
+        var durationResource = Guid.NewGuid();
+        var consumable = new FakeConsumable { Identity = item, quantity = 1 };
+        consumable.consumableTypes.Add(
+            new FakeConsumableType { Identity = KnownEntities.ConsumableScrollType.Uuid });
+        consumable.consumableTypes.Add(new FakeConsumableType { Identity = extraFamily });
+        consumable.consumeCost.costs.Add(new FakeConsumableCost(toxicity, 2d));
+        consumable.usageCost.costs.Add(new FakeConsumableCost(durationResource, 3d));
+        var usage = new FakeConsumableUsage
+        {
+            baseSi = new FakeConsumableScalingInfo { Level = 7 },
+            en = true,
+            dr = new BigDouble(11d),
+            maxDr = new BigDouble(12d),
+        };
+        consumable.consumableUsages.Add(usage);
+        consumable.consumableCounts.Add(new FakeConsumableCount
+        {
+            Level = 7,
+            Quantity = 4,
+            fr = 3,
+        });
+        FakeConsumable.All.Add(consumable);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldConsumableTypeLookup.TryFindRange(
+            world.ConsumableTypes, item, out var typeStart, out var typeCount));
+        Assert.Equal(2, typeCount);
+        var publishedTypes = new HashSet<Guid>();
+        for (var index = 0; index < typeCount; index++)
+            publishedTypes.Add(world.ConsumableTypes[typeStart + index].TypeId);
+        Assert.Contains(KnownEntities.ConsumableScrollType.Uuid, publishedTypes);
+        Assert.Contains(extraFamily, publishedTypes);
+
+        Assert.True(WorldConsumableCostLookup.TryFindRange(
+            world.ConsumableCosts,
+            item,
+            WorldConsumableCostKind.Consume,
+            out var consumeStart,
+            out var consumeCount));
+        Assert.Equal(1, consumeCount);
+        Assert.Equal(toxicity, world.ConsumableCosts[consumeStart].ResourceId);
+        Assert.Equal(2d, world.ConsumableCosts[consumeStart].Amount.ToDouble());
+
+        Assert.True(WorldConsumableUsageLookup.TryFindRange(
+            world.ConsumableUsages, item, out var usageStart, out var usageCount));
+        Assert.Equal(1, usageCount);
+        Assert.Equal(usage.Identity, world.ConsumableUsages[usageStart].UsageId);
+        Assert.Equal(7, world.ConsumableUsages[usageStart].Level);
+        Assert.True(world.ConsumableUsages[usageStart].Engaged);
+
+        Assert.True(WorldConsumableCountLookup.TryFindRange(
+            world.ConsumableCounts, item, out var countStart, out var countCount));
+        Assert.Equal(1, countCount);
+        Assert.Equal(7, world.ConsumableCounts[countStart].Level);
+        Assert.Equal(4, world.ConsumableCounts[countStart].Quantity);
+        Assert.Equal(3, world.ConsumableCounts[countStart].FreeQuantity);
+    }
+
+    [Fact]
+    public void AnUnreadableConsumableRelationSkipsTheWholeItem()
+    {
+        var item = Guid.NewGuid();
+        FakeConsumable.All.Add(new FakeConsumable
+        {
+            Identity = item,
+            quantity = 1,
+            consumableTypes = null!,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.False(report.IsComplete);
+        Assert.Contains("type list was null", report.For("consumables").FirstFailure);
+        Assert.False(WorldLookup.TryFind(world.Consumables, item, out _));
+        Assert.Equal(0, world.ConsumableTypes.Count);
+        Assert.Equal(0, world.ConsumableCosts.Count);
+        Assert.Equal(0, world.ConsumableUsages.Count);
+        Assert.Equal(0, world.ConsumableCounts.Count);
     }
 
     /// <summary>
@@ -1336,6 +1573,11 @@ public sealed class GameWorldCollectorTests : IDisposable
         var water = Guid.NewGuid();
         var cauldron = Guid.NewGuid();
 
+        FakeCount.All.Add(new FakeCount
+        {
+            Identity = KnownEntities.BulkDevelopment.Uuid,
+            value = new FakeModifierRecord(3d),
+        });
         FakePlayerGlobals.SetStructureCost(200d);
         FakeResource.All.Add(new FakeResource
         {
@@ -1373,6 +1615,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         var row = world.PurchaseCosts[start];
         Assert.Equal(water, row.ResourceId);
         Assert.Equal(730.8d, row.Amount.ToDouble(), 6);
+        Assert.Equal(3, row.ExactGroupedLevels);
+        Assert.Equal(2208.6d, row.ExactGroupedAmount.ToDouble(), 6);
     }
 
     /// <summary>
@@ -2177,10 +2421,16 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(
             WorldPlotActionLookup.TryFind(world.PlotActions, node, confirmed.Identity, out var allowed));
         Assert.True(allowed.Reading.PrerequisitesConfirmed);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.NativeLatchedTrue,
+            allowed.Reading.PrerequisiteEvidence);
 
         Assert.True(
             WorldPlotActionLookup.TryFind(world.PlotActions, node, unconfirmed.Identity, out var blocked));
         Assert.False(blocked.Reading.PrerequisitesConfirmed);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            blocked.Reading.PrerequisiteEvidence);
     }
 
     /// <summary>
@@ -2719,319 +2969,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(WorldCategoryOutcome.Unavailable, queues.Outcome);
         Assert.Contains("ActionableListVariable", queues.FirstFailure, StringComparison.Ordinal);
         Assert.Equal(WorldCategoryOutcome.Collected, report.For("resources").Outcome);
-    }
-
-    /// <summary>
-    /// A structure's standing effects are published as edges, with what each does to a value of one.
-    /// </summary>
-    /// <remarks>
-    /// Both vocabularies in one fixture, because the point of the table is that they land in it the
-    /// same way. The resource effect names a member of the game's enum and the object effect carries
-    /// an authored string; what a consumer reads is a name either way.
-    /// </remarks>
-    [Fact]
-    public void AStructuresEffectsArePublishedAsWhatTheyDoToAValueOfOne()
-    {
-        var water = Guid.NewGuid();
-        var cauldron = Guid.NewGuid();
-        var forge = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = cauldron,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect(
-                            water, FakeModifiableProperty.Quality, FakeModifierKind.MultiDiminishing, 0.25d),
-                    },
-                    upgradeableObjectEffects =
-                    {
-                        new FakeObjectEffect(forge, "CostScaling", FakeModifierKind.MultiStacking, 0.8d),
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        var report = collector.Collect();
-        var world = collector.Build();
-
-        Assert.True(report.IsComplete, report.Describe());
-        Assert.True(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, cauldron, out var start, out var count));
-        Assert.Equal(2, count);
-
-        var rows = new Dictionary<string, WorldEntityEffect>(StringComparer.Ordinal);
-        for (var index = 0; index < count; index++)
-            rows[world.EntityEffects[start + index].Property] = world.EntityEffects[start + index];
-
-        Assert.Equal(water, rows["Quality"].TargetId);
-        Assert.True(rows["Quality"].RatioKnown);
-        Assert.Equal(1.25d, rows["Quality"].RatioAtOne.ToDouble(), 6);
-
-        Assert.Equal(forge, rows["CostScaling"].TargetId);
-        Assert.True(rows["CostScaling"].RatioKnown);
-        Assert.Equal(0.8d, rows["CostScaling"].RatioAtOne.ToDouble(), 6);
-    }
-
-    /// <summary>
-    /// Effects across a structure's several property blocks all land under that structure.
-    /// </summary>
-    /// <remarks>
-    /// The blocks are how the game groups effects, not how it scopes them: what a purchase does is
-    /// the union. A reader that stopped after the first block would publish a structure that looked
-    /// like it did less than it does.
-    /// </remarks>
-    [Fact]
-    public void EveryPropertyBlockOnAStructureContributes()
-    {
-        var stone = Guid.NewGuid();
-        var iron = Guid.NewGuid();
-        var quarry = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = quarry,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect(
-                            stone, FakeModifiableProperty.Rate, FakeModifierKind.Raw, 2d),
-                    },
-                },
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect(
-                            iron, FakeModifiableProperty.Rate, FakeModifierKind.Raw, 3d),
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        collector.Collect();
-        var world = collector.Build();
-
-        Assert.True(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, quarry, out _, out var count));
-        Assert.Equal(2, count);
-    }
-
-    /// <summary>
-    /// An effect that resolves its target at apply time publishes no edge.
-    /// </summary>
-    /// <remarks>
-    /// There is nothing to key a row on: what it modifies is decided from whatever object applies it,
-    /// so publishing it against the object it happens to name would be publishing a guess.
-    /// </remarks>
-    [Fact]
-    public void AnEffectThatResolvesItsTargetLaterIsNotPublished()
-    {
-        var forge = Guid.NewGuid();
-        var workshop = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = workshop,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    upgradeableObjectEffects =
-                    {
-                        new FakeObjectEffect(
-                            forge, "Cost", FakeModifierKind.MultiStacking, 0.5d, useTargetRef: true),
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        collector.Collect();
-        var world = collector.Build();
-
-        Assert.False(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, workshop, out _, out _));
-    }
-
-    /// <summary>
-    /// A modifier this suite was not ported against publishes an unusable ratio rather than a wrong one.
-    /// </summary>
-    [Fact]
-    public void AModifierKindThePortDoesNotModelPublishesNoUsableRatio()
-    {
-        var water = Guid.NewGuid();
-        var still = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = still,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect(
-                            water, FakeModifiableProperty.Quality, (FakeModifierKind)97, 5d),
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        collector.Collect();
-        var world = collector.Build();
-
-        Assert.True(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, still, out var start, out _));
-        Assert.False(world.EntityEffects[start].RatioKnown);
-        Assert.Equal(1d, world.EntityEffects[start].RatioAtOne.ToDouble(), 6);
-    }
-
-    /// <summary>
-    /// Each source's rows are found whichever order the registry held them in.
-    /// </summary>
-    /// <remarks>
-    /// Fixed identities in deliberately descending order, because the lookup is a binary search and a
-    /// table left in registry order answers correctly for whichever entity happens to land where the
-    /// search looks first. With random identities that is a coin flip per run, which is the shape of
-    /// test that passes until it matters.
-    /// </remarks>
-    [Fact]
-    public void EachSourcesEffectsAreFoundWhateverOrderTheRegistryHeldThemIn()
-    {
-        var sources = new[]
-        {
-            new Guid("cccccccc-0000-0000-0000-000000000000"),
-            new Guid("bbbbbbbb-0000-0000-0000-000000000000"),
-            new Guid("aaaaaaaa-0000-0000-0000-000000000000"),
-        };
-        var target = Guid.NewGuid();
-
-        for (var index = 0; index < sources.Length; index++)
-        {
-            FakeStructure.All.Add(new FakeStructure
-            {
-                Identity = sources[index],
-                structureProperties =
-                {
-                    new FakeEffectProperty
-                    {
-                        resourceEffects =
-                        {
-                            new FakeResourceEffect(
-                                target, FakeModifiableProperty.Rate, FakeModifierKind.Raw, index + 1),
-                        },
-                    },
-                },
-            });
-        }
-
-        var collector = Collector();
-        collector.Collect();
-        var world = collector.Build();
-
-        for (var index = 0; index < sources.Length; index++)
-        {
-            Assert.True(
-                WorldEntityEffectLookup.TryFindRange(world.EntityEffects, sources[index], out var start, out var count),
-                $"source {index} was not found");
-            Assert.Equal(1, count);
-            Assert.Equal(index + 2d, world.EntityEffects[start].RatioAtOne.ToDouble(), 6);
-        }
-    }
-
-    /// <summary>
-    /// An effect naming nothing is dropped rather than published against the empty identity.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Guid.Empty"/> is the suite's "no entity", and a row carrying it would be an edge to
-    /// a thing that does not exist — findable by a consumer that looked up the wrong identity and
-    /// silently wrong for one that did not.
-    /// </remarks>
-    [Fact]
-    public void AnEffectNamingNoTargetIsNotPublished()
-    {
-        var orphan = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = orphan,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect
-                        {
-                            upgradeType = FakeModifiableProperty.Quality,
-                            modifier = new FakeValueModifier(FakeModifierKind.Raw, 1d, 0),
-                        },
-                    },
-                    upgradeableObjectEffects =
-                    {
-                        new FakeObjectEffect
-                        {
-                            propertyType = "Cost",
-                            modifier = new FakeValueModifier(FakeModifierKind.Raw, 1d, 0),
-                        },
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        collector.Collect();
-        var world = collector.Build();
-
-        Assert.False(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, orphan, out _, out _));
-        Assert.Equal(0, world.EntityEffects.Count);
-    }
-
-    /// <summary>
-    /// Collecting twice publishes each effect once.
-    /// </summary>
-    /// <remarks>
-    /// The effect buffer is the reader's own and is reset by the reader rather than by the collector,
-    /// unlike the cost buffer two readers share. Getting that backwards would double every row per
-    /// pass and show up as a structure that appeared to gain effects as the game ran.
-    /// </remarks>
-    [Fact]
-    public void CollectingTwicePublishesEachEffectOnce()
-    {
-        var water = Guid.NewGuid();
-        var still = Guid.NewGuid();
-
-        FakeStructure.All.Add(new FakeStructure
-        {
-            Identity = still,
-            structureProperties =
-            {
-                new FakeEffectProperty
-                {
-                    resourceEffects =
-                    {
-                        new FakeResourceEffect(
-                            water, FakeModifiableProperty.Quality, FakeModifierKind.Raw, 1d),
-                    },
-                },
-            },
-        });
-
-        var collector = Collector();
-        collector.Collect();
-        collector.Collect();
-        var world = collector.Build();
-
-        Assert.True(WorldEntityEffectLookup.TryFindRange(world.EntityEffects, still, out _, out var count));
-        Assert.Equal(1, count);
     }
 
     private static FakeCostList CostOf(params (Guid Resource, double Amount)[] entries)

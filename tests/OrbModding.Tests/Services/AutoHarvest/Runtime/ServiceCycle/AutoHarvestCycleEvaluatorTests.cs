@@ -4,6 +4,7 @@ using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
@@ -11,7 +12,7 @@ namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
 public sealed class AutoHarvestCycleEvaluatorTests
 {
     [Fact]
-    public void FirstEligibleCyclePlansOnlyFruitAndWaitsAfterBatch()
+    public void FirstEligibleCyclePlansOnlyFruitAndWaitsForTheNextPublication()
     {
         var result = Evaluate(ReadyFrame(), Configuration(), InitialState(), Context(1));
 
@@ -19,8 +20,30 @@ public sealed class AutoHarvestCycleEvaluatorTests
         Assert.Equal(AutoHarvestPair.FruitTree, result.Action.Pair);
         Assert.True(result.State.HasPlannedAction);
         Assert.Equal(AutoHarvestPair.FruitTree, result.State.PlannedPair);
-        Assert.Equal(WakePolicyKind.AfterBatch, result.Wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(1), result.Wake.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, result.Wake.Kind);
+    }
+
+    [Fact]
+    public void OtherwiseReadyUnlatchedCandidateReachesTheActionBoundaryOncePerPublication()
+    {
+        var facts = new AutoHarvestPairFacts(
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            AutoHarvestEvidenceState.Verified);
+        var frame = new AutoHarvestCycleFrame(
+            Captured(AutoHarvestPair.FruitTree, facts),
+            Captured(AutoHarvestPair.TreasureTree, facts));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.True(result.HasAction);
+        Assert.Equal(AutoHarvestPair.FruitTree, result.Action.Pair);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            result.Action.Facts.Prerequisites);
+        Assert.Equal(WakePolicyKind.OnPublication, result.Wake.Kind);
     }
 
     /// <summary>
@@ -37,7 +60,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
-                    AutoHarvestEvidenceState.Verified,
+                    PlotActionPrerequisiteEvidence.NativeLatchedTrue,
                     AutoHarvestEvidenceState.Rejected)),
             Captured(AutoHarvestPair.TreasureTree, ReadyFacts()));
 
@@ -390,7 +413,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState.Verified,
+        PlotActionPrerequisiteEvidence.NativeLatchedTrue,
         AutoHarvestEvidenceState.Verified);
 
     private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
@@ -398,8 +421,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: true,
-        MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+        treasureSelected: true);
 
     private static AutoHarvestCycleState InitialState() =>
         AutoHarvestCycleState.Create(new LifecycleGeneration(1));

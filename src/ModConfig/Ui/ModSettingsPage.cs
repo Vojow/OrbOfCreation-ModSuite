@@ -220,7 +220,7 @@ internal sealed class ModSettingsPage : IDisposable
         var section = mod.Sections[_selectedSectionIndex];
         _featureCommands.TryGet(mod.Guid, section.Name, out var command);
         var settings = section.Settings
-            .Where(setting => command is null || !IsImmediateModeSetting(setting))
+            .Where(setting => command is null || !IsImmediateCommandSetting(setting))
             .ToArray();
         var contentHeight = _settingList.Render(settings, command);
         RestoreScrollOffset(requestedOffset, contentHeight);
@@ -299,7 +299,9 @@ internal sealed class ModSettingsPage : IDisposable
         if (_disposed) throw new ObjectDisposedException(nameof(ModSettingsPage));
     }
 
-    internal static bool IsImmediateModeSetting(ConfigSettingDescriptor setting) =>
-        string.Equals(setting.Key, "Mode", StringComparison.Ordinal) &&
-        setting.SourceSection is "AutoBuy" or "AutoCast" or "AutoConcept" or "AutoHarvest" or "General";
+    internal static bool IsImmediateCommandSetting(ConfigSettingDescriptor setting) =>
+        (string.Equals(setting.Key, "Mode", StringComparison.Ordinal) &&
+         setting.SourceSection is "AutoBuy" or "AutoCast" or "AutoConcept" or "AutoHarvest" or "AutoItems" or "AutoScribe" or "General") ||
+        (string.Equals(setting.Key, "EmergencyDisable", StringComparison.Ordinal) &&
+         string.Equals(setting.SourceSection, "Safety", StringComparison.Ordinal));
 }

@@ -70,8 +70,7 @@ public sealed class WorldIdentityWalkTests
     /// already owns. Walking it would report every priced structure as colliding with itself, which
     /// would turn the collision check from a real invariant into noise everyone learns to ignore.
     /// <c>PlotActions</c> is worse: its rows are pairs, so neither of the two identities on one is
-    /// the row's own, and both belong to a table that already claims them. <c>EntityEffects</c> is
-    /// the same shape — an edge from one claimed entity to another, and <c>PlotActionInstances</c>
+    /// the row's own, and both belong to a table that already claims them. <c>PlotActionInstances</c>
     /// is that edge several times over, one row per instance the plot holds. <c>PlotAuthoring</c>,
     /// <c>PlotPhaseDescriptors</c> and <c>EffectBlocks</c> are all second readings of an entity the
     /// plot and action tables already claim, said about the entity rather than as it. So is
@@ -79,6 +78,14 @@ public sealed class WorldIdentityWalkTests
     /// purchasable categories already own. <c>ActionQueueSlots</c> is a position in a list, which is
     /// no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
     /// source identity points at a recipe or equipment row that already owns that identity.
+    /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
+    /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
+    /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
+    /// second entity namespace. <c>CollectionCategories</c> is availability evidence about one
+    /// collector pass, not a native row and not a second identity namespace. <c>ScribeWork</c>,
+    /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
+    /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
+    /// Scrolls, and enchantments whose owning tables already carry those identities.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -86,17 +93,25 @@ public sealed class WorldIdentityWalkTests
     /// </remarks>
     private static readonly HashSet<string> NotIdentityTables = new(StringComparer.Ordinal)
     {
+        "CollectionCategories",
         "PurchaseCosts",
         "PlotActions",
         "PlotActionInstances",
-        "EntityEffects",
         "ActionQueueSlots",
         "SpellSlots",
         "SpellCosts",
         "MasteryExperience",
+        "ConsumableTypes",
+        "ConsumableCosts",
+        "ConsumableUsages",
+        "ConsumableCounts",
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",
+        "ScribeWork",
+        "StructureEnchantments",
+        "ScrollTargets",
+        "ScrollTargetEvidence",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",

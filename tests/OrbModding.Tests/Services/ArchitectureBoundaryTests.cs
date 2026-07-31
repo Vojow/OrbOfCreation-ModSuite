@@ -61,7 +61,7 @@ public sealed class ArchitectureBoundaryTests
 
     private static readonly string[] FeatureIdentityFragments =
     {
-        "AutoHarvest", "AutoBuy", "AutoCast", "AutoConcept",
+        "AutoHarvest", "AutoItems", "AutoBuy", "AutoCast", "AutoConcept",
         "AutoSpell", "SpellLevel", "Mentor", "Agrimancy", "Agromancy",
         "Automata", "ModConfig",
     };

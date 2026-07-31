@@ -70,7 +70,7 @@ internal static class MentorCycleEvaluator
             missed);
         state.Observe(input.Sequence, missed, in metrics);
         return inputIndex + 1 < inputs.Length
-            ? WakePolicy.Immediate
+            ? WakePolicy.OnPublication
             : WakePolicy.AfterDecision(MentorConfigurationPolicy.IdleInterval);
     }
 

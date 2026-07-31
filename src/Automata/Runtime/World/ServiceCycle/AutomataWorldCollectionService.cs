@@ -14,17 +14,11 @@ internal static class AutomataWorldCollectionPolicies
     /// How often the world is re-read.
     /// </summary>
     /// <remarks>
-    /// Faster than both consumers' defaults on purpose — Auto Buy evaluates every 500 ms and Auto
-    /// Harvest every second. A world-bound service waits for a snapshot it has not acted on yet, so
-    /// collecting slower than a service evaluates throttles that service to the collection rate. A
-    /// measured warm pass is a little over a millisecond, so four passes a second costs well under one
-    /// percent of a 60 Hz frame budget.
-    ///
-    /// Auto Buy's interval is configurable to any positive value, so an operator can set it below this
-    /// one. That does not break anything — the gate is what stops a second purchase against one
-    /// reading of the world, and it must — but it does mean the configured interval becomes a floor
-    /// rather than the achieved cadence. Lowering this is the fix if that ever matters, not weakening
-    /// the gate.
+    /// This is the suite's one planning cadence: every ordinary service evaluates after each
+    /// publication. A measured warm pass is a little over a millisecond, so four passes a second
+    /// costs well under one percent of a 60 Hz frame budget. The value is deliberately not
+    /// configurable; service-specific cadence controls would create competing clocks over the same
+    /// immutable reading.
     /// </remarks>
     private static readonly MonotonicDuration DefaultInterval =
         MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250));
@@ -101,6 +95,8 @@ internal static class AutomataWorldCollectionService
                     WakePolicy.AfterDecision(AutomataWorldCollectionPolicies.UnavailableRetry));
             }
 
+            frame.CollectedAt = context.CapturedAt;
+            frame.CollectedAtUtcTicks = DateTime.UtcNow.Ticks;
             capture.Collect(frame);
             return ServiceCaptureResult.Captured(CommonServiceDecisionCodes.Captured);
         }

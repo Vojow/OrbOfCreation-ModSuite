@@ -41,7 +41,8 @@ internal sealed class ServiceCycleOrdinaryStartCoordinator<TState, TAction> :
             clock,
             lifetime,
             strategy,
-            world)
+            world,
+            wakeOnWorldPublication: true)
     {
     }
 

@@ -114,7 +114,6 @@ public sealed class AutoCastServiceCompositionTests
             AutoCast = new AutoCastConfiguration
             {
                 Mode = AutoCastOperationMode.Active,
-                EvaluationIntervalSeconds = 0.1f,
             },
         };
 

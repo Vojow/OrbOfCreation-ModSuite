@@ -192,6 +192,5 @@ public sealed class AutomataServiceCycleActivationTests
         false,
         false,
         true,
-        true,
-        new MonotonicDuration(1));
+        true);
 }

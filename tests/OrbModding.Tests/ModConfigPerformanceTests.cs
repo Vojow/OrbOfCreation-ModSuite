@@ -2,6 +2,7 @@ using OrbModConfig;
 using OrbModding.Common;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Xunit;
@@ -10,6 +11,111 @@ namespace OrbModding.Tests;
 
 public sealed class ModConfigPerformanceTests
 {
+    [Fact]
+    public void ModsTabSelectionAlwaysRequestsTheOpenState()
+    {
+        Assert.True(ModConfigTabSelectionPolicy.RequestedOpenState(currentlyOpen: false));
+        Assert.True(ModConfigTabSelectionPolicy.RequestedOpenState(currentlyOpen: true));
+    }
+
+    [Fact]
+    public void ZeroCandidatesDuringStartupRetryFastAndAdmitBothWhenReady()
+    {
+        var missing = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 0, HasIcon: false))
+            .ToArray();
+        var ready = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 1, HasIcon: true))
+            .ToArray();
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        Assert.True(gate.ShouldInspect(0f));
+        Assert.Equal(
+            NativeUiStartupReadinessKind.NotYetPresent,
+            NativeTopBarReadinessPolicy.Classify(missing));
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.False(waiting.QuickControls);
+        Assert.False(waiting.ModsRail);
+        Assert.False(gate.ShouldInspect(0.05f));
+        Assert.True(gate.ShouldInspect(0.05f));
+
+        Assert.Equal(
+            NativeUiStartupReadinessKind.Ready,
+            NativeTopBarReadinessPolicy.Classify(ready));
+        var admitted = gate.Observe(NativeUiStartupReadinessKind.Ready);
+        Assert.True(admitted.QuickControls);
+        Assert.True(admitted.ModsRail);
+    }
+
+    [Fact]
+    public void GenuineCaptureMismatchUsesSlowTerminalPathImmediately()
+    {
+        var candidates = NativeTopBarReadinessPolicy.RequiredItemNames
+            .Select(name => new NativeTopBarCandidateFact(name, MatchCount: 1, HasIcon: true))
+            .ToArray();
+        candidates[2] = candidates[2] with { MatchCount = 2 };
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        Assert.Equal(
+            NativeUiStartupReadinessKind.Mismatch,
+            NativeTopBarReadinessPolicy.Classify(candidates));
+        var admission = gate.Observe(NativeUiStartupReadinessKind.Mismatch);
+        Assert.True(admission.QuickControls);
+        Assert.True(admission.ModsRail);
+
+        var quickControls = new UiInstallationRetryState();
+        var modsRail = new UiInstallationRetryState();
+        for (var attempt = 1; attempt < UiInstallationRetryState.TerminalAttempt; attempt++)
+        {
+            Assert.False(quickControls.ObserveFailure().IsTerminal);
+            Assert.False(modsRail.ObserveFailure().IsTerminal);
+        }
+        Assert.True(quickControls.ObserveFailure().IsTerminal);
+        Assert.True(modsRail.ObserveFailure().IsTerminal);
+    }
+
+    [Fact]
+    public void SharedReadinessGateNeverAdmitsOnlyOneSurface()
+    {
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.Equal(waiting.QuickControls, waiting.ModsRail);
+
+        gate.Reset();
+        gate.Begin();
+        var ready = gate.Observe(NativeUiStartupReadinessKind.Ready);
+        Assert.Equal(ready.QuickControls, ready.ModsRail);
+
+        gate.Reset();
+        gate.Begin();
+        var mismatch = gate.Observe(NativeUiStartupReadinessKind.Mismatch);
+        Assert.Equal(mismatch.QuickControls, mismatch.ModsRail);
+    }
+
+    [Fact]
+    public void StartupFastLaneWaitsUntilNamedBoundThenEntersSlowFailurePath()
+    {
+        var gate = new UiStartupReadinessGate();
+        gate.Begin();
+        Assert.True(gate.ShouldInspect(
+            UiStartupReadinessGate.StartupWindowSeconds -
+            UiStartupReadinessGate.FastRetryIntervalSeconds));
+
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.False(waiting.QuickControls);
+        Assert.False(waiting.ModsRail);
+        Assert.True(gate.ShouldInspect(UiStartupReadinessGate.FastRetryIntervalSeconds));
+
+        var admission = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+
+        Assert.True(admission.QuickControls);
+        Assert.True(admission.ModsRail);
+    }
+
     [Fact]
     [Trait("Category", "PerformanceSimulation")]
     public void UiMaintenanceRunsAtMostOncePerFrameAndRetainsDueRepair()
@@ -303,19 +409,6 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Theory]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly", true)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly (1)", true)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/Nested/SpellButton", false)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/ScreenContent/MagicScreen/SpellButton", false)]
-    [InlineData("Canvas/BottomBar/SpellButtonBottomBar", false)]
-    public void SpellFrameSamplingRequiresTheAuditedCastingBarDirectChildPath(
-        string path,
-        bool expected)
-    {
-        Assert.Equal(expected, NativeViewAdapter.IsAuditedBottomBarSpellPath(path));
-    }
-
-    [Theory]
     [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)", true)]
     [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)/Icon", false)]
     [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio/ViewRadioButtonLong(Clone)", false)]
@@ -380,55 +473,6 @@ public sealed class ModConfigPerformanceTests
                 out var reason),
             reason);
         Assert.Same(candidate.viewImage.sprite, icon);
-    }
-
-    [Fact]
-    public void BottomBarSpellFrameAcceptsTheRealNullOptionalFields()
-    {
-        var buttonObject = new GameObject("SpellButtonIconOnly");
-        var background = buttonObject.AddComponent<Image>();
-        var candidate = buttonObject.AddComponent<FakeSpellButton>();
-        candidate.background = background;
-        candidate.icon = buttonObject.AddComponent<Image>();
-        candidate.baseBackground = new Sprite();
-        candidate.insufficientBackground = null;
-        candidate.effects = null;
-        candidate.isForCasting = true;
-
-        Assert.True(
-            NativeViewAdapter.TryReadBottomBarSpellFrame(
-                new Component[] { candidate },
-                out var prototype,
-                out var baseFrame,
-                out var reason),
-            reason);
-        Assert.Same(candidate, prototype);
-        Assert.Same(candidate.baseBackground, baseFrame);
-    }
-
-    [Fact]
-    public void CaptureFailureCensusReportsEveryAuditedFieldAndLifecycleFact()
-    {
-        var canvas = new GameObject("Canvas");
-        var buttonObject = Child(canvas, "SpellButtonIconOnly");
-        var candidate = buttonObject.AddComponent<FakeSpellButton>();
-        candidate.isForCasting = true;
-        buttonObject.SetActive(false);
-
-        var census = NativeViewAdapter.BuildSpellCandidateCensus(
-            new Component[] { candidate });
-
-        Assert.Contains("path='Canvas/SpellButtonIconOnly'", census);
-        Assert.Contains("activeSelf=False", census);
-        Assert.Contains("activeInHierarchy=False", census);
-        Assert.Contains("scene=Main(loaded=True)", census);
-        Assert.Contains("pathMatch=False", census);
-        Assert.Contains("isForCasting=True", census);
-        Assert.Contains("background=null", census);
-        Assert.Contains("icon=null", census);
-        Assert.Contains("baseBackground=null", census);
-        Assert.Contains("insufficientBackground=null(optional)", census);
-        Assert.Contains("effects=null(optional)", census);
     }
 
     [Fact]
@@ -520,16 +564,6 @@ public sealed class ModConfigPerformanceTests
         public Sprite? activeImage;
         public Image? buttonImage;
         public Image? viewImage;
-    }
-
-    private sealed class FakeSpellButton : Behaviour
-    {
-        public Image? icon;
-        public Sprite? insufficientBackground;
-        public bool isForCasting;
-        public Image? background;
-        public Sprite? baseBackground;
-        public Component? effects;
     }
 
     private static GameObject Child(GameObject parent, string name)

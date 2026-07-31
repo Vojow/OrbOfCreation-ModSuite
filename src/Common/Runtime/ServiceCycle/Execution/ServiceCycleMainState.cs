@@ -17,6 +17,10 @@ internal sealed class ServiceCycleMainState
     internal MonotonicTimestamp ResponsePublishedAt;
     internal MonotonicTimestamp NextWakeDue;
     internal bool HasWakeDue;
+    internal ConfigGeneration WakeConfigurationGeneration;
+    internal bool WakeInvalidatedByConfiguration;
+    internal WorldGeneration WakeWorldGeneration;
+    internal bool WakeInvalidatedByWorld;
     internal BatchReceipt PreviousReceipt;
     internal ServiceProjectionPublication Projection;
     internal ServiceFault LatestFault;
@@ -25,6 +29,7 @@ internal sealed class ServiceCycleMainState
 
     /// <summary>Committed actions in this batch that published rather than mutated the game.</summary>
     internal int PublishedCount;
+    internal int PreNativeSkippedCount;
     internal ConfigGeneration LatestConfigGeneration;
     internal int ActionCount;
     internal int ActionCursor;
@@ -37,4 +42,36 @@ internal sealed class ServiceCycleMainState
     internal ServiceCaptureFact LastCapture;
     internal ServiceActionFact LastAction;
     internal ServiceEvaluationTimingFact EvaluationTiming;
+
+    internal void ScheduleWake(
+        MonotonicTimestamp due,
+        ConfigGeneration configurationGeneration,
+        WorldGeneration worldGeneration = default,
+        bool invalidatedByConfiguration = true,
+        bool invalidatedByWorld = true)
+    {
+        if (!configurationGeneration.IsValid)
+            throw new System.ArgumentException(
+                "A valid configuration generation is required.",
+                nameof(configurationGeneration));
+        if (invalidatedByWorld && !worldGeneration.IsValid)
+            throw new System.ArgumentException(
+                "A valid world generation is required for a world-sensitive wake.",
+                nameof(worldGeneration));
+        NextWakeDue = due;
+        WakeConfigurationGeneration = configurationGeneration;
+        WakeInvalidatedByConfiguration = invalidatedByConfiguration;
+        WakeWorldGeneration = worldGeneration;
+        WakeInvalidatedByWorld = invalidatedByWorld;
+        HasWakeDue = true;
+    }
+
+    internal void ClearWake()
+    {
+        HasWakeDue = false;
+        WakeConfigurationGeneration = default;
+        WakeInvalidatedByConfiguration = false;
+        WakeWorldGeneration = default;
+        WakeInvalidatedByWorld = false;
+    }
 }

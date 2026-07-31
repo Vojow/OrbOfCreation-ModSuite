@@ -36,6 +36,7 @@ internal class ExecutionServiceDefinition :
     internal int RejectAtIndex { get; set; } = -1;
     internal int FaultAtIndex { get; set; } = -1;
     internal int SkipAtIndex { get; set; } = -1;
+    internal int SkipWithoutNativeAtIndex { get; set; } = -1;
     internal NativeMutationCallOutcome CommittedNativeOutcome { get; set; } = new(1, 1, 1);
 
     /// <summary>When set, actions commit as publications instead of native mutations.</summary>
@@ -130,6 +131,8 @@ internal class ExecutionServiceDefinition :
                 ServiceNativeMutationEvidence.Observed(
                     NativeMutationOutcome.PostconditionFailed,
                     new NativeMutationCallOutcome(1, 1, 0)));
+        if (context.ActionIndex == SkipWithoutNativeAtIndex)
+            return ServiceActionResult.Skipped(CommonActionResultCodes.Skipped);
         if (PublishesGeneration is { } published)
         {
             return ServiceActionResult.CommittedPublication(

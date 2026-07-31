@@ -40,7 +40,8 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
             _runtime.State.NativeOutcome,
             now,
             emergency,
-            _runtime.State.PublishedCount);
+            _runtime.State.PublishedCount,
+            _runtime.State.PreNativeSkippedCount);
         CompleteBatch(in receipt, now, true, nonBlockingHandoff);
         return true;
     }
@@ -127,7 +128,8 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
                 _runtime.Actions.Cursor,
                 _runtime.State.NativeOutcome,
                 now,
-                _runtime.State.PublishedCount);
+                _runtime.State.PublishedCount,
+                _runtime.State.PreNativeSkippedCount);
             CompleteLifecycleOrphan(in receipt);
             return new ServiceRunnerRetirement(
                 phase,
@@ -153,11 +155,14 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
         bool nonBlockingHandoff)
     {
         _runtime.State.PreviousReceipt = receipt;
-        _runtime.State.NextWakeDue = ServiceWakeSchedule.AtBatchTerminal(
-            _runtime.State.ActiveWake,
-            _runtime.State.ResponsePublishedAt,
-            terminalAt);
-        _runtime.State.HasWakeDue = true;
+        _runtime.State.ScheduleWake(
+            ServiceWakeSchedule.AtBatchTerminal(
+                _runtime.State.ActiveWake,
+                _runtime.State.ResponsePublishedAt,
+                terminalAt),
+            _runtime.State.ActiveCycle.Config,
+            _runtime.State.ActiveCycle.World,
+            invalidatedByWorld: _runtime.Starts.WakeOnWorldPublication);
         _runtime.State.CycleConfiguration = null;
         _runtime.State.HasActiveBatch = false;
         _runtime.State.HasInFlightCycle = false;

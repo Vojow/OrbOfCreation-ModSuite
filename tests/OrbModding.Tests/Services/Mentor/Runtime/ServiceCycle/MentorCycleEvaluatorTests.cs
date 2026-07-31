@@ -129,6 +129,24 @@ public sealed class MentorCycleEvaluatorTests
         Assert.Equal(2, state.TotalMissedInputs);
     }
 
+    [Fact]
+    public void ASecondInputWaitsForANewerWorldEvenWhenTheFirstPlansNoAction()
+    {
+        var world = BaseWorld() with
+        {
+            MasteryExperience = Table(
+                Input(1, MasteryExperienceDomain.Spell, Source, 5, 100),
+                Input(2, MasteryExperienceDomain.Spell, Peer, 5, 100)),
+        };
+        var state = MentorCycleState.Create(new LifecycleGeneration(1));
+
+        var actions = PlanWithWake(world, Config(), ref state, out _, out var wake);
+
+        Assert.Empty(actions);
+        Assert.Equal(1, state.LastInputSequence);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
+    }
+
     private static GameWorldState BaseWorld(
         MasteryExperienceDomain domain = MasteryExperienceDomain.Spell)
     {
@@ -173,12 +191,21 @@ public sealed class MentorCycleEvaluatorTests
         GameWorldState world,
         SuiteRuntimeConfiguration config,
         ref MentorCycleState state,
-        out MentorDecisionMetrics metrics)
+        out MentorDecisionMetrics metrics) =>
+        PlanWithWake(world, config, ref state, out metrics, out _);
+
+    private static IReadOnlyList<MentorCycleAction> PlanWithWake(
+        GameWorldState world,
+        SuiteRuntimeConfiguration config,
+        ref MentorCycleState state,
+        out MentorDecisionMetrics metrics,
+        out WakePolicy wake)
     {
         var store = new ReusableActionStore<MentorCycleAction>();
         store.BeginWrite();
         var writer = new ServiceActionWriter<MentorCycleAction>(store);
-        MentorCycleEvaluator.Evaluate(world, in config, ref state, writer, out metrics);
+        wake = MentorCycleEvaluator.Evaluate(
+            world, in config, ref state, writer, out metrics);
         var result = new List<MentorCycleAction>();
         while (!store.IsComplete)
         {

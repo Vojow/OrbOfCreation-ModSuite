@@ -3,7 +3,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 
 namespace OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 
-internal sealed class DecisionJournalCoalescer
+internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
 {
     private readonly IDecisionJournalRecordSink _sink;
     private readonly DecisionJournalRecord[] _open;
@@ -29,10 +29,10 @@ internal sealed class DecisionJournalCoalescer
         _lastObservedAt = startedAt;
     }
 
-    internal bool IsFaulted { get; private set; }
+    public bool IsFaulted { get; private set; }
     internal bool IsStopped => _stopped;
 
-    internal void Observe(in DecisionJournalObservation observation)
+    public void Observe(in DecisionJournalObservation observation)
     {
         if (IsFaulted) return;
         EnsureRunning(observation.LastObservedAt);
@@ -54,7 +54,7 @@ internal sealed class DecisionJournalCoalescer
         _hasOpen[index] = true;
     }
 
-    internal void ObserveTransition(in DecisionJournalRecord transition)
+    public void ObserveTransition(in DecisionJournalRecord transition)
     {
         if (IsFaulted) return;
         DecisionJournalRecordValidation.Validate(in transition);
@@ -72,7 +72,7 @@ internal sealed class DecisionJournalCoalescer
         if (!_sink.TryAppend(in transition)) IsFaulted = true;
     }
 
-    internal void BreakServiceSpan(
+    public void BreakServiceSpan(
         ServiceCycleTraceServiceId service,
         MonotonicTimestamp observedAt)
     {
@@ -81,7 +81,7 @@ internal sealed class DecisionJournalCoalescer
         AppendOpen(ServiceIndex(service));
     }
 
-    internal void Advance(MonotonicTimestamp now)
+    public void Advance(MonotonicTimestamp now)
     {
         if (IsFaulted) return;
         EnsureRunning(now);
@@ -90,7 +90,7 @@ internal sealed class DecisionJournalCoalescer
         _nextCheckpoint = AddSaturated(now, _checkpointInterval);
     }
 
-    internal void Stop(MonotonicTimestamp now)
+    public void Stop(MonotonicTimestamp now)
     {
         if (_stopped) return;
         if (now < _lastObservedAt) throw new ArgumentOutOfRangeException(nameof(now));

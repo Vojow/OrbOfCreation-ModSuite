@@ -11,7 +11,7 @@ namespace OrbModding.Tests;
 public sealed class EmergencyStopControlTests
 {
     [Fact]
-    public void StopIsImmediateAndResumeRequiresPreviewConfirmation()
+    public void StopAndResumeAreImmediatePlainToggles()
     {
         var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var events = new List<string>();
@@ -25,7 +25,6 @@ public sealed class EmergencyStopControlTests
             });
         var control = new EmergencyStopControl(
             store,
-            () => new[] { "Auto Buy", "Spell Leveling" },
             _ => events.Add("changed"));
 
         control.Activate();
@@ -39,17 +38,8 @@ public sealed class EmergencyStopControlTests
 
         control.Activate();
 
-        Assert.True(store.Current.Safety.EmergencyDisable);
-        Assert.True(control.ResumeArmed);
-        Assert.Equal("RESUME?", control.Label);
-        Assert.Equal("Will resume: Auto Buy, Spell Leveling", control.ResumePreview);
-        Assert.Equal(2, events.Count);
-        Assert.Single(publications);
-
-        control.Activate();
-
         Assert.False(store.Current.Safety.EmergencyDisable);
-        Assert.False(control.ResumeArmed);
+        Assert.Equal("STOP ALL", control.Label);
         Assert.Equal(
             new[] { "changed", "published", "changed", "published" },
             events);
@@ -75,7 +65,6 @@ public sealed class EmergencyStopControlTests
             statuses.ObserveConfiguration);
         var control = new EmergencyStopControl(
             store,
-            () => new[] { "Auto Buy", "Auto Cast" },
             _ => { });
 
         statuses.AutoCast.ObserveOperational();
@@ -92,27 +81,6 @@ public sealed class EmergencyStopControlTests
             store.Current,
             statuses.AutoBuy.ConfigurationGeneration);
         AssertStopped(statuses.AutoCast.Current);
-    }
-
-    [Fact]
-    public void CompatibilityQuarantineCannotBeResumedBeforeAcknowledgement()
-    {
-        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
-        config.EmergencyDisable.Value = true;
-        var store = new AutomataConfigurationStore(config, (_, _) => { });
-        var control = new EmergencyStopControl(
-            store,
-            () => new[] { "Auto Buy" },
-            _ => { },
-            canResume: () => false);
-
-        control.Activate();
-        control.Activate();
-
-        Assert.True(store.Current.Safety.EmergencyDisable);
-        Assert.False(control.ResumeArmed);
-        Assert.Equal("STOPPED", control.Label);
-        Assert.Contains("Mods > General", control.ResumePreview);
     }
 
     private static void AssertStopped(FeatureStatusSnapshot status)

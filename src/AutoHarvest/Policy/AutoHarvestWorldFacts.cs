@@ -44,14 +44,15 @@ internal static class AutoHarvestWorldFacts
         // one there is nothing to submit into, so the pair is not decidable rather than not ready.
         var submittable = pair.Reading.InstanceCount == 1;
 
-        // The prerequisite fact is Verified or it is not Verified. Its rejected reading means the game
-        // has not confirmed the prerequisites, not that it has ruled on them — the latch behind it
-        // cannot express the difference, so neither does this.
+        // A false latch is not a native refusal. It asks the action boundary to validate the exact
+        // current action once; only that fresh return can say the prerequisites are unmet.
         return new AutoHarvestPairFacts(
             AutoHarvestEvidenceState.Verified,
             Evidence(plot.Reading.Visible),
             Evidence(pair.Reading.OfferedCount == 1),
-            submittable ? Evidence(pair.Reading.PrerequisitesConfirmed) : AutoHarvestEvidenceState.Unknown,
+            submittable
+                ? pair.Reading.PrerequisiteEvidence
+                : PlotActionPrerequisiteEvidence.Unknown,
             submittable ? Evidence(IsReady(in plot, in pair)) : AutoHarvestEvidenceState.Unknown);
     }
 
@@ -95,7 +96,7 @@ internal static class AutoHarvestWorldFacts
             AutoHarvestEvidenceState.Unknown,
             AutoHarvestEvidenceState.Unknown,
             AutoHarvestEvidenceState.Unknown,
-            AutoHarvestEvidenceState.Unknown,
+            PlotActionPrerequisiteEvidence.Unknown,
             AutoHarvestEvidenceState.Unknown);
 
     private static AutoHarvestEvidenceState Evidence(bool value) =>

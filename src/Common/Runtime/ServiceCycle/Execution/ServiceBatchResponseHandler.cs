@@ -82,8 +82,11 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
             _runtime.PublishActionMetrics(response.ActionMetrics);
             if (!response.TransientContention)
                 _runtime.State.LatestFault = response.Fault;
-            _runtime.State.NextWakeDue = response.WakeDue;
-            _runtime.State.HasWakeDue = true;
+            _runtime.State.ScheduleWake(
+                response.WakeDue,
+                response.Cycle.Config,
+                invalidatedByConfiguration: false,
+                invalidatedByWorld: false);
             _runtime.State.CycleConfiguration = null;
             _runtime.State.HasActiveBatch = false;
             _runtime.State.HasInFlightCycle = false;
@@ -109,6 +112,7 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
         _runtime.State.NativeOutcome = default;
         _runtime.State.CommittedCount = 0;
         _runtime.State.PublishedCount = 0;
+        _runtime.State.PreNativeSkippedCount = 0;
         _runtime.PublishActionMetrics(response.ActionMetrics);
 
         if (response.ActionCount != 0)
@@ -131,7 +135,11 @@ internal sealed class ServiceBatchResponseHandler<TState, TAction>
         _runtime.State.HasInFlightCycle = false;
         _runtime.Actions.CompleteSuccessfulBatch();
         _runtime.ClearVisibleActionBatch();
-        _runtime.State.HasWakeDue = true;
+        _runtime.State.ScheduleWake(
+            response.WakeDue,
+            response.Cycle.Config,
+            response.Cycle.World,
+            invalidatedByWorld: _runtime.Starts.WakeOnWorldPublication);
         _runtime.State.CycleConfiguration = null;
         _completion.ReturnMainOwnership(nonBlockingHandoff);
     }

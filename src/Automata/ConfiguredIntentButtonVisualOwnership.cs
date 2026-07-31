@@ -17,11 +17,7 @@ namespace OrbAutomata;
 /// </remarks>
 internal static class ConfiguredIntentButtonVisualOwnership
 {
-    internal static void Claim(Button button)
-    {
-        var effectsType = Type.GetType("UIImageEffects, Assembly-CSharp", false);
-        Claim(button, effectsType);
-    }
+    internal static void Claim(Button button) => Claim(button, effectsType: null);
 
     internal static void Claim(Button button, Type? effectsType)
     {

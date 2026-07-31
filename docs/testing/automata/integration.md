@@ -8,6 +8,9 @@ This page owns Automata behavior that is broader than one feature.
 
 - [AutomataTests.cs](../../../tests/OrbModding.Tests/AutomataTests.cs) — configuration defaults, migration-facing behavior, and
   feature composition.
+- [AutomataLoggingTests.cs](../../../tests/OrbModding.Tests/AutomataLoggingTests.cs) — first-line
+  immediacy, exact-repeat holding, state-transition ordering, severity isolation, heartbeat, and
+  truthful repeat summaries.
 - [ConfigurationSchemaTests.cs](../../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) — schema-zero migration, rollback, and
   safe typed binding.
 - [AutomataFeatureStatusTests.cs](../../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) and [AutomataRuntimeEvidenceTests.cs](../../../tests/OrbModding.Tests/AutomataRuntimeEvidenceTests.cs) — health
@@ -38,7 +41,8 @@ must run `PerformanceAll` and the checked suite performance evaluator.
 - Runtime status reports saved configuration separately from actual readiness.
 - Every control, ownership decision, host activation, and status join reads the configuration store's
   committed snapshot; raw BepInEx state is persistence input only.
-- STOP/resume cancels prepared work before synchronously committing its one saved emergency state.
+- Each STOP/resume press cancels prepared work before synchronously committing its one saved
+  emergency state; no resume-arming state exists.
 
 ## Runtime handoff
 

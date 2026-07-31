@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
@@ -44,6 +45,10 @@ internal sealed class AutoHarvestReflectionContract
     public AutoHarvestStableIdAccessor PlotStableId { get; private set; } = null!;
     public AutoHarvestStableIdAccessor ActionStableId { get; private set; } = null!;
 
+    public Func<object, object?> ActionPrerequisites { get; private set; } = null!;
+    public Func<object, bool> PrerequisitesAvailable { get; private set; } = null!;
+    public Func<object, bool> PrerequisitesCheck { get; private set; } = null!;
+
     public MethodInfo PlotGetActionInstances { get; private set; } = null!;
 
     public MethodInfo InstanceGetAction { get; private set; } = null!;
@@ -62,6 +67,19 @@ internal sealed class AutoHarvestReflectionContract
         var contract = new AutoHarvestReflectionContract(types);
         contract.PlotStableId = AutoHarvestStableIdAccessor.Bind(types.Plot);
         contract.ActionStableId = AutoHarvestStableIdAccessor.Bind(types.Action);
+        var prerequisitesField = RequireField(types.Action, "prerequisites");
+        contract.ActionPrerequisites =
+            NativeAccessorBinder.Reference(types.Action, prerequisitesField.Name) ??
+            throw new InvalidOperationException(
+                $"{types.Action.FullName}.prerequisites reference contract is unavailable");
+        contract.PrerequisitesAvailable =
+            NativeAccessorBinder.Field<bool>(prerequisitesField.FieldType, "available") ??
+            throw new InvalidOperationException(
+                $"{prerequisitesField.FieldType.FullName}.available Boolean contract is unavailable");
+        contract.PrerequisitesCheck =
+            NativeAccessorBinder.Call<bool>(prerequisitesField.FieldType, "Check") ??
+            throw new InvalidOperationException(
+                $"{prerequisitesField.FieldType.FullName}.Check() Boolean contract is unavailable");
         contract.PlotGetActionInstances = RequireListMethod(types.Plot, "GetActionInstances", types.Instance);
 
         contract.InstanceGetAction = RequireMethod(types.Instance, "GetAction", types.Action);

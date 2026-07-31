@@ -104,7 +104,8 @@ internal static class AutomataServiceCycleComposition
                 // recorder before it did.
                 HostSemanticTrace.Create(
                     new ServiceCycleTraceSessionId(checked((ulong)DateTime.UtcNow.Ticks)),
-                    features.Count)
+                    features.Count),
+                hostDependencies.ActionOutcomes
 #if SERVICE_CYCLE_PROFILE
                 , profileProbe
 #endif

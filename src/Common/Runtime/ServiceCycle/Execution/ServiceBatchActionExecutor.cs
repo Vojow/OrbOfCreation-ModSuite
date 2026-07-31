@@ -122,6 +122,9 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         if (result.Disposition == ServiceActionDisposition.Committed &&
             result.Effect == ServiceActionEffect.Publication)
             _runtime.State.PublishedCount++;
+        if (result.Disposition == ServiceActionDisposition.Skipped &&
+            result.Effect == ServiceActionEffect.None)
+            _runtime.State.PreNativeSkippedCount++;
 
         return advances
             ? _outcomes.Advance(

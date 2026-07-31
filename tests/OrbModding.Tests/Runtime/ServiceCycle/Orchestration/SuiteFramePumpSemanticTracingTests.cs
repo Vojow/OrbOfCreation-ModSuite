@@ -135,15 +135,20 @@ public sealed class SuiteFramePumpSemanticTracingTests
         Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.CycleCompleted);
     }
 
-    [Fact]
-    public void SkippedActionIsTracedAndDoesNotTerminateTheBatch()
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public void SkippedActionIsTracedAndDoesNotTerminateTheBatch(
+        bool beforeNative,
+        long expectedMutationAttempts)
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("trace.runtime.skipped")
         {
             ActionCount = 2,
-            SkipAtIndex = 0,
+            SkipAtIndex = beforeNative ? -1 : 0,
+            SkipWithoutNativeAtIndex = beforeNative ? 0 : -1,
         };
         using var registration = registry.Register(
             definition,
@@ -169,7 +174,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
             ServiceCycleSemanticEventKind.BatchCompleted,
             ServiceCycleSemanticEventKind.CycleCompleted);
         var skipped = Assert.Single(events, value => value.Kind == ServiceCycleSemanticEventKind.ActionSkipped);
-        Assert.Equal(1, skipped.Payload.MutationAttempts);
+        Assert.Equal(expectedMutationAttempts, skipped.Payload.MutationAttempts);
         Assert.Equal(0, skipped.Payload.MutationsCommitted);
         Assert.Equal(1, registration.Runner.Snapshot.PreviousReceipt.SkippedCount);
     }
@@ -762,6 +767,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
                 value.CleanupAcknowledgementCount > faultedHandoff.CleanupAcknowledgementCount &&
                 value.WorkerWaitCount > faultedHandoff.WorkerWaitCount,
             "the action-fault cleanup handback");
+        TestWorldCollector.CollectedAt(registry, frame);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
         Assert.Equal(1, pump.PumpFrame(frame++).CyclesStarted);
         ServiceRunnerTestWait.ForHandoff(
@@ -780,6 +786,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
             registration.Runner.Snapshot.Fault.Category);
 
         definition.ActionCount = 1;
+        TestWorldCollector.CollectedAt(registry, frame);
         Assert.Equal(0, pump.PumpFrame(frame++).CyclesStarted);
         var returned = registration.Runner.ProbeHandoff();
         Assert.Equal(ServiceHandoffPhase.Empty, returned.Phase);
@@ -824,6 +831,7 @@ public sealed class SuiteFramePumpSemanticTracingTests
         Drain(pump, ref cursor);
 
         definition.FaultAtIndex = -1;
+        TestWorldCollector.CollectedAt(registry, frame);
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
         ServiceCyclePumpTestWait.UntilStart(pump, ref frame);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);

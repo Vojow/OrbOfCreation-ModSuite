@@ -81,31 +81,100 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void AnAllLevelsEveryReadySpellOnce()
+    public void AnAllSkipsAnUnaffordableCreateSpringAndLevelsAffordableDenseExpansion()
     {
-        var lowest = Spell(masteryLevel: 1, ready: true, unlocked: true);
-        var other = Spell(masteryLevel: 5, ready: true, unlocked: true);
+        var water = new global::ResourceSO { name = "Water", quantity = new BigDouble(5, 0) };
+        var space = new global::ResourceSO { name = "Space", quantity = new BigDouble(2, 1) };
+        var createSpring = Spell(masteryLevel: 24, ready: true, unlocked: true);
+        createSpring.levelCost.costs.Add(new global::ResourceTuple(water, new BigDouble(1, 1)));
+        var denseExpansion = Spell(masteryLevel: 25, ready: true, unlocked: true);
+        denseExpansion.levelCost.costs.Add(new global::ResourceTuple(space, new BigDouble(1, 1)));
         var notReady = Spell(masteryLevel: 2, ready: false, unlocked: true);
         UnlockLevelAll(level: 1);
 
-        var result = Execute(SpellLevelActionKind.All, Id(lowest));
+        var result = Execute(SpellLevelActionKind.All, Id(createSpring));
 
         Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
-        Assert.Equal(2, lowest.masteryLevel);
-        Assert.Equal(6, other.masteryLevel);
+        Assert.True(result.HasNativeEvidence);
+        Assert.Equal(NativeMutationOutcome.Verified, result.NativeEvidence.Outcome);
+        Assert.Equal(1, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(24, createSpring.masteryLevel);
+        Assert.Equal(26, denseExpansion.masteryLevel);
         Assert.Equal(2, notReady.masteryLevel);
     }
 
     [Fact]
-    public void AnAllPlannedAgainstAnUpgradeThatIsNoLongerCommittedRejects()
+    public void AnAllWithNoAffordableLiveSpellRejectsWithoutCallingOrQuarantiningTheBatch()
+    {
+        var spell = Spell(masteryLevel: 1, ready: true, unlocked: true);
+        spell.levelCost.affordable = false;
+        UnlockLevelAll(level: 1);
+        var levels = new SpellLevelNativeAdapter();
+        var capability = new SpellLevelCapabilityState();
+        capability.Observe(AutoSpellLevelCapability.All);
+        var boundaryStatus = new SpellLevelBoundaryStatusState();
+
+        var rejected = Execute(
+            SpellLevelActionKind.All,
+            Id(spell),
+            levels: levels,
+            observeCapability: capability.Observe,
+            observeBoundaryStatus: boundaryStatus.Observe);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, rejected.Disposition);
+        Assert.Equal(SpellLevelActionResultCodes.LevelNotAffordable, rejected.Code);
+        Assert.Equal(0, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(AutoSpellLevelCapability.All, capability.Current);
+        Assert.Equal("no ready spell has an affordable level cost", boundaryStatus.WaitingReason);
+
+        spell.levelCost.affordable = true;
+        var committed = Execute(
+            SpellLevelActionKind.All,
+            Id(spell),
+            levels: levels,
+            observeCapability: capability.Observe,
+            observeBoundaryStatus: boundaryStatus.Observe);
+
+        Assert.Equal(ServiceActionDisposition.Committed, committed.Disposition);
+        Assert.Equal(1, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(2, spell.masteryLevel);
+        Assert.Null(boundaryStatus.WaitingReason);
+    }
+
+    [Fact]
+    public void AnAllPlannedAgainstAQueuedButUncommittedUpgradeRejectsWithoutCalling()
     {
         var spell = Spell(masteryLevel: 1, ready: true, unlocked: true);
         UnlockLevelAll(level: 0);
+        LevelAllUpgrade().queuedLevels = 1;
+        var capability = new SpellLevelCapabilityState();
+        capability.Observe(AutoSpellLevelCapability.All);
 
-        var result = Execute(SpellLevelActionKind.All, Id(spell));
+        var result = Execute(
+            SpellLevelActionKind.All,
+            Id(spell),
+            observeCapability: capability.Observe);
 
         Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
         Assert.Equal(SpellLevelActionResultCodes.LevelNotAffordable, result.Code);
+        Assert.Equal(1, spell.masteryLevel);
+        Assert.Equal(0, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(AutoSpellLevelCapability.Single, capability.Current);
+    }
+
+    [Fact]
+    public void AnAllWithAnUnavailableExactBindingFailsClosedWithoutCalling()
+    {
+        var spell = Spell(masteryLevel: 1, ready: true, unlocked: true);
+        UnlockLevelAll(level: 1);
+        var manager = global::SpellManager.instance!;
+        global::IdScriptableObject.RuntimeLookup.Remove(KnownEntities.UnlockLevelAllSpells.Uuid);
+
+        var result = Execute(SpellLevelActionKind.All, Id(spell));
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
+        Assert.Equal(0, manager.TryLevelAllCalls);
         Assert.Equal(1, spell.masteryLevel);
     }
 
@@ -120,6 +189,20 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
         Assert.Equal(CommonActionResultCodes.LifecycleReplaced, result.Code);
         Assert.Equal(1, spell.masteryLevel);
         Assert.Equal(0, spell.GetLevelCost().PerformCalls);
+    }
+
+    [Fact]
+    public void AnAllLifecycleEpochDriftRejectsWithoutCallingTheBatch()
+    {
+        var spell = Spell(masteryLevel: 1, ready: true, unlocked: true);
+        UnlockLevelAll(level: 1);
+
+        var result = Execute(SpellLevelActionKind.All, Id(spell), nativeEpoch: PlannedEpoch + 1);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.LifecycleReplaced, result.Code);
+        Assert.Equal(0, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(1, spell.masteryLevel);
     }
 
     [Fact]
@@ -173,7 +256,35 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void TheBoundaryIsTheOnlyPlaceLockedCanBeObserved()
+    public void AnAttemptedAllNoOpFaultsAndBlocksTheBatchUntilLifecycleReplacement()
+    {
+        var spell = Spell(masteryLevel: 1, ready: true, unlocked: true);
+        spell.SuppressLevelMutation = true;
+        spell.levelCost.AffordableLevels = 1;
+        UnlockLevelAll(level: 1);
+        var levels = new SpellLevelNativeAdapter();
+
+        var first = Execute(SpellLevelActionKind.All, Id(spell), levels: levels);
+        Assert.Equal(ServiceActionDisposition.Faulted, first.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, first.Code);
+        Assert.Equal(1, global::SpellManager.instance!.TryLevelAllCalls);
+
+        spell.SuppressLevelMutation = false;
+        spell.levelCost.AffordableLevels = 1;
+        var blocked = Execute(SpellLevelActionKind.All, Id(spell), levels: levels);
+        Assert.Equal(ServiceActionDisposition.Faulted, blocked.Disposition);
+        Assert.Equal(1, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(1, spell.masteryLevel);
+
+        levels.InvalidateLifecycle();
+        var recovered = Execute(SpellLevelActionKind.All, Id(spell), levels: levels);
+        Assert.Equal(ServiceActionDisposition.Committed, recovered.Disposition);
+        Assert.Equal(2, global::SpellManager.instance!.TryLevelAllCalls);
+        Assert.Equal(2, spell.masteryLevel);
+    }
+
+    [Fact]
+    public void TheBoundaryChangesCapabilityOnlyForProgressionOrCommittedUpgradeFacts()
     {
         var spell = Spell(masteryLevel: 1, ready: true, unlocked: false);
         var observed = new List<AutoSpellLevelCapability>();
@@ -184,7 +295,7 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
         observed.Clear();
         spell.levelingPrerequisites.available = true;
         Execute(SpellLevelActionKind.Single, Id(spell), observeCapability: observed.Add);
-        Assert.Equal(AutoSpellLevelCapability.Single, Assert.Single(observed));
+        Assert.DoesNotContain(observed, _ => true);
     }
 
     [Fact]
@@ -242,13 +353,15 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
         bool ownsActionFamily = true,
         bool autoLevelSpells = true,
         SpellLevelNativeAdapter? levels = null,
-        Action<AutoSpellLevelCapability>? observeCapability = null)
+        Action<AutoSpellLevelCapability>? observeCapability = null,
+        Action<SpellLevelSubmission>? observeBoundaryStatus = null)
     {
         var adapter = new SpellLevelCycleActionAdapter(
             levels ?? new SpellLevelNativeAdapter(),
             () => nativeEpoch,
             () => ownsActionFamily,
-            observeCapability);
+            observeCapability,
+            observeBoundaryStatus);
         var action = new SpellLevelCycleAction(kind, uuid, PlannedEpoch);
         var config = new SuiteRuntimeConfiguration
         {
@@ -258,7 +371,6 @@ public sealed class SpellLevelCycleActionAdapterTests : IDisposable
             {
                 Mode = AutoBuyOperationMode.Active,
                 AutoLevelSpells = autoLevelSpells,
-                EvaluationIntervalSeconds = 1f,
             },
         };
         return adapter.TryExecute(in action, in config, default);

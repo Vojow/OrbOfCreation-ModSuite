@@ -29,14 +29,13 @@ public sealed class AutoBuyCycleEvaluatorTests
     // ---- Whole-service gates -------------------------------------------------------------------
 
     [Fact]
-    public void ReschedulesAfterDecisionAtTheConfiguredInterval()
+    public void WaitsForTheNextPublicationWhenThereIsNoWork()
     {
         var frame = new FrameBuilder().Build(); // no candidates
         var actions = Plan(frame, Config(), out var wake);
 
         Assert.Empty(actions);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(0.5), wake.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -66,7 +65,7 @@ public sealed class AutoBuyCycleEvaluatorTests
     [Fact]
     public void ReportsWorkerInputEligibilityAndDecisionSize()
     {
-        var builder = new FrameBuilder().Multiplier(4);
+        var builder = new FrameBuilder().Bulk(4);
         var resource = builder.Resource(1_000);
         builder.Structure(StructureA, new[] { (resource, 1.0) });
         builder.Structure(StructureB, new[] { (resource, 2.0) }, available: false);
@@ -74,7 +73,7 @@ public sealed class AutoBuyCycleEvaluatorTests
 
         var actions = Plan(
             builder.Build(),
-            Config(grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier),
+            Config(),
             out _,
             out var metrics);
 
@@ -85,6 +84,10 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(2, metrics.PlannedActions);
         Assert.Equal(5, metrics.RequestedLevels);
         Assert.Equal(actions.Count, metrics.PlannedActions);
+        Assert.Equal(2, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
     }
 
     [Fact]
@@ -99,7 +102,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         AutoBuyServiceProjection.Write(in state, output);
 
         var projection = output.CaptureSnapshot();
-        Assert.Equal(14, projection.Count);
+        Assert.Equal(16, projection.Count);
         Assert.Collection(
             Enumerable.Range(0, projection.Count).Select(projection.GetEntry),
             entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedCandidatesKey, 3),
@@ -109,13 +112,15 @@ public sealed class AutoBuyCycleEvaluatorTests
             entry => AssertProjection(entry, AutoBuyServiceProjection.PlannedActionsKey, 2),
             entry => AssertProjection(entry, AutoBuyServiceProjection.RequestedLevelsKey, 5),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedKindNotSelectedKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedBlocklistedKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedNotAllowlistedKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnavailableKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedRequirementsUnmetKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedTerminalKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnaffordableKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnpriceableKey, 0));
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnpriceableKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.FullGroupsKey, 2),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupsKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupLevelsKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.LedgerStarvedKey, 0));
     }
 
     /// <summary>
@@ -237,24 +242,143 @@ public sealed class AutoBuyCycleEvaluatorTests
     }
 
     [Fact]
-    public void AMultiLevelRequestIsChargedForEveryLevelItAsksFor()
+    public void AStructureBulkRequestIsChargedForEveryLevelItAsksFor()
     {
-        var builder = new FrameBuilder().Multiplier(3);
+        var builder = new FrameBuilder().Bulk(3);
         var resource = builder.Resource(40);
-        builder.Upgrade(UpgradeA, new[] { (resource, 8.0) });      // ratio 0.2, ranked first
-        builder.Structure(StructureA, new[] { (resource, 10.0) }); // ratio 0.25
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost: 8.0,
+            exactGroupedCost: 24.0);
+        builder.Upgrade(UpgradeA, new[] { (resource, 10.0) });
         var frame = builder.Build();
 
-        // The upgrade asks for 3 levels, so it is charged 24, not 8. That leaves 16, which cannot
-        // cover the structure's cost(10) + reserve(8).
+        // The structure asks for 3 levels, so it is charged 24, not 8. That leaves 16, which cannot
+        // cover the upgrade's cost(10) + reserve(8).
         var actions = Plan(
             frame,
-            Config(grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier, absoluteReserve: "8"),
+            Config(absoluteReserve: "8"),
             out _);
 
         Assert.Single(actions);
-        Assert.Equal(UpgradeA, actions[0].Uuid);
+        Assert.Equal(StructureA, actions[0].Uuid);
         Assert.Equal(3, actions[0].Count);
+    }
+
+    [Fact]
+    public void LiveMissedStructurePlansOneExactLevelAndRecordsReducedGroup()
+    {
+        // Alchemic Command's live Water arithmetic: one level was 77.4098% of stock, while the
+        // exact two-level sum was 174.2981%. One-level admission therefore must result in one action.
+        const double stock = 1.10713885171171e9;
+        const double nextCost = 8.5703445124987e8;
+        const double exactTwoLevelCost = 1.92972183318296e9;
+        var builder = new FrameBuilder().Bulk(2);
+        var resource = builder.Resource(stock);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost,
+            exactTwoLevelCost);
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(1, action.Count);
+        Assert.Equal(nextCost / stock, action.Belief.CostRatio, 6);
+        Assert.Equal(0, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroupLevels);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
+    }
+
+    [Fact]
+    public void CandidateSpentOutByEarlierActionRecordsLedgerStarved()
+    {
+        var builder = new FrameBuilder().Bulk(1);
+        var resource = builder.Resource(15);
+        builder.Structure(StructureA, new[] { (resource, 10.0) });
+        builder.Structure(StructureB, new[] { (resource, 10.0) });
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(StructureA, action.Uuid);
+        Assert.Equal(2, metrics.EligibleCandidates);
+        Assert.Equal(1, metrics.PlannedActions);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(1, metrics.GroupOutcomes.LedgerStarved);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
+    }
+
+    [Fact]
+    public void FullyAffordableTwoLevelGroupRemainsFull()
+    {
+        const double stock = 3e9;
+        const double nextCost = 8.5703445124987e8;
+        const double exactTwoLevelCost = 1.92972183318296e9;
+        var builder = new FrameBuilder().Bulk(2);
+        var resource = builder.Resource(stock);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost,
+            exactTwoLevelCost);
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(2, action.Count);
+        Assert.Equal(exactTwoLevelCost / stock, action.Belief.CostRatio, 6);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroupLevels);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
+    }
+
+    [Fact]
+    public void FillAvailableQueueReservesTheExactRisingGroupedCost()
+    {
+        var builder = new FrameBuilder().Bulk(3);
+        var resource = builder.Resource(65);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost: 10.0,
+            exactGroupedCost: 60.0); // successive prices 10 + 20 + 30
+        builder.Upgrade(UpgradeA, new[] { (resource, 20.0) });
+        var frame = builder.Build();
+
+        // The old lower bound reserved 3 * 10 = 30, leaving 35 and admitting the structure. Native
+        // payment leaves only 5 after the rising 10 + 20 + 30 curve, so the structure is predictably
+        // unaffordable. FillAvailableQueue still plans the grouped upgrade, but no longer emits that
+        // doomed later action.
+        var action = Assert.Single(Plan(
+            frame,
+            Config(),
+            out _));
+
+        Assert.Equal(StructureA, action.Uuid);
+        Assert.Equal(3, action.Count);
+    }
+
+    [Fact]
+    public void AGroupedRequestUsesOnlyAnExactPublishedReducedCurve()
+    {
+        var builder = new FrameBuilder().Bulk(3);
+        var resource = builder.Resource(1_000);
+        builder.GroupedStructure(
+            StructureA,
+            resource,
+            nextCost: 10.0,
+            exactGroupedCost: 30.0,
+            publishedGroupedLevels: 2);
+
+        var action = Assert.Single(Plan(builder.Build(), Config(), out _, out var metrics));
+
+        Assert.Equal(2, action.Count);
+        Assert.Equal(1, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(2, metrics.GroupOutcomes.ReducedGroupLevels);
     }
 
     // ---- Affordability threshold ----------------------------------------------------------------
@@ -286,8 +410,7 @@ public sealed class AutoBuyCycleEvaluatorTests
             frame,
             Config(
                 structureAffordability: AutoBuyAffordabilityMode.Excess100, // rejects the structure
-                upgradeAffordability: AutoBuyAffordabilityMode.Excess10,    // admits the upgrade
-                grouping: AutoBuyPurchaseGroupingMode.Single),
+                upgradeAffordability: AutoBuyAffordabilityMode.Excess10),   // admits the upgrade
             out _);
 
         Assert.All(actions, a => Assert.Equal(AutoBuyCandidateKind.Upgrade, a.Kind));
@@ -348,9 +471,7 @@ public sealed class AutoBuyCycleEvaluatorTests
 
         var action = Assert.Single(Plan(
             frame,
-            Config(
-                grouping: AutoBuyPurchaseGroupingMode.Single,
-                structureAffordability: AutoBuyAffordabilityMode.BuyAll),
+            Config(structureAffordability: AutoBuyAffordabilityMode.BuyAll),
             out _));
         Assert.Equal(StructureA, action.Uuid);
     }
@@ -379,72 +500,13 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Structure(StructureB, new[] { (cheap, 1.0) });    // ratio 0.001
         var frame = builder.Build();
 
-        var actions = Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _);
+        var actions = Plan(frame, Config(), out _);
 
         Assert.Equal(StructureB, actions[0].Uuid); // lower ratio first
         Assert.Contains(actions, a => a.Uuid == StructureA);
         Assert.True(
             actions.ToList().FindIndex(a => a.Uuid == StructureB) <
             actions.ToList().FindIndex(a => a.Uuid == StructureA));
-    }
-
-    [Fact]
-    public void PriorityRankOutranksCostRatioForPrioritizedStructures()
-    {
-        var builder = new FrameBuilder();
-        var cheap = builder.Resource(1_000);
-        var pricey = builder.Resource(1_000);
-        builder.Structure(StructureA, new[] { (cheap, 1.0) });    // ratio 0.001, no priority
-        builder.Structure(
-            StructureB,
-            new[] { (pricey, 100.0) },                             // ratio 0.1, prioritized
-            priority: AutoBuyEconomicPriority.CostReduction);
-        var frame = builder.Build();
-
-        var actions = Plan(
-            frame,
-            Config(grouping: AutoBuyPurchaseGroupingMode.Single, prioritize: true),
-            out _);
-
-        Assert.Equal(StructureB, actions[0].Uuid); // higher PriorityRank wins despite worse ratio
-    }
-
-    // ---- Allow / block --------------------------------------------------------------------------
-
-    [Fact]
-    public void BlocklistExcludesACandidate()
-    {
-        var builder = new FrameBuilder();
-        var resource = builder.Resource(1_000);
-        builder.Structure(StructureA, new[] { (resource, 1.0) });
-        builder.Structure(StructureB, new[] { (resource, 1.0) });
-        var frame = builder.Build();
-
-        var actions = Plan(
-            frame,
-            Config(grouping: AutoBuyPurchaseGroupingMode.Single, blocked: StructureA.ToString()),
-            out _);
-
-        Assert.DoesNotContain(actions, a => a.Uuid == StructureA);
-        Assert.Contains(actions, a => a.Uuid == StructureB);
-    }
-
-    [Fact]
-    public void AllowlistRestrictsToListedCandidates()
-    {
-        var builder = new FrameBuilder();
-        var resource = builder.Resource(1_000);
-        builder.Structure(StructureA, new[] { (resource, 1.0) });
-        builder.Structure(StructureB, new[] { (resource, 1.0) });
-        var frame = builder.Build();
-
-        var actions = Plan(
-            frame,
-            Config(grouping: AutoBuyPurchaseGroupingMode.Single, allowed: StructureB.ToString()),
-            out _);
-
-        Assert.All(actions, a => Assert.Equal(StructureB, a.Uuid));
-        Assert.NotEmpty(actions);
     }
 
     // ---- Availability / lifecycle gates ---------------------------------------------------------
@@ -457,7 +519,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Structure(StructureA, new[] { (resource, 1.0) }, available: false);
         var frame = builder.Build();
 
-        Assert.Empty(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _));
+        Assert.Empty(Plan(frame, Config(), out _));
     }
 
     [Fact]
@@ -469,7 +531,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Structure(StructureB, new[] { (resource, 1.0) }, hasFiniteLevels: true, isMaxQueuedLevel: true, queuedLevels: 3);
         var frame = builder.Build();
 
-        Assert.Empty(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _));
+        Assert.Empty(Plan(frame, Config(), out _));
     }
 
     /// <summary>
@@ -486,7 +548,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Structure(StructureA, new[] { (resource, 1.0) }, meetsNextLevelRequirements: false);
         var frame = builder.Build();
 
-        Assert.Empty(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _));
+        Assert.Empty(Plan(frame, Config(), out _));
     }
 
     /// <summary>The gate is per candidate, not per cycle: an ungated neighbour still gets bought.</summary>
@@ -499,41 +561,12 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Structure(StructureB, new[] { (resource, 1.0) });
         var frame = builder.Build();
 
-        var actions = Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _);
+        var actions = Plan(frame, Config(), out _);
 
         Assert.Equal(StructureB, Assert.Single(actions).Uuid);
     }
 
     // ---- Grouping -------------------------------------------------------------------------------
-
-    /// <summary>
-    /// A structure requests one level under every mode but the one that names the game's own
-    /// structure bulk mechanism.
-    /// </summary>
-    /// <remarks>
-    /// The multiplier belongs to upgrades: the native structure purchase consults no multiplier, so
-    /// asking for five under <c>ActionMultiplier</c> would be asking for something the game does not
-    /// offer. <c>Single</c> and <c>Fixed</c> are operator-set counts rather than a native mechanism
-    /// and still request one.
-    /// </remarks>
-    [Theory]
-    [InlineData((int)AutoBuyPurchaseGroupingMode.Single)]
-    [InlineData((int)AutoBuyPurchaseGroupingMode.Fixed)]
-    [InlineData((int)AutoBuyPurchaseGroupingMode.ActionMultiplier)]
-    public void StructuresRequestOneLevelOutsideBulkDevelopment(int grouping)
-    {
-        var builder = new FrameBuilder().Bulk(4).Multiplier(5);
-        var resource = builder.Resource(1_000_000);
-        builder.Structure(StructureA, new[] { (resource, 1.0) });
-        var frame = builder.Build();
-
-        var action = Assert.Single(Plan(
-            frame,
-            Config(grouping: (AutoBuyPurchaseGroupingMode)grouping, fixedGroupSize: 3),
-            out _));
-        Assert.Equal(StructureA, action.Uuid);
-        Assert.Equal(1, action.Count);
-    }
 
     /// <summary>
     /// Under Bulk Development a structure asks for the game's own bulk count.
@@ -546,19 +579,41 @@ public sealed class AutoBuyCycleEvaluatorTests
     [Fact]
     public void StructuresBulkOnBulkDevelopment()
     {
-        var builder = new FrameBuilder().Bulk(4).Multiplier(5);
+        var builder = new FrameBuilder().Bulk(4);
         var resource = builder.Resource(1_000_000);
         builder.Structure(StructureA, new[] { (resource, 1.0) });
         var frame = builder.Build();
 
         var action = Assert.Single(Plan(
             frame,
-            Config(grouping: AutoBuyPurchaseGroupingMode.BulkDevelopment),
+            Config(),
             out _,
             out var metrics));
         Assert.Equal(StructureA, action.Uuid);
         Assert.Equal(4, action.Count);
         Assert.Equal(4, metrics.RequestedLevels);
+    }
+
+    [Fact]
+    public void BulkDevelopmentOnePreservesTheSingleLevelActionBelief()
+    {
+        var builder = new FrameBuilder().Bulk(1);
+        var resource = builder.Resource(40);
+        builder.Structure(StructureA, new[] { (resource, 10.0) });
+        var frame = builder.Build();
+
+        var action = Assert.Single(Plan(frame, Config(), out _, out var metrics));
+
+        AssertSingleLevelAction(
+            action,
+            AutoBuyCandidateKind.Structure,
+            StructureA,
+            frame.Resources[resource].ResourceId,
+            cost: 10.0,
+            available: 40.0);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
     }
 
     /// <summary>One action stays readable: a hundred levels is the ceiling, as it was in legacy.</summary>
@@ -571,7 +626,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         var frame = builder.Build();
 
         var action = Assert.Single(Plan(
-            frame, Config(grouping: AutoBuyPurchaseGroupingMode.BulkDevelopment), out _));
+            frame, Config(), out _));
         Assert.Equal(100, action.Count);
     }
 
@@ -587,43 +642,36 @@ public sealed class AutoBuyCycleEvaluatorTests
         var frame = builder.Build();
 
         var action = Assert.Single(Plan(
-            frame, Config(grouping: AutoBuyPurchaseGroupingMode.BulkDevelopment), out _));
+            frame, Config(), out _));
         Assert.Equal(1, action.Count);
     }
 
     [Fact]
-    public void UpgradesBulkOnlyUnderActionMultiplier()
+    public void UpgradesRemainByteForByteSingleLevelRequests()
     {
-        var builder = new FrameBuilder().Multiplier(3).Bulk(4);
+        var builder = new FrameBuilder().Bulk(4);
         var resource = builder.Resource(1_000_000);
         builder.Upgrade(UpgradeA, new[] { (resource, 1.0) });
         var frame = builder.Build();
 
-        Assert.Equal(3, Assert.Single(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier), out _)).Count);
-        Assert.Equal(1, Assert.Single(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _)).Count);
-        Assert.Equal(1, Assert.Single(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Fixed, fixedGroupSize: 5), out _)).Count);
-        // Bulk Development is the structure mechanism; an upgrade under it still takes one level.
-        Assert.Equal(1, Assert.Single(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.BulkDevelopment), out _)).Count);
-    }
+        var action = Assert.Single(Plan(frame, Config(), out _, out var metrics));
 
-    [Fact]
-    public void UpgradeBulkCountIsNotBoundedByQueueRoom()
-    {
-        // Room bounds the number of actions (queue slots), not the per-action level count: one bulk
-        // upgrade call can request more levels than the room has slots.
-        var builder = new FrameBuilder().Multiplier(10);
-        var resource = builder.Resource(1_000_000);
-        builder.Upgrade(UpgradeA, new[] { (resource, 1.0) });
-        var frame = builder.Build();
-
-        var action = Assert.Single(Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.ActionMultiplier), out _));
-        Assert.Equal(10, action.Count);
+        AssertSingleLevelAction(
+            action,
+            AutoBuyCandidateKind.Upgrade,
+            UpgradeA,
+            frame.Resources[resource].ResourceId,
+            cost: 1.0,
+            available: 1_000_000.0);
+        Assert.Equal(1, metrics.GroupOutcomes.FullGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.ReducedGroups);
+        Assert.Equal(0, metrics.GroupOutcomes.LedgerStarved);
     }
 
     // ---- One action per candidate, room- and batch-bounded --------------------------------------
 
     [Fact]
-    public void SingleGroupingBuysExactlyOnePerEligibleCandidate()
+    public void PlansOncePerEligibleCandidate()
     {
         var builder = new FrameBuilder();
         var resource = builder.Resource(1_000_000);
@@ -632,7 +680,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         builder.Upgrade(UpgradeA, new[] { (resource, 3.0) });      // ratio largest
         var frame = builder.Build();
 
-        var actions = Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _);
+        var actions = Plan(frame, Config(), out _);
 
         // One action per eligible candidate, in ranked order, each requesting a single level.
         Assert.Equal(new[] { StructureA, StructureB, UpgradeA }, actions.Select(a => a.Uuid).ToArray());
@@ -652,33 +700,11 @@ public sealed class AutoBuyCycleEvaluatorTests
         // All three eligible, one action each, in rank order. The worker cannot know how many slots
         // will still be free by the time each one runs, so it plans the whole ranked list; the action
         // boundary re-reads the live room, clamps, and cascade-terminates the batch when it fills.
-        var actions = Plan(frame, Config(grouping: AutoBuyPurchaseGroupingMode.Single), out _);
+        var actions = Plan(frame, Config(), out _);
 
         Assert.Equal(
             new[] { StructureA, StructureB, UpgradeA },
             actions.Select(a => a.Uuid).ToArray());
-    }
-
-    [Fact]
-    public void FixedBatchSizingCapsTheNumberOfActionsAtMaxPurchasesPerBatch()
-    {
-        var builder = new FrameBuilder();
-        var resource = builder.Resource(1_000_000);
-        builder.Structure(StructureA, new[] { (resource, 1.0) });
-        builder.Structure(StructureB, new[] { (resource, 2.0) });
-        builder.Upgrade(UpgradeA, new[] { (resource, 3.0) });
-        var frame = builder.Build();
-
-        // Three eligible with room for all, but the Fixed batch cap holds it to two actions.
-        var actions = Plan(
-            frame,
-            Config(
-                grouping: AutoBuyPurchaseGroupingMode.Single,
-                batchSizing: AutoBuyBatchSizingMode.Fixed,
-                maxPurchasesPerBatch: 2),
-            out _);
-
-        Assert.Equal(2, actions.Count);
     }
 
     // ---- Duplicate-resource combining -----------------------------------------------------------
@@ -781,6 +807,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(
             metrics.CapturedCandidates,
             metrics.EligibleCandidates + metrics.Exclusions.Total);
+        Assert.Equal(metrics.EligibleCandidates, metrics.GroupOutcomes.TotalCandidates);
     }
 
     /// <summary>
@@ -798,8 +825,6 @@ public sealed class AutoBuyCycleEvaluatorTests
         var terms = new[]
         {
             AutoBuyExclusion.KindNotSelected,
-            AutoBuyExclusion.Blocklisted,
-            AutoBuyExclusion.NotAllowlisted,
             AutoBuyExclusion.Unavailable,
             AutoBuyExclusion.RequirementsUnmet,
             AutoBuyExclusion.Terminal,
@@ -825,8 +850,6 @@ public sealed class AutoBuyCycleEvaluatorTests
             var config = term switch
             {
                 AutoBuyExclusion.KindNotSelected => Config(includeStructures: false),
-                AutoBuyExclusion.Blocklisted => Config(blocked: StructureA.ToString("D")),
-                AutoBuyExclusion.NotAllowlisted => Config(allowed: StructureB.ToString("D")),
                 _ => Config(),
             };
 
@@ -859,10 +882,10 @@ public sealed class AutoBuyCycleEvaluatorTests
             isMaxLevel: true,
             meetsNextLevelRequirements: false);
 
-        Plan(builder.Build(), Config(blocked: StructureA.ToString("D")), out _, out var metrics);
+        Plan(builder.Build(), Config(), out _, out var metrics);
 
         Assert.Equal(1, metrics.Exclusions.Total);
-        Assert.Equal(1, metrics.Exclusions.Blocklisted);
+        Assert.Equal(1, metrics.Exclusions.Unavailable);
     }
 
     /// <summary>
@@ -951,7 +974,7 @@ public sealed class AutoBuyCycleEvaluatorTests
 
         var actions = Plan(
             builder.Build(),
-            Config(structureAffordability: AutoBuyAffordabilityMode.BuyAll, grouping: AutoBuyPurchaseGroupingMode.Single),
+            Config(structureAffordability: AutoBuyAffordabilityMode.BuyAll),
             out _);
 
         // The worker must emit the oracle's lower-ratio candidate first.
@@ -1017,6 +1040,36 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(expectedValue, entry.Value.Integer);
     }
 
+    private static void AssertSingleLevelAction(
+        in AutoBuyCycleAction action,
+        AutoBuyCandidateKind expectedKind,
+        Guid expectedUuid,
+        Guid expectedResource,
+        double cost,
+        double available)
+    {
+        Assert.Equal(expectedKind, action.Kind);
+        Assert.Equal(expectedUuid, action.Uuid);
+        Assert.Equal(1, action.Count);
+        Assert.Equal(1, action.CollectedAtEpoch);
+
+        var belief = action.Belief;
+        Assert.True(belief.IsAvailable);
+        Assert.False(belief.HasFiniteLevels);
+        Assert.False(belief.IsMaxLevel);
+        Assert.False(belief.IsMaxQueuedLevel);
+        Assert.Equal(0, belief.CurrentLevel);
+        Assert.Equal(0, belief.QueuedLevels);
+        Assert.Equal(1, belief.CostResourceCount);
+        Assert.Equal(1, belief.PricedResourceCount);
+        Assert.Equal(cost / available, belief.CostRatio, 12);
+        Assert.Equal(expectedResource, belief.BindingResourceId);
+        Assert.False(belief.BindingIsBandwidth);
+        Assert.Equal(cost, belief.BindingCost.ToDouble(), 12);
+        Assert.Equal(available, belief.BindingAvailable.ToDouble(), 12);
+        Assert.Equal(0.0, belief.BindingReserveFloor.ToDouble(), 12);
+    }
+
     private static SuiteRuntimeConfiguration Config(
         bool enabled = true,
         bool emergencyDisabled = false,
@@ -1025,16 +1078,8 @@ public sealed class AutoBuyCycleEvaluatorTests
         bool includeUpgrades = true,
         AutoBuyAffordabilityMode structureAffordability = AutoBuyAffordabilityMode.BuyAll,
         AutoBuyAffordabilityMode upgradeAffordability = AutoBuyAffordabilityMode.BuyAll,
-        AutoBuyPurchaseGroupingMode grouping = AutoBuyPurchaseGroupingMode.Single,
-        AutoBuyBatchSizingMode batchSizing = AutoBuyBatchSizingMode.FillAvailableQueue,
-        int maxPurchasesPerBatch = 8,
-        int fixedGroupSize = 2,
-        bool prioritize = false,
-        string allowed = "",
-        string blocked = "",
         string absoluteReserve = "0",
-        float relativeMultiplier = 0f,
-        float evaluationIntervalSeconds = 0.5f) =>
+        float relativeMultiplier = 0f) =>
         new SuiteRuntimeConfiguration
         {
             General = new SuiteGeneralConfiguration { Enabled = enabled },
@@ -1046,14 +1091,6 @@ public sealed class AutoBuyCycleEvaluatorTests
                 IncludeUpgrades = includeUpgrades,
                 StructureAffordability = structureAffordability,
                 UpgradeAffordability = upgradeAffordability,
-                PurchaseGrouping = grouping,
-                BatchSizing = batchSizing,
-                MaxPurchasesPerBatch = maxPurchasesPerBatch,
-                FixedGroupSize = fixedGroupSize,
-                PrioritizeCostAndQualityStructures = prioritize,
-                AllowedUuids = allowed,
-                BlockedUuids = blocked,
-                EvaluationIntervalSeconds = evaluationIntervalSeconds,
             },
             Reserves = new AutomataReserveConfiguration
             {
@@ -1068,7 +1105,6 @@ public sealed class AutoBuyCycleEvaluatorTests
         private readonly List<AutoBuyResourceRow> _resources = new();
         private readonly List<AutoBuyCostRow> _costs = new();
         private int _bulk = 1;
-        private int _multiplier = 1;
         private long _collectedAtEpoch = 1;
 
         public FrameBuilder CollectedAtEpoch(long epoch)
@@ -1080,12 +1116,6 @@ public sealed class AutoBuyCycleEvaluatorTests
         public FrameBuilder Bulk(int bulk)
         {
             _bulk = bulk;
-            return this;
-        }
-
-        public FrameBuilder Multiplier(int multiplier)
-        {
-            _multiplier = multiplier;
             return this;
         }
 
@@ -1115,14 +1145,13 @@ public sealed class AutoBuyCycleEvaluatorTests
             Guid uuid,
             (int resourceIndex, double cost)[] costs,
             bool available = true,
-            AutoBuyEconomicPriority priority = AutoBuyEconomicPriority.None,
             bool hasFiniteLevels = false,
             bool isMaxLevel = false,
             bool isMaxQueuedLevel = false,
             int queuedLevels = 0,
             bool meetsNextLevelRequirements = true) =>
             Candidate(
-                AutoBuyCandidateKind.Structure, uuid, costs, available, priority, hasFiniteLevels,
+                AutoBuyCandidateKind.Structure, uuid, costs, available, hasFiniteLevels,
                 isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements);
 
         public FrameBuilder Upgrade(
@@ -1135,24 +1164,53 @@ public sealed class AutoBuyCycleEvaluatorTests
             int queuedLevels = 0,
             bool meetsNextLevelRequirements = true) =>
             Candidate(
-                AutoBuyCandidateKind.Upgrade, uuid, costs, available, AutoBuyEconomicPriority.None,
+                AutoBuyCandidateKind.Upgrade, uuid, costs, available,
                 hasFiniteLevels, isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements);
+
+        public FrameBuilder GroupedStructure(
+            Guid uuid,
+            int resourceIndex,
+            double nextCost,
+            double exactGroupedCost,
+            int? publishedGroupedLevels = null) =>
+            Candidate(
+                AutoBuyCandidateKind.Structure,
+                uuid,
+                new[] { (resourceIndex, nextCost) },
+                available: true,
+                hasFiniteLevels: false,
+                isMaxLevel: false,
+                isMaxQueuedLevel: false,
+                queuedLevels: 0,
+                meetsNextLevelRequirements: true,
+                new[] { exactGroupedCost },
+                publishedGroupedLevels);
 
         private FrameBuilder Candidate(
             AutoBuyCandidateKind kind,
             Guid uuid,
             (int resourceIndex, double cost)[] costs,
             bool available,
-            AutoBuyEconomicPriority priority,
             bool hasFiniteLevels,
             bool isMaxLevel,
             bool isMaxQueuedLevel,
             int queuedLevels,
-            bool meetsNextLevelRequirements)
+            bool meetsNextLevelRequirements,
+            double[]? exactGroupedCosts = null,
+            int? publishedGroupedLevels = null)
         {
             var start = _costs.Count;
-            foreach (var (resourceIndex, cost) in costs)
-                _costs.Add(new AutoBuyCostRow(resourceIndex, cost));
+            var groupedLevels = publishedGroupedLevels ?? Math.Max(
+                1, Math.Min(WorldPurchaseGrouping.MaximumLevels,
+                    kind == AutoBuyCandidateKind.Structure ? _bulk : 1));
+            for (var index = 0; index < costs.Length; index++)
+            {
+                var (resourceIndex, cost) = costs[index];
+                var groupedCost = exactGroupedCosts is null
+                    ? cost * groupedLevels
+                    : exactGroupedCosts[index];
+                _costs.Add(new AutoBuyCostRow(resourceIndex, cost, groupedLevels, groupedCost));
+            }
 
             _candidates.Add(new AutoBuyCandidateRow(
                 kind,
@@ -1164,7 +1222,6 @@ public sealed class AutoBuyCycleEvaluatorTests
                 isMaxLevel,
                 isMaxQueuedLevel,
                 meetsNextLevelRequirements,
-                priority,
                 start,
                 costs.Length));
             return this;
@@ -1172,7 +1229,7 @@ public sealed class AutoBuyCycleEvaluatorTests
 
         public AutoBuyCycleFrame Build()
         {
-            var global = new AutoBuyGlobalRow(_bulk, _multiplier, _collectedAtEpoch);
+            var global = new AutoBuyGlobalRow(_bulk, _collectedAtEpoch);
 
             return new AutoBuyCycleFrame(
                 global,

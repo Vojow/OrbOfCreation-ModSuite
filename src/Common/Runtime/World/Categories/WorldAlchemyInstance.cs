@@ -9,16 +9,20 @@ namespace OrbModding.Common.Runtime.World;
 /// <summary>One recipe named by the native ConceptRecipes registry.</summary>
 internal readonly struct WorldConceptRecipe
 {
-    internal WorldConceptRecipe(Guid recipeId, Guid coreTypeId)
+    internal WorldConceptRecipe(Guid recipeId, Guid coreTypeId, bool canAddNow = true)
     {
         RecipeId = recipeId;
         CoreTypeId = coreTypeId;
+        CanAddNow = canAddNow;
     }
 
     internal Guid RecipeId { get; }
 
     /// <summary>The native slot family that prevents two incompatible concepts sharing one slot.</summary>
     internal Guid CoreTypeId { get; }
+
+    /// <summary>Whether the authoritative Active Concepts list can admit this recipe now.</summary>
+    internal bool CanAddNow { get; }
 }
 
 /// <summary>One active Concept assignment as it stood when the world was collected.</summary>
@@ -277,6 +281,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
 
     private readonly Func<object, IList?>? _activeValues;
     private readonly Func<object, IList?>? _recipeValues;
+    private readonly MethodInfo? _canAddInstance;
     private readonly Func<object, Guid>? _recipeId;
     private readonly Func<object, Guid>? _coreTypeId;
     private readonly Func<object, object?>? _recipeDrain;
@@ -310,6 +315,9 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
 
         _activeValues = NativeAccessorBinder.CollectionField(activeListType, "value");
         _recipeValues = NativeAccessorBinder.CollectionField(recipeListType, "value");
+        _canAddInstance = activeListType.GetMethod(
+            "CanAddInstance", Instance, null, new[] { _recipeType! }, null);
+        if (_canAddInstance?.ReturnType != typeof(bool)) _canAddInstance = null;
         _instanceType = NativeAccessorBinder.CollectionElementType(activeListType, "value");
         _recipeId = NativeAccessorBinder.Call<Guid>(_recipeType, "GetGuid");
         _coreTypeId = NativeAccessorBinder.CallReferenceGuid(_recipeType, "GetCoreType");
@@ -383,7 +391,11 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                     continue;
                 }
 
-                frame.ConceptRecipes.Append(new WorldConceptRecipe(id, core));
+                var canAddValue = _canAddInstance!.Invoke(activeList, new[] { recipe });
+                if (canAddValue is not bool canAddNow)
+                    throw new InvalidOperationException(
+                        "AlchemyInstanceListVariable.CanAddInstance returned no Boolean value");
+                frame.ConceptRecipes.Append(new WorldConceptRecipe(id, core, canAddNow));
                 AppendCosts(id, WorldAlchemyCostKind.RecipeDrain, _recipeDrain!(recipe), frame.AlchemyCosts);
                 sampled++;
             }
@@ -446,7 +458,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     }
 
     private bool IsBound() =>
-        _activeValues is not null && _recipeValues is not null && _instanceType is not null &&
+        _activeValues is not null && _recipeValues is not null && _canAddInstance is not null &&
+        _instanceType is not null &&
         _recipeId is not null && _coreTypeId is not null && _recipeDrain is not null &&
         _instanceRecipeId is not null && _quantity is not null && _queuedQuantity is not null &&
         _resourceDrain is not null && _drainRatio is not null && _currentDrain is not null &&

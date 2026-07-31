@@ -13,7 +13,8 @@ namespace OrbAutomata;
 /// <see cref="AutoSpellLevelCapability.All"/> from the snapshot but never
 /// <see cref="AutoSpellLevelCapability.Locked"/>, because that answer is the leveling prerequisite and
 /// prerequisites are a boundary fact (W59). So the capability is main-thread state, seeded by a probe
-/// once per lifecycle and corrected by every action the boundary runs.
+/// once per lifecycle and corrected only when the boundary learns a progression or committed-upgrade
+/// fact.
 /// <para>
 /// It resets to <see cref="AutoSpellLevelCapability.Locked"/> on a lifecycle boundary rather than
 /// keeping the last generation's answer. Nothing is retained across a boundary, and a tooltip that
@@ -30,6 +31,27 @@ internal sealed class SpellLevelCapabilityState
         Volatile.Write(ref _current, (int)capability);
 
     public void Reset() => Observe(AutoSpellLevelCapability.Locked);
+}
+
+/// <summary>
+/// The last ordinary affordability refusal learned at the action boundary. It is separate from
+/// capability: being broke says what the feature is waiting for, not what the committed progression
+/// upgrade lets it do.
+/// </summary>
+internal sealed class SpellLevelBoundaryStatusState
+{
+    private string? _waitingReason;
+
+    public string? WaitingReason => Volatile.Read(ref _waitingReason);
+
+    public void Observe(SpellLevelSubmission submission) =>
+        Volatile.Write(
+            ref _waitingReason,
+            submission.Preflight == SpellLevelPreflight.NotAffordable
+                ? submission.Reason
+                : null);
+
+    public void Reset() => Volatile.Write(ref _waitingReason, null);
 }
 
 /// <summary>

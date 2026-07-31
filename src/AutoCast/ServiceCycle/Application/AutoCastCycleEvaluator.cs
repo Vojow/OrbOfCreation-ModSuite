@@ -41,7 +41,7 @@ internal static class AutoCastCycleEvaluator
         ServiceActionWriter<AutoCastCycleAction> actions,
         out AutoCastDecisionMetrics metrics)
     {
-        var wake = WakePolicy.AfterDecision(AutoCastConfigurationPolicy.EvaluationInterval(config));
+        var wake = WakePolicy.OnPublication;
         var slots = world.SpellSlots;
         metrics = new AutoCastDecisionMetrics(
             slots.Count,
@@ -148,7 +148,7 @@ internal static class AutoCastCycleEvaluator
 
         // A cast that took a hold wakes on the next world rather than on the interval, so the release
         // lands as close to the charge finishing as a generation-gated service can put it.
-        return holdsCharge ? WakePolicy.Immediate : wake;
+        return wake;
     }
 
     /// <summary>
@@ -184,7 +184,7 @@ internal static class AutoCastCycleEvaluator
             // off the main thread; waking on the interval instead would make it several.
             metrics = new AutoCastDecisionMetrics(
                 rows.Length, 0, 0, holdingCharge: true, channelBlocked: false);
-            return WakePolicy.Immediate;
+            return WakePolicy.OnPublication;
         }
 
         actions.Add(new AutoCastCycleAction(
@@ -196,7 +196,7 @@ internal static class AutoCastCycleEvaluator
 
         metrics = new AutoCastDecisionMetrics(
             rows.Length, 0, 1, holdingCharge: false, channelBlocked: false);
-        return WakePolicy.AfterDecision(AutoCastConfigurationPolicy.EvaluationInterval(config));
+        return WakePolicy.OnPublication;
     }
 
     /// <summary>

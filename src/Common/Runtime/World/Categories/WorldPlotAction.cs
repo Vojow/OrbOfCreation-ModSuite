@@ -8,7 +8,7 @@ namespace OrbModding.Common.Runtime.World;
 
 /// <summary>
 /// One plot-and-action pair as read: whether the plot offers the action, whether it has an instance
-/// of it, and whether the game has confirmed the action's prerequisites.
+/// of it, and what the native prerequisite latch proves.
 /// </summary>
 /// <remarks>
 /// A pair is not an entity — neither side owns it and it has no identity of its own — which is why
@@ -23,13 +23,13 @@ internal readonly struct RawPlotAction
         Guid plotNodeActionId,
         int offeredCount,
         int instanceCount,
-        bool prerequisitesConfirmed)
+        PlotActionPrerequisiteEvidence prerequisiteEvidence)
     {
         PlotNodeId = plotNodeId;
         PlotNodeActionId = plotNodeActionId;
         OfferedCount = offeredCount;
         InstanceCount = instanceCount;
-        PrerequisitesConfirmed = prerequisitesConfirmed;
+        PrerequisiteEvidence = prerequisiteEvidence;
     }
 
     internal Guid PlotNodeId { get; }
@@ -51,8 +51,9 @@ internal readonly struct RawPlotAction
     internal int InstanceCount { get; }
 
     /// <summary>
-    /// Whether the game has confirmed the action's prerequisites — read from the latch rather than by
-    /// asking, so <see langword="false"/> means "not confirmed", never "refused".
+    /// What the native latch proves. A true latch is a prior successful native validation; a false
+    /// latch needs exact validation at the action boundary and is never published as an unmet
+    /// prerequisite.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -65,13 +66,24 @@ internal readonly struct RawPlotAction
     /// </para>
     /// <para>
     /// Which is why this is named for what it proves rather than for what it is easily taken to mean.
-    /// True is a verdict: the game checked and they passed. False is the absence of a verdict. As a
-    /// <em>gate</em> it still refuses, because refusing on absent evidence is the safe direction; as a
-    /// <em>sentence to a player</em> it has to say what it actually is, and "you have not met these
-    /// prerequisites" is not that.
+    /// True is a verdict: the game checked and they passed. False is the absence of a verdict and is
+    /// carried as an exact request for native validation. A pair discovered only through an instance
+    /// has no latch reading at all and remains unknown.
     /// </para>
     /// </remarks>
-    internal bool PrerequisitesConfirmed { get; }
+    internal PlotActionPrerequisiteEvidence PrerequisiteEvidence { get; }
+
+    /// <summary>Legacy diagnostic projection; policy must use <see cref="PrerequisiteEvidence"/>.</summary>
+    internal bool PrerequisitesConfirmed =>
+        PrerequisiteEvidence == PlotActionPrerequisiteEvidence.NativeLatchedTrue;
+}
+
+/// <summary>What one published plot-action prerequisite reading can honestly prove.</summary>
+internal enum PlotActionPrerequisiteEvidence
+{
+    Unknown = 0,
+    NativeLatchedTrue = 1,
+    UnknownNeedsNativeValidation = 2,
 }
 
 /// <summary>One plot-and-action pair as published.</summary>
@@ -138,7 +150,7 @@ internal readonly struct WorldPlotAction
 /// <para>
 /// Whether the instance is visible is deliberately absent. <c>IsVisible()</c> reaches
 /// <c>Prerequisites.Container.Check()</c>, which is a write, and the latch it writes is already
-/// published as the pair's <see cref="RawPlotAction.PrerequisitesConfirmed"/>.
+/// published as the pair's <see cref="RawPlotAction.PrerequisiteEvidence"/>.
 /// </para>
 /// </remarks>
 internal readonly struct WorldPlotActionInstance
@@ -636,11 +648,18 @@ internal sealed class WorldPlotActionReader : IWorldCategoryReader
                     actionId,
                     previous.OfferedCount + 1,
                     previous.InstanceCount,
-                    previous.PrerequisitesConfirmed));
+                    previous.PrerequisiteEvidence));
                 continue;
             }
 
-            buffer.Append(new RawPlotAction(plotId, actionId, 1, 0, _prerequisitesConfirmed!(action)));
+            buffer.Append(new RawPlotAction(
+                plotId,
+                actionId,
+                1,
+                0,
+                _prerequisitesConfirmed!(action)
+                    ? PlotActionPrerequisiteEvidence.NativeLatchedTrue
+                    : PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation));
             appended++;
         }
 
@@ -687,10 +706,15 @@ internal sealed class WorldPlotActionReader : IWorldCategoryReader
             var existing = buffer.IndexOf(plotId, actionId);
             if (existing < 0)
             {
-                // Not confirmed, because this walk never read the action's latch: the pair exists only
+                // Unknown, because this walk never read the action's latch: the pair exists only
                 // because an instance references it, and the reference is not the action object whose
                 // prerequisites container the offered walk reads.
-                buffer.Append(new RawPlotAction(plotId, actionId, 0, 1, false));
+                buffer.Append(new RawPlotAction(
+                    plotId,
+                    actionId,
+                    0,
+                    1,
+                    PlotActionPrerequisiteEvidence.Unknown));
                 continue;
             }
 
@@ -700,7 +724,7 @@ internal sealed class WorldPlotActionReader : IWorldCategoryReader
                 actionId,
                 previous.OfferedCount,
                 previous.InstanceCount + 1,
-                previous.PrerequisitesConfirmed));
+                previous.PrerequisiteEvidence));
         }
     }
 

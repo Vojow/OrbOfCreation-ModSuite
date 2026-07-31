@@ -1,10 +1,16 @@
 # Public release checklist
 
-[Back to roadmap](../plans/roadmap.md) · [Runtime validation](../testing/runtime-validation.md)
+[Back to roadmap](../plans/roadmap.md) · [Runtime validation](../testing/runtime-validation.md) ·
+[Release procedure](../releasing.md)
+
+The publication procedure itself — building, tagging, and creating the GitHub release with
+`tools/release.sh` — is documented in [Releasing Orb Of Creation ModSuite](../releasing.md). The
+published GitHub release attaches the single `OrbModSuite.dll` asset. This page is the review
+checklist that precedes it.
 
 ## Supported package
 
-The release is one artifact containing one plugin assembly:
+`script/package` additionally builds a standalone distribution archive for manual installs:
 
 ```text
 OrbOfCreation-ModSuite-<SuiteVersion>.zip
@@ -19,8 +25,6 @@ There is one version. `SuiteVersion` in `Directory.Build.props` names the archiv
 `<Version>` in `src/OrbModSuite.csproj` and `PluginIds.Version` name the assembly and the
 loaded plugin, and the packaging script fails if the two disagree. There are no
 per-component versions to reconcile.
-
-Orb Insights and Orb Toolbox are plans, not plugins.
 
 ## Candidate review
 

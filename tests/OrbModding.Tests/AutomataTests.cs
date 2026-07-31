@@ -31,10 +31,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoBuyOperationMode.Active, config.AutoBuyMode.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.AutoBuyAffordability.Value);
         Assert.Equal(AutoBuyAffordabilityMode.Excess100, config.UpgradeAffordability.Value);
-        Assert.Equal(AutoBuyBatchSizingMode.FillAvailableQueue, config.AutoBuyBatchSizing.Value);
-        Assert.Equal(8, config.MaxPurchasesPerBatch.Value);
-        Assert.Equal(AutoBuyPurchaseGroupingMode.BulkDevelopment, config.PurchaseGrouping.Value);
-        Assert.Equal(2, config.FixedGroupSize.Value);
+        Assert.Equal(1, config.LeaveQueueSlots.Value);
         Assert.Equal("0", config.AbsoluteReserve.Value);
         Assert.Equal(0.0f, config.RelativeReserveMultiplier.Value);
         Assert.Equal(AutoCastOperationMode.Disabled, config.AutoCastMode.Value);
@@ -42,16 +39,19 @@ public sealed class AutomataTests
         Assert.Equal(AutoHarvestOperationMode.Disabled, config.AutoHarvestMode.Value);
         Assert.True(config.AutoHarvestFruitTrees.Value);
         Assert.True(config.AutoHarvestTreasureTrees.Value);
-        Assert.Equal(1.0f, config.AutoHarvestEvaluationIntervalSeconds.Value);
+        Assert.Equal(AutoItemsOperationMode.Disabled, config.AutoItemsMode.Value);
+        Assert.True(config.AutoItemsUseScrolls.Value);
+        Assert.True(config.AutoItemsUseRelics.Value);
+        Assert.Empty(config.AutoItemsTemporaryItemAllowlist.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);
-        Assert.Equal(300, config.AutoConceptTrainingPeriodSeconds.Value);
-        Assert.Equal(300, config.AutoConceptFallbackEvaluationIntervalSeconds.Value);
+        Assert.Equal(30, config.AutoConceptTrainingPeriodSeconds.Value);
         Assert.True(config.Current.CanStartAutoBuyActively);
         Assert.False(config.Current.CanStartAutoCastActively);
         Assert.False(config.Current.CanStartAutoConceptActively);
         Assert.False(config.Current.CanStartAutoHarvestActively);
+        Assert.False(config.Current.CanStartAutoItemsActively);
     }
 
     [Fact]

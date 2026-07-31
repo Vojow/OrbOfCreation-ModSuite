@@ -38,7 +38,7 @@ public sealed class AutoHarvestWorldFactsTests : IDisposable
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Identity);
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.PlotVisibility);
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.ActionAvailability);
-        Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Prerequisites);
+        Assert.Equal(PlotActionPrerequisiteEvidence.NativeLatchedTrue, facts.Prerequisites);
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Readiness);
     }
 
@@ -57,7 +57,7 @@ public sealed class AutoHarvestWorldFactsTests : IDisposable
         Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.Identity);
         Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.PlotVisibility);
         Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.ActionAvailability);
-        Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.Prerequisites);
+        Assert.Equal(PlotActionPrerequisiteEvidence.Unknown, facts.Prerequisites);
         Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.Readiness);
     }
 
@@ -106,19 +106,25 @@ public sealed class AutoHarvestWorldFactsTests : IDisposable
 
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.Identity);
         Assert.Equal(AutoHarvestEvidenceState.Verified, facts.ActionAvailability);
-        Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.Prerequisites);
+        Assert.Equal(PlotActionPrerequisiteEvidence.Unknown, facts.Prerequisites);
         Assert.Equal(AutoHarvestEvidenceState.Unknown, facts.Readiness);
     }
 
     [Fact]
-    public void AnUnmetPrerequisiteRejects()
+    public void AFalseLatchRequestsNativeValidationRatherThanClaimingFailure()
     {
         var (plot, action) = Pair();
         action.prerequisites.available = false;
 
         Assert.Equal(
-            AutoHarvestEvidenceState.Rejected,
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
             Facts(plot, action).Prerequisites);
+
+        var decision = AutoHarvestPolicy.EvaluatePair(
+            AutoHarvestPair.FruitTree,
+            selected: true,
+            Facts(plot, action));
+        Assert.True(decision.ShouldSubmit, decision.RejectionReason.ToString());
     }
 
     /// <summary>

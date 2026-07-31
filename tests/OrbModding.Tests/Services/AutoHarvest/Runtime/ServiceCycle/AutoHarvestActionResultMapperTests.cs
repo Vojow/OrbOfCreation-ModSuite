@@ -55,4 +55,25 @@ public sealed class AutoHarvestActionResultMapperTests
             7,
             new LifecycleGeneration(7)));
     }
+
+    [Theory]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativePrerequisitesCurrentlyUnmet,
+        1028)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable,
+        1029)]
+    public void PrerequisiteRefusalsArePenaltyFreeAndKeepTheirExactCode(
+        int failure,
+        int expectedCode)
+    {
+        var mutation = new AutoHarvestSubmissionResult(
+            (AutoHarvestSubmissionFailureCode)failure);
+
+        var result = AutoHarvestActionResultMapper.FromMutation(mutation);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(new ServiceActionResultCode(expectedCode), result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
 }

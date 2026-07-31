@@ -1,3 +1,5 @@
+using OrbModding.Common.Runtime.World;
+
 namespace OrbAutomata;
 
 internal static class AutoHarvestPolicy
@@ -72,7 +74,7 @@ internal static class AutoHarvestPolicy
     private static AutoHarvestRejectionReason EvaluateFacts(
         AutoHarvestEvidenceState plotVisibility,
         AutoHarvestEvidenceState actionAvailability,
-        AutoHarvestEvidenceState prerequisites,
+        PlotActionPrerequisiteEvidence prerequisites,
         AutoHarvestEvidenceState readiness)
     {
         var rejection = EvaluateEvidence(
@@ -85,18 +87,22 @@ internal static class AutoHarvestPolicy
             AutoHarvestRejectionReason.ActionAvailabilityUnknown,
             AutoHarvestRejectionReason.ActionUnavailable);
         if (rejection != AutoHarvestRejectionReason.None) return rejection;
-        // Rejected here is the native latch reading false, which is not the game saying no — see
-        // RawPlotAction.PrerequisitesConfirmed. It refuses either way, and only the naming changes.
-        rejection = EvaluateEvidence(
-            prerequisites,
-            AutoHarvestRejectionReason.PrerequisitesUnknown,
-            AutoHarvestRejectionReason.PrerequisitesNotConfirmed);
+        rejection = EvaluatePrerequisites(prerequisites);
         if (rejection != AutoHarvestRejectionReason.None) return rejection;
         return EvaluateEvidence(
             readiness,
             AutoHarvestRejectionReason.ReadinessUnknown,
             AutoHarvestRejectionReason.NotReady);
     }
+
+    private static AutoHarvestRejectionReason EvaluatePrerequisites(
+        PlotActionPrerequisiteEvidence prerequisites) => prerequisites switch
+    {
+        PlotActionPrerequisiteEvidence.NativeLatchedTrue or
+        PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation =>
+            AutoHarvestRejectionReason.None,
+        _ => AutoHarvestRejectionReason.PrerequisitesUnknown,
+    };
 
     private static AutoHarvestRejectionReason EvaluateSafety(AutoHarvestActionSafetyState safety) => safety switch
     {

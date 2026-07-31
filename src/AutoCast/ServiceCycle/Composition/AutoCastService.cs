@@ -46,7 +46,7 @@ internal static class AutoCastService
             {
                 return ServiceStartDecision.Wait(
                     CommonServiceDecisionCodes.NotReady,
-                    WakePolicy.AfterDecision(AutoCastConfigurationPolicy.EvaluationInterval(config)));
+                    WakePolicy.OnPublication);
             }
 
             manualPause.Refresh(context.Now, config);

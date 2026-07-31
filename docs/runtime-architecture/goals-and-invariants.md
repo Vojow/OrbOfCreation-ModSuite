@@ -77,8 +77,8 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 
 ### World freshness
 
-- A service does not start a cycle against a world collected before it went live or before its own last committed native mutation. The gate is unconditional, strictly-after, and armed by activation and by what a service commits rather than by any declaration. [Acting twice on one world](world-collection.md) specifies it.
-- The gate is a start refusal, not a wake policy: a held service is skipped and asked again next frame, no feature callback is entered, and every held frame is recorded, because holding a service is otherwise indistinguishable from that service having nothing to do.
+- A service does not start a cycle against a world collected before it went live or before its own last attempted game-facing action. The gate is unconditional, strictly-after, and armed by activation and every attempt rather than by a feature declaration or terminal disposition. [Acting twice on one world](world-collection.md) specifies it.
+- The gate is a start refusal, not a wake policy: a commit is missing from the pinned world, while a skip, rejection, or fault is evidence that live reality diverged from the facts which produced the action. A held service is skipped and asked again next frame, no feature callback is entered, and every held frame is recorded, because holding a service is otherwise indistinguishable from that service having nothing to do.
 - A source that cannot answer holds the service closed, because "unknown" is not "fresh".
 
 ### Dedicated service execution
@@ -118,6 +118,7 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 - There are exactly three publications — world, configuration, and strategy — all constructed and owned by the registry, each latest-wins, immutable, and generation-stamped. One publisher per kind makes a generation suite-wide. See [three publications](architecture.md).
 - A cycle pins one reading of each when it starts, names all three generations on its identity, and keeps them fixed through evaluation and the whole batch drain. No service holds a publisher, so the two halves of a cycle cannot disagree about what the game looked like.
 - New world, configuration, or strategy never cancels, orphans, or partially changes current work. The next cycle consumes the latest snapshots and may skip intermediate versions.
+- Action dispatch continues under the cycle-pinned configuration if a newer generation commits while the batch drains. This deliberate staleness is bounded by the one-or-two-frame batch execution (normally one or two publications) and the configuration's single player-driven writer, so no second read or invalidation path exists. A future long-running-batch design must revisit the bound. Master-disable lease release on committed refresh is an additional fast backstop, not the policy-correctness story.
 - The world publication becomes live on the main thread during the action pass, and publishing services dispatch before mutating ones, so a snapshot acquired in a frame is visible to every consumer in that same frame and no consumer sees it change mid-decision.
 - A change to a persisted setting publishes a complete immutable suite configuration snapshot and a new generation, whatever changed it. UI drafts are not runtime configuration, and failed validation, failed persistence, revert, and abandoned edits change no setting and therefore publish nothing.
 - Feature-grouped immutable records are the canonical runtime configuration; persistence-framework entries stay behind the composition adapter and services never retain a `ConfigEntry` or a feature-specific mirror.

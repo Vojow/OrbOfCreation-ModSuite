@@ -34,9 +34,6 @@ gates, install a profiler-enabled build, and capture one comparable session befo
    because an ordinary native queue cannot free slots within one tick.
 3. **Reassess static binding.** Use decompile artifacts to evaluate direct static game bindings and
    the fail-closed behaviour for unknown game versions.
-4. **Fix the quick settings button.** Surfaced during baseline validation: it no longer opens
-   reliably and settings behaviour was inconsistent. Diagnose the UI/configuration path separately;
-   do not fold an unproven settings fix into a performance change.
 
 ### A deeper pass: eliminate reflection entirely
 
@@ -75,17 +72,20 @@ Quantify the per-candidate cost of the audit and try/catch branches before decid
   owner-thread affine and a worker definition may hold no runtime-owned storage, so worker stages
   need a different probe than the suite has.
 
-### 3. Structure bulk purchasing — only the grouping modes are left
+### 3. Structure bulk purchasing — only the operator-defined grouping modes are left
 - **What is left:** the `Single` and `Fixed` grouping modes still request one level. They are
   operator-set counts rather than a native mechanism, so nothing forced them alongside the bulk work.
-  `ActionMultiplier` and `BulkDevelopment` already raise an upgrade's and a structure's requested
-  level count to the game's own counts, capped at 100.
+  `BulkDevelopment` raises a Structure's preferred level count to the game's own count, capped at
+  100; Upgrades intentionally remain one level.
 
-### 4. Cost-curve-aware planning
-- **What:** buy many affordable levels of one candidate in a cycle using the rising cost curve, and
-  fix cross-candidate resource-contention cascade cancellation.
-- **Why deferred:** the game exposes no purchasable count and no cost curve — only next-level
-  `CanPurchase` and `GetPurchaseCost`. The shipped approach is probe-based; this is a separate effort.
+### 4. Dynamic grouping beyond the native preferred count
+- **What:** decide whether Auto Buy should ever expand beyond the live Bulk Development preference
+  when still more levels are affordable.
+- **Why deferred:** the worker now descends from that preferred count and emits the largest positive
+  count whose exact published rising-cost sum clears the remaining batch ledger. It never substitutes
+  `levels × next cost`; an intermediate count with no exact published sum is refused, while the
+  one-level row remains the safe floor. Expanding beyond the player's native preference would be a
+  new policy, not completion of the affordability fix.
 
 ### 5. Replicating the last game formula in the worker
 - **What is left:** `CanPurchase()` is the one live game call on the action path, by design — it

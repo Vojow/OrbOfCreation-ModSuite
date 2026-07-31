@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.Verification;
 #if SERVICE_CYCLE_PROFILE
@@ -25,6 +26,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private readonly IHostTraceDumpControl _hostTraceDump;
     private readonly IDifferentialVerificationControl _differentialVerification;
     private readonly IDecisionJournalStatusSource _decisionJournal;
+    private readonly IServiceActionOutcomeWindowSource _actionOutcomes;
     private readonly IServiceCyclePumpTimingSource _pumpTiming;
 #if SERVICE_CYCLE_PROFILE
     private readonly IPerformanceProfileControl _performanceProfile;
@@ -33,7 +35,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private readonly List<string> _staleKeys = new();
     private ManualFullTraceControlView? _traceView;
     private HostTraceDumpControlView? _hostTraceDumpView;
-    private PumpTimingGraphView? _pumpTimingView;
+    private ActionOutcomeView? _actionOutcomeView;
     private RuntimeFeatureHealthGridView? _featureHealthView;
 #if SERVICE_CYCLE_PROFILE
     private PerformanceProfileControlView? _performanceProfileView;
@@ -44,6 +46,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private long _hostTraceDumpRevision = -1;
     private long _differentialVerificationRevision = -1;
     private long _decisionJournalRevision = -1;
+    private long _actionOutcomeRevision = -1;
 #if SERVICE_CYCLE_PROFILE
     private long _performanceProfileRevision = -1;
 #endif
@@ -57,6 +60,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         IHostTraceDumpControl hostTraceDump,
         IDifferentialVerificationControl differentialVerification,
         IDecisionJournalStatusSource decisionJournal,
+        IServiceActionOutcomeWindowSource actionOutcomes,
         IServiceCyclePumpTimingSource pumpTiming
 #if SERVICE_CYCLE_PROFILE
         , IPerformanceProfileControl performanceProfile
@@ -71,6 +75,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _differentialVerification = differentialVerification ??
                                     throw new ArgumentNullException(nameof(differentialVerification));
         _decisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
+        _actionOutcomes = actionOutcomes ?? throw new ArgumentNullException(nameof(actionOutcomes));
         _pumpTiming = pumpTiming ?? throw new ArgumentNullException(nameof(pumpTiming));
 #if SERVICE_CYCLE_PROFILE
         _performanceProfile = performanceProfile ?? throw new ArgumentNullException(nameof(performanceProfile));
@@ -80,7 +85,8 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     public bool ObservabilityChanged => _traceRevision != _traceControl.Revision ||
         _hostTraceDumpRevision != _hostTraceDump.Revision ||
         _differentialVerificationRevision != _differentialVerification.Revision ||
-        _decisionJournalRevision != _decisionJournal.Revision
+        _decisionJournalRevision != _decisionJournal.Revision ||
+        _actionOutcomeRevision != _actionOutcomes.TimelineRevision
 #if SERVICE_CYCLE_PROFILE
         || _performanceProfileRevision != _performanceProfile.Revision
 #endif
@@ -123,8 +129,13 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         top += _performanceProfileView.Layout(_content.rect.width, top, siblingIndex++);
         _performanceProfileRevision = _performanceProfile.Revision;
 #endif
-        _pumpTimingView ??= new PumpTimingGraphView(_content, _labelTemplate, _pumpTiming);
-        top += _pumpTimingView.Layout(_content.rect.width, top, siblingIndex++);
+        _actionOutcomeView ??= new ActionOutcomeView(
+            _content,
+            _labelTemplate,
+            _actionOutcomes,
+            _pumpTiming);
+        top += _actionOutcomeView.Layout(_content.rect.width, top, siblingIndex++);
+        _actionOutcomeRevision = _actionOutcomes.TimelineRevision;
         var journalView = GetOrCreate(DecisionJournalCardKey);
         top += journalView.LayoutStatic(
             "Decision journal",
@@ -182,7 +193,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         Clear();
     }
 
-    public void RefreshPumpTiming() => _pumpTimingView?.Refresh();
+    public void RefreshActivity() => _actionOutcomeView?.Refresh();
 
     public void Clear()
     {
@@ -190,8 +201,8 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _traceView = null;
         _hostTraceDumpView?.Dispose();
         _hostTraceDumpView = null;
-        _pumpTimingView?.Dispose();
-        _pumpTimingView = null;
+        _actionOutcomeView?.Dispose();
+        _actionOutcomeView = null;
         _featureHealthView?.Dispose();
         _featureHealthView = null;
 #if SERVICE_CYCLE_PROFILE

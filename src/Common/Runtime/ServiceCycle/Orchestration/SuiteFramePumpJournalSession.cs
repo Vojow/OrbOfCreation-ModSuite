@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 
 namespace OrbModding.Common.Runtime.ServiceCycle.Orchestration;
@@ -8,18 +9,49 @@ internal sealed class SuiteFramePumpJournalSession
 {
     private readonly ServiceCycleRegistry _registry;
     private readonly int _serviceCapacity;
+    private readonly ServiceCycleDecisionJournalObserver? _outcomeObserver;
+    private readonly ServiceCycleDecisionJournalObserverFanout? _fanout;
+    private readonly ServiceActionOutcomeWindowRegistration? _outcomeRegistration;
     private IServiceCycleDecisionJournalObserver? _observer;
     private object? _runtimeOwner;
 
     internal SuiteFramePumpJournalSession(
         ServiceCycleRegistry registry,
-        int serviceCapacity)
+        int serviceCapacity,
+        ServiceActionOutcomeWindowRegistry? outcomeWindows)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _serviceCapacity = serviceCapacity;
+        if (outcomeWindows is null) return;
+
+        var projection = ServiceActionOutcomeWindowProjection.Create(registry);
+        ServiceActionOutcomeWindowRegistration? registration = null;
+        try
+        {
+            registration = outcomeWindows.Register(projection);
+            var observer = new ServiceCycleDecisionJournalObserver(projection, serviceCapacity);
+            var baselines = new DecisionJournalServiceBaseline[serviceCapacity];
+            if (!ServiceCycleDecisionJournalBinder.TryBind(
+                    registry,
+                    serviceCapacity,
+                    observer,
+                    baselines))
+            {
+                throw new InvalidOperationException(
+                    "The always-on action-outcome projection could not bind the settled service roster.");
+            }
+            _outcomeObserver = observer;
+            _fanout = new ServiceCycleDecisionJournalObserverFanout(observer);
+            _outcomeRegistration = registration;
+        }
+        catch
+        {
+            registration?.Dispose();
+            throw;
+        }
     }
 
-    internal IServiceCycleDecisionJournalObserver? Observer => _observer;
+    internal IServiceCycleDecisionJournalObserver? Observer => _fanout ?? _observer;
 
     internal bool TryAttach(
         IServiceCycleDecisionJournalObserver observer,
@@ -35,6 +67,7 @@ internal sealed class SuiteFramePumpJournalSession
                 observer,
                 baselines)) return false;
         _observer = observer;
+        _fanout?.Attach(observer);
         return true;
     }
 
@@ -42,7 +75,17 @@ internal sealed class SuiteFramePumpJournalSession
     {
         if (!ReferenceEquals(_observer, observer))
             throw new InvalidOperationException("The requested decision journal is not attached.");
+        _fanout?.Detach(observer);
         _observer = null;
+    }
+
+    internal void Dispose(MonotonicTimestamp observedAt)
+    {
+        if (_observer is not null)
+            throw new InvalidOperationException(
+                "An attached decision journal must stop before the action-outcome projection.");
+        try { _outcomeObserver?.Stop(observedAt); }
+        finally { _outcomeRegistration?.Dispose(); }
     }
 
     internal void ClaimRuntime(object owner)

@@ -375,7 +375,7 @@ A service the world freshness gate holds closed reaches the journal as its own r
 and its active lifecycle generation. The gate is otherwise silent — a held service attempts nothing, which
 reads exactly like a service that had no work — and a stalled world collector holds every mutating service at
 once, so without the record a stalled suite is an absence of evidence rather than evidence. Transition code
-`1` means the live world was collected before the service's own last action; `2` means no source could answer
+`1` means the live world was collected before the service's own last action attempt; `2` means no source could answer
 at all. A hold is one record however long it lasts: the gate re-defers a held service every frame, and a
 further record follows only when the action being waited past changes or when the reason changes. A hold that
 never ends is therefore one record whose missing successor is the stall itself.
@@ -643,18 +643,38 @@ all, because the profiler is compiled out of one. A missing product leaves its p
 that the dashboard renders as a banner under the header, so the reader is told what is not there instead of
 being refused a dashboard.
 
-Common also exposes a separate 1,200-frame owner-thread timing projection for the in-game Runtime page,
-approximately 20 seconds at 60 FPS or 40 seconds at 30 FPS. It copies the existing pump report after the pump returns; it does not
-start a trace, retain semantic payloads, perform a second service poll, or write to disk. Mod Config redraws
-one fitted mesh through its existing open-only 0.1-second maintenance cadence. Every retained accepted pump
-frame contributes one bar across the available plot, without paging, aggregation, or 1,200 Unity objects.
-Height scales to the ninety-ninth percentile of the retained window rather than to its maximum, and frames
-above that scale are drawn full height in red. One warm-up frame costs a couple of hundred milliseconds
-against a steady frame of a fraction of one, so scaling to the maximum flattened every ordinary frame to
-nothing for the whole twenty seconds that one sample stayed retained; a percentile absorbs a scene load, a
-save, or a collection the same way, which a "first N frames" rule would not. The true maximum, the p95, and
-the count of clipped frames stay in the summary line. Retention is frame-count based rather than wall-clock
-based.
+Common also exposes one owner-thread rolling action-outcome projection for future outcome-truthful health
+and the in-game Runtime page. It consumes the same assembled `DecisionJournalObservation` and lifecycle
+transition evidence as the rolling journal, before storage coalescing, and therefore retains exact planned,
+committed, skipped, rejected, and faulted totals plus the latest real boundary reason per registered
+service. It adds no feature bookkeeping, native read, second service poll, storage path, or disk I/O. The
+live projection is composed in both build flavors and remains available if journal storage cannot
+initialize; optional disk recording and the always-on in-memory projection receive the same evidence
+through one fan-out observer.
+
+The projection carries the registration's typed action-dispatch shape and retains each service's newest 32
+assembled observations as whole entries; eviction subtracts that entry's outcome totals and recomputes the
+latest surviving boundary. Alongside that health window it exposes a fixed 30-minute action timeline. The
+minute key is derived only from the monotonic timestamp already carried by the evidence stream. Each minute
+stores committed actions by registered service plus fault presence; planned, skipped, rejected, and waiting
+evidence never becomes charted work. `Advance` revises the timeline only when its journal timestamp crosses
+a minute boundary, so a closed bucket never changes and no within-minute no-commit cycle can trigger a
+repaint. A lifecycle
+generation change clears every timeline bucket before the new world can contribute.
+
+Mod Config renders one linear stacked chart from the 30 fixed slots. `Source` infrastructure is excluded by
+typed shape, never by a display-name match. Mentor's steady per-recipient mastery grants are explicitly
+excluded by registered service identity: they are truthful committed evidence retained for health and trace
+diagnosis, but not discrete player-facing automation events for this chart. Each remaining known `Ordinary`
+service owns one deterministic palette color, and only services with committed work in the window enter the
+compact legend. Empty minutes remain visible baseline slots. A fault in an included automation bucket adds
+one small red triangle at its base; waiting and rejected evidence stays with the feature-health grid. With no
+included commit or fault evidence the entire plot is replaced by the exact calm line
+`No automation activity in the last 30 minutes`.
+
+The existing 1,200-frame owner-thread pump-timing projection remains, but the Runtime page now reduces it
+to one average/worst line. The former 224-pixel percentile column chart, per-frame phase colors, p95, clipped
+frame count, and plot scale are removed. Full performance analysis remains the offline trace dashboard.
 
 **What a profile's numbers may and may not be used for.** They are diagnostic elapsed time, not an
 uncontaminated CPU or allocation claim, and a profile recorded with the semantic trace active is

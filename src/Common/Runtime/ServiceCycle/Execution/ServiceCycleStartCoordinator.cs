@@ -25,6 +25,7 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
     private readonly ServiceFaultTracker _startFaults;
     private readonly ServiceStrategyPublisher _strategy;
     private readonly ServiceWorldPublisher<GameWorldState> _world;
+    private readonly bool _wakeOnWorldPublication;
     private ulong _cycleSequence;
     private ulong _batchSequence;
     private bool _hasPendingRequest;
@@ -46,7 +47,8 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         IMonotonicClock clock,
         ServiceRunnerLifetime lifetime,
         ServiceStrategyPublisher strategy,
-        ServiceWorldPublisher<GameWorldState> world)
+        ServiceWorldPublisher<GameWorldState> world,
+        bool wakeOnWorldPublication)
     {
         _definition = definition;
         _configuration = configuration;
@@ -59,6 +61,7 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         Lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _strategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
         _world = world ?? throw new ArgumentNullException(nameof(world));
+        _wakeOnWorldPublication = wakeOnWorldPublication;
     }
 
     private protected ServiceCycleMainState State { get; }
@@ -66,6 +69,8 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
     private protected LifecycleGeneration Lifecycle { get; }
     private protected IMonotonicClock Clock { get; }
     private protected ServiceRunnerLifetime Lifetime { get; }
+    private protected WorldGeneration LatestWorldGeneration => _world.ReadLatest().Generation;
+    internal bool WakeOnWorldPublication => _wakeOnWorldPublication;
 
     /// <summary>
     /// Whether the main thread is inside the service's capture callback right now.
@@ -151,7 +156,7 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         _pendingContext = default;
         _pendingBatch = default;
         _pendingStart = default;
-        State.HasWakeDue = false;
+        State.ClearWake();
         State.InFlightCycle = identity;
         State.InFlightBatch = batch;
         State.HasInFlightCycle = true;
@@ -175,8 +180,11 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
     {
         var record = _startFaults.Record(category, observedAt);
         State.LatestFault = record.Fault;
-        State.NextWakeDue = record.RetryDue;
-        State.HasWakeDue = true;
+        State.ScheduleWake(
+            record.RetryDue,
+            State.LatestConfigGeneration,
+            invalidatedByConfiguration: false,
+            invalidatedByWorld: false);
         return record;
     }
 

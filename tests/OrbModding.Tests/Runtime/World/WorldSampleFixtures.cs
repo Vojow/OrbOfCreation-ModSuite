@@ -336,7 +336,9 @@ internal static class WorldSamples
                 plotNodeActionId,
                 offeredCount,
                 instanceCount,
-                prerequisitesMet),
+                prerequisitesMet
+                    ? PlotActionPrerequisiteEvidence.NativeLatchedTrue
+                    : PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation),
             elementCost,
             elementCostKnown,
             hasEnoughForOneInstance,

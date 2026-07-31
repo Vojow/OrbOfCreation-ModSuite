@@ -34,6 +34,13 @@ namespace OrbModding.Common.Runtime.World;
 /// </remarks>
 public sealed record GameWorldState
 {
+    /// <summary>
+    /// The result of attempting each world category in this exact collection. A zero-row category is
+    /// only a fact about the save when its matching row says it was collected cleanly.
+    /// </summary>
+    internal PublicationTable<WorldCollectionCategoryStatus> CollectionCategories { get; init; } =
+        PublicationTable<WorldCollectionCategoryStatus>.Empty;
+
     internal PublicationTable<WorldResource> Resources { get; init; } =
         PublicationTable<WorldResource>.Empty;
 
@@ -72,13 +79,6 @@ public sealed record GameWorldState
     /// entity and then resource, with several rows per entity; read it through
     /// <see cref="WorldPurchaseCostLookup"/> rather than <see cref="WorldLookup"/>.
     /// </summary>
-    /// <summary>
-    /// What each entity's purchase does to other entities' named properties, keyed by the entity
-    /// applying the effect; read it through <see cref="WorldEntityEffectLookup"/>.
-    /// </summary>
-    internal PublicationTable<WorldEntityEffect> EntityEffects { get; init; } =
-        PublicationTable<WorldEntityEffect>.Empty;
-
     internal PublicationTable<WorldPurchaseCost> PurchaseCosts { get; init; } =
         PublicationTable<WorldPurchaseCost>.Empty;
 
@@ -125,6 +125,46 @@ public sealed record GameWorldState
 
     internal PublicationTable<WorldConsumable> Consumables { get; init; } =
         PublicationTable<WorldConsumable>.Empty;
+
+    /// <summary>Every native family assigned to each consumable.</summary>
+    internal PublicationTable<WorldConsumableType> ConsumableTypes { get; init; } =
+        PublicationTable<WorldConsumableType>.Empty;
+
+    /// <summary>Every immediate and held resource cost authored on each consumable.</summary>
+    internal PublicationTable<WorldConsumableCost> ConsumableCosts { get; init; } =
+        PublicationTable<WorldConsumableCost>.Empty;
+
+    /// <summary>Every pending or engaged native usage owned by each consumable.</summary>
+    internal PublicationTable<WorldConsumableUsage> ConsumableUsages { get; init; } =
+        PublicationTable<WorldConsumableUsage>.Empty;
+
+    /// <summary>Every levelled inventory bucket owned by each consumable.</summary>
+    internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
+        PublicationTable<WorldConsumableCount>.Empty;
+
+    /// <summary>The complete contents of the audited Scribe recipe registry.</summary>
+    internal PublicationTable<WorldScribeRecipe> ScribeRecipes { get; init; } =
+        PublicationTable<WorldScribeRecipe>.Empty;
+
+    /// <summary>Occupancy of the player and game-owned Scribe production lists.</summary>
+    internal PublicationTable<WorldScribeQueue> ScribeQueues { get; init; } =
+        PublicationTable<WorldScribeQueue>.Empty;
+
+    /// <summary>
+    /// Existing Scribe work, including player-owned AutoScribeInstances as observed external
+    /// production pressure. The suite never edits that persistent automation list.
+    /// </summary>
+    internal PublicationTable<WorldScribeWork> ScribeWork { get; init; } =
+        PublicationTable<WorldScribeWork>.Empty;
+
+    internal PublicationTable<WorldStructureEnchantment> StructureEnchantments { get; init; } =
+        PublicationTable<WorldStructureEnchantment>.Empty;
+
+    internal PublicationTable<WorldScrollTarget> ScrollTargets { get; init; } =
+        PublicationTable<WorldScrollTarget>.Empty;
+
+    internal PublicationTable<WorldScrollTargetEvidence> ScrollTargetEvidence { get; init; } =
+        PublicationTable<WorldScrollTargetEvidence>.Empty;
 
     internal PublicationTable<WorldRitual> Rituals { get; init; } =
         PublicationTable<WorldRitual>.Empty;
@@ -279,6 +319,9 @@ public sealed record GameWorldState
     /// </remarks>
     internal double FixedDeltaTime { get; init; }
 
+    /// <summary>The Unity frame at which this immutable world reading began.</summary>
+    internal long CollectedAtFrame { get; init; }
+
     /// <summary>
     /// Which run of the game this snapshot describes, as opposed to how new it is.
     /// </summary>
@@ -291,6 +334,23 @@ public sealed record GameWorldState
     /// gate: an epoch is not a frame and never participates in that comparison.
     /// </remarks>
     internal long CollectedAtEpoch { get; init; }
+
+    /// <summary>
+    /// UTC ticks captured beside <see cref="CollectedAt"/> on the Unity thread. This is diagnostic
+    /// publication data, not a scheduler clock; it gives external readers a wall-clock collection
+    /// time without asking them to interpret this process's monotonic origin.
+    /// </summary>
+    internal long CollectedAtUtcTicks { get; init; }
+
+    /// <summary>
+    /// Monotonic time at which the collection that produced this snapshot began.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the world generation, which names the Unity frame, this gives diagnostics a duration
+    /// even when frame cadence varies. It is inert published data and does not participate in
+    /// freshness or scheduling.
+    /// </remarks>
+    internal MonotonicTimestamp CollectedAt { get; init; }
 
     // Lookups live on WorldLookup rather than here. A member per category would be a forwarding
     // one-liner repeated once per table, and the record is meant to grow to roughly thirty of them.

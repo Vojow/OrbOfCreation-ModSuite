@@ -5,6 +5,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.Verification;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile.Control;
@@ -18,6 +19,7 @@ internal sealed class ModConfigRuntimeSources
         IConfigurationSchemaStatusSource schemaStatuses,
         IFeatureStatusSource featureStatuses,
         IRuntimeDiagnosticsSource diagnostics,
+        IServiceActionOutcomeWindowSource actionOutcomes,
         IServiceCyclePumpTimingSource pumpTiming,
         IManualFullTraceControl manualFullTrace,
         IHostTraceDumpControl hostTraceDump,
@@ -31,6 +33,7 @@ internal sealed class ModConfigRuntimeSources
         SchemaStatuses = schemaStatuses ?? throw new ArgumentNullException(nameof(schemaStatuses));
         FeatureStatuses = featureStatuses ?? throw new ArgumentNullException(nameof(featureStatuses));
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        ActionOutcomes = actionOutcomes ?? throw new ArgumentNullException(nameof(actionOutcomes));
         PumpTiming = pumpTiming ?? throw new ArgumentNullException(nameof(pumpTiming));
         ManualFullTrace = manualFullTrace ?? throw new ArgumentNullException(nameof(manualFullTrace));
         HostTraceDump = hostTraceDump ?? throw new ArgumentNullException(nameof(hostTraceDump));
@@ -45,6 +48,7 @@ internal sealed class ModConfigRuntimeSources
     public IConfigurationSchemaStatusSource SchemaStatuses { get; }
     public IFeatureStatusSource FeatureStatuses { get; }
     public IRuntimeDiagnosticsSource Diagnostics { get; }
+    public IServiceActionOutcomeWindowSource ActionOutcomes { get; }
     public IServiceCyclePumpTimingSource PumpTiming { get; }
     public IManualFullTraceControl ManualFullTrace { get; }
     public IHostTraceDumpControl HostTraceDump { get; }

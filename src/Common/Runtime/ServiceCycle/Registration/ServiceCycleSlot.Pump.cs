@@ -73,27 +73,24 @@ internal sealed partial class ServiceCycleSlot<TState, TAction>
             , in profileCoordinates
 #endif
             );
-        RecordGameMutation(in dispatch, frameIdentity);
+        RecordWorldInvalidation(in dispatch, frameIdentity);
         return dispatch;
     }
 
     /// <summary>
-    /// Remembers the frame on which this service last actually changed the game.
+    /// Remembers the frame on which this service last attempted a game-facing action.
     /// </summary>
     /// <remarks>
-    /// Only a committed native mutation counts. A publication changed no game state, so a publishing
-    /// service must not gate itself behind its own output; and a rejected or skipped action left the
-    /// world exactly as the snapshot described it.
+    /// A commit is absent from the pinned world. A skip, rejection, or fault is evidence that live
+    /// native reality diverged from the facts which produced the action, so another plan from those
+    /// same facts is not trustworthy. Every game-facing attempt therefore waits for a reading
+    /// collected strictly after it. A Source is exempt because it only publishes the reading and
+    /// gating it behind its own attempt would stop collection.
     /// </remarks>
-    private void RecordGameMutation(in ServiceActionDispatch dispatch, long frameIdentity)
+    private void RecordWorldInvalidation(in ServiceActionDispatch dispatch, long frameIdentity)
     {
-        if (!dispatch.Attempted) return;
-        var result = dispatch.ActionFact.Result;
-        if (result.Disposition == ServiceActionDisposition.Committed &&
-            result.Effect == ServiceActionEffect.NativeMutation)
-        {
-            RaiseWorldGateFloor(frameIdentity);
-        }
+        if (!dispatch.Attempted || ActionDispatchPolicy.Shape == ServiceShape.Source) return;
+        RaiseWorldGateFloor(frameIdentity);
     }
 
     /// <summary>
@@ -142,8 +139,8 @@ internal sealed partial class ServiceCycleSlot<TState, TAction>
         var runner = CurrentRunner;
         if (runner is null) return default;
         // Not a wake policy: nothing here is a timing condition. The world either has or has not been
-        // re-read since this service went live and last changed the game, and the answer can change on
-        // any frame, so the service is simply skipped and asked again next frame — no callback,
+        // re-read since this service went live or last attempted an action, and the answer can change
+        // on any frame, so the service is simply skipped and asked again next frame — no callback,
         // nothing scheduled.
         if (IsWaitingForAWorldPastTheGateFloor(frameIdentity))
         {
@@ -155,17 +152,18 @@ internal sealed partial class ServiceCycleSlot<TState, TAction>
 
     /// <summary>
     /// Whether the live world is still the one this service went live on, or an older reading than
-    /// its own last game mutation.
+    /// its own last game-facing action attempt.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Unconditional: every mutating service is gated and nothing opts in. The floor is raised by
-    /// activation and by a committed native mutation, so a service is held from birth until a reading
-    /// later than it exists, and afterwards until a reading later than its own change does. A Source
-    /// is the one exemption, because it is the collector and would otherwise wait on itself. The game
-    /// always has a collector, so a composition with no world publisher is a test fixture rather than
-    /// a case to design for, and those supply worlds the way production's collector does — a fixture
-    /// that publishes nothing simply never starts a mutating cycle, which is the rule working.
+    /// activation and by every attempted game-facing action, so a service is held from birth until a
+    /// later reading exists, and afterwards until a reading later than its own last attempt does. A
+    /// Source is the one exemption, because it is the collector and would otherwise wait on itself.
+    /// The game always has a collector, so a composition with no world publisher is a test fixture
+    /// rather than a case to design for, and those supply worlds the way production's collector does
+    /// — a fixture that publishes nothing simply never starts a mutating cycle, which is the rule
+    /// working.
     /// </para>
     /// <para>
     /// A generation is the pump frame the readings were collected on, so this compares like with

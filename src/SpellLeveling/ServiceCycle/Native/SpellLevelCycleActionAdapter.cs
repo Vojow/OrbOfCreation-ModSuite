@@ -32,25 +32,43 @@ internal sealed class SpellLevelCycleActionAdapter : ISpellLevelCycleActionPort
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<bool> _ownsActionFamily;
     private readonly Action<AutoSpellLevelCapability>? _observeCapability;
+    private readonly Action<SpellLevelSubmission>? _observeBoundaryStatus;
 
     public SpellLevelCycleActionAdapter(
         ISpellLevelNativePort levels,
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
-        Action<AutoSpellLevelCapability>? observeCapability = null)
+        Action<AutoSpellLevelCapability>? observeCapability = null,
+        Action<SpellLevelSubmission>? observeBoundaryStatus = null)
     {
         _levels = levels ?? throw new ArgumentNullException(nameof(levels));
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _ownsActionFamily = ownsActionFamily ?? throw new ArgumentNullException(nameof(ownsActionFamily));
         _observeCapability = observeCapability;
+        _observeBoundaryStatus = observeBoundaryStatus;
     }
 
     public ServiceActionResult TryExecute(
         in SpellLevelCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: true);
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in SpellLevelCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: false);
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in SpellLevelCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy)
     {
-        if (!SpellLevelConfigurationPolicy.IsOperational(config))
+        if (requireAutomationPolicy && !SpellLevelConfigurationPolicy.IsOperational(config))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
 
         if (!Owns())
@@ -74,7 +92,8 @@ internal sealed class SpellLevelCycleActionAdapter : ISpellLevelCycleActionPort
         }
 
         Narrate(in action, in submission);
-        ObserveCapability(in submission);
+        ObserveCapability(in action, in submission);
+        _observeBoundaryStatus?.Invoke(submission);
         return Map(in submission);
     }
 
@@ -82,21 +101,20 @@ internal sealed class SpellLevelCycleActionAdapter : ISpellLevelCycleActionPort
     /// Tells the feature status what the boundary just learned about the capability, which is the only
     /// place <see cref="AutoSpellLevelCapability.Locked"/> can be observed at all.
     /// </summary>
-    private void ObserveCapability(in SpellLevelSubmission submission)
+    private void ObserveCapability(
+        in SpellLevelCycleAction action,
+        in SpellLevelSubmission submission)
     {
         if (_observeCapability is null) return;
         switch (submission.Preflight)
         {
             case SpellLevelPreflight.ProgressionLocked:
-                _observeCapability(AutoSpellLevelCapability.Locked);
+                // SubmitAll has already revalidated the committed batch upgrade. A prerequisite
+                // refusal says the live set cannot move, not that the upgrade ceased to exist.
+                if (action.Kind == SpellLevelActionKind.Single)
+                    _observeCapability(AutoSpellLevelCapability.Locked);
                 break;
             case SpellLevelPreflight.BatchUnavailable:
-                _observeCapability(AutoSpellLevelCapability.Single);
-                break;
-            case SpellLevelPreflight.Proceeded:
-            case SpellLevelPreflight.NotAffordable:
-                // Reaching either means a discovered spell's prerequisite passed, which is exactly
-                // what separates Single from Locked.
                 _observeCapability(AutoSpellLevelCapability.Single);
                 break;
         }

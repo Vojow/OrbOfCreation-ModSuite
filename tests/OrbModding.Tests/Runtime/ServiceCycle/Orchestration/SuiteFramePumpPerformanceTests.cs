@@ -163,6 +163,9 @@ public sealed class SuiteFramePumpPerformanceTests
         TestWorldCollector.CollectedAtActivation(registry);
         var frame = 1L;
         RunRejectedCycle(pump, registration.Runner, ref frame);
+        // Rejection proves that the pinned world diverged from native reality. Warm the next
+        // cycle only after the collector has published facts from beyond that attempt.
+        TestWorldCollector.CollectedAt(registry, frame);
 
         var captureAllocation = MeasurePump(pump, ref frame, out var capture);
         ServiceRunnerTestWait.PublishDeferredRequest(pump, registration.Runner, ref frame);

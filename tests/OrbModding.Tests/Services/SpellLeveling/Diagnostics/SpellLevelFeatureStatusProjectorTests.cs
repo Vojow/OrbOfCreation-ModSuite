@@ -65,11 +65,27 @@ public sealed class SpellLevelFeatureStatusProjectorTests
         Assert.Contains("at once", all.Summary);
     }
 
+    [Fact]
+    public void AnAffordabilityStretchIsAQuietWaitWithTheBoundaryReason()
+    {
+        var status = Project(
+            cycleObserved: true,
+            capability: AutoSpellLevelCapability.All,
+            waitingReason: "no ready spell has an affordable level cost");
+
+        Assert.Equal(FeatureStatusState.NotReady, status.State);
+        Assert.Equal(FeatureStatusReasonCode.GameplayNotReady, status.Reason);
+        Assert.Equal(
+            "Spell leveling is waiting: no ready spell has an affordable level cost.",
+            status.Summary);
+    }
+
     private static SpellLevelFeatureStatus Project(
         bool emergencyDisabled = false,
         bool owned = true,
         bool cycleObserved = true,
-        AutoSpellLevelCapability capability = AutoSpellLevelCapability.Single) =>
+        AutoSpellLevelCapability capability = AutoSpellLevelCapability.Single,
+        string? waitingReason = null) =>
         SpellLevelFeatureStatusProjector.Project(
-            emergencyDisabled, owned, cycleObserved, capability);
+            emergencyDisabled, owned, cycleObserved, capability, waitingReason);
 }

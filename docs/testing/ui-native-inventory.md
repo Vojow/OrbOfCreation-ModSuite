@@ -12,7 +12,8 @@ restyled. The PNG evidence is intentionally an untracked local validation artifa
 |---|---|---|---|
 | Magic and Scholar | A second `SubviewRadio` level inside the active screen; live list items use the native subview frame and text vocabulary | Runtime `UIViewRadioButton` items are direct children of `Canvas/ContentArea/MainContentContainer/SubviewRadio`. Their root owns `buttonImage`; `baseImage` and `activeImage` are populated; `viewImage` is null. | Reuse the native subview frame pair as a vertical suite rail, with exact native icons rather than pretending the source list items contain icons. |
 | Settings | `Main`, `Game`, and `Graphics` horizontal text tabs inside a native framed modal | Native text-tab and framed-panel vocabulary | Retain as evidence that horizontal text tabs are native, but do not use them for nine suite sections. |
-| Main navigation | `Magic`, `Scholar`, `Time`, and `Mods` horizontal `ViewRadio` controls | Direct children of `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; these `UIViewRadioButton` instances populate `viewImage.sprite` and provide audited Time, Magic, Scholar, and Alchemy icons. | Keep the Mods entry as the outer level and reuse named top-bar icons for Runtime, General, Concept, and Advanced. |
+| Main navigation | `Magic`, `Scholar`, `Time`, and `Mods` horizontal `ViewRadio` controls | Direct children of `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; these `UIViewRadioButton` instances populate `viewImage.sprite` and provide audited Time, Magic, Scholar, Alchemy, World, and Workshop icons. | Keep the Mods entry as the outer level and reuse named top-bar icons for Runtime, General, Concept, Advanced, Auto Items, and Auto Scribe. |
+| Help buttons | Gear and character buttons in one top-left group | The declared scene-bound `UIContentArea.canvas` field resolves the exact direct child `Canvas/HelpButtons`, whose direct `SettingsButton` and `PlayerStatsButton` children prove the expected anchor structure. | Parent one native-size emergency square plus an attached disclosure footer below the native pair. The footer opens a transient panel below the compound control. No exact anchor means no controls. |
 
 Evidence:
 
@@ -32,47 +33,91 @@ views are inactive: Mods is the active view when the panel is constructed, so re
 Live census proved that these runtime list items exist while inactive and are not destroyed on view
 close. It also proved their real field population: owned `buttonImage`, populated `baseImage` and
 `activeImage`, and null `viewImage`. The named top-bar icon instances are direct children of
-`Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; they are created shortly after Main
-loads, so an initial absence is startup timing and receives a bounded retry. Once present, inactive
-objects such as `ScreenAlchemy` remain valid sources.
+`Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`. Assembly IL establishes their exact
+construction path, but not a usable time relative to suite scene entry.
+`UIRenderGroupElement.Update` eventually calls its one-shot virtual `DelayedRegisterStart`. The
+`UIGenericPlainList` override calls `EnsureRendered`; `RenderChildren` instantiates each button, and
+`UIGenericItem.Setup`/`UIViewRadioButton.RenderContent` synchronously populate its `ViewSO` and
+`viewImage.sprite`. The game publishes no event for that completion, and production launches show
+that its relationship to the suite's `sceneLoaded` boundary is machine/load-dependent and
+seconds-scale: current evidence places icon birth roughly two to four seconds after scene entry.
+
+The suite therefore starts a bounded readiness window after Main's first end-of-frame boundary. It
+checks the six required icon candidates at 100 ms cadence for at most 30 seconds. A zero or
+partial-zero set is still loading; duplicates, null icons, and structural mismatches are failures.
+All six ready icons release quick controls and Mods together in one suite Update. Once present,
+inactive objects such as `ScreenAlchemy` remain valid sources.
+
+The same IL establishes the interaction grammar. `UIViewRadio.PostSetupItem` wires each button to
+`SwapToView`; `ViewListVariable.SwapToView` writes the selected `ViewSO` active and every sibling
+inactive. Selecting an already active native tab therefore reselects it without closing the view.
+The Mods tab follows that same state transition.
 
 ## Quick-button frame and icon comparison
 
-The bottom spell bar is the reference button vocabulary. `UISpellButton` supplies its base and
-icon image, background image, and `UIImageEffects`. The serialized main scene leaves
-`insufficientBackground` null on both gameplay-strip buttons; `UISpellButton.RenderContent` only
-uses that optional sprite when it exists. `Awake` captures the root Image as `background` and its
-sprite as `baseBackground`, while the scene puts a real `UIImageEffects` component on each button.
-The scene contains several `isForCasting` families: the gameplay strip's direct children live at
-`Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly{ (1)}`,
-while the Magic view separately contains `ArcaneCasting/.../SpellList/SpellButton{ (1)}` and
-`ArcaneSpellBook/.../BigSpellList/SpellButtonBigIconOnly{ (1)}`. Sampling is therefore scoped to
-the audited direct-child gameplay-strip path and deterministically takes the first prototype with
-the populated root Image, icon Image, and `baseBackground` that the game actually supplies. It
-never requires the null optional insufficient sprite or compares unrelated spellbook and
-casting-list frames. Suite states use icon color over the one native base frame.
+The two-button shell and its transient feature drawer speak the same selected/unselected vocabulary as the native
+`UIViewRadioButton` family used by the Mods rail. The populated `baseImage` is the dim,
+recessed/hollow OFF frame; `activeImage` is the solid, raised ON frame. The suite creates each
+button and icon itself, releases `Selectable.targetGraphic`, and swaps the audited frame sprite
+before applying its own gray, green, red, or orange glyph color. Thus configured intent cannot be
+color-only. The emergency compound additionally tints those full native frames deep green while
+clear and deep red while stopped. The disclosure uses recessed/raised frames plus different
+closed/open chevrons, and a contained fault or block adds a separate exclamation marker plus red
+color while closed.
 
-Any failed rail or spell capture includes a census of every object of the audited component type:
-full path, active state, loaded-scene membership, selector result, and a verdict for every sampled
-field. A supported baseline can therefore fail loudly without another selector guessing loop.
+Frame capture requires every exact direct-child SubviewRadio candidate to own `buttonImage` and
+agree on both sprites. A failed capture includes the typed candidate census. A control is created
+only after the pair and its audited feature sprite are available, so a missing primitive cannot
+leave a clickable stateless object. The emergency stop uses the exact loaded native Sprite named
+`power-lightning`, audited in `sharedassets0.assets`; capture requires exactly one match and fails
+the complete surface closed on zero or duplicates. The Sprite occupies 72% of the unchanged native
+button square with aspect preserved.
 
 The live mastery-level and mastery-XP marks are readable next to their numbers on a full Scholar
 card, but their silhouettes collapse into similar small progression marks at quick-button size.
-The runtime `SubviewRadio` items have no icon at all, so the Concept control uses the audited
-`ScreenScholar` top-bar book glyph. Mentor uses the distinct mastery-XP glyph.
+The runtime `SubviewRadio` items have no icon at all, so central feature icon resolution uses the
+audited `ScreenScholar` top-bar book for Auto Concept, `ScreenWorld` for Auto Items, and
+`ScreenWorkshop` for Auto Scribe. Advanced keeps `ScreenAlchemy`; the rail rejects any duplicate
+page sprite. Auto Buy, Auto Harvest, and Mentor retain their distinct audited native tooltipable
+glyphs. Auto Cast uses the static audited Casting Speed attribute glyph from
+`GlobalVariables.GetCastingSpeedAttr().GetIcon()`. The same resolver serves each feature's rail
+entry and quick control, so neither surface depends on the equipped-spell loadout.
 
 Evidence: `artifacts/ui-overhaul-evidence/native-mastery-icon-context.png`.
 
 ## Audited fields
 
-The native-contract manifest declares eleven visual fields and four icon accessors:
+The native-contract manifest declares six visual/anchor fields and five icon accessors. The
+emergency icon is a named loaded-asset capture, not a reflected managed member:
 
-- `UISpellButton`: `icon`, `insufficientBackground`, `isForCasting`, `background`,
-  `baseBackground`, and `effects`.
+- `UIContentArea`: `canvas`.
 - `UIViewRadioButton`: `viewText`, `viewImage`, `activeImage`, `buttonImage`, and `baseImage`.
-- `GlobalVariables.GetGlobalStructureType`, `GlobalVariables.GetHarvestSpeedAttr`,
+- `GlobalVariables.GetGlobalStructureType`, `GlobalVariables.GetCastingSpeedAttr`,
+  `GlobalVariables.GetHarvestSpeedAttr`,
   `GlobalVariables.GetMasteryExpAttr`, and
   `TooltipableObject.GetIcon`.
+- Loaded `UnityEngine.Sprite`: exact name `power-lightning`, audited source
+  `sharedassets0.assets`, exactly one match.
 
-All are capture-only UI contracts. Manifest schema 3 and the sole legacy allowlist entry
-`spell.get-icon` remain unchanged.
+The Auto Items temporary-item picker reuses the captured subview-radio base/active frame pair and
+the already-declared `TooltipableObject.GetIcon()` capture for each discovered item. Its one added
+capture contract is `TooltipableObject.GetName()` in the picker boundary; identity, discovery,
+family, registry, and stock reads reuse the existing world-capture contracts. Multi-membership rows
+also invoke that same inherited `GetName()` contract for each `ConsumableTypeSO`; the existing type
+contract now pins its `UpgradeableObject` base so this receiver relationship is audited without a
+new contract entry. The picker creates its own row and `Image` objects and never captures a native
+UI object.
+
+Discovery-failure pixels use the same suite-owned frame and text primitives. Their state line and
+failure panel are measured from the actual editor width and rendered font size before the setting
+row height is committed, so wrapped text cannot overlap the panel or the Default button at any
+settings-page width.
+
+The installed gate also pins the inheritance that makes those accessor results tooltipable
+(`AttributeSO -> TooltipableObject` and
+`StructureTypeSO -> UpgradeableObject -> TooltipableObject`) plus Unity's UI-construction
+contract: `GameObject.transform` is declared as `Transform`,
+`RectTransform` derives from it, and `GameObject(string, Type[])` is the constructor used to
+request `RectTransform` for every suite-created UI node.
+
+All are capture-only UI contracts. Manifest schema 3 remains unchanged.

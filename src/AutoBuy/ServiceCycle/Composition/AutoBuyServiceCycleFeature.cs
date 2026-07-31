@@ -4,6 +4,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
@@ -27,7 +28,8 @@ internal sealed class AutoBuyServiceCycleFeature : IAutomataServiceCycleFeature
     public IAutomataServiceCycleFeatureRuntime Register(in AutomataServiceCycleFeatureContext context)
     {
         var adapters = AutoBuyServiceAdapterComposition.Create(
-            _dependencies
+            _dependencies,
+            context.Registry.WorldGenerations
 #if SERVICE_CYCLE_PROFILE
             , context.ProfileProbe
 #endif
@@ -39,7 +41,11 @@ internal sealed class AutoBuyServiceCycleFeature : IAutomataServiceCycleFeature
             _dependencies,
             registration,
             context.LifecycleValue,
-            context.ConfigurationGeneration);
+            context.ConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+            , adapters.Actions
+#endif
+            );
     }
 
 }
@@ -60,6 +66,9 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
         AutoBuyCycleAction> _registration;
     private readonly long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+    private readonly AutoBuyCycleActionAdapter _actions;
+#endif
     private AutoBuyServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoBuyFeatureRuntime(
@@ -68,12 +77,19 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
             AutoBuyCycleState,
             AutoBuyCycleAction> registration,
         long lifecycleValue,
-        ConfigGeneration initialConfigurationGeneration)
+        ConfigGeneration initialConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+        , AutoBuyCycleActionAdapter actions
+#endif
+        )
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+#endif
     }
 
     public void ActivateDiagnostics()
@@ -108,4 +124,12 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
     public void DisposeDiagnostics() => _diagnostics = null;
 
     public void DisposeRegistration() => _registration.Dispose();
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoBuyCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context) =>
+        _actions.TryExecuteGameMcp(in action, in config, in context);
+#endif
 }

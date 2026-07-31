@@ -15,7 +15,37 @@ $OOC_GAME_DIR/
 
 The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.csproj` at this directory's root, which compiles every feature folder below it. `Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by the features. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
-The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
+The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `AutoItems`,
+`AutoScribe`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and
+`SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration
+transaction that bind them together.
+
+## Automatic save backup
+
+`Plugin.Awake` runs the automatic save-backup gate before the assembly audit, configuration bind,
+Harmony patches, lifecycle subscriptions, feature controls, or ServiceCycle composition. The save
+root is Unity's runtime `Application.persistentDataPath`; no platform-specific user path is
+embedded. The gate reads only top-level `*.sav` files and `steam_autocloud.vdf`, matching the
+supported installer, and opens each file for reading without write sharing. It reads each source
+twice, verifies the copied bytes, rechecks the complete source set and contents, and publishes the
+backup directory only after every file agrees.
+
+Completed backups are `<save root>/backups/auto-modsuite-backup-yyyyMMddTHHmmssZ`. Incomplete work
+uses a distinct `.partial-*` staging name and cannot be mistaken for a completed backup. Retention
+keeps five completed directories and deletes only names that match that exact automatic-backup
+grammar; installer, manual, malformed, and partial directories are never candidates. A pruning
+failure is a visible degraded-health warning but does not disarm automation because the new backup
+already exists.
+
+The last successful suite version, normalized save root, verified backup path, and file count are
+stored in a strict stamp beside the BepInEx suite configuration. A missing, unreadable, malformed,
+wrong-version, wrong-root, or missing-backup stamp triggers another backup. Copy or stamp failure
+leaves automation disarmed for the launch and does not publish a success stamp, so the next launch
+retries. The release Start card reports the transaction's created/ready outcome without a count or
+path; the performance-debug card keeps that outcome and the verified file count. Runtime
+diagnostics retain the completed path and count. Both Start shapes and Runtime health show the
+exact blocking failure; accepting an unverified game build and clearing STOP cannot bypass this
+gate.
 
 ## Shared configuration schemas
 
@@ -27,7 +57,11 @@ Migration code must use explicit known-key maps and closed safe failure codes. I
 
 `OrbModding.Common.Runtime` holds monotonic time, catalogs, configuration and strategy publications, the shared world collection, diagnostics, and tracing. The contracts contain no Unity objects or gameplay policy, and the configuration UI consumes their typed projections. The earlier R0 scheduler it once carried was deleted at the Auto Harvest cutover.
 
-`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, and Auto Concept. The ordinary runner through semantic export, snapshot export, and schema-v7 recording is verified by the portable suite. Replay was retired as a runtime system rather than rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
+`OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it
+drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, Auto
+Items, and Auto Scribe. The ordinary runner through semantic export, snapshot export, and schema-v7
+recording is verified by the portable suite. Replay was retired as a runtime system rather than
+rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
 
 ## Shared automation decisions
 
@@ -37,16 +71,36 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 
 ## Shared gameplay controls
 
-Suite buttons register with `OrbModding.Common.StatusControlGroup`, which owns a compact two-column
-tray in the audited empty lane at the left edge of `RightSidebar/AttributeBar`. Controls use
-34-pixel native spell frames with 4-pixel row/column spacing; STOP is last and has an additional
-6-pixel separation. Add a unique named assignment to `StatusControlOrder` and call
-`RegisterControl` before `Reflow`; higher values appear first in row-major order. Current
-assignments are emergency stop `50`, Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, Auto
-Harvest `400`, and Mentor `500`. The emergency control is composed independently of the worker
-host and master automation switch. Do not add object names or a fixed button count to the layout
-helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored
-non-controls, invalid indexes, the exact native anchor, compact tray geometry, and STOP separation.
+`AutomationFeatureControlRegistry` is the one ordered roster for the Mods feature headers and the
+gameplay quick controls. The closed surface is one native-width compound control under the native
+top-left gear and character buttons: a full-size emergency stop followed by an attached,
+separately framed disclosure footer. The square's size, alignment, and vertical stack step are
+captured from the adjacent native buttons instead of guessed; its icon is the exact shipped
+`power-lightning` Sprite, enlarged inside that unchanged square rather than enlarging the control.
+The disclosure enumerates the
+registry into a transient, native-framed four-column panel below the compound control; it never
+maintains a second feature list. The closed disclosure carries a separate exclamation marker plus
+red color whenever a contained feature is faulted or blocked. The surface anchors through the
+declared, scene-bound `UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure. The
+32-pixel footer and panel reuse the audited recessed `UIViewRadioButton` frame as sliced border
+dressing;
+the panel surrounds an opaque suite-owned background.
+Every suite-created UI node requests `RectTransform` through
+`GameObject(string, Type[])`; a plain `GameObject(string)` exposes only the declared
+`Transform` contract and is never cast to a UI transform.
+
+Each live feature control requires its audited native glyph plus both
+`UIViewRadioButton.baseImage` and `activeImage`. OFF uses the recessed inactive frame; configured ON
+uses the raised active frame. Gray, green, red, and orange remain secondary health channels, and
+tooltips carry the same joined feature status as Mods Runtime. A missing anchor, glyph, or frame
+pair creates no corresponding live control and publishes the exact failure. STOP is separately
+visible and uses the exact audited `power-lightning` Sprite with immediate press-to-stop and
+press-to-resume `Safety/EmergencyDisable` semantics. Its native frame and the attached disclosure
+footer use deep green while clear and deep red while stopped; frame structure, glyphs, and tooltips
+keep state from depending on color alone. General uses that same command instead of staging the
+safety switch behind Apply. Capture/construction failures name the member plus expected
+and actual types, log that installation will retry on the shared five-second UI cadence, and become
+terminal diagnostics only on the third failed attempt, matching the Mods rail.
 
 ## Shared alchemy gameplay-domain classifier
 

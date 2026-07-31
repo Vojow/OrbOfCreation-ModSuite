@@ -27,18 +27,18 @@ main thread we barely touch.
 3. **Publish** (action): the finished snapshot returns through the ordinary action pipeline;
    applying it swaps the current-world reference and advances the live generation.
 4. **Consume**: an ordinary service starts only against a world collected strictly after it went
-   live, and strictly after the frame of its own last committed change to the game. Generations
+   live, and strictly after the frame of its own last game-facing action attempt. Generations
    and frames share one clock — a snapshot's generation is the pump frame it was collected on —
    so the comparison is like with like. The gate is born armed: acting on the seed publication
    means acting on an empty world where nothing is priced, so a service waits for a reading
-   later than itself before its first cycle. After that, the shape of what a service commits
-   raises the floor, not a declaration: only a committed native mutation does. A publication
-   changed no game state; a rejected or skipped action left the world exactly as the snapshot
-   described it; neither raises it. A service therefore never acts on a world it does not appear
-   in, never acts twice on one generation, and never acts on a world collected before its own
-   last change landed. A held service is simply skipped and asked again next frame, and every
-   held frame is recorded. The worker receives `(world, config, strategy)` as arguments and
-   returns actions; the main thread applies them.
+   later than itself before its first cycle. After that, every attempted ordinary action raises
+   the floor, not a declaration or one terminal disposition. A commit is absent from the pinned
+   world; a skip, rejection, or fault proves its facts insufficient at the live boundary. The
+   Source's publication attempts are the sole exemption. A service therefore never acts on a
+   world it does not appear in, never acts twice on one generation, and never acts on a world
+   collected before its own last attempt. A held service is simply skipped and asked again next
+   frame, and every held frame is recorded. The worker receives `(world, config, strategy)` as
+   arguments and returns actions; the main thread applies them.
 
 Configuration is the same shape with a different source (the config file); strategy is the
 same shape with a neutral constant bulletin until a strategist exists. BepInEx entries are only
@@ -136,7 +136,7 @@ Every seam must pay rent. Scheduled for deletion because they don't:
   per-frame operation cap because those are local delivery bounds, not another scheduler.
 - the application-level service registry that once hosted ServiceCycle beside legacy engines.
   With those engines gone, `Plugin` owns one deferred ServiceCycle activation directly; Common's
-  typed seven-service registry remains the engine's ordering boundary.
+  typed eight-service registry remains the engine's ordering boundary.
 - per-feature configuration relays and cached mode/emergency facts. Feature diagnostics report
   runtime health; one application status join supplies saved intent and emergency state.
 

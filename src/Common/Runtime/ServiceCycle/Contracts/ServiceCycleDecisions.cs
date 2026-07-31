@@ -98,13 +98,14 @@ public readonly struct ServiceStartDecision
     private static ServiceStartDecision CreateWait(ServiceDecisionCode code, WakePolicy wakePolicy)
     {
         ValidateCode(code, CommonServiceDecisionCodes.NotReady, nameof(code));
-        if (!IsPositiveDelay(wakePolicy))
+        if (wakePolicy.Kind != WakePolicyKind.OnPublication && !IsPositiveDelay(wakePolicy))
             throw new ArgumentException("A waiting decision requires an explicit non-immediate retry policy.", nameof(wakePolicy));
         return new ServiceStartDecision(false, code, wakePolicy);
     }
 
     internal static bool IsRetryShape(WakePolicy wakePolicy) =>
-        wakePolicy.Kind == WakePolicyKind.At || IsPositiveDelay(wakePolicy);
+        wakePolicy.Kind is WakePolicyKind.At or WakePolicyKind.OnPublication ||
+        IsPositiveDelay(wakePolicy);
 
     internal static bool IsPositiveDelay(WakePolicy wakePolicy) =>
         wakePolicy.Kind == WakePolicyKind.AfterDecision && wakePolicy.Delay.Ticks > 0;

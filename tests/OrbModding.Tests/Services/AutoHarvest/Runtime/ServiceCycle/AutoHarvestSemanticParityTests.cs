@@ -2,6 +2,7 @@ using System;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 using OrbModding.Common.Runtime;
 using OrbModding.Common;
 using Xunit;
@@ -114,8 +115,7 @@ public sealed class AutoHarvestSemanticParityTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected,
-            treasureSelected: true,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: true);
         return new CycleInput(frame, config);
     }
 
@@ -131,7 +131,7 @@ public sealed class AutoHarvestSemanticParityTests
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
         actionAvailability,
-        AutoHarvestEvidenceState.Verified,
+        PlotActionPrerequisiteEvidence.NativeLatchedTrue,
         readiness);
 
     /// <summary>

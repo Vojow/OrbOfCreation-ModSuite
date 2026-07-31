@@ -15,8 +15,21 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         if (Lifetime.IsSuperseded) return default;
         if (_hasPendingRequest)
             return TryPublishPendingRequest(nonBlockingProbe);
+
+        var configuration = _configuration.ReadLatest();
+        var world = _world.ReadLatest();
+        State.LatestConfigGeneration = configuration.Generation;
+        if (State.HasWakeDue &&
+            State.WakeInvalidatedByConfiguration &&
+            configuration.Generation != State.WakeConfigurationGeneration)
+            State.ClearWake();
+        if (State.HasWakeDue &&
+            State.WakeInvalidatedByWorld &&
+            world.Generation != State.WakeWorldGeneration)
+            State.ClearWake();
         if (State.HasWakeDue && now < State.NextWakeDue)
             return default;
+
         ServiceHandoffSnapshot handoff;
         if (nonBlockingProbe)
         {
@@ -31,8 +44,6 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
         if (handoff.Phase != ServiceHandoffPhase.Empty || handoff.CleanupPending)
             return default;
 
-        var configuration = _configuration.ReadLatest();
-        State.LatestConfigGeneration = configuration.Generation;
         var startContext = new ServiceCycleStartContext(
             Lifecycle,
             configuration.Generation,
@@ -90,10 +101,13 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
 
         if (!start.ShouldStart)
         {
-            State.NextWakeDue = ServiceWakeSchedule.FromRetryPolicy(
-                start.WakePolicy,
-                startObservedAt);
-            State.HasWakeDue = true;
+            State.ScheduleWake(
+                ServiceWakeSchedule.FromRetryPolicy(
+                    start.WakePolicy,
+                    startObservedAt),
+                configuration.Generation,
+                world.Generation,
+                invalidatedByWorld: WakeOnWorldPublication);
             var recoveredFault = RecoverStartFault(startObservedAt);
             return new ServiceCycleStartAttempt(
                 false, startFact, default, default, default, default,

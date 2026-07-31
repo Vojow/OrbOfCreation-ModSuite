@@ -50,7 +50,8 @@ internal sealed class ServiceCycleSourceStartCoordinator<TState, TAction> :
             clock,
             lifetime,
             strategy,
-            world)
+            world,
+            wakeOnWorldPublication: false)
     {
         _definition = definition;
         _frame = frame;
@@ -123,10 +124,13 @@ internal sealed class ServiceCycleSourceStartCoordinator<TState, TAction> :
             // one would outlive the runner that owns it.
             if (!Lifetime.IsSuperseded)
             {
-                State.NextWakeDue = ServiceWakeSchedule.FromRetryPolicy(
-                    result.WakePolicy,
-                    captureObservedAt);
-                State.HasWakeDue = true;
+                State.ScheduleWake(
+                    ServiceWakeSchedule.FromRetryPolicy(
+                        result.WakePolicy,
+                        captureObservedAt),
+                    configuration.Generation,
+                    opening.World.Generation,
+                    invalidatedByWorld: WakeOnWorldPublication);
             }
             return new ServiceCycleStartAttempt(
                 false, startFact, committedCapture, default, opening.Batch, default,

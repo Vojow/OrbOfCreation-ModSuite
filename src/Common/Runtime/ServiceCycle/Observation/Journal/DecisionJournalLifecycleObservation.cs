@@ -11,9 +11,9 @@ internal sealed class DecisionJournalLifecycleObservation
     private const int RequestedCode = 1;
     private const int ActivatedCode = 2;
 
-    private readonly DecisionJournalCoalescer _journal;
+    private readonly IDecisionJournalObservationSink _journal;
 
-    internal DecisionJournalLifecycleObservation(DecisionJournalCoalescer journal) => _journal = journal;
+    internal DecisionJournalLifecycleObservation(IDecisionJournalObservationSink journal) => _journal = journal;
 
     internal void Requested(
         ref DecisionJournalServiceCursor service,

@@ -6,19 +6,20 @@
 
 Unofficial BepInEx mods, tests, and reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).
 
-The current beta provides grouped queue-aware Auto Buy, progression-aware Spell Leveling, Auto Cast, opt-in Auto Concept, disabled-by-default Auto Harvest, Mentor progression sharing, and an optional native-styled configuration UI. Back up your save before using beta automation.
+The current beta provides grouped queue-aware Auto Buy, progression-aware Spell Leveling, Auto Cast,
+opt-in Auto Concept, disabled-by-default Auto Harvest and Auto Items, Mentor progression sharing,
+and an optional native-styled configuration UI. Back up your save before using beta automation.
 
 ## Project status
 
-The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.vojow.orbofcreation.modsuite`, version `0.4.0` beta — with one configuration file. The earlier separately versioned Orb Automata, Orb Mod Config, Orb Mentor, and Orb Modding Common plugins are retired and no longer exist as loadable identities.
+The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.vojow.orbofcreation.modsuite`, release version `0.5.0-beta.1` — with one configuration file. The earlier separately versioned Orb Automata, Orb Mod Config, Orb Mentor, and Orb Modding Common plugins are retired and no longer exist as loadable identities.
 
 | Feature area | Status | Description |
 |---|---|---|
-| **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, and Auto Harvest. |
+| **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, Auto Harvest, and Auto Items for Scrolls and Relics. |
 | **Mentor** | Beta | Progression-gated mastery sharing for spells, artifacts, and alchemy. |
-| **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and recent pump timing. |
+| **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and an automation activity timeline. |
 | **Shared runtime** | Bundled | ServiceCycle, world collection, diagnostics, and tracing behind every feature. |
-| **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 The supported baseline is Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton and requires separate runtime validation.
 
@@ -26,7 +27,11 @@ The suite computes the game's economy math itself, transcribed from audited game
 
 ## Runtime foundation
 
-[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread pass reads raw game state and publishes it as an immutable world snapshot; features decide in the background against that snapshot without holding game objects, then revalidate the live game immediately before each action. World collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor are its seven registered services.
+[ServiceCycle](docs/runtime-architecture/README.md) is the suite's one runtime engine. One main-thread
+pass reads raw game state and publishes it as an immutable world snapshot; features decide in the
+background against that snapshot without holding game objects, then revalidate the live game
+immediately before each action. World collection, Auto Items, Auto Harvest, Auto Buy, Spell
+Leveling, Auto Cast, Auto Concept, and Mentor are its eight registered services.
 
 Three separate diagnostics help investigate different problems:
 

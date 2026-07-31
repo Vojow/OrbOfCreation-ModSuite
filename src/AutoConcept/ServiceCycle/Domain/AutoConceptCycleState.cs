@@ -1,6 +1,5 @@
 using System;
 using OrbModding.Common.Runtime;
-using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -204,6 +203,7 @@ internal struct AutoConceptCycleState
         LastSlotMode = null;
         LastTrainingPeriod = null;
         HasPendingReceipt = false;
+        PendingReceiptCommitted = false;
         PendingReceiptAction = default;
         Decision = default;
     }
@@ -221,6 +221,7 @@ internal struct AutoConceptCycleState
     internal AutoConceptSlotManagementMode? LastSlotMode;
     internal int? LastTrainingPeriod;
     internal bool HasPendingReceipt;
+    internal bool PendingReceiptCommitted;
     internal AutoConceptCycleAction PendingReceiptAction;
     public AutoConceptDecisionMetrics Decision { get; private set; }
 
@@ -230,6 +231,7 @@ internal struct AutoConceptCycleState
     {
         PendingReceiptAction = action;
         HasPendingReceipt = true;
+        PendingReceiptCommitted = false;
         CandidateCursor = checked(CandidateCursor + 1);
     }
 
@@ -237,6 +239,7 @@ internal struct AutoConceptCycleState
     {
         PendingReceiptAction = default;
         HasPendingReceipt = false;
+        PendingReceiptCommitted = false;
     }
 
     internal void RecordDecision(in AutoConceptDecisionMetrics decision) => Decision = decision;
@@ -252,6 +255,13 @@ internal enum AutoConceptDecisionKind
     Depth = 5,
 }
 
+internal enum AutoConceptIdleReason
+{
+    None = 0,
+    WaitingForTraining = 1,
+    NoUnlockedAssignableReplacement = 2,
+}
+
 internal readonly struct AutoConceptDecisionMetrics
 {
     internal AutoConceptDecisionMetrics(
@@ -260,7 +270,8 @@ internal readonly struct AutoConceptDecisionMetrics
         int activeRecipes,
         int ownedRecipes,
         int plannedActions,
-        AutoConceptDecisionKind kind)
+        AutoConceptDecisionKind kind,
+        AutoConceptIdleReason idleReason = AutoConceptIdleReason.None)
     {
         CapturedRecipes = capturedRecipes;
         EligibleRecipes = eligibleRecipes;
@@ -268,6 +279,7 @@ internal readonly struct AutoConceptDecisionMetrics
         OwnedRecipes = ownedRecipes;
         PlannedActions = plannedActions;
         Kind = kind;
+        IdleReason = idleReason;
     }
 
     public int CapturedRecipes { get; }
@@ -276,4 +288,5 @@ internal readonly struct AutoConceptDecisionMetrics
     public int OwnedRecipes { get; }
     public int PlannedActions { get; }
     public AutoConceptDecisionKind Kind { get; }
+    public AutoConceptIdleReason IdleReason { get; }
 }

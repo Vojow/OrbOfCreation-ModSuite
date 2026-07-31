@@ -15,14 +15,14 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Registration;
 
 /// <summary>
 /// A service must not start a cycle while the live world was collected before that service went live
-/// or before it last changed the game — otherwise it decides against a world it does not appear in,
-/// or re-decides against a world its own action already invalidated.
+/// or before its last game-facing action attempt — otherwise it decides against a world it does not
+/// appear in, or re-decides from facts its own action boundary already invalidated.
 /// </summary>
 /// <remarks>
 /// These live here rather than in any consuming feature on purpose. The rule belongs to consuming a
 /// shared snapshot, not to Auto Buy, and nothing opts into it: the gate is born armed, and after that
-/// only a committed native mutation raises its floor. Every composition here publishes worlds the way
-/// production's collection service does, because that is the only world a service is ever gated
+/// every attempted game-facing action raises its floor. Every composition here publishes worlds the
+/// way production's collection service does, because that is the only world a service is ever gated
 /// against — the first reading included.
 /// </remarks>
 public sealed class ServiceWorldFreshnessGateTests
@@ -237,6 +237,33 @@ public sealed class ServiceWorldFreshnessGateTests
     }
 
     /// <summary>
+    /// A failed publication attempt cannot close the collector behind a reading only it can produce.
+    /// The exemption belongs to the Source shape, not to one successful publication disposition.
+    /// </summary>
+    [Fact]
+    public void ASourceShapedServiceIsNeverGatedByARejectedPublicationAttempt()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var service = new ExecutionServiceDefinition("gate.publisher-rejected")
+        {
+            ActionCount = 1,
+            RejectAtIndex = 0,
+        };
+        using var registration = registry.Register(
+            service,
+            new LifecycleGeneration(1),
+            ServiceActionDispatchPolicy.Bounded(1, ServiceActionDispatchClass.Publication));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        var frame = PumpUntil(pump, () => service.ActionExecutionCount > 0);
+        var startsAfterAttempt = service.StartCount;
+
+        PumpUntil(pump, () => service.StartCount > startsAfterAttempt, frame + 1);
+    }
+
+    /// <summary>
     /// The gate belongs to the slot, not to the runner sitting in it: replacing a service's
     /// lifecycle does not forgive what that service already did to the game.
     /// </summary>
@@ -364,6 +391,88 @@ public sealed class ServiceWorldFreshnessGateTests
         Assert.Equal(heldFrame, deferral.FrameIdentity);
         Assert.Equal(actionFrame, deferral.LastActionFrame);
         Assert.Equal((ulong)ActivationWorld, deferral.World.Value);
+    }
+
+    /// <summary>
+    /// A pre-native skip says the action's snapshot was stale even though no game mutation happened,
+    /// so the same snapshot must not be planned again.
+    /// </summary>
+    [Fact]
+    public void APreNativeSkipWaitsForAWorldCollectedAfterTheRefusal()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var service = new ExecutionServiceDefinition("gate.pre-native-skip")
+        {
+            ActionCount = 1,
+            SkipWithoutNativeAtIndex = 0,
+        };
+        using var registration = registry.Register(service, new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var executions = service.ActionExecutionCount;
+        PumpUntilHeld(pump, actionFrame + 1);
+        Assert.Equal(executions, service.ActionExecutionCount);
+
+        TestWorldCollector.CollectedAt(registry, actionFrame + 1);
+        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+    }
+
+    /// <summary>
+    /// A native rejection proves that live reality disagreed with the pinned facts which produced
+    /// the action, so immediate wake cannot plan against those facts again.
+    /// </summary>
+    [Fact]
+    public void ARejectedActionWaitsForAWorldCollectedAfterTheAttempt()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var service = new ExecutionServiceDefinition("gate.rejected")
+        {
+            ActionCount = 1,
+            RejectAtIndex = 0,
+        };
+        using var registration = registry.Register(service, new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var executions = service.ActionExecutionCount;
+        PumpUntilHeld(pump, actionFrame + 1);
+        Assert.Equal(executions, service.ActionExecutionCount);
+
+        TestWorldCollector.CollectedAt(registry, actionFrame + 1);
+        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+    }
+
+    /// <summary>
+    /// Fault backoff remains the failure policy, but expiring it is not permission to reuse the
+    /// world whose action boundary faulted.
+    /// </summary>
+    [Fact]
+    public void AFaultedActionWaitsForAWorldCollectedAfterTheAttempt()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var service = new ExecutionServiceDefinition("gate.faulted")
+        {
+            ActionCount = 1,
+            FaultAtIndex = 0,
+        };
+        using var registration = registry.Register(service, new LifecycleGeneration(1));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+
+        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var executions = service.ActionExecutionCount;
+        clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
+        PumpUntilHeld(pump, actionFrame + 1);
+        Assert.Equal(executions, service.ActionExecutionCount);
+
+        TestWorldCollector.CollectedAt(registry, actionFrame + 1);
+        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
     }
 
     /// <summary>

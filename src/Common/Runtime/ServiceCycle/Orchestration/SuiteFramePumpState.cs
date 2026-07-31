@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 #endif
@@ -15,7 +16,8 @@ internal sealed class SuiteFramePumpState
 
     internal SuiteFramePumpState(
         ServiceCycleRegistry registry,
-        ServiceCycleSemanticRecorder? semanticRecorder
+        ServiceCycleSemanticRecorder? semanticRecorder,
+        ServiceActionOutcomeWindowRegistry? outcomeWindows
 #if SERVICE_CYCLE_PROFILE
         , ServiceCycleProfileProbe profileProbe
 #endif
@@ -40,7 +42,7 @@ internal sealed class SuiteFramePumpState
             registry,
             serviceCapacity,
             semanticRecorder);
-        Journal = new SuiteFramePumpJournalSession(registry, serviceCapacity);
+        Journal = new SuiteFramePumpJournalSession(registry, serviceCapacity, outcomeWindows);
         EvidenceScanner = new SuiteFramePumpEvidenceScanner(registry, serviceCapacity);
 #if SERVICE_CYCLE_PROFILE
         EvidenceProfiler = new SuiteFramePumpEvidenceProfiler(profileProbe);
@@ -116,7 +118,11 @@ internal sealed class SuiteFramePumpState
         Registry.ExitPumpCallback();
     }
 
-    internal void DisposeRegistry() => Registry.Dispose();
+    internal void DisposeRegistry()
+    {
+        try { Journal.Dispose(Clock.Now); }
+        finally { Registry.Dispose(); }
+    }
 
     internal void MarkDisposed() => IsDisposed = true;
 }

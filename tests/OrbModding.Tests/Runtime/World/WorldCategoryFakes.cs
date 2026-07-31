@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 
 namespace OrbModding.Tests.Runtime.World;
 
@@ -32,10 +33,28 @@ internal static class WorldCategoryFakes
         ["EquipmentTypeSO"] = typeof(FakeEquipmentType),
         ["ResourceTypeSO"] = typeof(FakeResourceType),
         ["CraftingRecipeTypeSO"] = typeof(FakeCraftingRecipeType),
+        ["CraftingRecipeSO"] = typeof(FakeScribeRecipe),
+        ["CraftingRecipeListVariable"] = typeof(FakeScribeRecipeList),
+        ["CraftingInstanceListVariable"] = typeof(FakeScribeInstanceList),
+        ["CraftingInstance"] = typeof(FakeScribeInstance),
         ["HarvestElementSO"] = typeof(FakeHarvestElement),
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
+        ["EnchantmentSO"] = typeof(FakeScribeEnchantment),
+        ["EnchantmentSO+EnchantTable"] = typeof(FakeScribeEnchantTable),
+        ["EnchantmentInstance"] = typeof(FakeScribeEnchantmentInstance),
+        ["ScalingInfo"] = typeof(FakeScribeScalingInfo),
+        ["BigDouble"] = typeof(BigDouble),
+        ["InstantEffectBlock"] = typeof(FakeScribeInstantBlock),
+        ["IInstantEffectScript"] = typeof(IFakeScribeInstantScript),
+        ["ConsumableSO+ConsumableGainEffect"] = typeof(FakeScribeConsumableGainEffect),
+        ["RequestTargetEffectScript"] = typeof(FakeScribeRequestTargetEffect),
+        ["Targeting.TargetSelectOptions"] = typeof(FakeScribeTargetOptions),
+        ["Targeting.BaseTargetSelection"] = typeof(FakeScribeBaseTargetSelection),
+        ["Targeting.TargetStructure"] = typeof(FakeScribeTargetStructure),
+        ["Targeting.ITargetable"] = typeof(IFakeScribeTargetable),
+        ["EnchantmentSO+EnchantItemScript"] = typeof(FakeScribeEnchantItemScript),
         ["RitualSO"] = typeof(FakeRitual),
         ["AchievementSO"] = typeof(FakeAchievement),
         ["AdvancementSO"] = typeof(FakeAdvancement),
@@ -100,6 +119,48 @@ internal static class WorldCategoryFakes
         FakeTreasurePool.All.Clear();
         FakeModifierVariable.All.Clear();
         FakeIdRegistry.RuntimeLookup.Clear();
+        SeedScribeRelations();
+    }
+
+    private static void SeedScribeRelations()
+    {
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ScribeCraftingRecipes.Uuid] =
+            new FakeScribeRecipeList();
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveScribeInstances.Uuid] =
+            new FakeScribeInstanceList();
+        FakeIdRegistry.RuntimeLookup[KnownEntities.AutoScribeInstances.Uuid] =
+            new FakeScribeInstanceList { isAutoList = true };
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ScribeCrafting.Uuid] =
+            new FakeCraftingRecipeType
+            {
+                Identity = KnownEntities.ScribeCrafting.Uuid,
+                maxStartingLevel = 1,
+            };
+
+        foreach (var (scrollId, enchantmentId) in new[]
+                 {
+                     (KnownEntities.ScrollAdvancement.Uuid, KnownEntities.EnchantAdvancement.Uuid),
+                     (KnownEntities.ScrollDevelopment.Uuid, KnownEntities.EnchantDevelopment.Uuid),
+                     (KnownEntities.ScrollEcho.Uuid, KnownEntities.EnchantEcho.Uuid),
+                     (KnownEntities.ScrollExcellence.Uuid, KnownEntities.EnchantExcellence.Uuid),
+                     (KnownEntities.ScrollInvestment.Uuid, KnownEntities.EnchantInvestment.Uuid),
+                     (KnownEntities.ScrollLearning.Uuid, KnownEntities.EnchantLearning.Uuid),
+                     (KnownEntities.ScrollPower.Uuid, KnownEntities.EnchantPower.Uuid),
+                     (KnownEntities.ScrollSpeed.Uuid, KnownEntities.EnchantSpeed.Uuid),
+                 })
+        {
+            var enchantment = new FakeScribeEnchantment { Identity = enchantmentId };
+            var block = new FakeScribeInstantBlock();
+            block.effectScripts.Add(new FakeScribeRequestTargetEffect());
+            block.effectScripts.Add(new FakeScribeEnchantItemScript
+            {
+                enchantment = enchantment,
+            });
+            var scroll = new FakeConsumable { Identity = scrollId };
+            scroll.onUseEffects.Add(block);
+            FakeIdRegistry.RuntimeLookup[enchantmentId] = enchantment;
+            FakeIdRegistry.RuntimeLookup[scrollId] = scroll;
+        }
     }
 }
 
@@ -110,6 +171,110 @@ internal static class WorldCategoryFakes
 internal static class FakeIdRegistry
 {
     public static readonly Dictionary<Guid, object> RuntimeLookup = new();
+}
+
+internal sealed class FakeScribeRecipeList
+{
+    public List<FakeScribeRecipe> value = new();
+}
+
+internal sealed class FakeScribeRecipe
+{
+    public Guid Identity = Guid.NewGuid();
+    public List<FakeCraftingRecipeType> craftingTypes = new();
+    public List<FakeScribeInstantBlock> completeEffects = new();
+    public bool useQuantityAsLevel = false;
+
+    public Guid GetGuid() => Identity;
+    public bool IsVisible() => true;
+}
+
+internal sealed class FakeScribeInstanceList
+{
+    public List<FakeScribeInstance> value = new();
+    public bool isAutoList;
+    public int Maximum = 4;
+
+    public int GetMax() => Maximum;
+}
+
+internal sealed class FakeScribeInstance
+{
+    public Guid RecipeId = Guid.Empty;
+    public BigDouble Quantity = BigDouble.Zero;
+    public bool Automatic = false;
+    public bool Expired = false;
+
+    public Guid GetGuidReference() => RecipeId;
+    public BigDouble GetQuantity() => Quantity;
+    public bool IsAuto() => Automatic;
+    public bool IsExpired() => Expired;
+}
+
+internal interface IFakeScribeInstantScript
+{
+}
+
+internal sealed class FakeScribeInstantBlock
+{
+    public List<IFakeScribeInstantScript> effectScripts = new();
+}
+
+internal sealed class FakeScribeConsumableGainEffect : IFakeScribeInstantScript
+{
+    public FakeConsumable? consumable = null;
+}
+
+internal sealed class FakeScribeRequestTargetEffect : IFakeScribeInstantScript
+{
+    public FakeScribeTargetOptions targetOptions = new();
+}
+
+internal sealed class FakeScribeEnchantItemScript : IFakeScribeInstantScript
+{
+    public FakeScribeEnchantment? enchantment;
+}
+
+internal sealed class FakeScribeEnchantment
+{
+    public Guid Identity = Guid.NewGuid();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeScribeEnchantTable
+{
+    public List<FakeScribeEnchantmentInstance> enchantments = new();
+}
+
+internal sealed class FakeScribeEnchantmentInstance
+{
+    public Guid EnchantmentId = Guid.Empty;
+    public int Level = 0;
+    public Guid GetGuidReference() => EnchantmentId;
+    public int GetLevel() => Level;
+}
+
+internal sealed class FakeScribeScalingInfo
+{
+    public static FakeScribeScalingInfo Basic(BigDouble level) => new();
+}
+
+internal class FakeScribeBaseTargetSelection
+{
+}
+
+internal interface IFakeScribeTargetable
+{
+}
+
+internal sealed class FakeScribeTargetStructure : FakeScribeBaseTargetSelection
+{
+    public List<IFakeScribeTargetable> GetRandomList(FakeScribeScalingInfo scaling) => new();
+}
+
+internal sealed class FakeScribeTargetOptions
+{
+    public FakeScribeBaseTargetSelection GetTargeting() => new FakeScribeTargetStructure();
 }
 
 /// <summary>
@@ -244,73 +409,6 @@ internal struct FakeValueModifier
     }
 }
 
-/// <summary>
-/// One authored effect block. Effects hang off this rather than off the entity, so a structure's
-/// standing effects are a list of lists.
-/// </summary>
-internal sealed class FakeEffectProperty
-{
-    public List<FakeResourceEffect> resourceEffects = new();
-    public List<FakeObjectEffect> upgradeableObjectEffects = new();
-}
-
-/// <summary>An effect on one of a resource's modifiable properties, named by the game's enum.</summary>
-internal struct FakeResourceEffect
-{
-    public FakeReferencedEntity resource;
-    public FakeModifiableProperty upgradeType;
-    public FakeValueModifier modifier;
-
-    internal FakeResourceEffect(
-        Guid resourceId,
-        FakeModifiableProperty property,
-        FakeModifierKind kind,
-        double amount)
-    {
-        resource = new FakeReferencedEntity { Identity = resourceId };
-        upgradeType = property;
-        modifier = new FakeValueModifier(kind, amount, 0);
-    }
-}
-
-/// <summary>
-/// An effect on a named property of any upgradeable object. The name is a string here because it is
-/// one in the game: each type authors its own property names rather than sharing an enum.
-/// </summary>
-internal struct FakeObjectEffect
-{
-    public FakeReferencedEntity upgradeableObject;
-    public string propertyType;
-    public FakeValueModifier modifier;
-    public bool useTargetRef;
-
-    internal FakeObjectEffect(
-        Guid targetId,
-        string propertyType,
-        FakeModifierKind kind,
-        double amount,
-        bool useTargetRef = false)
-    {
-        upgradeableObject = new FakeReferencedEntity { Identity = targetId };
-        this.propertyType = propertyType;
-        modifier = new FakeValueModifier(kind, amount, 0);
-        this.useTargetRef = useTargetRef;
-    }
-}
-
-/// <summary>
-/// A stand-in for the game's <c>ResourceSO.ModifiableType</c>. Member names matter here, unlike every
-/// other enum a fake carries: the collector publishes the name rather than the integer, because the
-/// other vocabulary reaching that table has no integer to share.
-/// </summary>
-internal enum FakeModifiableProperty
-{
-    Rate,
-    MaxQuantity,
-    Quality,
-    AttributeCostMod,
-}
-
 /// <summary>Positionally identical to the game's ValueModifierType, which is what travels.</summary>
 internal enum FakeModifierKind
 {
@@ -440,11 +538,30 @@ internal sealed class FakeAlchemyRecipe
     public FakeModifierRecord freeUsageSlots = new(0d);
     public FakeModifierRecord maxUsageSlots = new(0d);
     public BigDouble cachedCompletionTime;
+    // Deliberately orphaned like the v1.0.5 field. The collector must not read this.
     public BigDouble cachedRequiredXp;
+    public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
+
+    public BigDouble GetRequiredExperience() =>
+        experienceContainer.GetRequiredExperience();
+
+    public int GetMaxUsageSlots()
+    {
+        if (coreType.maxUsageByMastery) return masteryLevel + 1;
+        var maximum = maxUsageSlots.GetValue().ToDouble();
+        return maximum < 0 ? int.MaxValue : (int)Math.Floor(maximum);
+    }
+}
+
+internal sealed class FakeExperienceContainer
+{
+    public BigDouble cachedRequiredXp;
+
+    public BigDouble GetRequiredExperience() => cachedRequiredXp;
 }
 
 internal sealed class FakeAlchemyRecipeList
@@ -455,6 +572,8 @@ internal sealed class FakeAlchemyRecipeList
 internal sealed class FakeAlchemyInstanceList
 {
     public List<FakeAlchemyInstance> value = new();
+
+    public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
 }
 
 internal sealed class FakeAlchemyInstance
@@ -952,13 +1071,75 @@ internal sealed class FakeConsumable
     public ValueModifierRecord special = new(new BigDouble(0.0, 0));
     public ValueModifierRecord prepSpeed = new(new BigDouble(0.0, 0));
     public ValueModifierRecord bonusLevels = new(new BigDouble(0.0, 0));
+    public List<FakeConsumableType> consumableTypes = new();
+    public List<FakeConsumableUsage> consumableUsages = new();
+    public List<FakeConsumableCount> consumableCounts = new();
+    public List<FakeScribeInstantBlock> onUseEffects = new();
+    public FakeConsumableCostList consumeCost = new();
+    public FakeConsumableCostList usageCost = new();
+    public int maximumCarryLoad = 100;
 
     public Guid GetGuid() => Identity;
+    public int GetMaximumCarryLoad() => maximumCarryLoad;
     public double preparationTime;
     public bool canBeRandomized;
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+}
+
+internal sealed class FakeConsumableType
+{
+    public Guid Identity = Guid.NewGuid();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableCostList
+{
+    public List<FakeConsumableCost> costs = new();
+}
+
+internal sealed class FakeConsumableCost
+{
+    internal FakeConsumableCost(Guid resourceId, double amount)
+    {
+        resource = new FakeConsumableResource { Identity = resourceId };
+        valueBig = new BigDouble(amount);
+    }
+
+    public FakeConsumableResource resource;
+    public BigDouble valueBig;
+}
+
+internal sealed class FakeConsumableResource
+{
+    public Guid Identity = Guid.NewGuid();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableUsage
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool en;
+    public BigDouble dr;
+    public BigDouble maxDr;
+    public FakeConsumableScalingInfo baseSi = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableScalingInfo
+{
+    public int Level = 1;
+    public int GetLevelInt() => Level;
+}
+
+internal sealed class FakeConsumableCount
+{
+    public int Level = 1;
+    public int Quantity;
+    public int fr;
+    public int GetLevel() => Level;
+    public int GetQuantity() => Quantity;
 }
 
 internal sealed class FakeRitual

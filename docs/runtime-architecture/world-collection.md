@@ -122,11 +122,11 @@ competing for. See [W53](world-collection-decisions.md).
 
 ## Acting twice on one world
 
-A service that changes the game must not decide again until the world has been re-read since. Acting
-on slightly stale readings once is harmless — most quantities only grow, so the decision is merely
-conservative. Acting a *second* time on readings that predate the first action is not: Auto Buy would
-re-decide against a world in which its own purchase never happened and buy it again, breaking the
-rule it was given.
+A service that attempts a game-facing action must not decide again until the world has been re-read
+since. A commit is absent from the pinned reading. A skip, rejection, or fault is just as important:
+the live action boundary has shown that the facts which produced the plan were insufficient or
+divergent. Planning another action from those same facts means trusting a snapshot just proven
+unreliable.
 
 The first world is the same problem in different clothes. At activation the published snapshot is the
 seed one — an empty world, or a real collection whose prices the game has not finished cooking — and a
@@ -135,20 +135,18 @@ service deciding against it decides that nothing costs anything. So the gate is 
 current, at activation and again on lifecycle replacement.
 
 This is enforced by the runtime, not by the services, and there is nothing to declare. The gate is
-unconditional: every mutating service is subject to it and none opts in, because what raises the floor
-is activation plus the shape of what a service commits, rather than a registration call.
-`ServiceCycleSlot.RecordGameMutation` raises it again only when a dispatched action came back
-`Committed` with effect `NativeMutation`, and `TryStartCycle` refuses to open the next cycle until the
-published world generation is strictly newer than the floor. Because both numbers are pump frames, the
-comparison is a plain `>`. The floor only rises, so re-arming never forgives an earlier mutation.
+unconditional: every ordinary service is subject to it and none opts in.
+`ServiceCycleSlot.RecordWorldInvalidation` raises the floor after every attempted game-facing
+dispatch, whatever its terminal disposition, and `TryStartCycle` refuses to open the next cycle until
+the published world generation is strictly newer than the floor. Because both numbers are pump frames,
+the comparison is a plain `>`. The floor only rises, so re-arming never forgives an earlier attempt.
 
-That single condition covers the cases an opt-in would have had to enumerate. A `Source` is exempt by
-shape, so collection never waits on itself; a service whose action was rejected or skipped left the
-world exactly as the snapshot described it, so nothing holds it for that; and a service that has not yet
-changed the game waits on its own activation instead. Strictly-after is deliberate —
-within a frame, actions dispatch before captures, so a snapshot stamped with our own action's frame does
-contain it, but waiting one more collection is cheap next to a duplicate purchase. A world source that
-cannot answer holds the service closed, because "unknown" is not "fresh".
+A `Source` is exempt by shape, so collection never waits on itself. That is the only exemption:
+committed, skipped, rejected, and faulted ordinary attempts all close the gate. Strictly-after is
+deliberate — within a frame, actions dispatch before captures, so a snapshot stamped with our own
+action's frame can contain it, but waiting one more collection is cheap next to acting again on
+unreliable facts. A world source that cannot answer holds the service closed, because "unknown" is
+not "fresh".
 
 Nothing about this lives in a feature. `AutoBuyService.ShouldStart` answers only "is Auto Buy
 configured to run"; freshness is not its question to answer. Only the generation crosses the seam
@@ -176,14 +174,18 @@ tables rather than the two registries ([W44](world-collection-decisions.md)).
 than a claim about one service. Six of its eight facts come from the snapshot: five from the
 plot-node and plot-action tables, and the sixth — the action's audited structural safety — from the
 plot-authoring, phase-descriptor and effect-block tables, computed on the worker as this service's
-own policy rather than published as a verdict ([W54](world-collection-decisions.md)). It has no
-main-thread fact-capture stages left to measure.
+own policy rather than published as a verdict ([W54](world-collection-decisions.md)). A false
+plot-action prerequisite latch is published as needing validation, not as an unmet prerequisite; an
+otherwise-ready GameAction calls the exact current action's domain validator once before quantity
+mutation ([W37](world-collection-decisions.md)). It has no main-thread fact-capture stages left to
+measure.
 
 | Native read | Why it stays |
 | --- | --- |
 | `ActionManager` active-action list | Whether this pair is already queued or running, and whether a slot is free. Published now, but read where it is *acted on*: a collected reading admits nothing ([W53](world-collection-decisions.md)). |
 | The plot's own `actionInstances`, per submission | The instance to submit into. A live object rather than a fact — every fact the decision rested on rode in on the action. |
 | The two pairs' plot and action objects | Resolved once per lifecycle by uuid. Needed to mutate, not to decide. |
+| The exact action's parameterless prerequisite validator | A false published latch cannot distinguish “unmet” from “not checked.” One fresh action-boundary call supplies that verdict; before/result/after latch evidence is recorded and no UI method participates. |
 
 Exempting it from the migration on the grounds that its capture was narrow was a mistake, for reasons
 that had nothing to do with what Auto Harvest gains — see [W14](world-collection-decisions.md),

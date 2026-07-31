@@ -3,6 +3,7 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
+using OrbModding.Common.Runtime.Configuration;
 
 namespace OrbAutomata;
 
@@ -25,7 +26,11 @@ internal sealed class AutoConceptServiceCycleFeature : IAutomataServiceCycleFeat
             adapters.Natives,
             registration,
             context.LifecycleValue,
-            context.ConfigurationGeneration);
+            context.ConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+            , adapters.Actions
+#endif
+            );
     }
 
 }
@@ -37,6 +42,9 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
     private readonly ServiceRegistration<AutoConceptCycleState, AutoConceptCycleAction> _registration;
     private readonly long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+    private readonly AutoConceptCycleActionAdapter _actions;
+#endif
     private AutoConceptServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoConceptFeatureRuntime(
@@ -44,13 +52,20 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
         AutoConceptNativeAdapter natives,
         ServiceRegistration<AutoConceptCycleState, AutoConceptCycleAction> registration,
         long lifecycleValue,
-        ConfigGeneration initialConfigurationGeneration)
+        ConfigGeneration initialConfigurationGeneration
+#if SERVICE_CYCLE_PROFILE
+        , AutoConceptCycleActionAdapter actions
+#endif
+        )
     {
         _dependencies = dependencies;
         _natives = natives;
         _registration = registration;
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
+#if SERVICE_CYCLE_PROFILE
+        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+#endif
     }
 
     public void ActivateDiagnostics()
@@ -86,4 +101,12 @@ internal sealed class AutoConceptFeatureRuntime : IAutomataServiceCycleFeatureRu
         _registration.Dispose();
         _natives.Dispose();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoConceptCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context) =>
+        _actions.TryExecuteGameMcp(in action, in config, in context);
+#endif
 }

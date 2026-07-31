@@ -1,5 +1,37 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.5.0 — 2026-08-01
+
+### New
+
+- Automatic save backups: first run and every update copy your saves into `backups/` before
+  automation starts; the five newest are kept. A failed backup blocks automation.
+- Auto Items: automatic Scroll and Relic use, plus a picker to approve specific temporary Fruits,
+  Potions, and Threads.
+- Auto Scribe: automatic Scroll crafting.
+- Emergency stop below the game's gear and character buttons, with a fold-out panel of per-feature
+  switches.
+- Runtime activity chart: completed actions per minute, per feature, over the last thirty minutes.
+
+### Fixed
+
+- Auto Buy no longer skips bulk purchases it can afford; it buys every level it can pay for.
+- Spell leveling no longer stalls on one unaffordable spell.
+- Auto Harvest works with the Agromancy screen closed.
+- Auto Concept ranks training by the game's real experience requirements.
+- Mouse wheel works on all mod screens; clicks no longer fall through panels.
+- Mod controls appear together right after loading; the Mods tab behaves like the game's own tabs.
+
+### Improved
+
+- Auto Concept settles into new training in 30 seconds instead of 5 minutes and rotates through
+  all unlocked concepts.
+- One shared automation rhythm; the per-feature timing settings are gone. Settings migrate
+  automatically.
+- Repeated log lines collapse into short summaries.
+- The Windows installer refuses to run while the game is open.
+- Debug builds replace the F10/F11/F12 shortcuts with a local control server.
+
 ## Orb Of Creation ModSuite 0.4.0 Beta 1 — 2026-07-29
 
 - Support Orb of Creation `1.0.5-2` on Windows after checking the current game assemblies and
@@ -48,7 +80,7 @@
 - Replace the cramped quick-strip labels with native spell-frame icon controls for Mentor, Auto
   Harvest, Auto Concept, Auto Cast, and Auto Buy. Desired Off, desired On, unhealthy, and
   emergency-stopped states share one renderer; STOP uses a separated alert control and retains its
-  two-step resume confirmation.
+  immediate press-to-stop, press-to-resume semantics.
 - Reframe the Mods surface with the game's audited vertical subview-radio vocabulary and preserve
   the full `Orb Of Creation ModSuite` title.
 - Replace the nine legacy section tabs with a Runtime/General/feature/Advanced rail, merge Mentor's
@@ -77,7 +109,7 @@
   one `ConfigGeneration`. Feature bridges publish runtime health only; one status join combines it
   with committed saved intent for every player-facing feature.
 - Make one configuration store the application source of truth. BepInEx entries only deserialize and
-  persist explicit values; controls, ownership, activation, resume previews, button visibility, status,
+  persist explicit values; controls, ownership, activation, emergency state, button visibility, status,
   and services all read the store's committed snapshot.
 - Absorb binding-time notifications into generation 1, compute quick-control changes from committed
   state even while an external edit is pending, and route STOP/resume and fail-closed Auto Buy

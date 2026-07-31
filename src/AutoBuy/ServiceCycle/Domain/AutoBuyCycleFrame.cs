@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime;
 
 namespace OrbAutomata;
 
@@ -18,16 +19,22 @@ internal readonly struct AutoBuyGlobalRow
 {
     public AutoBuyGlobalRow(
         int bulkDevelopment,
-        int actionMultiplier,
         long collectedAtEpoch)
+        : this(bulkDevelopment, collectedAtEpoch, default)
+    {
+    }
+
+    public AutoBuyGlobalRow(
+        int bulkDevelopment,
+        long collectedAtEpoch,
+        MonotonicTimestamp collectedAt)
     {
         BulkDevelopment = bulkDevelopment;
-        ActionMultiplier = actionMultiplier;
         CollectedAtEpoch = collectedAtEpoch;
+        CollectedAt = collectedAt;
     }
 
     public int BulkDevelopment { get; }
-    public int ActionMultiplier { get; }
 
     /// <summary>
     /// The lifecycle epoch the world this frame was projected from was collected under.
@@ -41,6 +48,9 @@ internal readonly struct AutoBuyGlobalRow
     /// which is the comparison that closes the game-reload race.
     /// </remarks>
     public long CollectedAtEpoch { get; }
+
+    /// <summary>When the world readings were captured, on the runtime's monotonic clock.</summary>
+    public MonotonicTimestamp CollectedAt { get; }
 }
 
 /// <summary>
@@ -66,7 +76,6 @@ internal readonly struct AutoBuyCandidateRow
         bool isMaxLevel,
         bool isMaxQueuedLevel,
         bool meetsNextLevelRequirements,
-        AutoBuyEconomicPriority economicPriority,
         int costRowStart,
         int costRowCount)
     {
@@ -79,7 +88,6 @@ internal readonly struct AutoBuyCandidateRow
         IsMaxLevel = isMaxLevel;
         IsMaxQueuedLevel = isMaxQueuedLevel;
         MeetsNextLevelRequirements = meetsNextLevelRequirements;
-        EconomicPriority = economicPriority;
         CostRowStart = costRowStart;
         CostRowCount = costRowCount;
     }
@@ -107,7 +115,6 @@ internal readonly struct AutoBuyCandidateRow
     /// </remarks>
     public bool MeetsNextLevelRequirements { get; }
 
-    public AutoBuyEconomicPriority EconomicPriority { get; }
     public int CostRowStart { get; }
     public int CostRowCount { get; }
 }
@@ -193,13 +200,26 @@ internal readonly struct AutoBuyResourceRow
 internal readonly struct AutoBuyCostRow
 {
     public AutoBuyCostRow(int resourceRowIndex, BigDouble cost)
+        : this(resourceRowIndex, cost, exactGroupedLevels: 1, cost)
+    {
+    }
+
+    public AutoBuyCostRow(
+        int resourceRowIndex,
+        BigDouble cost,
+        int exactGroupedLevels,
+        BigDouble exactGroupedCost)
     {
         ResourceRowIndex = resourceRowIndex;
         Cost = cost;
+        ExactGroupedLevels = exactGroupedLevels;
+        ExactGroupedCost = exactGroupedCost;
     }
 
     public int ResourceRowIndex { get; }
     public BigDouble Cost { get; }
+    public int ExactGroupedLevels { get; }
+    public BigDouble ExactGroupedCost { get; }
 }
 
 /// <summary>

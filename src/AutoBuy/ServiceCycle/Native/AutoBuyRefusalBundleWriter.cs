@@ -5,15 +5,15 @@ using System.IO;
 namespace OrbAutomata;
 
 /// <summary>
-/// Where a refusal bundle is put. Separated from the responder so the disable decision can be tested
-/// without a filesystem, and so a failure to write one is a value the responder handles rather than
-/// an exception thrown into the action path.
+/// Where a refusal bundle is put. Separated from the responder so recoverable and stand-down policy
+/// can be tested without a filesystem, and so a failure to write one is a value the responder handles
+/// rather than an exception thrown into the action path.
 /// </summary>
 internal interface IAutoBuyRefusalBundlePort
 {
     /// <summary>
     /// Writes one bundle and answers where it went. False means it could not be written; the caller
-    /// still disables, and still says so, without a path.
+    /// still applies its classified policy, and still says so, without a path.
     /// </summary>
     bool TryWrite(string contents, DateTime utcNow, out string path);
 }
@@ -25,7 +25,7 @@ internal interface IAutoBuyRefusalBundlePort
 /// <remarks>
 /// <para>
 /// A stable directory rather than a per-launch one, because a bundle is written at the moment Auto
-/// Buy stands itself down and is read some time later, by someone who was told a path — the folder
+/// Buy records a refusal and is read some time later, by someone who was told a path — the folder
 /// they were told about has to be the folder it is still in after a restart.
 /// </para>
 /// <para>

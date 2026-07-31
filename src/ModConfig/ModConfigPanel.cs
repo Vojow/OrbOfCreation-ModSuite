@@ -97,6 +97,7 @@ internal sealed class ModConfigPanel : IDisposable
                 runtimeSources.HostTraceDump,
                 runtimeSources.DifferentialVerification,
                 runtimeSources.DecisionJournal,
+                runtimeSources.ActionOutcomes,
                 runtimeSources.PumpTiming
 #if SERVICE_CYCLE_PROFILE
                 , runtimeSources.PerformanceProfile
@@ -331,14 +332,25 @@ internal sealed class ModConfigPanel : IDisposable
 
     public void RefreshExternalValues() => _settingsPage.RefreshExternalValues();
 
-    internal void SelectNextPageForValidation()
+#if SERVICE_CYCLE_PROFILE
+    internal IReadOnlyList<string> CapturePagesForGameMcp() =>
+        ModConfigTopNavigation.Build(_catalog, _dashboard.AttentionCount)
+            .Select(page => page.Label)
+            .ToArray();
+
+    internal bool TrySelectPageForGameMcp(int index, out string reason)
     {
-        var pageCount = ModConfigTopNavigation.Build(_catalog, _dashboard.AttentionCount).Count;
-        if (pageCount == 0) return;
-        _selectedTopPageIndex = (_selectedTopPageIndex + 1) % pageCount;
-        RebuildTopTabs();
-        ShowSelectedPage();
+        var pages = ModConfigTopNavigation.Build(_catalog, _dashboard.AttentionCount);
+        if (index < 0 || index >= pages.Count)
+        {
+            reason = "Mods page index " + index + " is outside the current live catalog";
+            return false;
+        }
+        SelectTopPage(index);
+        reason = string.Empty;
+        return true;
     }
+#endif
 
     public void RefreshResponsiveLayout()
     {
@@ -358,7 +370,7 @@ internal sealed class ModConfigPanel : IDisposable
     public void RefreshRuntimeDashboardIfNeeded()
     {
         if (_disposed) return;
-        if (IsRuntimeSelected) _runtimePage.RefreshPumpTiming();
+        if (IsRuntimeSelected) _runtimePage.RefreshActivity();
         // Consume both latches independently. Short-circuiting here would leave an
         // overflow pending and force the same authoritative rebuild on the next pass.
         var fullDashboardDirty = _fullDashboardDirty.TryConsume();

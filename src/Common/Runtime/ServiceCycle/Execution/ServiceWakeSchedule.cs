@@ -27,6 +27,7 @@ internal static class ServiceWakeSchedule
             WakePolicyKind.AfterBatch when zeroActions => AddSaturated(responsePublishedAt, resolved.Delay),
             WakePolicyKind.AfterBatch => default,
             WakePolicyKind.At => resolved.DueTime,
+            WakePolicyKind.OnPublication => new MonotonicTimestamp(long.MaxValue),
             _ => throw new InvalidOperationException("The wake policy is not concrete."),
         };
     }
@@ -42,6 +43,7 @@ internal static class ServiceWakeSchedule
             WakePolicyKind.AfterDecision => AddSaturated(responsePublishedAt, resolved.Delay),
             WakePolicyKind.AfterBatch => AddSaturated(terminalAt, resolved.Delay),
             WakePolicyKind.At => resolved.DueTime,
+            WakePolicyKind.OnPublication => new MonotonicTimestamp(long.MaxValue),
             _ => throw new InvalidOperationException("The wake policy is not concrete."),
         };
     }
@@ -52,7 +54,8 @@ internal static class ServiceWakeSchedule
         {
             WakePolicyKind.AfterDecision => AddSaturated(anchor, policy.Delay),
             WakePolicyKind.At => policy.DueTime,
-            _ => throw new InvalidOperationException("A retry policy must be AfterDecision or At."),
+            WakePolicyKind.OnPublication => new MonotonicTimestamp(long.MaxValue),
+            _ => throw new InvalidOperationException("A retry policy must be AfterDecision, At, or OnPublication."),
         };
     }
 

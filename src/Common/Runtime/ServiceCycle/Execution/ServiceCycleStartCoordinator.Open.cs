@@ -107,7 +107,7 @@ internal abstract partial class ServiceCycleStartCoordinator<TState, TAction>
                 startInvocation: startInvocation);
         }
 
-        State.HasWakeDue = false;
+        State.ClearWake();
         State.InFlightCycle = identity;
         State.InFlightBatch = batch;
         State.HasInFlightCycle = true;

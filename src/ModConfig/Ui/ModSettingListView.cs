@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OrbAutomata;
 using OrbModding.Common;
 using TMPro;
 using UnityEngine;
@@ -26,6 +27,7 @@ internal sealed class ModSettingListView : IDisposable
     private readonly TextMeshProUGUI _labelTemplate;
     private readonly Action _rebuildRequested;
     private readonly Action<ConfigEditValue?> _statusChanged;
+    private readonly AutoItemsTemporaryItemPickerView _temporaryItemPicker;
     private readonly List<GameObject> _rows = new();
 
     public ModSettingListView(
@@ -40,6 +42,10 @@ internal sealed class ModSettingListView : IDisposable
         _labelTemplate = labelTemplate ?? throw new ArgumentNullException(nameof(labelTemplate));
         _rebuildRequested = rebuildRequested ?? throw new ArgumentNullException(nameof(rebuildRequested));
         _statusChanged = statusChanged ?? throw new ArgumentNullException(nameof(statusChanged));
+        _temporaryItemPicker = new AutoItemsTemporaryItemPickerView(
+            _labelTemplate,
+            _rebuildRequested,
+            _statusChanged);
     }
 
     public float MeasuredDescriptionWidth { get; private set; }
@@ -55,7 +61,11 @@ internal sealed class ModSettingListView : IDisposable
         if (featureCommand is not null)
             contentHeight += CreateFeatureHeader(featureCommand, contentHeight);
         foreach (var setting in settings)
-            contentHeight += CreateRow(setting, contentHeight, MeasuredDescriptionWidth);
+            contentHeight += CreateRow(
+                setting,
+                contentHeight,
+                MeasuredDescriptionWidth,
+                _content.rect.width);
         contentHeight = Math.Max(1f, contentHeight);
         _content.sizeDelta = new Vector2(0f, contentHeight);
         return contentHeight;
@@ -72,8 +82,7 @@ internal sealed class ModSettingListView : IDisposable
     private float CreateFeatureHeader(ModConfigFeatureCommand command, float topOffset)
     {
         const float headerHeight = 82f;
-        var status = command.Status;
-        var presentation = FeatureStatusPresenter.Present(status);
+        var presentation = command.Presentation;
         var row = ModConfigUiFactory.CreateRectObject(
             "Feature." + command.DisplayName,
             _content,
@@ -101,7 +110,7 @@ internal sealed class ModSettingListView : IDisposable
             new Vector2(0.025f, 0.08f),
             new Vector2(0.74f, 0.5f),
             _labelTemplate,
-            FeatureStatusPresenter.Format(status),
+            presentation.StatusText,
             TextAlignmentOptions.MidlineLeft,
             0.56f);
         ModConfigUiFactory.CreateButton(
@@ -110,21 +119,22 @@ internal sealed class ModSettingListView : IDisposable
             new Vector2(0.77f, 0.18f),
             new Vector2(0.975f, 0.82f),
             _labelTemplate,
-            presentation.IsConfiguredOn ? "Turn off" : "Turn on",
+            presentation.ButtonLabel,
             () =>
             {
                 command.Toggle();
                 _session.RefreshExternalValues();
                 _rebuildRequested();
             },
-            active: presentation.IsConfiguredOn);
+            active: presentation.IsActive);
         return headerHeight;
     }
 
     private float CreateRow(
         ConfigSettingDescriptor setting,
         float topOffset,
-        float descriptionWidth)
+        float descriptionWidth,
+        float contentWidth)
     {
         var edit = _session.Get(setting);
         var row = new GameObject(
@@ -174,6 +184,20 @@ internal sealed class ModSettingListView : IDisposable
             TextOverflowModes.Overflow);
         var preferredDescriptionHeight = descriptionText.GetPreferredValues(description, descriptionWidth, 0f).y;
         var rowHeight = ModSettingsLayout.CalculateSettingRowHeight(preferredDescriptionHeight);
+        AutoItemsTemporaryItemCatalogSnapshot? temporaryCatalog = null;
+        if (AutoItemsTemporaryItemPickerView.AppliesTo(setting) &&
+            _session.DependencySatisfied(setting) &&
+            !edit.HasExternalConflict)
+        {
+            temporaryCatalog = _temporaryItemPicker.CaptureCatalog();
+            rowHeight = Math.Max(
+                rowHeight,
+                _temporaryItemPicker.Measure(
+                    edit,
+                    temporaryCatalog,
+                    AutoItemsTemporaryItemPickerView.CalculateEditorWidth(contentWidth),
+                    MinimumSettingRowHeight));
+        }
         var visibleRowHeight = rowHeight - SettingRowGap;
         rowRect.sizeDelta = new Vector2(0f, visibleRowHeight);
         ModConfigUiFactory.SetTopAnchoredHeight(
@@ -201,8 +225,8 @@ internal sealed class ModSettingListView : IDisposable
             return rowHeight;
         }
 
-        CreateEditor(row.transform, setting, edit);
-        if (edit.IsEditable)
+        CreateEditor(row.transform, setting, edit, temporaryCatalog);
+        if (edit.IsEditable && !AutoItemsTemporaryItemPickerView.AppliesTo(setting))
         {
             ModConfigUiFactory.CreateButton(
                 "Default",
@@ -260,8 +284,19 @@ internal sealed class ModSettingListView : IDisposable
     private void CreateEditor(
         Transform parent,
         ConfigSettingDescriptor setting,
-        ConfigEditValue edit)
+        ConfigEditValue edit,
+        AutoItemsTemporaryItemCatalogSnapshot? temporaryCatalog)
     {
+        if (AutoItemsTemporaryItemPickerView.AppliesTo(setting))
+        {
+            _temporaryItemPicker.Render(
+                parent,
+                edit,
+                temporaryCatalog ?? AutoItemsTemporaryItemCatalogSnapshot.Failed(
+                    "The picker catalog was not captured for this setting."),
+                AutoItemsTemporaryItemPickerView.CalculateEditorWidth(_content.rect.width));
+            return;
+        }
         switch (setting.Kind)
         {
             case ConfigEditorKind.Boolean:

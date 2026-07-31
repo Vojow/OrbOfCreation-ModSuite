@@ -7,14 +7,17 @@ internal sealed class AutoConceptServiceAdapterComposition
 {
     private AutoConceptServiceAdapterComposition(
         IAutomataServiceDefinition<AutoConceptCycleState, AutoConceptCycleAction> definition,
-        AutoConceptNativeAdapter natives)
+        AutoConceptNativeAdapter natives,
+        AutoConceptCycleActionAdapter actions)
     {
         Definition = definition;
         Natives = natives;
+        Actions = actions;
     }
 
     internal IAutomataServiceDefinition<AutoConceptCycleState, AutoConceptCycleAction> Definition { get; }
     internal AutoConceptNativeAdapter Natives { get; }
+    internal AutoConceptCycleActionAdapter Actions { get; }
 
     internal static AutoConceptServiceAdapterComposition Create(
         AutoConceptFeatureDependencies dependencies)
@@ -25,6 +28,7 @@ internal sealed class AutoConceptServiceAdapterComposition
             natives,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily);
-        return new AutoConceptServiceAdapterComposition(AutoConceptService.Define(actions), natives);
+        return new AutoConceptServiceAdapterComposition(
+            AutoConceptService.Define(actions), natives, actions);
     }
 }

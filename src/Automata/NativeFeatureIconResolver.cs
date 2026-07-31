@@ -5,34 +5,62 @@ using UnityEngine;
 
 namespace OrbAutomata;
 
+/// <summary>
+/// One icon vocabulary for feature quick controls and the Mods rail. Every borrowed sprite comes
+/// from a declared native accessor or an exact audited top-bar capture.
+/// </summary>
 internal static class NativeFeatureIconResolver
 {
-    internal static bool TryGetAutoBuyIcon(out Sprite? icon, out string reason) =>
-        TryGetTooltipableIcon("GetGlobalStructureType", out icon, out reason);
-
-    internal static bool TryGetConceptIcon(out Sprite? icon, out string reason)
+    internal static bool TryResolve(
+        string pageLabel,
+        NativeFeatureRailVisualPrimitives? capturedRail,
+        out Sprite? icon,
+        out string reason)
     {
-        icon = null;
-        if (!NativeViewAdapter.TryCaptureFeatureRailVisuals(out var rail, out reason))
-            return false;
-        icon = NativeViewAdapter.ReadFeatureRailIcon(rail!);
-        if (icon is not null)
+        if (pageLabel.StartsWith("Runtime", StringComparison.Ordinal))
+            return FromCaptured(capturedRail?.RuntimeIcon, "ScreenTime", out icon, out reason);
+        return pageLabel switch
         {
+            "General" => FromCaptured(
+                capturedRail?.GeneralIcon, "ScreenMagic", out icon, out reason),
+            "Auto Buy" => TryGetTooltipableIcon(
+                "GetGlobalStructureType", "StructureTypeSO", out icon, out reason),
+            "Auto Cast" => TryGetTooltipableIcon(
+                "GetCastingSpeedAttr", "AttributeSO", out icon, out reason),
+            "Auto Concept" => FromCaptured(
+                capturedRail?.ConceptIcon, "ScreenScholar", out icon, out reason),
+            "Auto Harvest" => TryGetTooltipableIcon(
+                "GetHarvestSpeedAttr", "AttributeSO", out icon, out reason),
+            "Mentor" => TryGetTooltipableIcon(
+                "GetMasteryExpAttr", "AttributeSO", out icon, out reason),
+            "Auto Items" => FromCaptured(
+                capturedRail?.WorldIcon, "ScreenWorld", out icon, out reason),
+            "Auto Scribe" => FromCaptured(
+                capturedRail?.WorkshopIcon, "ScreenWorkshop", out icon, out reason),
+            "Advanced" => FromCaptured(
+                capturedRail?.AdvancedIcon, "ScreenAlchemy", out icon, out reason),
+            _ => Unknown(pageLabel, out icon, out reason),
+        };
+    }
+
+    private static bool FromCaptured(
+        Sprite? captured,
+        string auditedItemName,
+        out Sprite? icon,
+        out string reason)
+    {
+        if (captured is not null)
+        {
+            icon = captured;
             reason = string.Empty;
             return true;
         }
-        reason = "audited feature-rail prototype has no viewImage sprite";
-        return false;
+        return NativeViewAdapter.TryCaptureNamedTopBarIcon(auditedItemName, out icon, out reason);
     }
-
-    internal static bool TryGetHarvestIcon(out Sprite? icon, out string reason) =>
-        TryGetTooltipableIcon("GetHarvestSpeedAttr", out icon, out reason);
-
-    internal static bool TryGetMentorIcon(out Sprite? icon, out string reason) =>
-        TryGetTooltipableIcon("GetMasteryExpAttr", out icon, out reason);
 
     private static bool TryGetTooltipableIcon(
         string accessorName,
+        string returnTypeName,
         out Sprite? icon,
         out string reason)
     {
@@ -42,22 +70,47 @@ internal static class NativeFeatureIconResolver
         {
             var globals = Type.GetType("GlobalVariables, Assembly-CSharp", false);
             var tooltipable = Type.GetType("TooltipableObject, Assembly-CSharp", false);
-            if (globals is null || tooltipable is null)
+            var returnType = Type.GetType(returnTypeName + ", Assembly-CSharp", false);
+            if (globals is null || tooltipable is null || returnType is null)
             {
-                reason = "native GlobalVariables or TooltipableObject type is unavailable";
+                reason =
+                    $"GlobalVariables.{accessorName}() type binding failed: expected " +
+                    $"{returnTypeName} deriving from TooltipableObject; one or more native types " +
+                    "are unavailable";
                 return false;
             }
-            const BindingFlags flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-            var accessor = globals.GetMethod(accessorName, flags, null, Type.EmptyTypes, null);
-            if (accessor is null || accessor.GetParameters().Length != 0)
+            const BindingFlags flags =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var accessor = globals.GetMethod(
+                accessorName, flags, null, Type.EmptyTypes, null);
+            if (accessor is null)
             {
-                reason = $"audited GlobalVariables.{accessorName}() accessor is unavailable";
+                reason =
+                    $"GlobalVariables.{accessorName}() binding failed: expected public/static or " +
+                    $"non-public/static {returnTypeName} {accessorName}(), actual <missing>";
+                return false;
+            }
+            if (accessor.ReturnType != returnType)
+            {
+                reason =
+                    $"GlobalVariables.{accessorName}() return type check failed: expected " +
+                    $"{returnType.FullName}, actual {accessor.ReturnType.FullName}";
+                return false;
+            }
+            if (!tooltipable.IsAssignableFrom(returnType))
+            {
+                reason =
+                    $"{returnType.FullName} base-type check for GlobalVariables.{accessorName}() " +
+                    $"failed: expected assignable to {tooltipable.FullName}, actual base " +
+                    $"{returnType.BaseType?.FullName ?? "<null>"}";
                 return false;
             }
             var attribute = accessor.Invoke(null, null);
-            if (attribute is null || !tooltipable.IsInstanceOfType(attribute))
+            if (attribute is null || !returnType.IsInstanceOfType(attribute))
             {
-                reason = $"GlobalVariables.{accessorName}() returned no TooltipableObject";
+                reason =
+                    $"GlobalVariables.{accessorName}() value type check failed: expected " +
+                    $"{returnType.FullName}, actual {attribute?.GetType().FullName ?? "<null>"}";
                 return false;
             }
             var getIcon = tooltipable.GetMethod(
@@ -68,22 +121,33 @@ internal static class NativeFeatureIconResolver
                 null);
             if (getIcon?.ReturnType != typeof(Sprite))
             {
-                reason = "audited TooltipableObject.GetIcon() accessor is unavailable";
+                reason =
+                    "TooltipableObject.GetIcon() return type check failed: expected " +
+                    $"UnityEngine.Sprite, actual {getIcon?.ReturnType.FullName ?? "<missing>"}";
                 return false;
             }
             icon = getIcon.Invoke(attribute, null) as Sprite;
-            if (icon is not null)
-            {
-                reason = string.Empty;
-                return true;
-            }
+            if (icon is not null) return true;
             reason = $"GlobalVariables.{accessorName}().GetIcon() returned no sprite";
             return false;
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            var root = ex.GetBaseException();
+            reason =
+                $"GlobalVariables.{accessorName}() -> TooltipableObject.GetIcon() capture failed: " +
+                $"{root.GetType().FullName}: {root.Message}";
             return false;
         }
+    }
+
+    private static bool Unknown(
+        string pageLabel,
+        out Sprite? icon,
+        out string reason)
+    {
+        icon = null;
+        reason = $"unrecognized consolidated page '{pageLabel}'";
+        return false;
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime;
 
 namespace OrbAutomata;
 
@@ -8,16 +9,18 @@ namespace OrbAutomata;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A native refusal of a planned purchase is a planner bug: the worker decided from published rows,
-/// and the game disagreed. Diagnosing that needs both halves — what the plan believed and what the
-/// game says — and only one of them survives the seam. The frame is gone by the time an action runs,
-/// so the belief travels by value with the action, in the leaf shapes a published action may hold.
+/// A native refusal of a planned purchase is either expected snapshot staleness or a structural
+/// contradiction. Distinguishing them needs both halves — what the plan believed and what the game
+/// says — and only one of them survives the seam. The frame is gone by the time an action runs, so
+/// the belief travels by value with the action, in the leaf shapes a published action may hold.
 /// </para>
 /// <para>
 /// Only the binding resource is carried, not every cost row: it is the one that set
-/// <see cref="CostRatio"/>, so it is the row the plan actually turned on, and the two counts beside
-/// it say how many rows there were and how many of them were priced at all. Nought priced rows out of
-/// several is the shape of the game's uncooked boot prices, where every structure reads as free.
+/// <see cref="CostRatio"/> for the exact group this action requests. A preferred one-level action
+/// retains its original admission belief byte for byte; a multi-level or reduced action carries the
+/// exact group comparison against the remaining batch ledger. The two counts beside it say how many
+/// rows there were and how many of them were priced at all. Nought priced rows out of several is the
+/// shape of the game's uncooked boot prices, where every structure reads as free.
 /// </para>
 /// </remarks>
 internal readonly struct AutoBuyPlanBelief
@@ -66,7 +69,7 @@ internal readonly struct AutoBuyPlanBelief
     public int CostResourceCount { get; }
     public int PricedResourceCount { get; }
 
-    /// <summary>The worst cost-to-available ratio across those resources, which ranked the candidate.</summary>
+    /// <summary>The chosen group's worst exact-cost-to-remaining ratio across those resources.</summary>
     public double CostRatio { get; }
 
     /// <summary>The resource that produced that ratio, and what the plan compared for it.</summary>
@@ -74,7 +77,10 @@ internal readonly struct AutoBuyPlanBelief
     public bool BindingIsBandwidth { get; }
     public BigDouble BindingCost { get; }
 
-    /// <summary>Holdings for an ordinary resource, room below the ceiling for a bandwidth one.</summary>
+    /// <summary>
+    /// Spendable holdings for an ordinary resource, or room below the ceiling for a bandwidth one,
+    /// used by the exact group comparison the action carries.
+    /// </summary>
     public BigDouble BindingAvailable { get; }
     public BigDouble BindingReserveFloor { get; }
 }
@@ -93,7 +99,7 @@ internal readonly struct AutoBuyCycleAction
         Guid uuid,
         long collectedAtEpoch,
         int count = 1)
-        : this(kind, uuid, collectedAtEpoch, count, default)
+        : this(kind, uuid, collectedAtEpoch, count, default, default)
     {
     }
 
@@ -103,6 +109,17 @@ internal readonly struct AutoBuyCycleAction
         long collectedAtEpoch,
         int count,
         AutoBuyPlanBelief belief)
+        : this(kind, uuid, collectedAtEpoch, count, belief, default)
+    {
+    }
+
+    public AutoBuyCycleAction(
+        AutoBuyCandidateKind kind,
+        Guid uuid,
+        long collectedAtEpoch,
+        int count,
+        AutoBuyPlanBelief belief,
+        MonotonicTimestamp worldCollectedAt)
     {
         if (kind is not (AutoBuyCandidateKind.Structure or AutoBuyCandidateKind.Upgrade))
             throw new ArgumentOutOfRangeException(nameof(kind));
@@ -115,6 +132,7 @@ internal readonly struct AutoBuyCycleAction
         CollectedAtEpoch = collectedAtEpoch;
         Count = count;
         Belief = belief;
+        WorldCollectedAt = worldCollectedAt;
     }
 
     public AutoBuyCandidateKind Kind { get; }
@@ -135,6 +153,9 @@ internal readonly struct AutoBuyCycleAction
     /// collected cannot be submitted.
     /// </remarks>
     public long CollectedAtEpoch { get; }
+
+    /// <summary>When the world snapshot was collected, for refusal timing diagnostics.</summary>
+    public MonotonicTimestamp WorldCollectedAt { get; }
 
     /// <summary>
     /// How many levels this action should request for its candidate — the live bulk or multiplier

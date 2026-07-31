@@ -112,15 +112,20 @@ public sealed class ServiceBatchControllerTests
         Assert.Equal(2L * int.MaxValue, runner.Snapshot.PreviousReceipt.NativeCallOutcome.MutationsCommitted);
     }
 
-    [Fact]
-    public void SkippedActionAdvancesAndLaterActionStillCommits()
+    [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 2)]
+    public void SkippedActionAdvancesAndLaterActionStillCommits(
+        bool beforeNative,
+        long expectedMutationAttempts)
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
         var definition = new ExecutionServiceDefinition("test.execution.skipped")
         {
             ActionCount = 3,
-            SkipAtIndex = 1,
+            SkipAtIndex = beforeNative ? -1 : 1,
+            SkipWithoutNativeAtIndex = beforeNative ? 1 : -1,
         };
         using var registration = registry.Register(
             definition,
@@ -134,8 +139,10 @@ public sealed class ServiceBatchControllerTests
         Assert.Equal(3, receipt.ActionCount);
         Assert.Equal(2, receipt.CommittedCount);
         Assert.Equal(1, receipt.SkippedCount);
+        Assert.Equal(beforeNative ? 1 : 0, receipt.PreNativeSkippedCount);
+        Assert.Equal(beforeNative ? 2 : 3, receipt.NativeActionCount);
         Assert.Equal(3, definition.ActionExecutionCount);
-        Assert.Equal(3, receipt.NativeCallOutcome.MutationAttempts);
+        Assert.Equal(expectedMutationAttempts, receipt.NativeCallOutcome.MutationAttempts);
         Assert.Equal(2, receipt.NativeCallOutcome.MutationsCommitted);
     }
 

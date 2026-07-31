@@ -13,10 +13,12 @@ internal sealed class AutoCastServiceAdapterComposition
         IAutomataServiceDefinition<
             AutoCastCycleState,
             AutoCastCycleAction> definition,
-        AutoCastNativeAdapter natives)
+        AutoCastNativeAdapter natives,
+        AutoCastCycleActionAdapter actions)
     {
         Definition = definition;
         Natives = natives;
+        Actions = actions;
     }
 
     internal IAutomataServiceDefinition<
@@ -28,6 +30,7 @@ internal sealed class AutoCastServiceAdapterComposition
     /// spell the boundary blocked must stay blocked until the next lifecycle whoever asks next.
     /// </summary>
     internal AutoCastNativeAdapter Natives { get; }
+    internal AutoCastCycleActionAdapter Actions { get; }
 
     internal static AutoCastServiceAdapterComposition Create(AutoCastFeatureDependencies dependencies)
     {
@@ -40,6 +43,6 @@ internal sealed class AutoCastServiceAdapterComposition
             dependencies.OwnsActionFamily,
             dependencies.ManualPause);
         return new AutoCastServiceAdapterComposition(
-            AutoCastService.Define(actions, dependencies.ManualPause), natives);
+            AutoCastService.Define(actions, dependencies.ManualPause), natives, actions);
     }
 }

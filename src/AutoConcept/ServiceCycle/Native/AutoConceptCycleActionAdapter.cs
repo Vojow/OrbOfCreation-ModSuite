@@ -31,8 +31,23 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
         in AutoConceptCycleAction action,
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: true);
+
+#if SERVICE_CYCLE_PROFILE
+    internal ServiceActionResult TryExecuteGameMcp(
+        in AutoConceptCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context)
+        => TryExecuteCore(in action, in config, in context, requireAutomationPolicy: false);
+#endif
+
+    private ServiceActionResult TryExecuteCore(
+        in AutoConceptCycleAction action,
+        in SuiteRuntimeConfiguration config,
+        in ServiceActionContext context,
+        bool requireAutomationPolicy)
     {
-        if (!AutoConceptConfigurationPolicy.IsOperational(config))
+        if (requireAutomationPolicy && !AutoConceptConfigurationPolicy.IsOperational(config))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
         if (!Owns())
             return ServiceActionResult.Rejected(AutoConceptActionResultCodes.ActionFamilyUnavailable);
@@ -88,13 +103,22 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
         in AutoConceptCycleAction action,
         in AutoConceptSubmission submission)
     {
-        if (submission.Verified) return;
+        var replacement = action.ReplacementId == Guid.Empty
+            ? string.Empty
+            : $" with replacement {action.ReplacementId:D}";
+        if (submission.Verified)
+        {
+            var sign = submission.AppliedDelta >= 0 ? "+" : string.Empty;
+            Plugin.Log?.LogAutomataInfo(
+                $"Auto Concept completed {action.Kind} for {action.RecipeId:D}{replacement}; " +
+                $"quantity delta {sign}{submission.AppliedDelta}.");
+            return;
+        }
 
         var message =
-            $"Auto Concept did not complete {action.Kind} for {action.RecipeId:D}: " +
+            $"Auto Concept did not complete {action.Kind} for {action.RecipeId:D}{replacement}: " +
             submission.Reason;
-        if (submission.Preflight == AutoConceptPreflight.Proceeded)
-            Plugin.Log?.LogAutomataWarning(message);
+        Plugin.Log?.LogAutomataWarning(message);
     }
 
     private bool Owns()

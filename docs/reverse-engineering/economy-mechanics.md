@@ -6,8 +6,8 @@ This reference describes the economy implemented by the audited Orb of Creation
 v1.0.5-2 managed build. It separates authored values from runtime calculations because
 the strategist must value the result the game computes, not a tooltip approximation.
 The assembly evidence below names metadata tokens and IL offsets in
-`Assembly-CSharp.dll`; the serialized evidence names lines in the read-only
-`/Users/marvin/repos/orb-of-creation/data/game_data.json` dump. The audited assembly and
+`Assembly-CSharp.dll`; the serialized evidence names lines in a read-only `game_data.json`
+dump extracted from the installed game's serialized data. The audited assembly and
 its SHA-256 are recorded in [the audit](audit.md#audited-build).
 
 ## 1. Progression levels increase advancement capacity

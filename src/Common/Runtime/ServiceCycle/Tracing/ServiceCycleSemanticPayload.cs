@@ -175,6 +175,9 @@ public readonly partial struct ServiceCycleSemanticPayload : IEquatable<ServiceC
             case WakePolicyKind.At:
                 wake = WakePolicy.At(new MonotonicTimestamp(DeadlineTicks));
                 return true;
+            case WakePolicyKind.OnPublication when DeadlineTicks == 0:
+                wake = WakePolicy.OnPublication;
+                return true;
             default:
                 wake = default;
                 return false;

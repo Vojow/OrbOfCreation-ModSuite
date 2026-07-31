@@ -14,7 +14,7 @@ Gameplay runtime quarantined: the installed game build does not match an audited
 
 The line names the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` hashes and the audited baselines. A refusal beginning `Refusing to load even the diagnostic control plane` means the pair could not be discovered completely, so even a hash-bound acknowledgement would be unsafe.
 
-Run **Mods > Runtime > Run differential verification** while quarantined and report the results. If a player chooses to proceed before an audited release, clear **General > Emergency disable** and Apply. That action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later two-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
+Run **Mods > Runtime > Run differential verification** while quarantined and report the results. If a player chooses to proceed before an audited release, press **Resume all** on General or the top-left STOP button. That immediate action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later one-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
 
 Players should still report the new game version on the [issue tracker](https://github.com/Vojow/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
 
@@ -41,6 +41,12 @@ Expected on the upgrade to 0.4.0. The suite has one configuration file named aft
 ## Auto Concept repeatedly removes and re-adds one concept
 
 Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, capture the Runtime page's recent events and full trace, then include those records plus the affected resource name.
+
+If Auto Concept repeatedly logs `Auto Concept did not complete`, the line names the active and
+proposed replacement UUIDs and says whether the live slot, quantity, or prospective resource drain
+refused the rotation. That rejection ends the current world round. The same candidate may be proposed
+and rejected again after each 250-millisecond collection; this is deliberate evidence that the world
+snapshot is missing a native constraint, not a reason to skip ahead or add a retry timer.
 
 ## Checking the suite against the live game
 

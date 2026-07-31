@@ -11,8 +11,8 @@ namespace OrbAutomata;
 /// No control state. The worker is a per-cycle planner: it projects the pinned world and produces a
 /// batch of purchase decisions purely as a function of that projection plus the pinned
 /// configuration. There is no ranked-pass cursor, no group/batch counter, no retry/backoff
-/// dictionary — pacing and fairness come entirely from one-batch-per-cycle emission and the
-/// <c>AfterDecision</c> wake cadence, so the worker never re-plans stale state.
+/// dictionary — pacing and fairness come from one-batch-per-cycle emission and fresh world
+/// publications, so the worker never re-plans stale state.
 /// </para>
 /// <para>
 /// The scratch carries nothing between cycles: every evaluation overwrites it before reading it. It
@@ -57,30 +57,24 @@ internal enum AutoBuyExclusion
     /// <summary>Its family is switched off: IncludeStructures or IncludeUpgrades.</summary>
     KindNotSelected = 1,
 
-    /// <summary>Named in BlockedUuids.</summary>
-    Blocklisted = 2,
-
-    /// <summary>AllowedUuids is set and does not name it.</summary>
-    NotAllowlisted = 3,
-
     /// <summary>The game's own IsAvailable() says its prerequisites are unmet.</summary>
-    Unavailable = 4,
+    Unavailable = 2,
 
     /// <summary>The conditions on the level this purchase would reach are unmet or unevaluable.</summary>
-    RequirementsUnmet = 5,
+    RequirementsUnmet = 3,
 
     /// <summary>Finite levels, and done or fully queued to the cap.</summary>
-    Terminal = 6,
+    Terminal = 4,
 
     /// <summary>Priced, and the holdings do not cover the price plus the reserve floor.</summary>
-    Unaffordable = 7,
+    Unaffordable = 5,
 
     /// <summary>
     /// Every cost row read as zero or negative, so no comparison was possible. Distinct from
     /// unaffordable on purpose: one is a fact about the player's holdings and the other is a fact
     /// about the snapshot.
     /// </summary>
-    Unpriceable = 8,
+    Unpriceable = 6,
 }
 
 /// <summary>How many candidates each exclusion term accounted for in one cycle.</summary>
@@ -92,8 +86,6 @@ internal readonly struct AutoBuyExclusionHistogram
 {
     internal AutoBuyExclusionHistogram(
         int kindNotSelected,
-        int blocklisted,
-        int notAllowlisted,
         int unavailable,
         int requirementsUnmet,
         int terminal,
@@ -101,8 +93,6 @@ internal readonly struct AutoBuyExclusionHistogram
         int unpriceable)
     {
         KindNotSelected = kindNotSelected;
-        Blocklisted = blocklisted;
-        NotAllowlisted = notAllowlisted;
         Unavailable = unavailable;
         RequirementsUnmet = requirementsUnmet;
         Terminal = terminal;
@@ -111,22 +101,18 @@ internal readonly struct AutoBuyExclusionHistogram
     }
 
     public int KindNotSelected { get; }
-    public int Blocklisted { get; }
-    public int NotAllowlisted { get; }
     public int Unavailable { get; }
     public int RequirementsUnmet { get; }
     public int Terminal { get; }
     public int Unaffordable { get; }
     public int Unpriceable { get; }
 
-    public int Total => KindNotSelected + Blocklisted + NotAllowlisted + Unavailable +
+    public int Total => KindNotSelected + Unavailable +
         RequirementsUnmet + Terminal + Unaffordable + Unpriceable;
 
     public int For(AutoBuyExclusion exclusion) => exclusion switch
     {
         AutoBuyExclusion.KindNotSelected => KindNotSelected,
-        AutoBuyExclusion.Blocklisted => Blocklisted,
-        AutoBuyExclusion.NotAllowlisted => NotAllowlisted,
         AutoBuyExclusion.Unavailable => Unavailable,
         AutoBuyExclusion.RequirementsUnmet => RequirementsUnmet,
         AutoBuyExclusion.Terminal => Terminal,
@@ -146,7 +132,8 @@ internal readonly struct AutoBuyDecisionMetrics
         int requestedLevels)
         : this(
             capturedStructures, capturedUpgrades, eligibleCandidates, plannedActions, requestedLevels,
-            default)
+            default,
+            AutoBuyGroupOutcomeHistogram.FromTotals(eligibleCandidates, plannedActions))
     {
     }
 
@@ -157,18 +144,50 @@ internal readonly struct AutoBuyDecisionMetrics
         int plannedActions,
         int requestedLevels,
         in AutoBuyExclusionHistogram exclusions)
+        : this(
+            capturedStructures,
+            capturedUpgrades,
+            eligibleCandidates,
+            plannedActions,
+            requestedLevels,
+            exclusions,
+            AutoBuyGroupOutcomeHistogram.FromTotals(eligibleCandidates, plannedActions))
+    {
+    }
+
+    internal AutoBuyDecisionMetrics(
+        int capturedStructures,
+        int capturedUpgrades,
+        int eligibleCandidates,
+        int plannedActions,
+        int requestedLevels,
+        in AutoBuyExclusionHistogram exclusions,
+        in AutoBuyGroupOutcomeHistogram groupOutcomes)
     {
         if (capturedStructures < 0) throw new System.ArgumentOutOfRangeException(nameof(capturedStructures));
         if (capturedUpgrades < 0) throw new System.ArgumentOutOfRangeException(nameof(capturedUpgrades));
         if (eligibleCandidates < 0) throw new System.ArgumentOutOfRangeException(nameof(eligibleCandidates));
         if (plannedActions < 0) throw new System.ArgumentOutOfRangeException(nameof(plannedActions));
         if (requestedLevels < 0) throw new System.ArgumentOutOfRangeException(nameof(requestedLevels));
+        if (groupOutcomes.TotalCandidates != eligibleCandidates)
+            throw new System.ArgumentException(
+                "Auto Buy grouping outcomes must account for every eligible candidate.",
+                nameof(groupOutcomes));
+        if (groupOutcomes.PlannedActions != plannedActions)
+            throw new System.ArgumentException(
+                "Auto Buy full and reduced groups must account for every planned action.",
+                nameof(groupOutcomes));
+        if (groupOutcomes.ReducedGroupLevels > requestedLevels)
+            throw new System.ArgumentException(
+                "Reduced-group levels cannot exceed all requested levels.",
+                nameof(groupOutcomes));
         CapturedStructures = capturedStructures;
         CapturedUpgrades = capturedUpgrades;
         EligibleCandidates = eligibleCandidates;
         PlannedActions = plannedActions;
         RequestedLevels = requestedLevels;
         Exclusions = exclusions;
+        GroupOutcomes = groupOutcomes;
     }
 
     public int CapturedStructures { get; }
@@ -180,4 +199,55 @@ internal readonly struct AutoBuyDecisionMetrics
 
     /// <summary>Why the candidates that did not reach the plan did not reach it.</summary>
     public AutoBuyExclusionHistogram Exclusions { get; }
+
+    /// <summary>How every eligible candidate's preferred group was resolved by the batch ledger.</summary>
+    public AutoBuyGroupOutcomeHistogram GroupOutcomes { get; }
+}
+
+/// <summary>How the batch ledger resolved every candidate that passed one-level eligibility.</summary>
+internal readonly struct AutoBuyGroupOutcomeHistogram
+{
+    internal AutoBuyGroupOutcomeHistogram(
+        int fullGroups,
+        int reducedGroups,
+        int reducedGroupLevels,
+        int ledgerStarved)
+    {
+        if (fullGroups < 0) throw new System.ArgumentOutOfRangeException(nameof(fullGroups));
+        if (reducedGroups < 0) throw new System.ArgumentOutOfRangeException(nameof(reducedGroups));
+        if (reducedGroupLevels < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(reducedGroupLevels));
+        if (ledgerStarved < 0) throw new System.ArgumentOutOfRangeException(nameof(ledgerStarved));
+        if (reducedGroupLevels < reducedGroups)
+            throw new System.ArgumentException(
+                "Every reduced group must request at least one level.",
+                nameof(reducedGroupLevels));
+
+        FullGroups = fullGroups;
+        ReducedGroups = reducedGroups;
+        ReducedGroupLevels = reducedGroupLevels;
+        LedgerStarved = ledgerStarved;
+    }
+
+    public int FullGroups { get; }
+    public int ReducedGroups { get; }
+    public int ReducedGroupLevels { get; }
+    public int LedgerStarved { get; }
+    public int PlannedActions => checked(FullGroups + ReducedGroups);
+    public int TotalCandidates => checked(PlannedActions + LedgerStarved);
+
+    internal static AutoBuyGroupOutcomeHistogram FromTotals(
+        int eligibleCandidates,
+        int plannedActions)
+    {
+        if (eligibleCandidates < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(eligibleCandidates));
+        if (plannedActions < 0 || plannedActions > eligibleCandidates)
+            throw new System.ArgumentOutOfRangeException(nameof(plannedActions));
+        return new AutoBuyGroupOutcomeHistogram(
+            plannedActions,
+            reducedGroups: 0,
+            reducedGroupLevels: 0,
+            eligibleCandidates - plannedActions);
+    }
 }

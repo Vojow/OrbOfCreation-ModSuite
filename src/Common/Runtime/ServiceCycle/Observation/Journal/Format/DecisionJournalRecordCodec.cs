@@ -190,13 +190,14 @@ internal static class DecisionJournalRecordCodec
             WakePolicyKind.AfterDecision => WakePolicy.AfterDecision(new MonotonicDuration(value)),
             WakePolicyKind.AfterBatch => WakePolicy.AfterBatch(new MonotonicDuration(value)),
             WakePolicyKind.At => WakePolicy.At(new MonotonicTimestamp(value)),
+            WakePolicyKind.OnPublication when value == 0 => WakePolicy.OnPublication,
             _ => throw Invalid(),
         };
     }
 
     private static long WakeValue(WakePolicy wake) => wake.Kind switch
     {
-        WakePolicyKind.Default or WakePolicyKind.Immediate => 0,
+        WakePolicyKind.Default or WakePolicyKind.Immediate or WakePolicyKind.OnPublication => 0,
         WakePolicyKind.AfterDecision or WakePolicyKind.AfterBatch => wake.Delay.Ticks,
         WakePolicyKind.At => wake.DueTime.Ticks,
         _ => throw new ArgumentException("The journal wake is invalid.", nameof(wake)),

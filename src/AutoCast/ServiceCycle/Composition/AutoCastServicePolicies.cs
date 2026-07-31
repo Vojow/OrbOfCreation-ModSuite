@@ -6,9 +6,6 @@ namespace OrbAutomata;
 
 internal static class AutoCastServicePolicies
 {
-    private static readonly MonotonicDuration DefaultInterval =
-        MonotonicDuration.FromTimeSpan(
-            TimeSpan.FromSeconds(AutoCastConfigurationPolicy.DefaultEvaluationIntervalSeconds));
     private static readonly MonotonicDuration InitialFaultBackoff =
         MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250));
     private static readonly MonotonicDuration MaximumFaultBackoff =
@@ -16,10 +13,7 @@ internal static class AutoCastServicePolicies
 
     public static ServiceId ServiceId => new("orbautomata.auto-cast");
 
-    // AfterDecision anchors the next capture on this capture's time, so the cadence is measured from
-    // tick start rather than from batch end. The metadata fallback only covers the cycles before the
-    // worker has run once; every cycle after returns its own wake with the live configured interval.
-    public static WakePolicy DefaultWakePolicy => WakePolicy.AfterDecision(DefaultInterval);
+    public static WakePolicy DefaultWakePolicy => WakePolicy.OnPublication;
 
     // A cast fault is nearly always a contract that will not come back before the next lifecycle, so
     // the ceiling climbs to ten seconds rather than Auto Buy's one. That keeps a permanently blocked

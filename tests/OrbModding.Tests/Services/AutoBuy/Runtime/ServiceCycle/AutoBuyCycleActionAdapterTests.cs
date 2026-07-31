@@ -3,6 +3,7 @@ using OrbAutomata;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using Xunit;
 
@@ -252,13 +253,24 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     [Fact]
     public void Submit_RefusedOnPrice_NamesTheCostList()
     {
+        var mana = new global::ResourceSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            quantity = new BigDouble(3.2, 3),
+        };
+        var spark = new global::ResourceSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            quantity = new BigDouble(1.9, 1),
+        };
         var structure = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
             available = true,
             purchasable = true,
         };
-        structure.purchaseCost.affordable = false;
+        structure.purchaseCost.costs.Add(new global::ResourceTuple(mana, new BigDouble(1.6, 3)));
+        structure.purchaseCost.costs.Add(new global::ResourceTuple(spark, new BigDouble(2.0, 1)));
         global::StructureSO.All.Add(structure);
 
         var submission = new AutoBuyNativePurchaseAdapter()
@@ -268,6 +280,136 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         Assert.Equal(AutoBuyAdmissionTerm.Passed, submission.Diagnosis.IsAvailable);
         Assert.Equal(AutoBuyAdmissionTerm.Refused, submission.Diagnosis.HasEnough);
         Assert.Equal("GetPurchaseCost().HasEnough()", submission.Diagnosis.RefusingTerm);
+        Assert.Equal(AutoBuyRefusalClassification.AffordabilityChanged, submission.Diagnosis.Classification);
+        Assert.True(submission.Diagnosis.LiveCosts.IsComplete);
+        var rows = submission.Diagnosis.LiveCosts.Rows;
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(Guid.Parse(mana.uuid), rows[0].ResourceId);
+        Assert.Equal(new BigDouble(1.6, 3), rows[0].Cost);
+        Assert.Equal(mana.GetTrueQuantity(), rows[0].Available);
+        Assert.Equal(Guid.Parse(spark.uuid), rows[1].ResourceId);
+        Assert.Equal(new BigDouble(2.0, 1), rows[1].Cost);
+        Assert.Equal(spark.GetTrueQuantity(), rows[1].Available);
+    }
+
+    /// <summary>
+    /// The exact reported shape — affordable in the plan, price-only refusal at the boundary — is a
+    /// pre-native skip. It records the disagreement but does not turn it into a structural rejection.
+    /// </summary>
+    [Theory]
+    [InlineData("2fa66381-76be-42d5-a25b-31cb5790f03a", "cc4f0000-0000-0000-0000-000000000000", 2.0, 1, 2.5335543615217575, 1)]
+    [InlineData("30263415-650b-4544-85f9-cff8afdb089b", "55758000-0000-0000-0000-000000000000", 4.5, 57, 2.6160792960345307, 58)]
+    public void Execute_PriceOnlyRefusal_SkipsWithoutNativeEvidence(
+        string candidateText,
+        string resourceText,
+        double costMantissa,
+        int costExponent,
+        double plannedAvailableMantissa,
+        int plannedAvailableExponent)
+    {
+        var candidateId = Guid.Parse(candidateText);
+        var resourceId = Guid.Parse(resourceText);
+        var resource = new global::ResourceSO
+        {
+            uuid = resourceId.ToString(),
+            quantity = new BigDouble(costMantissa * 0.9, costExponent),
+        };
+        var upgrade = new global::UpgradeSO
+        {
+            uuid = candidateId.ToString(),
+            available = true,
+            purchasable = true,
+        };
+        var cost = new BigDouble(costMantissa, costExponent);
+        upgrade.purchaseCost.costs.Add(new global::ResourceTuple(resource, cost));
+        global::UpgradeSO.All.Add(upgrade);
+        var belief = Belief(
+            resourceId,
+            cost,
+            new BigDouble(plannedAvailableMantissa, plannedAvailableExponent));
+        var refusals = new RecordingRefusals();
+
+        var result = Execute(
+            AutoBuyCandidateKind.Upgrade,
+            candidateId,
+            nativeEpoch: PlannedEpoch,
+            refusals: refusals,
+            belief: belief);
+
+        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.Skipped, result.Code);
+        Assert.False(result.HasNativeEvidence);
+        var report = Assert.Single(refusals.Reports);
+        Assert.Equal(AutoBuyRefusalClassification.AffordabilityChanged, report.Diagnosis.Classification);
+        Assert.Equal(resourceId, Assert.Single(report.Diagnosis.LiveCosts.Rows.ToArray()).ResourceId);
+    }
+
+    [Fact]
+    public void Execute_LaterAffordabilityRefusal_NamesEarlierSameBatchResourceOverlap()
+    {
+        var shared = new global::ResourceSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            quantity = new BigDouble(4.0, 1),
+        };
+        var first = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        first.purchaseCost.costs.Add(
+            new global::ResourceTuple(shared, new BigDouble(2.0, 1)));
+        var second = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        second.purchaseCost.costs.Add(
+            new global::ResourceTuple(shared, new BigDouble(3.0, 1)));
+        global::StructureSO.All.Add(first);
+        global::StructureSO.All.Add(second);
+        var refusals = new RecordingRefusals();
+        var adapter = new AutoBuyCycleActionAdapter(
+            new AutoBuyNativePurchaseAdapter(),
+            new FakeQueueRoom(64, readable: true),
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            refusals,
+            new FixedWorldGeneration(new WorldGeneration(9)));
+
+        var firstResult = adapter.TryExecute(
+            new AutoBuyCycleAction(
+                AutoBuyCandidateKind.Structure,
+                Guid.Parse(first.uuid),
+                PlannedEpoch,
+                count: 1,
+                Belief(Guid.Parse(shared.uuid), new BigDouble(2.0, 1), shared.GetTrueQuantity()),
+                new MonotonicTimestamp(100)),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 0, attemptedAt: 130));
+        var secondResult = adapter.TryExecute(
+            new AutoBuyCycleAction(
+                AutoBuyCandidateKind.Structure,
+                Guid.Parse(second.uuid),
+                PlannedEpoch,
+                count: 1,
+                Belief(Guid.Parse(shared.uuid), new BigDouble(3.0, 1), shared.GetTrueQuantity()),
+                new MonotonicTimestamp(100)),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 1, attemptedAt: 150));
+
+        Assert.Equal(ServiceActionDisposition.Committed, firstResult.Disposition);
+        Assert.Equal(ServiceActionDisposition.Skipped, secondResult.Disposition);
+        var report = Assert.Single(refusals.Reports);
+        var earlier = Assert.Single(report.EarlierPurchases.ToArray());
+        Assert.Equal(Guid.Parse(first.uuid), earlier.Uuid);
+        Assert.Equal(0, earlier.ActionIndex);
+        Assert.Equal(1, earlier.CommittedLevels);
+        Assert.Equal((ulong)9, report.LatestWorldGeneration);
+        Assert.Equal(new MonotonicTimestamp(100), report.WorldCollectedAt);
+        Assert.Equal(new MonotonicTimestamp(150), report.AdmissionAttemptedAt);
     }
 
     [Fact]
@@ -837,7 +979,9 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         Assert.Equal(2, upgrade.level);
     }
 
-    private static ServiceActionContext Context() =>
+    private static ServiceActionContext Context(
+        int actionIndex = 0,
+        long attemptedAt = 1) =>
         new ServiceActionContext(
             new ServiceCycleIdentity(
                 new ServiceId("AutoBuy"),
@@ -847,9 +991,42 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
                 new WorldGeneration(1),
                 new CycleId(1)),
             new BatchId(1),
-            new ActionId(1),
-            actionIndex: 0,
-            new MonotonicTimestamp(1));
+            new ActionId(checked((ulong)actionIndex + 1)),
+            actionIndex,
+            new MonotonicTimestamp(attemptedAt));
+
+    private static AutoBuyPlanBelief Belief(
+        Guid resourceId,
+        BigDouble cost,
+        BigDouble available) =>
+        new(
+            isAvailable: true,
+            hasFiniteLevels: false,
+            isMaxLevel: false,
+            isMaxQueuedLevel: false,
+            currentLevel: 0,
+            queuedLevels: 0,
+            costResourceCount: 1,
+            pricedResourceCount: 1,
+            costRatio: 0.5,
+            bindingResourceId: resourceId,
+            bindingIsBandwidth: false,
+            bindingCost: cost,
+            bindingAvailable: available,
+            bindingReserveFloor: default);
+
+    private sealed class FixedWorldGeneration : IServiceWorldGenerationSource
+    {
+        private readonly WorldGeneration _generation;
+
+        internal FixedWorldGeneration(WorldGeneration generation) => _generation = generation;
+
+        public bool TryGetLatestGeneration(out WorldGeneration generation)
+        {
+            generation = _generation;
+            return true;
+        }
+    }
 
     private static SuiteRuntimeConfiguration Config(bool structures, bool upgrades, int leaveQueueSlots = 0) =>
         new SuiteRuntimeConfiguration
@@ -861,7 +1038,6 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
                 IncludeStructures = structures,
                 IncludeUpgrades = upgrades,
                 LeaveQueueSlots = leaveQueueSlots,
-                EvaluationIntervalSeconds = 0.5f,
             },
         };
 

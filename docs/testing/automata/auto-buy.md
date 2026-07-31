@@ -22,7 +22,7 @@ global multiplier restored on every exit.
 | Concern | Primary tests |
 |---|---|
 | Worker admission, reserves, ranking, grouping, and batch shape | [AutoBuyCycleEvaluatorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleEvaluatorTests.cs) |
-| Worker input, eligibility, action, and requested-level cardinality | `AutoBuyCycleEvaluatorTests` and the decision-journal state projection |
+| Worker input, eligibility, full/reduced/ledger-starved grouping, action, and requested-level cardinality | `AutoBuyCycleEvaluatorTests` and the decision-journal state projection |
 | Worker-side frame projection from the shared world snapshot | [AutoBuyFrameProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyFrameProjectorTests.cs) |
 | Final lifecycle, queue-room, native admission, mutation, and postcondition gates | [AutoBuyCycleActionAdapterTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleActionAdapterTests.cs) |
 | Typed registration on the shared Automata host | [AutoBuyServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyServiceCompositionTests.cs) |

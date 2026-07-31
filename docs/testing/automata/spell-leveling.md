@@ -40,12 +40,20 @@ Then run `Fast`; include installed contracts for any reflected/native change.
 
 - No eligible discovered spell remains `Locked`, not falsely complete.
 - Single pays and verifies exactly one native level.
+- All admits the live exact-type recipe set when at least one discovered,
+  prerequisite-passing, ready spell is affordable. An unaffordable head spell
+  does not veto an affordable later spell, and the audited manager action is
+  called exactly once.
 - All calls the audited manager action only after the capability upgrade is
-  completed, not merely queued.
+  completed, not merely queued; no affordable member rejects without a native
+  call or quarantine.
 - Affordability and prerequisites are checked immediately before mutation,
   at the boundary rather than in the plan.
-- A failure blocks spell leveling without blocking Structure/Upgrade buying,
-  casting, concepts, or Mentor.
+- A Single or All attempted no-op blocks spell leveling until lifecycle
+  replacement without blocking Structure/Upgrade buying, casting, concepts,
+  or Mentor.
+- Affordability refusal preserves committed All capability and reports a quiet
+  `Waiting` state with the live boundary reason; success clears that wait.
 
 ## Runtime handoff
 

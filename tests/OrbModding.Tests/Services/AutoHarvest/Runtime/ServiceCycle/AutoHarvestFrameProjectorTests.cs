@@ -86,7 +86,9 @@ public sealed class AutoHarvestFrameProjectorTests
         Assert.Equal(AutoHarvestEvidenceState.Verified, frame.Fruit.Facts.Identity);
         Assert.Equal(AutoHarvestEvidenceState.Verified, frame.Fruit.Facts.PlotVisibility);
         Assert.Equal(AutoHarvestEvidenceState.Verified, frame.Fruit.Facts.ActionAvailability);
-        Assert.Equal(AutoHarvestEvidenceState.Verified, frame.Fruit.Facts.Prerequisites);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.NativeLatchedTrue,
+            frame.Fruit.Facts.Prerequisites);
         Assert.Equal(AutoHarvestEvidenceState.Verified, frame.Fruit.Facts.Readiness);
 
         Assert.Equal(AutoHarvestPairCaptureKind.Captured, frame.Treasure.Kind);
@@ -120,8 +122,7 @@ public sealed class AutoHarvestFrameProjectorTests
             emergencyDisabled: false,
             activeMode: true,
             fruitSelected: fruit,
-            treasureSelected: treasure,
-            MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(1)));
+            treasureSelected: treasure);
 
     private static void AssertUnavailable(in AutoHarvestPairCapture capture)
     {

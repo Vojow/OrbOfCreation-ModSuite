@@ -39,6 +39,6 @@ internal static class SpellLevelService
                 ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
                 : ServiceStartDecision.Wait(
                     CommonServiceDecisionCodes.NotReady,
-                    WakePolicy.AfterDecision(SpellLevelConfigurationPolicy.EvaluationInterval(config)));
+                    WakePolicy.OnPublication);
     }
 }

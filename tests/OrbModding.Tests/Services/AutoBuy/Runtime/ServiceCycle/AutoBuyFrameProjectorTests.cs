@@ -52,7 +52,6 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
 
         var frame = Project(Config(structures: true, upgrades: true));
 
-        Assert.Equal(3, frame.Global.ActionMultiplier);
         Assert.Equal(2, frame.Global.BulkDevelopment);
 
         var candidate = Assert.Single(frame.Candidates.ToArray());
@@ -66,6 +65,8 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
         var cost = frame.Costs[candidate.CostRowStart];
         Assert.Equal(2.0, cost.Cost.Mantissa);
         Assert.Equal(1, cost.Cost.Exponent);
+        Assert.Equal(2, cost.ExactGroupedLevels);
+        Assert.Equal(40d, cost.ExactGroupedCost.ToDouble(), 6);
 
         var resourceRow = frame.Resources[cost.ResourceRowIndex];
         Assert.Equal(Guid.Parse(resource.uuid), resourceRow.ResourceId);
@@ -507,7 +508,6 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
                 Mode = AutoBuyOperationMode.Active,
                 IncludeStructures = structures,
                 IncludeUpgrades = upgrades,
-                EvaluationIntervalSeconds = 0.5f,
             },
         };
 

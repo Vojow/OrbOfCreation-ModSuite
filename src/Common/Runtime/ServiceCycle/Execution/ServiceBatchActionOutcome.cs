@@ -35,7 +35,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 _runtime.State.CommittedCount,
                 _runtime.State.NativeOutcome,
                 observedAt,
-                _runtime.State.PublishedCount);
+                _runtime.State.PublishedCount,
+                _runtime.State.PreNativeSkippedCount);
             _completion.CompleteBatch(
                 in completed,
                 observedAt,
@@ -57,7 +58,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 _runtime.Actions.Cursor,
                 _runtime.State.NativeOutcome,
                 observedAt,
-                _runtime.State.PublishedCount);
+                _runtime.State.PublishedCount,
+                _runtime.State.PreNativeSkippedCount);
             _completion.CompleteLifecycleOrphan(in orphaned);
             return new ServiceActionDispatch(
                 actionFact,
@@ -89,7 +91,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
             result,
             _runtime.State.NativeOutcome,
             observedAt,
-            publishedCount: _runtime.State.PublishedCount);
+            publishedCount: _runtime.State.PublishedCount,
+            preNativeSkippedCount: _runtime.State.PreNativeSkippedCount);
         _completion.CompleteBatch(
             in terminal,
             observedAt,
@@ -104,8 +107,11 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 result.Code,
                 observedAt);
             _runtime.State.LatestFault = record.Fault;
-            _runtime.State.NextWakeDue = record.RetryDue;
-            _runtime.State.HasWakeDue = true;
+            _runtime.State.ScheduleWake(
+                record.RetryDue,
+                _runtime.State.ActiveCycle.Config,
+                invalidatedByConfiguration: false,
+                invalidatedByWorld: false);
             fault = record.Fault;
             retryDue = record.RetryDue;
         }

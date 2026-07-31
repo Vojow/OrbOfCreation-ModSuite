@@ -33,9 +33,11 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.NotReady, statuses.SpellLevel.Current.State);
         Assert.True(statuses.SpellLevel.Current.ConfiguredEnabled);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoItems.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoScribe.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(7, status.LifecycleGeneration));
-        Assert.Equal(6, added);
+        Assert.Equal(8, added);
         Assert.Equal(0, changed);
     }
 
@@ -77,6 +79,28 @@ public sealed class AutomataFeatureStatusTests
         }
 
         Assert.Equal(2, changes);
+    }
+
+    [Fact]
+    public void LifecycleObservationNormalizesNoneReasonDespitePositiveSummaryText()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        using var statuses = new AutomataFeatureStatuses(
+            config.Current,
+            1,
+            new FeatureStatusRegistry());
+
+        Assert.True(statuses.AutoBuy.ObserveLifecycle(
+            configuredEnabled: true,
+            FeatureStatusState.Operational,
+            FeatureStatusReasonCode.None,
+            "Positive operational wording is not a reason.",
+            lifecycleGeneration: 2));
+
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoBuy.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.None, statuses.AutoBuy.Current.Reason.Code);
+        Assert.Null(statuses.AutoBuy.Current.Reason.Summary);
+        Assert.Equal(2, statuses.AutoBuy.Current.LifecycleGeneration);
     }
 
     [Theory]
@@ -159,6 +183,8 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoItems.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoScribe.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 
@@ -181,7 +207,7 @@ public sealed class AutomataFeatureStatusTests
             statuses.AutoBuy.ConfigurationGeneration);
 
         Assert.All(registry.GetSnapshot(), status => Assert.Equal(9, status.LifecycleGeneration));
-        Assert.Equal(6, changes);
+        Assert.Equal(8, changes);
 
         for (var index = 0; index < 10_000; index++)
             statuses.ObserveLifecycleNotReady(
@@ -189,12 +215,14 @@ public sealed class AutomataFeatureStatusTests
                 9,
                 statuses.AutoBuy.ConfigurationGeneration);
 
-        Assert.Equal(6, changes);
+        Assert.Equal(8, changes);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.AutoBuy.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoCast.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoConcept.Current.State);
         Assert.Equal(FeatureStatusReasonCode.ParentFeatureDisabled, statuses.SpellLevel.Current.Reason.Code);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoHarvest.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoItems.Current.State);
+        Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.AutoScribe.Current.State);
         Assert.Equal(FeatureStatusState.ConfigurationDisabled, statuses.Mentor.Current.State);
     }
 

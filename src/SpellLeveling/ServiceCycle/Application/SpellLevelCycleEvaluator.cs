@@ -9,7 +9,7 @@ namespace OrbAutomata;
 
 /// <summary>
 /// The pure Spell Leveling worker policy: given the pinned world and the pinned configuration it
-/// plans at most one mastery-level purchase and returns an <c>AfterDecision</c> wake. It owns no state
+/// plans at most one mastery-level purchase and waits for the next publication. It owns no state
 /// between cycles — no capability latch, no retry counter, no backoff — because a fresh world every
 /// generation is the only input it has ever needed.
 /// </summary>
@@ -37,7 +37,7 @@ internal static class SpellLevelCycleEvaluator
         ServiceActionWriter<SpellLevelCycleAction> actions,
         out SpellLevelDecisionMetrics metrics)
     {
-        var wake = WakePolicy.AfterDecision(SpellLevelConfigurationPolicy.EvaluationInterval(config));
+        var wake = WakePolicy.OnPublication;
         var spells = world.SpellRecipes;
         metrics = new SpellLevelDecisionMetrics(
             spells.Count,

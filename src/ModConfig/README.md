@@ -7,9 +7,11 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 ## Settings editor
 
 - Discovers loaded plugins and typed BepInEx configuration entries.
-- Groups settings into Runtime, General, five feature pages, and Advanced while preserving the original section/key contract.
+- Groups settings into Runtime, General, seven automation feature pages, and Advanced while preserving the original section/key contract.
 - Renders feature mode once in the page header as an immediate committed-store command; mode is not repeated in the staged setting list.
 - Supports booleans, enums, bounded and unbounded numbers, strings, and keyboard shortcuts.
+- Replaces the Auto Items temporary allowlist's generic string editor with a whitelist-only picker
+  of discovered native items while retaining the same staged string setting and Apply/Revert path.
 - Stages edits until Apply, supports per-setting Default and selected-mod Revert, and rolls back earlier writes if Apply fails.
 - Honors optional presentation metadata for labels, dependencies, restart guidance, and hidden compatibility keys.
 - Keeps unstaged fields synchronized with external changes.
@@ -18,31 +20,62 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 - Preserves same-page scroll position and remeasures variable-height rows when the available width changes.
 - Removes its owned Unity objects and listeners on scene exit or plugin unload.
 
-The Mods button is cloned from native top-level navigation, remains last, and opens a mod-owned overlay rather than modifying native content panels. `[Interface] EnableButtonShell = false` disables that integration if the game UI changes incompatibly.
+The Mods tab is cloned from native top-level navigation, remains last, and selects a mod-owned
+overlay rather than modifying native content panels. Selecting Mods again while it is active keeps
+it open, matching the native `ViewRadio` reselect behavior; selecting another native tab closes it.
+`[Interface] EnableButtonShell = false` disables that integration if the game UI changes
+incompatibly.
 
-Restyled suite controls sample only the audited native `UIViewRadioButton` subview rail and
-`UISpellButton` casting-button frames. The rail sampler includes inactive Magic/Scholar views, and
-the spell sampler selects direct children of the audited gameplay casting bar rather than comparing
-unrelated spellbook and casting-list buttons. The gameplay buttons intentionally leave
-`insufficientBackground` null, so the quick strip uses their one populated native base frame and
-suite-owned icon colors for state. Missing required types, fields, sprites, or structural paths are
+Restyled suite controls sample the audited native `UIViewRadioButton` subview frame pair. OFF uses
+`baseImage`; configured ON uses `activeImage`, so intent differs structurally before the
+suite-owned gray/green/red/orange icon color is applied. Quick controls close to an emergency-stop
+button and one disclosure under `Canvas/HelpButtons`. The disclosure opens the seven registered
+feature controls to the right; when closed, faults and blocks add an exclamation marker as well as
+red color. General invokes the same immediate STOP/resume command instead of staging
+`EmergencyDisable`. The anchor is resolved through the declared scene-bound `UIContentArea.canvas`
+contract. Missing required types, fields, sprites, or structural paths are
 suite defects on the matching audited baseline: installation retries bounded startup timing, then
-logs the exact terminal reason and a full typed-candidate census at error level and publishes it to
-Runtime. There is no text quick-control or flat horizontal-shell fallback. See the
+logs the exact terminal reason and a typed-candidate census at error level and publishes it to
+Runtime. There is no cloned native toggle, text quick-control, or alternate shell fallback. See the
 [native UI inventory](../../docs/testing/ui-native-inventory.md).
+
+Suite-owned UI objects request `RectTransform` explicitly from the native
+`GameObject(string, Type[])` constructor. Quick controls and Mods share one startup-readiness gate.
+After Main's first end-of-frame boundary it checks the six required direct top-bar icon candidates
+at 100 ms cadence for at most 30 seconds. The game's own delayed list renderer creates and
+populates those entries on a machine/load-dependent, seconds-scale schedule after suite scene entry;
+the suite observes rather than predicts that moment. Zero or partial-zero counts remain startup
+waiting and do not increment either failure state. All six populated icons admit both suite
+surfaces in the same Update, so normal appearance is within 100 ms of native icon readiness.
+
+Duplicates, null icons, wrong fields/types, or continued absence after that bounded window bypass
+the startup lane. Each surface then retains the same five-second retry cadence and three-attempt
+waiting-to-terminal diagnostic policy; the first genuine failure logs that installation will
+retry, and type failures name the member plus expected and actual managed types.
 
 The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.
-The cloned native behavior is removed: suite buttons have no `Selectable.targetGraphic`,
-`UIImageEffects` is disabled and destroyed, and suite rendering remains the only pixel writer.
+The cloned native behavior is removed from Mods navigation, and suite buttons have no
+`Selectable.targetGraphic`; suite rendering remains the only pixel writer.
+Native-skinned suite panel frames remain raycast targets: the settings viewport therefore routes
+wheel input to its own `ScrollRect` across rows, text, gutters, and padding, while the quick-control
+drawer frame owns its complete rectangle so input cannot pass through its grid gaps to native UI.
+Decorative text, icons, and inset fills remain non-raycasting.
+
+The Auto Items picker uses those same captured base/active frames for raised/recessed approval
+rows. Its suite-owned images display icon sprites captured from the item's audited
+`TooltipableObject.GetIcon()` contract; no live native UI object is retained, cloned, or mutated.
+Item identity, discovery visibility, family, name, and stock are validated as one complete read
+before a healthy catalog is rendered. A missing contract, invalid item, or read exception produces
+the picker's explicit failure panel instead of an empty list or a fallback label/icon.
 
 At installation, the BepInEx log reports exactly:
 
-- `Quick strip: native icon visuals active`
+- `Quick controls: native state frames and icons active`
 - `Mods rail: native visuals active`
 
 A terminal failure replaces the corresponding success line with
-`Quick strip: native icon visuals failed: <reason>` or
+`Quick controls: native state frames or icons failed: <reason>` or
 `Mods rail: native visuals failed: <reason>`. Both surfaces are also registered as Suite UI
 capabilities on Runtime.
 
@@ -59,10 +92,35 @@ It presents:
 - explicit start/stop controls for manual full traces;
 - start/stop controls for profiling builds;
 - read-only rolling decision-journal health; and
-- a bounded 1,200-frame ServiceCycle pump chart rendered directly into the available plot as one exact-frame
-  mesh, without paging or creating one Unity object per frame.
+- one 30-minute automation timeline of committed work, followed by one quiet average/worst
+  processing-time line.
 
-The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. The health grid is a presentation over the same joined feature snapshots used elsewhere; detailed plugin cards remain sorted by severity. Cards update through the existing open-page cadence. Pending refresh work has a hard 30-frame admission bound and the Runtime footer exposes pending and last-refresh age. Pre-created chart bars are reused rather than allocated per sample.
+The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. The health grid is a presentation over the same joined feature snapshots used elsewhere; detailed plugin cards remain sorted by severity. Cards update through the existing open-page cadence. Pending refresh work has a hard 30-frame admission bound and the Runtime footer exposes pending and last-refresh age.
+The action timeline excludes `Source`-shaped infrastructure such as World collection. It also excludes
+Mentor by its exact registered service identity: Mentor's per-recipient mastery grants remain available
+to health and trace consumers, but that steady fan-out is not a discrete player-facing automation event
+for this chart. The view renders 30 fixed one-minute baseline slots and stacks committed action counts
+for the remaining `Ordinary` services, using one deterministic suite-palette color per service. The
+linear height scale is the largest visible bucket. Only active included services enter the compact color
+legend. Empty minutes remain quiet baseline slots; a fully quiet window is the single line
+`No automation activity in the last 30 minutes`. Waiting, skipped, rejected, and merely planned work is
+not charted. Any fault in an included automation bucket adds one small red triangular base marker so
+fault presence does not depend on color alone.
+
+The plot labels its linear scale `Completed actions / minute`, with zero and the current visible maximum.
+Selecting any minute highlights its slot and shows the included services' outcomes for that minute below
+the legend. Release copy uses `completed`, `not applied`, `skipped`, and `failed`; the profile build uses
+the exact diagnostic terms `committed`, `rejected`, `skipped`, and `faulted`. A selected minute with no
+outcomes says `No automation outcomes in this minute`. These outcome lines do not turn rejected or skipped
+work into bar height, and Mentor and `Source` services remain excluded from both chart and detail.
+
+The timeline revision changes only at a minute boundary, for committed work, for a newly visible fault
+marker, or for lifecycle clear. Ordinary within-minute no-commit cycles leave the rendered presentation
+byte-identical. Skipped, rejected, and repeated-fault counts accumulate behind that stable revision and
+become visible on the next commit, first fault, or minute boundary rather than repainting at cycle cadence.
+A lifecycle change
+discards all 30 buckets, and the existing journal monotonic timestamp supplies fixed minute keys; no
+UI timer, coroutine, second clock, game read, or disk path participates.
 
 ## Configuration behavior
 

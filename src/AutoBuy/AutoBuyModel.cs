@@ -16,11 +16,3 @@ internal enum AutoBuyCandidateKinds
     Upgrades = 1 << 1,
     All = Structures | Upgrades,
 }
-
-[Flags]
-internal enum AutoBuyEconomicPriority
-{
-    None = 0,
-    CostReduction = 1 << 0,
-    QualityIncrease = 1 << 1,
-}

@@ -132,7 +132,9 @@ internal sealed class AutomataFeatureStatusReporter : IDisposable
             DisplayName,
             configuredEnabled,
             state,
-            new FeatureStatusReason(reasonCode, summary),
+            reasonCode == FeatureStatusReasonCode.None
+                ? default
+                : new FeatureStatusReason(reasonCode, summary),
             lifecycleGeneration);
         var prior = Current;
         Current = status;
@@ -207,6 +209,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     internal const string AutoConceptFeatureId = "AutoConcept";
     internal const string SpellLevelFeatureId = "SpellLevel";
     internal const string AutoHarvestFeatureId = "AutoHarvest";
+    internal const string AutoItemsFeatureId = "AutoItems";
+    internal const string AutoScribeFeatureId = "AutoScribe";
     internal const string MentorFeatureId = "Mentor";
 
     public AutomataFeatureStatuses(
@@ -222,6 +226,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutomataFeatureStatusReporter? autoConcept = null;
         AutomataFeatureStatusReporter? spellLevel = null;
         AutomataFeatureStatusReporter? autoHarvest = null;
+        AutomataFeatureStatusReporter? autoItems = null;
+        AutomataFeatureStatusReporter? autoScribe = null;
         AutomataFeatureStatusReporter? mentor = null;
         try
         {
@@ -243,6 +249,13 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             autoHarvest = CreateInitialReporter(
                 target, AutoHarvestFeatureId, "Auto Harvest", config.General.Enabled,
                 IsAutoHarvestConfigured(config), true, lifecycleGeneration, initialGeneration);
+            autoItems = CreateInitialReporter(
+                target, AutoItemsFeatureId, "Auto Items", config.General.Enabled,
+                IsAutoItemsConfigured(config), true, lifecycleGeneration, initialGeneration);
+            autoScribe = CreateInitialReporter(
+                target, AutoScribeFeatureId, "Auto Scribe", config.General.Enabled,
+                IsAutoScribeConfigured(config), IsAutoItemsScrollsConfigured(config),
+                lifecycleGeneration, initialGeneration);
             mentor = CreateInitialReporter(
                 target, MentorFeatureId, "Orb Mentor", config.General.Enabled,
                 config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, initialGeneration);
@@ -250,6 +263,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         catch
         {
             mentor?.Dispose();
+            autoScribe?.Dispose();
+            autoItems?.Dispose();
             autoHarvest?.Dispose();
             spellLevel?.Dispose();
             autoConcept?.Dispose();
@@ -262,6 +277,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutoConcept = autoConcept!;
         SpellLevel = spellLevel!;
         AutoHarvest = autoHarvest!;
+        AutoItems = autoItems!;
+        AutoScribe = autoScribe!;
         Mentor = mentor!;
         ObserveConfiguration(config, initialGeneration);
     }
@@ -271,6 +288,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public AutomataFeatureStatusReporter AutoConcept { get; }
     public AutomataFeatureStatusReporter SpellLevel { get; }
     public AutomataFeatureStatusReporter AutoHarvest { get; }
+    public AutomataFeatureStatusReporter AutoItems { get; }
+    public AutomataFeatureStatusReporter AutoScribe { get; }
     public AutomataFeatureStatusReporter Mentor { get; }
 
     internal void ObserveConfiguration(
@@ -313,6 +332,21 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             parentEnabled: true,
             configurationGeneration);
         ObserveConfiguredIntent(
+            AutoItems,
+            config.General.Enabled,
+            IsAutoItemsConfigured(config),
+            parentEnabled: true,
+            configurationGeneration,
+            AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems)
+                ? null
+                : "Auto Items has neither Scrolls nor Relics selected.");
+        ObserveConfiguredIntent(
+            AutoScribe,
+            config.General.Enabled,
+            IsAutoScribeConfigured(config),
+            IsAutoItemsScrollsConfigured(config),
+            configurationGeneration);
+        ObserveConfiguredIntent(
             Mentor,
             config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active,
@@ -343,6 +377,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         AutoConcept.SetEmergencyStop(active, configurationGeneration);
         SpellLevel.SetEmergencyStop(active, configurationGeneration);
         AutoHarvest.SetEmergencyStop(active, configurationGeneration);
+        AutoItems.SetEmergencyStop(active, configurationGeneration);
+        AutoScribe.SetEmergencyStop(active, configurationGeneration);
         Mentor.SetEmergencyStop(active, configurationGeneration);
     }
 
@@ -363,6 +399,11 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             lifecycleGeneration, summary);
         ObserveContractFeature(AutoHarvest, config.General.Enabled,
             IsAutoHarvestConfigured(config), true, lifecycleGeneration, summary);
+        ObserveContractFeature(AutoItems, config.General.Enabled,
+            IsAutoItemsConfigured(config), true, lifecycleGeneration, summary);
+        ObserveContractFeature(AutoScribe, config.General.Enabled,
+            IsAutoScribeConfigured(config), IsAutoItemsScrollsConfigured(config),
+            lifecycleGeneration, summary);
         ObserveContractFeature(Mentor, config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active, true, lifecycleGeneration, summary);
     }
@@ -413,6 +454,18 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             parentEnabled: true,
             summary);
         ObserveUnavailableFeature(
+            AutoItems,
+            config.General.Enabled,
+            IsAutoItemsConfigured(config),
+            parentEnabled: true,
+            summary);
+        ObserveUnavailableFeature(
+            AutoScribe,
+            config.General.Enabled,
+            IsAutoScribeConfigured(config),
+            IsAutoItemsScrollsConfigured(config),
+            summary);
+        ObserveUnavailableFeature(
             Mentor,
             config.General.Enabled,
             config.Mentor.Mode == MentorOperationMode.Active,
@@ -452,6 +505,16 @@ internal sealed class AutomataFeatureStatuses : IDisposable
             AutoHarvest,
             config.General.Enabled,
             IsAutoHarvestConfigured(config),
+            lifecycleGeneration);
+        ObserveLifecycleFeature(
+            AutoItems,
+            config.General.Enabled,
+            IsAutoItemsConfigured(config),
+            lifecycleGeneration);
+        ObserveLifecycleFeature(
+            AutoScribe,
+            config.General.Enabled && IsAutoItemsScrollsConfigured(config),
+            IsAutoScribeConfigured(config),
             lifecycleGeneration);
         ObserveLifecycleFeature(
             Mentor,
@@ -643,6 +706,17 @@ internal sealed class AutomataFeatureStatuses : IDisposable
         config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
         (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees);
 
+    private static bool IsAutoItemsConfigured(SuiteRuntimeConfiguration config) =>
+        config.AutoItems.Mode == AutoItemsOperationMode.Active &&
+        AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems);
+
+    private static bool IsAutoItemsScrollsConfigured(SuiteRuntimeConfiguration config) =>
+        config.AutoItems.Mode == AutoItemsOperationMode.Active &&
+        config.AutoItems.UseScrolls;
+
+    private static bool IsAutoScribeConfigured(SuiteRuntimeConfiguration config) =>
+        config.AutoScribe.Mode == AutoScribeOperationMode.Active;
+
     private static void ObserveConfigurationDisabled(
         AutomataFeatureStatusReporter reporter,
         long lifecycleGeneration,
@@ -723,6 +797,8 @@ internal sealed class AutomataFeatureStatuses : IDisposable
     public void Dispose()
     {
         Mentor.Dispose();
+        AutoScribe.Dispose();
+        AutoItems.Dispose();
         AutoHarvest.Dispose();
         SpellLevel.Dispose();
         AutoConcept.Dispose();

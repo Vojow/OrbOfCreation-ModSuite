@@ -10,9 +10,9 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Configuration;
 /// </summary>
 /// <remarks>
 /// A service bound to one of these is gated on it: the runtime will not start its cycle while the
-/// live world was collected before that service last changed the game. Only the generation crosses
-/// this seam, so it is a scheduling question rather than a second way to read the world — a cycle
-/// still pins its snapshot exactly once, at capture.
+/// live world was collected before that service last attempted a game-facing action. Only the
+/// generation crosses this seam, so it is a scheduling question rather than a second way to read the
+/// world — a cycle still pins its snapshot exactly once, at capture.
 /// </remarks>
 public interface IServiceWorldGenerationSource
 {

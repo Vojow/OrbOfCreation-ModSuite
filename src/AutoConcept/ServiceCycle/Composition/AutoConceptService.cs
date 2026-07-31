@@ -29,14 +29,13 @@ internal static class AutoConceptService
             ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
             : ServiceStartDecision.Wait(
                 CommonServiceDecisionCodes.NotReady,
-                WakePolicy.AfterDecision(AutoConceptConfigurationPolicy.FallbackInterval(config)));
+                WakePolicy.OnPublication);
 }
 
 internal static class AutoConceptServicePolicies
 {
     public static ServiceId ServiceId => new("orbautomata.auto-concept");
-    public static WakePolicy DefaultWakePolicy =>
-        WakePolicy.AfterDecision(MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(10)));
+    public static WakePolicy DefaultWakePolicy => WakePolicy.OnPublication;
     public static ServiceFaultRecoveryPolicy FaultRecoveryPolicy => new(
         MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(250)),
         MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(10)));

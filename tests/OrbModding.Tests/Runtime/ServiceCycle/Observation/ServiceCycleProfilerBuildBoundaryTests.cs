@@ -18,6 +18,7 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
         "OrbModding.Common.Runtime.ServiceCycle.Observation.Profile",
         "OrbAutomata.Runtime.ServiceCycle.Profile",
         "OrbModConfig.Runtime.ServiceCycle.Profile",
+        "OrbAutomata.GameMcp",
     };
 
     [Fact]
@@ -62,6 +63,13 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
             typeof(AutoHarvestActionSafety),
             typeof(AutoHarvestStableIdAccessor),
             typeof(AutoHarvestReflectionAccess),
+            typeof(AutoItemsServiceCycleFeature),
+            typeof(AutoItemsFeatureRuntime),
+            typeof(AutoItemsServiceAdapterComposition),
+            typeof(AutoItemsConsumableUseGameAction),
+            typeof(AutoItemsNativeBindings),
+            typeof(AutoItemsScrollTargetPreflight),
+            typeof(AutoItemsReflectionAccess),
             typeof(global::OrbModding.Plugin),
         };
         var violations = new List<string>();
@@ -96,4 +104,20 @@ public sealed class ServiceCycleProfilerBuildBoundaryTests
     private static bool IsNamespaceOrChild(string? candidate, string root) =>
         string.Equals(candidate, root, StringComparison.Ordinal) ||
         candidate?.StartsWith(root + ".", StringComparison.Ordinal) == true;
+}
+
+/// <summary>
+/// Stable acceptance-test name for the Game MCP's ordinary-build absence.
+/// </summary>
+public sealed class GameMcpBuildBoundaryTests
+{
+    [Fact]
+    public void OrdinaryAssemblyContainsNoGameMcpTypes()
+    {
+        var assembly = typeof(global::OrbModding.Plugin).Assembly;
+        Assert.DoesNotContain(
+            assembly.GetTypes(),
+            type => string.Equals(type.Namespace, "OrbAutomata.GameMcp", StringComparison.Ordinal) ||
+                    type.Namespace?.StartsWith("OrbAutomata.GameMcp.", StringComparison.Ordinal) == true);
+    }
 }

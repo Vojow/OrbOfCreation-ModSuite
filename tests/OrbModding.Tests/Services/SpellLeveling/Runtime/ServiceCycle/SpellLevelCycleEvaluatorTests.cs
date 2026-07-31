@@ -28,13 +28,12 @@ public sealed class SpellLevelCycleEvaluatorTests
     private static readonly Guid Gale = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     [Fact]
-    public void ReschedulesAfterDecisionAtTheConfiguredInterval()
+    public void WaitsForTheNextPublicationWhenThereIsNoWork()
     {
-        var actions = Plan(World(), Config(evaluationIntervalSeconds: 2f), out var wake);
+        var actions = Plan(World(), Config(), out var wake);
 
         Assert.Empty(actions);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(2), wake.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -43,7 +42,7 @@ public sealed class SpellLevelCycleEvaluatorTests
         var world = World(Spell(Ember, discovered: true, ready: true));
 
         Assert.Empty(Plan(world, Config(autoLevelSpells: false), out var disabledWake));
-        Assert.Equal(WakePolicyKind.AfterDecision, disabledWake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, disabledWake.Kind);
         Assert.Empty(Plan(world, Config(mode: AutoBuyOperationMode.Disabled), out _));
         Assert.Empty(Plan(world, Config(enabled: false), out _));
         Assert.Empty(Plan(world, Config(emergencyDisabled: true), out _));
@@ -230,8 +229,7 @@ public sealed class SpellLevelCycleEvaluatorTests
         bool enabled = true,
         bool emergencyDisabled = false,
         AutoBuyOperationMode mode = AutoBuyOperationMode.Active,
-        bool autoLevelSpells = true,
-        float evaluationIntervalSeconds = 1f) =>
+        bool autoLevelSpells = true) =>
         new()
         {
             General = new SuiteGeneralConfiguration { Enabled = enabled },
@@ -240,7 +238,6 @@ public sealed class SpellLevelCycleEvaluatorTests
             {
                 Mode = mode,
                 AutoLevelSpells = autoLevelSpells,
-                EvaluationIntervalSeconds = evaluationIntervalSeconds,
             },
         };
 

@@ -15,6 +15,10 @@ or action-family ownership is affected.
   mutation verification, and controls.
 - [Auto Concept](auto-concept.md) — catalog classification, slot policy,
   mastery balancing, drain, and lifecycle behavior.
+- [Auto Items](auto-items.md) — Scroll/Relic/temporary policy, freshness-classified
+  native submission, exact evidence, quarantine, and lifecycle behavior.
+- [Auto Scribe](auto-scribe.md) — coverage policy, complete-evidence blocking,
+  exact payment/admission receipts, partial commits, quarantine, and lifecycle behavior.
 - [Spell leveling](spell-leveling.md) — capability unlocks, single/all modes,
   costs, queueing, and completion semantics.
 - [Automata integration](integration.md) — configuration, coordinator,
@@ -45,7 +49,7 @@ also require [suite integration](../suite-integration.md).
   native facts immediately before execution.
 - Queue reservations are applied once and total native capacity remains
   authoritative.
-- Native multi-buy state is restored on every Upgrade path.
+- Native multi-buy state is restored on every scoped Upgrade or consumable-use path.
 - Disabled features do not scan or rebuild catalogs in the background.
 - No test may treat display name, registry presence, or `IsAvailable()==false`
   as sufficient identity or completion evidence.

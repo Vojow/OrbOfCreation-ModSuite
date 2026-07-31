@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
 #if SERVICE_CYCLE_PROFILE
@@ -37,7 +38,8 @@ internal readonly struct AutoBuyPurchaseSubmission
         NativeMutationCallOutcome callOutcome,
         int requestedLevels,
         int committedLevels,
-        in AutoBuyAdmissionDiagnosis diagnosis)
+        in AutoBuyAdmissionDiagnosis diagnosis,
+        in AutoBuyLiveCostSnapshot liveCosts)
     {
         Preflight = preflight;
         HasEvidence = hasEvidence;
@@ -46,6 +48,7 @@ internal readonly struct AutoBuyPurchaseSubmission
         RequestedLevels = requestedLevels;
         CommittedLevels = committedLevels;
         Diagnosis = diagnosis;
+        LiveCosts = liveCosts;
     }
 
     public AutoBuyPurchasePreflight Preflight { get; }
@@ -59,6 +62,12 @@ internal readonly struct AutoBuyPurchaseSubmission
     /// <see cref="AutoBuyPurchasePreflight.NotAdmissible"/>. Every other disposition leaves it unread.
     /// </summary>
     public AutoBuyAdmissionDiagnosis Diagnosis { get; }
+
+    /// <summary>
+    /// The native first-level cost rows read immediately before this submission. On a refusal this
+    /// is the same snapshot carried by <see cref="Diagnosis"/>.
+    /// </summary>
+    public AutoBuyLiveCostSnapshot LiveCosts { get; }
 
     /// <summary>How many levels this single native call was asked to buy (the "Y" of "X of Y").</summary>
     public int RequestedLevels { get; }
@@ -79,11 +88,22 @@ internal readonly struct AutoBuyPurchaseSubmission
     {
         if (preflight == AutoBuyPurchasePreflight.Proceeded)
             throw new ArgumentOutOfRangeException(nameof(preflight));
+        var liveCosts = diagnosis.LiveCosts;
         return new AutoBuyPurchaseSubmission(
-            preflight, hasEvidence: false, default, default, 0, 0, in diagnosis);
+            preflight,
+            hasEvidence: false,
+            default,
+            default,
+            0,
+            0,
+            in diagnosis,
+            in liveCosts);
     }
 
-    public static AutoBuyPurchaseSubmission Attempted(NativeMutationEvidence<int> evidence, int requestedLevels)
+    public static AutoBuyPurchaseSubmission Attempted(
+        NativeMutationEvidence<int> evidence,
+        int requestedLevels,
+        in AutoBuyLiveCostSnapshot liveCosts)
     {
         var committed = evidence.HasBefore && evidence.HasAfter
             ? Math.Max(0, evidence.After - evidence.Before)
@@ -95,7 +115,17 @@ internal readonly struct AutoBuyPurchaseSubmission
             NativeMutationCallOutcome.FromEvidence(evidence),
             requestedLevels,
             committed,
-            default);
+            default,
+            in liveCosts);
+    }
+
+    public static AutoBuyPurchaseSubmission Attempted(
+        NativeMutationEvidence<int> evidence,
+        int requestedLevels)
+    {
+        var liveCosts = AutoBuyLiveCostSnapshot.Unavailable(
+            AutoBuyLiveCostReadStatus.PurchaseCostUnavailable);
+        return Attempted(evidence, requestedLevels, in liveCosts);
     }
 }
 
@@ -189,12 +219,17 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             return AutoBuyPurchaseSubmission.Rejected(AutoBuyPurchasePreflight.CandidateUnavailable);
         if (!admitted)
         {
-            // A refusal of a purchase the worker planned is a disagreement between the plan and the
-            // game, which is a planner bug — so the fold is taken apart here, on the cold path, to
-            // name the term that bit. Nothing else in this method pays for it.
+            // A refusal says either that affordability moved after collection or that the plan and
+            // game disagree structurally. Take the fold apart here, on the cold path, while the same
+            // native object is in hand.
             return AutoBuyPurchaseSubmission.Rejected(
                 AutoBuyPurchasePreflight.NotAdmissible, accessors.Diagnose(source));
         }
+
+        // Preserve the resource identities and first-level terms before the native call spends them.
+        // The action adapter keeps these detached values only for this batch, so a later refusal can
+        // name earlier purchases that touched the same resources.
+        var liveCosts = accessors.ReadLiveCosts(source);
 
 #if SERVICE_CYCLE_PROFILE
         var submissionStage = _profileOperations.Begin(
@@ -216,8 +251,8 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             }
 #endif
         return kind == AutoBuyCandidateKind.Structure
-            ? SubmitStructure(uuid, source, accessors, count)
-            : SubmitUpgrade(uuid, source, accessors, count);
+            ? SubmitStructure(uuid, source, accessors, count, in liveCosts)
+            : SubmitUpgrade(uuid, source, accessors, count, in liveCosts);
 #if SERVICE_CYCLE_PROFILE
         }
         finally { submissionStage.Complete(); }
@@ -239,7 +274,8 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         Guid uuid,
         object source,
         PurchaseAccessors accessors,
-        int count)
+        int count,
+        in AutoBuyLiveCostSnapshot liveCosts)
     {
         var evidence = NativeMutationVerifier.Execute(
             "Auto Buy Structure",
@@ -260,14 +296,16 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             (before, after) => count == 1
                 ? after == before + 1
                 : after > before && after <= before + count);
-        return AutoBuyPurchaseSubmission.Attempted(evidence, requestedLevels: count);
+        return AutoBuyPurchaseSubmission.Attempted(
+            evidence, requestedLevels: count, in liveCosts);
     }
 
     private static AutoBuyPurchaseSubmission SubmitUpgrade(
         Guid uuid,
         object source,
         PurchaseAccessors accessors,
-        int count)
+        int count,
+        in AutoBuyLiveCostSnapshot liveCosts)
     {
         // The native upgrade Purchase() honours the global multi-buy multiplier, so requesting
         // exactly `count` levels means pinning the multiplier to `count` for the single call. The
@@ -286,7 +324,8 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
                 () => accessors.ReadQueuedLevel(source),
                 () => accessors.InvokePurchase(source),
                 (before, after) => after > before && after <= before + count);
-            return AutoBuyPurchaseSubmission.Attempted(evidence, requestedLevels: count);
+            return AutoBuyPurchaseSubmission.Attempted(
+                evidence, requestedLevels: count, in liveCosts);
         }
     }
 
@@ -421,6 +460,15 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         private readonly MethodInfo? _purchaseCost;
         private Type? _costListType;
         private MethodInfo? _hasEnough;
+        private MethodInfo? _getEntries;
+        private Type? _entryType;
+        private FieldInfo? _entryResource;
+        private MethodInfo? _entryValue;
+        private Type? _resourceType;
+        private MethodInfo? _isBandwidth;
+        private MethodInfo? _getTrueQuantity;
+        private MethodInfo? _getMissing;
+        private MethodInfo? _getGuid;
 
         private PurchaseAccessors(
             AutoBuyCandidateKind kind,
@@ -485,12 +533,16 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         /// <see cref="AutoBuyAdmissionTerm.Unread"/> rather than throwing, because a diagnosis that
         /// can fail the action it is diagnosing is worse than no diagnosis.
         /// </summary>
-        public AutoBuyAdmissionDiagnosis Diagnose(object source) =>
-            new AutoBuyAdmissionDiagnosis(
+        public AutoBuyAdmissionDiagnosis Diagnose(object source)
+        {
+            var liveCosts = ReadLiveCosts(source, out var costList);
+            return new AutoBuyAdmissionDiagnosis(
                 ReadTerm(_isAvailable, source, refusesWhen: false),
                 ReadTerm(_isMaxLevel, source, refusesWhen: true),
                 ReadTerm(_isMaxQueuedLevel, source, refusesWhen: true),
-                ReadHasEnough(source));
+                ReadHasEnough(costList),
+                in liveCosts);
+        }
 
         private static AutoBuyAdmissionTerm ReadTerm(MethodInfo? method, object source, bool refusesWhen)
         {
@@ -504,21 +556,8 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         /// list type is resolved from the instance the call returns and cached, because the suite
         /// names no game type at compile time.
         /// </summary>
-        private AutoBuyAdmissionTerm ReadHasEnough(object source)
+        private AutoBuyAdmissionTerm ReadHasEnough(object? costList)
         {
-            if (_purchaseCost is null) return AutoBuyAdmissionTerm.Unread;
-            object? costList;
-            try
-            {
-                costList = _purchaseCost.Invoke(source, Array.Empty<object>());
-            }
-            catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
-                                       ex is InvalidOperationException || ex is TargetException ||
-                                       ex is MemberAccessException)
-            {
-                return AutoBuyAdmissionTerm.Unread;
-            }
-
             if (costList is null) return AutoBuyAdmissionTerm.Unread;
             var costListType = costList.GetType();
             if (!ReferenceEquals(costListType, _costListType))
@@ -529,6 +568,232 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
 
             return ReadTerm(_hasEnough, costList, refusesWhen: false);
         }
+
+        public AutoBuyLiveCostSnapshot ReadLiveCosts(object source) =>
+            ReadLiveCosts(source, out _);
+
+        /// <summary>
+        /// Reads the exact live cost list and the spendable magnitude each row compares against,
+        /// detached from all native objects. Any incomplete contract returns a named status rather
+        /// than a partial list that could masquerade as all rows.
+        /// </summary>
+        private AutoBuyLiveCostSnapshot ReadLiveCosts(object source, out object? costList)
+        {
+            costList = null;
+            if (_purchaseCost is null)
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.PurchaseCostUnavailable);
+            }
+
+            try
+            {
+                costList = _purchaseCost.Invoke(source, Array.Empty<object>());
+            }
+            catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
+                                       ex is InvalidOperationException || ex is TargetException ||
+                                       ex is MemberAccessException)
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.PurchaseCostUnavailable);
+            }
+
+            if (costList is null)
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.PurchaseCostUnavailable);
+            }
+
+            var costListType = costList.GetType();
+            if (!IsGameType(costListType, "ResourceCostList"))
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.EntryListUnavailable);
+            }
+
+            if (!ReferenceEquals(costListType, _costListType))
+            {
+                _costListType = costListType;
+                _hasEnough = FindNoArg(costListType, "HasEnough", typeof(bool));
+                _getEntries = FindCostEntries(costListType);
+                _entryType = null;
+                _entryResource = null;
+                _entryValue = null;
+                _resourceType = null;
+                _isBandwidth = null;
+                _getTrueQuantity = null;
+                _getMissing = null;
+                _getGuid = null;
+            }
+
+            object? entriesValue;
+            try
+            {
+                entriesValue = _getEntries?.Invoke(costList, Array.Empty<object>());
+            }
+            catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
+                                       ex is InvalidOperationException || ex is TargetException ||
+                                       ex is MemberAccessException)
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.EntryListUnavailable);
+            }
+
+            if (entriesValue is not IList entries)
+            {
+                return AutoBuyLiveCostSnapshot.Unavailable(
+                    AutoBuyLiveCostReadStatus.EntryListUnavailable);
+            }
+
+            var rows = new List<AutoBuyLiveCostRow>(entries.Count);
+            for (var index = 0; index < entries.Count; index++)
+            {
+                var entry = entries[index];
+                if (entry is null || !TryBindEntry(entry.GetType()))
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.EntryContractUnavailable);
+                }
+
+                object? resource;
+                BigDouble cost;
+                try
+                {
+                    resource = _entryResource!.GetValue(entry);
+                    if (_entryValue!.Invoke(entry, Array.Empty<object>()) is not BigDouble value)
+                    {
+                        return AutoBuyLiveCostSnapshot.Unavailable(
+                            AutoBuyLiveCostReadStatus.EntryContractUnavailable);
+                    }
+                    cost = value;
+                }
+                catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
+                                           ex is InvalidOperationException || ex is TargetException ||
+                                           ex is MemberAccessException)
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.EntryContractUnavailable);
+                }
+
+                if (resource is null || !TryBindResource(resource.GetType()))
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.ResourceContractUnavailable);
+                }
+
+                if (_getGuid is null)
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.IdentityContractUnavailable);
+                }
+
+                Guid resourceId;
+                try
+                {
+                    if (_getGuid.Invoke(resource, Array.Empty<object>()) is not Guid readId)
+                    {
+                        return AutoBuyLiveCostSnapshot.Unavailable(
+                            AutoBuyLiveCostReadStatus.IdentityContractUnavailable);
+                    }
+                    resourceId = readId;
+                }
+                catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
+                                           ex is InvalidOperationException || ex is TargetException ||
+                                           ex is MemberAccessException)
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.IdentityContractUnavailable);
+                }
+
+                if (resourceId == Guid.Empty)
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.InvalidResourceIdentity);
+                }
+
+                try
+                {
+                    if (_isBandwidth!.Invoke(resource, Array.Empty<object>()) is not bool bandwidth)
+                    {
+                        return AutoBuyLiveCostSnapshot.Unavailable(
+                            AutoBuyLiveCostReadStatus.ResourceContractUnavailable);
+                    }
+                    var availableValue = bandwidth
+                        ? _getMissing!.Invoke(resource, Array.Empty<object>())
+                        : _getTrueQuantity!.Invoke(resource, Array.Empty<object>());
+                    if (availableValue is not BigDouble available)
+                    {
+                        return AutoBuyLiveCostSnapshot.Unavailable(
+                            AutoBuyLiveCostReadStatus.ResourceContractUnavailable);
+                    }
+
+                    rows.Add(new AutoBuyLiveCostRow(resourceId, bandwidth, cost, available));
+                }
+                catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException ||
+                                           ex is InvalidOperationException || ex is TargetException ||
+                                           ex is MemberAccessException)
+                {
+                    return AutoBuyLiveCostSnapshot.Unavailable(
+                        AutoBuyLiveCostReadStatus.ResourceContractUnavailable);
+                }
+            }
+
+            return AutoBuyLiveCostSnapshot.Complete(rows.ToArray());
+        }
+
+        private bool TryBindEntry(Type type)
+        {
+            if (ReferenceEquals(type, _entryType))
+                return _entryResource is not null && _entryValue is not null;
+            _entryType = type;
+            _entryResource = null;
+            _entryValue = null;
+            if (!IsGameType(type, "ResourceTuple")) return false;
+            _entryResource = type.GetField(
+                "resource", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            _entryValue = FindNoArg(type, "GetValue", typeof(BigDouble));
+            return _entryResource is not null &&
+                IsGameType(_entryResource.FieldType, "ResourceSO") &&
+                _entryValue is not null;
+        }
+
+        private bool TryBindResource(Type type)
+        {
+            if (ReferenceEquals(type, _resourceType))
+            {
+                return _isBandwidth is not null &&
+                    _getTrueQuantity is not null &&
+                    _getMissing is not null &&
+                    _getGuid is not null;
+            }
+
+            _resourceType = type;
+            _isBandwidth = null;
+            _getTrueQuantity = null;
+            _getMissing = null;
+            _getGuid = null;
+            if (!IsGameType(type, "ResourceSO")) return false;
+            _isBandwidth = FindNoArg(type, "IsBandwidthResource", typeof(bool));
+            _getTrueQuantity = FindNoArg(type, "GetTrueQuantity", typeof(BigDouble));
+            _getMissing = FindNoArg(type, "GetMissing", typeof(BigDouble));
+            _getGuid = FindInheritedNoArg(
+                type,
+#if USE_GAME_STUBS
+                "UpgradeableObject",
+#else
+                "IdScriptableObject",
+#endif
+                "GetGuid",
+                typeof(Guid));
+            return _isBandwidth is not null &&
+                _getTrueQuantity is not null &&
+                _getMissing is not null &&
+                _getGuid is not null;
+        }
+
+        private static bool IsGameType(Type type, string fullName) =>
+            string.Equals(type.FullName, fullName, StringComparison.Ordinal) &&
+            string.Equals(type.Assembly.GetName().Name, "Assembly-CSharp", StringComparison.Ordinal);
 
         public int ReadQueuedLevel(object source)
         {
@@ -546,6 +811,36 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         {
             var method = type.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
             return method is not null && method.DeclaringType == type && method.ReturnType == returnType
+                ? method
+                : null;
+        }
+
+        private static MethodInfo? FindInheritedNoArg(
+            Type type,
+            string declaringType,
+            string name,
+            Type returnType)
+        {
+            var method = type.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+            return method is not null &&
+                method.DeclaringType is not null &&
+                IsGameType(method.DeclaringType, declaringType) &&
+                method.ReturnType == returnType
+                ? method
+                : null;
+        }
+
+        private static MethodInfo? FindCostEntries(Type type)
+        {
+            var method = FindNoArgReturning(type, "GetEntries");
+            if (method is null || !method.ReturnType.IsGenericType ||
+                method.ReturnType.GetGenericTypeDefinition() != typeof(List<>))
+            {
+                return null;
+            }
+
+            var arguments = method.ReturnType.GetGenericArguments();
+            return arguments.Length == 1 && IsGameType(arguments[0], "ResourceTuple")
                 ? method
                 : null;
         }

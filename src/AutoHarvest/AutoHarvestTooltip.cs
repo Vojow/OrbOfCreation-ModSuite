@@ -11,11 +11,11 @@ internal sealed class AutoHarvestTooltip : ITooltipable
     internal AutoHarvestTooltip(AutoHarvestToggleControl control) => _control = control;
 
     public string GetName() => "Auto Harvest";
-    public string GetDisplayType() => _control.IsOn ? "ON" : "OFF";
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.TooltipLabelFor(_control.Status);
     public Sprite GetIcon() => null!;
-    public Color GetColor() => _control.IsOn
-        ? new Color(0.4f, 1.0f, 0.55f)
-        : new Color(0.7f, 0.7f, 0.7f);
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status).Color;
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() =>

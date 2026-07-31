@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace OrbModConfig;
@@ -10,10 +9,9 @@ namespace OrbModConfig;
 /// The sampler does not synthesize substitutes. A caller that cannot obtain this complete snapshot
 /// must report the audited surface as unavailable and try again after the next scene rebuild.
 /// </remarks>
-internal sealed record NativeSpellButtonVisualPrimitives(
-    Component SpellButtonPrototype,
-    Sprite SpellBaseFrame,
-    Type ImageEffectsType);
+internal sealed record NativeButtonStateVisualPrimitives(
+    Sprite InactiveFrame,
+    Sprite ActiveFrame);
 
 internal sealed record NativeFeatureRailVisualPrimitives(
     Component FeatureRailButtonPrototype,
@@ -22,8 +20,6 @@ internal sealed record NativeFeatureRailVisualPrimitives(
     Sprite RuntimeIcon,
     Sprite GeneralIcon,
     Sprite ConceptIcon,
-    Sprite AdvancedIcon);
-
-internal sealed record NativeUiVisualPrimitives(
-    NativeSpellButtonVisualPrimitives SpellButton,
-    NativeFeatureRailVisualPrimitives FeatureRail);
+    Sprite AdvancedIcon,
+    Sprite WorldIcon,
+    Sprite WorkshopIcon);

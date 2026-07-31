@@ -1,28 +1,65 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbAutomata;
 using OrbModding.Common;
 
 namespace OrbModConfig;
 
+internal readonly record struct ModConfigFeatureCommandPresentation(
+    string StatusText,
+    bool IsActive,
+    string ButtonLabel);
+
 internal sealed class ModConfigFeatureCommand
 {
-    private readonly Func<FeatureStatusSnapshot> _readStatus;
+    private readonly Func<ModConfigFeatureCommandPresentation> _readPresentation;
     private readonly Action _toggle;
 
     public ModConfigFeatureCommand(
         string displayName,
-        Func<FeatureStatusSnapshot> readStatus,
+        Func<ModConfigFeatureCommandPresentation> readPresentation,
         Action toggle)
     {
         DisplayName = displayName ?? throw new ArgumentNullException(nameof(displayName));
-        _readStatus = readStatus ?? throw new ArgumentNullException(nameof(readStatus));
+        _readPresentation = readPresentation ??
+            throw new ArgumentNullException(nameof(readPresentation));
         _toggle = toggle ?? throw new ArgumentNullException(nameof(toggle));
     }
 
     public string DisplayName { get; }
-    public FeatureStatusSnapshot Status => _readStatus();
+    public ModConfigFeatureCommandPresentation Presentation => _readPresentation();
     public void Toggle() => _toggle();
+
+    internal static ModConfigFeatureCommand FromFeature(
+        AutomationFeatureControlRegistration registration) =>
+        new(
+            registration.DisplayName,
+            () =>
+            {
+                var status = registration.Status;
+                var presentation = FeatureStatusPresenter.Present(status);
+                return new ModConfigFeatureCommandPresentation(
+                    FeatureStatusPresenter.Format(status),
+                    presentation.IsConfiguredOn,
+                    presentation.IsConfiguredOn ? "Turn off" : "Turn on");
+            },
+            registration.Toggle);
+
+    internal static ModConfigFeatureCommand FromEmergencyStop(
+        EmergencyStopControl control) =>
+        new(
+            "Suite emergency stop",
+            () => control.IsStopped
+                ? new ModConfigFeatureCommandPresentation(
+                    "Emergency stop: Engaged\nAll suite automation is stopped.",
+                    true,
+                    "Resume all")
+                : new ModConfigFeatureCommandPresentation(
+                    "Emergency stop: Clear\nConfigured automation may run.",
+                    false,
+                    "Stop all"),
+            control.Activate);
 }
 
 internal sealed class ModConfigFeatureCommands
@@ -30,19 +67,17 @@ internal sealed class ModConfigFeatureCommands
     private readonly IReadOnlyDictionary<string, ModConfigFeatureCommand> _bySection;
 
     public ModConfigFeatureCommands(
-        AutomataConfigurationStore store,
-        AutomataFeatureStatuses statuses)
+        AutomationFeatureControlRegistry registry,
+        EmergencyStopControl emergencyStop)
     {
-        if (store is null) throw new ArgumentNullException(nameof(store));
-        if (statuses is null) throw new ArgumentNullException(nameof(statuses));
-        _bySection = new Dictionary<string, ModConfigFeatureCommand>(StringComparer.Ordinal)
-        {
-            ["Auto Buy"] = new("Auto Buy", () => statuses.AutoBuy.Current, store.ToggleAutoBuy),
-            ["Auto Cast"] = new("Auto Cast", () => statuses.AutoCast.Current, store.ToggleAutoCast),
-            ["Auto Concept"] = new("Auto Concept", () => statuses.AutoConcept.Current, store.ToggleAutoConcept),
-            ["Auto Harvest"] = new("Auto Harvest", () => statuses.AutoHarvest.Current, store.ToggleAutoHarvest),
-            ["Mentor"] = new("Orb Mentor", () => statuses.Mentor.Current, store.ToggleMentor),
-        };
+        if (registry is null) throw new ArgumentNullException(nameof(registry));
+        if (emergencyStop is null) throw new ArgumentNullException(nameof(emergencyStop));
+        var commands = registry.Features.ToDictionary(
+            registration => registration.PageLabel,
+            ModConfigFeatureCommand.FromFeature,
+            StringComparer.Ordinal);
+        commands.Add("General", ModConfigFeatureCommand.FromEmergencyStop(emergencyStop));
+        _bySection = commands;
     }
 
     public bool TryGet(string pluginGuid, string sectionName, out ModConfigFeatureCommand command)

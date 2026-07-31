@@ -66,8 +66,8 @@ public static class SuiteLoadGate
             .Append(", ")
             .Append(GameAssemblyAudit.MacV1052BaselineId)
             .Append(". Configuration and differential verification remain available, but all gameplay ")
-            .Append("patches and services are emergency-stopped. Players may clear the General emergency ")
-            .Append("stop or use the Advanced acknowledgement to accept this exact assembly pair at their ")
+            .Append("patches and services are emergency-stopped. Players may clear STOP from General or the ")
+            .Append("top-left control, or use the Advanced acknowledgement, to accept this exact assembly pair at their ")
             .Append("own risk; a later game update requires a new acceptance.");
         return message.ToString();
     }

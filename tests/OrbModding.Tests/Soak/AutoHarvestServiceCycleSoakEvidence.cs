@@ -30,7 +30,7 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         var definition = AutoHarvestService.Define(actions);
         var world = AutoHarvestTestWorlds.Harvestable();
         using var registry = new ServiceCycleRegistry(1, clock);
-        registry.ConfigurationPublication.Publish(Configuration(Step));
+        registry.ConfigurationPublication.Publish(Configuration());
         using var registration = registry.Register(
             definition,
             new LifecycleGeneration(1));
@@ -50,9 +50,9 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         {
             RunCycle(pump, registry, world, registration, clock, ref frame, deadline);
             if (cycle == CycleCount / 3)
-                PublishConfiguration(registry, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(750)));
+                PublishConfiguration(registry);
             if (cycle == CycleCount * 2 / 3)
-                PublishConfiguration(registry, MonotonicDuration.FromTimeSpan(TimeSpan.FromMilliseconds(500)));
+                PublishConfiguration(registry);
             if (cycle % 500 != 0 || cycle == CycleCount) continue;
 
             lifecycle++;
@@ -91,10 +91,8 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         WaitForCleanup(registration, deadline);
     }
 
-    private static void PublishConfiguration(
-        ServiceCycleRegistry registry,
-        MonotonicDuration interval) =>
-        registry.ConfigurationPublication.Publish(Configuration(interval));
+    private static void PublishConfiguration(ServiceCycleRegistry registry) =>
+        registry.ConfigurationPublication.Publish(Configuration());
 
     private static void WaitForCleanup(
         ServiceRegistration<
@@ -118,13 +116,12 @@ public sealed class AutoHarvestServiceCycleSoakEvidence
         return TimeSpan.FromSeconds((double)ticks / Stopwatch.Frequency);
     }
 
-    private static SuiteRuntimeConfiguration Configuration(MonotonicDuration interval) => AutoHarvestConfigurationFactory.Create(
+    private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(
         masterEnabled: true,
         emergencyDisabled: false,
         activeMode: true,
         fruitSelected: true,
-        treasureSelected: true,
-        interval);
+        treasureSelected: true);
 
     private sealed class CommittingActions : IAutoHarvestCycleActionPort
     {

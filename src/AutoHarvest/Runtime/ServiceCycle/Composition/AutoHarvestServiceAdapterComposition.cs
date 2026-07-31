@@ -13,7 +13,8 @@ internal sealed class AutoHarvestServiceAdapterComposition
         AutoHarvestNativeGateSet gates,
         IAutomataServiceDefinition<
             AutoHarvestCycleState,
-            AutoHarvestCycleAction> definition
+            AutoHarvestCycleAction> definition,
+        AutoHarvestCycleActionAdapter actions
 #if SERVICE_CYCLE_PROFILE
         , AutomataProfileOperations profileOperations
 #endif
@@ -22,6 +23,7 @@ internal sealed class AutoHarvestServiceAdapterComposition
         Bindings = bindings;
         Gates = gates;
         Definition = definition;
+        Actions = actions;
 #if SERVICE_CYCLE_PROFILE
         ProfileOperations = profileOperations;
 #endif
@@ -32,6 +34,7 @@ internal sealed class AutoHarvestServiceAdapterComposition
     internal IAutomataServiceDefinition<
         AutoHarvestCycleState,
         AutoHarvestCycleAction> Definition { get; }
+    internal AutoHarvestCycleActionAdapter Actions { get; }
 #if SERVICE_CYCLE_PROFILE
     internal AutomataProfileOperations ProfileOperations { get; }
 #endif
@@ -81,7 +84,8 @@ internal sealed class AutoHarvestServiceAdapterComposition
         return new AutoHarvestServiceAdapterComposition(
             bindings,
             gates,
-            AutoHarvestService.Define(actions)
+            AutoHarvestService.Define(actions),
+            actions
 #if SERVICE_CYCLE_PROFILE
             , profileOperations
 #endif

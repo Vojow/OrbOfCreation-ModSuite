@@ -91,14 +91,18 @@ assert_version() {
 
 suite_project_version="$(read_project_version "${repository_root}/src/OrbModSuite.csproj")"
 suite_version="$(read_suite_version)"
-assert_version "Orb Of Creation ModSuite" "${suite_project_version}" "$(read_plugin_version Version)"
+suite_numeric_version="${suite_project_version%%[-+]*}"
+assert_version "Orb Of Creation ModSuite release" \
+    "${suite_project_version}" "$(read_plugin_version ReleaseVersion)"
+assert_version "Orb Of Creation ModSuite loader" \
+    "${suite_numeric_version}" "$(read_plugin_version Version)"
 
-# The archive is named from SuiteVersion, the assembly is stamped with the csproj Version, and the
-# plugin announces PluginIds.Version to BepInEx. Nothing else compares the first to the other two,
-# so a bumped project version would ship inside an archive still named for the old release.
+# The archive is named from SuiteVersion, the assembly informational version and user-visible
+# surfaces carry the csproj Version, and BepInEx receives the numeric core through PluginIds.Version
+# because BepInEx 5 parses it as System.Version.
 if [[ "${suite_version}" != "${suite_project_version}" ]]; then
     echo "Package version mismatch: Directory.Build.props SuiteVersion=${suite_version}," >&2
-    echo "src/OrbModSuite.csproj Version=${suite_project_version} (PluginIds.Version matches the project)." >&2
+    echo "src/OrbModSuite.csproj Version=${suite_project_version}." >&2
     exit 1
 fi
 

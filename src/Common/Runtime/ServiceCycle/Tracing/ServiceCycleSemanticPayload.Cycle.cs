@@ -142,7 +142,12 @@ public readonly partial struct ServiceCycleSemanticPayload
         if (!wake.IsValid || wake.Kind is WakePolicyKind.Default or WakePolicyKind.Immediate or
             WakePolicyKind.AfterBatch)
             throw new ArgumentException("A concrete retry wake policy is required.", nameof(wake));
-        var operand = wake.Kind == WakePolicyKind.At ? wake.DueTime.Ticks : wake.Delay.Ticks;
+        var operand = wake.Kind switch
+        {
+            WakePolicyKind.At => wake.DueTime.Ticks,
+            WakePolicyKind.AfterDecision => wake.Delay.Ticks,
+            _ => 0,
+        };
         return new ServiceCycleSemanticPayload(
             identityFields | ServiceCycleSemanticFields.Code | ServiceCycleSemanticFields.Timestamp |
             ServiceCycleSemanticFields.Duration | ServiceCycleSemanticFields.Disposition |

@@ -23,21 +23,36 @@ internal readonly struct RawPurchaseCost
 }
 
 /// <summary>
-/// What one more level of one entity costs in one resource, computed rather than asked for.
+/// What the next level and the current native purchase group cost in one resource, computed rather
+/// than asked for.
 /// </summary>
 /// <remarks>
 /// This is what `GetPurchaseCost()` returns, without the call. The game's own implementation rebuilds
 /// the whole cost list from scratch on every ask — six LINQ projections and six allocations per
-/// candidate — and Auto Buy asks four hundred times a cycle. Owning the chain means computing it once
-/// per entity per collection, on the worker.
+/// candidate — and Auto Buy asks four hundred times a cycle. Owning the chain means computing the
+/// next level and the bounded succession a native group may buy once per entity per collection, on
+/// the worker. The grouped amount is a sum of independently priced and rounded levels, never a
+/// multiplication of the first price.
 /// </remarks>
 internal readonly struct WorldPurchaseCost
 {
     internal WorldPurchaseCost(Guid entityId, Guid resourceId, BigDouble amount)
+        : this(entityId, resourceId, amount, exactGroupedLevels: 1, amount)
+    {
+    }
+
+    internal WorldPurchaseCost(
+        Guid entityId,
+        Guid resourceId,
+        BigDouble amount,
+        int exactGroupedLevels,
+        BigDouble exactGroupedAmount)
     {
         EntityId = entityId;
         ResourceId = resourceId;
         Amount = amount;
+        ExactGroupedLevels = exactGroupedLevels;
+        ExactGroupedAmount = exactGroupedAmount;
     }
 
     /// <summary>The structure or upgrade being priced.</summary>
@@ -47,6 +62,31 @@ internal readonly struct WorldPurchaseCost
     internal Guid ResourceId { get; }
 
     internal BigDouble Amount { get; }
+
+    /// <summary>The live native group size priced through the complete rising cost curve.</summary>
+    internal int ExactGroupedLevels { get; }
+
+    /// <summary>
+    /// The exact sum charged for <see cref="ExactGroupedLevels"/> successive levels, including each
+    /// level's own rounding. For a bounded upgrade this includes only levels remaining below its cap.
+    /// </summary>
+    internal BigDouble ExactGroupedAmount { get; }
+}
+
+/// <summary>The shared bound and lookup for native purchase-group counts.</summary>
+internal static class WorldPurchaseGrouping
+{
+    internal const int MaximumLevels = 100;
+
+    internal static int Read(
+        PublicationTable<WorldNumberVariable> variables,
+        Guid variableId)
+    {
+        if (!WorldLookup.TryFind(variables, variableId, out var variable))
+            return 1;
+
+        return Math.Max(1, Math.Min(MaximumLevels, (int)variable.Value.ToDouble()));
+    }
 }
 
 /// <summary>
@@ -164,9 +204,12 @@ internal sealed class WorldPurchaseCostDeriver
     private readonly PublicationTable<WorldModifierVariable> _modifiers;
     private readonly WorldLevelCostModifierBuffer _levelModifiers;
     private readonly WorldFrameGlobals _globals;
+    private readonly int _structureGroupedLevels;
 
     private GameResourceCost[] _scratch = new GameResourceCost[8];
     private BigDouble[] _attributeMods = new BigDouble[8];
+    private BigDouble[] _nextAmounts = new BigDouble[8];
+    private BigDouble[] _groupedAmounts = new BigDouble[8];
     private GameValueModifier[] _perLevel = new GameValueModifier[8];
     private GameValueModifier[] _perLevelExponents = new GameValueModifier[8];
     private GameValueModifier[] _scaled = new GameValueModifier[8];
@@ -179,7 +222,8 @@ internal sealed class WorldPurchaseCostDeriver
         PublicationTable<WorldResource> resources,
         PublicationTable<WorldModifierVariable> modifiers,
         WorldLevelCostModifierBuffer levelModifiers,
-        in WorldFrameGlobals globals)
+        in WorldFrameGlobals globals,
+        int structureGroupedLevels)
     {
         _structures = structures ?? throw new ArgumentNullException(nameof(structures));
         _upgrades = upgrades ?? throw new ArgumentNullException(nameof(upgrades));
@@ -187,6 +231,8 @@ internal sealed class WorldPurchaseCostDeriver
         _modifiers = modifiers ?? throw new ArgumentNullException(nameof(modifiers));
         _levelModifiers = levelModifiers ?? throw new ArgumentNullException(nameof(levelModifiers));
         _globals = globals;
+        _structureGroupedLevels = Math.Max(
+            1, Math.Min(WorldPurchaseGrouping.MaximumLevels, structureGroupedLevels));
     }
 
     /// <summary>
@@ -215,12 +261,16 @@ internal sealed class WorldPurchaseCostDeriver
             while (end < buffer.Count && buffer[end].EntityId == entityId) end++;
 
             var length = end - index;
-            if (TryComputeEntity(buffer, entityId, index, length))
+            if (TryComputeEntity(buffer, entityId, index, length, out var groupedLevels))
             {
                 for (var offset = 0; offset < length; offset++)
                 {
                     derived[written++] = new WorldPurchaseCost(
-                        entityId, buffer[index + offset].ResourceId, _scratch[offset].Value);
+                        entityId,
+                        buffer[index + offset].ResourceId,
+                        _nextAmounts[offset],
+                        groupedLevels,
+                        _groupedAmounts[offset]);
                 }
             }
 
@@ -237,18 +287,31 @@ internal sealed class WorldPurchaseCostDeriver
     /// Prices one entity, whichever kind it is. The two chains share nothing but their inputs' shape,
     /// so the only thing dispatched on here is which registry the identity belongs to.
     /// </summary>
-    private bool TryComputeEntity(WorldPurchaseCostBuffer buffer, Guid entityId, int start, int length)
+    private bool TryComputeEntity(
+        WorldPurchaseCostBuffer buffer,
+        Guid entityId,
+        int start,
+        int length,
+        out int groupedLevels)
     {
-        FillCosts(buffer, start, length);
-
         if (WorldLookup.TryFind(_structures, entityId, out var structure))
-            return TryFillAttributeMods(buffer, start, length) && TryPriceStructure(in structure, length);
+        {
+            groupedLevels = _structureGroupedLevels;
+            return TryFillAttributeMods(buffer, start, length) &&
+                TryPriceStructure(buffer, start, in structure, length, groupedLevels);
+        }
 
+        groupedLevels = 1;
         return WorldLookup.TryFind(_upgrades, entityId, out var upgrade) &&
-            TryPriceUpgrade(in upgrade, entityId, length);
+            TryPriceUpgrade(buffer, start, in upgrade, entityId, length, groupedLevels);
     }
 
-    private bool TryPriceStructure(in WorldStructure structure, int length)
+    private bool TryPriceStructure(
+        WorldPurchaseCostBuffer buffer,
+        int start,
+        in WorldStructure structure,
+        int length,
+        int groupedLevels)
     {
         var reading = structure.Reading;
         if (!WorldLookup.TryFind(_modifiers, reading.CostPerQuantityId, out var variable)) return false;
@@ -257,20 +320,28 @@ internal sealed class WorldPurchaseCostDeriver
         if (costPerQuantity is not { } modifier) return false;
 
         var committed = reading.Level + reading.QueuedLevels;
-        var nextCostMod = GameCostMath.ComputeNextCostMod(
-            reading.Modifiers.PassiveCostMod,
-            reading.Modifiers.ActiveCostMod,
-            in modifier,
-            committed,
-            _globals.StructureCostPercent);
+        ClearGroupedAmounts(length);
+        for (var level = 0; level < groupedLevels; level++)
+        {
+            FillCosts(buffer, start, length);
+            var levelCommitted = committed + level;
+            var nextCostMod = GameCostMath.ComputeNextCostMod(
+                reading.Modifiers.PassiveCostMod,
+                reading.Modifiers.ActiveCostMod,
+                in modifier,
+                levelCommitted,
+                _globals.StructureCostPercent);
 
-        GameCostMath.ComputeNextCost(
-            new Span<GameResourceCost>(_scratch, 0, length),
-            new ReadOnlySpan<BigDouble>(_attributeMods, 0, length),
-            in modifier,
-            OrbGameMath.AsPercent(reading.Modifiers.CostScalingMod),
-            committed,
-            OrbGameMath.AsPercent(nextCostMod));
+            GameCostMath.ComputeNextCost(
+                new Span<GameResourceCost>(_scratch, 0, length),
+                new ReadOnlySpan<BigDouble>(_attributeMods, 0, length),
+                in modifier,
+                OrbGameMath.AsPercent(reading.Modifiers.CostScalingMod),
+                levelCommitted,
+                OrbGameMath.AsPercent(nextCostMod));
+            Accumulate(level, length);
+        }
+
         return true;
     }
 
@@ -283,7 +354,13 @@ internal sealed class WorldPurchaseCostDeriver
     /// does not run, and the authored cost is published rounded. That is the game's own behaviour for
     /// a flat-cost upgrade, not a degraded reading, so it is not treated as a failure.
     /// </remarks>
-    private bool TryPriceUpgrade(in WorldUpgrade upgrade, Guid entityId, int length)
+    private bool TryPriceUpgrade(
+        WorldPurchaseCostBuffer buffer,
+        int start,
+        in WorldUpgrade upgrade,
+        Guid entityId,
+        int length,
+        int groupedLevels)
     {
         var committed = upgrade.CommittedLevel;
 
@@ -299,15 +376,44 @@ internal sealed class WorldPurchaseCostDeriver
         Grow(ref _scaledExponents, exponents);
         Grow(ref _combineScratch, modifiers);
 
-        GameCostMath.ComputeLeveledCost(
-            new Span<GameResourceCost>(_scratch, 0, length),
-            new ReadOnlySpan<GameValueModifier>(_perLevel, 0, modifiers),
-            new ReadOnlySpan<GameValueModifier>(_perLevelExponents, 0, exponents),
-            committed + 1,
-            new Span<GameValueModifier>(_scaled, 0, modifiers),
-            new Span<GameValueModifier>(_scaledExponents, 0, exponents),
-            new Span<GameValueModifier>(_combineScratch, 0, modifiers));
+        var pricedLevels = upgrade.IsBounded
+            ? Math.Min(groupedLevels, upgrade.RemainingLevels)
+            : groupedLevels;
+        ClearGroupedAmounts(length);
+        for (var level = 0; level < Math.Max(1, pricedLevels); level++)
+        {
+            FillCosts(buffer, start, length);
+            GameCostMath.ComputeLeveledCost(
+                new Span<GameResourceCost>(_scratch, 0, length),
+                new ReadOnlySpan<GameValueModifier>(_perLevel, 0, modifiers),
+                new ReadOnlySpan<GameValueModifier>(_perLevelExponents, 0, exponents),
+                committed + level + 1,
+                new Span<GameValueModifier>(_scaled, 0, modifiers),
+                new Span<GameValueModifier>(_scaledExponents, 0, exponents),
+                new Span<GameValueModifier>(_combineScratch, 0, modifiers));
+            Accumulate(level, length);
+        }
+
+        if (pricedLevels == 0)
+            Array.Clear(_groupedAmounts, 0, length);
         return true;
+    }
+
+    private void ClearGroupedAmounts(int length)
+    {
+        if (_nextAmounts.Length < length) _nextAmounts = new BigDouble[length];
+        if (_groupedAmounts.Length < length) _groupedAmounts = new BigDouble[length];
+        Array.Clear(_groupedAmounts, 0, length);
+    }
+
+    private void Accumulate(int level, int length)
+    {
+        for (var index = 0; index < length; index++)
+        {
+            var amount = _scratch[index].Value;
+            if (level == 0) _nextAmounts[index] = amount;
+            _groupedAmounts[index] += amount;
+        }
     }
 
     /// <summary>
@@ -355,6 +461,8 @@ internal sealed class WorldPurchaseCostDeriver
         {
             _scratch = new GameResourceCost[length];
             _attributeMods = new BigDouble[length];
+            _nextAmounts = new BigDouble[length];
+            _groupedAmounts = new BigDouble[length];
         }
 
         for (var offset = 0; offset < length; offset++)

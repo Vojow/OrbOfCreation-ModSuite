@@ -95,6 +95,24 @@ internal sealed class AutomataConfigurationStore
         PublishPending();
     }
 
+    internal void ToggleAutoItems()
+    {
+        _configuration.SetAutoItemsMode(
+            Current.AutoItems.Mode == AutoItemsOperationMode.Active
+                ? AutoItemsOperationMode.Disabled
+                : AutoItemsOperationMode.Active);
+        PublishPending();
+    }
+
+    internal void ToggleAutoScribe()
+    {
+        _configuration.SetAutoScribeMode(
+            Current.AutoScribe.Mode == AutoScribeOperationMode.Active
+                ? AutoScribeOperationMode.Disabled
+                : AutoScribeOperationMode.Active);
+        PublishPending();
+    }
+
     internal void ToggleMentor()
     {
         _configuration.SetMentorMode(
@@ -110,4 +128,32 @@ internal sealed class AutomataConfigurationStore
         _configuration.SetEmergencyStop(stopped);
         PublishPending();
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal bool TrySetGameMcp(
+        string section,
+        string key,
+        string serializedValue,
+        ConfigGeneration expectedGeneration,
+        out string reason)
+    {
+        if (expectedGeneration != CurrentGeneration)
+        {
+            reason =
+                "configuration generation changed: expected " + expectedGeneration.Value +
+                ", current " + CurrentGeneration.Value;
+            return false;
+        }
+        if (!_configuration.TrySetGameMcpSetting(section, key, serializedValue, out reason))
+            return false;
+        if (!TryPublishPending())
+        {
+            reason =
+                "the BepInEx entry accepted the value but produced no committed configuration change";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+#endif
 }

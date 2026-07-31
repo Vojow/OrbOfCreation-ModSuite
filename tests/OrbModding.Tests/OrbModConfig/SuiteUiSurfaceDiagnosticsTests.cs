@@ -8,8 +8,31 @@ namespace OrbModding.Tests.OrbModConfig;
 
 public sealed class SuiteUiSurfaceDiagnosticsTests
 {
+    [Fact]
+    public void BothUiSurfacesShareRetryThenTerminalFailureDiscipline()
+    {
+        var retry = new UiInstallationRetryState();
+
+        var first = retry.ObserveFailure();
+        var second = retry.ObserveFailure();
+        var third = retry.ObserveFailure();
+
+        Assert.Equal(1, first.Attempt);
+        Assert.True(first.ShouldLogRetry);
+        Assert.False(first.IsTerminal);
+        Assert.Equal(2, second.Attempt);
+        Assert.False(second.ShouldLogRetry);
+        Assert.False(second.IsTerminal);
+        Assert.Equal(UiInstallationRetryState.TerminalAttempt, third.Attempt);
+        Assert.False(third.ShouldLogRetry);
+        Assert.True(third.IsTerminal);
+
+        retry.Reset();
+        Assert.True(retry.ObserveFailure().ShouldLogRetry);
+    }
+
     [Theory]
-    [InlineData(0, "Quick strip: native icon visuals failed: ")]
+    [InlineData(0, "Quick controls: native state frames or icons failed: ")]
     [InlineData(1, "Mods rail: native visuals failed: ")]
     public void EveryTerminalCaptureFailureLogsTheExactReasonAndPublishesRuntimeFailure(
         int surfaceValue,
@@ -27,7 +50,7 @@ public sealed class SuiteUiSurfaceDiagnosticsTests
 
         Assert.Equal(prefix + "audited sprite mismatch", Assert.Single(errors));
         var snapshot = Assert.Single(registry.GetSnapshot());
-        var capability = surface == SuiteUiSurface.QuickStrip
+        var capability = surface == SuiteUiSurface.QuickControls
             ? snapshot.Capabilities[0]
             : snapshot.Capabilities[1];
         Assert.Equal(FeatureStatusState.Faulted, capability.State);
@@ -36,7 +59,7 @@ public sealed class SuiteUiSurfaceDiagnosticsTests
     }
 
     [Theory]
-    [InlineData(0, "Quick strip: native icon visuals active")]
+    [InlineData(0, "Quick controls: native state frames and icons active")]
     [InlineData(1, "Mods rail: native visuals active")]
     public void SuccessfulInstallSelfReportsOnce(int surfaceValue, string expected)
     {

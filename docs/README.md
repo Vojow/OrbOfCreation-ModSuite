@@ -7,6 +7,7 @@ Choose the path that matches what you are trying to do.
 - [Install the supported suite](user-guide/installation.md)
 - [Configure automation safely](user-guide/configuration.md)
 - [Troubleshoot a problem](user-guide/troubleshooting.md)
+- [Attach a strategist through the performance-debug game MCP](user-guide/game-mcp.md)
 - [Remove the mods](user-guide/uninstalling.md)
 - [Automation behavior reference](../src/Automata/README.md)
 - [Mod Config UI reference](../src/ModConfig/README.md)
@@ -20,7 +21,8 @@ Choose the path that matches what you are trying to do.
 - [Headless E2E simulation](testing/headless-e2e.md)
 - [Runtime validation protocol](testing/runtime-validation.md)
 - [Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
-- [Release process](development/releases.md)
+- [Release review checklist](development/releases.md)
+- [Release procedure](releasing.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)
 

@@ -31,27 +31,14 @@ public sealed class AutoCastCycleEvaluatorTests
     private static readonly Guid Blood = Guid.Parse("55555555-5555-5555-5555-555555555555");
 
     [Fact]
-    public void ReschedulesAfterDecisionAtTheConfiguredInterval()
+    public void WaitsForTheNextPublicationWhenThereIsNoWork()
     {
         var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
 
-        var actions = Plan(World(), Config(evaluationIntervalSeconds: 2f), ref state, out var wake);
+        var actions = Plan(World(), Config(), ref state, out var wake);
 
         Assert.Empty(actions);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
-        Assert.Equal(TimeSpan.FromSeconds(2), wake.Delay.ToTimeSpan());
-    }
-
-    [Fact]
-    public void AnOutOfRangeIntervalIsClampedRatherThanObeyed()
-    {
-        var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
-
-        Plan(World(), Config(evaluationIntervalSeconds: 0.001f), ref state, out var tooFast);
-        Plan(World(), Config(evaluationIntervalSeconds: 900f), ref state, out var tooSlow);
-
-        Assert.Equal(TimeSpan.FromSeconds(0.1), tooFast.Delay.ToTimeSpan());
-        Assert.Equal(TimeSpan.FromSeconds(10), tooSlow.Delay.ToTimeSpan());
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -61,7 +48,7 @@ public sealed class AutoCastCycleEvaluatorTests
 
         var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
         Assert.Empty(Plan(world, Config(mode: AutoCastOperationMode.Disabled), ref state, out var wake));
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
         Assert.Empty(Plan(world, Config(enabled: false), ref state, out _));
         Assert.Empty(Plan(world, Config(emergencyDisabled: true), ref state, out _));
     }
@@ -232,7 +219,7 @@ public sealed class AutoCastCycleEvaluatorTests
         var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
         Assert.Empty(Plan(world, Config(), ref state, out var wake, out var metrics));
         Assert.True(metrics.ChannelBlocked);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -277,9 +264,7 @@ public sealed class AutoCastCycleEvaluatorTests
         Assert.Equal(0, state.HeldChargeSlot);
         Assert.Equal(Ember, state.HeldChargeSpellId);
 
-        // Immediate rather than the interval: the release must land as close to the charge finishing
-        // as a generation-gated service can put it.
-        Assert.Equal(WakePolicyKind.Immediate, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -292,7 +277,7 @@ public sealed class AutoCastCycleEvaluatorTests
 
         Assert.False(metrics.HoldingCharge);
         Assert.Equal(AutoCastCycleState.NoHeldSlot, state.HeldChargeSlot);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -309,7 +294,7 @@ public sealed class AutoCastCycleEvaluatorTests
         // eligible slot waits too.
         Assert.Empty(Plan(charging, Config(fullCharge: true), ref state, out var wake, out var metrics));
         Assert.True(metrics.HoldingCharge);
-        Assert.Equal(WakePolicyKind.Immediate, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -324,7 +309,7 @@ public sealed class AutoCastCycleEvaluatorTests
         Assert.Equal(0, released.SlotIndex);
         Assert.Equal(Ember, released.SpellRecipeId);
         Assert.Equal(AutoCastCycleState.NoHeldSlot, state.HeldChargeSlot);
-        Assert.Equal(WakePolicyKind.AfterDecision, wake.Kind);
+        Assert.Equal(WakePolicyKind.OnPublication, wake.Kind);
     }
 
     [Fact]
@@ -468,7 +453,6 @@ public sealed class AutoCastCycleEvaluatorTests
         bool emergencyDisabled = false,
         AutoCastOperationMode mode = AutoCastOperationMode.Active,
         bool fullCharge = false,
-        float evaluationIntervalSeconds = 1f,
         float startResourcePercent = 0f,
         string absoluteReserve = "0") =>
         new()
@@ -480,7 +464,6 @@ public sealed class AutoCastCycleEvaluatorTests
             {
                 Mode = mode,
                 FullCharge = fullCharge,
-                EvaluationIntervalSeconds = evaluationIntervalSeconds,
                 StartResourcePercent = startResourcePercent,
             },
         };

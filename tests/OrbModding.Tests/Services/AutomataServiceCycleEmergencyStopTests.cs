@@ -6,6 +6,7 @@ using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
@@ -15,7 +16,7 @@ namespace OrbModding.Tests.Services;
 public sealed class AutomataServiceCycleEmergencyStopTests
 {
     [Fact]
-    public void ConfirmedResumeRestoresServiceDispatchInTheSameRuntime()
+    public void PlainToggleResumeRestoresServiceDispatchInTheSameRuntime()
     {
         var configuration = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var feature = new DispatchFeature();
@@ -25,7 +26,8 @@ public sealed class AutomataServiceCycleEmergencyStopTests
             new ConfigGeneration(1),
             new AutomataServiceCycleHostDependencies(
                 () => ++frame,
-                () => 1),
+                () => 1,
+                new ServiceActionOutcomeWindowRegistry()),
             new IAutomataServiceCycleFeature[] { feature },
             new ManualLogSource());
         var store = new AutomataConfigurationStore(
@@ -33,7 +35,6 @@ public sealed class AutomataServiceCycleEmergencyStopTests
             runtime.PublishSavedConfiguration);
         var control = new EmergencyStopControl(
             store,
-            () => new[] { "Test service" },
             _ => runtime.CancelPreparedWork());
 
         AssertDispatchesAfter(runtime, feature.Definition, 0);
@@ -46,8 +47,6 @@ public sealed class AutomataServiceCycleEmergencyStopTests
         Assert.True(runtime.EmergencyStopEngaged);
         Assert.Equal(actionsAtStop, feature.Definition.ActionExecutionCount);
 
-        control.Activate();
-        Assert.True(control.ResumeArmed);
         control.Activate();
         feature.CollectAfterResume();
 

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -10,6 +11,8 @@ public sealed class AutoConceptNativeAdapterTests : IDisposable
 {
     private static readonly Guid RecipeId =
         Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid ReplacementId =
+        Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     public AutoConceptNativeAdapterTests()
     {
@@ -182,6 +185,136 @@ public sealed class AutoConceptNativeAdapterTests : IDisposable
         Assert.Equal(0, runtime.LastNativeMutationOutcome.NativeCallsAttempted);
         Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
     }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void RotationCanUseAReleasedTypelessSlotAcrossConceptTypes()
+    {
+        var activeType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString());
+        var replacementType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString());
+        var activeRecipe = RecipeWithType(RecipeId, "Active", activeType);
+        var replacementRecipe = RecipeWithType(ReplacementId, "Replacement", replacementType);
+        var active = InstallNativeLists(activeRecipe, replacementRecipe);
+        active.TypelessSlots = 1;
+        active.value.Add(new AlchemyInstance(activeRecipe) { quantity = 1, queuedQuantity = 1 });
+        using var runtime = new AutoConceptNativeAdapter(new AlchemyGameplayDomainClassifier());
+        var belief = new AutoConceptPlanBelief(1, 1, 1, Guid.Empty, 0);
+        var action = new AutoConceptCycleAction(
+            AutoConceptActionKind.RotateOut,
+            RecipeId,
+            1,
+            ReplacementId,
+            1,
+            in belief);
+
+        var submission = runtime.Submit(in action, new AutoConceptConfiguration());
+
+        Assert.True(submission.Verified, submission.Reason);
+        Assert.Equal(-1, submission.AppliedDelta);
+        Assert.Equal(0, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void RotationDoesNotTradeATypeSpecificSlotForAnotherType()
+    {
+        var activeType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString());
+        var replacementType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString());
+        var activeRecipe = RecipeWithType(RecipeId, "Active", activeType);
+        var replacementRecipe = RecipeWithType(ReplacementId, "Replacement", replacementType);
+        var active = InstallNativeLists(activeRecipe, replacementRecipe);
+        active.TypelessSlots = 0;
+        active.TypeSlots[activeType] = 1;
+        active.value.Add(new AlchemyInstance(activeRecipe) { quantity = 1, queuedQuantity = 1 });
+        using var runtime = new AutoConceptNativeAdapter(new AlchemyGameplayDomainClassifier());
+        var belief = new AutoConceptPlanBelief(1, 1, 1, Guid.Empty, 0);
+        var action = new AutoConceptCycleAction(
+            AutoConceptActionKind.RotateOut,
+            RecipeId,
+            1,
+            ReplacementId,
+            1,
+            in belief);
+
+        var submission = runtime.Submit(in action, new AutoConceptConfiguration());
+
+        Assert.Equal(AutoConceptPreflight.SlotUnavailable, submission.Preflight);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void RotationDoesNotDegradeWhenTheNativeAdmissionReadThrows()
+    {
+        var activeType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString());
+        var replacementType = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReflectiveConceptTypeUuid.ToString());
+        var activeRecipe = RecipeWithType(RecipeId, "Active", activeType);
+        var replacementRecipe = RecipeWithType(ReplacementId, "Replacement", replacementType);
+        var active = InstallNativeLists(activeRecipe, replacementRecipe);
+        active.TypelessSlots = 1;
+        active.ThrowOnCanAdd = true;
+        active.value.Add(new AlchemyInstance(activeRecipe) { quantity = 1, queuedQuantity = 1 });
+        using var runtime = new AutoConceptNativeAdapter(new AlchemyGameplayDomainClassifier());
+        var belief = new AutoConceptPlanBelief(1, 1, 1, Guid.Empty, 0);
+        var action = new AutoConceptCycleAction(
+            AutoConceptActionKind.RotateOut,
+            RecipeId,
+            1,
+            ReplacementId,
+            1,
+            in belief);
+
+        var exception = Assert.Throws<TargetInvocationException>(
+            () => runtime.Submit(in action, new AutoConceptConfiguration()));
+
+        Assert.Contains("CanAddInstance failed", exception.GetBaseException().Message);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "HeadlessIntegration")]
+    public void RotationRevalidatesThatTheReplacementIsStillUnlocked()
+    {
+        var type = new AlchemyTypeSO(
+            AlchemyGameplayDomainClassifier.ReductiveConceptTypeUuid.ToString());
+        var activeRecipe = RecipeWithType(RecipeId, "Active", type);
+        var replacementRecipe = RecipeWithType(ReplacementId, "Locked", type);
+        replacementRecipe.discovered = false;
+        var active = InstallNativeLists(activeRecipe, replacementRecipe);
+        active.TypelessSlots = 1;
+        active.value.Add(new AlchemyInstance(activeRecipe) { quantity = 1, queuedQuantity = 1 });
+        using var runtime = new AutoConceptNativeAdapter(new AlchemyGameplayDomainClassifier());
+        var belief = new AutoConceptPlanBelief(1, 1, 1, Guid.Empty, 0);
+        var action = new AutoConceptCycleAction(
+            AutoConceptActionKind.RotateOut,
+            RecipeId,
+            1,
+            ReplacementId,
+            1,
+            in belief);
+
+        var submission = runtime.Submit(in action, new AutoConceptConfiguration());
+
+        Assert.Equal(AutoConceptPreflight.SlotUnavailable, submission.Preflight);
+        Assert.Contains("unlock", submission.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, Assert.Single(active.value).queuedQuantity);
+    }
+
+    private static AlchemyRecipeSO RecipeWithType(
+        Guid id,
+        string name,
+        AlchemyTypeSO type) =>
+        new(id.ToString("D"), name, new[] { type })
+        {
+            coreType = type,
+            maxUsageSlots = new ValueModifierRecord(new BigDouble(1.0, 0)),
+        };
 
     private static AlchemyInstanceListVariable InstallNativeLists(params AlchemyRecipeSO[] recipes)
     {

@@ -17,59 +17,82 @@ icons.
 4. Keep the BepInEx log and the generated Runtime artifacts. Do not edit an active save.
 5. Before opening Mods, confirm the log contains exactly one successful install line for each
    surface:
-   - `Quick strip: native icon visuals active`
+   - `Quick controls: native state frames and icons active`
    - `Mods rail: native visuals active`
-   Any `Quick strip: native icon visuals failed: <reason>` or
+   Any `Quick controls: native state frames or icons failed: <reason>` or
    `Mods rail: native visuals failed: <reason>` is a blocking suite defect. A temporary
-   informational `Mod Config UI is not ready; installation will retry: <reason>` is allowed only if it is
-   followed by the Mods-rail success line.
+   informational `Quick controls are not ready; installation will retry: <reason>` or
+   `Mod Config UI is not ready; installation will retry: <reason>` is allowed only if it is
+   followed by the corresponding success line.
 
 ## Native shell and responsive layout
 
-1. Open Mods from each unlocked top-level native view. Confirm Mods remains last and returning to
-   Magic, Scholar, or Time restores the previously selected native view.
+0. Enter Main and watch the progressive top-bar render. Icon birth is machine/load-dependent and
+   may be seconds after scene entry; confirm quick controls and Mods appear together no more than
+   100 ms after all six native icon tabs are present, with no five-second quantization or staggered
+   pop-in. A top bar that remains absent for 30 seconds must enter the loud ordinary failure path.
+1. Open Mods from each unlocked top-level native view. Click the active Mods tab again and confirm
+   it stays open. Confirm Mods remains last and selecting Magic, Scholar, or Time closes Mods and
+   selects that native view.
 2. Confirm the title is exactly **Orb Of Creation ModSuite** and the left rail is Runtime,
-   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Advanced.
+   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, Mentor,
+   Advanced.
 3. Confirm no old Safety/Spells/Artifacts/Alchemy row and no per-feature Mode row remains.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
-   At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
-   the eight rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
-5. With the maximum unlocked native spell-slot count, confirm the five feature icons plus separated
-   STOP remain in their compact 2×3 tray inside the left lane of `RightSidebar/AttributeBar`.
-   Confirm the tray stays between the main-content boundary and native queue cells, never joins the
-   expanding spell-slot row, and does not cover future/unlocked native controls.
+   At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits, and
+   wheel scrolling over row bodies, inter-row gaps, runtime-card text, and viewport padding. Inspect
+   the ten rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
+5. Confirm the closed top-left suite footprint is one compound control under the native gear and
+   character buttons: an emergency square exactly matching their size and alignment, plus a
+   shorter attached disclosure footer. The square must show the native `power-lightning` Sprite
+   centered at 72% of its unchanged size; the footer caret must have balanced space above and below.
+   Nothing else from the suite may occupy that left lane while closed. Open the disclosure and
+   confirm a native-framed 4x2 panel contains all seven feature icons below the compound control;
+   press the disclosure again and confirm the panel is removed from the live layout.
 
-## Profile-build validation keys
+## Profile-build validation navigation
 
-The `perf-debug` profile build intentionally retains three unobtrusive UI-validation shortcuts.
-They are absent from the normal build:
+The `perf-debug` MCP server replaces the retired F10/F11/F12 validation shortcuts:
 
-1. On Start, F12 invokes the audited native `SaveStateManager.StartGame` Continue action.
-2. On Main, F11 toggles the suite Mods shell without clicking a native gameplay control.
-3. With Mods open, F10 advances to the next rail page.
+1. On Start, `game_continue` invokes the audited native `SaveStateManager.StartGame` action.
+2. On Main, `game_screen_catalog` lists native tabs plus the suite-owned Mods rail entry.
+3. `game_navigate` selects Mods and its live page catalog by exact name or index. Invoke the same
+   Mods destination while it is active and confirm it remains open through the ordinary indexed
+   button path.
 
-These shortcuts are navigation aids only. They must not write configuration, click native gameplay
-actions, or bypass the suite's ordinary shell/page construction.
+The Start screen also carries a large native-styled ModSuite status card beneath the game's version
+number in both build modes. A screenshot must distinguish no mod, release (`MCP OFF`), perf-debug
+(`MCP READY`), compatibility-blocked or control-plane-failed state, and duplicate processes by PID
+without consulting a log. The card must use the native TMP font and the Mods dark-panel/status
+palette; a small IMGUI/debug overlay is not an acceptable substitute.
 
 ## Pixel ownership and icon states
 
-For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the five
-quick icons, and STOP:
+For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the seven
+drawer icons, the disclosure, and STOP:
 
 1. Capture the idle appearance, then hover, press and hold, drag out, release, keyboard-select where
    supported, disable/re-enable the control, and hover again.
 2. Confirm the suite-rendered frame/icon/text does not flicker to a native hover or pressed state
    after the suite paints it. Click actions must still fire exactly once.
-3. Check each quick icon in Off, On, unhealthy, and emergency-stopped states. Auto Concept must use
-   the `ScreenScholar` book glyph; Mentor must use mastery XP. Auto Harvest must use the
-   harvest-speed glyph.
+3. Check each quick icon in Off, On, unhealthy, and emergency-stopped states. OFF must use the
+   recessed native view-button frame and configured ON the raised frame independent of color.
+   Auto Concept must use `ScreenScholar`, Auto Items `ScreenWorld`, Auto Scribe `ScreenWorkshop`,
+   and Advanced `ScreenAlchemy`; each feature's quick and rail glyph must match. Mentor must use
+   mastery XP and Auto Harvest the harvest-speed glyph.
 4. Confirm tooltips identify the feature, configured intent, runtime health, and reason without
    clipped text.
+5. With the drawer closed, fault or safety-block one contained feature. Confirm the disclosure gains
+   a visible exclamation marker and red color. Clear the condition and confirm both cues clear.
+6. Confirm the complete emergency square uses a deep green native frame while clear and a deep red
+   native frame while stopped; the footer follows the same state family using a darker tint. STOP
+   and RESUME must repaint both regions immediately while their separate frames, the lightning
+   glyph, the caret, and tooltips keep the state structurally legible.
 
 ## Commands, staging, and conflicts
 
-1. For Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor, toggle once in the feature
-   header and once in the quick strip. Confirm the other surface updates from the same committed
+1. For every registered automation feature, toggle once in the feature header and once in the
+   open drawer. Confirm the other surface updates from the same committed
    value and no duplicate mode row exists.
 2. Stage policy changes on at least two feature pages without applying. Navigate through Runtime,
    close/reopen Mods, and confirm staged values and each remembered scroll position survive.
@@ -85,25 +108,25 @@ quick icons, and STOP:
 
 0. With an unknown complete assembly pair, confirm Mods and differential verification load, STOP is engaged,
    no feature quick control or gameplay service starts, and General shows an engaged **Emergency disable**
-   switch. Clear it and Apply; confirm the exact pair is accepted and the runtime composes without the switch
+   command. Press **Resume all** once; confirm the exact pair is accepted and the runtime composes without STOP
    being forced on again. Separately confirm **Allow this unverified game build** composes the runtime while
-   STOP stays engaged until the ordinary two-click resume. Change either test hash and confirm the
+   STOP stays engaged until the ordinary one-click resume. Change either test hash and confirm the
    acknowledgement resets on next launch.
-1. Configure a resume set containing Auto Buy/Spell Leveling, Auto Cast, Auto Concept, Auto Harvest,
-   and Mentor. Hover STOP and confirm its tooltip lists that exact desired-On set.
-2. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On
+1. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On
    quick icon reads stopped, and feature headers/Runtime agree.
-3. Click STOP once to arm resume. Confirm automation remains stopped and the tooltip still lists the
-   resume set. Click again to resume and confirm only the listed configured-On features recover.
+2. Click STOP once more. Confirm the saved emergency state clears immediately, no intermediate armed
+   state appears, and only configured-On features recover after a fresh world publication.
+3. Repeat both directions from the General page. Confirm each single press changes the same committed
+   emergency state immediately and no Apply or confirmation step is offered.
 4. Rebuild the game UI through an ordinary supported scene/UI transition, then return to Main.
-   Confirm exactly one Mods entry, one five-icon strip, and one STOP exist; ordering, gap, tooltips,
+   Confirm exactly one Mods entry, one two-button shell, and one seven-feature drawer exist; ordering, tooltips,
    listeners, staged navigation bookmark, and native-view restoration still work.
 
 ## Runtime actions
 
-1. Confirm the six-feature grid appears first and orders failure/attention before waiting/healthy
+1. Confirm the seven-feature grid appears first and orders failure/attention before waiting/healthy
    states, with configured intent, runtime state, and one readable reason.
-2. Confirm the **Suite UI** diagnostic card contains healthy **Quick strip native visuals** and
+2. Confirm the **Suite UI** diagnostic card contains healthy **Quick controls shell and drawer native visuals** and
    **Mods rail native visuals** capabilities. If either failed, confirm the exact BepInEx error
    reason is repeated there.
 3. Click **Run verifier**. Confirm it becomes queued, prevents a duplicate request, completes, and
@@ -120,6 +143,6 @@ quick icons, and STOP:
    latest evidence, and reasons are readable; cards with failures or attention appear before healthy
    cards.
 
-Record screenshots for the quick-strip matrix, Mods rail at minimum resolution, staged conflict,
-emergency armed state, Runtime grid, and every failed checklist item. A visual failure blocks the
+Record screenshots for the closed two-button footprint, open drawer, closed attention cue, Mods rail at
+minimum resolution, staged conflict, stopped state, Runtime grid, and every failed checklist item. A visual failure blocks the
 install even when portable and contract gates are green.

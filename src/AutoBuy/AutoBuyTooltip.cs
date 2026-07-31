@@ -11,9 +11,11 @@ internal sealed class AutoBuyTooltip : ITooltipable
     private SuiteRuntimeConfiguration Config => _control.Config;
     public AutoBuyTooltip(AutoBuyToggleControl control) { _control = control; }
     public string GetName() => "Automata Auto Buy";
-    public string GetDisplayType() => _control.State == AutoCastToggleVisualState.On ? "ON" : "OFF";
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.TooltipLabelFor(_control.Status);
     public Sprite GetIcon() => null!;
-    public Color GetColor() => _control.State == AutoCastToggleVisualState.On ? new Color(.4f, 1, .55f) : new Color(.7f, .7f, .7f);
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status).Color;
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() => "Purchases eligible structures, upgrades, and spell levels through native game actions.";
@@ -34,8 +36,8 @@ internal sealed class AutoBuyTooltip : ITooltipable
         nodes.AddRange(new[]
         {
             new TooltipNode($"Queue slots reserved: {Config.AutoBuy.LeaveQueueSlots}"),
-            new TooltipNode($"Batch sizing: {Config.AutoBuy.BatchSizing}"),
-            new TooltipNode($"Purchase grouping: {Config.AutoBuy.PurchaseGrouping}"),
+            new TooltipNode("Batch sizing: fill available queue"),
+            new TooltipNode("Structure grouping: live Bulk Development"),
             new TooltipNode("Click to toggle Auto Buy and its enabled spell leveling."),
         });
         return nodes;

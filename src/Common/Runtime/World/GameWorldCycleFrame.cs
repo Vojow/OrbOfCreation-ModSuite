@@ -1,4 +1,5 @@
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -43,12 +44,6 @@ internal sealed class GameWorldCycleFrame
 
     /// <summary>Each upgrade's per-level cost modifiers, split into modifiers and exponents.</summary>
     internal WorldLevelCostModifierBuffer LevelCostModifiers { get; } = new();
-
-    /// <summary>
-    /// Every authored effect an entity's purchase applies. One-to-many per entity as well, and the
-    /// row is keyed by two entities rather than by one.
-    /// </summary>
-    internal WorldEntityEffectBuffer EntityEffects { get; } = new();
 
     /// <summary>
     /// Every plot-and-action pair. Not one row per entity either: a pair belongs to neither side.
@@ -119,6 +114,16 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
     internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
+    internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
+    internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
+    internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
+    internal WorldConsumableCountBuffer ConsumableCounts { get; } = new();
+    internal WorldRelationBuffer<WorldScribeRecipe> ScribeRecipes { get; } = new();
+    internal WorldRelationBuffer<WorldScribeQueue> ScribeQueues { get; } = new();
+    internal WorldRelationBuffer<WorldScribeWork> ScribeWork { get; } = new();
+    internal WorldRelationBuffer<WorldStructureEnchantment> StructureEnchantments { get; } = new();
+    internal WorldRelationBuffer<WorldScrollTarget> ScrollTargets { get; } = new();
+    internal WorldRelationBuffer<WorldScrollTargetEvidence> ScrollTargetEvidence { get; } = new();
     internal WorldSampleBuffer<WorldRitual, WorldRitual> Rituals { get; } = new();
     internal WorldSampleBuffer<WorldAchievement, WorldAchievement> Achievements { get; } = new();
     internal WorldSampleBuffer<WorldAdvancement, WorldAdvancement> Advancements { get; } = new();
@@ -175,6 +180,18 @@ internal sealed class GameWorldCycleFrame
     internal long CollectedAtEpoch { get; set; }
 
     /// <summary>
+    /// UTC ticks from the same capture boundary as <see cref="CollectedAt"/>. Kept as a scalar so
+    /// the immutable publication contains no runtime clock or mutable date object.
+    /// </summary>
+    internal long CollectedAtUtcTicks { get; set; }
+
+    /// <summary>
+    /// Monotonic time at which this collection began, carried to diagnostics so a native refusal can
+    /// quantify how long its resource quantities had to move before admission.
+    /// </summary>
+    internal MonotonicTimestamp CollectedAt { get; set; }
+
+    /// <summary>
     /// What the capture could and could not read. Carried on the frame so the worker can project it
     /// into the service's diagnostics without asking the Unity thread a second time.
     /// </summary>
@@ -198,14 +215,18 @@ internal static class GameWorldFrameDeriver
         var structures = frame.Structures.Build(WorldStructureDeriver.Shared);
         var modifierVariables =
             frame.ModifierVariables.Build(WorldIdentityDeriver<WorldModifierVariable>.Shared);
+        var intVariables =
+            frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared);
 
         // Built after the three tables it reads, because a cost is the one derived fact that is not a
         // function of its own category: it needs the entity's modifiers, each resource's attribute
-        // modifier, and the modifier the entity points at.
+        // modifier, the modifier the entity points at, and the already-collected grouping counts that
+        // bound its exact rising-curve total.
         var upgrades = frame.Upgrades.Build(WorldUpgradeDeriver.Shared);
         var purchaseCosts = new WorldPurchaseCostDeriver(
                 structures, upgrades, resources, modifierVariables, frame.LevelCostModifiers,
-                frame.FrameGlobals)
+                frame.FrameGlobals,
+                WorldPurchaseGrouping.Read(intVariables, KnownEntities.BulkDevelopment.Uuid))
             .Build(frame.PurchaseCosts);
 
         // Same shape, same reason: what one run of an action costs a plot is a function of both, so
@@ -216,16 +237,19 @@ internal static class GameWorldFrameDeriver
 
         return new GameWorldState
         {
+            CollectionCategories = WorldCollectionCategoryStatus.Build(frame.Report),
             FixedDeltaTime = frame.FixedDeltaTime,
+            CollectedAtFrame = frame.CollectedAtFrame,
             CollectedAtEpoch = frame.CollectedAtEpoch,
+            CollectedAtUtcTicks = frame.CollectedAtUtcTicks,
+            CollectedAt = frame.CollectedAt,
             Resources = resources,
             Structures = structures,
             PurchaseCosts = purchaseCosts,
-            EntityEffects = new WorldEntityEffectDeriver().Build(frame.EntityEffects),
             Upgrades = upgrades,
             Research = frame.Research.Build(WorldIdentityDeriver<WorldResearch>.Shared),
             DoubleVariables = frame.DoubleVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared),
-            IntVariables = frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared),
+            IntVariables = intVariables,
             BoolVariables = frame.BoolVariables.Build(WorldIdentityDeriver<WorldBoolVariable>.Shared),
             ModifierVariables = modifierVariables,
             AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
@@ -241,6 +265,54 @@ internal static class GameWorldFrameDeriver
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
             Glyphs = frame.Glyphs.Build(WorldIdentityDeriver<WorldGlyph>.Shared),
             Consumables = frame.Consumables.Build(WorldIdentityDeriver<WorldConsumable>.Shared),
+            ConsumableTypes = WorldConsumableRelationDeriver.Build(frame.ConsumableTypes),
+            ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
+            ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
+            ConsumableCounts = WorldConsumableRelationDeriver.Build(frame.ConsumableCounts),
+            ScribeRecipes = WorldScribeRelationDeriver.Build(
+                frame.ScribeRecipes,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            ScribeQueues = WorldScribeRelationDeriver.Build(
+                frame.ScribeQueues,
+                static (left, right) => left.QueueId.CompareTo(right.QueueId)),
+            ScribeWork = WorldScribeRelationDeriver.Build(
+                frame.ScribeWork,
+                static (left, right) =>
+                {
+                    var queue = left.QueueId.CompareTo(right.QueueId);
+                    if (queue != 0) return queue;
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    return recipe != 0 ? recipe : left.Level.CompareTo(right.Level);
+                }),
+            StructureEnchantments = WorldScribeRelationDeriver.Build(
+                frame.StructureEnchantments,
+                static (left, right) =>
+                {
+                    var structure = left.StructureId.CompareTo(right.StructureId);
+                    return structure != 0
+                        ? structure
+                        : left.EnchantmentId.CompareTo(right.EnchantmentId);
+                }),
+            ScrollTargets = WorldScribeRelationDeriver.Build(
+                frame.ScrollTargets,
+                static (left, right) =>
+                {
+                    var item = left.ConsumableId.CompareTo(right.ConsumableId);
+                    if (item != 0) return item;
+                    var enchantment = left.EnchantmentId.CompareTo(right.EnchantmentId);
+                    return enchantment != 0
+                        ? enchantment
+                        : left.StructureId.CompareTo(right.StructureId);
+                }),
+            ScrollTargetEvidence = WorldScribeRelationDeriver.Build(
+                frame.ScrollTargetEvidence,
+                static (left, right) =>
+                {
+                    var item = left.ConsumableId.CompareTo(right.ConsumableId);
+                    return item != 0
+                        ? item
+                        : left.EnchantmentId.CompareTo(right.EnchantmentId);
+                }),
             Rituals = frame.Rituals.Build(WorldIdentityDeriver<WorldRitual>.Shared),
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),

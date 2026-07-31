@@ -4,9 +4,10 @@
     <RootNamespace>OrbModding</RootNamespace>
     <RequireGameReferences>true</RequireGameReferences>
     <!-- Literal, not $(SuiteVersion): tools/package-supported-suite.sh reads this with sed. -->
-    <Version>0.4.0</Version>
-    <AssemblyVersion>0.4.0.0</AssemblyVersion>
-    <FileVersion>0.4.0.0</FileVersion>
+    <Version>0.5.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
+    <InformationalVersion>0.5.0</InformationalVersion>
     <Description>Orb Of Creation ModSuite: buying and progression automation, mastery catch-up, and the in-game configuration browser, in one BepInEx 5 plugin.</Description>
     <!--
       The project directory is the source root, so the default **/*.cs glob covers every feature
@@ -15,6 +16,9 @@
       project directories; anchor them at any depth.
     -->
     <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**;**/bin-stubs/**;**/obj-stubs/**;**/bin-profile/**;**/obj-profile/**;**/bin-profile-stubs/**;**/obj-profile-stubs/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UseGameStubs)' == 'true'">
+    <DefineConstants>$(DefineConstants);USE_GAME_STUBS</DefineConstants>
   </PropertyGroup>
 
   <!--
@@ -36,6 +40,30 @@
       <HintPath>$(ManagedDir)/Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Newtonsoft.Json" Condition="'$(EnableServiceCycleProfiler)' == 'true'">
+      <HintPath>$(ManagedDir)/Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ScreenCaptureModule"
+               Condition="'$(EnableServiceCycleProfiler)' == 'true'">
+      <HintPath>$(ManagedDir)/UnityEngine.ScreenCaptureModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"
+               Condition="'$(EnableServiceCycleProfiler)' == 'true'">
+      <HintPath>$(ManagedDir)/UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    The game MCP exists only in profiler builds. Installed builds bind to the Newtonsoft.Json copy
+    the game already ships; portable profiler builds use the matching package as a compile asset.
+    Excluding its runtime asset keeps the suite project from pretending it owns or deploys that DLL.
+  -->
+  <ItemGroup Condition="'$(EnableServiceCycleProfiler)' == 'true' and '$(UseGameStubs)' == 'true'">
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1"
+                      PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <!--

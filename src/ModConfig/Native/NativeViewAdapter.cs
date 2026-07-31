@@ -17,64 +17,49 @@ internal static class NativeViewAdapter
     private static readonly object Gate = new();
     private static readonly Dictionary<Type, NativeButtonContract> ButtonContracts = new();
     private static readonly Dictionary<Type, NativeViewContract> ViewContracts = new();
-    private static readonly Dictionary<Type, NativeSpellButtonContract> SpellButtonContracts = new();
-
-    public static bool TryCaptureVisualPrimitives(
-        out NativeUiVisualPrimitives? primitives,
-        out string reason)
-    {
-        primitives = null;
-        if (!TryCaptureSpellButtonVisuals(out var spellButton, out reason)) return false;
-        if (!TryCaptureFeatureRailVisuals(out var featureRail, out reason)) return false;
-        primitives = new NativeUiVisualPrimitives(spellButton!, featureRail!);
-        return true;
-    }
-
-    public static bool TryCaptureSpellButtonVisuals(
-        out NativeSpellButtonVisualPrimitives? primitives,
+    public static bool TryCaptureButtonStateVisuals(
+        out NativeButtonStateVisualPrimitives? primitives,
         out string reason)
     {
         primitives = null;
         reason = string.Empty;
         try
         {
-            var spellButtonType = Type.GetType("UISpellButton, Assembly-CSharp", false);
-            var imageEffectsType = Type.GetType("UIImageEffects, Assembly-CSharp", false);
-            if (spellButtonType is null || imageEffectsType is null)
+            var viewButtonType = Type.GetType("UIViewRadioButton, Assembly-CSharp", false);
+            if (viewButtonType is null)
             {
-                reason = "native spell-button visual types unavailable";
+                reason = "native view-radio type unavailable";
                 return false;
             }
 
-            var allSpellButtons = Resources.FindObjectsOfTypeAll(spellButtonType)
+            var allViewButtons = Resources.FindObjectsOfTypeAll(viewButtonType)
                 .OfType<Component>()
                 .OrderBy(component => NativeObjectPath.Build(component), StringComparer.Ordinal)
                 .ToArray();
-            var spellCandidates = allSpellButtons
-                .Where(IsCastingSpellButton)
-                .Where(component => IsAuditedBottomBarSpellPath(NativeObjectPath.Build(component)))
+            var railCandidates = allViewButtons
+                .Where(component => IsFeatureRailPath(NativeObjectPath.Build(component)))
                 .ToArray();
-            if (!TryReadBottomBarSpellFrame(
-                    spellCandidates,
-                    out var spellPrototype,
-                    out var spellBaseFrame,
+            if (!TryReadFeatureRailFrames(
+                    railCandidates,
+                    out _,
+                    out var inactiveFrame,
+                    out var activeFrame,
                     out var frameReason))
             {
-                reason = "audited CastingBar/SmallSpellList spell-button frame unavailable: " +
+                reason = "audited inactive/active MainContentContainer/SubviewRadio frame pair unavailable: " +
                          frameReason + ". Candidate census: " +
-                         BuildSpellCandidateCensus(allSpellButtons);
+                         BuildFeatureRailCandidateCensus(allViewButtons);
                 return false;
             }
 
-            primitives = new NativeSpellButtonVisualPrimitives(
-                spellPrototype!,
-                spellBaseFrame!,
-                imageEffectsType);
+            primitives = new NativeButtonStateVisualPrimitives(inactiveFrame!, activeFrame!);
             return true;
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            reason = DescribeCaptureException(
+                "UIViewRadioButton.baseImage/activeImage state-frame capture",
+                ex);
             return false;
         }
     }
@@ -122,12 +107,25 @@ internal static class NativeViewAdapter
                 allViewButtons, "ScreenScholar", out var conceptIcon, out var conceptReason);
             var hasAdvancedIcon = TryReadNamedTopBarIcon(
                 allViewButtons, "ScreenAlchemy", out var advancedIcon, out var advancedReason);
-            if (!hasRuntimeIcon || !hasGeneralIcon || !hasConceptIcon || !hasAdvancedIcon)
+            var hasWorldIcon = TryReadNamedTopBarIcon(
+                allViewButtons, "ScreenWorld", out var worldIcon, out var worldReason);
+            var hasWorkshopIcon = TryReadNamedTopBarIcon(
+                allViewButtons, "ScreenWorkshop", out var workshopIcon, out var workshopReason);
+            if (!hasRuntimeIcon || !hasGeneralIcon || !hasConceptIcon || !hasAdvancedIcon ||
+                !hasWorldIcon || !hasWorkshopIcon)
             {
                 reason = "audited top-bar rail icon unavailable: " +
                          string.Join(
                              "; ",
-                             new[] { runtimeReason, generalReason, conceptReason, advancedReason }
+                             new[]
+                             {
+                                 runtimeReason,
+                                 generalReason,
+                                 conceptReason,
+                                 advancedReason,
+                                 worldReason,
+                                 workshopReason,
+                             }
                                  .Where(value => !string.IsNullOrEmpty(value))) +
                          ". Candidate census: " +
                          BuildFeatureRailCandidateCensus(allViewButtons);
@@ -141,21 +139,110 @@ internal static class NativeViewAdapter
                 runtimeIcon!,
                 generalIcon!,
                 conceptIcon!,
-                advancedIcon!);
+                advancedIcon!,
+                worldIcon!,
+                workshopIcon!);
             return true;
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            reason = DescribeCaptureException(
+                "UIViewRadioButton rail frame and top-bar viewImage capture",
+                ex);
             return false;
         }
     }
 
-    public static Sprite? ReadFeatureRailIcon(NativeFeatureRailVisualPrimitives primitives)
+    internal static NativeUiStartupReadinessObservation ObserveTopBarStartupReadiness()
     {
-        if (primitives is null) throw new ArgumentNullException(nameof(primitives));
-        var contract = GetButtonContract(primitives.FeatureRailButtonPrototype.GetType());
-        return primitives.ConceptIcon;
+        try
+        {
+            var viewButtonType = Type.GetType("UIViewRadioButton, Assembly-CSharp", false);
+            if (viewButtonType is null)
+                return new NativeUiStartupReadinessObservation(
+                    NativeUiStartupReadinessKind.Mismatch,
+                    "native view-radio type unavailable");
+
+            var topBarCandidates = Resources.FindObjectsOfTypeAll(viewButtonType)
+                .OfType<Component>()
+                .Where(component => IsAuditedTopBarPath(NativeObjectPath.Build(component)))
+                .OrderBy(component => NativeObjectPath.Build(component), StringComparer.Ordinal)
+                .ToArray();
+            var facts = new List<NativeTopBarCandidateFact>(
+                NativeTopBarReadinessPolicy.RequiredItemNames.Count);
+            var missing = new List<string>();
+            var mismatches = new List<string>();
+            foreach (var itemName in NativeTopBarReadinessPolicy.RequiredItemNames)
+            {
+                var matches = topBarCandidates
+                    .Where(candidate => string.Equals(
+                        ReadNativeItemName(candidate),
+                        itemName,
+                        StringComparison.Ordinal))
+                    .ToArray();
+                var hasIcon = matches.Length == 1 &&
+                              (GetButtonContract(matches[0].GetType())
+                                  .ViewImageField?.GetValue(matches[0]) as Image)?.sprite is not null;
+                facts.Add(new NativeTopBarCandidateFact(itemName, matches.Length, hasIcon));
+                if (matches.Length == 0)
+                    missing.Add(itemName);
+                else if (matches.Length != 1)
+                    mismatches.Add(
+                        $"{itemName}: expected one top-bar candidate, found {matches.Length}");
+                else if (!hasIcon)
+                    mismatches.Add($"{itemName}: viewImage sprite is null");
+            }
+
+            var kind = NativeTopBarReadinessPolicy.Classify(facts);
+            var reason = kind switch
+            {
+                NativeUiStartupReadinessKind.Ready => string.Empty,
+                NativeUiStartupReadinessKind.NotYetPresent =>
+                    "required top-bar candidates are not yet present: " +
+                    string.Join(", ", missing),
+                _ => string.Join("; ", mismatches),
+            };
+            return new NativeUiStartupReadinessObservation(kind, reason);
+        }
+        catch (Exception ex)
+        {
+            return new NativeUiStartupReadinessObservation(
+                NativeUiStartupReadinessKind.Mismatch,
+                DescribeCaptureException("UIViewRadioButton top-bar readiness capture", ex));
+        }
+    }
+
+    public static bool TryCaptureNamedTopBarIcon(
+        string itemName,
+        out Sprite? icon,
+        out string reason)
+    {
+        icon = null;
+        reason = string.Empty;
+        try
+        {
+            var viewButtonType = Type.GetType("UIViewRadioButton, Assembly-CSharp", false);
+            if (viewButtonType is null)
+            {
+                reason = "native view-radio type unavailable";
+                return false;
+            }
+            var candidates = Resources.FindObjectsOfTypeAll(viewButtonType)
+                .OfType<Component>()
+                .OrderBy(component => NativeObjectPath.Build(component), StringComparer.Ordinal)
+                .ToArray();
+            if (TryReadNamedTopBarIcon(candidates, itemName, out icon, out reason))
+                return true;
+            reason += ". Candidate census: " + BuildFeatureRailCandidateCensus(candidates);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            reason = DescribeCaptureException(
+                $"UIViewRadioButton.viewImage sprite capture for '{itemName}'",
+                ex);
+            return false;
+        }
     }
 
     public static bool IsAlive(object? value)
@@ -228,14 +315,6 @@ internal static class NativeViewAdapter
             '/',
             "Canvas/ContentArea/MainContentContainer/SubviewRadio/".Length) < 0;
 
-    internal static bool IsAuditedBottomBarSpellPath(string path)
-    {
-        const string parent =
-            "Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/";
-        if (!path.StartsWith(parent, StringComparison.Ordinal)) return false;
-        return path.IndexOf('/', parent.Length) < 0;
-    }
-
     internal static bool IsAuditedTopBarPath(string path)
     {
         const string parent =
@@ -270,62 +349,6 @@ internal static class NativeViewAdapter
 
             return contract;
         }
-    }
-
-    private static NativeSpellButtonContract GetSpellButtonContract(Type type)
-    {
-        lock (Gate)
-        {
-            if (!SpellButtonContracts.TryGetValue(type, out var contract))
-            {
-                contract = NativeSpellButtonContract.Create(type);
-                SpellButtonContracts.Add(type, contract);
-            }
-
-            return contract;
-        }
-    }
-
-    private static bool IsCastingSpellButton(Component component) =>
-        GetSpellButtonContract(component.GetType()).IsForCasting.GetValue(component) as bool? == true;
-
-    internal static bool TryReadBottomBarSpellFrame(
-        IReadOnlyList<Component> candidates,
-        out Component? prototype,
-        out Sprite? baseFrame,
-        out string reason)
-    {
-        prototype = null;
-        baseFrame = null;
-        if (candidates.Count == 0)
-        {
-            reason = "no isForCasting candidate exists at the audited direct-child path";
-            return false;
-        }
-        foreach (var candidate in candidates)
-        {
-            var contract = GetSpellButtonContract(candidate.GetType());
-            if (contract.Background.GetValue(candidate) is not Image background ||
-                contract.Icon.GetValue(candidate) is not Image ||
-                contract.BaseBackground.GetValue(candidate) is not Sprite candidateBase)
-            {
-                reason =
-                    $"candidate '{NativeObjectPath.Build(candidate)}' is missing a required frame field";
-                continue;
-            }
-            if (background.gameObject != candidate.gameObject)
-            {
-                reason =
-                    $"candidate '{NativeObjectPath.Build(candidate)}' does not own its background Image";
-                continue;
-            }
-            prototype = candidate;
-            baseFrame = candidateBase;
-            reason = string.Empty;
-            return true;
-        }
-        reason = "all audited bottom-bar candidates failed structural validation";
-        return false;
     }
 
     internal static bool TryReadFeatureRailFrames(
@@ -417,19 +440,6 @@ internal static class NativeViewAdapter
         return item is UnityEngine.Object unityObject ? unityObject.name : item?.ToString() ?? string.Empty;
     }
 
-    internal static string BuildSpellCandidateCensus(IReadOnlyList<Component> candidates)
-    {
-        if (candidates.Count == 0) return "<no UISpellButton objects>";
-        var census = new StringBuilder();
-        foreach (var candidate in candidates
-                     .OrderBy(component => NativeObjectPath.Build(component), StringComparer.Ordinal))
-        {
-            if (census.Length > 0) census.Append(" || ");
-            census.Append(DescribeSpellCandidate(candidate));
-        }
-        return census.ToString();
-    }
-
     internal static string BuildFeatureRailCandidateCensus(IReadOnlyList<Component> candidates)
     {
         if (candidates.Count == 0) return "<no UIViewRadioButton objects>";
@@ -441,34 +451,6 @@ internal static class NativeViewAdapter
             census.Append(DescribeFeatureRailCandidate(candidate));
         }
         return census.ToString();
-    }
-
-    private static string DescribeSpellCandidate(Component candidate)
-    {
-        var path = NativeObjectPath.Build(candidate);
-        try
-        {
-            var contract = GetSpellButtonContract(candidate.GetType());
-            var background = contract.Background.GetValue(candidate) as Image;
-            var icon = contract.Icon.GetValue(candidate) as Image;
-            var baseFrame = contract.BaseBackground.GetValue(candidate) as Sprite;
-            var insufficient = contract.InsufficientBackground.GetValue(candidate) as Sprite;
-            var effects = contract.Effects.GetValue(candidate) as Component;
-            return DescribeObject(candidate, path) +
-                   $"; pathMatch={IsAuditedBottomBarSpellPath(path)}" +
-                   $"; isForCasting={IsCastingSpellButton(candidate)}" +
-                   $"; background={Present(background)}" +
-                   $"; backgroundOwned={background is not null && background.gameObject == candidate.gameObject}" +
-                   $"; icon={Present(icon)}" +
-                   $"; baseBackground={Present(baseFrame)}" +
-                   $"; insufficientBackground={Present(insufficient)}(optional)" +
-                   $"; effects={Present(effects)}(optional)";
-        }
-        catch (Exception ex)
-        {
-            return DescribeObject(candidate, path) +
-                   "; inspectionError=" + ex.GetBaseException().Message;
-        }
     }
 
     private static string DescribeFeatureRailCandidate(Component candidate)
@@ -561,45 +543,11 @@ internal static class NativeViewAdapter
         public static NativeButtonContract Create(Type type) => new(
             FindField(type, "item") ??
                 throw new MissingFieldException(type.FullName, "item"),
-            FindField(type, "baseImage"),
-            FindField(type, "activeImage"),
-            FindField(type, "buttonImage"),
-            FindField(type, "viewImage"),
+            RequireField(type, "baseImage", typeof(Sprite)),
+            RequireField(type, "activeImage", typeof(Sprite)),
+            RequireField(type, "buttonImage", typeof(Image)),
+            RequireField(type, "viewImage", typeof(Image)),
             FindField(type, "viewText"));
-    }
-
-    private sealed class NativeSpellButtonContract
-    {
-        private NativeSpellButtonContract(
-            FieldInfo icon,
-            FieldInfo insufficientBackground,
-            FieldInfo isForCasting,
-            FieldInfo background,
-            FieldInfo baseBackground,
-            FieldInfo effects)
-        {
-            Icon = icon;
-            InsufficientBackground = insufficientBackground;
-            IsForCasting = isForCasting;
-            Background = background;
-            BaseBackground = baseBackground;
-            Effects = effects;
-        }
-
-        public FieldInfo Icon { get; }
-        public FieldInfo InsufficientBackground { get; }
-        public FieldInfo IsForCasting { get; }
-        public FieldInfo Background { get; }
-        public FieldInfo BaseBackground { get; }
-        public FieldInfo Effects { get; }
-
-        public static NativeSpellButtonContract Create(Type type) => new(
-            RequireField(type, "icon", typeof(Image)),
-            RequireField(type, "insufficientBackground", typeof(Sprite)),
-            RequireField(type, "isForCasting", typeof(bool)),
-            RequireField(type, "background", typeof(Image)),
-            RequireField(type, "baseBackground", typeof(Sprite)),
-            RequireField(type, "effects"));
     }
 
     private sealed class NativeViewContract
@@ -637,4 +585,10 @@ internal static class NativeViewAdapter
 
     private static FieldInfo RequireField(Type type, string name) =>
         FindField(type, name) ?? throw new MissingFieldException(type.FullName, name);
+
+    private static string DescribeCaptureException(string check, Exception exception)
+    {
+        var root = exception.GetBaseException();
+        return $"{check} failed: {root.GetType().FullName}: {root.Message}";
+    }
 }

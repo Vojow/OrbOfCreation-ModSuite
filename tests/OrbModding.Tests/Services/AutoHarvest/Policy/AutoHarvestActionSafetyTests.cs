@@ -250,7 +250,7 @@ public sealed class AutoHarvestActionSafetyTests : IDisposable
     public void ACompletionScriptOfAnotherKindIsUnsafe() =>
         AssertFruit(
             AutoHarvestActionSafetyState.UnsafeCompletionEffects,
-            (_, action) => Block(action).effectScripts[0] = new FilterEffectMod());
+            (_, action) => Block(action).effectScripts[0] = new UnexpectedInstantEffectScript());
 
     /// <summary>
     /// The weight comparison is by identity rather than by value: a weight that is not the one the

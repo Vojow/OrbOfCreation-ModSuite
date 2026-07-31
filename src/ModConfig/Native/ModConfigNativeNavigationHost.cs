@@ -79,10 +79,10 @@ internal sealed class ModConfigNativeNavigationHost : IDisposable
         NativeViewAdapter.IsAlive(panel) && NativeViewAdapter.IsAlive(panel.transform.parent) &&
         ReferenceEquals(panel.transform.parent, PanelParent);
 
-    public void Connect(Action modsRequested, Action nativeTabSelected, Action? hierarchyChanged)
+    public void Connect(Action modsSelected, Action nativeTabSelected, Action? hierarchyChanged)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(ModConfigNativeNavigationHost));
-        _modsListener = () => modsRequested();
+        _modsListener = () => modsSelected();
         _nativeTabSelected = nativeTabSelected;
         _button.onClick.AddListener(_modsListener);
         foreach (var nativeButton in EnumerateNativeButtons()) BindNativeButton(nativeButton);
@@ -141,6 +141,77 @@ internal sealed class ModConfigNativeNavigationHost : IDisposable
         EnsureButtonIsLast();
         foreach (var nativeButton in EnumerateNativeButtons()) BindNativeButton(nativeButton);
     }
+
+#if SERVICE_CYCLE_PROFILE
+    internal IReadOnlyList<GameMcpNativeTab> CaptureNativeTabsForGameMcp()
+    {
+        if (_disposed || !IsAlive) return Array.Empty<GameMcpNativeTab>();
+        var result = new List<GameMcpNativeTab>();
+        foreach (var component in EnumerateNativeButtons())
+        {
+            var label = component.GetComponentInChildren<TextMeshProUGUI>(includeInactive: true);
+            result.Add(new GameMcpNativeTab(
+                result.Count,
+                label?.text?.Trim() ?? string.Empty,
+                NativeObjectPath.BuildIndexed(component),
+                component));
+        }
+        result.Add(new GameMcpNativeTab(
+            result.Count,
+            _button.GetComponentInChildren<TextMeshProUGUI>(includeInactive: true)?.text?.Trim() ??
+                "Mods",
+            NativeObjectPath.BuildIndexed(_button),
+            _button));
+        return result;
+    }
+
+    internal bool IsNativeTabForGameMcp(Component component)
+    {
+        if (_disposed || !IsAlive || component is null) return false;
+        foreach (var candidate in EnumerateNativeButtons())
+            if (ReferenceEquals(candidate, component)) return true;
+        return ReferenceEquals(component.gameObject, _buttonObject);
+    }
+
+    internal int NativeTabCountForGameMcp()
+    {
+        if (_disposed || !IsAlive) return 0;
+        return EnumerateNativeButtons().Count() + 1;
+    }
+
+    internal bool TrySelectNativeTabForGameMcp(int requestedIndex, out string reason)
+    {
+        if (_disposed || !IsAlive)
+        {
+            reason = "the native navigation host is not alive";
+            return false;
+        }
+        var index = 0;
+        foreach (var component in EnumerateNativeButtons())
+        {
+            if (index++ != requestedIndex) continue;
+            var button = component.GetComponent<Button>();
+            if (button is null)
+            {
+                reason = "native tab " + requestedIndex + " has no Button component";
+                return false;
+            }
+            button.onClick.Invoke();
+            reason = string.Empty;
+            return true;
+        }
+        if (requestedIndex == index)
+        {
+            _button.onClick.Invoke();
+            reason = string.Empty;
+            return true;
+        }
+        reason =
+            "native tab index " + requestedIndex +
+            " is outside the current closed-world navigation rail";
+        return false;
+    }
+#endif
 
     public void Dispose()
     {
@@ -248,3 +319,21 @@ internal sealed class ModConfigNativeNavigationHost : IDisposable
         try { if (button != null) button.onClick.RemoveListener(listener); } catch { }
     }
 }
+
+#if SERVICE_CYCLE_PROFILE
+internal readonly struct GameMcpNativeTab
+{
+    internal GameMcpNativeTab(int index, string label, string path, Component component)
+    {
+        Index = index;
+        Label = label ?? string.Empty;
+        Path = path ?? string.Empty;
+        Component = component ?? throw new ArgumentNullException(nameof(component));
+    }
+
+    internal int Index { get; }
+    internal string Label { get; }
+    internal string Path { get; }
+    internal Component Component { get; }
+}
+#endif

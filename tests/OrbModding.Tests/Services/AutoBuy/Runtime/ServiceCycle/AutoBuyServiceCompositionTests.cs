@@ -82,6 +82,40 @@ public sealed class AutoBuyServiceCompositionTests
         Assert.True(actions.ExecutionCount > 0);
     }
 
+    [Fact]
+    public void AffordabilitySkipWaitsForFreshWorldThenReplans()
+    {
+        var ownerThread = Thread.CurrentThread.ManagedThreadId;
+        var actions = new SkipThenCommitActionPort(ownerThread);
+        var definition = AutoBuyService.Define(actions);
+        using var registry = new ServiceCycleRegistry(1, new LifecycleGeneration(7));
+        registry.ConfigurationPublication.Publish(Configuration());
+        using var registration = registry.Register(definition);
+        registry.WorldPublication.Publish(AffordableStructureWorld(), new WorldGeneration(2));
+        registry.Seal();
+        using var pump = new SuiteFramePump(registry);
+        var frame = 10L;
+
+        ServiceCyclePumpTestWait.PumpUntil(
+            pump,
+            ref frame,
+            () => actions.ExecutionCount == 1);
+        Assert.Equal(ServiceActionDisposition.Skipped, actions.FirstDisposition);
+
+        for (var index = 0; index < 4; index++) pump.PumpFrame(frame++);
+        Assert.Equal(1, actions.ExecutionCount);
+
+        registry.WorldPublication.Publish(
+            AffordableStructureWorld(),
+            new WorldGeneration(checked((ulong)frame + 1)));
+        ServiceCyclePumpTestWait.PumpUntil(
+            pump,
+            ref frame,
+            () => actions.ExecutionCount == 2);
+
+        Assert.Equal(ServiceActionDisposition.Committed, actions.LastDisposition);
+    }
+
     /// <summary>One structure priced at one unit of a resource the player holds plenty of.</summary>
     private static GameWorldState AffordableStructureWorld()
     {
@@ -111,7 +145,6 @@ public sealed class AutoBuyServiceCompositionTests
                 Mode = AutoBuyOperationMode.Active,
                 IncludeStructures = true,
                 IncludeUpgrades = false,
-                EvaluationIntervalSeconds = 0.01f,
             },
         };
 
@@ -133,6 +166,36 @@ public sealed class AutoBuyServiceCompositionTests
             return ServiceActionResult.Committed(
                 CommonActionResultCodes.Committed,
                 ServiceNativeMutationEvidence.Observed(NativeMutationOutcome.Verified, call));
+        }
+    }
+
+    private sealed class SkipThenCommitActionPort : IAutoBuyCycleActionPort
+    {
+        private readonly int _ownerThread;
+
+        internal SkipThenCommitActionPort(int ownerThread) => _ownerThread = ownerThread;
+
+        internal int ExecutionCount { get; private set; }
+        internal ServiceActionDisposition FirstDisposition { get; private set; }
+        internal ServiceActionDisposition LastDisposition { get; private set; }
+
+        public ServiceActionResult TryExecute(
+            in AutoBuyCycleAction action,
+            in SuiteRuntimeConfiguration config,
+            in ServiceActionContext context)
+        {
+            Assert.Equal(_ownerThread, Thread.CurrentThread.ManagedThreadId);
+            ExecutionCount++;
+            var result = ExecutionCount == 1
+                ? ServiceActionResult.Skipped(CommonActionResultCodes.Skipped)
+                : ServiceActionResult.Committed(
+                    CommonActionResultCodes.Committed,
+                    ServiceNativeMutationEvidence.Observed(
+                        NativeMutationOutcome.Verified,
+                        new NativeMutationCallOutcome(1, 1, 1)));
+            if (ExecutionCount == 1) FirstDisposition = result.Disposition;
+            LastDisposition = result.Disposition;
+            return result;
         }
     }
 }

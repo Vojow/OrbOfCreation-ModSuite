@@ -178,6 +178,7 @@ Composition is explicit:
 ```text
 SuiteFramePump
   -> Register world collection definition and adapters   (source shape)
+  -> Register Auto Items definition and adapters         (ordinary)
   -> Register Auto Harvest definition and adapters       (ordinary)
   -> Register Auto Buy definition and adapters           (ordinary)
   -> Register Spell Leveling definition and adapters     (ordinary)
@@ -188,7 +189,7 @@ SuiteFramePump
 World collection registers first so the world is published before the services that read it
 evaluate. That ordering is a convenience, not a guarantee: nothing enforces order between
 services, and a consumer whose first cycle beat the first collection would simply wait a
-frame. Mentor is the seventh registration and uses the same ordinary-service path as the other
+frame. Mentor is the eighth registration and uses the same ordinary-service path as the other
 feature services. This list is the complete production runtime roster.
 
 Registration:
@@ -252,7 +253,7 @@ There is no cross-service priority scheduler or global action slot. Stable regis
 
 ### World-freshness gate
 
-A service does not start a cycle against a world collected before it went live, or before its own last change to the game. Both halves matter: the gate is born armed, so a service cannot act on the seed publication, and it re-arms on every committed change. The gate is unconditional, lives in the runtime rather than in any feature, and is a start refusal rather than a wake policy. [Shared world collection](world-collection.md) states the rule and what arms it.
+A service does not start a cycle against a world collected before it went live or before its own last attempted game-facing action. Both halves matter: the gate is born armed, so a service cannot act on the seed publication, and it re-arms after every committed, skipped, rejected, or faulted attempt. The gate is unconditional, lives in the runtime rather than in any feature, and is a start refusal rather than a wake policy. [Shared world collection](world-collection.md) states the rule and what arms it.
 
 ## Definition catalogs and changing values
 
