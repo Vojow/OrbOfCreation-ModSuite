@@ -19,8 +19,9 @@ public sealed class ScrollCoveragePlannerTests
     {
         var plan = ScrollCoveragePlanner.Build(World(), _profile);
 
-        var found = plan.TryChooseProduction(
+        var found = plan.TryChooseCraft(
             enabledRoles: null,
+            afterCraftCostOrder: -1,
             out var selected,
             out var blocked);
 
@@ -31,14 +32,130 @@ public sealed class ScrollCoveragePlannerTests
     }
 
     [Fact]
+    public void ProductionSelectionRotatesAcrossEveryProducibleRole()
+    {
+        var plan = ScrollCoveragePlanner.Build(World(), _profile);
+        var expected = new[]
+        {
+            "scribe.advancement",
+            "scribe.power",
+            "scribe.learning",
+            "scribe.excellence",
+            "scribe.development",
+            "scribe.echo",
+            "scribe.advancement",
+        };
+        var cursor = -1;
+
+        for (var index = 0; index < expected.Length; index++)
+        {
+            Assert.True(plan.TryChooseCraft(
+                enabledRoles: null,
+                cursor,
+                out var selected,
+                out var blocked));
+            Assert.Equal(expected[index], selected.Role.Value);
+            Assert.Equal(default, blocked);
+            cursor = selected.CraftCostOrder;
+        }
+    }
+
+    [Fact]
+    public void CoveredRoleProbesItsOwnNextLevel()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 1,
+                freeQuantity: 1)),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(ScrollCoverageState.Covered, coverage.State);
+        Assert.False(coverage.ShouldProduce);
+        Assert.True(coverage.ShouldProbeProgression);
+        Assert.Equal(3, coverage.TargetLevel);
+        Assert.Equal(4, coverage.RequestedCraftLevel);
+    }
+
+    [Fact]
+    public void SharedScribeMaximumDoesNotRaiseAnotherRecipesFrontier()
+    {
+        var power = FindProfileRole("scribe.power");
+        var world = World() with
+        {
+            CraftingRecipeTypes = Table(RecipeType(maxStartingLevel: 67)),
+            Consumables = ScrollsWithOverride(power.Key, maxCreatedLevel: 24),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            power.Key);
+
+        Assert.Equal(24, coverage.TargetLevel);
+        Assert.Equal(25, coverage.ProgressionLevel);
+        Assert.NotEqual(67, coverage.TargetLevel);
+    }
+
+    [Fact]
+    public void HigherQueuedWorkRaisesOnlyItsRecipesFrontierAndSuppressesProbe()
+    {
+        var advancement = FindProfileRole("scribe.advancement");
+        var world = World() with
+        {
+            ScribeWork = Table(new WorldScribeWork(
+                _profile.ActiveInstances.Uuid,
+                advancement.Recipe!.Value.Uuid,
+                level: 17,
+                isAutomatic: false,
+                isExpired: false)),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            advancement.Key);
+
+        Assert.Equal(17, coverage.TargetLevel);
+        Assert.Equal(1, coverage.QueuedSupply);
+        Assert.False(coverage.ShouldProbeProgression);
+    }
+
+    [Fact]
+    public void VisibleRecipeWithoutItsScrollFrontierFailsClosed()
+    {
+        var advancement = FindProfileRole("scribe.advancement");
+        var world = World() with
+        {
+            Consumables = PublicationTable<WorldConsumable>.Empty,
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            advancement.Key);
+
+        Assert.Equal(ScrollCoverageState.EvidenceUnknown, coverage.State);
+        Assert.Equal(
+            AutoScribeEvidenceReason.TargetLevelUnavailable,
+            coverage.EvidenceReason);
+        Assert.False(coverage.ShouldAttemptCraft);
+    }
+
+    [Fact]
     public void UnknownEnabledRoleBlocksWholePublicationBeforeHealthyRoleCanProduce()
     {
         var plan = ScrollCoveragePlanner.Build(
             World(omitTargetEvidenceForRole: 1),
             _profile);
 
-        var found = plan.TryChooseProduction(
+        var found = plan.TryChooseCraft(
             enabledRoles: null,
+            afterCraftCostOrder: -1,
             out var selected,
             out var blocked);
 
@@ -132,6 +249,7 @@ public sealed class ScrollCoveragePlannerTests
             in configuration,
             _profile,
             enabledRoles: null,
+            afterCraftCostOrder: -1,
             new ServiceActionWriter<AutoScribeCycleAction>(store),
             out _);
         actionCount = store.Count;
@@ -143,6 +261,7 @@ public sealed class ScrollCoveragePlannerTests
         int candidateCount = 1)
     {
         var recipes = new List<WorldScribeRecipe>();
+        var consumables = new List<WorldConsumable>();
         var targets = new List<WorldScrollTarget>();
         var evidence = new List<WorldScrollTargetEvidence>();
         for (var index = 0; index < _profile.Roles.Count; index++)
@@ -155,6 +274,7 @@ public sealed class ScrollCoveragePlannerTests
                 role.Scroll.Uuid,
                 visible: true,
                 usesQuantityAsLevel: true));
+            consumables.Add(Scroll(role.Scroll.Uuid, maxCreatedLevel: 3));
             var structure = Guid.NewGuid();
             if (candidateCount > 0)
                 targets.Add(new WorldScrollTarget(
@@ -179,6 +299,7 @@ public sealed class ScrollCoveragePlannerTests
                 skipped: 0,
                 firstFailure: string.Empty)),
             ScribeRecipes = Table(recipes.ToArray()),
+            Consumables = Table(consumables.ToArray()),
             ScrollTargets = Table(targets.ToArray()),
             ScrollTargetEvidence = Table(evidence.ToArray()),
             CraftingRecipeTypes = Table(new WorldCraftingRecipeType(
@@ -200,6 +321,83 @@ public sealed class ScrollCoveragePlannerTests
                 multiPenaltyModModifiers: 0)),
         };
     }
+
+    private AutoScribeRoleDescriptor FindProfileRole(string key)
+    {
+        Assert.True(_profile.TryFind(new ScrollRoleKey(key), out var role));
+        return role;
+    }
+
+    private static ScrollRoleCoverage FindRole(
+        ScrollCoveragePlan plan,
+        ScrollRoleKey key)
+    {
+        for (var index = 0; index < plan.Roles.Length; index++)
+            if (plan.Roles[index].Role == key)
+                return plan.Roles[index];
+        throw new InvalidOperationException($"Coverage role {key.Value} was absent.");
+    }
+
+    private PublicationTable<WorldConsumable> ScrollsWithOverride(
+        ScrollRoleKey overrideRole,
+        int maxCreatedLevel)
+    {
+        var rows = new List<WorldConsumable>();
+        for (var index = 0; index < _profile.Roles.Count; index++)
+        {
+            var role = _profile.Roles[index];
+            if (!role.IsProducible) continue;
+            rows.Add(Scroll(
+                role.Scroll.Uuid,
+                role.Key == overrideRole ? maxCreatedLevel : 3));
+        }
+        return Table(rows.ToArray());
+    }
+
+    private static WorldConsumable Scroll(
+        Guid scrollId,
+        int maxCreatedLevel,
+        int maximumCarryLoad = 0)
+    {
+        var modifiers = default(RawConsumableModifiers);
+        return new WorldConsumable(
+            scrollId,
+            visible: true,
+            randomized: true,
+            quantity: 0,
+            queuedQuantity: 0,
+            maximumCarryLoad,
+            gainedSince: 0,
+            maxCreatedLevel,
+            currentPrepTime: BigDouble.Zero,
+            currentCooldown: BigDouble.Zero,
+            currentCooldownTime: BigDouble.Zero,
+            in modifiers,
+            preparationTime: 0,
+            canBeRandomized: true,
+            hasDuration: false,
+            durationBase: 0,
+            queueOnStart: false);
+    }
+
+    private static WorldCraftingRecipeType RecipeType(int maxStartingLevel) =>
+        new(
+            KnownEntities.ScribeCrafting.Uuid,
+            startingLevel: 1,
+            maxStartingLevel,
+            craftVerb: "Scribe",
+            isLevelType: true,
+            initiated: true,
+            magnitudeLoss: 0,
+            magnitudeTime: 0,
+            magnitudeIncrement: BigDouble.Zero,
+            powerModifiers: 0,
+            speedModifiers: 0,
+            costModModifiers: 0,
+            costIncrementModModifiers: 0,
+            efficiencyModModifiers: 0,
+            autoPenaltyModModifiers: 0,
+            multiPenaltyModModifiers: 0);
 
     private static PublicationTable<T> Table<T>(params T[] rows)
         where T : struct =>

@@ -100,9 +100,14 @@ CraftingRecipeSO.PurchaseQuantity(purchasedQuantity, previousQuantity)
 `max(before.maxStartingLevel, purchasedLevel)`. The resulting Scroll separately raises its
 `maxCreatedLv` when gained.
 
-The worker treats the published Scribe `maxStartingLevel` as the coverage target. Purchasing an
-affordable higher level is the native way to advance that ceiling; `CanBuyAt(BigDouble)` and
-`GetTotalCost(0, level).HasEnough()` remain live action preflights.
+The shared `maxStartingLevel` is progression evidence and a payment receipt, not a coverage target
+for every recipe. Each Scroll owns a frontier equal to the strongest of its positive
+`maxCreatedLv`, owned level, non-expired queued work, and non-expired pending use, with level one as
+the initial floor. A stable covered role requests the next level. The guarded action requires that
+minimum to be affordable, brackets the first unaffordable level, and binary-searches the monotonic
+`CanBuyAt(BigDouble)` boundary before running the exact cost preflight. Purchasing that strongest
+affordable level is the native way to advance both the individual Scroll frontier and, when higher,
+the shared ceiling.
 
 ## Native Scribe lists and external production
 
@@ -140,7 +145,7 @@ row's scaling level and `GetQuantity()` supplies its quantity. Aggregated consum
 insufficient because native Scroll use selects the strongest count and carries that count's scaling
 through the use.
 
-For one role and the current Scribe target level, coverage demand is:
+For one role and its independent Scroll frontier, coverage demand is:
 
 ```text
 desired = max(uncovered eligible structures, maximum carry load when positive)
@@ -153,6 +158,12 @@ deficit = max(0, desired
 Automatic Scribe work at or above the target does not subtract a guessed quantity. It changes the
 role disposition to external production, causing the suite to yield until a later publication
 shows what the game produced.
+
+Queued work and pending uses raise only their matching recipe's frontier. A higher shared
+`maxStartingLevel` produced by cheap Advancement crafts never raises Power, Learning, Excellence,
+Development, or Echoing by itself. Once ordinary demand is covered and no matching work is active,
+the role becomes a next-level progression probe. The semantic cost order is a fair rotating cursor,
+so an always-affordable earlier recipe cannot starve later unlocked recipes.
 
 Every `StructureSO` owns an `EnchantmentSO.EnchantTable`. A native enchantment upgrade keeps a
 stronger existing instance and replaces an equal-or-lower one only when the proposed scaling is
@@ -205,10 +216,10 @@ The main-thread action performs this complete order before `PurchaseQuantity`:
 4. verify those live native UUIDs and the complete registry/recipe/Scroll/enchantment graph;
 5. require `CraftingRecipeSO.IsVisible()`;
 6. require `ActiveScribeInstances.HasEmptySpot()`;
-7. reject matching non-expired active or automatic supply;
-8. require a non-empty exact native target selection and preserve its reason;
-9. require `CanBuyAt(level)`;
-10. require exact `GetTotalCost(0, level)` type and `HasEnough()`;
+7. require the requested per-Scroll level and bracket/binary-search the highest affordable level;
+8. reject matching non-expired active or automatic supply at that selected level;
+9. require a non-empty exact native target selection at that selected level and preserve its reason;
+10. require exact `GetTotalCost(0, selected level)` type and `HasEnough()`;
 11. capture resource quantities, ceiling, queue count, and exact-level Scroll stock; and
 12. capture the `CraftingQueueSubmission` mutation permit.
 
@@ -262,7 +273,7 @@ only recovery.
 | active and automatic instance membership | Pure | enumerate live before payment |
 | `TargetSelectOptions.GetTargeting()` | Pure serialized dispatch | require exact `TargetStructure` |
 | `TargetStructure.GetRandomList(ScalingInfo.Basic(level))` | Pure | repeat live immediately before payment |
-| `CraftingRecipeSO.CanBuyAt(level)` | Pure | call live before cost capture |
+| monotonic `CraftingRecipeSO.CanBuyAt(level)` frontier | Pure | bounded bracket and binary search live before cost capture |
 | `GetTotalCost(0, level).HasEnough()` | Pure | call live and retain exact cost for receipt |
 | action-family ownership permit | Pure process-local authority | capture immediately before payment |
 | `PurchaseQuantity` acceptance | Side-effectful | attempt only after all preflights, then verify exact deltas |
@@ -297,6 +308,8 @@ A disposable-save Unity pass must still:
 - compare the exact resource and `maxStartingLevel` deltas with the receipt;
 - exercise manual one-shot and persistent automatic competition;
 - confirm empty native target selection blocks production;
+- observe cheap and expensive Scroll recipes progress independently despite one shared Scribe ceiling;
+- observe the fair cursor eventually selects every visible enabled producible role;
 - confirm Runtime shows the exact role/evidence block and post-payment stage; and
 - cross scene change, save/load, reset, NG+, shutdown, and restart.
 

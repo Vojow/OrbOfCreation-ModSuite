@@ -19,6 +19,7 @@ internal readonly struct AutoScribeDecisionMetrics
         int deficientRoles,
         int externalRoles,
         int plannedActions,
+        int selectedCraftCostOrder,
         AutoScribeDecisionKind kind,
         int blockedRoleOrdinal,
         AutoScribeEvidenceReason blockedReason)
@@ -27,6 +28,7 @@ internal readonly struct AutoScribeDecisionMetrics
         DeficientRoles = deficientRoles;
         ExternalRoles = externalRoles;
         PlannedActions = plannedActions;
+        SelectedCraftCostOrder = selectedCraftCostOrder;
         Kind = kind;
         BlockedRoleOrdinal = blockedRoleOrdinal;
         BlockedReason = blockedReason;
@@ -36,6 +38,7 @@ internal readonly struct AutoScribeDecisionMetrics
     internal int DeficientRoles { get; }
     internal int ExternalRoles { get; }
     internal int PlannedActions { get; }
+    internal int SelectedCraftCostOrder { get; }
     internal AutoScribeDecisionKind Kind { get; }
     internal int BlockedRoleOrdinal { get; }
     internal AutoScribeEvidenceReason BlockedReason { get; }
@@ -48,12 +51,14 @@ internal struct AutoScribeCycleState
         Lifecycle = lifecycle;
         RoleConfiguration = default;
         EnabledRoles = null;
+        LastSelectedCraftCostOrder = -1;
         Decision = default;
     }
 
     internal LifecycleGeneration Lifecycle { get; }
     internal ConfigGeneration RoleConfiguration { get; private set; }
     internal PublicationTable<ScrollRoleKey>? EnabledRoles { get; private set; }
+    internal int LastSelectedCraftCostOrder { get; private set; }
     internal AutoScribeDecisionMetrics Decision { get; private set; }
 
     internal static AutoScribeCycleState Create(LifecycleGeneration lifecycle) => new(lifecycle);
@@ -65,8 +70,12 @@ internal struct AutoScribeCycleState
     {
         if (RoleConfiguration == generation) return;
         EnabledRoles = AutoScribeRoleSelection.ParsePublication(serialized, profile.Roles);
+        LastSelectedCraftCostOrder = -1;
         RoleConfiguration = generation;
     }
+
+    internal void ObserveSelection(int craftCostOrder) =>
+        LastSelectedCraftCostOrder = craftCostOrder;
 
     internal void RecordDecision(in AutoScribeDecisionMetrics decision) => Decision = decision;
 }

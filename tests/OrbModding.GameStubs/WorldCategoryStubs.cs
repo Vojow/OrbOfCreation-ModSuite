@@ -129,6 +129,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool useQuantityAsLevel;
     public bool visible;
     public bool BuyAllowed = true;
+    public int MaximumAffordableLevel = int.MaxValue;
     public ResourceCostList TotalCost = new ResourceCostList();
     public CraftingRecipeTypeSO MainType = new CraftingRecipeTypeSO
     {
@@ -145,7 +146,10 @@ public sealed class CraftingRecipeSO : IdScriptableObject
 
     public bool IsVisible() => visible;
     public bool CanBuyAt(BigDouble quantity) =>
-        BuyAllowed && quantity > BigDouble.Zero && TotalCost.HasEnough();
+        BuyAllowed &&
+        quantity > BigDouble.Zero &&
+        quantity.ToDouble() <= MaximumAffordableLevel &&
+        TotalCost.HasEnough();
     public ResourceCostList GetTotalCost(BigDouble previousQuantity, BigDouble purchasedQuantity) =>
         TotalCost;
     public CraftingRecipeTypeSO GetMainType() => MainType;
@@ -155,8 +159,9 @@ public sealed class CraftingRecipeSO : IdScriptableObject
         PurchaseCalls++;
         TotalCost.PerformCost();
         if (MainType.isLevelType)
-            MainType.maxStartingLevel =
-                purchasedQuantity.ToInt() + previousQuantity.ToInt();
+            MainType.maxStartingLevel = Math.Max(
+                MainType.maxStartingLevel,
+                purchasedQuantity.ToInt() + previousQuantity.ToInt());
         if (ThrowAfterPurchase)
             throw new InvalidOperationException("injected failure after purchase");
     }

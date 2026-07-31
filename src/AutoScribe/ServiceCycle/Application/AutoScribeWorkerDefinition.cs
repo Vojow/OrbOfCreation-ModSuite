@@ -37,8 +37,11 @@ internal sealed class AutoScribeWorkerDefinition :
             in config,
             _profile,
             state.EnabledRoles,
+            state.LastSelectedCraftCostOrder,
             actions,
             out var decision);
+        if (decision.SelectedCraftCostOrder >= 0)
+            state.ObserveSelection(decision.SelectedCraftCostOrder);
         state.RecordDecision(in decision);
         return wake;
     }

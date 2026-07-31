@@ -51,6 +51,46 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     }
 
     [Fact]
+    public void MoreExpensiveRecipeUsesItsOwnAffordableFrontierBelowSharedCeiling()
+    {
+        var fixture = Fixture();
+        fixture.RecipeType.maxStartingLevel = 67;
+        fixture.Recipe.MaximumAffordableLevel = 24;
+        var request = AtLevel(fixture.Action, level: 1);
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, request);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(24d, Assert.Single(fixture.Active.value).Quantity.ToDouble());
+        Assert.Equal(67, fixture.RecipeType.maxStartingLevel);
+        Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void ProgressionRequestWaitsUntilItsOwnNextLevelIsAffordable()
+    {
+        var fixture = Fixture();
+        fixture.RecipeType.maxStartingLevel = 67;
+        fixture.Recipe.MaximumAffordableLevel = 24;
+        var request = AtLevel(fixture.Action, level: 25);
+        using var actionBoundary = GameAction();
+
+        var waiting = Submit(actionBoundary, request);
+
+        Assert.Equal(AutoScribePreflight.Unaffordable, waiting.Preflight);
+        Assert.Empty(fixture.Active.value);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+
+        fixture.Recipe.MaximumAffordableLevel = 25;
+        var advanced = Submit(actionBoundary, request);
+
+        Assert.True(advanced.Verified, advanced.Reason);
+        Assert.Equal(25d, Assert.Single(fixture.Active.value).Quantity.ToDouble());
+        Assert.Equal(67, fixture.RecipeType.maxStartingLevel);
+    }
+
+    [Fact]
     public void VerifiedInstantAdmissionProvesPaymentCeilingAndExactStockOutcome()
     {
         var fixture = Fixture();
@@ -270,6 +310,15 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         AutoScribeCycleAction action) =>
         boundary.Submit(in action);
 
+    private static AutoScribeCycleAction AtLevel(
+        in AutoScribeCycleAction action,
+        int level) =>
+        new(
+            action.RecipeId,
+            action.ScrollId,
+            level,
+            action.CollectedAtEpoch);
+
     private FixtureState Fixture(bool withTarget = true)
     {
         var recipeType = Register(
@@ -317,6 +366,7 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
             {
                 visible = true,
                 useQuantityAsLevel = true,
+                MaximumAffordableLevel = 3,
                 MainType = recipeType,
                 InstantOutput = scroll,
             }, role.Recipe!.Value.Uuid);

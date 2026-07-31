@@ -12,13 +12,14 @@ internal static class AutoScribeCycleEvaluator
         in SuiteRuntimeConfiguration configuration,
         AutoScribeIdentityProfile profile,
         PublicationTable<ScrollRoleKey>? enabledRoles,
+        int afterCraftCostOrder,
         ServiceActionWriter<AutoScribeCycleAction> actions,
         out AutoScribeDecisionMetrics metrics)
     {
         if (!AutoScribeConfigurationPolicy.IsOperational(configuration))
         {
             metrics = new AutoScribeDecisionMetrics(
-                0, 0, 0, 0, AutoScribeDecisionKind.Disabled, -1,
+                0, 0, 0, 0, -1, AutoScribeDecisionKind.Disabled, -1,
                 AutoScribeEvidenceReason.None);
             return WakePolicy.OnPublication;
         }
@@ -41,18 +42,23 @@ internal static class AutoScribeCycleEvaluator
                 external++;
         }
 
-        if (plan.TryChooseProduction(enabledRoles, out var selected, out var blocked))
+        if (plan.TryChooseCraft(
+                enabledRoles,
+                afterCraftCostOrder,
+                out var selected,
+                out var blocked))
         {
             actions.Add(new AutoScribeCycleAction(
                 selected.RecipeId,
                 selected.ScrollId,
-                selected.TargetLevel,
+                selected.RequestedCraftLevel,
                 world.CollectedAtEpoch));
             metrics = new AutoScribeDecisionMetrics(
                 enabled,
                 deficient,
                 external,
                 1,
+                selected.CraftCostOrder,
                 AutoScribeDecisionKind.Planned,
                 -1,
                 AutoScribeEvidenceReason.None);
@@ -65,6 +71,7 @@ internal static class AutoScribeCycleEvaluator
                 deficient,
                 external,
                 0,
+                -1,
                 AutoScribeDecisionKind.EvidenceBlocked,
                 blocked.RoleOrdinal,
                 blocked.EvidenceReason);
@@ -76,6 +83,7 @@ internal static class AutoScribeCycleEvaluator
             deficient,
             external,
             0,
+            -1,
             external > 0
                 ? AutoScribeDecisionKind.ExternallyProducing
                 : AutoScribeDecisionKind.Idle,

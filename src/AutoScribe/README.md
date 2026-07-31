@@ -10,17 +10,29 @@ Scroll uses, active one-shot work, and player-owned `AutoScribeInstances`. Unkno
 evidence for any enabled producible role blocks the complete service for that publication and names
 the first exact role and reason. A healthy role is never produced around an unknown sibling.
 
-Selection uses stable semantic roles and an audited cost rank:
-Advancement, Power, Learning, Excellence, Development, then Echoing. It plans at most one action per
-world publication. Persistent native automation is external production pressure only; the suite
-never creates, edits, or removes an `AutoScribeInstances` entry.
+Selection uses stable semantic roles and an audited cost rank as a fair rotating order:
+Advancement, Power, Learning, Excellence, Development, then Echoing. The cursor survives across
+world publications and resets when role configuration changes, so a permanently affordable cheap
+recipe cannot starve later unlocked recipes. It plans at most one action per world publication.
+Persistent native automation is external production pressure only; the suite never creates, edits,
+or removes an `AutoScribeInstances` entry.
+
+Each visible recipe owns an independent progression frontier derived from that Scroll's
+`maxCreatedLv`, strongest owned level, queued work, and pending use. The shared Scribe
+`maxStartingLevel` is not copied onto every recipe. A covered stable role probes its next level;
+the guarded action then brackets and binary-searches the monotonic native affordability boundary
+and crafts the strongest affordable level at or above that request. This advances cheaper and more
+expensive Scroll families independently while still allowing stronger stock to replace weaker
+stock up to the native carry cap.
 
 `AutoScribeOneShotCraftGameAction` owns the only mutation boundary. It resolves one complete
 lifecycle-scoped binding set before use, re-resolves the action's recipe, Scroll, enchantment,
 registry, and queue identities live, proves the complete role relationship, then preflights
 visibility, queue room, competing supply, a valid native target, affordability, exact cost, and
 ownership. `PurchaseQuantity` is the last risk taken before the native construction, initiation,
-and queue-or-instant admission sequence.
+and queue-or-instant admission sequence. Affordability search is bounded, uses only the audited
+`CanBuyAt(BigDouble)` predicate, and the chosen level is revalidated for target, competing supply,
+and exact cost before payment.
 
 The action receipts the exact resource charge, `maxStartingLevel` transition, and exclusive queue
 or instant-stock outcome. A native failure after payment or an ambiguous postcondition records the

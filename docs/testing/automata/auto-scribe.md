@@ -13,11 +13,13 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj \
   -p:UseGameStubs=true --filter "FullyQualifiedName~AutoScribe"
 ```
 
-The required defect cases are semantic cost-rank selection, cycle-pinned role narrowing, whole
-publication blocking when one enabled role has unknown evidence, player-owned automatic production
-pressure, exact recipe/Scroll mismatch, queue-full and no-target preflights, exact queue and
-instant-stock verification, duplicate resource-cost rows, lifecycle quarantine reset, and
-post-payment injected failure at payment, construction, initiation, and final admission.
+The required defect cases are fair semantic cost-rank rotation, per-Scroll progression frontiers,
+shared-ceiling isolation, next-level affordability probes, highest-affordable bounded search,
+cycle-pinned role narrowing, whole publication blocking when one enabled role has unknown evidence,
+player-owned automatic production pressure, exact recipe/Scroll mismatch, queue-full and no-target
+preflights, exact queue and instant-stock verification, duplicate resource-cost rows, lifecycle
+quarantine reset, and post-payment injected failure at payment, construction, initiation, and
+final admission.
 
 The stubs make `PurchaseQuantity` deduct the exact `GetTotalCost` resources and advance
 `maxStartingLevel`; a test that only counts method calls does not prove this boundary.

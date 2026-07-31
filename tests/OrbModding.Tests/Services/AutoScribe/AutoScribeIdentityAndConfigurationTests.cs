@@ -82,6 +82,7 @@ public sealed class AutoScribeIdentityAndConfigurationTests
         var profile = AutoScribeIdentityCatalog.Audited;
         var state = AutoScribeCycleState.Create(new LifecycleGeneration(1));
         state.PinRoles(new ConfigGeneration(1), "scribe.power", profile);
+        state.ObserveSelection(craftCostOrder: 3);
         state.PinRoles(new ConfigGeneration(1), "scribe.learning", profile);
 
         Assert.True(AutoScribeRoleSelection.Contains(
@@ -90,6 +91,7 @@ public sealed class AutoScribeIdentityAndConfigurationTests
         Assert.False(AutoScribeRoleSelection.Contains(
             state.EnabledRoles,
             new ScrollRoleKey("scribe.learning")));
+        Assert.Equal(3, state.LastSelectedCraftCostOrder);
 
         state.PinRoles(new ConfigGeneration(2), "scribe.learning", profile);
 
@@ -99,6 +101,7 @@ public sealed class AutoScribeIdentityAndConfigurationTests
         Assert.True(AutoScribeRoleSelection.Contains(
             state.EnabledRoles,
             new ScrollRoleKey("scribe.learning")));
+        Assert.Equal(-1, state.LastSelectedCraftCostOrder);
     }
 
     [Fact]

@@ -73,21 +73,28 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.QueueFull,
                     "ActiveScribeInstances.HasEmptySpot() refused before payment.");
-            if (HasCompetingSupply(native, action.RecipeId, action.Level, out reason))
+
+            var craftLevel = FindHighestAffordableLevel(
+                native,
+                recipe,
+                recipeType,
+                action.Level);
+            if (craftLevel < action.Level)
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.Unaffordable,
+                    $"Recipe {action.RecipeId:D} could not afford requested level " +
+                    $"{action.Level} or any stronger level.");
+            if (HasCompetingSupply(native, action.RecipeId, craftLevel, out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.CompetingSupply,
                     reason);
-            if (!TryValidateTarget(native, scroll, action.ScrollId, action.Level, out reason))
+            if (!TryValidateTarget(native, scroll, action.ScrollId, craftLevel, out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.TargetUnavailable,
                     reason);
 
-            var level = new BigDouble(action.Level, 0);
+            var level = new BigDouble(craftLevel, 0);
             var zero = BigDouble.Zero;
-            if (!Invoke<bool>(native.RecipeCanBuyAt, recipe, level))
-                return AutoScribeSubmission.Reject(
-                    AutoScribePreflight.Unaffordable,
-                    $"CraftingRecipeSO.CanBuyAt({action.Level}) refused recipe {action.RecipeId:D}.");
             var totalCost = InvokeObject(native.RecipeTotalCost, recipe, zero, level);
             if (totalCost.GetType() != native.ResourceCostType)
                 return AutoScribeSubmission.Reject(
@@ -96,9 +103,9 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!Invoke<bool>(native.CostHasEnough, totalCost))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.Unaffordable,
-                    $"GetTotalCost(0,{action.Level}).HasEnough() refused recipe {action.RecipeId:D}.");
+                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {action.RecipeId:D}.");
 
-            var before = CaptureBefore(native, recipeType, activeQueue, scroll, action.Level, totalCost);
+            var before = CaptureBefore(native, recipeType, activeQueue, scroll, craftLevel, totalCost);
             if (!TryCaptureMutationPermit(out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.MutationPermitUnavailable,
@@ -114,6 +121,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 activeQueue,
                 scroll,
                 totalCost,
+                craftLevel,
                 level,
                 in before);
         }
@@ -149,6 +157,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         object activeQueue,
         object scroll,
         object totalCost,
+        int craftLevel,
         BigDouble level,
         in BeforeState before)
     {
@@ -187,7 +196,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 activeQueue,
                 scroll,
                 action.RecipeId,
-                action.Level,
+                craftLevel,
                 totalCost,
                 in before,
                 paymentInvoked);
@@ -220,7 +229,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 activeQueue,
                 scroll,
                 action.RecipeId,
-                action.Level,
+                craftLevel,
                 totalCost,
                 in before,
                 paymentInvoked);
@@ -605,6 +614,87 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         reason = string.Empty;
         return true;
     }
+
+    private static int FindHighestAffordableLevel(
+        AutoScribeNativeBindings native,
+        object recipe,
+        object recipeType,
+        int minimumLevel)
+    {
+        if (minimumLevel <= 0 ||
+            !CanBuyAt(native, recipe, minimumLevel))
+            return 0;
+
+        var sharedMaximum = Math.Max(
+            1,
+            Require<int>(
+                native.MaxStartingLevel.GetValue(recipeType),
+                "CraftingRecipeTypeSO.maxStartingLevel"));
+        var affordable = minimumLevel;
+        if (sharedMaximum > affordable)
+        {
+            if (!CanBuyAt(native, recipe, sharedMaximum))
+                return FindHighestAffordableBetween(
+                    native,
+                    recipe,
+                    affordable,
+                    sharedMaximum - 1);
+            affordable = sharedMaximum;
+        }
+        if (affordable == int.MaxValue)
+            return affordable;
+
+        // Audited levelled Scribe costs grow monotonically. Bracket the first unaffordable level,
+        // then refine the frontier without an unbounded linear scan.
+        while (affordable < int.MaxValue)
+        {
+            var candidate = affordable > int.MaxValue / 2
+                ? int.MaxValue
+                : Math.Max(affordable + 1, affordable * 2);
+            if (!CanBuyAt(native, recipe, candidate))
+                return FindHighestAffordableBetween(
+                    native,
+                    recipe,
+                    affordable,
+                    candidate - 1);
+            affordable = candidate;
+        }
+        return affordable;
+    }
+
+    private static int FindHighestAffordableBetween(
+        AutoScribeNativeBindings native,
+        object recipe,
+        int affordable,
+        int maximum)
+    {
+        var low = affordable + 1;
+        var high = maximum;
+        var found = affordable;
+        while (low <= high)
+        {
+            var candidate = low + ((high - low) / 2);
+            if (CanBuyAt(native, recipe, candidate))
+            {
+                found = candidate;
+                low = candidate + 1;
+            }
+            else
+            {
+                high = candidate - 1;
+            }
+        }
+        return found;
+    }
+
+    private static bool CanBuyAt(
+        AutoScribeNativeBindings native,
+        object recipe,
+        int level) =>
+        Invoke<bool>(
+            native.RecipeCanBuyAt,
+            recipe,
+            new BigDouble(level, 0));
 
     private BeforeState CaptureBefore(
         AutoScribeNativeBindings native,
