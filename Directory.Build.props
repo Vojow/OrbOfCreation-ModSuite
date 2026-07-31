@@ -6,7 +6,9 @@
     <ImplicitUsings>false</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <DebugType>portable</DebugType>
-    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <!-- Coverlet cannot instrument path-mapped PDBs, so stub test builds stay unmapped;
+         every shipped (real-reference) binary carries neutral /_/ source paths. -->
+    <PathMap Condition="'$(UseGameStubs)' != 'true'">$(MSBuildThisFileDirectory)=/_/</PathMap>
     <Authors>Vojow</Authors>
     <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
