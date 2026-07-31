@@ -17,9 +17,9 @@ icons.
 4. Keep the BepInEx log and the generated Runtime artifacts. Do not edit an active save.
 5. Before opening Mods, confirm the log contains exactly one successful install line for each
    surface:
-   - `Quick strip: native icon visuals active`
+   - `Quick controls: native state frames and icons active`
    - `Mods rail: native visuals active`
-   Any `Quick strip: native icon visuals failed: <reason>` or
+   Any `Quick controls: native state frames or icons failed: <reason>` or
    `Mods rail: native visuals failed: <reason>` is a blocking suite defect. A temporary
    informational `Mod Config UI is not ready; installation will retry: <reason>` is allowed only if it is
    followed by the Mods-rail success line.
@@ -29,15 +29,15 @@ icons.
 1. Open Mods from each unlocked top-level native view. Confirm Mods remains last and returning to
    Magic, Scholar, or Time restores the previously selected native view.
 2. Confirm the title is exactly **Orb Of Creation ModSuite** and the left rail is Runtime,
-   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Advanced.
+   General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, Mentor,
+   Advanced.
 3. Confirm no old Safety/Spells/Artifacts/Alchemy row and no per-feature Mode row remains.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
    At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
-   the eight rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
-5. With the maximum unlocked native spell-slot count, confirm the five feature icons plus separated
-   STOP remain in their compact 2×3 tray inside the left lane of `RightSidebar/AttributeBar`.
-   Confirm the tray stays between the main-content boundary and native queue cells, never joins the
-   expanding spell-slot row, and does not cover future/unlocked native controls.
+   the ten rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
+5. Confirm all seven feature icons plus separated STOP form one top-left vertical column under the
+   native gear and character buttons. The column must not cover those buttons, join the expanding
+   spell-slot row, or leave any old control in `RightSidebar/AttributeBar`.
 
 ## Profile-build validation navigation
 
@@ -55,23 +55,25 @@ palette; a small IMGUI/debug overlay is not an acceptable substitute.
 
 ## Pixel ownership and icon states
 
-For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the five
+For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the seven
 quick icons, and STOP:
 
 1. Capture the idle appearance, then hover, press and hold, drag out, release, keyboard-select where
    supported, disable/re-enable the control, and hover again.
 2. Confirm the suite-rendered frame/icon/text does not flicker to a native hover or pressed state
    after the suite paints it. Click actions must still fire exactly once.
-3. Check each quick icon in Off, On, unhealthy, and emergency-stopped states. Auto Concept must use
-   the `ScreenScholar` book glyph; Mentor must use mastery XP. Auto Harvest must use the
-   harvest-speed glyph.
+3. Check each quick icon in Off, On, unhealthy, and emergency-stopped states. OFF must use the
+   recessed native view-button frame and configured ON the raised frame independent of color.
+   Auto Concept must use `ScreenScholar`, Auto Items `ScreenWorld`, Auto Scribe `ScreenWorkshop`,
+   and Advanced `ScreenAlchemy`; each feature's quick and rail glyph must match. Mentor must use
+   mastery XP and Auto Harvest the harvest-speed glyph.
 4. Confirm tooltips identify the feature, configured intent, runtime health, and reason without
    clipped text.
 
 ## Commands, staging, and conflicts
 
-1. For Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor, toggle once in the feature
-   header and once in the quick strip. Confirm the other surface updates from the same committed
+1. For every registered automation feature, toggle once in the feature header and once in the
+   quick column. Confirm the other surface updates from the same committed
    value and no duplicate mode row exists.
 2. Stage policy changes on at least two feature pages without applying. Navigate through Runtime,
    close/reopen Mods, and confirm staged values and each remembered scroll position survive.
@@ -98,14 +100,14 @@ quick icons, and STOP:
 3. Click STOP once to arm resume. Confirm automation remains stopped and the tooltip still lists the
    resume set. Click again to resume and confirm only the listed configured-On features recover.
 4. Rebuild the game UI through an ordinary supported scene/UI transition, then return to Main.
-   Confirm exactly one Mods entry, one five-icon strip, and one STOP exist; ordering, gap, tooltips,
+   Confirm exactly one Mods entry, one seven-feature column, and one STOP exist; ordering, gap, tooltips,
    listeners, staged navigation bookmark, and native-view restoration still work.
 
 ## Runtime actions
 
-1. Confirm the six-feature grid appears first and orders failure/attention before waiting/healthy
+1. Confirm the seven-feature grid appears first and orders failure/attention before waiting/healthy
    states, with configured intent, runtime state, and one readable reason.
-2. Confirm the **Suite UI** diagnostic card contains healthy **Quick strip native visuals** and
+2. Confirm the **Suite UI** diagnostic card contains healthy **Quick controls column native visuals** and
    **Mods rail native visuals** capabilities. If either failed, confirm the exact BepInEx error
    reason is repeated there.
 3. Click **Run verifier**. Confirm it becomes queued, prevents a duplicate request, completes, and
@@ -122,6 +124,6 @@ quick icons, and STOP:
    latest evidence, and reasons are readable; cards with failures or attention appear before healthy
    cards.
 
-Record screenshots for the quick-strip matrix, Mods rail at minimum resolution, staged conflict,
+Record screenshots for the top-left quick-control matrix, Mods rail at minimum resolution, staged conflict,
 emergency armed state, Runtime grid, and every failed checklist item. A visual failure blocks the
 install even when portable and contract gates are green.

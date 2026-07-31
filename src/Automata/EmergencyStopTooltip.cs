@@ -9,11 +9,11 @@ internal sealed class EmergencyStopTooltip : ITooltipable
 
     public EmergencyStopTooltip(EmergencyStopControl control) => _control = control;
     public string GetName() => "Suite emergency stop";
-    public string GetDisplayType() => _control.IsStopped ? "STOPPED" : "READY";
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.FromEmergencyStop(_control).TooltipLabel;
     public Sprite GetIcon() => null!;
-    public Color GetColor() => _control.IsStopped
-        ? new Color(1.0f, 0.45f, 0.25f)
-        : new Color(1.0f, 0.75f, 0.35f);
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromEmergencyStop(_control).Color;
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() => !_control.IsStopped

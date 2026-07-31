@@ -629,13 +629,9 @@ public sealed class InstalledGameContractTests
         Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "activeImage"));
         Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UIViewRadioButton", "buttonImage"));
         Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UIViewRadioButton", "baseImage"));
-
-        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "icon"));
-        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "insufficientBackground"));
-        Assert.Equal("System.Boolean", assembly.GetFieldType("UISpellButton", "isForCasting"));
-        Assert.Equal("UnityEngine.UI.Image", assembly.GetFieldType("UISpellButton", "background"));
-        Assert.Equal("UnityEngine.Sprite", assembly.GetFieldType("UISpellButton", "baseBackground"));
-        Assert.Equal("UIImageEffects", assembly.GetFieldType("UISpellButton", "effects"));
+        Assert.Equal(
+            "UnityEngine.RectTransform",
+            assembly.GetFieldType("UIContentArea", "canvas"));
         AssertMethod(
             assembly,
             "GlobalVariables",

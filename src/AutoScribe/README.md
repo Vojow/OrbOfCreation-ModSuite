@@ -36,8 +36,9 @@ Configuration is additive:
 Role narrowing is deliberately cycle-pinned under the runtime doctrine's bounded configuration
 staleness rule. Actions contain recipe UUID, Scroll UUID, level, and collection lifecycle only;
 they do not carry a role key or re-read current configuration. Every evaluator disposition wakes
-only on another publication. This lane adds no evaluation interval, timer, quick control,
-temporary-item allowlist, installer behavior, or persistent Scribe automation.
+only on another publication. The shared registry exposes one feature-wide mode quick control; this
+lane adds no evaluation interval, timer, per-role control, temporary-item allowlist, installer
+behavior, or persistent Scribe automation.
 
 The installed evidence and remaining live-validation limits are documented in the
 [Auto Scribe native pipeline](../../docs/reverse-engineering/auto-scribe-native-pipeline.md).

@@ -41,14 +41,33 @@ internal static class ModConfigNativeRailFactory
         if (labels.Count == 0) return true;
         try
         {
+            var resolvedIcons = new Sprite[labels.Count];
             for (var index = 0; index < labels.Count; index++)
             {
-                if (!TryResolveIcon(labels[index], primitives, out var iconSprite, out var iconReason))
+                if (!NativeFeatureIconResolver.TryResolve(
+                        labels[index], primitives, out var resolved, out var iconReason))
                 {
                     reason = $"rail entry '{labels[index]}' has no audited native icon: {iconReason}";
                     ModConfigUiFactory.ClearObjects(owned);
                     return false;
                 }
+                resolvedIcons[index] = resolved!;
+            }
+            for (var left = 0; left < resolvedIcons.Length; left++)
+            {
+                for (var right = left + 1; right < resolvedIcons.Length; right++)
+                {
+                    if (resolvedIcons[left] != resolvedIcons[right]) continue;
+                    reason =
+                        $"rail entries '{labels[left]}' and '{labels[right]}' resolve the same sprite";
+                    ModConfigUiFactory.ClearObjects(owned);
+                    return false;
+                }
+            }
+
+            for (var index = 0; index < labels.Count; index++)
+            {
+                var iconSprite = resolvedIcons[index];
                 var captured = index;
                 var buttonObject = UnityEngine.Object.Instantiate(
                     primitives.FeatureRailButtonPrototype.gameObject,
@@ -105,57 +124,6 @@ internal static class ModConfigNativeRailFactory
             ModConfigUiFactory.ClearObjects(owned);
             reason = ex.GetBaseException().Message;
             return false;
-        }
-    }
-
-    private static bool TryResolveIcon(
-        string label,
-        NativeFeatureRailVisualPrimitives primitives,
-        out Sprite? icon,
-        out string reason)
-    {
-        if (label.StartsWith("Runtime", StringComparison.Ordinal))
-        {
-            icon = primitives.RuntimeIcon;
-            reason = string.Empty;
-            return true;
-        }
-        switch (label)
-        {
-            case "General":
-                icon = primitives.GeneralIcon;
-                reason = string.Empty;
-                return true;
-            case "Auto Buy":
-                return NativeFeatureIconResolver.TryGetAutoBuyIcon(out icon, out reason);
-            case "Auto Cast":
-                icon = AutoCastToggleButton.FindEquippedSpellIcon(out var source);
-                reason = icon is null ? "no equipped spell icon is available" : source;
-                return icon is not null;
-            case "Auto Concept":
-                icon = primitives.ConceptIcon;
-                reason = string.Empty;
-                return true;
-            case "Auto Harvest":
-                return NativeFeatureIconResolver.TryGetHarvestIcon(out icon, out reason);
-            case "Auto Items":
-                icon = primitives.AdvancedIcon;
-                reason = string.Empty;
-                return true;
-            case "Auto Scribe":
-                icon = primitives.ConceptIcon;
-                reason = string.Empty;
-                return true;
-            case "Mentor":
-                return NativeFeatureIconResolver.TryGetMentorIcon(out icon, out reason);
-            case "Advanced":
-                icon = primitives.AdvancedIcon;
-                reason = string.Empty;
-                return true;
-            default:
-                icon = null;
-                reason = "unrecognized consolidated page";
-                return false;
         }
     }
 

@@ -11,7 +11,8 @@
 This dossier reconciles the useful native evidence from the Auto Items work on PR #102 with the
 suite's one-cadence ServiceCycle runtime and game-boundary doctrine. Auto Items supports Scrolls,
 Relics, and exact-UUID-approved temporary Fruits, Potions, and Threads. Auto Scribe is a separate
-feature. Auto Items quick controls remain deliberately absent.
+feature. One registered feature-wide quick control changes `AutoItems.Mode`; there is no
+per-family or temporary-item control.
 
 The declared contracts were checked against the read-only `artifacts/game-v105` managed
 assemblies for Orb of Creation v1.0.5-2. No game binary, installation, or save was changed.
@@ -178,7 +179,8 @@ configuration key, and neither adapter nor GameAction has a current-configuratio
 These keys join the existing committed store and one configuration generation. They require no
 configuration schema migration because no prior shipped key is rewritten or removed. The allowlist
 appears on the existing consolidated Auto Items Mods page, so there is no new rail entry or icon.
-Auto Items has no gameplay quick control.
+The existing Auto Items feature-wide quick control changes the same master mode and never changes
+the exact-UUID allowlist.
 
 ## Evidence limits
 

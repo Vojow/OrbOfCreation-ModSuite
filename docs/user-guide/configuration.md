@@ -27,11 +27,11 @@ full trace, optional profiling, pump timing, the decision journal, and detailed 
 Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods
 maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
-The Auto Buy, Auto Cast, Auto Concept, Auto Harvest, and Mentor quick buttons, plus every
-feature-card command including Auto Items and Auto Scribe, publish the saved value through the same
-configuration store used by every other writer before the click returns, then render that
-committed intent. Auto Items and Auto Scribe deliberately have no gameplay quick button in this
-release. A button decides its next value from committed state, not from a raw file-watcher
+Every registered automation feature's quick control and feature-card command publishes the saved
+value through the same configuration store used by every other writer before the click returns,
+then renders that committed intent. Auto Items has one feature-wide control for Scrolls, Relics,
+and exact-UUID-approved temporary items; Auto Scribe likewise has one feature-wide control. A
+button decides its next value from committed state, not from a raw file-watcher
 notification that the application has not accepted yet. Mods Apply and external edits join the
 same store at the start of the next main-thread frame.
 
@@ -51,11 +51,11 @@ If the shared automation host cannot start, desired-On features report that runt
 - `AutoBuy.Mode` and `AutoCast.Mode`: saved values are `Disabled` or `Active`; change them with the feature header or quick button.
 - `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts; change it with the feature header or quick button.
 - `AutoHarvest.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick button. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
-- `AutoItems.Mode`: `Disabled` (default) or `Active`; change it with the feature header. `UseScrolls` and `UseRelics` both default to true behind the disabled master switch. Scrolls use native randomized targeting; Relics receive priority. `TemporaryItemAllowlist` is empty by default and accepts comma-separated exact UUIDs only; it has no family-level switch, and an empty list leaves temporary Fruits, Potions, and Threads inert.
-- `AutoScribe.Mode`: `Disabled` (default) or `Active`; change it with the feature header. `AutoScribe.Roles` accepts comma-separated semantic role keys (`scribe.advancement`, `scribe.power`, `scribe.learning`, `scribe.excellence`, `scribe.development`, `scribe.echo`). Empty selects all audited producible roles and `none` selects none. Native UUIDs are not configuration values.
+- `AutoItems.Mode`: `Disabled` (default) or `Active`; change it with the feature header or the one feature-wide quick control. That control gates Scrolls, Relics, and exact-UUID-approved temporary items together. `UseScrolls` and `UseRelics` both default to true behind the disabled master switch; Scrolls use native randomized targeting and Relics receive priority. `TemporaryItemAllowlist` is empty by default and accepts comma-separated exact UUIDs only; it has no family-level switch, and an empty list leaves temporary Fruits, Potions, and Threads inert.
+- `AutoScribe.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick control. `AutoScribe.Roles` accepts comma-separated semantic role keys (`scribe.advancement`, `scribe.power`, `scribe.learning`, `scribe.excellence`, `scribe.development`, `scribe.echo`). Empty selects all audited producible roles and `none` selects none. Native UUIDs are not configuration values.
 - The world collector publishes a fresh immutable reading every 250 milliseconds. Auto Buy, spell leveling, Auto Cast, Auto Concept, Auto Harvest, Auto Items, and Auto Scribe evaluate after every world publication and configuration publication. There are no per-service cadence settings or fallback polls; training periods, manual-cast pauses, and fault backoffs remain explicit waits for their own semantics.
 - `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates through every unlocked concept after each assignment has received the complete configured settled-active period; the game decides whether releasing an assignment opens an appropriate typed or typeless slot. `RotateAll` replaces active concepts to train a same-type strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
-- `AutoConcept.ShowToggleButton`: show the `CN ON/OFF` configured-intent button in the native Auto Buy-anchored control strip; runtime health remains in its tooltip; default true.
+- Legacy `AutoCast.ShowToggleButton` and `AutoConcept.ShowToggleButton` values remain readable from existing config files but are hidden and ignored. Every registered automation feature has one quick control.
 - `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 30, range 10 to 3600. Schema 6 rewrites every serialized 300-second value — the former default — to 30, including a value deliberately saved by a player; all other customized values are preserved. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.
 - Auto Concept considers every discovered (unlocked) concept. While a settled training period is still running, its tooltip and Runtime status say that it is waiting. If training has finished but no other unlocked concept can be assigned, they show that progression-locked reason instead of treating a locked concept as a candidate. If the game refuses an unlocked replacement because its prospective slot or resource drain is unsafe, that attempt ends Auto Concept's work on the current world reading. The candidate re-enters ordinary planning after the next collection; persistent refusal is logged again on every publication and may deliberately starve later candidates until the collected schema exposes the native constraint. There is no retry timer, fallback poll, or rejection memory. `BepInEx/LogOutput.log` names each verified quantity delta or rejected rotation and its native reason.
 - `AutoBuy.AutoLevelSpells`: enabled by default while Auto Buy is active. It detects native progression automatically: Locked, Single, then All after the completed level-all Upgrade. It spends the game's live spell-level costs and can be disabled separately.
@@ -73,7 +73,7 @@ Default input inventory:
 - Auto Cast is polled once per Unity frame and defaults to `F8`; the central collision audit verifies that chord has no audited native default.
 - Mentor is polled once per Unity frame and defaults to `Left Alt + M`. It intentionally remains configurable and the audit warns that its modifier is also the native More Info modifier.
 - Differential verification has no key listener. Run it with **Run differential verification** on Mods -> Runtime.
-- Auto Buy, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items and Auto Scribe have only their Mods feature-card commands.
+- Auto Buy, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items and Auto Scribe expose the same feature-wide mode through their Mods command and registered quick control.
 
 Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, Auto
 Harvest, Auto Items, and Auto Scribe default to Disabled. Auto Harvest queues quantity one, keeps at

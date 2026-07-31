@@ -6,7 +6,7 @@ namespace OrbModConfig;
 
 internal enum SuiteUiSurface
 {
-    QuickStrip = 0,
+    QuickControls = 0,
     ModsRail = 1,
 }
 
@@ -20,7 +20,7 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
     private readonly Action<string> _logInfo;
     private readonly Action<string> _logError;
     private readonly RuntimeDiagnosticsRegistration _registration;
-    private SurfaceState _quickStrip;
+    private SurfaceState _quickControls;
     private SurfaceState _modsRail;
 
     internal SuiteUiSurfaceDiagnostics(
@@ -31,14 +31,15 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         if (registry is null) throw new ArgumentNullException(nameof(registry));
         _logInfo = logInfo ?? throw new ArgumentNullException(nameof(logInfo));
         _logError = logError ?? throw new ArgumentNullException(nameof(logError));
-        _quickStrip = SurfaceState.Waiting("Native quick-strip capture has not run yet.");
+        _quickControls = SurfaceState.Waiting(
+            "Native quick-controls column capture has not run yet.");
         _modsRail = SurfaceState.Waiting("Native Mods-rail capture has not run yet.");
         _registration = registry.Register(BuildSnapshot());
     }
 
     internal void ResetForScene()
     {
-        _quickStrip = SurfaceState.Waiting("Waiting for the gameplay casting strip.");
+        _quickControls = SurfaceState.Waiting("Waiting for the native top-left HelpButtons anchor.");
         _modsRail = SurfaceState.Waiting("Waiting for the native Mods navigation host.");
         Publish();
     }
@@ -56,7 +57,8 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         state = SurfaceState.Operational;
         _logInfo(surface switch
         {
-            SuiteUiSurface.QuickStrip => "Quick strip: native icon visuals active",
+            SuiteUiSurface.QuickControls =>
+                "Quick controls: native state frames and icons active",
             _ => "Mods rail: native visuals active",
         });
         Publish();
@@ -72,8 +74,8 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         state = SurfaceState.Failed(exactReason);
         _logError(surface switch
         {
-            SuiteUiSurface.QuickStrip =>
-                "Quick strip: native icon visuals failed: " + exactReason,
+            SuiteUiSurface.QuickControls =>
+                "Quick controls: native state frames or icons failed: " + exactReason,
             _ => "Mods rail: native visuals failed: " + exactReason,
         });
         Publish();
@@ -83,13 +85,13 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
 
     private ref SurfaceState State(SuiteUiSurface surface)
     {
-        if (surface == SuiteUiSurface.QuickStrip) return ref _quickStrip;
+        if (surface == SuiteUiSurface.QuickControls) return ref _quickControls;
         return ref _modsRail;
     }
 
     private void Set(SuiteUiSurface surface, SurfaceState state)
     {
-        if (surface == SuiteUiSurface.QuickStrip) _quickStrip = state;
+        if (surface == SuiteUiSurface.QuickControls) _quickControls = state;
         else _modsRail = state;
     }
 
@@ -102,7 +104,10 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         GameLifecycleMonitor.Shared.Current.Generation,
         new[]
         {
-            Capability("QuickStrip", "Quick strip native visuals", _quickStrip),
+            Capability(
+                "QuickControls",
+                "Quick controls column native visuals",
+                _quickControls),
             Capability("ModsRail", "Mods rail native visuals", _modsRail),
         });
 

@@ -9,7 +9,7 @@ namespace OrbModding.Tests.OrbModConfig;
 public sealed class SuiteUiSurfaceDiagnosticsTests
 {
     [Theory]
-    [InlineData(0, "Quick strip: native icon visuals failed: ")]
+    [InlineData(0, "Quick controls: native state frames or icons failed: ")]
     [InlineData(1, "Mods rail: native visuals failed: ")]
     public void EveryTerminalCaptureFailureLogsTheExactReasonAndPublishesRuntimeFailure(
         int surfaceValue,
@@ -27,7 +27,7 @@ public sealed class SuiteUiSurfaceDiagnosticsTests
 
         Assert.Equal(prefix + "audited sprite mismatch", Assert.Single(errors));
         var snapshot = Assert.Single(registry.GetSnapshot());
-        var capability = surface == SuiteUiSurface.QuickStrip
+        var capability = surface == SuiteUiSurface.QuickControls
             ? snapshot.Capabilities[0]
             : snapshot.Capabilities[1];
         Assert.Equal(FeatureStatusState.Faulted, capability.State);
@@ -36,7 +36,7 @@ public sealed class SuiteUiSurfaceDiagnosticsTests
     }
 
     [Theory]
-    [InlineData(0, "Quick strip: native icon visuals active")]
+    [InlineData(0, "Quick controls: native state frames and icons active")]
     [InlineData(1, "Mods rail: native visuals active")]
     public void SuccessfulInstallSelfReportsOnce(int surfaceValue, string expected)
     {

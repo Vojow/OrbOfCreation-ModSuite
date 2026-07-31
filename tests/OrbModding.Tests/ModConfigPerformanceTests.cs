@@ -303,19 +303,6 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Theory]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly", true)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/SpellButtonIconOnly (1)", true)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/CastingBar/SmallSpellList/Nested/SpellButton", false)]
-    [InlineData("Canvas/ContentArea/MainContentContainer/ScreenContent/MagicScreen/SpellButton", false)]
-    [InlineData("Canvas/BottomBar/SpellButtonBottomBar", false)]
-    public void SpellFrameSamplingRequiresTheAuditedCastingBarDirectChildPath(
-        string path,
-        bool expected)
-    {
-        Assert.Equal(expected, NativeViewAdapter.IsAuditedBottomBarSpellPath(path));
-    }
-
-    [Theory]
     [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)", true)]
     [InlineData("Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio/ViewRadioButtonLong(Clone)/Icon", false)]
     [InlineData("Canvas/ContentArea/MainContentContainer/SubviewRadio/ViewRadioButtonLong(Clone)", false)]
@@ -380,55 +367,6 @@ public sealed class ModConfigPerformanceTests
                 out var reason),
             reason);
         Assert.Same(candidate.viewImage.sprite, icon);
-    }
-
-    [Fact]
-    public void BottomBarSpellFrameAcceptsTheRealNullOptionalFields()
-    {
-        var buttonObject = new GameObject("SpellButtonIconOnly");
-        var background = buttonObject.AddComponent<Image>();
-        var candidate = buttonObject.AddComponent<FakeSpellButton>();
-        candidate.background = background;
-        candidate.icon = buttonObject.AddComponent<Image>();
-        candidate.baseBackground = new Sprite();
-        candidate.insufficientBackground = null;
-        candidate.effects = null;
-        candidate.isForCasting = true;
-
-        Assert.True(
-            NativeViewAdapter.TryReadBottomBarSpellFrame(
-                new Component[] { candidate },
-                out var prototype,
-                out var baseFrame,
-                out var reason),
-            reason);
-        Assert.Same(candidate, prototype);
-        Assert.Same(candidate.baseBackground, baseFrame);
-    }
-
-    [Fact]
-    public void CaptureFailureCensusReportsEveryAuditedFieldAndLifecycleFact()
-    {
-        var canvas = new GameObject("Canvas");
-        var buttonObject = Child(canvas, "SpellButtonIconOnly");
-        var candidate = buttonObject.AddComponent<FakeSpellButton>();
-        candidate.isForCasting = true;
-        buttonObject.SetActive(false);
-
-        var census = NativeViewAdapter.BuildSpellCandidateCensus(
-            new Component[] { candidate });
-
-        Assert.Contains("path='Canvas/SpellButtonIconOnly'", census);
-        Assert.Contains("activeSelf=False", census);
-        Assert.Contains("activeInHierarchy=False", census);
-        Assert.Contains("scene=Main(loaded=True)", census);
-        Assert.Contains("pathMatch=False", census);
-        Assert.Contains("isForCasting=True", census);
-        Assert.Contains("background=null", census);
-        Assert.Contains("icon=null", census);
-        Assert.Contains("baseBackground=null", census);
-        Assert.Contains("insufficientBackground=null(optional)", census);
-        Assert.Contains("effects=null(optional)", census);
     }
 
     [Fact]
@@ -520,16 +458,6 @@ public sealed class ModConfigPerformanceTests
         public Sprite? activeImage;
         public Image? buttonImage;
         public Image? viewImage;
-    }
-
-    private sealed class FakeSpellButton : Behaviour
-    {
-        public Image? icon;
-        public Sprite? insufficientBackground;
-        public bool isForCasting;
-        public Image? background;
-        public Sprite? baseBackground;
-        public Component? effects;
     }
 
     private static GameObject Child(GameObject parent, string name)

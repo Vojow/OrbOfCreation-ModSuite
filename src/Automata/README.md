@@ -37,12 +37,12 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 ## Release defaults
 
 - Auto Buy starts `Active` with separate `Excess100` thresholds for structures and upgrades; progression-aware spell leveling is enabled within Auto Buy and can be disabled separately.
-- Auto Cast starts `Disabled` and can be toggled with `F8` or its queue-adjacent button.
-- Gameplay controls extend outward from the native Auto Buy queue switch as icon-only native spell frames: emergency stop, suite Auto Buy, Auto Cast, Auto Concept, Auto Harvest, then Mentor. STOP has one additional gap. The strip is outside the action queue and does not use the status-effects container.
+- Auto Cast starts `Disabled` and can be toggled with `F8` or its registered quick control.
+- Gameplay controls form one suite-owned vertical column below the native top-left gear and character buttons. The shared registry contributes Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Mentor, Auto Items, and Auto Scribe; STOP is separately spaced.
 - Auto Concept starts `Disabled`; `Active` fills compatible acquired Active Concept slots breadth-first, then batches safe quantity depth up to native mastery limits.
 - Auto Harvest starts `Disabled`; its fruit-tree and treasure-tree selectors default on behind that master switch, and its native harvest-speed quick icon toggles the mode.
-- Auto Items starts `Disabled`; `UseScrolls` and `UseRelics` default on behind it. Its mode is available on the Mods page and this lane adds no gameplay quick control.
-- Auto Scribe starts `Disabled`; an empty `Roles` value selects every audited producible semantic role. Its mode is available on the Mods page and this lane adds no gameplay quick control.
+- Auto Items starts `Disabled`; `UseScrolls` and `UseRelics` default on behind it, exact temporary-item approval remains in `TemporaryItemAllowlist`, and one feature-wide quick control toggles the master mode.
+- Auto Scribe starts `Disabled`; an empty `Roles` value selects every audited producible semantic role, and one feature-wide quick control toggles its mode.
 - Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, and Mentor expose only `Disabled` and `Active`.
 - One native queue slot is reserved for manual actions.
 - Each ranked Structure prefers one live Bulk Development-sized group, reduced to the largest exactly priced positive count the remaining batch ledger can fund; each Upgrade receives one level. Every submitted level is independently revalidated.
@@ -261,7 +261,12 @@ that the game resolves to a mastery-derived or unlimited maximum.
 
 Every newly assigned lower-mastery concept in `RotateAll` or `PreserveManual` receives a catch-up training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. `TimedCycle` uses the same timer but never applies the catch-up shortcut. The default is 30 seconds and the accepted range is 10 through 3600 seconds. Native setup time does not consume the period, and the controller schedules the exact next session deadline in addition to ordinary world/configuration wakes. A verified assignment starts its session from the accepted queued target; a later depth settlement is recorded as suite-owned and cannot restart that deadline.
 
-The `CN ON/OFF` gameplay button toggles Auto Concept and represents configured intent; emergency blocking renders `CN ON / STOPPED`, while other runtime health remains tooltip evidence. `ShowToggleButton` defaults to true. Spell-leveling state is shown on the suite's Auto Buy tooltip instead.
+The registered Auto Concept quick control toggles committed intent with the same `ScreenScholar`
+book used by its Mods rail entry. OFF uses the native recessed view-button frame; configured ON
+uses the raised frame, including `ON / STOPPED` and faulted states. Runtime health remains in the
+tooltip. The legacy `ShowToggleButton` config-file key is retained hidden and ignored because every
+registered automation feature always owns one quick control. Spell-leveling state remains on the
+suite's Auto Buy tooltip rather than becoming a separate control.
 
 Before every add or rotation, Auto Concept reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. Each world publication checks cached active assignments; if the native drain ratio falls below `MinimumDrainRatio`, a drained resource reaches zero, or its live net rate becomes negative, it schedules removal of only the quantity recorded as suite-owned.
 

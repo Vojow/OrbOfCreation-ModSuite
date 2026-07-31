@@ -30,7 +30,6 @@ internal static class BepInExAutomataConfigurationReader
             {
                 Mode = source.AutoCastMode.Value,
                 ToggleShortcut = source.AutoCastToggleShortcut.Value.ToString(),
-                ShowToggleButton = source.AutoCastShowToggleButton.Value,
                 StartResourcePercent = source.AutoCastStartResourcePercent.Value,
                 ManualPauseSeconds = source.AutoCastManualPauseSeconds.Value,
                 FullCharge = source.AutoCastFullCharge.Value,
@@ -39,7 +38,6 @@ internal static class BepInExAutomataConfigurationReader
             {
                 Mode = source.AutoConceptMode.Value,
                 SlotManagement = source.AutoConceptSlotManagement.Value,
-                ShowToggleButton = source.AutoConceptShowToggleButton.Value,
                 TrainingPeriodSeconds = source.AutoConceptTrainingPeriodSeconds.Value,
                 RateReservePercent = source.AutoConceptRateReservePercent.Value,
                 MinimumResourcePercent = source.AutoConceptMinimumResourcePercent.Value,

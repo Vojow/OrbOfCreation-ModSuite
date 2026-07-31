@@ -8,6 +8,11 @@
   captured game state, and every action is checked again immediately before it changes the game.
 - Add Auto Harvest, spell leveling, clearer Runtime diagnostics, compact gameplay controls, and a
   Mods screen that uses the game's own visual style.
+- Replace the compact gameplay tray with one top-left column under the native gear and character
+  buttons. Every automation feature now has one control; OFF uses the game’s recessed view-button
+  frame, ON uses its raised frame, and color remains secondary. Auto Concept, Auto Items, Auto
+  Scribe, and Advanced use distinct Scholar, World, Workshop, and Alchemy glyphs shared with their
+  Mods rail entries.
 - Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue,
   native randomized Scroll targeting, and one fresh world publication per attempted use.
 - Recheck each item's exact family, visibility, inventory readiness, native firing decision,
@@ -18,7 +23,7 @@
   other consumable use until one native usage has engaged and later disappeared.
 - Quarantine only the exact temporary item when native mutation or activation evidence is
   ambiguous, doubled, prematurely expired, or missing. Every decision remains publication-driven;
-  Auto Items adds no timer, family switch, rail entry, or quick button.
+  Auto Items adds no timer, family switch, rail entry, or separate temporary-item quick button.
 - Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It consumes
   complete role, recipe, Scroll, enchantment, levelled inventory, target, queue, and native
   automatic-production facts and blocks the whole publication when any enabled role is unknown.

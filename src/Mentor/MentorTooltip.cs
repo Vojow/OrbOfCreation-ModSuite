@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System;
+using OrbAutomata;
 using OrbModding.Common;
 using UnityEngine;
 
@@ -16,11 +17,11 @@ internal sealed class MentorTooltip : ITooltipable
         _readStatus = readStatus;
     }
     public string GetName() => "Orb Mentor";
-    public string GetDisplayType() => MentorToggleButton.StatusLabel(
-        FeatureStatusPresenter.Present(_readStatus()).ConfiguredState);
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.TooltipLabelFor(_readStatus());
     public Sprite GetIcon() => null!;
-    public Color GetColor() => MentorToggleButton.StatusColor(
-        FeatureStatusPresenter.Present(_readStatus()).ConfiguredState);
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromFeatureStatus(_readStatus()).Color;
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() => "Equipped spells (or highest discovered spells), equipped artifacts, and active alchemy recipes can mentor lower-mastery discoveries in their own domain.";

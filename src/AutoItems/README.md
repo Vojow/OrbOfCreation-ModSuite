@@ -1,8 +1,8 @@
 # Auto Items
 
 Auto Items is the disabled-by-default Scroll, Relic, and temporary-item automation service compiled into
-`OrbModSuite.dll`. It has no independent plugin identity, cadence, quick control, or configuration
-store.
+`OrbModSuite.dll`. It has no independent plugin identity, cadence, or configuration store. Its one
+feature-wide quick control is owned by the shared automation control registry.
 
 The worker consumes immutable shared-world consumable facts, requires exactly one supported native
 family, gives eligible Relics priority over exact-UUID-approved temporary items and Scrolls, and
@@ -34,6 +34,6 @@ configuration generation and pinned to the cycle; actions carry no configuration
 current-configuration reader in the adapter or GameAction. Committed master disable releases the
 ownership lease as a fast backstop.
 
-Gameplay quick controls remain outside this implementation. Native evidence and remaining
-live-validation limits are documented in the
+The shared quick control changes only `AutoItems.Mode`; exact temporary-item approval remains on
+the Mods page. Native evidence and remaining live-validation limits are documented in the
 [Auto Items native pipeline](../../docs/reverse-engineering/auto-items-native-pipeline.md).

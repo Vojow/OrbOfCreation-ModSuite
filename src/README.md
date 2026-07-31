@@ -44,16 +44,19 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 
 ## Shared gameplay controls
 
-Suite buttons register with `OrbModding.Common.StatusControlGroup`, which owns a compact two-column
-tray in the audited empty lane at the left edge of `RightSidebar/AttributeBar`. Controls use
-34-pixel native spell frames with 4-pixel row/column spacing; STOP is last and has an additional
-6-pixel separation. Add a unique named assignment to `StatusControlOrder` and call
-`RegisterControl` before `Reflow`; higher values appear first in row-major order. Current
-assignments are emergency stop `50`, Auto Buy `100`, Auto Cast `200`, Auto Concept `300`, Auto
-Harvest `400`, and Mentor `500`. The emergency control is composed independently of the worker
-host and master automation switch. Do not add object names or a fixed button count to the layout
-helper. `StatusControlGroupTests` covers priority uniqueness, reordered creation, ignored
-non-controls, invalid indexes, the exact native anchor, compact tray geometry, and STOP separation.
+`AutomationFeatureControlRegistry` is the one ordered roster for the Mods feature headers and the
+gameplay quick-controls column. The column enumerates every registration and adds the emergency
+stop; it never maintains a second feature list. It owns every control object and pixel and anchors
+one vertical column under the native top-left gear and character buttons through the declared,
+scene-bound `UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure.
+
+Each live feature control requires its audited native glyph plus both
+`UIViewRadioButton.baseImage` and `activeImage`. OFF uses the recessed inactive frame; configured ON
+uses the raised active frame. Gray, green, red, and orange remain secondary health channels, and
+tooltips carry the same joined feature status as Mods Runtime. A missing anchor, glyph, or frame
+pair creates no corresponding live control and publishes the exact failure. STOP is separately
+spaced and uses a suite-owned exclamation glyph while retaining the same immediate
+`Safety/EmergencyDisable` semantics.
 
 ## Shared alchemy gameplay-domain classifier
 

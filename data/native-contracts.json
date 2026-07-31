@@ -13342,107 +13342,17 @@
       "place": "capture"
     },
     {
-      "id": "ui.spell-button.background",
+      "id": "ui.content-area.canvas",
       "assembly": "assembly-csharp",
-      "type": "UISpellButton",
+      "type": "UIContentArea",
       "typeVisibility": "public",
       "kind": "field",
-      "member": "background",
-      "visibility": "private",
-      "static": false,
-      "valueType": "UnityEngine.UI.Image",
-      "owners": [
-        "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "ui.spell-button.base-background",
-      "assembly": "assembly-csharp",
-      "type": "UISpellButton",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "baseBackground",
-      "visibility": "private",
-      "static": false,
-      "valueType": "UnityEngine.Sprite",
-      "owners": [
-        "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "ui.spell-button.effects",
-      "assembly": "assembly-csharp",
-      "type": "UISpellButton",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "effects",
-      "visibility": "private",
-      "static": false,
-      "valueType": "UIImageEffects",
-      "owners": [
-        "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "ui.spell-button.icon",
-      "assembly": "assembly-csharp",
-      "type": "UISpellButton",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "icon",
+      "member": "canvas",
       "visibility": "public",
       "static": false,
-      "valueType": "UnityEngine.UI.Image",
+      "valueType": "UnityEngine.RectTransform",
       "owners": [
-        "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "ui.spell-button.insufficient-background",
-      "assembly": "assembly-csharp",
-      "type": "UISpellButton",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "insufficientBackground",
-      "visibility": "public",
-      "static": false,
-      "valueType": "UnityEngine.Sprite",
-      "owners": [
-        "Mod Config native visual sampler"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "ui.spell-button.is-for-casting",
-      "assembly": "assembly-csharp",
-      "type": "UISpellButton",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "isForCasting",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Boolean",
-      "owners": [
-        "Mod Config native visual sampler"
+        "Suite quick-controls anchor capture"
       ],
       "usages": [
         "reflection"
@@ -13460,7 +13370,8 @@
       "static": false,
       "valueType": "UnityEngine.Sprite",
       "owners": [
-        "Mod Config native visual sampler"
+        "Mod Config native visual sampler",
+        "Suite quick-controls state sampler"
       ],
       "usages": [
         "reflection"
@@ -13478,7 +13389,8 @@
       "static": false,
       "valueType": "UnityEngine.Sprite",
       "owners": [
-        "Mod Config native visual sampler"
+        "Mod Config native visual sampler",
+        "Suite quick-controls state sampler"
       ],
       "usages": [
         "reflection"
@@ -13496,7 +13408,8 @@
       "static": false,
       "valueType": "UnityEngine.UI.Image",
       "owners": [
-        "Mod Config native visual sampler"
+        "Mod Config native visual sampler",
+        "Suite quick-controls state sampler"
       ],
       "usages": [
         "reflection"
@@ -15520,28 +15433,12 @@
     ],
     "exemptions": [
       {
-        "path": "src/AutoBuy/AutoBuyToggleButton.cs",
-        "reason": "Reflects cloned Unity UI fields only; gameplay contracts are resolved by the audited Auto Buy adapter."
-      },
-      {
-        "path": "src/AutoCast/AutoCastToggleButton.cs",
-        "reason": "Reflects the cloned toggle's Unity UI fields, the native color helpers and the status-popup surface, none of which are gameplay contracts. It also walks live SpellManager state for the equipped spell's icon; that walk selects no mutation and every member it names — spell-manager.instance, spell-manager.active-spells, spell.is-empty, spell.get-icon — is declared."
-      },
-      {
-        "path": "src/AutoConcept/AutoConceptToggleButton.cs",
-        "reason": "Reflects cloned Unity UI fields only; Auto Concept gameplay reads use world capture and its audited action boundary."
-      },
-      {
-        "path": "src/Mentor/MentorToggleButton.cs",
-        "reason": "Reflects cloned Unity UI fields only; Mentor gameplay and Harmony contracts are audited separately."
-      },
-      {
         "path": "src/ModConfig/ConfigEditSession.cs",
         "reason": "Reflects BepInEx acceptable-value validators rather than an Orb of Creation native contract."
       },
       {
         "path": "src/ModConfig/Native/NativeViewAdapter.cs",
-        "reason": "Reflects the declared native view-radio and bottom-bar spell-button visual fields plus generic ViewSO shell state; installed layout contracts validate every sampled field."
+        "reason": "Reflects the declared native view-radio visual fields plus generic ViewSO shell state; installed layout contracts validate every sampled field."
       },
       {
         "path": "src/ModConfig/SteamKeyboardBridge.cs",

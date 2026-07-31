@@ -55,14 +55,14 @@ installation, recovery, or layout work changes.
   combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
 - Disabled/absent plugins remain honest status-only or absent entries.
-- Feature modes appear only in the feature header and gameplay quick strip; both publish through
+- Feature modes appear only in the feature header and gameplay quick-controls column; both publish through
   the committed store, while policy fields remain staged.
-- Every suite-owned `Button` has `targetGraphic == null`; native `UIImageEffects` is disabled and
-  destroyed, so hover, press, release, selection, and interactable changes cannot repaint a
-  suite-rendered state.
-- Inactive audited rail candidates remain capturable while Mods is open; the spell-frame sampler
-  considers only the exact gameplay casting-bar family.
-- Feature quick controls cannot retain or construct a text-rendering path. Every terminal native
+- Every suite-owned `Button` has `targetGraphic == null`, so hover, press, release, selection, and
+  interactable changes cannot repaint a suite-rendered state.
+- Inactive audited rail candidates remain capturable while Mods is open. Quick controls reuse that
+  family’s inactive/active frame pair rather than sampling spell buttons.
+- Feature quick controls cannot retain or construct a text-rendering path or clone a native toggle.
+  Every terminal native
   surface failure publishes a Runtime failure and an error log containing the exact reason.
 
 ## Runtime handoff

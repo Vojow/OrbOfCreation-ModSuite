@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using OrbModConfig;
 using OrbModding.Common;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,158 +18,181 @@ internal enum ConfiguredIntentIconState
     ResumeArmed = 5,
 }
 
-/// <summary>Owns every pixel written by one icon-only quick control.</summary>
+internal enum ConfiguredIntentFrameTreatment
+{
+    InactiveRecessed = 0,
+    ActiveRaised = 1,
+}
+
+internal readonly record struct ConfiguredIntentPresentation(
+    ConfiguredIntentIconState State,
+    ConfiguredIntentFrameTreatment FrameTreatment,
+    Color Color,
+    string TooltipLabel);
+
+/// <summary>
+/// Owns every pixel written by one suite-created quick control. The inactive/active frame pair is
+/// the audited <c>UIViewRadioButton.baseImage</c>/<c>activeImage</c> vocabulary; color is secondary.
+/// </summary>
 internal sealed class ConfiguredIntentIconButtonVisual
 {
-    private static readonly Color Off = new(0.55f, 0.55f, 0.55f, 1.0f);
-    private static readonly Color On = new(0.4f, 1.0f, 0.55f, 1.0f);
-    private static readonly Color Unhealthy = new(1.0f, 0.3f, 0.3f, 1.0f);
-    private static readonly Color Stopped = new(1.0f, 0.55f, 0.2f, 1.0f);
-    private static readonly Color Ready = new(1.0f, 0.78f, 0.28f, 1.0f);
-    private static readonly Color Armed = new(0.45f, 0.9f, 1.0f, 1.0f);
+    internal static readonly Color OffColor = new(0.55f, 0.55f, 0.55f, 1.0f);
+    internal static readonly Color OnColor = new(0.4f, 1.0f, 0.55f, 1.0f);
+    internal static readonly Color UnhealthyColor = new(1.0f, 0.3f, 0.3f, 1.0f);
+    internal static readonly Color StoppedColor = new(1.0f, 0.55f, 0.2f, 1.0f);
+    internal static readonly Color ReadyColor = new(1.0f, 0.78f, 0.28f, 1.0f);
+    internal static readonly Color ArmedColor = new(0.45f, 0.9f, 1.0f, 1.0f);
 
     private readonly Image _frame;
-    private readonly Image? _icon;
-    private readonly TextMeshProUGUI? _symbol;
-    private readonly Sprite _baseFrame;
-    private ConfiguredIntentIconState? _rendered;
+    private readonly IReadOnlyList<Image> _glyphs;
+    private readonly Sprite _inactiveFrame;
+    private readonly Sprite _activeFrame;
+    private ConfiguredIntentPresentation? _rendered;
 
     private ConfiguredIntentIconButtonVisual(
         Image frame,
-        Image? icon,
-        TextMeshProUGUI? symbol,
-        Sprite baseFrame)
+        IReadOnlyList<Image> glyphs,
+        Sprite inactiveFrame,
+        Sprite activeFrame)
     {
         _frame = frame;
-        _icon = icon;
-        _symbol = symbol;
-        _baseFrame = baseFrame;
+        _glyphs = glyphs;
+        _inactiveFrame = inactiveFrame;
+        _activeFrame = activeFrame;
     }
 
-    internal static bool TryCreateFeature(
-        GameObject root,
-        Button button,
-        Image? icon,
-        TextMeshProUGUI? text,
-        Sprite? iconSprite,
-        out ConfiguredIntentIconButtonVisual? visual,
-        out string reason)
-    {
-        if (iconSprite is null)
-        {
-            visual = null;
-            reason = "feature icon unavailable";
-            return false;
-        }
-        return TryCreate(
-            root,
-            button,
-            icon,
-            text,
-            iconSprite,
-            symbol: null,
-            out visual,
-            out reason);
-    }
+    internal ConfiguredIntentPresentation? Rendered => _rendered;
 
-    internal static bool TryCreateStop(
+    internal static bool TryCreate(
         GameObject root,
         Button button,
-        Image? icon,
-        TextMeshProUGUI? text,
-        out ConfiguredIntentIconButtonVisual? visual,
-        out string reason) =>
-        TryCreate(
-            root,
-            button,
-            icon,
-            text,
-            iconSprite: null,
-            symbol: "×",
-            out visual,
-            out reason);
-
-    private static bool TryCreate(
-        GameObject root,
-        Button button,
-        Image? icon,
-        TextMeshProUGUI? text,
-        Sprite? iconSprite,
-        string? symbol,
+        IEnumerable<Image> glyphs,
+        NativeButtonStateVisualPrimitives? stateVisuals,
         out ConfiguredIntentIconButtonVisual? visual,
         out string reason)
     {
         visual = null;
-        if (!NativeViewAdapter.TryCaptureSpellButtonVisuals(out var native, out reason))
+        if (root is null)
+        {
+            reason = "quick control root is unavailable";
             return false;
+        }
+        if (button is null)
+        {
+            reason = "quick control has no Unity Button";
+            return false;
+        }
+        if (stateVisuals?.InactiveFrame is null || stateVisuals.ActiveFrame is null)
+        {
+            reason =
+                "audited UIViewRadioButton inactive/active state frame pair is unconstructible";
+            return false;
+        }
         var frame = root.GetComponent<Image>();
         if (frame is null)
         {
-            reason = "cloned quick control has no root Image";
+            reason = "suite-owned quick control has no root Image";
             return false;
         }
-        ConfiguredIntentButtonVisualOwnership.Claim(button, native!.ImageEffectsType);
-        frame.sprite = native.SpellBaseFrame;
+        var ownedGlyphs = (glyphs ?? throw new ArgumentNullException(nameof(glyphs)))
+            .Where(image => image is not null)
+            .ToArray();
+        if (ownedGlyphs.Length == 0)
+        {
+            reason = "suite-owned quick control has no state-colored glyph";
+            return false;
+        }
+
+        ConfiguredIntentButtonVisualOwnership.Claim(button);
+        frame.type = Image.Type.Sliced;
         frame.color = Color.white;
-
-        if (icon is not null)
+        frame.raycastTarget = true;
+        foreach (var glyph in ownedGlyphs)
         {
-            icon.sprite = iconSprite;
-            icon.enabled = iconSprite is not null;
-            icon.preserveAspect = true;
-            icon.raycastTarget = false;
+            glyph.raycastTarget = false;
+            glyph.preserveAspect = true;
         }
-        if (text is not null)
-        {
-            text.text = symbol ?? string.Empty;
-            text.enabled = !string.IsNullOrWhiteSpace(symbol);
-            text.gameObject.SetActive(text.enabled);
-            text.alignment = TextAlignmentOptions.Center;
-            text.raycastTarget = false;
-            text.transform.SetAsLastSibling();
-        }
-
         visual = new ConfiguredIntentIconButtonVisual(
             frame,
-            iconSprite is null ? null : icon,
-            string.IsNullOrWhiteSpace(symbol) ? null : text,
-            native.SpellBaseFrame);
+            ownedGlyphs,
+            stateVisuals.InactiveFrame,
+            stateVisuals.ActiveFrame);
         reason = string.Empty;
         return true;
     }
 
-    internal void Render(ConfiguredIntentIconState state, bool force = false)
+    internal void Render(ConfiguredIntentPresentation presentation, bool force = false)
     {
-        if (!force && _rendered == state) return;
-        _rendered = state;
-        var color = ColorFor(state);
-        _frame.sprite = _baseFrame;
+        if (!force && _rendered == presentation) return;
+        _rendered = presentation;
+        _frame.sprite = presentation.FrameTreatment == ConfiguredIntentFrameTreatment.ActiveRaised
+            ? _activeFrame
+            : _inactiveFrame;
         _frame.color = Color.white;
-        if (_icon is not null) _icon.color = color;
-        if (_symbol is not null) _symbol.color = color;
+        foreach (var glyph in _glyphs) glyph.color = presentation.Color;
     }
 
-    internal static ConfiguredIntentIconState FromFeatureStatus(in FeatureStatusSnapshot status)
+    internal static ConfiguredIntentPresentation FromFeatureStatus(
+        in FeatureStatusSnapshot status)
     {
         var presentation = FeatureStatusPresenter.Present(status);
-        if (!presentation.IsConfiguredOn) return ConfiguredIntentIconState.Off;
+        if (!presentation.IsConfiguredOn)
+            return Present(
+                ConfiguredIntentIconState.Off,
+                ConfiguredIntentFrameTreatment.InactiveRecessed,
+                OffColor,
+                "OFF");
         if (AutomataFeatureStatusVisuals.IsEmergencyStopped(status))
-            return ConfiguredIntentIconState.Stopped;
+            return Present(
+                ConfiguredIntentIconState.Stopped,
+                ConfiguredIntentFrameTreatment.ActiveRaised,
+                StoppedColor,
+                "ON / STOPPED");
         return presentation.RuntimeState is FeatureRuntimePresentationState.Degraded
             or FeatureRuntimePresentationState.Unavailable
             or FeatureRuntimePresentationState.Faulted
-            ? ConfiguredIntentIconState.Unhealthy
-            : ConfiguredIntentIconState.On;
+            ? Present(
+                ConfiguredIntentIconState.Unhealthy,
+                ConfiguredIntentFrameTreatment.ActiveRaised,
+                UnhealthyColor,
+                "ON / FAULTED")
+            : Present(
+                ConfiguredIntentIconState.On,
+                ConfiguredIntentFrameTreatment.ActiveRaised,
+                OnColor,
+                "ON / OPERATIONAL");
     }
 
-    private static Color ColorFor(ConfiguredIntentIconState state) => state switch
+    internal static ConfiguredIntentPresentation FromEmergencyStop(
+        EmergencyStopControl control)
     {
-        ConfiguredIntentIconState.On => On,
-        ConfiguredIntentIconState.Unhealthy => Unhealthy,
-        ConfiguredIntentIconState.Stopped => Stopped,
-        ConfiguredIntentIconState.StopReady => Ready,
-        ConfiguredIntentIconState.ResumeArmed => Armed,
-        _ => Off,
-    };
+        if (control is null) throw new ArgumentNullException(nameof(control));
+        if (control.ResumeArmed)
+            return Present(
+                ConfiguredIntentIconState.ResumeArmed,
+                ConfiguredIntentFrameTreatment.ActiveRaised,
+                ArmedColor,
+                "STOPPED / RESUME ARMED");
+        return control.IsStopped
+            ? Present(
+                ConfiguredIntentIconState.Stopped,
+                ConfiguredIntentFrameTreatment.ActiveRaised,
+                StoppedColor,
+                "STOPPED")
+            : Present(
+                ConfiguredIntentIconState.StopReady,
+                ConfiguredIntentFrameTreatment.InactiveRecessed,
+                ReadyColor,
+                "READY / STOP ALL");
+    }
 
+    internal static string TooltipLabelFor(in FeatureStatusSnapshot status) =>
+        FromFeatureStatus(status).TooltipLabel;
+
+    private static ConfiguredIntentPresentation Present(
+        ConfiguredIntentIconState state,
+        ConfiguredIntentFrameTreatment frame,
+        Color color,
+        string tooltipLabel) =>
+        new(state, frame, color, tooltipLabel);
 }

@@ -10,17 +10,11 @@ internal sealed class AutoCastTooltip : ITooltipable
 
     public AutoCastTooltip(AutoCastToggleControl control) { _control = control; }
     public string GetName() => "Auto Cast";
-    public string GetDisplayType() => _control.State switch
-    {
-        AutoCastToggleVisualState.On => "ON",
-        _ => "OFF",
-    };
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.TooltipLabelFor(_control.Status);
     public Sprite GetIcon() => null!;
-    public Color GetColor() => _control.State switch
-    {
-        AutoCastToggleVisualState.On => new Color(.4f, 1, .55f),
-        _ => new Color(.7f, .7f, .7f),
-    };
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status).Color;
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;
     public string GetDescription() => "Automatically casts eligible equipped spells through the native spell manager.";

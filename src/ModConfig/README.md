@@ -7,7 +7,7 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 ## Settings editor
 
 - Discovers loaded plugins and typed BepInEx configuration entries.
-- Groups settings into Runtime, General, five feature pages, and Advanced while preserving the original section/key contract.
+- Groups settings into Runtime, General, seven automation feature pages, and Advanced while preserving the original section/key contract.
 - Renders feature mode once in the page header as an immediate committed-store command; mode is not repeated in the staged setting list.
 - Supports booleans, enums, bounded and unbounded numbers, strings, and keyboard shortcuts.
 - Stages edits until Apply, supports per-setting Default and selected-mod Revert, and rolls back earlier writes if Apply fails.
@@ -20,29 +20,28 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 
 The Mods button is cloned from native top-level navigation, remains last, and opens a mod-owned overlay rather than modifying native content panels. `[Interface] EnableButtonShell = false` disables that integration if the game UI changes incompatibly.
 
-Restyled suite controls sample only the audited native `UIViewRadioButton` subview rail and
-`UISpellButton` casting-button frames. The rail sampler includes inactive Magic/Scholar views, and
-the spell sampler selects direct children of the audited gameplay casting bar rather than comparing
-unrelated spellbook and casting-list buttons. The gameplay buttons intentionally leave
-`insufficientBackground` null, so the quick strip uses their one populated native base frame and
-suite-owned icon colors for state. Missing required types, fields, sprites, or structural paths are
+Restyled suite controls sample the audited native `UIViewRadioButton` subview frame pair. OFF uses
+`baseImage`; configured ON uses `activeImage`, so intent differs structurally before the
+suite-owned gray/green/red/orange icon color is applied. Quick controls are suite-created pixels in
+one top-left column under `Canvas/HelpButtons`, resolved through the declared scene-bound
+`UIContentArea.canvas` contract. Missing required types, fields, sprites, or structural paths are
 suite defects on the matching audited baseline: installation retries bounded startup timing, then
-logs the exact terminal reason and a full typed-candidate census at error level and publishes it to
-Runtime. There is no text quick-control or flat horizontal-shell fallback. See the
+logs the exact terminal reason and a typed-candidate census at error level and publishes it to
+Runtime. There is no cloned native toggle, text quick-control, or alternate shell fallback. See the
 [native UI inventory](../../docs/testing/ui-native-inventory.md).
 
 The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.
-The cloned native behavior is removed: suite buttons have no `Selectable.targetGraphic`,
-`UIImageEffects` is disabled and destroyed, and suite rendering remains the only pixel writer.
+The cloned native behavior is removed from Mods navigation, and suite buttons have no
+`Selectable.targetGraphic`; suite rendering remains the only pixel writer.
 
 At installation, the BepInEx log reports exactly:
 
-- `Quick strip: native icon visuals active`
+- `Quick controls: native state frames and icons active`
 - `Mods rail: native visuals active`
 
 A terminal failure replaces the corresponding success line with
-`Quick strip: native icon visuals failed: <reason>` or
+`Quick controls: native state frames or icons failed: <reason>` or
 `Mods rail: native visuals failed: <reason>`. Both surfaces are also registered as Suite UI
 capabilities on Runtime.
 

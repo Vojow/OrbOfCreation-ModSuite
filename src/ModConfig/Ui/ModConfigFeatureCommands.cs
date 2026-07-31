@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbAutomata;
 using OrbModding.Common;
 
@@ -29,22 +30,16 @@ internal sealed class ModConfigFeatureCommands
 {
     private readonly IReadOnlyDictionary<string, ModConfigFeatureCommand> _bySection;
 
-    public ModConfigFeatureCommands(
-        AutomataConfigurationStore store,
-        AutomataFeatureStatuses statuses)
+    public ModConfigFeatureCommands(AutomationFeatureControlRegistry registry)
     {
-        if (store is null) throw new ArgumentNullException(nameof(store));
-        if (statuses is null) throw new ArgumentNullException(nameof(statuses));
-        _bySection = new Dictionary<string, ModConfigFeatureCommand>(StringComparer.Ordinal)
-        {
-            ["Auto Buy"] = new("Auto Buy", () => statuses.AutoBuy.Current, store.ToggleAutoBuy),
-            ["Auto Cast"] = new("Auto Cast", () => statuses.AutoCast.Current, store.ToggleAutoCast),
-            ["Auto Concept"] = new("Auto Concept", () => statuses.AutoConcept.Current, store.ToggleAutoConcept),
-            ["Auto Harvest"] = new("Auto Harvest", () => statuses.AutoHarvest.Current, store.ToggleAutoHarvest),
-            ["Auto Items"] = new("Auto Items", () => statuses.AutoItems.Current, store.ToggleAutoItems),
-            ["Auto Scribe"] = new("Auto Scribe", () => statuses.AutoScribe.Current, store.ToggleAutoScribe),
-            ["Mentor"] = new("Orb Mentor", () => statuses.Mentor.Current, store.ToggleMentor),
-        };
+        if (registry is null) throw new ArgumentNullException(nameof(registry));
+        _bySection = registry.Features.ToDictionary(
+            registration => registration.PageLabel,
+            registration => new ModConfigFeatureCommand(
+                registration.DisplayName,
+                () => registration.Status,
+                registration.Toggle),
+            StringComparer.Ordinal);
     }
 
     public bool TryGet(string pluginGuid, string sectionName, out ModConfigFeatureCommand command)

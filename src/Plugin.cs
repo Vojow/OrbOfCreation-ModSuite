@@ -108,28 +108,13 @@ public sealed class Plugin : BaseUnityPlugin
     private readonly MentorMasteryEventJournal _mentorMasteryJournal = new();
     private AutomataActionFamilyOwnership? _automataActionFamilyOwnership;
     private AutomataServiceCycleActivation? _serviceCycleActivation;
-    private AutoCastToggleControl? _autoCastToggleControl;
-    private AutoCastToggleButton? _autoCastToggleButton;
-    private AutoBuyToggleControl? _autoBuyToggleControl;
-    private AutoBuyToggleButton? _autoBuyToggleButton;
-    private AutoConceptToggleControl? _autoConceptToggleControl;
-    private AutoConceptToggleButton? _autoConceptToggleButton;
-    private AutoHarvestToggleControl? _autoHarvestToggleControl;
-    private AutoHarvestToggleButton? _autoHarvestToggleButton;
+    private AutomationFeatureControlRegistry? _automationFeatureControls;
+    private QuickControlColumn? _quickControls;
     private EmergencyStopControl? _emergencyStopControl;
-    private EmergencyStopButton? _emergencyStopButton;
     private AutomataDifferentialVerificationControl? _mathVerification;
-    private float _autoCastUiRetrySeconds;
-    private float _autoBuyUiRetrySeconds;
-    private float _autoConceptUiRetrySeconds;
-    private float _autoHarvestUiRetrySeconds;
-    private string _autoBuyUiFailureReason = string.Empty;
-    private string _autoCastUiFailureReason = string.Empty;
-    private string _autoConceptUiFailureReason = string.Empty;
-    private string _autoHarvestUiFailureReason = string.Empty;
-    private string _mentorUiFailureReason = string.Empty;
-    private string _emergencyStopUiFailureReason = string.Empty;
-    private float _quickStripFailureSeconds;
+    private float _quickControlsUiRetrySeconds;
+    private string _quickControlsUiFailureReason = string.Empty;
+    private float _quickControlsFailureSeconds;
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
     private bool _auditedBuild;
@@ -137,12 +122,9 @@ public sealed class Plugin : BaseUnityPlugin
     private string _observedBuildFingerprint = string.Empty;
     private bool _runtimeComposed;
     private bool _runtimeCompositionAttempted;
-    private float _emergencyStopUiRetrySeconds;
 
     private MentorConfig? _mentorConfig;
     private MentorActionFamilyOwnership? _mentorActionFamilyOwnership;
-    private MentorToggleButton? _mentorButton;
-    private float _mentorUiRetrySeconds;
 
     private ModConfigSettings? _modConfigSettings;
     private float _mainSceneElapsed;
@@ -237,6 +219,11 @@ public sealed class Plugin : BaseUnityPlugin
             ReadEmergencyStopResumePreview,
             OnEmergencyStopChanged,
             canResume: () => _runtimeActivationAllowed);
+        _automationFeatureControls = AutomationFeatureControlRegistry.Create(
+            _configurationStore,
+            _featureStatuses,
+            _spellLevelCapability,
+            _mentorConfig);
         ValidateSuiteShortcuts();
 
         if (_auditedBuild)
@@ -307,17 +294,6 @@ public sealed class Plugin : BaseUnityPlugin
         _automataActionFamilyOwnership.RefreshLoadedPluginInventory(
             Chainloader.PluginInfos.Count,
             guid => Chainloader.PluginInfos.ContainsKey(guid));
-        _autoCastToggleControl = new AutoCastToggleControl(
-            _configurationStore!,
-            () => featureStatuses.AutoCast.Current);
-        _autoBuyToggleControl = new AutoBuyToggleControl(
-            _configurationStore!,
-            () => _spellLevelCapability.Current,
-            () => featureStatuses.AutoBuy.Current,
-            () => featureStatuses.SpellLevel.Current);
-        _autoHarvestToggleControl = new AutoHarvestToggleControl(
-            _configurationStore!,
-            () => featureStatuses.AutoHarvest.Current);
         Func<long> readAutoHarvestLifecycleEpoch =
             () => GameLifecycleMonitor.Shared.Current.Generation;
         var autoHarvestRegistryResolver = TypedRegistryResolver.Shared;
@@ -459,9 +435,6 @@ public sealed class Plugin : BaseUnityPlugin
             _configurationStore!.Current,
             _configurationStore!.CurrentGeneration,
             featureStatuses.ObserveServiceCycleUnavailable);
-        _autoConceptToggleControl = new AutoConceptToggleControl(
-            _configurationStore,
-            () => featureStatuses.AutoConcept.Current);
         foreach (var hook in LifecycleObservationHooks)
             PatchOptional(hook.Target, hook.Handler, hook.Postfix);
         var runtimeConfig = _configurationStore.Current;
@@ -514,10 +487,9 @@ public sealed class Plugin : BaseUnityPlugin
 #endif
             );
         _modConfigFeatureCommands = new ModConfigFeatureCommands(
-            _configurationStore ??
-            throw new InvalidOperationException("Configuration store was not composed."),
-            _featureStatuses ??
-            throw new InvalidOperationException("Feature statuses were not composed."));
+            _automationFeatureControls ??
+            throw new InvalidOperationException(
+                "Automation feature control registry was not composed."));
         _runUiMaintenance = RunUiMaintenance;
         _uiWork = new ModConfigFrameWork(() => Time.frameCount);
         ResetSceneState(SceneManager.GetActiveScene());
@@ -529,7 +501,6 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateBuildCompatibilityOverride();
         PublishChangedConfiguration();
         ValidateSuiteShortcuts();
-        UpdateEmergencyStopControl();
         if (!_runtimeActivationAllowed || !_configurationStore!.Current.General.Enabled)
         {
             _runtimeCompositionAttempted = false;
@@ -565,7 +536,8 @@ public sealed class Plugin : BaseUnityPlugin
         DrainGameMcpCommands();
 #endif
         UpdateMentor();
-        UpdateQuickStripSurface(Time.unscaledDeltaTime);
+        UpdateQuickControls(Time.unscaledDeltaTime);
+        UpdateQuickControlsSurface(Time.unscaledDeltaTime);
         UpdateModConfig();
 #if SERVICE_CYCLE_PROFILE
         _gameMcpCaptureElapsed += Time.unscaledDeltaTime;
@@ -747,10 +719,10 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
         var deltaTime = Time.unscaledDeltaTime;
-        UpdateAutoCastControls(deltaTime);
-        UpdateAutoBuyControl(deltaTime);
-        UpdateAutoConceptControl(deltaTime);
-        UpdateAutoHarvestControl(deltaTime);
+        if (SceneManager.GetActiveScene().name == "Main" &&
+            _automataConfig!.IsAutoCastTogglePressed() &&
+            _automationFeatureControls!.TryGet("Auto Cast", out var autoCast))
+            autoCast.Toggle();
         if (!configuration.General.Enabled)
         {
             CancelPreparedAutomationForOwnershipRelease();
@@ -797,41 +769,12 @@ public sealed class Plugin : BaseUnityPlugin
     private void UpdateMentor()
     {
         if (_mentorConfig is null) return;
-        if (!_nativeContractsAvailable)
-        {
-            _mentorButton?.Dispose();
-            _mentorButton = null;
-            _mentorUiFailureReason = string.Empty;
-            return;
-        }
         _mentorActionFamilyOwnership?.Refresh(_mentorConfig, IsGameplayScene(), Time.frameCount);
         if (SceneManager.GetActiveScene().name == "Main" && _mentorConfig.ToggleShortcut.Value.IsDown())
         {
-            _configurationStore!.ToggleMentor();
+            if (_automationFeatureControls!.TryGet("Mentor", out var mentor))
+                mentor.Toggle();
             Logger.LogInfo($"Orb Mentor is now {_mentorConfig.Mode.Value}.");
-        }
-        if (SceneManager.GetActiveScene().name != "Main")
-        {
-            _mentorButton?.Dispose();
-            _mentorButton = null;
-            _mentorUiFailureReason = string.Empty;
-            return;
-        }
-        if (_mentorButton is not null && !_mentorButton.IsAlive) { _mentorButton.Dispose(); _mentorButton = null; }
-        if (_mentorButton is not null) { _mentorButton.Render(); return; }
-        _mentorUiRetrySeconds -= Time.unscaledDeltaTime;
-        if (_mentorUiRetrySeconds <= 0)
-        {
-            _mentorUiRetrySeconds = UiRetryIntervalSeconds;
-            if (MentorToggleButton.TryCreate(
-                _mentorConfig,
-                _configurationStore!,
-                () => _featureStatuses!.Mentor.Current,
-                out _mentorButton,
-                out var reason))
-                _mentorUiFailureReason = string.Empty;
-            else
-                _mentorUiFailureReason = reason;
         }
     }
 
@@ -913,9 +856,10 @@ public sealed class Plugin : BaseUnityPlugin
 #endif
         _startStatusView?.Dispose();
         _startStatusView = null;
-        _emergencyStopButton?.Dispose();
-        _emergencyStopButton = null;
+        _quickControls?.Dispose();
+        _quickControls = null;
         _emergencyStopControl = null;
+        _automationFeatureControls = null;
         _uiShell?.Dispose();
         _uiShell = null;
         _uiWork?.Dispose();
@@ -927,8 +871,6 @@ public sealed class Plugin : BaseUnityPlugin
         _uiSurfaceDiagnostics = null;
         _configurationStore = null;
 
-        _mentorButton?.Dispose();
-        _mentorButton = null;
         _mentorActionFamilyOwnership?.Dispose();
         _mentorActionFamilyOwnership = null;
 
@@ -939,18 +881,6 @@ public sealed class Plugin : BaseUnityPlugin
         _serviceCycleActivation = null;
         _automataActionFamilyOwnership?.Dispose();
         _automataActionFamilyOwnership = null;
-        _autoCastToggleButton?.Dispose();
-        _autoCastToggleButton = null;
-        _autoCastToggleControl = null;
-        _autoBuyToggleButton?.Dispose();
-        _autoBuyToggleButton = null;
-        _autoBuyToggleControl = null;
-        _autoConceptToggleButton?.Dispose();
-        _autoConceptToggleButton = null;
-        _autoConceptToggleControl = null;
-        _autoHarvestToggleButton?.Dispose();
-        _autoHarvestToggleButton = null;
-        _autoHarvestToggleControl = null;
         _mathVerification = null;
         _featureStatuses?.Dispose();
         _featureStatuses = null;
@@ -965,36 +895,60 @@ public sealed class Plugin : BaseUnityPlugin
         _serviceCycleActivation?.CancelPreparedWork();
     }
 
-    private void UpdateEmergencyStopControl()
+    private void UpdateQuickControls(float unscaledDeltaTime)
     {
-        if (_emergencyStopControl is null) return;
+        if (_automationFeatureControls is null || _emergencyStopControl is null) return;
         if (SceneManager.GetActiveScene().name != "Main")
         {
-            _emergencyStopButton?.Dispose();
-            _emergencyStopButton = null;
-            _emergencyStopUiFailureReason = string.Empty;
+            _quickControls?.Dispose();
+            _quickControls = null;
+            _quickControlsUiFailureReason = string.Empty;
+            _quickControlsUiRetrySeconds = 0f;
             return;
         }
-        if (_emergencyStopButton is not null && !_emergencyStopButton.IsAlive)
+        if (_quickControls is not null && !_quickControls.IsAlive)
         {
-            _emergencyStopButton.Dispose();
-            _emergencyStopButton = null;
+            _quickControls.Dispose();
+            _quickControls = null;
         }
-        if (_emergencyStopButton is not null)
+        _quickControls?.Render();
+        if (_quickControls is not null && _quickControls.Failures.Count == 0)
         {
-            _emergencyStopButton.Render();
+            _quickControlsUiFailureReason = string.Empty;
             return;
         }
-        _emergencyStopUiRetrySeconds -= Time.unscaledDeltaTime;
-        if (_emergencyStopUiRetrySeconds > 0) return;
-        _emergencyStopUiRetrySeconds = UiRetryIntervalSeconds;
-        if (EmergencyStopButton.TryCreate(
+
+        _quickControlsUiRetrySeconds -= Math.Max(0f, unscaledDeltaTime);
+        if (_quickControlsUiRetrySeconds > 0f) return;
+        _quickControlsUiRetrySeconds = UiRetryIntervalSeconds;
+        if (!QuickControlNativeAdapter.TryCapture(out var native, out var captureReason))
+        {
+            _quickControlsUiFailureReason = captureReason;
+            return;
+        }
+        if (!QuickControlColumn.TryCreate(
+                _automationFeatureControls,
                 _emergencyStopControl,
-                out _emergencyStopButton,
-                out var reason))
-            _emergencyStopUiFailureReason = string.Empty;
+                native,
+                allowFeatureControls: _nativeContractsAvailable,
+                out var candidate,
+                out var constructionReason))
+        {
+            _quickControlsUiFailureReason = constructionReason;
+            return;
+        }
+
+        if (_quickControls is null ||
+            candidate!.Failures.Count < _quickControls.Failures.Count)
+        {
+            _quickControls?.Dispose();
+            _quickControls = candidate;
+        }
         else
-            _emergencyStopUiFailureReason = reason;
+        {
+            candidate!.Dispose();
+        }
+        _quickControlsUiFailureReason = constructionReason;
     }
 
     private void OnEmergencyStopChanged(bool stopped)
@@ -1052,6 +1006,15 @@ public sealed class Plugin : BaseUnityPlugin
         MentorMasteryPatchBridge.ResetLifecycle(_lifecycleGeneration);
         _mentorActionFamilyOwnership?.ReleaseLifecycleClaims();
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
+
+        // The quick-controls anchor and every borrowed sprite are scene-object references. Save
+        // load, reset, and NG+ can replace them without changing the active scene name, so no
+        // lifecycle generation may retain the previous column.
+        _quickControls?.Dispose();
+        _quickControls = null;
+        _quickControlsFailureSeconds = 0f;
+        _quickControlsUiRetrySeconds = 0f;
+        _quickControlsUiFailureReason = string.Empty;
 
         // Mod Config rebuilds its shell only when the game entered a scene; every other transition
         // leaves the installed UI alone.
@@ -2032,233 +1995,33 @@ public sealed class Plugin : BaseUnityPlugin
 
     internal static bool AssemblyAuditAllowsMutation(AssemblyAuditResult audit) => audit.MatchesExpected;
 
-    private void UpdateAutoCastControls(float unscaledDeltaTime)
-    {
-        if (_automataConfig is null || _autoCastToggleControl is null)
-        {
-            return;
-        }
-
-        var inGameplay = SceneManager.GetActiveScene().name == "Main";
-        if (inGameplay && _automataConfig.IsAutoCastTogglePressed())
-        {
-            _autoCastToggleControl.Toggle();
-        }
-
-        if (!inGameplay || !_configurationStore!.Current.AutoCast.ShowToggleButton)
-        {
-            _autoCastToggleButton?.Dispose();
-            _autoCastToggleButton = null;
-            _autoCastUiRetrySeconds = 0.0f;
-            _autoCastUiFailureReason = string.Empty;
-            return;
-        }
-
-        if (_autoCastToggleButton is not null && !_autoCastToggleButton.IsAlive)
-        {
-            _autoCastToggleButton.Dispose();
-            _autoCastToggleButton = null;
-        }
-
-        if (_autoCastToggleButton is not null)
-        {
-            _autoCastToggleButton.Render();
-            return;
-        }
-
-        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
-        _autoCastUiRetrySeconds -= elapsed;
-        if (_autoCastUiRetrySeconds > 0.0f)
-            return;
-
-        _autoCastUiRetrySeconds = UiRetryIntervalSeconds;
-        if (AutoCastToggleButton.TryCreate(_autoCastToggleControl, Log, out var toggle, out var reason))
-        {
-            _autoCastToggleButton = toggle;
-            _autoCastUiFailureReason = string.Empty;
-            return;
-        }
-
-        _autoCastUiFailureReason = reason;
-    }
-
-    private void UpdateAutoBuyControl(float unscaledDeltaTime)
-    {
-        if (_autoBuyToggleControl is null) return;
-        if (SceneManager.GetActiveScene().name != "Main")
-        {
-            _autoBuyToggleButton?.Dispose();
-            _autoBuyToggleButton = null;
-            _autoBuyUiRetrySeconds = 0.0f;
-            _autoBuyUiFailureReason = string.Empty;
-            return;
-        }
-        if (_autoBuyToggleButton is not null && !_autoBuyToggleButton.IsAlive)
-        {
-            _autoBuyToggleButton.Dispose();
-            _autoBuyToggleButton = null;
-        }
-        if (_autoBuyToggleButton is not null) { _autoBuyToggleButton.Render(); return; }
-        _autoBuyUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
-        if (_autoBuyUiRetrySeconds > 0.0f) return;
-        _autoBuyUiRetrySeconds = UiRetryIntervalSeconds;
-        if (AutoBuyToggleButton.TryCreate(
-                _autoBuyToggleControl,
-                out _autoBuyToggleButton,
-                out var reason))
-            _autoBuyUiFailureReason = string.Empty;
-        else
-            _autoBuyUiFailureReason = reason;
-    }
-
-    private void UpdateAutoConceptControl(float unscaledDeltaTime)
-    {
-        if (_automataConfig is null || _autoConceptToggleControl is null) return;
-        var inGameplay = SceneManager.GetActiveScene().name == "Main";
-        if (!inGameplay || !_configurationStore!.Current.AutoConcept.ShowToggleButton)
-        {
-            _autoConceptToggleButton?.Dispose();
-            _autoConceptToggleButton = null;
-            _autoConceptUiRetrySeconds = 0.0f;
-            _autoConceptUiFailureReason = string.Empty;
-            return;
-        }
-        if (_autoConceptToggleButton is not null && !_autoConceptToggleButton.IsAlive)
-        {
-            _autoConceptToggleButton.Dispose();
-            _autoConceptToggleButton = null;
-        }
-        if (_autoConceptToggleButton is not null)
-        {
-            _autoConceptToggleButton.Render();
-            return;
-        }
-
-        var elapsed = Math.Max(0.0f, unscaledDeltaTime);
-        _autoConceptUiRetrySeconds -= elapsed;
-        if (_autoConceptUiRetrySeconds > 0.0f)
-            return;
-        _autoConceptUiRetrySeconds = UiRetryIntervalSeconds;
-        if (AutoConceptToggleButton.TryCreate(
-                _autoConceptToggleControl,
-                out var toggle,
-                out var reason))
-        {
-            _autoConceptToggleButton = toggle;
-            _autoConceptUiFailureReason = string.Empty;
-            return;
-        }
-        _autoConceptUiFailureReason = reason;
-    }
-
-    private void UpdateAutoHarvestControl(float unscaledDeltaTime)
-    {
-        if (_autoHarvestToggleControl is null) return;
-        if (SceneManager.GetActiveScene().name != "Main")
-        {
-            _autoHarvestToggleButton?.Dispose();
-            _autoHarvestToggleButton = null;
-            _autoHarvestUiRetrySeconds = 0.0f;
-            _autoHarvestUiFailureReason = string.Empty;
-            return;
-        }
-        if (_autoHarvestToggleButton is not null && !_autoHarvestToggleButton.IsAlive)
-        {
-            _autoHarvestToggleButton.Dispose();
-            _autoHarvestToggleButton = null;
-        }
-        if (_autoHarvestToggleButton is not null)
-        {
-            _autoHarvestToggleButton.Render();
-            return;
-        }
-        _autoHarvestUiRetrySeconds -= Math.Max(0.0f, unscaledDeltaTime);
-        if (_autoHarvestUiRetrySeconds > 0.0f) return;
-        _autoHarvestUiRetrySeconds = UiRetryIntervalSeconds;
-        if (AutoHarvestToggleButton.TryCreate(
-                _autoHarvestToggleControl,
-                out _autoHarvestToggleButton,
-                out var reason))
-            _autoHarvestUiFailureReason = string.Empty;
-        else
-            _autoHarvestUiFailureReason = reason;
-    }
-
-    private void UpdateQuickStripSurface(float unscaledDeltaTime)
+    private void UpdateQuickControlsSurface(float unscaledDeltaTime)
     {
         if (_uiSurfaceDiagnostics is null ||
             SceneManager.GetActiveScene().name != "Main")
             return;
 
-        var failures = new System.Collections.Generic.List<string>(6);
-        AddMissingUiControl(
-            failures,
-            "STOP",
-            _emergencyStopControl is not null,
-            _emergencyStopButton is not null,
-            _emergencyStopUiFailureReason);
-        AddMissingUiControl(
-            failures,
-            "Mentor",
-            _mentorConfig is not null,
-            _mentorButton is not null,
-            _mentorUiFailureReason);
-        AddMissingUiControl(
-            failures,
-            "Auto Buy",
-            _autoBuyToggleControl is not null,
-            _autoBuyToggleButton is not null,
-            _autoBuyUiFailureReason);
-        AddMissingUiControl(
-            failures,
-            "Auto Cast",
-            _autoCastToggleControl is not null &&
-            _configurationStore!.Current.AutoCast.ShowToggleButton,
-            _autoCastToggleButton is not null,
-            _autoCastUiFailureReason);
-        AddMissingUiControl(
-            failures,
-            "Auto Concept",
-            _autoConceptToggleControl is not null &&
-            _configurationStore!.Current.AutoConcept.ShowToggleButton,
-            _autoConceptToggleButton is not null,
-            _autoConceptUiFailureReason);
-        AddMissingUiControl(
-            failures,
-            "Auto Harvest",
-            _autoHarvestToggleControl is not null,
-            _autoHarvestToggleButton is not null,
-            _autoHarvestUiFailureReason);
-
-        if (failures.Count == 0)
+        var expectedCount =
+            (_nativeContractsAvailable ? _automationFeatureControls!.Features.Count : 0) + 1;
+        if (_quickControls is not null &&
+            _quickControls.ControlIds.Count == expectedCount &&
+            _quickControls.Failures.Count == 0)
         {
-            _quickStripFailureSeconds = 0.0f;
-            _uiSurfaceDiagnostics.ReportSuccess(SuiteUiSurface.QuickStrip);
+            _quickControlsFailureSeconds = 0.0f;
+            _uiSurfaceDiagnostics.ReportSuccess(SuiteUiSurface.QuickControls);
             return;
         }
 
-        _quickStripFailureSeconds += Math.Max(0.0f, unscaledDeltaTime);
-        var reason = string.Join("; ", failures);
-        if (_quickStripFailureSeconds < 10.0f)
+        _quickControlsFailureSeconds += Math.Max(0.0f, unscaledDeltaTime);
+        var reason = string.IsNullOrWhiteSpace(_quickControlsUiFailureReason)
+            ? "audited native objects are not ready; retry is pending"
+            : _quickControlsUiFailureReason;
+        if (_quickControlsFailureSeconds < 10.0f)
         {
-            _uiSurfaceDiagnostics.ReportWaiting(SuiteUiSurface.QuickStrip, reason);
+            _uiSurfaceDiagnostics.ReportWaiting(SuiteUiSurface.QuickControls, reason);
             return;
         }
-        _uiSurfaceDiagnostics.ReportFailure(SuiteUiSurface.QuickStrip, reason);
-    }
-
-    private static void AddMissingUiControl(
-        System.Collections.Generic.ICollection<string> failures,
-        string displayName,
-        bool required,
-        bool installed,
-        string reason)
-    {
-        if (!required || installed) return;
-        failures.Add(displayName + ": " +
-                     (string.IsNullOrWhiteSpace(reason)
-                         ? "native objects are not ready; retry is pending"
-                         : reason));
+        _uiSurfaceDiagnostics.ReportFailure(SuiteUiSurface.QuickControls, reason);
     }
 
     private static void BeforeSaveLoad(object __instance) =>
@@ -2439,13 +2202,11 @@ public sealed class Plugin : BaseUnityPlugin
         _uiIntegritySeconds = 0f;
         _uiFailureLogged = false;
         _uiFailureAttempts = 0;
-        _quickStripFailureSeconds = 0f;
-        _autoBuyUiFailureReason = string.Empty;
-        _autoCastUiFailureReason = string.Empty;
-        _autoConceptUiFailureReason = string.Empty;
-        _autoHarvestUiFailureReason = string.Empty;
-        _mentorUiFailureReason = string.Empty;
-        _emergencyStopUiFailureReason = string.Empty;
+        _quickControls?.Dispose();
+        _quickControls = null;
+        _quickControlsFailureSeconds = 0f;
+        _quickControlsUiRetrySeconds = 0f;
+        _quickControlsUiFailureReason = string.Empty;
         _uiMaintenanceDue = false;
         _uiIntegrityDue = false;
         _deferInstallUntilFrame = 0;

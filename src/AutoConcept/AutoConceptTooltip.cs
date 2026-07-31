@@ -17,19 +17,13 @@ internal sealed class AutoConceptTooltip : ITooltipable
 
     public string GetName() => "Auto Concept";
 
-    public string GetDisplayType() => _control.State switch
-    {
-        AutoCastToggleVisualState.On => "ON",
-        _ => "OFF",
-    };
+    public string GetDisplayType() =>
+        ConfiguredIntentIconButtonVisual.TooltipLabelFor(_control.Status);
 
     public Sprite GetIcon() => null!;
 
-    public Color GetColor() => _control.State switch
-    {
-        AutoCastToggleVisualState.On => new Color(0.4f, 1.0f, 0.55f),
-        _ => new Color(0.7f, 0.7f, 0.7f),
-    };
+    public Color GetColor() =>
+        ConfiguredIntentIconButtonVisual.FromFeatureStatus(_control.Status).Color;
 
     public bool IsColoredIcon() => false;
     public bool HasAltTooltips() => false;

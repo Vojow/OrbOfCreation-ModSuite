@@ -183,10 +183,10 @@ public sealed class ModConfigTests
             new[] { "Mode", "IncludeStructures", "IncludeUpgrades", "AutoLevelSpells", "AffordabilityMode", "UpgradeAffordabilityMode", "LeaveQueueSlots" },
             mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Take(7).Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "FullCharge", "ToggleShortcut", "ShowToggleButton", "StartResourcePercent", "ManualPauseSeconds" },
+            new[] { "Mode", "FullCharge", "ToggleShortcut", "StartResourcePercent", "ManualPauseSeconds" },
             mod.Sections.Single(section => section.Name == "Auto Cast").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "SlotManagementMode", "ShowToggleButton", "TrainingPeriodSeconds", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio" },
+            new[] { "Mode", "SlotManagementMode", "TrainingPeriodSeconds", "RateReservePercent", "MinimumResourcePercent", "MinimumDrainRatio" },
             mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Select(setting => setting.Key));
         Assert.Equal(
             new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees" },
@@ -234,12 +234,12 @@ public sealed class ModConfigTests
                 dependency.Section == "AutoBuy" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
             settings.Values.Where(setting => setting.SourceSection == "AutoCast" &&
-                setting.Key is not ("Mode" or "ToggleShortcut" or "ShowToggleButton")),
+                setting.Key is not ("Mode" or "ToggleShortcut")),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoCast" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
             settings.Values.Where(setting => setting.SourceSection == "AutoConcept" &&
-                setting.Key is not ("Mode" or "ShowToggleButton")),
+                setting.Key != "Mode"),
             setting => Assert.Contains(setting.Dependencies, dependency =>
                 dependency.Section == "AutoConcept" && dependency.Key == "Mode" && dependency.ExpectedValue == "Active"));
         Assert.All(
@@ -255,14 +255,12 @@ public sealed class ModConfigTests
 
         Assert.True(session.DependencySatisfied(settings["AutoCast.Mode"]));
         Assert.True(session.DependencySatisfied(settings["AutoCast.ToggleShortcut"]));
-        Assert.True(session.DependencySatisfied(settings["AutoCast.ShowToggleButton"]));
         Assert.True(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
         session.Get(settings["AutoBuy.Mode"]).Stage("Disabled");
         Assert.False(session.DependencySatisfied(settings["AutoBuy.AutoLevelSpells"]));
         session.Get(settings["AutoBuy.Mode"]).Stage("Active");
         Assert.False(session.DependencySatisfied(settings["AutoCast.FullCharge"]));
         Assert.False(session.DependencySatisfied(settings["AutoConcept.SlotManagementMode"]));
-        Assert.True(session.DependencySatisfied(settings["AutoConcept.ShowToggleButton"]));
 
         session.Get(settings["AutoCast.Mode"]).Stage("Active");
         session.Get(settings["AutoConcept.Mode"]).Stage("Active");
@@ -306,15 +304,18 @@ public sealed class ModConfigTests
         var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
         var prototypeObject = new GameObject("NativeRailPrototype");
         var prototype = prototypeObject.AddComponent<Behaviour>();
-        var sprite = new Sprite();
+        var inactive = new Sprite();
+        var active = new Sprite();
         var primitives = new NativeFeatureRailVisualPrimitives(
             prototype,
-            sprite,
-            sprite,
-            sprite,
-            sprite,
-            sprite,
-            sprite);
+            inactive,
+            active,
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite());
         var parent = (RectTransform)new GameObject("RailParent").transform;
         var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
         var owned = new List<GameObject>();
@@ -344,6 +345,40 @@ public sealed class ModConfigTests
             UnityEngine.Object.Destroy(prototypeObject);
             UnityEngine.Object.Destroy(parent.gameObject);
         }
+    }
+
+    [Fact]
+    public void ModsRailRejectsAnyDuplicateRegisteredPageGlyph()
+    {
+        var prototypeObject = new GameObject("NativeRailPrototype");
+        var prototype = prototypeObject.AddComponent<Behaviour>();
+        var duplicate = new Sprite();
+        var primitives = new NativeFeatureRailVisualPrimitives(
+            prototype,
+            new Sprite(),
+            new Sprite(),
+            duplicate,
+            duplicate,
+            new Sprite(),
+            new Sprite(),
+            new Sprite(),
+            new Sprite());
+        var parent = (RectTransform)new GameObject("RailParent").transform;
+        var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
+        var owned = new List<GameObject>();
+
+        Assert.False(
+            ModConfigNativeRailFactory.TryBuild(
+                parent,
+                new[] { "Runtime", "General" },
+                selected: 0,
+                owned,
+                template,
+                primitives,
+                _ => { },
+                out var reason));
+        Assert.Empty(owned);
+        Assert.Contains("resolve the same sprite", reason);
     }
 
     [Fact]
