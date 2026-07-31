@@ -214,7 +214,7 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
         }
         catch (Exception ex) when (IsReflectionFailure(ex))
         {
-            Block($"spell-level capability probe failed: {ex.GetBaseException().Message}");
+            Block($"spell-level capability check failed: {ex.GetBaseException().Message}");
             return false;
         }
     }

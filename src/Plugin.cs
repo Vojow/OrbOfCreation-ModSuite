@@ -152,7 +152,9 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigStartStatusView? _startStatusView;
     private string _startStatusFailure = string.Empty;
     private int _startStatusFailureFrames;
+#if SERVICE_CYCLE_PROFILE
     private int _processId;
+#endif
     private string _controlPlaneFailure = string.Empty;
 
     internal static Plugin? Instance { get; private set; }
@@ -602,50 +604,28 @@ public sealed class Plugin : BaseUnityPlugin
             _startStatusFailureFrames = 0;
             return;
         }
-        if (_processId == 0)
-            _processId = ModConfigProcessIdentity.CaptureCurrentProcessId();
-
         var controlPlaneReady = _automataConfig is not null &&
             _controlPlaneFailure.Length == 0;
 #if SERVICE_CYCLE_PROFILE
-        const string mode = "Performance-debug build";
-        var endpoint = _gameMcpServer is null
-            ? "Agent endpoint unavailable · see log"
-            : "Agent: 127.0.0.1:19106/mcp";
-        var mcpStatus = !controlPlaneReady
-            ? "MCP unavailable"
-            : _gameMcpServer is null
-                ? "MCP starting"
-                : "MCP ready";
+        if (_processId == 0)
+            _processId = ModConfigProcessIdentity.CaptureCurrentProcessId();
+        var presentation = ModConfigStartStatusPresenter.Build(
+            PluginIds.ReleaseVersion,
+            controlPlaneReady,
+            _auditedBuild,
+            _runtimeActivationAllowed,
+            _gameMcpServer is not null,
+            _processId);
 #else
-        const string mode = "Release build";
-        const string endpoint = "Agent unavailable · install performance-debug";
-        const string mcpStatus = "MCP unavailable";
+        var presentation = ModConfigStartStatusPresenter.Build(
+            PluginIds.ReleaseVersion,
+            controlPlaneReady,
+            _auditedBuild,
+            _runtimeActivationAllowed);
 #endif
-        var compatibility = !controlPlaneReady
-            ? "Control-plane error · see log"
-            : _auditedBuild
-                ? "Audited game verified"
-                : _runtimeActivationAllowed
-                ? "Unverified game accepted"
-                : "Unverified game · actions blocked";
-        var tone = !controlPlaneReady
-            ? ModConfigStartStatusTone.Failure
-            : _auditedBuild && _runtimeActivationAllowed
-#if SERVICE_CYCLE_PROFILE
-                && _gameMcpServer is not null
-#endif
-                ? ModConfigStartStatusTone.Ready
-                : ModConfigStartStatusTone.Attention;
         _startStatusView ??= new ModConfigStartStatusView();
         if (_startStatusView.TryRender(
-                new ModConfigStartStatusPresentation(
-                    "Orb ModSuite  ·  v" + PluginIds.ReleaseVersion,
-                    mode,
-                    mcpStatus + "  ·  " + compatibility,
-                    endpoint,
-                    "PID " + _processId + "  ·  Localhost only",
-                    tone),
+                presentation,
                 out var reason))
         {
             _startStatusFailure = string.Empty;

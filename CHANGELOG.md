@@ -42,8 +42,9 @@
   OFF/ON states use the game's raised/recessed frame idiom, and the feature glyphs remain the audited
   native icons shared with their Mods rail entries.
 - Add the localhost Game MCP server to performance-debug builds only, replacing the F10/F11/F12
-  validation shortcuts with closed-world run and navigation tools. The Start screen reports build
-  mode, MCP status, audit health, endpoint, and process ID; release builds contain no MCP server.
+  validation shortcuts with closed-world run and navigation tools. In performance-debug builds, the
+  Start screen reports build mode, MCP status, audit health, endpoint, and process ID. Release builds
+  show only build mode and audit health and contain no MCP server.
 - Harden the installer for Windows Git-for-Windows/MSYS: normalize supplied game and save paths with
   `cygpath -u`, accept either `shasum` or `sha256sum`, and query native Windows processes through
   PowerShell before any POSIX fallback so an inspection failure cannot authorize installation.

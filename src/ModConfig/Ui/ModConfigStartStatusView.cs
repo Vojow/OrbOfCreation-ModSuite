@@ -18,27 +18,92 @@ internal enum ModConfigStartStatusTone
 internal sealed class ModConfigStartStatusPresentation
 {
     internal ModConfigStartStatusPresentation(
-        string headline,
-        string mode,
-        string health,
-        string endpoint,
-        string process,
-        ModConfigStartStatusTone tone)
+        ModConfigStartStatusTone tone,
+        params string[] rows)
     {
-        Headline = headline ?? string.Empty;
-        Mode = mode ?? string.Empty;
-        Health = health ?? string.Empty;
-        Endpoint = endpoint ?? string.Empty;
-        Process = process ?? string.Empty;
+        if (rows is null) throw new ArgumentNullException(nameof(rows));
+        if (rows.Length is < 3 or > 5)
+            throw new ArgumentException("A Start status card requires three to five visible rows.", nameof(rows));
+        if (rows.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("A visible Start status row cannot be blank.", nameof(rows));
+        Rows = rows.ToArray();
         Tone = tone;
     }
 
-    internal string Headline { get; }
-    internal string Mode { get; }
-    internal string Health { get; }
-    internal string Endpoint { get; }
-    internal string Process { get; }
+    internal IReadOnlyList<string> Rows { get; }
     internal ModConfigStartStatusTone Tone { get; }
+}
+
+internal static class ModConfigStartStatusPresenter
+{
+#if SERVICE_CYCLE_PROFILE
+    internal static ModConfigStartStatusPresentation Build(
+        string releaseVersion,
+        bool controlPlaneReady,
+        bool auditedBuild,
+        bool runtimeActivationAllowed,
+        bool gameMcpServerReady,
+        int processId)
+    {
+        var compatibility = Compatibility(
+            controlPlaneReady,
+            auditedBuild,
+            runtimeActivationAllowed);
+        var mcpStatus = !controlPlaneReady
+            ? "MCP unavailable"
+            : gameMcpServerReady
+                ? "MCP ready"
+                : "MCP starting";
+        var endpoint = gameMcpServerReady
+            ? "Agent: 127.0.0.1:19106/mcp"
+            : "Agent endpoint unavailable · see log";
+        var tone = !controlPlaneReady
+            ? ModConfigStartStatusTone.Failure
+            : auditedBuild && runtimeActivationAllowed && gameMcpServerReady
+                ? ModConfigStartStatusTone.Ready
+                : ModConfigStartStatusTone.Attention;
+        return new ModConfigStartStatusPresentation(
+            tone,
+            Headline(releaseVersion),
+            "Performance-debug build",
+            mcpStatus + "  ·  " + compatibility,
+            endpoint,
+            "PID " + processId + "  ·  Localhost only");
+    }
+#else
+    internal static ModConfigStartStatusPresentation Build(
+        string releaseVersion,
+        bool controlPlaneReady,
+        bool auditedBuild,
+        bool runtimeActivationAllowed)
+    {
+        var tone = !controlPlaneReady
+            ? ModConfigStartStatusTone.Failure
+            : auditedBuild && runtimeActivationAllowed
+                ? ModConfigStartStatusTone.Ready
+                : ModConfigStartStatusTone.Attention;
+        return new ModConfigStartStatusPresentation(
+            tone,
+            Headline(releaseVersion),
+            "Release build",
+            Compatibility(controlPlaneReady, auditedBuild, runtimeActivationAllowed));
+    }
+#endif
+
+    private static string Headline(string releaseVersion) =>
+        "Orb ModSuite  ·  v" + (releaseVersion ?? string.Empty);
+
+    private static string Compatibility(
+        bool controlPlaneReady,
+        bool auditedBuild,
+        bool runtimeActivationAllowed) =>
+        !controlPlaneReady
+            ? "Control-plane error · see log"
+            : auditedBuild
+                ? "Audited game verified"
+                : runtimeActivationAllowed
+                    ? "Unverified game accepted"
+                    : "Unverified game · actions blocked";
 }
 
 /// <summary>
@@ -54,9 +119,8 @@ internal sealed class ModConfigStartStatusView : IDisposable
     private Image? _statusFrame;
     private TextMeshProUGUI? _headline;
     private TextMeshProUGUI? _mode;
-    private TextMeshProUGUI? _health;
-    private TextMeshProUGUI? _endpoint;
-    private TextMeshProUGUI? _process;
+    private readonly List<TextMeshProUGUI> _detailRows = new();
+    private TextMeshProUGUI? _nativeBodyText;
     private NativeStartCardPalette? _native;
 
     internal bool IsAlive =>
@@ -86,11 +150,9 @@ internal sealed class ModConfigStartStatusView : IDisposable
         _statusFrame!.sprite = frame.Sprite;
         _statusFrame.color = frame.Color;
         _mode!.color = frame.TextColor;
-        _headline!.text = presentation.Headline;
-        _mode.text = presentation.Mode;
-        _health!.text = presentation.Health;
-        _endpoint!.text = presentation.Endpoint;
-        _process!.text = presentation.Process;
+        _headline!.text = presentation.Rows[0];
+        _mode.text = presentation.Rows[1];
+        RenderDetailRows(presentation.Rows);
         reason = string.Empty;
         return true;
     }
@@ -159,28 +221,62 @@ internal sealed class ModConfigStartStatusView : IDisposable
             native.ReadyText,
             0.58f,
             TextAlignmentOptions.Midline);
-        _health = CreateText(
-            "Health",
-            new Vector2(0.07f, 0.32f),
-            new Vector2(0.93f, 0.47f),
-            native.BodyText,
-            0.72f);
-        _endpoint = CreateText(
-            "Endpoint",
-            new Vector2(0.07f, 0.17f),
-            new Vector2(0.93f, 0.32f),
-            native.BodyText,
-            0.62f);
-        _process = CreateText(
-            "Process",
-            new Vector2(0.07f, 0.04f),
-            new Vector2(0.93f, 0.18f),
-            native.BodyText,
-            0.58f);
+        _nativeBodyText = native.BodyText;
         _native = native.Palette;
         reason = string.Empty;
         return true;
     }
+
+    private void RenderDetailRows(IReadOnlyList<string> rows)
+    {
+        var detailCount = rows.Count - 2;
+        while (_detailRows.Count > detailCount)
+        {
+            var lastIndex = _detailRows.Count - 1;
+            UnityEngine.Object.Destroy(_detailRows[lastIndex].gameObject);
+            _detailRows.RemoveAt(lastIndex);
+        }
+        while (_detailRows.Count < detailCount)
+        {
+            var index = _detailRows.Count;
+            _detailRows.Add(CreateText(
+                DetailName(index),
+                DetailAnchorMin(index),
+                DetailAnchorMax(index),
+                _nativeBodyText!,
+                DetailSizeScale(index)));
+        }
+        for (var index = 0; index < detailCount; index++)
+            _detailRows[index].text = rows[index + 2];
+    }
+
+    private static string DetailName(int index) => index switch
+    {
+        0 => "Health",
+        1 => "Endpoint",
+        _ => "Process",
+    };
+
+    private static Vector2 DetailAnchorMin(int index) => index switch
+    {
+        0 => new Vector2(0.07f, 0.32f),
+        1 => new Vector2(0.07f, 0.17f),
+        _ => new Vector2(0.07f, 0.04f),
+    };
+
+    private static Vector2 DetailAnchorMax(int index) => index switch
+    {
+        0 => new Vector2(0.93f, 0.47f),
+        1 => new Vector2(0.93f, 0.32f),
+        _ => new Vector2(0.93f, 0.18f),
+    };
+
+    private static float DetailSizeScale(int index) => index switch
+    {
+        0 => 0.72f,
+        1 => 0.62f,
+        _ => 0.58f,
+    };
 
     private TextMeshProUGUI CreateText(
         string name,
@@ -386,9 +482,8 @@ internal sealed class ModConfigStartStatusView : IDisposable
         _statusFrame = null;
         _headline = null;
         _mode = null;
-        _health = null;
-        _endpoint = null;
-        _process = null;
+        _detailRows.Clear();
+        _nativeBodyText = null;
         _native = null;
         NativeVersionPath = string.Empty;
     }
