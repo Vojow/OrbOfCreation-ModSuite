@@ -10,18 +10,14 @@ to state, not this file's.
 ## What remains
 
 1. Compare Auto Buy, Auto Harvest, and Mentor traces to identify measured runtime costs, and act only on material findings.
-2. Complete combined-suite runtime and package validation, then prepare a reviewed beta release.
-3. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
+2. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
 
 ## Completed
 
-- Roadmap item 1: Mentor is an ordinary ServiceCycle service. Its legacy engine,
+- Mentor is an ordinary ServiceCycle service. Its legacy engine,
   legacy native-contract surface, operations-per-frame and CPU-budget settings,
   shared performance coordinator, and coordinator evidence product are retired.
-
-## Later modules
-
-- [Orb Insights](insights.md) may add read-only gameplay explanations and diagnostics.
-- [Orb Toolbox](toolbox.md) may add explicit, reversible advanced player operations.
+- Combined-suite runtime and package validation completed and the reviewed
+  0.5.0-beta.1 release prepared.
 
 New automation features should use the shared lifecycle, ownership, diagnostics, and ServiceCycle contracts instead of introducing another scheduler.

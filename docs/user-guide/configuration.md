@@ -23,7 +23,8 @@ The Mods catalog is reused across ordinary refreshes and unchanged scene rebuild
 
 Runtime starts with a two-column summary of all seven suite features; failures and attention states
 sort before waiting and healthy features. Recent events and differential verification follow, then
-full trace, optional profiling, pump timing, the decision journal, and detailed service cards. The
+full trace, optional profiling, the automation activity timeline, the decision journal, and
+detailed service cards. The
 Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods
 maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 

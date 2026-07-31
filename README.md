@@ -18,9 +18,8 @@ The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.
 |---|---|---|
 | **Automation** | Beta | Auto Buy, Auto Cast, Auto Concept, Spell Leveling, Auto Harvest, and Auto Items for Scrolls and Relics. |
 | **Mentor** | Beta | Progression-gated mastery sharing for spells, artifacts, and alchemy. |
-| **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and recent pump timing. |
+| **Mod Config UI** | Beta | Staged settings editor plus live runtime health, tracing controls, and an automation activity timeline. |
 | **Shared runtime** | Bundled | ServiceCycle, world collection, diagnostics, and tracing behind every feature. |
-| **Orb Insights / Toolbox** | Planned | Design and reverse-engineering notes only. |
 
 The supported baseline is Windows 64-bit Mono, Unity `6000.0.70`, BepInEx `5.4.23.x`, and .NET `netstandard2.1`. Steam Deck is targeted through the Windows game under Proton and requires separate runtime validation.
 

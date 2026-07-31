@@ -21,7 +21,8 @@ Choose the path that matches what you are trying to do.
 - [Headless E2E simulation](testing/headless-e2e.md)
 - [Runtime validation protocol](testing/runtime-validation.md)
 - [Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
-- [Release process](development/releases.md)
+- [Release review checklist](development/releases.md)
+- [Release procedure](releasing.md)
 - [Source layout](../src/README.md)
 - [Contributing guidelines](../CONTRIBUTING.md)
 

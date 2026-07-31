@@ -34,9 +34,6 @@ gates, install a profiler-enabled build, and capture one comparable session befo
    because an ordinary native queue cannot free slots within one tick.
 3. **Reassess static binding.** Use decompile artifacts to evaluate direct static game bindings and
    the fail-closed behaviour for unknown game versions.
-4. **Fix the quick settings button.** Surfaced during baseline validation: it no longer opens
-   reliably and settings behaviour was inconsistent. Diagnose the UI/configuration path separately;
-   do not fold an unproven settings fix into a performance change.
 
 ### A deeper pass: eliminate reflection entirely
 

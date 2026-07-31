@@ -18,7 +18,7 @@ The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.cs
 The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `AutoItems`,
 `AutoScribe`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and
 `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration
-transaction that bind them together. Orb Insights and Orb Toolbox remain design-only.
+transaction that bind them together.
 
 ## Automatic save backup
 
