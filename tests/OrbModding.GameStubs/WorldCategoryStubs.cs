@@ -664,7 +664,8 @@ public sealed class PlotNodeActionSO : IdScriptableObject
     public ResourceCostList actionDrain = new ResourceCostList();
 
     // Which other nodes the action takes its size multiplier from, and the prerequisites that gate
-    // it. The suite reads the list's length and the container's latch, never the contents or Check().
+    // it. Collection reads the list's length and latch; the Auto Harvest action boundary calls the
+    // exact container Check() once after current UUID/type/lifecycle resolution.
     public List<PlotNodeSO> sizeModNodes = new List<PlotNodeSO>();
     public Prerequisites.Container prerequisites = new Prerequisites.Container();
 

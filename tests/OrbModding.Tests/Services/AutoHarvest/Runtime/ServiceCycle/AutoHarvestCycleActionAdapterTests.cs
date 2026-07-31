@@ -4,6 +4,7 @@ using OrbAutomata;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
@@ -54,7 +55,9 @@ public sealed class AutoHarvestCycleActionAdapterTests
         Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.Identity);
         Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.PlotVisibility);
         Assert.Equal(AutoHarvestEvidenceState.Verified, fixture.Mutation.Facts.ActionAvailability);
-        Assert.Equal(AutoHarvestEvidenceState.Rejected, fixture.Mutation.Facts.Prerequisites);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            fixture.Mutation.Facts.Prerequisites);
         Assert.Equal(AutoHarvestEvidenceState.Unknown, fixture.Mutation.Facts.Readiness);
         Assert.Equal(AutoHarvestActionSafetyState.ResourceDrain, fixture.Mutation.Safety);
     }
@@ -286,7 +289,7 @@ public sealed class AutoHarvestCycleActionAdapterTests
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
-                    AutoHarvestEvidenceState.Rejected,
+                    PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
                     AutoHarvestEvidenceState.Unknown),
                 AutoHarvestActionSafetyState.ResourceDrain);
             return _adapter.TryExecute(action, configuration, context);

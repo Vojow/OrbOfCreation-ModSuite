@@ -645,12 +645,17 @@ fit" has no reading below none, so it is clamped.
 
 ## W37 — Auto Harvest decides from the snapshot
 
-**Live, with one superseded part.** Auto Harvest's facts come from the world snapshot through
+**Live, with two explicit action-boundary exceptions.** Auto Harvest's facts come from the world snapshot through
 `AutoHarvestWorldFacts`, a pure function of an immutable `GameWorldState`. The `ReadFacts` routine
 this entry described has gone entirely: what the action boundary genuinely cannot be handed — the
 live instance it submits into — is `ReadPrototype`, and the six live reads it took to re-ask the
 decision come off the snapshot (W54). One of those six reached `Prerequisites.Container.Check()` and
-*wrote*, so re-checking was mutating.
+*wrote*, so the broad fact re-read stayed deleted. The plot-action latch is now published as
+`NativeLatchedTrue`, `UnknownNeedsNativeValidation`, or `Unknown`; a false latch no longer claims that
+prerequisites failed. An otherwise-ready `UnknownNeedsNativeValidation` candidate reaches the
+GameAction, which resolves the exact current UUID/type/lifecycle binding and calls only the parameterless
+domain validator once before quantity mutation. Fresh false and unreadable returns are exact penalty-free
+refusals; true continues the existing admission and mutation path.
 
 **The split is between deciding and acting, not between old and new.** `ReadFacts` was on the capture
 port and the submission port at once and the two callers wanted different things; they moved apart

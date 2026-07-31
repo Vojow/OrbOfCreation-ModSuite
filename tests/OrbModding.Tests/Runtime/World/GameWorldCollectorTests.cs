@@ -2326,10 +2326,16 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(
             WorldPlotActionLookup.TryFind(world.PlotActions, node, confirmed.Identity, out var allowed));
         Assert.True(allowed.Reading.PrerequisitesConfirmed);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.NativeLatchedTrue,
+            allowed.Reading.PrerequisiteEvidence);
 
         Assert.True(
             WorldPlotActionLookup.TryFind(world.PlotActions, node, unconfirmed.Identity, out var blocked));
         Assert.False(blocked.Reading.PrerequisitesConfirmed);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            blocked.Reading.PrerequisiteEvidence);
     }
 
     /// <summary>

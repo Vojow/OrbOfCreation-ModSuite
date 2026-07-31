@@ -73,8 +73,10 @@ Auto Harvest is independent from Auto Buy. When `AutoHarvest.Mode=Active`, it co
 
 Each pair-set capture admits both pair circuits once, resolves the shared active-list/scaling contract once,
 then resolves the fruit and treasure bindings independently and caches only their immutable serialized safety
-graphs. Visibility, prerequisites, readiness, duplicates, slot room, identity currency, and mutation
-postconditions remain live. A missing or unsafe pair therefore cannot starve a healthy sibling; transient
+graphs. Visibility, readiness, duplicates, slot room, identity currency, and mutation postconditions remain
+live. The published prerequisite latch is evidence rather than a refusal: true means the native validator has
+latched success, while false means the exact current action needs one validation at the action boundary. A
+missing or unsafe pair therefore cannot starve a healthy sibling; transient
 live-state gaps use bounded retry, static pair-contract failures remain process-bound, and partial availability
 is reported as degraded.
 
@@ -89,7 +91,17 @@ the plot and action stable UUIDs directly; it does not reread the same registry 
 may inspect configuration, quarantine, and family ownership to avoid reserving unnecessary work, while the
 action callback checks them again to produce the authoritative terminal result.
 
-Submission always requests quantity one through `ActivePlotNodeActions.AddInstance`. Auto Harvest requires both the action list's native `HasEmptySpot()` predicate and at least one enumerated empty action entry, and may consume the final free entry. The visible plot-space meter (for example `30/33`) is unrelated, and this action list is also separate from Auto Buy's global action queue. Auto Harvest captures the active list before and after mutation and requires exactly one new engaged matching entry with quantity one and the corresponding entry delta. If an attempted mutation cannot be verified, that tree pair remains blocked until a scene, save-load, reset, or NG+ lifecycle transition.
+After configuration, UUID/type, and lifecycle checks, submission calls the exact current action's
+parameterless `Prerequisites.Container.Check()` once through its lifecycle-bound compiled contract. A fresh
+false result is the penalty-free refusal “native prerequisites currently unmet”; unreadable evidence refuses
+under its own code. Both paths perform no quantity mutation. A true result continues the unchanged queue,
+capacity, cost, and mutation path. Submission always requests quantity one through
+`ActivePlotNodeActions.AddInstance`. Auto Harvest requires both the action list's native `HasEmptySpot()`
+predicate and at least one enumerated empty action entry, and may consume the final free entry. The visible
+plot-space meter (for example `30/33`) is unrelated, and this action list is also separate from Auto Buy's
+global action queue. Auto Harvest captures the active list before and after mutation and requires exactly one
+new engaged matching entry with quantity one and the corresponding entry delta. If an attempted mutation
+cannot be verified, that tree pair remains blocked until a scene, save-load, reset, or NG+ lifecycle transition.
 
 Auto Harvest evaluates after each world or configuration publication. Disabled mode and `EmergencyDisable` perform no Auto Harvest scans or new submissions. Auto Harvest does not plant, replant, replace, enrich, force growth, destroy plots, modify saves, or coexist with another plot-action automation mod. Interactive behavior is covered by the [runtime validation guide](../../docs/testing/runtime-validation.md).
 

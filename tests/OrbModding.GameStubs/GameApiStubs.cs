@@ -725,12 +725,14 @@ public class Prerequisites
 {
     /// <summary>
     /// Named as the game names it. `available` is a latch, not a question: Check() evaluates the
-    /// conditions and leaves it set once they pass, which is why the suite reads the field and never
-    /// calls Check().
+    /// conditions and leaves it set once they pass. Collection reads the latch; action boundaries
+    /// that require current native truth may call Check().
     /// </summary>
     public class Container
     {
         public bool available;
+        public bool NativeCheckResult { get; set; }
+        public int CheckCalls { get; private set; }
 
         /// <summary>
         /// The conditions themselves. The suite reads how many there are — none is what an
@@ -738,7 +740,13 @@ public class Prerequisites
         /// </summary>
         public List<object> prerequisites = new List<object>();
 
-        public bool Check() => available;
+        public bool Check()
+        {
+            CheckCalls++;
+            if (available) return true;
+            if (NativeCheckResult) available = true;
+            return available;
+        }
 
         /// <summary>
         /// The per-level overload, which takes the level being bought and neither stamps nor latches.

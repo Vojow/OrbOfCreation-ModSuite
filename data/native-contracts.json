@@ -1857,6 +1857,7 @@
       "valueType": "Prerequisites+Container",
       "owners": [
         "Automata Auto Harvest admission",
+        "Automata Auto Harvest action-boundary prerequisite validation",
         "Automata world collection",
         "Common world collection"
       ],
@@ -6983,6 +6984,7 @@
       "static": false,
       "valueType": "System.Boolean",
       "owners": [
+        "Automata Auto Harvest action-boundary prerequisite validation",
         "Automata world collection"
       ],
       "usages": [
@@ -7002,7 +7004,8 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata spell leveling"
+        "Automata spell leveling",
+        "Automata Auto Harvest action-boundary prerequisite validation"
       ],
       "usages": [
         "reflection"

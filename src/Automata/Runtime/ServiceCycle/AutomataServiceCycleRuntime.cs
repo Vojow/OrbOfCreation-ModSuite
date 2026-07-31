@@ -192,9 +192,9 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 world,
                 expected.PlotId,
                 expected.ActionId);
-            var harvestCacheReason =
-                HarvestPrerequisiteCacheReason(command.Mode, facts.Prerequisites);
-            if (harvestCacheReason is not null) return harvestCacheReason;
+            var harvestEvidenceReason =
+                HarvestPrerequisiteEvidenceReason(command.Mode, facts.Prerequisites);
+            if (harvestEvidenceReason is not null) return harvestEvidenceReason;
         }
 
         if (command.Kind != GameMcpCommandKind.Purchase ||
@@ -212,13 +212,13 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             "corresponding screen is viewed";
     }
 
-    internal static string? HarvestPrerequisiteCacheReason(
+    internal static string? HarvestPrerequisiteEvidenceReason(
         string mode,
-        AutoHarvestEvidenceState prerequisites) =>
-        prerequisites == AutoHarvestEvidenceState.Rejected
+        PlotActionPrerequisiteEvidence prerequisites) =>
+        prerequisites == PlotActionPrerequisiteEvidence.Unknown
             ? "the native " + mode +
-              " harvest was rejected while the published plot-action prerequisite latch was false; " +
-              "the game's upstream value cache stays stale until the corresponding plot screen is viewed"
+              " harvest was rejected because no plot-action prerequisite latch evidence was " +
+              "published for an exact current action instance"
             : null;
 
     private sealed class GameMcpActionUnavailableException : Exception

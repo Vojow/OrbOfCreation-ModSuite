@@ -1,6 +1,8 @@
 using System;
+using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoHarvest.Native;
@@ -21,13 +23,13 @@ public sealed class AutoHarvestMutationAdapterTests
     }
 
     /// <summary>
-    /// The facts the boundary judges are the ones the action carries; the reader is asked only for
-    /// the instance to submit into.
+    /// Apart from the exact prerequisite oracle, the facts the boundary judges are the ones the
+    /// action carries; the reader is asked only for the instance to submit into.
     /// </summary>
     /// <remarks>
-    /// A pair the world said was not ready is refused without a second opinion. The old boundary
-    /// re-derived these five off the live game — six reads including one that wrote, through
-    /// <c>PlotNodeActionInstance.IsVisible()</c> reaching <c>Prerequisites.Container.Check()</c>.
+    /// A pair the world said was not ready is refused without a second opinion. The prerequisite is
+    /// deliberately different because a false published latch is not an answer; it is validated by
+    /// the domain container directly, never through <c>PlotNodeActionInstance.IsVisible()</c>.
     /// </remarks>
     [Fact]
     public void CarriedFactsAreWhatTheSubmissionDecisionJudges()
@@ -43,6 +45,75 @@ public sealed class AutoHarvestMutationAdapterTests
         Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
         Assert.Equal(1, state.CaptureCount);
         Assert.Equal(1, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    [Fact]
+    public void FreshFalsePrerequisiteResultRefusesBeforeQueueOrQuantityMutation()
+    {
+        var state = new RecordingStatePort();
+        var action = new PlotNodeActionSO();
+        action.prerequisites.NativeCheckResult = false;
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(
+            ResolvedPair(action),
+            ReadyFacts(PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation),
+            Preserving);
+
+        Assert.Equal(
+            AutoHarvestSubmissionFailureCode.NativePrerequisitesCurrentlyUnmet,
+            result.FailureCode);
+        Assert.Equal(1, action.prerequisites.CheckCalls);
+        Assert.Equal(0, state.CaptureCount);
+        Assert.Equal(0, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+        Assert.True(result.PrerequisiteValidation.HasBeforeLatch);
+        Assert.False(result.PrerequisiteValidation.BeforeLatch);
+        Assert.True(result.PrerequisiteValidation.HasCheckResult);
+        Assert.False(result.PrerequisiteValidation.CheckResult);
+        Assert.True(result.PrerequisiteValidation.HasAfterLatch);
+        Assert.False(result.PrerequisiteValidation.AfterLatch);
+    }
+
+    [Fact]
+    public void SuccessfulColdValidationIsCalledOnceAndItsThreeObservationsSurviveRejection()
+    {
+        var state = new RecordingStatePort();
+        var action = new PlotNodeActionSO();
+        action.prerequisites.NativeCheckResult = true;
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(
+            ResolvedPair(action),
+            ReadyFacts(
+                PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+                readiness: AutoHarvestEvidenceState.Rejected),
+            Preserving);
+
+        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
+        Assert.Equal(1, action.prerequisites.CheckCalls);
+        Assert.False(result.PrerequisiteValidation.BeforeLatch);
+        Assert.True(result.PrerequisiteValidation.CheckResult);
+        Assert.True(result.PrerequisiteValidation.AfterLatch);
+        Assert.False(result.MutationAttempted);
+    }
+
+    [Fact]
+    public void UnreadablePrerequisiteContainerHasItsOwnPenaltyFreeRefusal()
+    {
+        var state = new RecordingStatePort();
+        var action = new PlotNodeActionSO { prerequisites = null! };
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(action), ReadyFacts(), Preserving);
+
+        Assert.Equal(
+            AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable,
+            result.FailureCode);
+        Assert.False(result.HasNativeMutationOutcome);
+        Assert.Equal(0, state.CaptureCount);
+        Assert.False(result.PrerequisiteValidation.HasBeforeLatch);
         Assert.False(result.MutationAttempted);
     }
 
@@ -251,12 +322,14 @@ public sealed class AutoHarvestMutationAdapterTests
     }
 
     private static AutoHarvestPairFacts ReadyFacts(
+        PlotActionPrerequisiteEvidence prerequisites =
+            PlotActionPrerequisiteEvidence.NativeLatchedTrue,
         AutoHarvestEvidenceState readiness = AutoHarvestEvidenceState.Verified) =>
         new(
             AutoHarvestEvidenceState.Verified,
             AutoHarvestEvidenceState.Verified,
             AutoHarvestEvidenceState.Verified,
-            AutoHarvestEvidenceState.Verified,
+            prerequisites,
             readiness);
 
     private static AutoHarvestSubmissionState State(
@@ -280,12 +353,18 @@ public sealed class AutoHarvestMutationAdapterTests
     private const AutoHarvestActionSafetyState Preserving =
         AutoHarvestActionSafetyState.NativePhaseCyclePreserving;
 
-    private static ResolvedAutoHarvestPair ResolvedPair()
+    private static ResolvedAutoHarvestPair ResolvedPair(PlotNodeActionSO? action = null)
     {
+        if (action is null)
+        {
+            action = new PlotNodeActionSO();
+            action.prerequisites.available = true;
+        }
+        var contract = PrerequisiteContract();
         var target = new AutoHarvestPairBinding(
             AutoHarvestPair.FruitTree,
-            new object(),
-            new object(),
+            new PlotNodeSO(),
+            action,
             AutoHarvestKnownIds.FruitTreePlot,
             AutoHarvestKnownIds.FruitTreeCollect,
             new object(),
@@ -293,8 +372,38 @@ public sealed class AutoHarvestMutationAdapterTests
             null!,
             null!);
         var shared = new AutoHarvestSharedBinding(new object(), null!, null!, 1);
-        return new ResolvedAutoHarvestPair(null!, shared, target, target, null);
+        return new ResolvedAutoHarvestPair(contract, shared, target, target, null);
     }
+
+    private static AutoHarvestReflectionContract PrerequisiteContract()
+    {
+        var types = (AutoHarvestReflectionTypes)Activator.CreateInstance(
+            typeof(AutoHarvestReflectionTypes),
+            nonPublic: true)!;
+        Set(types, nameof(AutoHarvestReflectionTypes.Action), typeof(PlotNodeActionSO));
+        var constructor = typeof(AutoHarvestReflectionContract).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            new[] { typeof(AutoHarvestReflectionTypes) },
+            modifiers: null)!;
+        var contract = (AutoHarvestReflectionContract)constructor.Invoke(new object[] { types });
+        Set(
+            contract,
+            nameof(AutoHarvestReflectionContract.ActionPrerequisites),
+            (Func<object, object?>)(source => ((PlotNodeActionSO)source).prerequisites));
+        Set(
+            contract,
+            nameof(AutoHarvestReflectionContract.PrerequisitesAvailable),
+            (Func<object, bool>)(source => ((Prerequisites.Container)source).available));
+        Set(
+            contract,
+            nameof(AutoHarvestReflectionContract.PrerequisitesCheck),
+            (Func<object, bool>)(source => ((Prerequisites.Container)source).Check()));
+        return contract;
+    }
+
+    private static void Set(object target, string property, object value) =>
+        target.GetType().GetProperty(property)!.SetValue(target, value);
 
     private sealed class ThrowingStatePort : IAutoHarvestSubmissionStatePort
     {

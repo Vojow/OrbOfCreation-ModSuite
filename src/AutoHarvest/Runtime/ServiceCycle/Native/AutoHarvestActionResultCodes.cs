@@ -23,4 +23,10 @@ internal static class AutoHarvestActionResultCodes
 
     /// <summary>This pair's mutation was attempted and the game did not do what it was asked.</summary>
     public static ServiceActionResultCode PairFaulted => new(1027);
+
+    /// <summary>The fresh native prerequisite check returned false without a quantity mutation.</summary>
+    public static ServiceActionResultCode NativePrerequisitesCurrentlyUnmet => new(1028);
+
+    /// <summary>The exact prerequisite validation evidence could not be read safely.</summary>
+    public static ServiceActionResultCode NativePrerequisiteValidationUnavailable => new(1029);
 }

@@ -141,19 +141,18 @@ public sealed class GameMcpActionAdmissionTests
 public sealed class GameMcpActionFailureReasonTests
 {
     [Fact]
-    public void HarvestPrerequisiteCacheFailureNamesTheRequiredScreenView()
+    public void MissingHarvestPrerequisiteEvidenceDoesNotClaimTheNativeCheckFailed()
     {
-        var reason = AutomataServiceCycleRuntime.HarvestPrerequisiteCacheReason(
+        var reason = AutomataServiceCycleRuntime.HarvestPrerequisiteEvidenceReason(
             "fruit_tree",
-            AutoHarvestEvidenceState.Rejected);
+            PlotActionPrerequisiteEvidence.Unknown);
 
         Assert.NotNull(reason);
-        Assert.Contains("prerequisite latch", reason);
-        Assert.Contains("upstream value cache", reason);
-        Assert.Contains("plot screen is viewed", reason);
-        Assert.Null(AutomataServiceCycleRuntime.HarvestPrerequisiteCacheReason(
+        Assert.Contains("no plot-action prerequisite latch evidence", reason);
+        Assert.DoesNotContain("unmet", reason);
+        Assert.Null(AutomataServiceCycleRuntime.HarvestPrerequisiteEvidenceReason(
             "fruit_tree",
-            AutoHarvestEvidenceState.Verified));
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation));
     }
 }
 

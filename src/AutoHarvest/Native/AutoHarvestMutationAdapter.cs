@@ -39,6 +39,16 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         )
     {
         var current = resolved;
+        var prerequisiteFailure = ValidatePrerequisites(
+            current,
+            out var prerequisiteValidation);
+        if (prerequisiteFailure != AutoHarvestSubmissionFailureCode.None)
+        {
+            return new AutoHarvestSubmissionResult(
+                prerequisiteFailure,
+                prerequisiteValidation);
+        }
+
         AutoHarvestSubmissionState before;
 #if SERVICE_CYCLE_PROFILE
         var beforeSnapshot = _profileOperations.Begin(
@@ -54,7 +64,8 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         {
             return new AutoHarvestSubmissionResult(
                 NativeMutationOutcome.BeforeCaptureFailed,
-                default);
+                default,
+                prerequisiteValidation);
         }
 #if SERVICE_CYCLE_PROFILE
         finally { beforeSnapshot.Complete(); }
@@ -78,13 +89,15 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
             if (!decision.ShouldSubmit || prototype is null)
             {
                 return new AutoHarvestSubmissionResult(
-                    AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected);
+                    AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected,
+                    prerequisiteValidation);
             }
         }
         catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
         {
             return new AutoHarvestSubmissionResult(
-                AutoHarvestSubmissionFailureCode.RuntimeReadFailed);
+                AutoHarvestSubmissionFailureCode.RuntimeReadFailed,
+                prerequisiteValidation);
         }
 #if SERVICE_CYCLE_PROFILE
         finally { revalidation.Complete(); }
@@ -94,6 +107,7 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         return SubmitAdmitted(
             current.Target.ActionUuid,
             before,
+            prerequisiteValidation,
             () =>
             {
 #if SERVICE_CYCLE_PROFILE
@@ -152,6 +166,7 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         return SubmitAdmitted(
             actionUuid,
             before,
+            default,
             captureAfter,
             execute,
             verify ?? VerifyAdmittedTransition);
@@ -160,6 +175,7 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
     private static AutoHarvestSubmissionResult SubmitAdmitted(
         string actionUuid,
         in AutoHarvestSubmissionState before,
+        in AutoHarvestPrerequisiteValidationEvidence prerequisiteValidation,
         Func<AutoHarvestSubmissionState> captureAfter,
         Action execute,
         Func<AutoHarvestSubmissionState, AutoHarvestSubmissionState, bool>? verify = null)
@@ -174,7 +190,65 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
             verify ?? VerifyAdmittedTransition);
         return new AutoHarvestSubmissionResult(
             evidence.Outcome,
-            NativeMutationCallOutcome.FromEvidence(evidence));
+            NativeMutationCallOutcome.FromEvidence(evidence),
+            prerequisiteValidation);
+    }
+
+    /// <summary>
+    /// Calls the parameterless domain validator exactly once on the UUID/type-resolved current
+    /// action. The before and after latch reads are evidence only; neither substitutes for the fresh
+    /// result.
+    /// </summary>
+    private static AutoHarvestSubmissionFailureCode ValidatePrerequisites(
+        in ResolvedAutoHarvestPair resolved,
+        out AutoHarvestPrerequisiteValidationEvidence evidence)
+    {
+        var hasBefore = false;
+        var before = false;
+        var hasResult = false;
+        var result = false;
+        var hasAfter = false;
+        var after = false;
+        try
+        {
+            var contract = resolved.Contract;
+            var action = resolved.Target.Action;
+            if (action.GetType() != contract.Types.Action)
+                throw new InvalidOperationException("resolved harvest action has the wrong native type");
+            var prerequisites = contract.ActionPrerequisites(action) ??
+                throw new InvalidOperationException("resolved harvest action has no prerequisite container");
+
+            before = contract.PrerequisitesAvailable(prerequisites);
+            hasBefore = true;
+            result = contract.PrerequisitesCheck(prerequisites);
+            hasResult = true;
+            after = contract.PrerequisitesAvailable(prerequisites);
+            hasAfter = true;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            evidence = new AutoHarvestPrerequisiteValidationEvidence(
+                hasBefore,
+                before,
+                hasResult,
+                result,
+                hasAfter,
+                after);
+            return AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable;
+        }
+
+        evidence = new AutoHarvestPrerequisiteValidationEvidence(
+            hasBefore,
+            before,
+            hasResult,
+            result,
+            hasAfter,
+            after);
+        if (!result)
+            return AutoHarvestSubmissionFailureCode.NativePrerequisitesCurrentlyUnmet;
+        return after
+            ? AutoHarvestSubmissionFailureCode.None
+            : AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable;
     }
 
 #if SERVICE_CYCLE_PROFILE

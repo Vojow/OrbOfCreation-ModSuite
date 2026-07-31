@@ -1,3 +1,5 @@
+using OrbModding.Common.Runtime.World;
+
 namespace OrbAutomata;
 
 /// <summary>
@@ -17,7 +19,7 @@ internal readonly struct AutoHarvestPairFacts
         AutoHarvestEvidenceState identity,
         AutoHarvestEvidenceState plotVisibility,
         AutoHarvestEvidenceState actionAvailability,
-        AutoHarvestEvidenceState prerequisites,
+        PlotActionPrerequisiteEvidence prerequisites,
         AutoHarvestEvidenceState readiness)
     {
         Identity = identity;
@@ -32,11 +34,10 @@ internal readonly struct AutoHarvestPairFacts
     public AutoHarvestEvidenceState ActionAvailability { get; }
 
     /// <summary>
-    /// Whether the game has confirmed the action's prerequisites. Verified is a verdict the game
-    /// reached; anything else is the lack of one, because the native latch behind this cannot say
-    /// whether it has ever been evaluated — see <c>RawPlotAction.PrerequisitesConfirmed</c>.
+    /// What the native prerequisite latch proves and whether the exact action boundary must ask the
+    /// game's validator for a current verdict.
     /// </summary>
-    public AutoHarvestEvidenceState Prerequisites { get; }
+    public PlotActionPrerequisiteEvidence Prerequisites { get; }
 
     public AutoHarvestEvidenceState Readiness { get; }
 }

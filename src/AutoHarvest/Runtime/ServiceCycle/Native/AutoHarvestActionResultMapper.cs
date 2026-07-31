@@ -16,9 +16,18 @@ internal static class AutoHarvestActionResultMapper
     {
         if (!mutation.HasNativeMutationOutcome)
         {
-            return mutation.FailureCode == AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected
-                ? ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected)
-                : ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+            return mutation.FailureCode switch
+            {
+                AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected =>
+                    ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected),
+                AutoHarvestSubmissionFailureCode.NativePrerequisitesCurrentlyUnmet =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativePrerequisitesCurrentlyUnmet),
+                AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativePrerequisiteValidationUnavailable),
+                _ => ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault),
+            };
         }
 
         var evidence = ServiceNativeMutationEvidence.Observed(

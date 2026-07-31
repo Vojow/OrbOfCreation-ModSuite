@@ -174,14 +174,18 @@ tables rather than the two registries ([W44](world-collection-decisions.md)).
 than a claim about one service. Six of its eight facts come from the snapshot: five from the
 plot-node and plot-action tables, and the sixth — the action's audited structural safety — from the
 plot-authoring, phase-descriptor and effect-block tables, computed on the worker as this service's
-own policy rather than published as a verdict ([W54](world-collection-decisions.md)). It has no
-main-thread fact-capture stages left to measure.
+own policy rather than published as a verdict ([W54](world-collection-decisions.md)). A false
+plot-action prerequisite latch is published as needing validation, not as an unmet prerequisite; an
+otherwise-ready GameAction calls the exact current action's domain validator once before quantity
+mutation ([W37](world-collection-decisions.md)). It has no main-thread fact-capture stages left to
+measure.
 
 | Native read | Why it stays |
 | --- | --- |
 | `ActionManager` active-action list | Whether this pair is already queued or running, and whether a slot is free. Published now, but read where it is *acted on*: a collected reading admits nothing ([W53](world-collection-decisions.md)). |
 | The plot's own `actionInstances`, per submission | The instance to submit into. A live object rather than a fact — every fact the decision rested on rode in on the action. |
 | The two pairs' plot and action objects | Resolved once per lifecycle by uuid. Needed to mutate, not to decide. |
+| The exact action's parameterless prerequisite validator | A false published latch cannot distinguish “unmet” from “not checked.” One fresh action-boundary call supplies that verdict; before/result/after latch evidence is recorded and no UI method participates. |
 
 Exempting it from the migration on the grounds that its capture was narrow was a mistake, for reasons
 that had nothing to do with what Auto Harvest gains — see [W14](world-collection-decisions.md),

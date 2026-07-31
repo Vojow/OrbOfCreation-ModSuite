@@ -62,6 +62,8 @@ public sealed class AutoHarvestContractTests
             "System.Collections.Generic.List`1<PlotNodeActionSO>",
             assembly.GetFieldType("PlotNodeActionSO", "All"));
         Assert.Equal("Prerequisites+Container", assembly.GetFieldType("PlotNodeActionSO", "prerequisites"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("Prerequisites+Container", "available"));
+        AssertMethod(assembly, "Prerequisites+Container", "Check", false, "System.Boolean");
         Assert.Equal(
             "PlotNodeActionSO+CostType",
             assembly.GetFieldType("PlotNodeActionSO", "elementCostType"));

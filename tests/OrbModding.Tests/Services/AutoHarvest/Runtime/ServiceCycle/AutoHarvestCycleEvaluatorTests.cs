@@ -4,6 +4,7 @@ using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoHarvest.Runtime.ServiceCycle;
@@ -22,6 +23,29 @@ public sealed class AutoHarvestCycleEvaluatorTests
         Assert.Equal(WakePolicyKind.OnPublication, result.Wake.Kind);
     }
 
+    [Fact]
+    public void OtherwiseReadyUnlatchedCandidateReachesTheActionBoundaryOncePerPublication()
+    {
+        var facts = new AutoHarvestPairFacts(
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            AutoHarvestEvidenceState.Verified,
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            AutoHarvestEvidenceState.Verified);
+        var frame = new AutoHarvestCycleFrame(
+            Captured(AutoHarvestPair.FruitTree, facts),
+            Captured(AutoHarvestPair.TreasureTree, facts));
+
+        var result = Evaluate(frame, Configuration(), InitialState(), Context(1));
+
+        Assert.True(result.HasAction);
+        Assert.Equal(AutoHarvestPair.FruitTree, result.Action.Pair);
+        Assert.Equal(
+            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation,
+            result.Action.Facts.Prerequisites);
+        Assert.Equal(WakePolicyKind.OnPublication, result.Wake.Kind);
+    }
+
     /// <summary>
     /// The planned action carries the facts of the pair it plans, so the boundary judges the same
     /// evidence this decision was taken on rather than re-reading the game for it.
@@ -36,7 +60,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
                     AutoHarvestEvidenceState.Verified,
-                    AutoHarvestEvidenceState.Verified,
+                    PlotActionPrerequisiteEvidence.NativeLatchedTrue,
                     AutoHarvestEvidenceState.Rejected)),
             Captured(AutoHarvestPair.TreasureTree, ReadyFacts()));
 
@@ -389,7 +413,7 @@ public sealed class AutoHarvestCycleEvaluatorTests
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState.Verified,
+        PlotActionPrerequisiteEvidence.NativeLatchedTrue,
         AutoHarvestEvidenceState.Verified);
 
     private static SuiteRuntimeConfiguration Configuration() => AutoHarvestConfigurationFactory.Create(

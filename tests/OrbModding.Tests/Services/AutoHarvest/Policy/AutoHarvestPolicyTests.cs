@@ -1,6 +1,7 @@
 using System;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -167,19 +168,25 @@ public sealed class AutoHarvestPolicyTests
     }
 
     /// <summary>
-    /// Both readings refuse. The rejected one is the native latch reading false, which is the absence
-    /// of a verdict rather than a refusal by the game — the gate treats absent evidence as grounds not
-    /// to act, and that is the half of this that must never change.
+    /// A genuinely missing reading refuses. A false latch is different: it is a bounded request for
+    /// exact native validation at the action boundary, so an otherwise-ready candidate proceeds.
     /// </summary>
-    [Theory]
-    [InlineData((int)AutoHarvestEvidenceState.Unknown, (int)AutoHarvestRejectionReason.PrerequisitesUnknown)]
-    [InlineData((int)AutoHarvestEvidenceState.Rejected, (int)AutoHarvestRejectionReason.PrerequisitesNotConfirmed)]
-    public void PrerequisitesFailClosed(int stateValue, int expectedValue)
+    [Fact]
+    public void UnknownPrerequisitesFailClosed()
     {
         var decision = Evaluate(ReadyFacts(
-            prerequisites: (AutoHarvestEvidenceState)stateValue));
+            prerequisites: PlotActionPrerequisiteEvidence.Unknown));
 
-        AssertRejected(decision, (AutoHarvestRejectionReason)expectedValue);
+        AssertRejected(decision, AutoHarvestRejectionReason.PrerequisitesUnknown);
+    }
+
+    [Fact]
+    public void AnUnlatchedCandidateProceedsToNativeValidation()
+    {
+        var decision = Evaluate(ReadyFacts(
+            prerequisites: PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation));
+
+        Assert.True(decision.ShouldSubmit);
     }
 
     [Theory]
@@ -303,7 +310,8 @@ public sealed class AutoHarvestPolicyTests
         AutoHarvestEvidenceState identity = AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState plotVisibility = AutoHarvestEvidenceState.Verified,
         AutoHarvestEvidenceState actionAvailability = AutoHarvestEvidenceState.Verified,
-        AutoHarvestEvidenceState prerequisites = AutoHarvestEvidenceState.Verified,
+        PlotActionPrerequisiteEvidence prerequisites =
+            PlotActionPrerequisiteEvidence.NativeLatchedTrue,
         AutoHarvestEvidenceState readiness = AutoHarvestEvidenceState.Verified) =>
         new(
             identity,

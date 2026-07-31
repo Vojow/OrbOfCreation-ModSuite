@@ -764,6 +764,10 @@ internal static class GameMcpActionResultCodeNames
             return "the native harvest feature contract is unavailable";
         if (code == AutoHarvestActionResultCodes.PairFaulted)
             return "the native harvest pair faulted before a verified mutation";
+        if (code == AutoHarvestActionResultCodes.NativePrerequisitesCurrentlyUnmet)
+            return "native prerequisites are currently unmet according to one fresh action-boundary check";
+        if (code == AutoHarvestActionResultCodes.NativePrerequisiteValidationUnavailable)
+            return "the exact native harvest prerequisite validation was unreadable, so no quantity mutation was attempted";
         if (code == AutoHarvestActionResultCodes.ActionFamilyUnavailable ||
             code == AutoBuyActionResultCodes.ActionFamilyUnavailable ||
             code == AutoCastActionResultCodes.ActionFamilyUnavailable)
@@ -794,6 +798,10 @@ internal static class GameMcpActionResultCodeNames
             return "feature_contract_unavailable";
         if (code == AutoHarvestActionResultCodes.PairFaulted)
             return "pair_faulted";
+        if (code == AutoHarvestActionResultCodes.NativePrerequisitesCurrentlyUnmet)
+            return "native_prerequisites_currently_unmet";
+        if (code == AutoHarvestActionResultCodes.NativePrerequisiteValidationUnavailable)
+            return "native_prerequisite_validation_unavailable";
         if (code == AutoBuyActionResultCodes.ActionFamilyUnavailable &&
             (commandKind == GameMcpCommandKind.Purchase ||
              commandKind == GameMcpCommandKind.SpellLevel))
