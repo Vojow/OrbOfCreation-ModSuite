@@ -8,6 +8,9 @@ This page owns Automata behavior that is broader than one feature.
 
 - [AutomataTests.cs](../../../tests/OrbModding.Tests/AutomataTests.cs) — configuration defaults, migration-facing behavior, and
   feature composition.
+- [AutomataLoggingTests.cs](../../../tests/OrbModding.Tests/AutomataLoggingTests.cs) — first-line
+  immediacy, exact-repeat holding, state-transition ordering, severity isolation, heartbeat, and
+  truthful repeat summaries.
 - [ConfigurationSchemaTests.cs](../../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs) — schema-zero migration, rollback, and
   safe typed binding.
 - [AutomataFeatureStatusTests.cs](../../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) and [AutomataRuntimeEvidenceTests.cs](../../../tests/OrbModding.Tests/AutomataRuntimeEvidenceTests.cs) — health

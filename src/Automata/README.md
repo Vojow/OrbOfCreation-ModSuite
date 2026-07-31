@@ -50,6 +50,11 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Candidates rank by cost ratio and stable UUID; there is no UUID-list filter or structure-effect priority tier.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Startup, warning, and error records remain enabled; explicit Runtime actions own deeper trace and journal evidence.
+- Suite automation logging emits the first info, warning, or error state immediately. Further
+  byte-identical occurrences collapse independently per severity: a changed message first emits the
+  held count and span, then the new state, while an unchanged state emits a count-and-span heartbeat
+  on the first occurrence at or beyond 60 seconds. Summaries repeat the exact original content for
+  searching. This is fixed suite behavior rather than a configuration option.
 - `EmergencyDisable` immediately stops new automated purchases, casts, concept mutations, spell levels, harvest submissions, and consumable uses.
 - An unknown complete game assembly pair starts with emergency stop engaged and only the Mods control plane available. Explicitly clearing STOP through the quick button or General's immediate command accepts the exact observed pair and permits runtime composition in the same action. `Compatibility.AllowUnverifiedGameBuild` remains a separate Advanced acknowledgement path that leaves STOP engaged. Changing either assembly returns the suite to quarantine. Removing acknowledgement during a running session re-engages STOP immediately, and a restart is required to unload patches already installed for that session.
 - Each Mods feature header and its matching gameplay drawer button issue the same immediate mode command through the committed store. Mode is not repeated in the staged settings list, and General's emergency command is likewise immediate rather than staged. Toggle shortcuts, quick-control visibility, emergency control, and diagnostics remain editable while inactive feature tuning stays locked.
