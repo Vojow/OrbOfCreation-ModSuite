@@ -104,6 +104,7 @@ does not refresh it by hidden navigation.
 | `game_concept` | Add, remove, or rotate one concept assignment |
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
+| `game_action_queue_recover` | Remove only an exact excess stack proven by a pre-shutdown dump ticket |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -130,6 +131,20 @@ stable identity plus the small set of availability, level, quantity, occupancy, 
 progress fields useful for comparing rows. Expensive modifier graphs, raw capture inputs, and
 secondary calculations stay out of list/search results. `world_get` answers “tell me everything
 about this exact UUID” and returns the complete projected record.
+
+For action-queue diagnosis, list `action-queues` to compare physical/unique occupancy with total
+stack occupancy and native remaining room. List `action-queue-members` to see each stack-backed
+member's queue/index, exact `StructureSO` or `UpgradeSO` kind, UUID, stack count, native queued count,
+timing evidence, and consistency classification. These are pinned `WORLD` facts, not live admission
+authority; use the `action_queue_room` probe immediately before reasoning about whether another
+action currently fits.
+
+`game_action_queue_recover` is intentionally not a general queue editor. It requires the exact
+ActiveActionables queue UUID, exact member UUID/type, observed stack and pending counts, the exact
+excess, and `proof: "pre_shutdown_dump"`. Unity-main-thread execution rejects lifecycle drift or
+any changed count, unloads only the stated excess, and verifies that authoritative pending work is
+unchanged and native total/room deltas are exact. A post-restart Upgrade mismatch without that
+operator evidence remains non-repairable.
 
 `suite_health` without arguments is likewise situational: lifecycle/configuration generations,
 STOP, runtime/audit state, feature ID/state/reason code, service or collector ID/phase/fault state,
@@ -272,12 +287,16 @@ being produced, and is retention or a writer fault active? It deliberately does 
 individual automation decisions. Those belong to the trace folder and offline analysis, where
 high-volume repeated decisions can be filtered without spending strategist context.
 
-`game_probe` has exactly three names:
+`game_probe` has exactly four names:
 
 - `runtime`: current Unity scene/frame/time scale, lifecycle state, gameplay readiness, and Mods
   shell liveness;
 - `action_queue_room`: live `ActionManager.GetRemainingRoom()`, the native boundary answer that a
-  published occupancy snapshot cannot guarantee; and
+  published occupancy snapshot cannot guarantee;
+- `audio_pool`: the read-only native allocator topology (maximum, current index, idle,
+  reusable-non-looping, playing-looping, total returnable) plus Upgrade processing-loop aggregation
+  policy, active group/lease counts, native starts, coalesced requests, reserve suppressions, final
+  synchronous stops, and contained stop failures; and
 - `navigation`: live tab and active-subtab counts, useful for diagnosing catalog availability.
 
 To add a probe, add one fixed name to the router schema and closed-world policy, implement its
@@ -285,6 +304,18 @@ Unity-main-thread branch without accepting reflection/member input, declare ever
 member in the schema-3 manifest, add installed-contract and portable behavior tests, and document
 why the fact does not belong in published `WORLD`. Facts that workers or strategists generally need
 belong in audited world collection instead.
+
+`game_audio_loop_control` is a bounded runtime diagnostic control. It accepts only `enable`,
+`disable`, or `reset_counters`. Disabling affects future Upgrade-loop requests but preserves all
+existing leases so native cancellation remains balanced. Counter reset preserves both policy and
+active groups. There is intentionally no force-stop operation, and the tool never edits a save.
+
+```sh
+tools/game-mcp-client.py audio-status
+tools/game-mcp-client.py audio-control disable
+tools/game-mcp-client.py audio-control enable
+tools/game-mcp-client.py audio-control reset_counters
+```
 
 ## SDK decision
 

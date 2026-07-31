@@ -67,7 +67,9 @@ internal static class AutoItemsCandidateScanner
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
         PublicationTable<Guid> quarantinedTemporaryItems,
-        PublicationTable<Guid>? temporaryAllowlist)
+        PublicationTable<Guid>? temporaryAllowlist,
+        bool relicSettlementQuarantined,
+        bool scrollSettlementQuarantined)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (quarantinedTemporaryItems is null)
@@ -139,16 +141,28 @@ internal static class AutoItemsCandidateScanner
 
             if (profile.Family == AutoItemsConsumableFamily.Relic)
             {
+                if (relicSettlementQuarantined) continue;
+                if (!WorldConsumableCountLookup.TryGetStrongestOwnedLevel(
+                        world.ConsumableCounts,
+                        itemId,
+                        out var strongestRelicLevel))
+                {
+                    rejected++;
+                    continue;
+                }
                 eligibleRelics++;
                 CaptureFirst(
                     ref firstRelic,
                     in profile,
                     world.CollectedAtFrame,
-                    world.CollectedAtEpoch);
+                    world.CollectedAtEpoch,
+                    strongestRelicLevel);
                 continue;
             }
 
             if (profile.Family != AutoItemsConsumableFamily.Scroll ||
+                scrollSettlementQuarantined ||
+                HasActiveScribeWork(world, itemId) ||
                 !profile.Consumable.CanBeRandomized ||
                 !WorldConsumableCountLookup.TryGetStrongestOwnedLevel(
                     world.ConsumableCounts,
@@ -157,6 +171,17 @@ internal static class AutoItemsCandidateScanner
             {
                 continue;
             }
+
+            if (!WorldScribeLookup.TryGetUseTargetEvidence(
+                    world.ScrollUseTargetEvidence,
+                    itemId,
+                    strongestLevel,
+                    out var targetCount))
+            {
+                rejected++;
+                continue;
+            }
+            if (targetCount <= 0) continue;
 
             eligibleScrolls++;
             CaptureFirst(
@@ -180,6 +205,25 @@ internal static class AutoItemsCandidateScanner
             in firstScroll);
     }
 
+    private static bool HasActiveScribeWork(GameWorldState world, Guid itemId)
+    {
+        var recipes = world.ScribeRecipes.AsSpan();
+        var work = world.ScribeWork.AsSpan();
+        for (var recipeIndex = 0; recipeIndex < recipes.Length; recipeIndex++)
+        {
+            var recipe = recipes[recipeIndex];
+            if (recipe.OutputConsumableId != itemId) continue;
+            for (var workIndex = 0; workIndex < work.Length; workIndex++)
+            {
+                if (work[workIndex].RecipeId == recipe.RecipeId &&
+                    !work[workIndex].IsExpired)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     private static bool HasPendingOrActiveUsage(GameWorldState world, Guid itemId)
     {
         if (!WorldConsumableUsageLookup.TryFindRange(

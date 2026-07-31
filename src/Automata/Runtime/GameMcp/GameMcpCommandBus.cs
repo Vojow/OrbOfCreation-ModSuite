@@ -24,6 +24,8 @@ internal enum GameMcpCommandKind
     TooltipCatalog = 12,
     TooltipRead = 13,
     ContinueRun = 14,
+    ActionQueueRecovery = 15,
+    AudioLoopControl = 16,
 }
 
 /// <summary>
@@ -50,7 +52,8 @@ internal sealed class GameMcpCommand
         bool saveCapture)
     {
         if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
-        var nativeAction = kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel;
+        var nativeAction = kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel ||
+            kind == GameMcpCommandKind.ActionQueueRecovery;
         if (nativeAction && expectedLifecycleGeneration <= 0)
             throw new ArgumentOutOfRangeException(nameof(expectedLifecycleGeneration));
         if ((nativeAction || kind is GameMcpCommandKind.ConfigurationSet or GameMcpCommandKind.EmergencyStop) &&
@@ -495,6 +498,40 @@ internal sealed class GameMcpCommandBus
         return Enqueue(command, priority: true, closesNativeAdmission: engaged);
     }
 
+    internal GameMcpCommand SubmitActionQueueRecovery(
+        ulong? decisionWorldGeneration,
+        long expectedLifecycleGeneration,
+        ulong expectedConfigurationGeneration,
+        Guid queueId,
+        Guid memberId,
+        string exactNativeType,
+        int excessStacks,
+        int observedStacks,
+        int observedPending)
+    {
+        var payload = new JObject
+        {
+            ["observedStacks"] = observedStacks,
+            ["observedPending"] = observedPending,
+        };
+        return Enqueue(NewCommand(
+            GameMcpCommandKind.ActionQueueRecovery,
+            decisionWorldGeneration,
+            expectedLifecycleGeneration,
+            expectedConfigurationGeneration,
+            "explicit_pre_shutdown_ticket",
+            memberId,
+            queueId,
+            exactNativeType,
+            exactNativeType,
+            excessStacks,
+            string.Empty,
+            payload.ToString(Newtonsoft.Json.Formatting.None),
+            capture: false,
+            saveCapture: false),
+            priority: true);
+    }
+
     internal GameMcpCommand SubmitGadget(
         GameMcpCommandKind kind,
         string mode,
@@ -504,7 +541,8 @@ internal sealed class GameMcpCommandBus
         bool capture,
         bool saveCapture)
     {
-        if (kind is < GameMcpCommandKind.Screenshot or > GameMcpCommandKind.ContinueRun)
+        if ((kind is < GameMcpCommandKind.Screenshot or > GameMcpCommandKind.ContinueRun) &&
+            kind != GameMcpCommandKind.AudioLoopControl)
             throw new ArgumentOutOfRangeException(nameof(kind));
         return Enqueue(NewCommand(
             kind,
@@ -570,7 +608,8 @@ internal sealed class GameMcpCommandBus
                 return command;
             }
             var nativeAction =
-                command.Kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel;
+                command.Kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel ||
+                command.Kind == GameMcpCommandKind.ActionQueueRecovery;
             if (nativeAction && (_emergencyStopObserved || _pendingStopEngages > 0))
             {
                 command.Completion.Complete(GameMcpCommandResult.Rejected(

@@ -80,6 +80,44 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
+    public void QueuedPreparingOrPendingConsumableRefusesANewFireAtTheLiveBoundary()
+    {
+        var spell = Equip(Ember);
+
+        var queued = Consumable(queued: 1);
+        var queuedResult = Execute(Fire(0, Ember));
+        Assert.Equal(ServiceActionDisposition.Rejected, queuedResult.Disposition);
+        Assert.Equal(AutoCastActionResultCodes.ConsumableBusy, queuedResult.Code);
+
+        global::ConsumableSO.All.Remove(queued);
+        var preparing = Consumable(preparation: 1d);
+        var preparingResult = Execute(Fire(0, Ember));
+        Assert.Equal(ServiceActionDisposition.Rejected, preparingResult.Disposition);
+        Assert.Equal(AutoCastActionResultCodes.ConsumableBusy, preparingResult.Code);
+
+        global::ConsumableSO.All.Remove(preparing);
+        Consumable(pending: true);
+        var pendingResult = Execute(Fire(0, Ember));
+        Assert.Equal(ServiceActionDisposition.Rejected, pendingResult.Disposition);
+        Assert.Equal(AutoCastActionResultCodes.ConsumableBusy, pendingResult.Code);
+        Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
+    public void ConsumableInterlockNeverPreventsChargeRelease()
+    {
+        var spell = Equip(Ember);
+        spell.SetChargeInput("test", true);
+        Consumable(queued: 1, preparation: 1d, pending: true);
+
+        var result = Execute(Release(0, Ember));
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.False(spell.HoldingCharge);
+        Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
     public void ASpellTheGameNoLongerCallsReadyRefusesWithoutFiring()
     {
         // The snapshot said ready and the game now says otherwise. That is the staleness the boundary
@@ -251,6 +289,25 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
+    public void ACastThatThrowsAfterOpeningATargetStillReleasesTheGamesInputLock()
+    {
+        var spell = Equip(Ember);
+        var target = new object();
+        global::TargetingManager.AvailableTarget = target;
+        spell.RequestsOnFire = 1;
+        spell.ThrowAfterOpeningTargets = true;
+
+        var result = Execute(Fire(0, Ember));
+
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
+        Assert.Equal(NativeMutationOutcome.ExecutionThrew, result.NativeEvidence.Outcome);
+        Assert.Single(global::TargetingManager.SubmittedTargets);
+        Assert.Same(target, global::TargetingManager.SubmittedTargets[0]);
+        Assert.False(global::TargetingManager.IsTargeting());
+    }
+
+    [Fact]
     public void ACastWhoseTargetRequestNothingCanSatisfyFaultsRatherThanLeavingThePromptOpen()
     {
         var spell = Equip(Ember);
@@ -322,6 +379,29 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
         return spell;
     }
 
+    private static global::ConsumableSO Consumable(
+        int queued = 0,
+        double preparation = 0d,
+        bool pending = false)
+    {
+        var consumable = new global::ConsumableSO
+        {
+            currentPrepTime = new BigDouble(preparation),
+        };
+        consumable.SetStock(1, queued, 0);
+        if (pending)
+        {
+            consumable.consumableUsages.Add(new global::ConsumableUsage
+            {
+                en = false,
+                dr = new BigDouble(1),
+                maxDr = new BigDouble(1),
+            });
+        }
+        global::ConsumableSO.All.Add(consumable);
+        return consumable;
+    }
+
     private static ServiceActionResult Execute(
         AutoCastCycleAction action,
         long nativeEpoch = PlannedEpoch,
@@ -368,5 +448,6 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
         global::SpellManager.NativeCanCast = true;
         global::TargetingManager.Reset();
         global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
+        global::ConsumableSO.All.Clear();
     }
 }

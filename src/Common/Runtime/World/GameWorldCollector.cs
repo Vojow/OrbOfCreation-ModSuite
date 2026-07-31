@@ -239,7 +239,9 @@ internal sealed class GameWorldCollector
         _actionQueues = new WorldActionQueueReader(
             resolveType("IdScriptableObject"),
             resolveType("PlotNodeActionInstanceListVariable"),
-            resolveType("ActionableListVariable"));
+            resolveType("ActionableListVariable"),
+            resolveType("StructureSO"),
+            resolveType("UpgradeSO"));
         _spellSlots = new WorldSpellSlotReader(
             resolveType("IdScriptableObject"),
             resolveType("SpellListVariable"),

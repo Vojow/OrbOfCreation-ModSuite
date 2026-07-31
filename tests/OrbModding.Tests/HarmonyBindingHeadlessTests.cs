@@ -13,6 +13,29 @@ public sealed class HarmonyBindingHeadlessTests
     {
         AssertTarget("OrbAutomata.SpellFirePatch", "Fire", typeof(Spell));
         AssertTarget(
+            "OrbAutomata.UpgradeProcessingSoundScopePatch",
+            "PlayProcessSound",
+            typeof(UpgradeSO));
+        AssertTarget(
+            "OrbAutomata.SoundManagerPlayLoopAggregationPatch",
+            "PlayLoop",
+            typeof(SoundManager),
+            typeof(UnityEngine.AudioClip),
+            typeof(float));
+        AssertTarget(
+            "OrbAutomata.AudioElementFadeOutDestroyAggregationPatch",
+            "FadeOutDestroy",
+            typeof(AudioElement),
+            typeof(float));
+        AssertTarget(
+            "OrbAutomata.StructureCompletionFaultPatch",
+            "CompleteAction",
+            typeof(StructureSO));
+        AssertTarget(
+            "OrbAutomata.UpgradeCompletionFaultPatch",
+            "CompleteAction",
+            typeof(UpgradeSO));
+        AssertTarget(
             "OrbMentor.MentorSpellMasteryPatch",
             "GainMasteryExp",
             typeof(SpellRecipeSO),

@@ -62,6 +62,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "StructureSO", "GetPurchaseLevel", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "GetQueuedQuantity", false, "System.Int32");
         AssertMethod(assembly, "StructureSO", "QueueBuild", false, "System.Void", "System.Int32");
+        AssertMethod(assembly, "StructureSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("System.Collections.Generic.List`1<UpgradeSO>", assembly.GetFieldType("UpgradeSO", "All"));
         AssertMethod(assembly, "UpgradeSO", "IsAvailable", false, "System.Boolean");
@@ -74,11 +75,14 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "UpgradeSO", "HasFiniteLevels", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxLevel", false, "System.Boolean");
         AssertMethod(assembly, "UpgradeSO", "IsMaxQueuedLevel", false, "System.Boolean");
+        AssertMethod(assembly, "UpgradeSO", "CompleteAction", false, "System.Void");
 
         Assert.Equal("ActionManager", assembly.GetFieldType("ActionManager", "instance"));
         Assert.Equal("ActionableListVariable", assembly.GetFieldType("ActionManager", "actionableItems"));
         Assert.Equal("IntVariable", assembly.GetFieldType("ActionableListVariable", "maxQueuedItems"));
         AssertMethod(assembly, "ActionManager", "GetRemainingRoom", true, "System.Int32");
+        AssertMethod(assembly, "ActionManager", "UnloadAction", true, "System.Void", "IActionable", "System.Int32");
+        AssertMethod(assembly, "StackableListVariable`1", "GetStacks", false, "System.Int32", "!0");
         AssertMethod(assembly, "GlobalVariables", "GetMultiBuy", true, "IntVariable");
         AssertMethod(assembly, "Player", "GetBulkDevelopment", true, "IntVariable");
         AssertMethod(assembly, "IntVariable", "AsInt", false, "System.Int32");
@@ -112,6 +116,16 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "SpellManager", "AddSpell", false, "System.Void", "Spell");
         AssertMethod(assembly, "SpellManager", "RemoveSpell", false, "System.Void", "Spell");
         AssertMethod(assembly, "SpellManager", "MoveSpell", false, "System.Void", "Spell");
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableSO>",
+            assembly.GetFieldType("ConsumableSO", "All"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableSO", "currentPrepTime"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableUsage>",
+            assembly.GetFieldType("ConsumableSO", "consumableUsages"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
+        AssertMethod(assembly, "ConsumableSO", "GetQueued", false, "System.Int32");
 
         AssertMethod(assembly, "Spell", "Fire", false, "System.Void");
         AssertMethod(assembly, "Spell", "CanCast", false, "System.Boolean");
@@ -301,6 +315,54 @@ public sealed class InstalledGameContractTests
             "System.Boolean");
         AssertMethod(assembly, "Inventory", "CanUseConsumable", true, "System.Boolean");
 
+        Assert.Equal(
+            new FieldContract("instance", "public", true, "SoundManager"),
+            assembly.GetField("SoundManager", "instance"));
+        Assert.Equal(
+            new FieldContract("audioMaximum", "public", false, "System.Int32"),
+            assembly.GetField("SoundManager", "audioMaximum"));
+        Assert.Equal(
+            new FieldContract(
+                "audioElements",
+                "private",
+                false,
+                "System.Collections.Generic.List`1<AudioElement>"),
+            assembly.GetField("SoundManager", "audioElements"));
+        Assert.Equal(
+            new FieldContract("currentIndex", "private", false, "System.Int32"),
+            assembly.GetField("SoundManager", "currentIndex"));
+        AssertMethod(
+            assembly,
+            "SoundManager",
+            "PlayLoop",
+            true,
+            "AudioElement",
+            "UnityEngine.AudioClip",
+            "System.Single");
+        AssertMethod(
+            assembly,
+            "UpgradeSO",
+            "PlayProcessSound",
+            false,
+            "System.Void");
+        Assert.Equal(
+            new FieldContract(
+                "audioSource",
+                "private",
+                false,
+                "UnityEngine.AudioSource"),
+            assembly.GetField("AudioElement", "audioSource"));
+        AssertMethod(assembly, "AudioElement", "IsPlaying", false, "System.Boolean");
+        AssertMethod(assembly, "AudioElement", "IsLooping", false, "System.Boolean");
+        AssertMethod(
+            assembly,
+            "AudioElement",
+            "FadeOutDestroy",
+            false,
+            "AudioElement",
+            "System.Single");
+        AssertMethod(assembly, "AudioElement", "Stop", false, "System.Void");
+
         Assert.True(assembly.HasType("ScalingInfo"));
         Assert.True(assembly.HasType("IInstantEffectScript"));
         Assert.True(assembly.HasType("Targeting.ITargetable"));
@@ -361,6 +423,7 @@ public sealed class InstalledGameContractTests
         Assert.True(assembly.HasType("EnchantmentSO"));
         Assert.True(assembly.HasType("EnchantmentSO+EnchantTable"));
         Assert.True(assembly.HasType("EnchantmentInstance"));
+        Assert.True(assembly.HasType("ConsumableUsage"));
         Assert.True(assembly.HasType("ConsumableSO+ConsumableGainEffect"));
         Assert.True(assembly.HasType("EnchantmentSO+EnchantItemScript"));
 
@@ -403,6 +466,12 @@ public sealed class InstalledGameContractTests
         Assert.Equal(
             "System.Collections.Generic.List`1<ConsumableCount>",
             assembly.GetFieldType("ConsumableSO", "consumableCounts"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ConsumableUsage>",
+            assembly.GetFieldType("ConsumableSO", "consumableUsages"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableSO", "currentPrepTime"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "dr"));
         Assert.Equal(
             "System.Collections.Generic.List`1<ResourceTuple>",
             assembly.GetFieldType("ResourceCostList", "costs"));
@@ -452,6 +521,17 @@ public sealed class InstalledGameContractTests
             "BigDouble");
         AssertMethod(assembly, "ResourceCostList", "HasEnough", false, "System.Boolean");
         AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "GetQuantity", false, "BigDouble");
+        AssertMethod(
+            assembly,
+            "ResourceSO",
+            "GetTrueSpend",
+            false,
+            "BigDouble",
+            "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "HasDecay", false, "System.Boolean");
+        AssertMethod(assembly, "ResourceSO", "GetDecayPercent", false, "BigDouble");
+        AssertMethod(assembly, "ResourceSO", "IsBandwidthResource", false, "System.Boolean");
         AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
         AssertMethod(assembly, "AbstractListVariable`1", "GetMax", false, "System.Int32");
         AssertMethod(assembly, "GenericListVariable`1", "HasEmptySpot", false, "System.Boolean");
@@ -489,6 +569,7 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "CraftingInstance", "InstantCraft", false, "System.Void");
         AssertMethod(assembly, "ConsumableCount", "GetLevel", false, "System.Int32");
         AssertMethod(assembly, "ConsumableCount", "GetQuantity", false, "System.Int32");
+        AssertMethod(assembly, "ConsumableSO", "GetQueued", false, "System.Int32");
         AssertMethod(
             assembly,
             "ScalingInfo",

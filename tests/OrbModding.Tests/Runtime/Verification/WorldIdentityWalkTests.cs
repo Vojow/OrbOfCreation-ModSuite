@@ -76,7 +76,9 @@ public sealed class WorldIdentityWalkTests
     /// plot and action tables already claim, said about the entity rather than as it. So is
     /// <c>EntityRequirements</c>, whose rows are conditions on an upgrade or a structure the two
     /// purchasable categories already own. <c>ActionQueueSlots</c> is a position in a list, which is
-    /// no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
+    /// no entity at all. <c>ActionQueueMembers</c> is likewise keyed by queue and position; its
+    /// actionable UUID points at the Structure/Upgrade table that owns it. <c>MasteryExperience</c>
+    /// is an ordered input journal keyed by sequence; its
     /// source identity points at a recipe or equipment row that already owns that identity.
     /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
     /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
@@ -84,8 +86,9 @@ public sealed class WorldIdentityWalkTests
     /// second entity namespace. <c>CollectionCategories</c> is availability evidence about one
     /// collector pass, not a native row and not a second identity namespace. <c>ScribeWork</c>,
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
-    /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
-    /// Scrolls, and enchantments whose owning tables already carry those identities.
+    /// <c>ScrollTargetEvidence</c>, and <c>ScrollUseTargetEvidence</c> are relationship or evidence
+    /// rows keyed by recipes, structures, Scrolls, and enchantments whose owning tables already
+    /// carry those identities.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -98,6 +101,7 @@ public sealed class WorldIdentityWalkTests
         "PlotActions",
         "PlotActionInstances",
         "ActionQueueSlots",
+        "ActionQueueMembers",
         "SpellSlots",
         "SpellCosts",
         "MasteryExperience",
@@ -112,6 +116,7 @@ public sealed class WorldIdentityWalkTests
         "StructureEnchantments",
         "ScrollTargets",
         "ScrollTargetEvidence",
+        "ScrollUseTargetEvidence",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",

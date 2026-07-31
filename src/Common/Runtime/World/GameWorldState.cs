@@ -166,6 +166,9 @@ public sealed record GameWorldState
     internal PublicationTable<WorldScrollTargetEvidence> ScrollTargetEvidence { get; init; } =
         PublicationTable<WorldScrollTargetEvidence>.Empty;
 
+    internal PublicationTable<WorldScrollUseTargetEvidence> ScrollUseTargetEvidence { get; init; } =
+        PublicationTable<WorldScrollUseTargetEvidence>.Empty;
+
     internal PublicationTable<WorldRitual> Rituals { get; init; } =
         PublicationTable<WorldRitual>.Empty;
 
@@ -232,6 +235,13 @@ public sealed record GameWorldState
     /// </summary>
     internal PublicationTable<WorldActionQueueSlot> ActionQueueSlots { get; init; } =
         PublicationTable<WorldActionQueueSlot>.Empty;
+
+    /// <summary>
+    /// Unique members of the stack-backed attribute queue. These are relation rows keyed by queue
+    /// and position; their actionable UUID points back to the primary Structure or Upgrade table.
+    /// </summary>
+    internal PublicationTable<WorldActionQueueMember> ActionQueueMembers { get; init; } =
+        PublicationTable<WorldActionQueueMember>.Empty;
 
     /// <summary>
     /// The player's equipped spell loadout, sorted by position. Reached by

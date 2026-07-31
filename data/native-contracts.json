@@ -280,6 +280,24 @@
       "place": "capture"
     },
     {
+      "id": "action-manager.actionable-items",
+      "assembly": "assembly-csharp",
+      "type": "ActionManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "actionableItems",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ActionableListVariable",
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
       "id": "action-manager.get-remaining-room",
       "assembly": "assembly-csharp",
       "type": "ActionManager",
@@ -295,6 +313,46 @@
       ],
       "usages": [
         "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "action-manager.instance",
+      "assembly": "assembly-csharp",
+      "type": "ActionManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instance",
+      "visibility": "public",
+      "static": true,
+      "valueType": "ActionManager",
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "action-manager.unload-action",
+      "assembly": "assembly-csharp",
+      "type": "ActionManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "UnloadAction",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Void",
+      "parameters": [
+        "IActionable",
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "direct"
       ],
       "place": "action"
     },
@@ -315,6 +373,48 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "actionable-list-variable.has-room",
+      "assembly": "assembly-csharp",
+      "type": "ActionableListVariable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasRoom",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Buy action-queue integrity",
+        "Common world collection"
+      ],
+      "usages": [
+        "direct",
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "actionable-list-variable.get-remaining-room",
+      "assembly": "assembly-csharp",
+      "type": "ActionableListVariable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRemainingRoom",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Buy action-queue integrity",
+        "Common world collection"
+      ],
+      "usages": [
+        "direct",
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "actionable-list-variable.type",
@@ -8821,6 +8921,25 @@
       "place": "action"
     },
     {
+      "id": "resource.get-decay-percent",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDecayPercent",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "resource.get-display-rate",
       "assembly": "assembly-csharp",
       "type": "ResourceSO",
@@ -8933,7 +9052,8 @@
       "owners": [
         "Automata resource snapshots",
         "Automata Auto Concept drain",
-        "Automata world collection"
+        "Automata world collection",
+        "Automata Auto Scribe action boundary"
       ],
       "usages": [
         "reflection"
@@ -9036,7 +9156,8 @@
         "BigDouble"
       ],
       "owners": [
-        "Automata Auto Concept action boundary"
+        "Automata Auto Concept action boundary",
+        "Automata Auto Scribe action boundary"
       ],
       "usages": [
         "reflection"
@@ -9056,6 +9177,25 @@
       "parameters": [],
       "owners": [
         "Automata rate-math verification"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "resource.has-decay",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasDecay",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe action boundary"
       ],
       "usages": [
         "reflection"
@@ -9166,7 +9306,8 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Buy refusal diagnostics"
+        "Automata Auto Buy refusal diagnostics",
+        "Automata Auto Scribe action boundary"
       ],
       "usages": [
         "reflection"
@@ -12076,6 +12217,48 @@
       "place": "action"
     },
     {
+      "id": "stackable-list-variable.get-stacks",
+      "assembly": "assembly-csharp",
+      "type": "StackableListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetStacks",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [
+        "!0"
+      ],
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "stackable-list-variable.get-total-stacks",
+      "assembly": "assembly-csharp",
+      "type": "StackableListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTotalStacks",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Buy action-queue integrity",
+        "Common world collection"
+      ],
+      "usages": [
+        "direct",
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "structure.active-cost-mod",
       "assembly": "assembly-csharp",
       "type": "StructureSO",
@@ -12260,6 +12443,25 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "structure.complete-action",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CompleteAction",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "harmony"
+      ],
+      "place": "patch"
     },
     {
       "id": "structure.cost-per-quantity",
@@ -12479,6 +12681,44 @@
       "owners": [
         "Automata Auto Buy verification",
         "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "structure.get-action-time",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetActionTime",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "structure.get-build-speed",
+      "assembly": "assembly-csharp",
+      "type": "StructureSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetBuildSpeed",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common world collection"
       ],
       "usages": [
         "reflection"
@@ -13615,6 +13855,25 @@
       "place": "capture"
     },
     {
+      "id": "upgrade.complete-action",
+      "assembly": "assembly-csharp",
+      "type": "UpgradeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CompleteAction",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata action-queue completion containment"
+      ],
+      "usages": [
+        "harmony"
+      ],
+      "place": "patch"
+    },
+    {
       "id": "upgrade.get-purchase-cost",
       "assembly": "assembly-csharp",
       "type": "UpgradeSO",
@@ -13633,6 +13892,44 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "upgrade.get-action-time",
+      "assembly": "assembly-csharp",
+      "type": "UpgradeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetActionTime",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "upgrade.get-build-speed",
+      "assembly": "assembly-csharp",
+      "type": "UpgradeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetBuildSpeed",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     },
     {
       "id": "upgrade.get-purchase-level",
@@ -14648,7 +14945,8 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Items action boundary"
+        "Automata Auto Items action boundary",
+        "Automata Auto Items world planning"
       ],
       "usages": [
         "reflection"
@@ -14700,6 +14998,215 @@
       "typeVisibility": "public",
       "kind": "method",
       "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "runtime.upgrade.play-process-sound",
+      "assembly": "assembly-csharp",
+      "type": "UpgradeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "PlayProcessSound",
+      "visibility": "private",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Upgrade processing-loop aggregation"
+      ],
+      "usages": [
+        "harmony"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "runtime.sound-manager.play-loop",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "PlayLoop",
+      "visibility": "public",
+      "static": true,
+      "returnType": "AudioElement",
+      "parameters": [
+        "UnityEngine.AudioClip",
+        "System.Single"
+      ],
+      "owners": [
+        "Automata Upgrade processing-loop aggregation"
+      ],
+      "usages": [
+        "harmony"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "runtime.audio-element.fade-out-destroy",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "FadeOutDestroy",
+      "visibility": "public",
+      "static": false,
+      "returnType": "AudioElement",
+      "parameters": [
+        "System.Single"
+      ],
+      "owners": [
+        "Automata Upgrade processing-loop aggregation"
+      ],
+      "usages": [
+        "harmony"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "runtime.audio-element.stop",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Stop",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Upgrade processing-loop aggregation"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.instance",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instance",
+      "visibility": "public",
+      "static": true,
+      "valueType": "SoundManager",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.audio-maximum",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioMaximum",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.audio-elements",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioElements",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<AudioElement>",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.current-index",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentIndex",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.audio-source",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioSource",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.AudioSource",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.is-playing",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsPlaying",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.is-looping",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsLooping",
       "visibility": "public",
       "static": false,
       "returnType": "System.Boolean",
@@ -14892,7 +15399,8 @@
       "returnType": "ConsumableCount",
       "parameters": [],
       "owners": [
-        "Automata Auto Items action boundary"
+        "Automata Auto Items action boundary",
+        "Automata Auto Items world planning"
       ],
       "usages": [
         "reflection"
@@ -14911,7 +15419,8 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Items action boundary"
+        "Automata Auto Items action boundary",
+        "Automata Auto Items world planning"
       ],
       "usages": [
         "reflection"
@@ -14932,7 +15441,8 @@
         "ConsumableCount"
       ],
       "owners": [
-        "Automata Auto Items action boundary"
+        "Automata Auto Items action boundary",
+        "Automata Auto Items world planning"
       ],
       "usages": [
         "reflection"

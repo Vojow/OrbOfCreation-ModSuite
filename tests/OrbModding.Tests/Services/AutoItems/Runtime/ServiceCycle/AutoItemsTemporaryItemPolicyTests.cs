@@ -171,6 +171,8 @@ public sealed class AutoItemsTemporaryItemPolicyTests
                 }),
             ConsumableCosts = PublicationTable<WorldConsumableCost>.Create(
                 new[] { ToxicityCost(itemId) }),
+            ConsumableCounts = PublicationTable<WorldConsumableCount>.Create(
+                new[] { new WorldConsumableCount(itemId, 1, 1, 0) }),
             Resources = WorldTable.Create(Toxicity(new BigDouble(100))),
             CollectedAtFrame = 10,
             CollectedAtEpoch = 1,
@@ -350,6 +352,7 @@ public sealed class AutoItemsTemporaryItemPolicyTests
             in context,
             ref state,
             writer,
+            new ConsumableMutationPublicationGapCoordinator(),
             out _);
         var actions = new List<AutoItemsCycleAction>(store.Count);
         while (!store.IsComplete)

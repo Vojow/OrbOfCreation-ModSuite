@@ -8,16 +8,18 @@ namespace OrbAutomata;
 internal static class AutoItemsService
 {
     internal static IAutomataServiceDefinition<AutoItemsCycleState, AutoItemsCycleAction> Define(
-        IAutoItemsCycleActionPort actions)
+        IAutoItemsCycleActionPort actions,
+        ConsumableMutationPublicationGapCoordinator publicationGap)
     {
         if (actions is null) throw new ArgumentNullException(nameof(actions));
+        if (publicationGap is null) throw new ArgumentNullException(nameof(publicationGap));
         var metadata = new AutomataServiceMetadata(
             AutoItemsServicePolicies.ServiceId,
             AutoItemsServicePolicies.DefaultWakePolicy,
             AutoItemsServicePolicies.FaultRecoveryPolicy);
         return AutomataService.Define<AutoItemsCycleState, AutoItemsCycleAction>(
             in metadata,
-            static () => new AutoItemsWorkerDefinition(),
+            () => new AutoItemsWorkerDefinition(publicationGap),
             ShouldStart,
             actions.TryExecute);
     }

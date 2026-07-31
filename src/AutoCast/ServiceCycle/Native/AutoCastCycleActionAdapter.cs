@@ -172,6 +172,8 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.TargetingInProgress);
             case AutoCastPreflight.CasterBusy:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.NativeCasterBusy);
+            case AutoCastPreflight.ConsumableBusy:
+                return ServiceActionResult.Rejected(AutoCastActionResultCodes.ConsumableBusy);
             case AutoCastPreflight.SlotIdentityChanged:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.SlotIdentityChanged);
             case AutoCastPreflight.NotReady:

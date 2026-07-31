@@ -14,6 +14,9 @@ internal enum AutoItemsDecisionKind
     AwaitingTemporaryActivation = 5,
     TemporaryEffectActive = 6,
     TemporaryItemQuarantined = 7,
+    NativePreparationActive = 8,
+    AwaitingPermanentSettlement = 9,
+    PermanentSettlementQuarantined = 10,
 }
 
 internal readonly struct AutoItemsDecisionMetrics
@@ -64,6 +67,15 @@ internal struct AutoItemsCycleState
         TemporaryActivationSeen = false;
         LastQuarantinedTemporaryItem = Guid.Empty;
         LastTemporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
+        PendingPermanentItem = Guid.Empty;
+        PendingPermanentFamily = AutoItemsConsumableFamily.Unknown;
+        PermanentPlannedLevel = 0;
+        PermanentSubmittedFromFrame = 0;
+        PermanentUsageSeen = false;
+        ScrollSettlementQuarantined = false;
+        RelicSettlementQuarantined = false;
+        LastPermanentQuarantineCause = AutoItemsPermanentQuarantineCause.None;
+        LastQuarantinedPermanentItem = Guid.Empty;
     }
 
     private ConfigGeneration _allowlistConfiguration;
@@ -81,6 +93,15 @@ internal struct AutoItemsCycleState
     internal bool TemporaryActivationSeen { get; private set; }
     internal Guid LastQuarantinedTemporaryItem { get; private set; }
     internal AutoItemsTemporaryQuarantineCause LastTemporaryQuarantineCause { get; private set; }
+    internal Guid PendingPermanentItem { get; private set; }
+    internal AutoItemsConsumableFamily PendingPermanentFamily { get; private set; }
+    internal int PermanentPlannedLevel { get; private set; }
+    internal long PermanentSubmittedFromFrame { get; private set; }
+    internal bool PermanentUsageSeen { get; private set; }
+    internal bool ScrollSettlementQuarantined { get; private set; }
+    internal bool RelicSettlementQuarantined { get; private set; }
+    internal AutoItemsPermanentQuarantineCause LastPermanentQuarantineCause { get; private set; }
+    internal Guid LastQuarantinedPermanentItem { get; private set; }
 
     internal static AutoItemsCycleState Create(LifecycleGeneration lifecycle) => new(lifecycle);
     internal void RecordDecision(in AutoItemsDecisionMetrics decision) => Decision = decision;
@@ -101,6 +122,12 @@ internal struct AutoItemsCycleState
         HasPendingReceipt = true;
     }
 
+    internal void RecordPlannedAction(in AutoItemsCycleAction action)
+    {
+        PendingReceiptAction = action;
+        HasPendingReceipt = true;
+    }
+
     internal void ClearPendingReceipt()
     {
         PendingReceiptAction = default;
@@ -113,6 +140,48 @@ internal struct AutoItemsCycleState
         PendingTemporaryItem = action.ItemId;
         TemporarySubmittedFromFrame = action.CollectedAtFrame;
         TemporaryActivationSeen = false;
+    }
+
+    internal void RecordSubmittedPermanent(in AutoItemsCycleAction action)
+    {
+        if (AutoItemsConsumableFamilies.IsTemporary(action.Family) ||
+            action.Family == AutoItemsConsumableFamily.Unknown)
+            throw new ArgumentOutOfRangeException(nameof(action));
+        PendingPermanentItem = action.ItemId;
+        PendingPermanentFamily = action.Family;
+        PermanentPlannedLevel = action.PlannedLevel;
+        PermanentSubmittedFromFrame = action.CollectedAtFrame;
+        PermanentUsageSeen = false;
+    }
+
+    internal void MarkPermanentUsageSeen() => PermanentUsageSeen = true;
+
+    internal void ClearPendingPermanent()
+    {
+        PendingPermanentItem = Guid.Empty;
+        PendingPermanentFamily = AutoItemsConsumableFamily.Unknown;
+        PermanentPlannedLevel = 0;
+        PermanentSubmittedFromFrame = 0;
+        PermanentUsageSeen = false;
+    }
+
+    internal void QuarantinePendingPermanent(AutoItemsPermanentQuarantineCause cause)
+    {
+        if (cause == AutoItemsPermanentQuarantineCause.None)
+            throw new ArgumentOutOfRangeException(nameof(cause));
+        if (PendingPermanentItem == Guid.Empty)
+            throw new InvalidOperationException(
+                "A permanent consumable quarantine requires a pending exact item.");
+        LastQuarantinedPermanentItem = PendingPermanentItem;
+        if (PendingPermanentFamily == AutoItemsConsumableFamily.Scroll)
+            ScrollSettlementQuarantined = true;
+        else if (PendingPermanentFamily == AutoItemsConsumableFamily.Relic)
+            RelicSettlementQuarantined = true;
+        else
+            throw new InvalidOperationException(
+                "Only Scroll and Relic settlement can be quarantined as permanent consumables.");
+        LastPermanentQuarantineCause = cause;
+        ClearPendingPermanent();
     }
 
     internal void MarkTemporaryActivationSeen() => TemporaryActivationSeen = true;

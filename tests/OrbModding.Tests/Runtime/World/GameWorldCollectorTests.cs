@@ -887,6 +887,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetQueuedQuantity() => Queued;
 
         public bool IsAvailable() => Available;
+
+        public BigDouble GetActionTime() => currentBuildTime;
+
+        public BigDouble GetBuildSpeed() => buildSpeed.GetValue();
     }
 
     /// <summary>A structure's authored cost, shaped as the game shapes it: a list wrapper.</summary>
@@ -938,6 +942,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetPurchaseLevel() => Level;
 
         public bool IsAvailable() => Available;
+
+        public BigDouble GetActionTime() => new(developmentTime);
+
+        public BigDouble GetBuildSpeed() => new(100d);
     }
 
     /// <summary>
@@ -1430,6 +1438,31 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(7, world.ConsumableCounts[countStart].Level);
         Assert.Equal(4, world.ConsumableCounts[countStart].Quantity);
         Assert.Equal(3, world.ConsumableCounts[countStart].FreeQuantity);
+    }
+
+    [Fact]
+    public void AnOwnedScrollPublishesCompleteStrongestLevelTargetEvidence()
+    {
+        var scrollId = KnownEntities.ScrollPower.Uuid;
+        var scroll = Assert.IsType<FakeConsumable>(FakeIdRegistry.RuntimeLookup[scrollId]);
+        scroll.quantity = 1;
+        scroll.consumableCounts.Add(new FakeConsumableCount
+        {
+            Level = 4,
+            Quantity = 1,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldScribeLookup.TryGetUseTargetEvidence(
+            world.ScrollUseTargetEvidence,
+            scrollId,
+            level: 4,
+            out var targetCount));
+        Assert.Equal(0, targetCount);
     }
 
     [Fact]
@@ -2825,6 +2858,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(2, row.UsedSlots);
         Assert.True(row.HasEmptySlot);
         Assert.True(row.Consistent);
+        Assert.Equal(WorldActionQueueKind.Stacked, row.Kind);
+        Assert.Equal(2, row.TotalStacks);
+        Assert.Equal(4, row.RemainingStackRoom);
+        Assert.True(row.HasStackRoom);
 
         // The edge resolves into the row that already carries the number, so nothing publishes it
         // twice and the two cannot drift.
@@ -2833,6 +2870,67 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(6d, capacity.Value.ToDouble());
 
         Assert.Equal(0, world.ActionQueueSlots.Count);
+        Assert.Equal(2, world.ActionQueueMembers.Count);
+        Assert.All(
+            world.ActionQueueMembers.AsSpan().ToArray(),
+            member => Assert.Equal(
+                WorldActionQueueMemberConsistency.UnknownNativeType,
+                member.Consistency));
+    }
+
+    [Fact]
+    public void TheAttributeQueuePublishesExactPerMemberStackContradictions()
+    {
+        var maximum = Guid.NewGuid();
+        FakeCount.All.Add(new FakeCount { Identity = maximum, value = new FakeModifierRecord(10d) });
+
+        var stale = new FakeStructure
+        {
+            Queued = 0,
+            queueTimeLeft = new BigDouble(-1d),
+            currentBuildTime = new BigDouble(2d),
+        };
+        var active = new FakeUpgrade
+        {
+            queuedLevels = 2,
+            buildTime = new BigDouble(3d),
+            developmentTime = 5d,
+        };
+        var queue = new FakeAttributeQueue
+        {
+            maxQueuedItems = new FakeQueueCapacity { Identity = maximum, Maximum = 10 },
+        };
+        queue.SetStacks(stale, 3);
+        queue.SetStacks(active, 2);
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveActionables.Uuid] = queue;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.ActionQueues, queue.Identity, out var summary));
+        Assert.Equal(2, summary.UsedSlots);
+        Assert.Equal(5, summary.TotalStacks);
+        Assert.Equal(5, summary.RemainingStackRoom);
+        Assert.True(summary.HasStackRoom);
+
+        Assert.Equal(2, world.ActionQueueMembers.Count);
+        var staleRow = world.ActionQueueMembers[0];
+        Assert.Equal(stale.Identity, staleRow.ActionableId);
+        Assert.Equal(WorldActionQueueMemberKind.Structure, staleRow.Kind);
+        Assert.Equal(3, staleRow.StackCount);
+        Assert.Equal(0, staleRow.NativeQueuedCount);
+        Assert.Equal(WorldActionQueueMemberConsistency.ExcessStacks, staleRow.Consistency);
+        Assert.True(staleRow.TimingReadable);
+
+        var activeRow = world.ActionQueueMembers[1];
+        Assert.Equal(active.Identity, activeRow.ActionableId);
+        Assert.Equal(WorldActionQueueMemberKind.Upgrade, activeRow.Kind);
+        Assert.Equal(2, activeRow.StackCount);
+        Assert.Equal(2, activeRow.NativeQueuedCount);
+        Assert.Equal(WorldActionQueueMemberConsistency.Consistent, activeRow.Consistency);
+        Assert.True(activeRow.TimingReadable);
     }
 
     /// <summary>

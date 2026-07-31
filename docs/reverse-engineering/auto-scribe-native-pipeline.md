@@ -1,9 +1,9 @@
 # Auto Scribe native pipeline
 
-> **Evidence status: implemented and installed-contract verified against both accepted 1.0.5-2
-> baselines; interactive validation remains open.** Metadata, immutable world publication, the
-> rewritten one-shot GameAction, and deterministic paid-failure tests are present. No game process
-> or save was used for this port.
+> **Evidence status: raw-spend receipt implemented and portable/installed-contract verified;
+> interactive validation remains required for this revision.** Metadata, immutable world
+> publication, the rewritten one-shot GameAction, and deterministic paid-failure coverage are
+> present.
 
 [Back to reverse-engineering index](README.md) ·
 [Game boundary doctrine](../runtime-architecture/game-boundary-doctrine.md) ·
@@ -14,9 +14,9 @@
 The original dossier was established from read-only ILSpy and AssetRipper inspection of the
 accepted Windows build. This release-line port retains that native evidence while reconciling the
 implementation to the suite's accepted GameAction doctrine. The manifest admits the exact Windows
-and macOS 1.0.5-2 `Assembly-CSharp.dll`/`Assembly-CSharp-firstpass.dll` pairs and verifies every
+and macOS 1.0.5-2 `Assembly-CSharp.dll`/`Assembly-CSharp-firstpass.dll` pairs and declares every
 reflected Scribe field, method, inheritance relation, return type, parameter list, staticness, and
-the `CraftingInstance(CraftingRecipeSO, BigDouble)` constructor.
+the `CraftingInstance(CraftingRecipeSO, BigDouble)` constructor for exact contract validation.
 
 The manifest check is necessary but not sufficient. Runtime makes the mutation capability
 available only when one complete binding set resolves at lifecycle scope. No type search, overload
@@ -136,7 +136,7 @@ UICraftingPage.QueueCraft(recipe, quantity)
 
 There is no non-UI one-shot composite. Re-driving the data-layer sequence below the UI handler is
 therefore the only supported automation entry point. The suite uses a new instance and refuses when
-matching active or automatic supply already exists at the requested level or higher.
+matching non-expired active or automatic work already exists at any level.
 
 ## Levelled inventory and coverage
 
@@ -148,16 +148,22 @@ through the use.
 For one role and its independent Scroll frontier, coverage demand is:
 
 ```text
-desired = max(uncovered eligible structures, maximum carry load when positive)
+desired = maximum carry load when positive, otherwise uncovered eligible structures
 deficit = max(0, desired
                  - owned Scrolls at or above target level
                  - active one-shot work at or above target level
                  - pending Auto Items uses at or above target level)
 ```
 
-Automatic Scribe work at or above the target does not subtract a guessed quantity. It changes the
-role disposition to external production, causing the suite to yield until a later publication
-shows what the game produced.
+The positive carry load is a hard native capacity bound, not merely a minimum buffer. Once stock at
+or above the target level fills that capacity, additional uncovered structures cannot authorize a
+futile same-level purchase. Lower-level stock is deliberately excluded from the subtraction, so a
+stronger target can still use the native replacement path even when total Scroll inventory is full.
+
+Queued consumable quantity, active preparation, any unexpired Scroll use, and matching non-expired
+manual or automatic Scribe work at any level activate a capacity-replacement interlock. The role
+becomes external production and yields without deficit production or progression until a later
+background-world publication shows that all four signals have cleared.
 
 Queued work and pending uses raise only their matching recipe's frontier. A higher shared
 `maxStartingLevel` produced by cheap Advancement crafts never raises Power, Learning, Excellence,
@@ -196,6 +202,10 @@ Before the capability can run, `AutoScribeNativeBindings` resolves and validates
   initiation, and admission;
 - exact instance/static field shapes, including generic element types;
 - exact instance/static methods, declaring hierarchy, parameter types, return types, and staticness;
+- the raw-spend receipt methods `ResourceSO.GetQuantity()`, `GetTrueSpend(BigDouble)`,
+  `HasDecay()`, `GetDecayPercent()`, and `IsBandwidthResource()`;
+- the replacement signals `ConsumableSO.GetQueued()`, `currentPrepTime`, `consumableUsages`, and
+  exact `ConsumableUsage.en`/`dr` expiry fields;
 - separate identity methods for recipe, Scroll, enchantment, resource, and instance-reference
   domains;
 - separate recipe-list and instance-list `value` fields; and
@@ -217,14 +227,25 @@ The main-thread action performs this complete order before `PurchaseQuantity`:
 5. require `CraftingRecipeSO.IsVisible()`;
 6. require `ActiveScribeInstances.HasEmptySpot()`;
 7. require the requested per-Scroll level and bracket/binary-search the highest affordable level;
-8. reject matching non-expired active or automatic supply at that selected level;
+8. reject queued Scroll quantity, active preparation, any unexpired Scroll usage, or matching
+   non-expired active/automatic Scribe work at any level;
 9. require a non-empty exact native target selection at that selected level and preserve its reason;
 10. require exact `GetTotalCost(0, selected level)` type and `HasEnough()`;
-11. capture resource quantities, ceiling, queue count, and exact-level Scroll stock; and
-12. capture the `CraftingQueueSubmission` mutation permit.
+11. capture every cost row's nominal value, raw `GetTrueSpend` value, decay state and percentage,
+    and the resource's raw `GetQuantity()`;
+12. reject any bandwidth cost resource and reject when duplicate rows aggregate to a raw debit
+    greater than the live raw balance, even if native row-by-row `HasEnough()` returned true;
+13. capture ceiling, queue count, and exact-level Scroll stock; and
+14. capture the `CraftingQueueSubmission` mutation permit; and
+15. immediately repeat visibility, queue room, selected-level affordability, all replacement
+    signals, target selection, exact cost affordability, raw spend evidence, and before-state
+    capture before payment.
 
 Payment is the final suite-owned risk. No configuration, policy, registry relationship, target,
-affordability, ownership, metadata discovery, or before-state read remains afterward.
+affordability, ownership, metadata discovery, spend-modifier calculation, or before-state read
+remains afterward. These reads stay inside the main-thread GameAction immediately around mutation;
+the background world remains an immutable planning input and does not publish native resource
+objects or attempt to authorize the final debit.
 
 ### Mutation and exact evidence
 
@@ -239,16 +260,44 @@ CheckInstantCraft()
   or ActiveScribeInstances.Add(instance)
 ```
 
-The receipt re-reads each distinct resource in the exact `GetTotalCost` value, aggregates duplicate
-resource rows, and proves that its quantity fell by the aggregated expected charge. It also proves
-the exact `max(before ceiling, level)` transition and exactly one of:
+For each cost row, native `ResourceSO.Spend` first converts the nominal tuple value to a raw debit:
+
+```text
+expected raw debit = resource.GetTrueSpend(nominal tuple value)
+if resource.HasDecay():
+    expected raw debit *= 1 - resource.GetDecayPercent()
+```
+
+That calculation and the raw before quantity are captured immediately before payment. Replenish
+may schedule a later gain but does not alter this immediate debit. Comparing `GetTrueQuantity()`
+against the nominal tuple value is invalid because quality and decay participate in native spend
+semantics.
+
+The receipt retains the exact native row count, order, resource object, nominal value, and captured
+raw debit. For each distinct resource it starts from the captured raw quantity and applies every row
+in authored order as native `Spend` does:
+
+```text
+predicted after = BigDouble.Max(predicted before - row raw debit, 0)
+```
+
+It then requires the live raw quantity to equal that predicted post-state. Comparing a mathematical
+`before - after` debit is not valid for `BigDouble`: when exponent distance exceeds its precision, a
+positive native debit can leave the stored quantity unchanged. Such a verified row is classified as
+below resolution rather than as an absent debit. Duplicate rows remain subject to the separate
+aggregate pre-payment affordability check, preventing native row-by-row `HasEnough()` plus zero
+clamping from hiding an underpayment; they are nevertheless reproduced sequentially for the
+post-state proof, never collapsed into one synthetic spend. A bandwidth resource is unsupported and
+rejects the action before payment. The receipt also proves the exact
+`max(before ceiling, level)` transition and exactly one of:
 
 - active queue count increased by one and contains non-expired work for the exact recipe and level;
 - exact-level Scroll stock increased by one while queue count did not change.
 
 A verified result carries four attempted native stages and one mutation attempt/verification. A
-partial result preserves the reached stage, observed payment, resource, ceiling, queue, and stock
-facts. It never substitutes the success call shape for incomplete work.
+partial result preserves the reached stage, observed payment, first mismatched resource UUID,
+nominal cost, expected raw debit, observed raw debit, captured decay evidence, ceiling, queue, and
+stock facts. It never substitutes the success call shape for incomplete work.
 
 ### Post-payment failure and quarantine
 
@@ -260,7 +309,9 @@ verification stage.
 
 Runtime health gives quarantine priority over later ordinary policy state. It reports the stage,
 recipe UUID, exception or verification reason, and observed receipt. Lifecycle replacement is the
-only recovery.
+only recovery. The first fault remains the root health record for that lifecycle. Later submissions
+rejected because the action is already quarantined do not replace it, advance the fault revision,
+or emit another warning.
 
 ## Validator freshness classification
 
@@ -271,12 +322,14 @@ only recovery.
 | `CraftingRecipeSO.IsVisible()` | Pure | call live before queue/cost work |
 | `CraftingInstanceListVariable.HasEmptySpot()` | Pure | call live before payment |
 | active and automatic instance membership | Pure | enumerate live before payment |
+| queued quantity, preparation, and usage expiry | Pure | read from the exact live Scroll and repeat after the mutation permit immediately before payment |
 | `TargetSelectOptions.GetTargeting()` | Pure serialized dispatch | require exact `TargetStructure` |
 | `TargetStructure.GetRandomList(ScalingInfo.Basic(level))` | Pure | repeat live immediately before payment |
 | monotonic `CraftingRecipeSO.CanBuyAt(level)` frontier | Pure | bounded bracket and binary search live before cost capture |
 | `GetTotalCost(0, level).HasEnough()` | Pure | call live and retain exact cost for receipt |
+| `GetQuantity()`, `GetTrueSpend(cost)`, decay, and bandwidth evidence | Pure live spend evidence | capture on the main thread immediately before payment; preserve row order, reject unsupported or aggregate-insufficient costs, and predict the native sequential raw post-state |
 | action-family ownership permit | Pure process-local authority | capture immediately before payment |
-| `PurchaseQuantity` acceptance | Side-effectful | attempt only after all preflights, then verify exact deltas |
+| `PurchaseQuantity` acceptance | Side-effectful | attempt only after all preflights, then verify the native row-ordered raw post-state and progression/admission deltas |
 | construction, initiation, and admission | Side-effectful | attempt once and quarantine any native exception |
 
 No Scribe validator is known to be UI-cached or to require a UI-driven refresh. If runtime
@@ -291,26 +344,36 @@ missing positive target level, absent target evidence, or a contradictory target
 role `EvidenceUnknown`.
 
 One `EvidenceUnknown` role blocks the entire Auto Scribe service for that publication before cost
-rank can select another role. Runtime health names the semantic role and exact evidence reason.
+rank can select another role. Selection carries an explicit evidence-blocked flag alongside the
+role: a default/empty coverage record is not a sentinel, because its enum value also represents
+`EvidenceUnknown`. Runtime health names the semantic role and exact evidence reason.
 There is no degraded-but-producing state. The engine then waits for a strictly newer publication;
 the feature owns no cadence, retry deadline, or candidate memory.
 
 ## Remaining runtime validation
 
-Portable and installed-contract tests now prove the static surface, paid fake behavior, semantic
-policy, F4 blocking, exact preflight reasons, both successful admission outcomes, every
-post-payment injected-failure stage, receipt evidence, quarantine, and lifecycle reset.
+Required portable and installed-contract coverage includes the complete static binding surface,
+paid fake behavior, semantic policy, F4 blocking, exact preflight reasons, both successful
+admission outcomes, every post-payment injected-failure stage, raw receipt evidence, quarantine,
+and lifecycle reset. The raw-spend cases include non-default quality, active decay, replenish
+without an immediate debit change, a positive debit below `BigDouble` resolution, duplicate rows
+whose sequential rounding differs from aggregate subtraction, duplicate rows with and without
+sufficient aggregate balance, bandwidth refusal, injected zero/partial/excess debits, cost-row mutation, first-fault preservation,
+warning deduplication, and lifecycle replacement.
 
 A disposable-save Unity pass must still:
 
 - correlate published structure/enchantment coverage with the visible game state;
 - observe queue and native instant completion at the requested level;
-- compare the exact resource and `maxStartingLevel` deltas with the receipt;
+- compare the exact raw resource post-state and `maxStartingLevel` deltas with the receipt, including a
+  decay-active Advancement purchase;
 - exercise manual one-shot and persistent automatic competition;
+- exercise queued quantity, active preparation, pending/engaged use, and their post-permit races;
 - confirm empty native target selection blocks production;
 - observe cheap and expensive Scroll recipes progress independently despite one shared Scribe ceiling;
 - observe the fair cursor eventually selects every visible enabled producible role;
-- confirm Runtime shows the exact role/evidence block and post-payment stage; and
+- confirm Runtime shows the exact role/evidence block and post-payment stage;
+- confirm a quarantined action preserves one root fault without repeated warnings; and
 - cross scene change, save/load, reset, NG+, shutdown, and restart.
 
 Until that pass exists, the metadata result proves compatibility of the declared native shape, not

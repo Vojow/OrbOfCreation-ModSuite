@@ -1146,6 +1146,87 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         Assert.False(result.HasNativeEvidence);
     }
 
+    [Fact]
+    public void Execute_StructureWithoutASpareAudioSlot_RejectsBeforeQueueOrPurchase()
+    {
+        var purchases = new RecordingPurchasePort();
+        var queue = new FakeQueueRoom(64, readable: true);
+        var adapter = new AutoBuyCycleActionAdapter(
+            purchases,
+            queue,
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance,
+            audioReadiness: new FakeAudioReadiness(reusableSlots: 1));
+
+        var result = adapter.TryExecute(
+            new AutoBuyCycleAction(AutoBuyCandidateKind.Structure, Guid.NewGuid(), PlannedEpoch),
+            Config(structures: true, upgrades: true),
+            Context());
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.AudioUnavailable, result.Code);
+        Assert.Equal(0, queue.ReadCount);
+        Assert.Equal(0, purchases.Calls);
+    }
+
+    [Fact]
+    public void Execute_ContradictoryActionQueueRejectsBeforeAudioQueueRoomOrPurchase()
+    {
+        var purchases = new RecordingPurchasePort();
+        var queue = new FakeQueueRoom(64, readable: true);
+        var audio = new FakeAudioReadiness(reusableSlots: 8);
+        var adapter = new AutoBuyCycleActionAdapter(
+            purchases,
+            queue,
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance,
+            audioReadiness: audio,
+            queueIntegrity: new FakeQueueIntegrity(healthy: false));
+
+        var result = adapter.TryExecute(
+            new AutoBuyCycleAction(AutoBuyCandidateKind.Structure, Guid.NewGuid(), PlannedEpoch),
+            Config(structures: true, upgrades: true),
+            Context());
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.ActionQueueInconsistent, result.Code);
+        Assert.Equal(0, queue.ReadCount);
+        Assert.Equal(0, purchases.Calls);
+    }
+
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    public void Execute_UpgradePreservesASpareSlotAfterItsProcessingAndCompletionDemand(
+        int reusableSlots,
+        bool purchaseExpected)
+    {
+        var purchases = new RecordingPurchasePort();
+        var queue = new FakeQueueRoom(64, readable: true);
+        var adapter = new AutoBuyCycleActionAdapter(
+            purchases,
+            queue,
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance,
+            audioReadiness: new FakeAudioReadiness(reusableSlots));
+
+        var result = adapter.TryExecute(
+            new AutoBuyCycleAction(AutoBuyCandidateKind.Upgrade, Guid.NewGuid(), PlannedEpoch),
+            Config(structures: true, upgrades: true),
+            Context());
+
+        Assert.Equal(purchaseExpected ? 1 : 0, purchases.Calls);
+        Assert.Equal(purchaseExpected ? 1 : 0, queue.ReadCount);
+        if (!purchaseExpected)
+        {
+            Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+            Assert.Equal(AutoBuyActionResultCodes.AudioUnavailable, result.Code);
+        }
+    }
+
     /// <summary>
     /// One upgrade action is one native call but several queue stacks — the game queues one entry per
     /// committed level and its purchase loop never consults the queue room. Checking that a single slot
@@ -1192,11 +1273,27 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     private sealed class RecordingPurchasePort : IAutoBuyNativePurchasePort
     {
         internal int LastCount { get; private set; }
+        internal int Calls { get; private set; }
 
         public AutoBuyPurchaseSubmission Submit(AutoBuyCandidateKind kind, Guid uuid, int count)
         {
+            Calls++;
             LastCount = count;
             return AutoBuyPurchaseSubmission.Rejected(AutoBuyPurchasePreflight.CandidateUnavailable);
+        }
+    }
+
+    private sealed class FakeQueueIntegrity : IAutoBuyQueueIntegrityPort
+    {
+        private readonly bool _healthy;
+
+        internal FakeQueueIntegrity(bool healthy) => _healthy = healthy;
+
+        public bool TryReadHealthy(out bool healthy, out string reason)
+        {
+            healthy = _healthy;
+            reason = _healthy ? "healthy" : "injected contradiction";
+            return true;
         }
     }
 
@@ -1225,10 +1322,27 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             _readable = readable;
         }
 
+        internal int ReadCount { get; private set; }
+
         public bool TryReadRemainingRoom(out int remainingRoom)
         {
+            ReadCount++;
             remainingRoom = _readable ? _room : 0;
             return _readable;
+        }
+    }
+
+    private sealed class FakeAudioReadiness : IAutoBuyAudioReadinessPort
+    {
+        private readonly int _reusableSlots;
+
+        internal FakeAudioReadiness(int reusableSlots) => _reusableSlots = reusableSlots;
+
+        public bool TryReadReusableSlots(out int reusableSlots, out string reason)
+        {
+            reusableSlots = _reusableSlots;
+            reason = reusableSlots > 0 ? string.Empty : "test pool exhausted";
+            return true;
         }
     }
 

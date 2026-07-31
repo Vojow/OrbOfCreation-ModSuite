@@ -7,7 +7,7 @@ namespace OrbAutomata.GameMcp;
 internal static class GameMcpGadgetPolicy
 {
     internal static bool IsAllowlistedProbe(string probe) =>
-        probe is "runtime" or "action_queue_room" or "navigation";
+        probe is "runtime" or "action_queue_room" or "audio_pool" or "navigation";
 
     internal static bool IsCurrentContentSubtabPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&

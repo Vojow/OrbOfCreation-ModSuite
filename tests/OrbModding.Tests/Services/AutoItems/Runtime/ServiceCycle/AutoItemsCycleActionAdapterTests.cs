@@ -21,7 +21,8 @@ public sealed class AutoItemsCycleActionAdapterTests
             static () => 7,
             static () => true,
             static () => string.Empty,
-            health);
+            health,
+            new ConsumableMutationPublicationGapCoordinator());
         var config = Configuration(AutoItemsOperationMode.Disabled);
         var action = new AutoItemsCycleAction(
             Guid.NewGuid(),
@@ -49,13 +50,14 @@ public sealed class AutoItemsCycleActionAdapterTests
             static () => 7,
             static () => false,
             static () => reason,
-            health);
+            health,
+            new ConsumableMutationPublicationGapCoordinator());
         var config = Configuration(AutoItemsOperationMode.Active);
         var action = new AutoItemsCycleAction(
             Guid.NewGuid(),
             AutoItemsConsumableFamily.Relic,
             collectedAtEpoch: 7,
-            plannedLevel: 0);
+            plannedLevel: 1);
         var context = Context();
 
         var result = adapter.TryExecute(in action, in config, in context);
@@ -80,6 +82,76 @@ public sealed class AutoItemsCycleActionAdapterTests
     }
 
     [Fact]
+    public void AudioUnavailableMapsToANamedTransientRejection()
+    {
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.AudioUnavailable,
+            "SoundManager.instance is not ready for permanent consumable preparation.");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.AudioUnavailable, result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
+
+    [Fact]
+    public void LifecycleReplacementInvalidatesThePendingLevelPlanBeforeNativeResolution()
+    {
+        var health = new AutoItemsActionHealth();
+        using var gameAction = GameAction();
+        var adapter = new AutoItemsCycleActionAdapter(
+            gameAction,
+            static () => 8,
+            static () => true,
+            static () => string.Empty,
+            health,
+            new ConsumableMutationPublicationGapCoordinator());
+        var config = Configuration(AutoItemsOperationMode.Active);
+        var action = new AutoItemsCycleAction(
+            Guid.NewGuid(),
+            AutoItemsConsumableFamily.Scroll,
+            collectedAtEpoch: 7,
+            plannedLevel: 3);
+        var context = Context();
+
+        var result = adapter.TryExecute(in action, in config, in context);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.LifecycleReplaced, result.Code);
+        Assert.False(result.HasNativeEvidence);
+        Assert.False(health.HasFailure);
+    }
+
+    [Fact]
+    public void OpenPublicationGapRejectsAutoItemsBeforeNativeResolution()
+    {
+        var gap = new ConsumableMutationPublicationGapCoordinator();
+        gap.ObserveMutationAttempt(7, 12);
+        using var gameAction = GameAction();
+        var adapter = new AutoItemsCycleActionAdapter(
+            gameAction,
+            static () => 7,
+            static () => true,
+            static () => string.Empty,
+            new AutoItemsActionHealth(),
+            gap);
+        var action = new AutoItemsCycleAction(
+            Guid.NewGuid(),
+            AutoItemsConsumableFamily.Relic,
+            collectedAtEpoch: 7,
+            plannedLevel: 1);
+        var config = Configuration(AutoItemsOperationMode.Active);
+        var context = Context();
+
+        var result = adapter.TryExecute(in action, in config, in context);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.PublicationGap, result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
+
+    [Fact]
     public void AmbiguousMutationReceiptNamesQuarantineAndRetainsAttemptEvidence()
     {
         var submission = new AutoItemsSubmission(
@@ -98,6 +170,20 @@ public sealed class AutoItemsCycleActionAdapterTests
         Assert.Equal(0, result.NativeCallOutcome.MutationsCommitted);
     }
 
+    [Fact]
+    public void ExistingQuarantineWithoutAnotherMutationIsAnExpectedRejection()
+    {
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.Quarantined,
+            "Auto Items remains quarantined after an earlier ambiguous mutation.");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.Quarantined, result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
+
     private static AutoItemsConsumableUseGameAction GameAction()
     {
         IDictionary registry = new System.Collections.Generic.Dictionary<Guid, object>();
@@ -107,7 +193,9 @@ public sealed class AutoItemsCycleActionAdapterTests
                 () => TypedRegistrySourceSnapshot.Ready(registry),
                 static _ => null),
             static () => true,
-            static () => string.Empty);
+            static () => string.Empty,
+            static () => 1,
+            static (_, _) => { });
     }
 
     private static SuiteRuntimeConfiguration Configuration(AutoItemsOperationMode mode) =>

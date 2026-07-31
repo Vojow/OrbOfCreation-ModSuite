@@ -44,6 +44,15 @@ internal sealed class AutoBuyWorkerDefinition :
         if (state.Lifecycle != context.Identity.Lifecycle)
             throw new InvalidOperationException("Auto Buy state belongs to a different lifecycle.");
 
+        // Planning is background-WORLD only. An absent or contradictory queue emits no purchases;
+        // the action boundary independently revalidates the same invariant to close the race to the
+        // Unity main thread. AutoScribe is intentionally unaffected because it uses its own queue.
+        if (!AutoBuyWorldQueueIntegrity.IsHealthy(world, out _))
+        {
+            state.RecordDecision(default);
+            return WakePolicy.OnPublication;
+        }
+
         AutoBuyFrameProjector.Project(ref state.Scratch, in config, world);
         var wake = AutoBuyCycleEvaluator.Evaluate(
             in state.Scratch, in config, actions, out var decision);

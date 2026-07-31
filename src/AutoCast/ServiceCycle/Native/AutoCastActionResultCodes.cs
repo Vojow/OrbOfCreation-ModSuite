@@ -42,4 +42,7 @@ internal static class AutoCastActionResultCodes
 
     /// <summary>A full-charge hold could not be established, so the cast was not submitted.</summary>
     public static ServiceActionResultCode ChargeHoldRefused => new(3079);
+
+    /// <summary>A consumable is queued, preparing, or has a pending native usage.</summary>
+    public static ServiceActionResultCode ConsumableBusy => new(3080);
 }

@@ -63,6 +63,10 @@ internal static class AutoCastCycleEvaluator
         if (state.HeldChargeSlot != AutoCastCycleState.NoHeldSlot)
             return EvaluateHeldCharge(world, in config, ref state, actions, rows, ref metrics);
 
+        // Consumable preparation and spell firing share game-owned effect/target execution state.
+        // A held charge is released above before this gate; only starting a new Fire is interlocked.
+        if (HasConsumableInterlock(world)) return wake;
+
         // A channel in progress pauses the rotation wholesale rather than skipping its slot: the
         // caster is occupied, so nothing else can go either.
         for (var index = 0; index < rows.Length; index++)
@@ -149,6 +153,28 @@ internal static class AutoCastCycleEvaluator
         // A cast that took a hold wakes on the next world rather than on the interval, so the release
         // lands as close to the charge finishing as a generation-gated service can put it.
         return wake;
+    }
+
+    private static bool HasConsumableInterlock(GameWorldState world)
+    {
+        var consumables = world.Consumables.AsSpan();
+        for (var index = 0; index < consumables.Length; index++)
+        {
+            ref readonly var consumable = ref consumables[index];
+            if (consumable.QueuedQuantity > 0 ||
+                consumable.CurrentPrepTime.CompareTo(BigDouble.Zero) > 0)
+            {
+                return true;
+            }
+        }
+
+        var usages = world.ConsumableUsages.AsSpan();
+        for (var index = 0; index < usages.Length; index++)
+        {
+            ref readonly var usage = ref usages[index];
+            if (usage.Pending && !usage.Expired) return true;
+        }
+        return false;
     }
 
     /// <summary>

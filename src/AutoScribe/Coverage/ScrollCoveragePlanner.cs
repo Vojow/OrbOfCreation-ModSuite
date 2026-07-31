@@ -79,10 +79,12 @@ internal sealed class ScrollCoveragePlan
         PublicationTable<ScrollRoleKey>? enabledRoles,
         int afterCraftCostOrder,
         out ScrollRoleCoverage coverage,
-        out ScrollRoleCoverage blocked)
+        out ScrollRoleCoverage blocked,
+        out bool evidenceBlocked)
     {
         coverage = default;
         blocked = default;
+        evidenceBlocked = false;
         for (var index = 0; index < Roles.Length; index++)
         {
             var candidate = Roles[index];
@@ -90,6 +92,7 @@ internal sealed class ScrollCoveragePlan
                 candidate.State != ScrollCoverageState.EvidenceUnknown)
                 continue;
             blocked = candidate;
+            evidenceBlocked = true;
             return false;
         }
 
@@ -230,7 +233,8 @@ internal static class ScrollCoveragePlanner
                 strongestOwned,
                 out var targetLevel,
                 out var progressionLevel,
-                out var carry))
+                out var carry,
+                out var capacityReplacementActive))
             return Row(
                 role, 0, AutoScribeEvidenceReason.TargetLevelUnavailable,
                 ScrollCoverageState.EvidenceUnknown);
@@ -269,9 +273,13 @@ internal static class ScrollCoveragePlanner
         var queued = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: false);
         var automatic = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: true);
         var pending = CountPending(world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
-        var desired = carry > 0 ? Math.Max(uncovered, carry) : uncovered;
+        // Native Scroll stock cannot exceed its positive carry limit. Demand therefore fills that
+        // capacity instead of mirroring a larger uncovered target count. Because owned/work/use
+        // supply is counted only at or above targetLevel, a full lower-level inventory still leaves
+        // room in this calculation for native stronger-level replacement.
+        var desired = carry > 0 ? carry : uncovered;
         var deficit = Math.Max(0, desired - owned - queued - pending);
-        var state = automatic > 0 && deficit > 0
+        var state = capacityReplacementActive
             ? ScrollCoverageState.ExternallyProducing
             : deficit > 0
                 ? ScrollCoverageState.ProductionNeeded
@@ -363,11 +371,13 @@ internal static class ScrollCoveragePlanner
         int strongestOwnedLevel,
         out int targetLevel,
         out int progressionLevel,
-        out int carryTarget)
+        out int carryTarget,
+        out bool capacityReplacementActive)
     {
         targetLevel = 0;
         progressionLevel = 0;
         carryTarget = 0;
+        capacityReplacementActive = false;
         if (!TryFindConsumable(world, scrollId, out var scroll))
             return false;
 
@@ -376,14 +386,16 @@ internal static class ScrollCoveragePlanner
             Math.Max(scroll.MaxCreatedLevel, strongestOwnedLevel));
         var stableFrontier = targetLevel;
         carryTarget = Math.Max(0, scroll.MaximumCarryLoad);
+        capacityReplacementActive =
+            scroll.QueuedQuantity > 0 ||
+            scroll.CurrentPrepTime.CompareTo(BigDouble.Zero) > 0;
 
-        var hasActiveWork = false;
         var work = world.ScribeWork.AsSpan();
         for (var index = 0; index < work.Length; index++)
         {
             var row = work[index];
             if (row.RecipeId != recipeId || row.IsExpired) continue;
-            hasActiveWork = true;
+            capacityReplacementActive = true;
             targetLevel = Math.Max(targetLevel, row.Level);
         }
 
@@ -391,11 +403,18 @@ internal static class ScrollCoveragePlanner
         for (var index = 0; index < usages.Length; index++)
         {
             var row = usages[index];
-            if (row.ConsumableId == scrollId && !row.Expired)
-                targetLevel = Math.Max(targetLevel, row.Level);
+            if (row.ConsumableId != scrollId || row.Expired) continue;
+            capacityReplacementActive = true;
+            targetLevel = Math.Max(targetLevel, row.Level);
         }
 
-        if (!hasActiveWork &&
+        var hasOwnedSupplyAtFrontier =
+            WorldConsumableCountLookup.CountAtOrAbove(
+                world.ConsumableCounts,
+                scrollId,
+                targetLevel) > 0;
+        if (!capacityReplacementActive &&
+            !hasOwnedSupplyAtFrontier &&
             targetLevel == stableFrontier &&
             stableFrontier < int.MaxValue)
         {
@@ -453,4 +472,5 @@ internal static class ScrollCoveragePlanner
         }
         return pending;
     }
+
 }

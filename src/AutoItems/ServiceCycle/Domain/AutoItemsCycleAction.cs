@@ -16,10 +16,10 @@ internal readonly struct AutoItemsCycleAction
             throw new ArgumentException("An Auto Items action requires an item identity.", nameof(itemId));
         if (family == AutoItemsConsumableFamily.Unknown)
             throw new ArgumentOutOfRangeException(nameof(family), family, "A supported item family is required.");
-        if (family == AutoItemsConsumableFamily.Scroll && plannedLevel < 1)
+        if (!AutoItemsConsumableFamilies.IsTemporary(family) && plannedLevel < 1)
             throw new ArgumentOutOfRangeException(
                 nameof(plannedLevel),
-                "A Scroll action requires the strongest owned level from its world reading.");
+                "A permanent consumable action requires the strongest owned level from its world reading.");
         ItemId = itemId;
         Family = family;
         CollectedAtFrame = collectedAtFrame;

@@ -107,6 +107,10 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
             return Blocked(
                 FeatureStatusReasonCode.EmergencyDisabled,
                 "Automata Emergency Disable is active.");
+        // A paid or ambiguous mutation is the lifecycle's root safety state. Configuration or
+        // ownership changes can happen afterward, but must not mask that first quarantine.
+        if (_health.HasFailure && IsQuarantiningFailure(_health.Preflight))
+            return FromActionHealth();
         if (!OwnsActionFamily())
             return Blocked(
                 FeatureStatusReasonCode.ActionFamilyConflict,
@@ -118,30 +122,53 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
                 string.IsNullOrWhiteSpace(_gameAction.BindingFailure)
                     ? "The lifecycle-scoped Auto Scribe binding set is unavailable."
                     : _gameAction.BindingFailure);
-        if (_health.HasFailure && IsQuarantiningFailure(_health.Preflight))
-            return FromActionHealth();
         if (!_cycleObserved)
             return new AutoScribeFeatureStatus(
                 FeatureStatusState.NotReady,
                 FeatureStatusReasonCode.GameplayNotReady,
                 "Auto Scribe is waiting for its first world publication.");
-        if (_decisionKind == AutoScribeDecisionKind.EvidenceBlocked)
+        return ProjectObservedCycle(
+            _health,
+            _decisionKind,
+            _blockedRole,
+            _blockedReason,
+            _dependencies.Profile);
+    }
+
+    internal static AutoScribeFeatureStatus ProjectObservedCycle(
+        AutoScribeActionHealth health,
+        AutoScribeDecisionKind decisionKind,
+        int blockedRole,
+        AutoScribeEvidenceReason blockedReason,
+        AutoScribeIdentityProfile profile)
+    {
+        if (health is null) throw new ArgumentNullException(nameof(health));
+        if (profile is null) throw new ArgumentNullException(nameof(profile));
+        // Live native action health is newer and more authoritative than the decision that planned
+        // it. In particular, a QueueFull refusal must not be hidden by a stale EvidenceBlocked
+        // projection from the same service-cycle diagnostics ring.
+        if (health.HasFailure)
+            return FromActionHealth(health);
+        if (decisionKind == AutoScribeDecisionKind.EvidenceBlocked)
         {
-            if (_dependencies.Profile.TryFindOrdinal(_blockedRole, out var role))
+            if (blockedReason == AutoScribeEvidenceReason.None)
+                return new AutoScribeFeatureStatus(
+                    FeatureStatusState.ContractUnavailable,
+                    FeatureStatusReasonCode.InvariantViolation,
+                    "Auto Scribe projected EvidenceBlocked without an evidence failure reason.");
+            if (profile.TryFindOrdinal(blockedRole, out var role))
                 return Blocked(
                     FeatureStatusReasonCode.EvidenceUnavailable,
-                    ScrollCoveragePlanner.DescribeEvidence(in role, _blockedReason));
+                    ScrollCoveragePlanner.DescribeEvidence(in role, blockedReason));
             return Blocked(
                 FeatureStatusReasonCode.EvidenceUnavailable,
-                $"Auto Scribe blocked an unknown role ordinal {_blockedRole} for " +
-                $"evidence reason {_blockedReason}.");
+                $"Auto Scribe blocked an unknown role ordinal {blockedRole} for " +
+                $"evidence reason {blockedReason}.");
         }
-        if (_health.HasFailure)
-            return FromActionHealth();
         return new AutoScribeFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,
-            _decisionKind switch
+            decisionKind switch
             {
                 AutoScribeDecisionKind.Planned =>
                     "Auto Scribe planned one audited Scroll from the latest world.",
@@ -151,12 +178,14 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
             });
     }
 
-    private AutoScribeFeatureStatus FromActionHealth()
+    private AutoScribeFeatureStatus FromActionHealth() => FromActionHealth(_health);
+
+    private static AutoScribeFeatureStatus FromActionHealth(AutoScribeActionHealth health)
     {
-        var summary = string.IsNullOrWhiteSpace(_health.Reason)
-            ? $"Auto Scribe failed at {_health.Stage}/{_health.Preflight}."
-            : _health.Reason;
-        return _health.Preflight switch
+        var summary = string.IsNullOrWhiteSpace(health.Reason)
+            ? $"Auto Scribe failed at {health.Stage}/{health.Preflight}."
+            : health.Reason;
+        return health.Preflight switch
         {
             AutoScribePreflight.ContractUnavailable =>
                 new AutoScribeFeatureStatus(
@@ -254,7 +283,7 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
         string summary) =>
         new(FeatureStatusState.TemporarilyBlocked, reason, summary);
 
-    private readonly struct AutoScribeFeatureStatus
+    internal readonly struct AutoScribeFeatureStatus
     {
         internal AutoScribeFeatureStatus(
             FeatureStatusState state,

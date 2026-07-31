@@ -56,11 +56,12 @@ precedence rule over unseen combinations.
 
 The shared world also publishes each consumable's quantity, queued quantity, preparation and
 cooldown readings, visibility, randomization capability, maximum carry, immediate `consumeCost`,
-held `usageCost`, usages, and per-level counts. Relations are all-or-nothing per consumable: an
-unreadable relation rejects that complete item reading instead of authorizing policy from a partial
-graph. Costs retain every resource row. Auto Items requires the exact capped inverted Toxicity
-resource and its immediate cost for worker admission; `CanFire()` remains authoritative for the
-complete live cost vector.
+held `usageCost`, usages, and per-level counts. For each owned supported Scroll it publishes the
+strongest owned level and the exact count returned by the authored target chain for that level.
+Relations are all-or-nothing per consumable or target graph: an unreadable relation rejects that
+complete reading instead of authorizing policy from a partial graph. Costs retain every resource
+row. Auto Items requires the exact capped inverted Toxicity resource and its immediate cost for
+worker admission; `CanFire()` remains authoritative for the complete live cost vector.
 
 ## Native submission
 
@@ -83,6 +84,21 @@ observable edge: stock decreases by one and queued quantity increases by one. La
 random target selection, and the eventual Scroll or Relic effect remain game-owned and are not
 reported as completed by this boundary.
 
+Live failure evidence refined the permanent path: `SelectAndFire()` increments
+`queuedQuantity`, then idle `Inventory.QueueConsumableForUse()` calls `PrepNextUsage()` before it
+inserts the consumable into the inventory queue or completes the stock debit. `PrepNextUsage()` can
+reach `SoundManager.Play()`, whose installed IL dereferences the static `SoundManager.instance`,
+cycles `currentIndex` modulo `audioMaximum` through the private `audioElements` list, and calls
+through each selected `AudioElement.audioSource`. If that singleton or reachable pool is not ready,
+the native call can throw after only the early queue increment. Auto Items therefore reads this
+audio topology without invoking any audio method immediately before Scroll or Relic mutation. It
+requires a non-null exact singleton, positive `audioMaximum`, a pool containing every reachable
+index, a current index inside that range, exact non-null `AudioElement` rows, and exact non-null
+audio sources. It also mirrors `GetAudioElement()` with the pure `IsPlaying()` and `IsLooping()`
+queries and requires at least two returnable entries: one for preparation and one reserved for the
+completion/progression path. Failure is a named transient `AudioUnavailable` rejection with zero native mutation
+attempts. Temporary-item submission does not use this permanent-preparation readiness gate.
+
 Scrolls additionally require `canBeRandomized`, enable the native randomized flag, confirm it with
 `IsRandomized()`, and use the authored request-target graph. The boundary requires exactly one exact
 `RequestTargetEffectScript`, obtains its exact `TargetStructure`, recomputes the valid target list
@@ -98,8 +114,9 @@ then applies the same live `CanUseConsumable()`, `CanFire()`, ownership, and qua
 It additionally requires exactly one new native usage.
 
 Mutual exclusion is global across temporary families: any pending or active temporary usage blocks
-Scroll, Relic, and temporary submissions. Conversely, native Scroll or Relic preparation makes
-`Inventory.CanUseConsumable()` refuse a temporary submission.
+Scroll, Relic, and temporary submissions. Any published consumable `currentPrepTime > 0` suppresses
+every new family plan, matching the native inventory rule that preparation is global. The action
+boundary still repeats `Inventory.CanUseConsumable()` immediately before every mutation.
 
 After a committed temporary receipt, lifecycle-scoped worker state follows only that exact item.
 Later world publications must show exactly one usage and at least one engaged reading before it
@@ -121,11 +138,13 @@ The protocol applies these classes from the
 | `hasDuration` and `durationBase` | Pure | Re-read the live fields for a temporary item and require a finite positive duration immediately before admission. |
 | `consumeCost.costs` and `usageCost.costs`, exact `ResourceTuple.resource` UUID/type, and `valueBig` | Pure | Traverse both complete live vectors. Immediate cost must contain Toxicity; neither vector may contain another resource or an invalid magnitude. `CanFire()` remains the affordability oracle. |
 | `ConsumableSO.All`, each temporary family membership, and `consumableUsages` | Pure | Re-read all exact native consumables and refuse every family while any temporary usage is pending or active. An unreadable row refuses with its exact reason. |
-| Native busy check, `Inventory.CanUseConsumable()` | Pure | Read the live shared preparation state immediately before mutation. A false result is a named `NativeBusy` refusal. |
+| Published `currentPrepTime` across all consumables | Pure | Worker policy refuses every family while any published item is preparing. This avoids using a known-stale plan as the normal busy detector. |
+| Native busy check, `Inventory.CanUseConsumable()` | Pure | Revalidate the live shared preparation state immediately before mutation. A false result is a named `NativeBusy` race refusal. |
+| `SoundManager.instance`, `audioMaximum`, `audioElements`, `currentIndex`, `AudioElement.audioSource`, `IsPlaying()`, and `IsLooping()` | Pure | Immediately before Scroll or Relic mutation, read the complete reachable native audio pool without calling the index-mutating `GetAudioElement()` or `Play()`. Missing, undersized, null, out-of-range, or fully occupied looping topology is a transient `AudioUnavailable` rejection with no mutation attempt. |
 | `ConsumableSO.CanFire()` | Pure | Read live stock, cooldown, and native cost admission immediately before the ownership permit and mutation. A false result is a named `CanFireRefused` refusal. |
-| `GetStrongestLevel()`, `GetStrongest()`, `GetCountScalingInfo()` | Pure | Rebuild the strongest-level scaling input from the live item; a change from the planned level rejects. |
-| `TargetSelectOptions.GetTargeting()` and `TargetStructure.GetRandomList(ScalingInfo)` | UI-cached, revalidatable | Treat published or previously computed targets as stale-capable. Invoke this exact authored chain as the declared scoped recomputation and require a non-empty result; no ambient screen visit or blanket cache warming is trusted. |
-| `SelectAndFire()` and the later durable effect | Unrefreshable / attempt-and-verify | Submit exactly once. Verify stock -1 and queue +1; also verify randomization for Scroll or usage +1 for a temporary item. Never claim durable effect completion, and let later publications supply activation evidence. |
+| `GetStrongestLevel()`, `GetStrongest()`, `GetCountScalingInfo()` | Pure | Collection publishes target evidence for the strongest owned level. The action rebuilds the same scaling input live; a change from the planned level rejects. |
+| `TargetSelectOptions.GetTargeting()` and `TargetStructure.GetRandomList(ScalingInfo)` | UI-cached, revalidatable | Collection invokes the exact authored chain for planning and records zero as complete evidence. The action repeats it because the publication is stale-capable and requires a non-empty live result; no ambient screen visit or blanket cache warming is trusted. |
+| `SelectAndFire()` and the later durable effect | Unrefreshable / attempt-and-verify | Submit exactly once. Verify stock -1, queue +1, usage +1, and positive preparation; for permanent items also verify the exact planned usage level, and for Scrolls verify randomization. Never claim durable effect completion, and let later publications supply settlement or activation evidence. |
 
 There is no feature-side configuration freshness check. Dispatch deliberately uses the
 cycle-pinned configuration, as specified by the doctrine. Configuration staleness is bounded by the
@@ -142,6 +161,7 @@ it validates the complete reflected binding set before resolving an item:
   `ConsumableUsage`, `ResourceCostList`, `ResourceTuple`, and `ScalingInfo`;
 - `InstantEffectBlock`, `IInstantEffectScript`, and exact `RequestTargetEffectScript`;
 - exact target options, base selection, target structure, and targetable types;
+- exact `SoundManager`, `AudioElement`, and permanent-preparation audio-pool fields;
 - every field and method used for family, visibility, randomization, targeting, busy/readiness
   admission, quantity/queue evidence, and `SelectAndFire()`.
 
@@ -159,13 +179,15 @@ The action order is:
 5. check native busy and `CanFire()`;
 6. capture current cooperative ownership permits with their exact conflict explanation;
 7. enter native multi-buy quantity one;
-8. capture stock, queue, randomization, and usage-count state;
-9. perform the native randomization/use mutation;
-10. capture again and require the exact family-specific immediate deltas.
+8. for Scroll or Relic, read the complete reachable audio pool and reject if it is not ready;
+9. capture stock, queue, randomization, and usage-count state;
+10. perform the native randomization/use mutation;
+11. capture again and require the exact family-specific immediate deltas.
 
 An unavailable complete binding set is `ContractUnavailable`. Lost identity, changed family,
 native busy, lost visibility, a native fire refusal, an empty target result, and a lost permit are
-named refusals. A mutation attempt that throws or cannot prove its postcondition faults the receipt
+named refusals. Unready permanent-preparation audio is a named transient refusal before any native
+call. A mutation attempt that throws or cannot prove its postcondition faults the receipt
 with its native-call evidence. Scroll or Relic ambiguity quarantines the entire consumable
 GameAction; temporary ambiguity quarantines only the exact item UUID. Health and diagnostics retain
 the same exact reason. A later ordinary publication cannot retry the quarantined target; lifecycle
@@ -181,8 +203,18 @@ reflection abstraction that hides each capability's declared contracts.
 
 Auto Items is an ordinary ServiceCycle service with a one-action main-thread turn. It evaluates
 after world or committed-configuration publication and returns `OnPublication` on every path.
-There is no evaluator interval, native-busy poll, cooldown, recovery latch, immediate chain, or
-candidate memory. The engine's one-attempt-per-world floor supplies the retry boundary.
+Published global preparation and strongest-level Scroll target evidence decide whether a candidate
+may be planned. Non-expired manual or automatic Scribe work for the same Scroll recipe also blocks
+that Scroll from being planned. Live reads are commit revalidation only. After a committed Scroll or
+Relic action, only a strictly newer clean consumables publication can settle it: either exactly one
+queued, preparing, unengaged/unexpired usage at the planned level remains, or the native queue is
+already fully drained. Contradictory topology quarantines that permanent family. Settlement does not
+compare total quantity because a capacity replacement can preserve total stock while replacing a
+weaker level. There is no evaluator interval, native-busy
+poll, cooldown, recovery latch, immediate chain, or candidate memory. The engine's
+one-attempt-per-world floor supplies the retry boundary. Identical expected live refusals do not
+advance health or repeat warnings, and the next clean non-action publication clears transient
+refusal health without clearing contract or quarantine faults.
 
 The additive configuration is:
 
@@ -226,9 +258,11 @@ the exact-UUID allowlist.
 
 ## Evidence limits
 
-Portable tests use exact-shape game stubs. They cover live-family change, native busy, lost permit,
-manual stock race, empty Scroll targets, ambiguous postconditions, lifecycle reset, direct adapter
-mapping, publication-driven planning, exact/near-miss allowlisting, every temporary shape guard,
+Portable tests use exact-shape game stubs. They cover published global preparation, strongest-level
+target evidence including a complete empty result, live-family change, native busy, lost permit,
+missing or incomplete permanent-preparation audio topology,
+manual stock race, empty live Scroll targets, ambiguous postconditions, lifecycle reset, direct
+adapter mapping, transient-health deduplication, publication-driven planning, exact/near-miss allowlisting, every temporary shape guard,
 mutual exclusion in both directions, native stock/duration/Toxicity/usage evidence, exact-item
 quarantine, and injected double-usage, premature-expiry, and missing-engagement publications. The
 target stub injects a candidate list and therefore does not reproduce the game's complete

@@ -11,6 +11,13 @@ namespace OrbAutomata;
 internal sealed class AutoItemsWorkerDefinition :
     IServiceCycleWorkerDefinition<AutoItemsCycleState, AutoItemsCycleAction>
 {
+    private readonly ConsumableMutationPublicationGapCoordinator _publicationGap;
+
+    internal AutoItemsWorkerDefinition(
+        ConsumableMutationPublicationGapCoordinator publicationGap) =>
+        _publicationGap = publicationGap ??
+            throw new ArgumentNullException(nameof(publicationGap));
+
     public AutoItemsCycleState CreateState(LifecycleGeneration lifecycle) =>
         AutoItemsCycleState.Create(lifecycle);
 
@@ -33,6 +40,7 @@ internal sealed class AutoItemsWorkerDefinition :
             in context,
             ref state,
             actions,
+            _publicationGap,
             out var decision);
         state.RecordDecision(in decision);
         return wake;

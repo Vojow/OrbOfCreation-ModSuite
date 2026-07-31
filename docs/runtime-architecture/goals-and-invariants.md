@@ -144,6 +144,9 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 - `Committed` and `Skipped` advance that batch's cursor; only `Committed` increments its committed count.
 - The first `Rejected` or `Faulted` action terminates the batch. Earlier commits remain committed, and the rejected action and untouched suffix are never executed or retried; a later cycle may replan, but an old batch is never resumed.
 - Every attempted action receives current native identity, availability, resources, queue, ownership, lifecycle, mutation, and postcondition validation as applicable; affordability, reserves, and strategy come from the cycle-pinned policy snapshots.
+- Native audio containment is exact-scope and ownership-preserving: only identical Upgrade processing
+  loops may share an element, each native owner retains one lease, final native release performs the
+  fade, and one-shot, Spell-loop, and Brewing-loop behavior stays native.
 
 ### Emergency stop
 
@@ -162,6 +165,8 @@ The long-term product should support Auto Buy, harvesting, Agrimancy, spells, cr
 
 - Save/load, reset, NG+, scene replacement, shutdown, and other audited boundaries advance the lifecycle generation. Old pending captures and action suffixes receive no further native call, and late old-generation responses cannot publish current state or actions. See [lifecycle retirement](service-cycle-runtime.md).
 - A fresh runner owns factory-created lifecycle-scoped state, plus a fresh world buffer where the shape has one; prior-lifecycle projections never seed it. Native caches are lifecycle-scoped and re-resolved after replacement.
+- Audio aggregation references and telemetry are lifecycle-scoped and cleared on replacement; MCP
+  may change future aggregation policy or reset counters but cannot force-stop a native loop.
 - An old evaluator may finish as an isolated orphan; its result is discarded by generation and its thread exits. The runtime never uses `Thread.Abort`, unsafe preemption, or shared mutable state transfer.
 - Each service has exactly two physical runner positions — normally current plus optional retiring, both retiring during a storm, in which case the service pauses and coalesces to the newest generation. No third runner exists.
 - A stopping runner remains live and retains its gate and stores until its worker acknowledges stopped; Unity never waits or reuses that position early. Retirement emits one terminal fact immediately, and eventual worker exit is separate cleanup evidence.

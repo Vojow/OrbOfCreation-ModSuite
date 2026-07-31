@@ -12,6 +12,7 @@ than marked done.
 | [Orb Insights](insights.md) | Planned | Read-only gameplay and diagnostic views. |
 | [Orb Toolbox](toolbox.md) | Planned | Explicit advanced player tools. |
 | [Auto Buy MVP deferrals](autobuy-servicecycle-mvp-deferrals.md) | Active | What the Auto Buy port deliberately left out, and what has to come back. |
+| [Native action-queue integrity and recovery](action-queue-integrity-recovery.md) | Active | Correct stacked occupancy, contain completion faults, and recover the captured persisted poison without save edits. |
 | [Full-trace world store](full-trace-world-store.md) | Open decision | The raw-capture stream of the full-trace mandate has no store: the volume and the codec are the ruling it waits on. |
 
 The accepted runtime design is maintained separately in the

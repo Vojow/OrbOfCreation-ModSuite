@@ -13,19 +13,26 @@ namespace OrbAutomata;
 internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 {
     private static readonly object[] EnableRandomizationArguments = { true };
+    private const int MaximumExceptionMessageCharacters = 512;
+    private const int MaximumExceptionStackCharacters = 2048;
 
     private readonly TypedRegistryResolver _registryResolver;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readMutationPermitFailure;
+    private readonly Func<long> _readFrameIdentity;
+    private readonly Action<long, long> _observeMutationAttempt;
     private readonly Dictionary<Guid, string> _temporaryQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
+    private string _scrollQuarantineReason = string.Empty;
 
     internal AutoItemsConsumableUseGameAction(
         TypedRegistryResolver registryResolver,
         Func<bool> tryCaptureMutationPermit,
-        Func<string> readMutationPermitFailure)
+        Func<string> readMutationPermitFailure,
+        Func<long> readFrameIdentity,
+        Action<long, long> observeMutationAttempt)
     {
         _registryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
@@ -33,12 +40,18 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readMutationPermitFailure = readMutationPermitFailure ??
             throw new ArgumentNullException(nameof(readMutationPermitFailure));
+        _readFrameIdentity = readFrameIdentity ??
+            throw new ArgumentNullException(nameof(readFrameIdentity));
+        _observeMutationAttempt = observeMutationAttempt ??
+            throw new ArgumentNullException(nameof(observeMutationAttempt));
         BindLifecycle();
     }
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal string QuarantineReason => _quarantineReason;
+    internal string QuarantineReason => _quarantineReason.Length != 0
+        ? _quarantineReason
+        : _scrollQuarantineReason;
 
     internal AutoItemsSubmission Submit(in AutoItemsCycleAction action)
     {
@@ -46,6 +59,13 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.Quarantined,
                 exactQuarantineReason);
+        if (action.Family == AutoItemsConsumableFamily.Scroll &&
+            _scrollQuarantineReason.Length != 0)
+        {
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.Quarantined,
+                _scrollQuarantineReason);
+        }
         if (_quarantineReason.Length != 0)
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.Quarantined,
@@ -63,6 +83,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
                 AutoItemsPreflight.ItemUnavailable,
                 resolution.Format());
         var item = resolution.Value!;
+        var temporary = AutoItemsConsumableFamilies.IsTemporary(action.Family);
         if (!HasExpectedFamily(item, action.Family, native, out var reason))
             return AutoItemsSubmission.Reject(AutoItemsPreflight.FamilyChanged, reason);
         if (!InvokeBool(native.IsVisible, item))
@@ -76,6 +97,14 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
                 AutoItemsPreflight.RandomizationUnavailable,
                 $"Scroll {action.ItemId:D} no longer has ConsumableSO.canBeRandomized=true.");
         }
+        var liveLevel = temporary ? 0 : Invoke<int>(native.StrongestLevel, item);
+        if (!temporary && liveLevel != action.PlannedLevel)
+        {
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TargetUnavailable,
+                $"The strongest live {action.Family} level changed from planned " +
+                $"{action.PlannedLevel} to {liveLevel} before native preparation.");
+        }
         if (action.Family == AutoItemsConsumableFamily.Scroll &&
             !AutoItemsScrollTargetPreflight.TryHasValidTarget(
                 item,
@@ -86,7 +115,6 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             return AutoItemsSubmission.Reject(AutoItemsPreflight.TargetUnavailable, reason);
         }
 
-        var temporary = AutoItemsConsumableFamilies.IsTemporary(action.Family);
         if (temporary &&
             !TryHasFinitePositiveDuration(item, action.ItemId, native, out reason))
         {
@@ -109,10 +137,35 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.TemporaryEffectPresent,
                 reason);
+        if (InvokeBool(native.IsTargeting, null))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.NativeBusy,
+                "TargetingManager.IsTargeting() reported an active native target request.");
         if (!InvokeBool(native.CanUseConsumable, null))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.NativeBusy,
                 "Inventory.CanUseConsumable() refused because native consumable preparation is busy.");
+        if (!TryReadQueuedOrPendingState(native, out var queueOccupied, out reason))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.ContractUnavailable,
+                reason);
+        if (queueOccupied)
+        {
+            var queueReason =
+                $"The native consumable queue was queued or pending while " +
+                $"Inventory.CanUseConsumable() reported idle before {action.Family} " +
+                $"{action.ItemId:D}: {reason}";
+            if (action.Family == AutoItemsConsumableFamily.Scroll)
+            {
+                _scrollQuarantineReason =
+                    "Auto Items Scroll use is quarantined for this lifecycle after inconsistent " +
+                    "native queue evidence. " + queueReason;
+                return AutoItemsSubmission.Reject(
+                    AutoItemsPreflight.Quarantined,
+                    _scrollQuarantineReason);
+            }
+            return AutoItemsSubmission.Reject(AutoItemsPreflight.NativeBusy, queueReason);
+        }
         if (!InvokeBool(native.CanFire, item))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.CanFireRefused,
@@ -126,21 +179,38 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 
         var itemId = action.ItemId;
         var family = action.Family;
+        var plannedLevel = action.PlannedLevel;
         NativeMutationEvidence<ItemState> evidence;
         using (multiBuy)
         {
+            if (!TryReadMutationFrame(out var mutationFrame, out reason))
+                return AutoItemsSubmission.Reject(
+                    AutoItemsPreflight.ContractUnavailable,
+                    reason);
+            if (!temporary && !TryHasReadyAudioPool(native, out reason))
+                return AutoItemsSubmission.Reject(
+                    AutoItemsPreflight.AudioUnavailable,
+                    reason);
+            var mutationLifecycle = action.CollectedAtEpoch;
             evidence = NativeMutationVerifier.Execute(
                 "Auto Items consumable use",
                 itemId.ToString("D"),
                 temporary
                     ? "one item leaves stock, one enters the native queue, and one temporary usage appears"
-                    : "one item leaves stock and one item enters the native preparation queue",
+                    : "one item leaves stock, one enters the native preparation queue, and one exact-level usage appears",
                 () => Capture(item, native),
-                () => Mutate(item, family, native),
+                () => MutateAndObserve(
+                    item,
+                    family,
+                    native,
+                    mutationLifecycle,
+                    mutationFrame),
                 (before, after) =>
                     after.Quantity == before.Quantity - 1 &&
                     after.Queued == before.Queued + 1 &&
-                    (!temporary || after.Usages == before.Usages + 1) &&
+                    after.Usages == before.Usages + 1 &&
+                    after.Preparation.CompareTo(BigDouble.Zero) > 0 &&
+                    (temporary || after.UsageLevel == plannedLevel) &&
                     (family != AutoItemsConsumableFamily.Scroll || after.Randomized));
         }
 
@@ -154,18 +224,26 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         var failureReason = string.Empty;
         if (evidence.MutationWasAttempted && !evidence.IsVerified)
         {
+            var diagnostic = evidence.Format(FormatItemState);
             if (temporary)
             {
                 failureReason =
                     $"Temporary item {action.ItemId:D} is quarantined for this lifecycle after " +
-                    $"an ambiguous consumable mutation: {evidence.Detail}";
+                    $"an ambiguous consumable mutation: {diagnostic}";
                 _temporaryQuarantine[action.ItemId] = failureReason;
+            }
+            else if (action.Family == AutoItemsConsumableFamily.Scroll)
+            {
+                _scrollQuarantineReason =
+                    "Auto Items Scroll use is quarantined for this lifecycle after an ambiguous " +
+                    $"consumable mutation on Scroll {action.ItemId:D}: {diagnostic}";
+                failureReason = _scrollQuarantineReason;
             }
             else
             {
                 _quarantineReason =
                     "Auto Items is quarantined for this lifecycle after an ambiguous consumable " +
-                    $"mutation on {action.ItemId:D}: {evidence.Detail}";
+                    $"mutation on {action.ItemId:D}: {diagnostic}";
                 failureReason = _quarantineReason;
             }
             preflight = AutoItemsPreflight.Quarantined;
@@ -192,6 +270,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindings = null;
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
+        _scrollQuarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
         BindLifecycle();
     }
@@ -201,6 +280,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindings = null;
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
+        _scrollQuarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
     }
 
@@ -442,6 +522,71 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Detects the native gap where <c>Inventory.CanUseConsumable()</c> reports no item is actively
+    /// preparing even though a queued item or unresolved usage still exists. Starting another use
+    /// in that state can increment a queue without synchronously preparing and consuming its stock.
+    /// This is read-only evidence; native queue and usage fields remain game-owned.
+    /// </summary>
+    private static bool TryReadQueuedOrPendingState(
+        AutoItemsNativeBindings native,
+        out bool occupied,
+        out string reason)
+    {
+        occupied = false;
+        if (native.AllConsumables.GetValue(null) is not IEnumerable all)
+        {
+            reason =
+                "ConsumableSO.All was unavailable while checking queued and pending native state.";
+            return false;
+        }
+
+        var queuedItems = 0;
+        var queuedQuantity = 0L;
+        var pendingItems = 0;
+        var pendingUsages = 0L;
+        foreach (var candidate in all)
+        {
+            if (candidate is null || candidate.GetType() != native.ConsumableType)
+            {
+                reason =
+                    "ConsumableSO.All contained a value that was not the exact ConsumableSO type " +
+                    "while checking queued and pending native state.";
+                return false;
+            }
+            var queued = Invoke<int>(native.GetQueued, candidate);
+            if (queued < 0)
+            {
+                reason = $"ConsumableSO.GetQueued() returned invalid quantity {queued}.";
+                return false;
+            }
+            if (native.Usages.GetValue(candidate) is not ICollection usages)
+            {
+                reason =
+                    "ConsumableSO.consumableUsages was unavailable while checking queued and " +
+                    "pending native state.";
+                return false;
+            }
+            if (queued > 0)
+            {
+                queuedItems++;
+                queuedQuantity = checked(queuedQuantity + queued);
+            }
+            if (usages.Count > 0)
+            {
+                pendingItems++;
+                pendingUsages = checked(pendingUsages + usages.Count);
+            }
+        }
+
+        occupied = queuedQuantity > 0 || pendingUsages > 0;
+        reason = occupied
+            ? $"queuedItems={queuedItems}; queuedQuantity={queuedQuantity}; " +
+              $"pendingItems={pendingItems}; pendingUsages={pendingUsages}."
+            : string.Empty;
+        return true;
+    }
+
     private static bool TryReadSupportedFamilyEvidence(
         object item,
         AutoItemsNativeBindings native,
@@ -494,25 +639,243 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         AutoItemsConsumableFamily family,
         AutoItemsNativeBindings native)
     {
-        if (family == AutoItemsConsumableFamily.Scroll)
+        var stage = family == AutoItemsConsumableFamily.Scroll
+            ? "SetRandomization"
+            : "SelectAndFire";
+        try
         {
-            native.SetRandomization.Invoke(item, EnableRandomizationArguments);
-            if (!InvokeBool(native.IsRandomized, item))
-                throw new InvalidOperationException(
-                    "ConsumableSO.SetRandomization(true) was not confirmed by IsRandomized().");
+            if (family == AutoItemsConsumableFamily.Scroll)
+            {
+                native.SetRandomization.Invoke(item, EnableRandomizationArguments);
+                stage = "RandomizationConfirmation";
+                if (!InvokeBool(native.IsRandomized, item))
+                    throw new InvalidOperationException(
+                        "ConsumableSO.SetRandomization(true) was not confirmed by IsRandomized().");
+            }
+            stage = "SelectAndFire";
+            native.SelectAndFire.Invoke(item, Array.Empty<object>());
         }
-        native.SelectAndFire.Invoke(item, Array.Empty<object>());
+        catch (Exception ex)
+        {
+            // NativeMutationVerifier keeps only the base exception message. Embed the bounded
+            // native exception evidence without an InnerException so it survives that boundary.
+            throw new InvalidOperationException(FormatMutationException(stage, ex));
+        }
     }
 
-    private static ItemState Capture(object item, AutoItemsNativeBindings native) =>
-        new(
+    private void MutateAndObserve(
+        object item,
+        AutoItemsConsumableFamily family,
+        AutoItemsNativeBindings native,
+        long lifecycle,
+        long mutationFrame)
+    {
+        try
+        {
+            Mutate(item, family, native);
+        }
+        finally
+        {
+            // The verifier invokes this delegate exactly when native mutation begins. Recording in
+            // finally includes thrown and ambiguous attempts, not only verified commits.
+            _observeMutationAttempt(lifecycle, mutationFrame);
+        }
+    }
+
+    private bool TryReadMutationFrame(out long frame, out string reason)
+    {
+        try
+        {
+            frame = _readFrameIdentity();
+            if (frame >= 0)
+            {
+                reason = string.Empty;
+                return true;
+            }
+            reason = "The shared frame identity was negative immediately before consumable use.";
+        }
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        {
+            frame = 0;
+            reason =
+                "The shared frame identity was unavailable immediately before consumable use: " +
+                ex.GetBaseException().Message;
+        }
+        return false;
+    }
+
+    private static bool TryHasReadyAudioPool(
+        AutoItemsNativeBindings native,
+        out string reason)
+    {
+        try
+        {
+            return TryHasReadyAudioPoolCore(native, out reason);
+        }
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        {
+            reason =
+                "The permanent consumable audio-readiness check failed without mutation: " +
+                ex.GetBaseException().Message;
+            return false;
+        }
+    }
+
+    private static bool TryHasReadyAudioPoolCore(
+        AutoItemsNativeBindings native,
+        out string reason)
+    {
+        var manager = native.SoundManagerInstance.GetValue(null);
+        if (manager is null || manager.GetType() != native.SoundManagerType)
+        {
+            reason =
+                "SoundManager.instance was unavailable immediately before permanent " +
+                "consumable preparation.";
+            return false;
+        }
+        if (native.AudioMaximum.GetValue(manager) is not int maximum || maximum <= 0)
+        {
+            reason =
+                "SoundManager.audioMaximum was not positive immediately before permanent " +
+                "consumable preparation.";
+            return false;
+        }
+        if (native.AudioElements.GetValue(manager) is not IList elements)
+        {
+            reason =
+                "SoundManager.audioElements was unavailable immediately before permanent " +
+                "consumable preparation.";
+            return false;
+        }
+        if (elements.Count < maximum)
+        {
+            reason =
+                $"SoundManager.audioElements contained {elements.Count} entries for " +
+                $"audioMaximum={maximum} immediately before permanent consumable preparation.";
+            return false;
+        }
+        if (native.AudioCurrentIndex.GetValue(manager) is not int currentIndex ||
+            currentIndex < 0 ||
+            currentIndex >= maximum)
+        {
+            reason =
+                $"SoundManager.currentIndex was outside [0,{maximum}) immediately before " +
+                "permanent consumable preparation.";
+            return false;
+        }
+
+        for (var index = 0; index < maximum; index++)
+        {
+            var element = elements[index];
+            if (element is null || element.GetType() != native.AudioElementType)
+            {
+                reason =
+                    $"SoundManager.audioElements[{index}] was unavailable immediately before " +
+                    "permanent consumable preparation.";
+                return false;
+            }
+            var source = native.AudioSource.GetValue(element);
+            if (source is null || source.GetType() != native.AudioSourceType)
+            {
+                reason =
+                    $"AudioElement.audioSource was unavailable at pool index {index} " +
+                    "immediately before permanent consumable preparation.";
+                return false;
+            }
+        }
+
+        var reusable = 0;
+        for (var offset = 0; offset < maximum; offset++)
+        {
+            var index = (currentIndex + offset) % maximum;
+            var element = elements[index]!;
+            if (!InvokeBool(native.AudioIsPlaying, element))
+            {
+                reusable++;
+                continue;
+            }
+            if (!InvokeBool(native.AudioIsLooping, element)) reusable++;
+        }
+
+        // Permanent use can pin one processing sound. Keep one more allocator entry available for
+        // completion/progression sounds instead of allowing this mutation to consume the last one.
+        if (reusable >= 2)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason =
+            $"SoundManager.audioElements had {reusable} idle or reusable non-looping entries; " +
+            "permanent consumable preparation requires two so one remains reserved.";
+        return false;
+    }
+
+    private static ItemState Capture(
+        object item,
+        AutoItemsNativeBindings native)
+    {
+        if (native.Usages.GetValue(item) is not ICollection usages)
+            throw new InvalidOperationException(
+                "ConsumableSO.consumableUsages was unavailable during mutation evidence capture.");
+        return new ItemState(
+            Invoke<int>(native.StrongestLevel, item),
             Invoke<int>(native.GetQuantity, item),
             Invoke<int>(native.GetQueued, item),
-            InvokeBool(native.IsRandomized, item),
-            native.Usages.GetValue(item) is ICollection usages
-                ? usages.Count
+            native.CurrentPrepTime.GetValue(item) is BigDouble prep
+                ? prep
                 : throw new InvalidOperationException(
-                    "ConsumableSO.consumableUsages was unavailable during mutation evidence capture."));
+                    "ConsumableSO.currentPrepTime was unavailable during mutation evidence capture."),
+            InvokeBool(native.IsRandomized, item),
+            usages.Count,
+            ReadSingleUsageLevel(usages, native),
+            InvokeBool(native.IsTargeting, null));
+    }
+
+    private static int ReadSingleUsageLevel(
+        ICollection usages,
+        AutoItemsNativeBindings native)
+    {
+        if (usages.Count != 1) return 0;
+        foreach (var usage in usages)
+        {
+            if (usage is null || usage.GetType() != native.UsageType)
+                throw new InvalidOperationException(
+                    "ConsumableSO.consumableUsages contained a non-ConsumableUsage value.");
+            var scaling = native.UsageBaseScaling.GetValue(usage) ??
+                throw new InvalidOperationException(
+                    "ConsumableUsage.baseSi was unavailable during mutation evidence capture.");
+            return Invoke<int>(native.ScalingLevel, scaling);
+        }
+        return 0;
+    }
+
+    private static string FormatMutationException(string stage, Exception exception)
+    {
+        var inner = UnwrapInvocation(exception);
+        return $"exceptionStage={stage}; wrapperType=" +
+            $"{exception.GetType().FullName ?? exception.GetType().Name}; " +
+            $"innerExceptionType={inner.GetType().FullName ?? inner.GetType().Name}; " +
+            $"innerExceptionMessage={Bound(inner.Message, MaximumExceptionMessageCharacters)}; " +
+            $"innerExceptionStack={Bound(inner.StackTrace ?? "<unavailable>", MaximumExceptionStackCharacters)}";
+    }
+
+    private static Exception UnwrapInvocation(Exception exception)
+    {
+        var current = exception;
+        while (current is TargetInvocationException { InnerException: not null } invocation)
+            current = invocation.InnerException;
+        return current;
+    }
+
+    private static string Bound(string value, int maximum) => value.Length <= maximum
+        ? value
+        : value.Substring(0, maximum) + "...[truncated]";
+
+    private static string FormatItemState(ItemState state) =>
+        $"level={state.Level},qty={state.Quantity},queued={state.Queued}," +
+        $"prep={state.Preparation},usages={state.Usages},usageLevel={state.UsageLevel}," +
+        $"randomized={state.Randomized},targeting={state.Targeting}";
 
     private static bool InvokeBool(MethodInfo method, object? target) =>
         Invoke<bool>(method, target);
@@ -525,17 +888,33 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 
     private readonly struct ItemState
     {
-        internal ItemState(int quantity, int queued, bool randomized, int usages)
+        internal ItemState(
+            int level,
+            int quantity,
+            int queued,
+            BigDouble preparation,
+            bool randomized,
+            int usages,
+            int usageLevel,
+            bool targeting)
         {
+            Level = level;
             Quantity = quantity;
             Queued = queued;
+            Preparation = preparation;
             Randomized = randomized;
             Usages = usages;
+            UsageLevel = usageLevel;
+            Targeting = targeting;
         }
 
+        internal int Level { get; }
         internal int Quantity { get; }
         internal int Queued { get; }
+        internal BigDouble Preparation { get; }
         internal bool Randomized { get; }
         internal int Usages { get; }
+        internal int UsageLevel { get; }
+        internal bool Targeting { get; }
     }
 }

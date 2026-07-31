@@ -119,6 +119,25 @@ internal readonly struct WorldScrollTargetEvidence
     internal int CandidateCount { get; }
 }
 
+/// <summary>
+/// Exact authored target availability for using the strongest currently owned Scroll. This is a
+/// main-thread collection fact; Auto Items plans from it and repeats the same target-chain read at
+/// the native commit boundary.
+/// </summary>
+internal readonly struct WorldScrollUseTargetEvidence
+{
+    internal WorldScrollUseTargetEvidence(Guid consumableId, int level, int candidateCount)
+    {
+        ConsumableId = consumableId;
+        Level = level;
+        CandidateCount = candidateCount;
+    }
+
+    internal Guid ConsumableId { get; }
+    internal int Level { get; }
+    internal int CandidateCount { get; }
+}
+
 internal sealed class WorldRelationBuffer<TRow> where TRow : struct
 {
     private TRow[] _rows = new TRow[16];
@@ -183,6 +202,23 @@ internal static class WorldScribeLookup
         return false;
     }
 
+    internal static bool TryGetUseTargetEvidence(
+        PublicationTable<WorldScrollUseTargetEvidence> evidence,
+        Guid consumableId,
+        int level,
+        out int candidateCount)
+    {
+        for (var index = 0; index < evidence.Count; index++)
+        {
+            var row = evidence[index];
+            if (row.ConsumableId != consumableId || row.Level != level) continue;
+            candidateCount = row.CandidateCount;
+            return true;
+        }
+        candidateCount = 0;
+        return false;
+    }
+
     internal static int EnchantmentLevel(
         PublicationTable<WorldStructureEnchantment> enchantments,
         Guid structureId,
@@ -232,6 +268,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         frame.StructureEnchantments.Reset();
         frame.ScrollTargets.Reset();
         frame.ScrollTargetEvidence.Reset();
+        frame.ScrollUseTargetEvidence.Reset();
         if (_native is not { } native)
             return WorldCategoryReport.Missing(Category, _unavailable);
 
@@ -431,6 +468,38 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                 role.EnchantmentId,
                 count));
             sampled++;
+
+            var owned = Invoke<int>(native.ConsumableQuantity, consumable);
+            if (owned <= 0) continue;
+            var strongestLevel = Invoke<int>(native.ConsumableStrongestLevel, consumable);
+            if (strongestLevel <= 0)
+                throw new InvalidOperationException(
+                    $"Scroll {role.ScrollId:D} had stock but no positive strongest level.");
+            var strongest = InvokeObject(native.ConsumableStrongest, consumable);
+            if (strongest.GetType() != native.ConsumableCountType)
+                throw new InvalidOperationException(
+                    $"Scroll {role.ScrollId:D} strongest count changed native type.");
+            var strongestScaling = InvokeObject(
+                native.ConsumableCountScaling,
+                consumable,
+                strongest);
+            if (strongestScaling.GetType() != native.ScalingType)
+                throw new InvalidOperationException(
+                    $"Scroll {role.ScrollId:D} strongest scaling changed native type.");
+            var strongestCandidates = RequireEnumerable(
+                native.GetRandomList.Invoke(targeting, new[] { strongestScaling }),
+                "Targeting.TargetStructure.GetRandomList strongest Scroll");
+            var strongestCandidateCount = 0;
+            foreach (var candidateValue in strongestCandidates)
+            {
+                RequireExact(candidateValue, native.StructureType, "strongest Scroll target");
+                strongestCandidateCount++;
+            }
+            frame.ScrollUseTargetEvidence.Append(new WorldScrollUseTargetEvidence(
+                role.ScrollId,
+                strongestLevel,
+                strongestCandidateCount));
+            sampled++;
         }
         return sampled;
     }
@@ -579,6 +648,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             Type instanceListType,
             Type instanceType,
             Type consumableType,
+            Type consumableCountType,
             Type structureType,
             Type enchantTableType,
             Type enchantmentInstanceType,
@@ -610,6 +680,10 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             MethodInfo recipeIdentity,
             MethodInfo recipeTypeIdentity,
             MethodInfo consumableIdentity,
+            MethodInfo consumableQuantity,
+            MethodInfo consumableStrongest,
+            MethodInfo consumableStrongestLevel,
+            MethodInfo consumableCountScaling,
             MethodInfo structureIdentity,
             MethodInfo recipeVisible,
             MethodInfo listMaximum,
@@ -630,6 +704,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             InstanceListType = instanceListType;
             InstanceType = instanceType;
             ConsumableType = consumableType;
+            ConsumableCountType = consumableCountType;
             StructureType = structureType;
             EnchantTableType = enchantTableType;
             EnchantmentInstanceType = enchantmentInstanceType;
@@ -661,6 +736,10 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             RecipeIdentity = recipeIdentity;
             RecipeTypeIdentity = recipeTypeIdentity;
             ConsumableIdentity = consumableIdentity;
+            ConsumableQuantity = consumableQuantity;
+            ConsumableStrongest = consumableStrongest;
+            ConsumableStrongestLevel = consumableStrongestLevel;
+            ConsumableCountScaling = consumableCountScaling;
             StructureIdentity = structureIdentity;
             RecipeVisible = recipeVisible;
             ListMaximum = listMaximum;
@@ -682,6 +761,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         internal Type InstanceListType { get; }
         internal Type InstanceType { get; }
         internal Type ConsumableType { get; }
+        internal Type ConsumableCountType { get; }
         internal Type StructureType { get; }
         internal Type EnchantTableType { get; }
         internal Type EnchantmentInstanceType { get; }
@@ -713,6 +793,10 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         internal MethodInfo RecipeIdentity { get; }
         internal MethodInfo RecipeTypeIdentity { get; }
         internal MethodInfo ConsumableIdentity { get; }
+        internal MethodInfo ConsumableQuantity { get; }
+        internal MethodInfo ConsumableStrongest { get; }
+        internal MethodInfo ConsumableStrongestLevel { get; }
+        internal MethodInfo ConsumableCountScaling { get; }
         internal MethodInfo StructureIdentity { get; }
         internal MethodInfo RecipeVisible { get; }
         internal MethodInfo ListMaximum { get; }
@@ -742,6 +826,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                 var instanceList = Type(resolve, "CraftingInstanceListVariable");
                 var instance = Type(resolve, "CraftingInstance");
                 var consumable = Type(resolve, "ConsumableSO");
+                var consumableCount = Type(resolve, "ConsumableCount");
                 var structure = Type(resolve, "StructureSO");
                 var enchantTable = Type(resolve, "EnchantmentSO+EnchantTable");
                 var enchantInstance = Type(resolve, "EnchantmentInstance");
@@ -765,6 +850,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                     instanceList,
                     instance,
                     consumable,
+                    consumableCount,
                     structure,
                     enchantTable,
                     enchantInstance,
@@ -796,6 +882,15 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                     MethodFromHierarchy(recipe, "GetGuid", typeof(Guid)),
                     MethodFromHierarchy(recipeType, "GetGuid", typeof(Guid)),
                     MethodFromHierarchy(consumable, "GetGuid", typeof(Guid)),
+                    Method(consumable, "GetQuantity", typeof(int), Instance),
+                    Method(consumable, "GetStrongest", consumableCount, Instance),
+                    Method(consumable, "GetStrongestLevel", typeof(int), Instance),
+                    Method(
+                        consumable,
+                        "GetCountScalingInfo",
+                        scaling,
+                        Instance,
+                        consumableCount),
                     MethodFromHierarchy(structure, "GetGuid", typeof(Guid)),
                     Method(recipe, "IsVisible", typeof(bool), Instance),
                     MethodFromHierarchy(instanceList, "GetMax", typeof(int)),

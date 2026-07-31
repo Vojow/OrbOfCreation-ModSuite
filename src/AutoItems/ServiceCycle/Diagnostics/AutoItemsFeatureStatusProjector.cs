@@ -32,6 +32,33 @@ internal static class AutoItemsFeatureStatusProjector
         AutoItemsDecisionKind decisionKind,
         Guid quarantinedTemporaryItem,
         AutoItemsTemporaryQuarantineCause temporaryQuarantineCause,
+        AutoItemsActionHealth health) =>
+        Project(
+            emergencyDisabled,
+            owned,
+            ownershipReason,
+            bindingsAvailable,
+            bindingFailure,
+            cycleObserved,
+            decisionKind,
+            quarantinedTemporaryItem,
+            temporaryQuarantineCause,
+            Guid.Empty,
+            AutoItemsPermanentQuarantineCause.None,
+            health);
+
+    internal static AutoItemsFeatureStatus Project(
+        bool emergencyDisabled,
+        bool owned,
+        string ownershipReason,
+        bool bindingsAvailable,
+        string bindingFailure,
+        bool cycleObserved,
+        AutoItemsDecisionKind decisionKind,
+        Guid quarantinedTemporaryItem,
+        AutoItemsTemporaryQuarantineCause temporaryQuarantineCause,
+        Guid quarantinedPermanentItem,
+        AutoItemsPermanentQuarantineCause permanentQuarantineCause,
         AutoItemsActionHealth health)
     {
         if (emergencyDisabled)
@@ -55,6 +82,10 @@ internal static class AutoItemsFeatureStatusProjector
             return TemporaryQuarantine(
                 quarantinedTemporaryItem,
                 temporaryQuarantineCause);
+        if (permanentQuarantineCause != AutoItemsPermanentQuarantineCause.None)
+            return PermanentQuarantine(
+                quarantinedPermanentItem,
+                permanentQuarantineCause);
         if (health.HasFailure)
             return FromActionFailure(health.Preflight, health.Reason);
         if (!cycleObserved)
@@ -76,8 +107,40 @@ internal static class AutoItemsFeatureStatusProjector
                     "Auto Items is waiting for one submitted temporary usage to engage.",
                 AutoItemsDecisionKind.TemporaryEffectActive =>
                     "Auto Items observed a pending or active temporary usage and is excluding every consumable use.",
+                AutoItemsDecisionKind.NativePreparationActive =>
+                    "Auto Items is waiting for the consumable currently preparing in the published world.",
+                AutoItemsDecisionKind.AwaitingPermanentSettlement =>
+                    "Auto Items is waiting for a committed Scroll or Relic queue to settle.",
+                AutoItemsDecisionKind.PermanentSettlementQuarantined =>
+                    "Auto Items contained a Scroll or Relic whose native queue did not settle.",
                 _ => "Auto Items is active and waiting for an eligible Scroll, Relic, or exact allowlisted temporary item.",
             });
+    }
+
+    private static AutoItemsFeatureStatus PermanentQuarantine(
+        Guid itemId,
+        AutoItemsPermanentQuarantineCause cause)
+    {
+        var evidence = cause switch
+        {
+            AutoItemsPermanentQuarantineCause.ItemDisappeared =>
+                "the consumable disappeared before settlement",
+            AutoItemsPermanentQuarantineCause.MultipleUsages =>
+                "more than one native usage appeared",
+            AutoItemsPermanentQuarantineCause.UsageLevelChanged =>
+                "the prepared usage level differed from the committed level",
+            AutoItemsPermanentQuarantineCause.MissingUsageDuringPreparation =>
+                "native preparation remained active without its usage record",
+            AutoItemsPermanentQuarantineCause.QueueStuckWithoutUsage =>
+                "the native queue remained nonzero after preparation ended with no usage",
+            AutoItemsPermanentQuarantineCause.QueueClearedWhileUsagePresent =>
+                "the native queue cleared while its usage record remained",
+            _ => "its settlement evidence was invalid",
+        };
+        return new AutoItemsFeatureStatus(
+            FeatureStatusState.Faulted,
+            FeatureStatusReasonCode.MutationQuarantined,
+            $"Permanent consumable {itemId:D} is quarantined for this lifecycle because {evidence}.");
     }
 
     private static AutoItemsFeatureStatus TemporaryQuarantine(

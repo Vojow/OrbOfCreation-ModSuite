@@ -20,6 +20,7 @@ internal sealed class AutomataWorldCollectionFeature : IAutomataServiceCycleFeat
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<GameWorldCollector> _createCollector;
     private readonly Action<WorldCollectionReport>? _announce;
+    private readonly ConsumableMutationPublicationGapCoordinator? _publicationGap;
 
     /// <param name="readFrameIdentity">
     /// The same counter the host pumps with, so a snapshot's generation and a consumer's last-action
@@ -33,12 +34,14 @@ internal sealed class AutomataWorldCollectionFeature : IAutomataServiceCycleFeat
         Func<long> readFrameIdentity,
         Func<long> readLifecycleEpoch,
         Action<WorldCollectionReport>? announce = null,
-        Func<GameWorldCollector>? createCollector = null)
+        Func<GameWorldCollector>? createCollector = null,
+        ConsumableMutationPublicationGapCoordinator? publicationGap = null)
     {
         _readFrameIdentity = readFrameIdentity ?? throw new ArgumentNullException(nameof(readFrameIdentity));
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _announce = announce;
         _createCollector = createCollector ?? (static () => new GameWorldCollector());
+        _publicationGap = publicationGap;
     }
 
     public IAutomataServiceCycleFeatureRuntime Register(in AutomataServiceCycleFeatureContext context)
@@ -48,8 +51,12 @@ internal sealed class AutomataWorldCollectionFeature : IAutomataServiceCycleFeat
         // runtime is being stood up for a playable lifecycle.
         var definition = AutomataWorldCollectionService.Define(
             new AutomataWorldCapturePort(
-                _createCollector(), _readFrameIdentity, _readLifecycleEpoch, _announce),
-            context.Registry.WorldPublication);
+                _createCollector(),
+                _readFrameIdentity,
+                _readLifecycleEpoch,
+                _announce),
+            context.Registry.WorldPublication,
+            _publicationGap);
 
         // No dispatch policy here: registering through the source path is the declaration, and one
         // publish per frame ahead of every mutating service is what that path means.

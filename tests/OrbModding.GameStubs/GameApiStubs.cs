@@ -106,6 +106,10 @@ public static class KnownVariableIds
 public sealed class ActionableListVariable : StackableListVariable<IActionable>
 {
     public IntVariable maxQueuedItems = new IntVariable();
+
+    public int GetRemainingRoom() => maxQueuedItems.AsInt() - GetTotalStacks();
+
+    public bool HasRoom() => GetRemainingRoom() > 0;
 }
 
 public sealed class ActionManager
@@ -116,7 +120,36 @@ public sealed class ActionManager
 
     public static int RemainingRoom { get; set; }
 
+    public static bool ThrowBeforeUnload { get; set; }
+
+    public static bool ThrowAfterUnload { get; set; }
+
+    public static bool SuppressUnload { get; set; }
+
+    public static int UnloadCalls { get; private set; }
+
     public static int GetRemainingRoom() => RemainingRoom;
+
+    public static void LoadAction(IActionable actionable, int times = 1) =>
+        instance.actionableItems.Stack(actionable, times);
+
+    public static void UnloadAction(IActionable actionable, int times = 1)
+    {
+        UnloadCalls++;
+        if (ThrowBeforeUnload) throw new InvalidOperationException("injected unload failure before mutation");
+        if (!SuppressUnload) instance.actionableItems.Unstack(actionable, times);
+        if (ThrowAfterUnload) throw new InvalidOperationException("injected unload failure after mutation");
+    }
+
+    public static void ResetTestState()
+    {
+        instance = new ActionManager();
+        RemainingRoom = 0;
+        ThrowBeforeUnload = false;
+        ThrowAfterUnload = false;
+        SuppressUnload = false;
+        UnloadCalls = 0;
+    }
 }
 
 public static class AutoBuyManager
@@ -417,10 +450,48 @@ public class EmptyTypeListVariable<T> : GenericListVariable<T>
 
 public class StackableListVariable<T> : GenericListVariable<T>
 {
+    private readonly Dictionary<T, int> stacks = new Dictionary<T, int>();
+
+    public int GetStacks(T item) =>
+        stacks.TryGetValue(item, out var quantity) ? quantity : 0;
+
+    public int GetTotalStacks() => stacks.Values.Sum();
+
+    public void Stack(T item, int quantity = 1)
+    {
+        if (quantity <= 0) return;
+        if (!stacks.ContainsKey(item))
+        {
+            stacks.Add(item, quantity);
+            value.Add(item);
+            return;
+        }
+
+        stacks[item] += quantity;
+    }
+
+    public void Unstack(T item, int quantity = 1)
+    {
+        if (quantity <= 0 || !stacks.TryGetValue(item, out var current)) return;
+        var remaining = current - quantity;
+        if (remaining > 0)
+        {
+            stacks[item] = remaining;
+            return;
+        }
+
+        stacks.Remove(item);
+        value.Remove(item);
+    }
 }
 
 public interface IActionable
 {
+    Guid GetGuid();
+    BigDouble actionTime { get; set; }
+    BigDouble GetActionTime();
+    BigDouble GetBuildSpeed();
+    void CompleteAction();
 }
 
 /// <summary>The plot-action queue: one instance, reached by uuid rather than through a registry.</summary>
@@ -434,7 +505,7 @@ public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyReci
 {
 }
 
-public class UpgradeSO : IdScriptableObject
+public class UpgradeSO : IdScriptableObject, IActionable
 {
     public static List<UpgradeSO> All = new List<UpgradeSO>();
     private string stableUuid = Guid.NewGuid().ToString();
@@ -457,6 +528,8 @@ public class UpgradeSO : IdScriptableObject
     public bool available = true;
     public bool purchasable = true;
     public ResourceCostList purchaseCost = new ResourceCostList();
+    public AudioInstance customProcessingSound = new AudioInstance();
+    private AudioElement? processingSoundInstance;
 
     // The authored cost and the list it grows by per level, which together are what the suite
     // computes GetPurchaseCost() from instead of calling it. An upgrade prices on an entirely
@@ -471,6 +544,9 @@ public class UpgradeSO : IdScriptableObject
     public BigDouble buildTime;
     public double developmentTime = 5.0;
     public new Guid GetGuid() => Guid.Parse(uuid);
+    public BigDouble actionTime { get => buildTime; set => buildTime = value; }
+    public BigDouble GetActionTime() => new BigDouble(developmentTime, 0);
+    public BigDouble GetBuildSpeed() => new BigDouble(1.0, 2);
     public string GetName() => "Upgrade";
     public bool IsAvailable() => available;
     public bool CanPurchase() => purchasable && !IsMaxQueuedLevel() && purchaseCost.HasEnough();
@@ -496,9 +572,17 @@ public class UpgradeSO : IdScriptableObject
         queuedLevels--;
         level++;
     }
+
+    private void PlayProcessSound()
+    {
+        if (customProcessingSound.audioClip is not null && processingSoundInstance is null)
+            processingSoundInstance = SoundManager.PlayLoop(
+                customProcessingSound.audioClip,
+                customProcessingSound.volume);
+    }
 }
 
-public class StructureSO : UpgradeableObject, Targeting.ITargetable
+public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
 {
     public static List<StructureSO> All = new List<StructureSO>();
     public StructureTypeSO structureType = new StructureTypeSO();
@@ -558,6 +642,9 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable
     public int QueuedQuantity { get => queuedQuantity; set => queuedQuantity = value; }
     public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
     public string GetName() => "Structure";
+    public BigDouble actionTime { get => queueTimeLeft; set => queueTimeLeft = value; }
+    public BigDouble GetActionTime() => new BigDouble(queueTimeTotal, 0);
+    public BigDouble GetBuildSpeed() => buildSpeed.GetValue();
     public bool IsAvailable() => available;
     public bool IsVisible() => visible;
 
@@ -713,11 +800,16 @@ public class Spell
     /// <summary>How many target requests this spell's effects open when it fires.</summary>
     public int RequestsOnFire { get; set; }
 
+    /// <summary>Models a native cast that opens its target request before failing.</summary>
+    public bool ThrowAfterOpeningTargets { get; set; }
+
     public void Fire()
     {
         if (EmitFireSignal) FireSignal?.Invoke();
         FireCalls++;
         TargetingManager.OpenRequests += RequestsOnFire;
+        if (ThrowAfterOpeningTargets)
+            throw new NullReferenceException("simulated native cast failure after target request");
     }
 }
 
@@ -823,16 +915,15 @@ public class ResourceCostList
     public bool HasEnough()
     {
         if (!affordable || AffordableLevels <= 0) return false;
-        var totals = new Dictionary<ResourceSO, BigDouble>();
         for (var index = 0; index < costs.Count; index++)
         {
             var row = costs[index];
             if (row.resource is null) return false;
-            totals.TryGetValue(row.resource, out var current);
-            totals[row.resource] = current + row.GetValue();
+            // Native ResourceCostList checks rows independently. In particular, it does not
+            // aggregate duplicate rows before asking the resource whether it can pay. Auto Scribe
+            // must therefore perform its own aggregate guard before invoking PurchaseQuantity.
+            if (!row.resource.HasAmount(row.GetValue())) return false;
         }
-        foreach (var pair in totals)
-            if (!pair.Key.HasAmount(pair.Value)) return false;
         return true;
     }
     public List<ResourceTuple> GetEntries() => costs;
@@ -960,6 +1051,12 @@ public class ResourceSO : UpgradeableObject
     private bool inLossMode;
     private bool inRestMode;
     private bool inRallyMode;
+
+    // Test-only fault injection applied after the native quality/decay calculation. The default
+    // preserves native behavior; focused receipt tests can use another multiplier to prove that a
+    // partial or excessive debit is quarantined instead of being accepted as a successful craft.
+    public BigDouble SpendDebitMultiplier = BigDouble.One;
+
     public string GetName() => name;
     public BigDouble GetQuantity() => quantity;
     // The game's own formula. A settable field here would let the stub's GetTrueQuantity()
@@ -974,19 +1071,42 @@ public class ResourceSO : UpgradeableObject
     public bool IsBandwidthResource() => bandwidthResource;
     public BigDouble GetMissing() => BigDouble.Max(maxQuantity.GetValue() - quantity, 0);
     public bool HasAmount(BigDouble amount) =>
-        bandwidthResource ? GetMissing() >= amount : GetTrueQuantity() >= amount;
-    public void Spend(BigDouble amount)
-    {
-        if (bandwidthResource)
-        {
-            quantity += amount;
-            return;
-        }
-
-        var normalizedQuality = BigDouble.Normalize(
+        bandwidthResource ? GetMissing() >= amount : quantity >= GetTrueSpend(amount);
+    public BigDouble GetTrueSpend(BigDouble amount) =>
+        amount / BigDouble.Normalize(
             quality.GetValue().Mantissa,
             quality.GetValue().Exponent - 2);
-        quantity -= amount / normalizedQuality;
+    public bool HasDecay() => decayRatio.GetValue().CompareTo(BigDouble.Zero) > 0;
+    public BigDouble GetDecayPercent()
+    {
+        var ratio = decayRatio.GetValue();
+        return ratio / (new BigDouble(100, 0) + ratio);
+    }
+    public bool HasReplenish() => replenishRatio.GetValue().CompareTo(BigDouble.Zero) > 0;
+    public bool HasReverberate() => reverberateMod.GetValue().CompareTo(new BigDouble(100, 0)) > 0;
+
+    public void Spend(
+        BigDouble amount,
+        bool isRaw = false,
+        bool pauseLoss = true,
+        bool triggerDecay = true,
+        bool triggerReplenish = true)
+    {
+        if (amount.CompareTo(BigDouble.Zero) == 0) return;
+
+        var rawDebit = isRaw ? amount : GetTrueSpend(amount);
+        if (triggerDecay && HasDecay())
+        {
+            debouncedDecay += rawDebit * GetDecayPercent();
+            rawDebit *= BigDouble.One - GetDecayPercent();
+        }
+        if (triggerReplenish && HasReplenish())
+            debouncedReplenish += rawDebit *
+                (replenishRatio.GetValue() /
+                 (new BigDouble(100, 0) + replenishRatio.GetValue()));
+
+        rawDebit *= SpendDebitMultiplier;
+        quantity = BigDouble.Max(quantity - rawDebit, BigDouble.Zero);
     }
     public BigDouble GetTrueAmount(BigDouble amount) => amount;
 }
@@ -2230,6 +2350,14 @@ namespace UnityEngine
     public class MonoBehaviour : Behaviour
     {
         public Coroutine StartCoroutine(IEnumerator routine) => new Coroutine(routine);
+    }
+
+    public sealed class AudioSource : Behaviour
+    {
+    }
+
+    public sealed class AudioClip : Object
+    {
     }
 
     public sealed class Coroutine

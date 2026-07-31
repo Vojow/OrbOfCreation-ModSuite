@@ -24,6 +24,7 @@ internal sealed class AutoScribeNativeBindings
         Type instanceListType,
         Type consumableType,
         Type consumableCountType,
+        Type consumableUsageType,
         Type enchantmentType,
         Type resourceCostType,
         Type resourceTupleType,
@@ -53,10 +54,15 @@ internal sealed class AutoScribeNativeBindings
         FieldInfo targetOptions,
         FieldInfo enchantScriptEnchantment,
         FieldInfo consumableCounts,
+        FieldInfo consumableUsages,
+        FieldInfo consumableCurrentPrepTime,
+        FieldInfo usageEngaged,
+        FieldInfo usageRemainingDuration,
         FieldInfo costs,
         FieldInfo tupleResource,
         MethodInfo identity,
         MethodInfo consumableIdentity,
+        MethodInfo consumableQueued,
         MethodInfo enchantmentIdentity,
         MethodInfo recipeVisible,
         MethodInfo recipeCanBuyAt,
@@ -66,7 +72,11 @@ internal sealed class AutoScribeNativeBindings
         MethodInfo costHasEnough,
         MethodInfo tupleValue,
         MethodInfo resourceIdentity,
-        MethodInfo resourceQuantity,
+        MethodInfo resourceRawQuantity,
+        MethodInfo resourceTrueSpend,
+        MethodInfo resourceHasDecay,
+        MethodInfo resourceDecayPercent,
+        MethodInfo resourceIsBandwidth,
         MethodInfo queueHasRoom,
         MethodInfo queueAdd,
         MethodInfo instanceRecipe,
@@ -88,6 +98,7 @@ internal sealed class AutoScribeNativeBindings
         InstanceListType = instanceListType;
         ConsumableType = consumableType;
         ConsumableCountType = consumableCountType;
+        ConsumableUsageType = consumableUsageType;
         EnchantmentType = enchantmentType;
         ResourceCostType = resourceCostType;
         ResourceTupleType = resourceTupleType;
@@ -117,10 +128,15 @@ internal sealed class AutoScribeNativeBindings
         TargetOptions = targetOptions;
         EnchantScriptEnchantment = enchantScriptEnchantment;
         ConsumableCounts = consumableCounts;
+        ConsumableUsages = consumableUsages;
+        ConsumableCurrentPrepTime = consumableCurrentPrepTime;
+        UsageEngaged = usageEngaged;
+        UsageRemainingDuration = usageRemainingDuration;
         Costs = costs;
         TupleResource = tupleResource;
         Identity = identity;
         ConsumableIdentity = consumableIdentity;
+        ConsumableQueued = consumableQueued;
         EnchantmentIdentity = enchantmentIdentity;
         RecipeVisible = recipeVisible;
         RecipeCanBuyAt = recipeCanBuyAt;
@@ -130,7 +146,11 @@ internal sealed class AutoScribeNativeBindings
         CostHasEnough = costHasEnough;
         TupleValue = tupleValue;
         ResourceIdentity = resourceIdentity;
-        ResourceQuantity = resourceQuantity;
+        ResourceRawQuantity = resourceRawQuantity;
+        ResourceTrueSpend = resourceTrueSpend;
+        ResourceHasDecay = resourceHasDecay;
+        ResourceDecayPercent = resourceDecayPercent;
+        ResourceIsBandwidth = resourceIsBandwidth;
         QueueHasRoom = queueHasRoom;
         QueueAdd = queueAdd;
         InstanceRecipe = instanceRecipe;
@@ -153,6 +173,7 @@ internal sealed class AutoScribeNativeBindings
     internal Type InstanceListType { get; }
     internal Type ConsumableType { get; }
     internal Type ConsumableCountType { get; }
+    internal Type ConsumableUsageType { get; }
     internal Type EnchantmentType { get; }
     internal Type ResourceCostType { get; }
     internal Type ResourceTupleType { get; }
@@ -182,10 +203,15 @@ internal sealed class AutoScribeNativeBindings
     internal FieldInfo TargetOptions { get; }
     internal FieldInfo EnchantScriptEnchantment { get; }
     internal FieldInfo ConsumableCounts { get; }
+    internal FieldInfo ConsumableUsages { get; }
+    internal FieldInfo ConsumableCurrentPrepTime { get; }
+    internal FieldInfo UsageEngaged { get; }
+    internal FieldInfo UsageRemainingDuration { get; }
     internal FieldInfo Costs { get; }
     internal FieldInfo TupleResource { get; }
     internal MethodInfo Identity { get; }
     internal MethodInfo ConsumableIdentity { get; }
+    internal MethodInfo ConsumableQueued { get; }
     internal MethodInfo EnchantmentIdentity { get; }
     internal MethodInfo RecipeVisible { get; }
     internal MethodInfo RecipeCanBuyAt { get; }
@@ -195,7 +221,11 @@ internal sealed class AutoScribeNativeBindings
     internal MethodInfo CostHasEnough { get; }
     internal MethodInfo TupleValue { get; }
     internal MethodInfo ResourceIdentity { get; }
-    internal MethodInfo ResourceQuantity { get; }
+    internal MethodInfo ResourceRawQuantity { get; }
+    internal MethodInfo ResourceTrueSpend { get; }
+    internal MethodInfo ResourceHasDecay { get; }
+    internal MethodInfo ResourceDecayPercent { get; }
+    internal MethodInfo ResourceIsBandwidth { get; }
     internal MethodInfo QueueHasRoom { get; }
     internal MethodInfo QueueAdd { get; }
     internal MethodInfo InstanceRecipe { get; }
@@ -222,6 +252,7 @@ internal sealed class AutoScribeNativeBindings
             var instanceList = Type("CraftingInstanceListVariable");
             var consumable = Type("ConsumableSO");
             var count = Type("ConsumableCount");
+            var usage = Type("ConsumableUsage");
             var enchantment = Type("EnchantmentSO");
             var cost = Type("ResourceCostList");
             var tuple = Type("ResourceTuple");
@@ -246,6 +277,7 @@ internal sealed class AutoScribeNativeBindings
                 instanceList,
                 consumable,
                 count,
+                usage,
                 enchantment,
                 cost,
                 tuple,
@@ -275,10 +307,15 @@ internal sealed class AutoScribeNativeBindings
                 Field(request, "targetOptions", options),
                 Field(enchantScript, "enchantment", enchantment),
                 CollectionField(consumable, "consumableCounts", count),
+                CollectionField(consumable, "consumableUsages", usage),
+                Field(consumable, "currentPrepTime", big),
+                Field(usage, "en", typeof(bool)),
+                Field(usage, "dr", big),
                 CollectionField(cost, "costs", tuple),
                 Field(tuple, "resource", resource),
                 MethodFromHierarchy(recipe, "GetGuid", typeof(Guid)),
                 MethodFromHierarchy(consumable, "GetGuid", typeof(Guid)),
+                Method(consumable, "GetQueued", typeof(int)),
                 MethodFromHierarchy(enchantment, "GetGuid", typeof(Guid)),
                 Method(recipe, "IsVisible", typeof(bool)),
                 Method(recipe, "CanBuyAt", typeof(bool), big),
@@ -288,7 +325,11 @@ internal sealed class AutoScribeNativeBindings
                 Method(cost, "HasEnough", typeof(bool)),
                 Method(tuple, "GetValue", big),
                 MethodFromHierarchy(resource, "GetGuid", typeof(Guid)),
-                Method(resource, "GetTrueQuantity", big),
+                Method(resource, "GetQuantity", big),
+                Method(resource, "GetTrueSpend", big, big),
+                Method(resource, "HasDecay", typeof(bool)),
+                Method(resource, "GetDecayPercent", big),
+                Method(resource, "IsBandwidthResource", typeof(bool)),
                 MethodFromHierarchy(instanceList, "HasEmptySpot", typeof(bool)),
                 MethodFromHierarchy(instanceList, "Add", typeof(void), instance),
                 MethodFromHierarchy(instance, "GetGuidReference", typeof(Guid)),

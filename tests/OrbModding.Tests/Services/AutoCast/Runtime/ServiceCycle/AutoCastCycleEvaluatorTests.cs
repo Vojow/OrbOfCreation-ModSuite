@@ -223,6 +223,52 @@ public sealed class AutoCastCycleEvaluatorTests
     }
 
     [Fact]
+    public void PublishedQueuedPreparingOrPendingConsumableBlocksANewFire()
+    {
+        var baseWorld = World(Slot(0, Ember, castReady: true));
+        var consumableId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var usageId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+
+        var queued = WithConsumables(
+            baseWorld,
+            new[] { Consumable(consumableId, queued: 1) });
+        var preparing = WithConsumables(
+            baseWorld,
+            new[] { Consumable(consumableId, preparation: 1d) });
+        var pending = WithConsumables(
+            baseWorld,
+            new[] { Consumable(consumableId) },
+            new[] { new WorldConsumableUsage(
+                consumableId,
+                usageId,
+                level: 1,
+                engaged: false,
+                remainingDuration: new BigDouble(1),
+                maximumDuration: new BigDouble(1)) });
+
+        var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
+        Assert.Empty(Plan(queued, Config(), ref state, out _));
+        state = AutoCastCycleState.Create(new LifecycleGeneration(1));
+        Assert.Empty(Plan(preparing, Config(), ref state, out _));
+        state = AutoCastCycleState.Create(new LifecycleGeneration(1));
+        Assert.Empty(Plan(pending, Config(), ref state, out _));
+    }
+
+    [Fact]
+    public void ConsumableInterlockDoesNotStrandAHeldChargeRelease()
+    {
+        var state = HoldingEmberInSlotZero();
+        var consumableId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var interlocked = WithConsumables(
+            World(Slot(0, Ember, castReady: true, chargeable: true)),
+            new[] { Consumable(consumableId, queued: 1, preparation: 1d) });
+
+        var action = Assert.Single(Plan(interlocked, Config(fullCharge: true), ref state, out _));
+
+        Assert.Equal(AutoCastActionKind.ReleaseCharge, action.Kind);
+    }
+
+    [Fact]
     public void ThePlanCarriesTheEpochTheWorldItCameFromWasCollectedUnder()
     {
         var world = World(
@@ -446,6 +492,49 @@ public sealed class AutoCastCycleEvaluatorTests
             Resources = WorldTable.Create(rows),
             CollectedAtEpoch = collectedAtEpoch,
         };
+    }
+
+    private static GameWorldState WithConsumables(
+        GameWorldState world,
+        WorldConsumable[] consumables,
+        WorldConsumableUsage[]? usages = null) =>
+        world with
+        {
+            Consumables = WorldTable.Create(consumables),
+            ConsumableUsages = PublicationTable<WorldConsumableUsage>.Create(
+                usages ?? Array.Empty<WorldConsumableUsage>(),
+                usages?.Length ?? 0),
+        };
+
+    private static WorldConsumable Consumable(
+        Guid consumableId,
+        int queued = 0,
+        double preparation = 0d)
+    {
+        var modifiers = new RawConsumableModifiers(
+            BigDouble.Zero,
+            BigDouble.Zero,
+            BigDouble.Zero,
+            BigDouble.Zero,
+            BigDouble.Zero);
+        return new WorldConsumable(
+            consumableId,
+            visible: true,
+            randomized: false,
+            quantity: 1,
+            queuedQuantity: queued,
+            maximumCarryLoad: 1,
+            gainedSince: 0,
+            maxCreatedLevel: 1,
+            currentPrepTime: new BigDouble(preparation),
+            currentCooldown: BigDouble.Zero,
+            currentCooldownTime: BigDouble.Zero,
+            in modifiers,
+            preparationTime: 1d,
+            canBeRandomized: false,
+            hasDuration: false,
+            durationBase: 0d,
+            queueOnStart: false);
     }
 
     private static SuiteRuntimeConfiguration Config(

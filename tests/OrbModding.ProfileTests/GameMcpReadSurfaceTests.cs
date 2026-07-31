@@ -72,6 +72,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Contains("game_concept", toolNames);
         Assert.Contains("game_harvest", toolNames);
         Assert.Contains("game_spell_level", toolNames);
+        Assert.Contains("game_action_queue_recover", toolNames);
         Assert.DoesNotContain("action_receipt", toolNames);
         Assert.Contains("game_screenshot", toolNames);
         Assert.Contains("game_screen_catalog", toolNames);
@@ -241,6 +242,60 @@ public sealed class GameMcpStreamableHttpProtocolTests
 
 public sealed class GameMcpWorldEnvelopeTests
 {
+    [Fact]
+    public void ActionQueueMembersAreDiscoverableFromThePinnedWorld()
+    {
+        var queueId = Guid.NewGuid();
+        var structureId = Guid.NewGuid();
+        var world = new GameWorldState
+        {
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(
+                new[] { Clean("action queues") },
+                1),
+            ActionQueueMembers = PublicationTable<WorldActionQueueMember>.Create(
+                new[]
+                {
+                    new WorldActionQueueMember(
+                        queueId,
+                        index: 0,
+                        structureId,
+                        WorldActionQueueMemberKind.Structure,
+                        stackCount: 4,
+                        nativeQueuedCount: 0,
+                        actionTime: new BigDouble(-1d),
+                        actionTimeTotal: new BigDouble(2d),
+                        buildSpeed: new BigDouble(100d),
+                        timingReadable: true),
+                },
+                1),
+            CollectedAtEpoch = 16,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        using var publisher =
+            new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        publisher.Publish(world, new WorldGeneration(900));
+        var state = Snapshot(publisher.ReadLatest());
+
+        var categories = GameMcpWorldQuery.ListCategories(state);
+        var category = categories["categories"]!
+            .Values<JObject>()
+            .Single(item => (string?)item!["name"] == "action-queue-members")!;
+        Assert.True((bool)category["available"]!);
+        Assert.Equal("StructureSO|UpgradeSO", (string?)category["expectedNativeType"]);
+        Assert.Equal("composite_guid_fields", (string?)category["identityMode"]);
+
+        var listed = GameMcpWorldQuery.ListRows(state, "action-queue-members", 0, 10);
+        Assert.Equal("available", (string?)listed["status"]);
+        Assert.Equal(1, (int)listed["total"]!);
+        var row = Assert.Single(listed["rows"]!.Values<JObject>());
+        Assert.Equal(queueId.ToString("D"), (string?)row["queueId"]);
+        Assert.Equal(structureId.ToString("D"), (string?)row["actionableId"]);
+        Assert.Equal("Structure", (string?)row["kind"]);
+        Assert.Equal(4, (int)row["stackCount"]!);
+        Assert.Equal(0, (int)row["nativeQueuedCount"]!);
+        Assert.Equal("ExcessStacks", (string?)row["consistency"]);
+    }
+
     [Fact]
     public void OneResponseUsesOnePublishedWorldAndCarriesCollectionEvidence()
     {

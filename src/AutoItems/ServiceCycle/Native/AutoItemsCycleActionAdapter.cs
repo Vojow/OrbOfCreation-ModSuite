@@ -13,13 +13,15 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
     private readonly Func<bool> _ownsActionFamily;
     private readonly Func<string> _readOwnershipFailure;
     private readonly AutoItemsActionHealth _health;
+    private readonly ConsumableMutationPublicationGapCoordinator _publicationGap;
 
     internal AutoItemsCycleActionAdapter(
         AutoItemsConsumableUseGameAction gameAction,
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         Func<string> readOwnershipFailure,
-        AutoItemsActionHealth health)
+        AutoItemsActionHealth health,
+        ConsumableMutationPublicationGapCoordinator publicationGap)
     {
         _gameAction = gameAction ?? throw new ArgumentNullException(nameof(gameAction));
         _readLifecycleEpoch = readLifecycleEpoch ??
@@ -29,6 +31,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         _health = health ?? throw new ArgumentNullException(nameof(health));
+        _publicationGap = publicationGap ??
+            throw new ArgumentNullException(nameof(publicationGap));
     }
 
     public ServiceActionResult TryExecute(
@@ -53,6 +57,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         }
         if (!NativeEpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
+        if (_publicationGap.BlocksMutation(action.CollectedAtEpoch))
+            return ServiceActionResult.Rejected(AutoItemsActionResultCodes.PublicationGap);
 
         AutoItemsSubmission submission;
         try
@@ -67,11 +73,11 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             submission = AutoItemsSubmission.Reject(
                 AutoItemsPreflight.ContractUnavailable,
                 reason);
-            Plugin.Log?.LogAutomataWarning(reason);
         }
 
-        _health.Observe(in submission);
-        if (!submission.Verified)
+        var newlyObserved = _health.Observe(in submission);
+        if (!submission.Verified && newlyObserved &&
+            !IsExpectedRejection(submission.Preflight))
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Items {submission.Preflight}: {submission.Reason}");
         return Map(in submission);
@@ -104,6 +110,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.TemporaryCostChanged,
             AutoItemsPreflight.TemporaryEffectPresent =>
                 AutoItemsActionResultCodes.TemporaryEffectPresent,
+            AutoItemsPreflight.AudioUnavailable =>
+                AutoItemsActionResultCodes.AudioUnavailable,
             AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };
@@ -116,7 +124,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                     submission.CallOutcome);
                 return ServiceActionResult.Faulted(code, rejectedEvidence);
             }
-            return IsExpectedRejection(submission.Preflight)
+            return IsExpectedRejection(submission.Preflight) ||
+                submission.Preflight == AutoItemsPreflight.Quarantined
                 ? ServiceActionResult.Rejected(code)
                 : ServiceActionResult.Faulted(code);
         }
@@ -140,7 +149,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             AutoItemsPreflight.TargetUnavailable or
             AutoItemsPreflight.TemporaryDurationChanged or
             AutoItemsPreflight.TemporaryCostChanged or
-            AutoItemsPreflight.TemporaryEffectPresent;
+            AutoItemsPreflight.TemporaryEffectPresent or
+            AutoItemsPreflight.AudioUnavailable;
 
     private bool Owns()
     {

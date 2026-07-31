@@ -46,7 +46,8 @@ internal static class AutoScribeCycleEvaluator
                 enabledRoles,
                 afterCraftCostOrder,
                 out var selected,
-                out var blocked))
+                out var blocked,
+                out var evidenceBlocked))
         {
             actions.Add(new AutoScribeCycleAction(
                 selected.RecipeId,
@@ -64,7 +65,7 @@ internal static class AutoScribeCycleEvaluator
                 AutoScribeEvidenceReason.None);
             return WakePolicy.OnPublication;
         }
-        if (blocked.State == ScrollCoverageState.EvidenceUnknown)
+        if (evidenceBlocked)
         {
             metrics = new AutoScribeDecisionMetrics(
                 enabled,

@@ -51,6 +51,27 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     }
 
     [Fact]
+    public void PaymentAttemptReportsItsActualLifecycleAndFrameToTheSharedGap()
+    {
+        var fixture = Fixture();
+        var observedLifecycle = 0L;
+        var observedFrame = 0L;
+        using var actionBoundary = GameAction(
+            readFrame: static () => 51,
+            observeMutation: (lifecycle, frame) =>
+            {
+                observedLifecycle = lifecycle;
+                observedFrame = frame;
+            });
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(fixture.Action.CollectedAtEpoch, observedLifecycle);
+        Assert.Equal(51, observedFrame);
+    }
+
+    [Fact]
     public void MoreExpensiveRecipeUsesItsOwnAffordableFrontierBelowSharedCeiling()
     {
         var fixture = Fixture();
@@ -150,6 +171,204 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     }
 
     [Fact]
+    public void DebitBelowBigDoubleResolutionUsesTheNativeUnchangedPostState()
+    {
+        var fixture = Fixture();
+        fixture.Resource.quantity = new BigDouble(3.12835344555536, 499);
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(3.12835344555536, 499), fixture.Resource.GetQuantity());
+        Assert.False(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.CostMatched);
+        Assert.Single(fixture.Active.value);
+    }
+
+    [Fact]
+    public void DuplicateRowsReproduceNativeSequentialRoundingInsteadOfAggregatingTheDebit()
+    {
+        var fixture = Fixture();
+        fixture.Resource.quantity = new BigDouble(1, 15);
+        fixture.Recipe.TotalCost.costs.Add(
+            new ResourceTuple(fixture.Resource, new BigDouble(5, 0)));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(1, 15), fixture.Resource.GetQuantity());
+        Assert.False(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.CostMatched);
+    }
+
+    [Fact]
+    public void NonParityQualityVerifiesTheNativeRawDebit()
+    {
+        var fixture = Fixture();
+        fixture.Resource.quality = new ValueModifierRecord(new BigDouble(50, 0));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(90, 0), fixture.Resource.GetQuantity());
+        Assert.Equal(new BigDouble(45, 0), fixture.Resource.GetTrueQuantity());
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.CostMatched);
+    }
+
+    [Fact]
+    public void QualityChangingAfterPaymentDoesNotRewriteTheCapturedRawDebit()
+    {
+        var fixture = Fixture();
+        fixture.Resource.quality = new ValueModifierRecord(new BigDouble(50, 0));
+        fixture.Recipe.AfterPayment = () =>
+            fixture.Resource.quality = new ValueModifierRecord(new BigDouble(200, 0));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(90, 0), fixture.Resource.GetQuantity());
+        Assert.Equal(new BigDouble(180, 0), fixture.Resource.GetTrueQuantity());
+        Assert.True(result.Receipt.CostMatched);
+    }
+
+    [Fact]
+    public void ActiveDecayVerifiesTheReducedImmediateRawDebit()
+    {
+        var fixture = Fixture();
+        // Native DiminishingReturn(100, 100).AsPercent() is 50%.
+        fixture.Resource.decayRatio = new ValueModifierRecord(new BigDouble(100, 0));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(97.5, 0), fixture.Resource.GetQuantity());
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.CostMatched);
+    }
+
+    [Fact]
+    public void ReplenishAndReverberationDoNotChangeTheImmediateDebitReceipt()
+    {
+        var fixture = Fixture();
+        fixture.Resource.replenishRatio = new ValueModifierRecord(new BigDouble(50, 0));
+        fixture.Resource.reverberateMod = new ValueModifierRecord(new BigDouble(200, 0));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new BigDouble(95, 0), fixture.Resource.GetQuantity());
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.CostMatched);
+    }
+
+    [Fact]
+    public void DuplicateRowsThatAreOnlyIndividuallyAffordableAreRejectedBeforePayment()
+    {
+        var fixture = Fixture();
+        fixture.Resource.quantity = new BigDouble(6, 0);
+        fixture.Recipe.TotalCost.costs.Add(
+            new ResourceTuple(fixture.Resource, new BigDouble(5, 0)));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.Unaffordable, result.Preflight);
+        Assert.Contains("Aggregated native debit", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        Assert.Equal(new BigDouble(6, 0), fixture.Resource.GetQuantity());
+        Assert.False(actionBoundary.IsQuarantined);
+    }
+
+    [Fact]
+    public void BandwidthCostIsRejectedBeforePaymentBecauseItCannotProduceADebitReceipt()
+    {
+        var fixture = Fixture();
+        fixture.Resource.bandwidthResource = true;
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.ContractUnavailable, result.Preflight);
+        Assert.Contains("bandwidth resource", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        Assert.False(actionBoundary.IsQuarantined);
+    }
+
+    [Theory]
+    [InlineData(50)]
+    [InlineData(200)]
+    public void IncorrectNativeDebitIsQuarantined(int debitPercent)
+    {
+        var fixture = Fixture();
+        fixture.Resource.SpendDebitMultiplier = new BigDouble(debitPercent, 0) /
+            new BigDouble(100, 0);
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(AutoScribeNativeStage.Verification, result.Stage);
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.False(result.Receipt.CostMatched);
+        Assert.Contains(fixture.Resource.GetGuid().ToString("D"), result.Reason);
+        Assert.Contains("expectedRawDebit=5", result.Reason);
+        Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+        Assert.True(actionBoundary.IsQuarantined);
+    }
+
+    [Fact]
+    public void CostShapeChangingAfterPaymentIsQuarantined()
+    {
+        var fixture = Fixture();
+        fixture.Recipe.AfterPayment = () =>
+        {
+            fixture.Recipe.TotalCost.costs.Clear();
+            fixture.Recipe.TotalCost.costs.Add(
+                new ResourceTuple(fixture.Resource, new BigDouble(6, 0)));
+        };
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(AutoScribeNativeStage.Verification, result.Stage);
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.False(result.Receipt.CostMatched);
+        Assert.Contains("costEvidence=NominalChanged", result.Reason);
+        Assert.True(actionBoundary.IsQuarantined);
+    }
+
+    [Fact]
+    public void DuplicateRowRedistributionWithTheSameAggregateCostIsQuarantined()
+    {
+        var fixture = Fixture();
+        fixture.Recipe.TotalCost.costs.Add(
+            new ResourceTuple(fixture.Resource, new BigDouble(2, 0)));
+        fixture.Recipe.AfterPayment = () =>
+        {
+            fixture.Recipe.TotalCost.costs.Clear();
+            fixture.Recipe.TotalCost.costs.Add(
+                new ResourceTuple(fixture.Resource, new BigDouble(4, 0)));
+            fixture.Recipe.TotalCost.costs.Add(
+                new ResourceTuple(fixture.Resource, new BigDouble(3, 0)));
+        };
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.VerificationFailed, result.Preflight);
+        Assert.False(result.Receipt.CostMatched);
+        Assert.Contains("costEvidence=NominalChanged", result.Reason);
+    }
+
+    [Fact]
     public void FailureDuringConstructionPreservesPaymentAndNamesConstruction()
     {
         var fixture = Fixture();
@@ -246,7 +465,7 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     {
         var fixture = Fixture();
         fixture.Automatic.value.Add(
-            new CraftingInstance(fixture.Recipe, new BigDouble(3, 0))
+            new CraftingInstance(fixture.Recipe, new BigDouble(1, 0))
             {
                 Automatic = true,
             });
@@ -257,6 +476,138 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
         Assert.Contains(KnownEntities.AutoScribeInstances.Uuid.ToString("D"), result.Reason);
         Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void ManualWorkAtAnyLevelIsRejectedBeforePayment()
+    {
+        var fixture = Fixture();
+        fixture.Active.value.Add(
+            new CraftingInstance(fixture.Recipe, new BigDouble(1, 0)));
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
+        Assert.Contains("level 1", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void QueuedConsumableQuantityIsRejectedBeforePayment()
+    {
+        var fixture = Fixture();
+        fixture.Scroll.SetStock(quantityN: 0, queuedN: 1, gainedSinceN: 0);
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
+        Assert.Contains("queued consumable production", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void ActivePreparationIsRejectedBeforePayment()
+    {
+        var fixture = Fixture();
+        fixture.Scroll.currentPrepTime = BigDouble.One;
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
+        Assert.Contains("active preparation", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void PendingAndActiveUsagesAreRejectedBeforePayment()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction();
+        foreach (var usage in new[]
+        {
+            new ConsumableUsage { en = false, dr = BigDouble.Zero },
+            new ConsumableUsage { en = true, dr = BigDouble.One },
+        })
+        {
+            fixture.Scroll.consumableUsages.Clear();
+            fixture.Scroll.consumableUsages.Add(usage);
+
+            var result = Submit(actionBoundary, fixture.Action);
+
+            Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
+            Assert.Contains("usage", result.Reason);
+            Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        }
+    }
+
+    [Fact]
+    public void ExpiredUsageDoesNotBlockPayment()
+    {
+        var fixture = Fixture();
+        fixture.Scroll.consumableUsages.Add(
+            new ConsumableUsage { en = true, dr = BigDouble.Zero });
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void CapacityIsRecheckedAfterPermitImmediatelyBeforePayment()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction(() =>
+        {
+            fixture.Scroll.currentPrepTime = BigDouble.One;
+            return true;
+        });
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.CompetingSupply, result.Preflight);
+        Assert.Contains("active preparation", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        Assert.Equal(new BigDouble(100, 0), fixture.Resource.GetTrueQuantity());
+    }
+
+    [Fact]
+    public void QueueRoomIsRecheckedAfterPermitImmediatelyBeforePayment()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction(() =>
+        {
+            fixture.Active.Maximum = 0;
+            return true;
+        });
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.QueueFull, result.Preflight);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        Assert.Equal(new BigDouble(100, 0), fixture.Resource.GetTrueQuantity());
+    }
+
+    [Fact]
+    public void AffordabilityIsRecheckedAfterPermitImmediatelyBeforePayment()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction(() =>
+        {
+            fixture.Recipe.BuyAllowed = false;
+            return true;
+        });
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.Unaffordable, result.Preflight);
+        Assert.Contains("immediately before payment", result.Reason);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+        Assert.Equal(new BigDouble(100, 0), fixture.Resource.GetTrueQuantity());
     }
 
     [Fact]
@@ -291,7 +642,10 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Equal(0, fixture.Recipe.PurchaseCalls);
     }
 
-    private AutoScribeOneShotCraftGameAction GameAction()
+    private AutoScribeOneShotCraftGameAction GameAction(
+        Func<bool>? permit = null,
+        Func<long>? readFrame = null,
+        Action<long, long>? observeMutation = null)
     {
         IDictionary dictionary = _registry;
         var resolver = new TypedRegistryResolver(
@@ -301,8 +655,10 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         return new AutoScribeOneShotCraftGameAction(
             resolver,
             _profile,
-            static () => true,
-            static () => string.Empty);
+            permit ?? (static () => true),
+            static () => string.Empty,
+            readFrame ?? (static () => 1),
+            observeMutation ?? (static (_, _) => { }));
     }
 
     private static AutoScribeSubmission Submit(
@@ -430,4 +786,5 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         CraftingInstanceListVariable Active,
         CraftingInstanceListVariable Automatic,
         AutoScribeCycleAction Action);
+
 }

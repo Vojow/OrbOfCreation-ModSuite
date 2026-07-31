@@ -13,9 +13,20 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj \
   -p:UseGameStubs=true --filter "FullyQualifiedName~AutoItems"
 ```
 
-The required defect cases are live family change, native busy, lost ownership permit, manual stock
-race, empty Scroll target selection, ambiguous postcondition quarantine, lifecycle reset, direct
-action-adapter result mapping, one-attempt publication planning, and exact health explanations.
+The required defect cases are permanent `Fruit + Relic` behavioral resolution in both background
+planning and live revalidation, fail-closed unsupported family conflicts, published global
+preparation, open native targeting, inconsistent queued/pending state, missing or complete-empty
+strongest-level Scroll target evidence, live family/level change, native busy, lost ownership
+permit, missing `SoundManager`, undersized or incomplete reachable audio pools, proof that these
+audio failures, a fully occupied looping pool, and a single returnable entry reject Scroll/Relic
+before mutation, manual stock race, empty live Scroll target selection, Scroll-family-only containment,
+same-Scroll manual/automatic Scribe-work exclusion, exact prepared usage level and preparation,
+strictly-newer permanent settlement in both preparing and already-drained forms, contradictory
+permanent topology containment, incomplete collection waiting, capacity-replacement tolerance,
+bounded stage/inner-stack and exact before/after mutation diagnostics, ambiguous postcondition
+quarantine, no-mutation quarantine rejection, lifecycle reset, direct
+action-adapter result mapping, one-attempt publication planning, transient health
+deduplication/cleanup, and exact health explanations.
 Temporary-item coverage additionally requires exact and near-miss allowlists, visibility/stock/
 preparation/cooldown/duration/cost/Toxicity guard failures, stock/queue/usage/Toxicity mutation
 evidence, mutual exclusion in both directions, exact-item mutation quarantine, and publication

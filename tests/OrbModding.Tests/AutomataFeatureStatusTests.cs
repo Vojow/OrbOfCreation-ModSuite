@@ -81,6 +81,27 @@ public sealed class AutomataFeatureStatusTests
         Assert.Equal(2, changes);
     }
 
+    [Fact]
+    public void OperationalLifecycleObservationNeverConstructsAReasonFromPositiveSummaryText()
+    {
+        var config = BepInExAutomataConfiguration.Bind(new ConfigFile());
+        var registry = new FeatureStatusRegistry();
+        using var statuses = new AutomataFeatureStatuses(config.Current, 1, registry);
+
+        var changed = statuses.AutoBuy.ObserveLifecycle(
+            true,
+            FeatureStatusState.Operational,
+            FeatureStatusReasonCode.None,
+            "Positive diagnostics are not a failure reason.",
+            2);
+
+        Assert.True(changed);
+        Assert.Equal(FeatureStatusState.Operational, statuses.AutoBuy.Current.State);
+        Assert.Equal(FeatureStatusReasonCode.None, statuses.AutoBuy.Current.Reason.Code);
+        Assert.True(string.IsNullOrEmpty(statuses.AutoBuy.Current.Reason.Summary));
+        Assert.Equal(2, statuses.AutoBuy.Current.LifecycleGeneration);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -9,19 +9,27 @@ internal sealed class AutoScribeActionHealth
     internal AutoScribeMutationReceipt Receipt { get; private set; }
     internal long Revision { get; private set; }
 
-    internal void Observe(in AutoScribeSubmission submission)
+    /// <summary>
+    /// Records a newly observed failure and returns whether callers should publish or narrate it.
+    /// Once the native action boundary has quarantined itself, its zero-mutation rejection is a
+    /// consequence of the original fault rather than a replacement for that fault's evidence.
+    /// </summary>
+    internal bool Observe(in AutoScribeSubmission submission)
     {
         if (submission.Verified)
         {
             Clear();
-            return;
+            return false;
         }
+        if (HasFailure && submission.Preflight == AutoScribePreflight.Quarantined)
+            return false;
         HasFailure = true;
         Preflight = submission.Preflight;
         Stage = submission.Stage;
         Reason = submission.Reason;
         Receipt = submission.Receipt;
         Revision = checked(Revision + 1);
+        return true;
     }
 
     internal void Clear()

@@ -10,6 +10,7 @@ public sealed class GameMcpGadgetTests
     [Theory]
     [InlineData("runtime", true)]
     [InlineData("action_queue_room", true)]
+    [InlineData("audio_pool", true)]
     [InlineData("navigation", true)]
     [InlineData("SaveStateManager", false)]
     [InlineData("System.IO.File.Delete", false)]
@@ -70,6 +71,19 @@ public sealed class GameMcpGadgetTests
             properties.Properties().Select(property => property.Name));
         Assert.Null(properties["operation"]);
         Assert.Null(properties["tabIndex"]);
+    }
+
+    [Fact]
+    public void AudioLoopControlIsBoundedAndNeverOffersForceStop()
+    {
+        var control = Tool("game_audio_loop_control");
+        var properties = (JObject)control["inputSchema"]!["properties"]!;
+        Assert.Equal(new[] { "operation" }, properties.Properties().Select(p => p.Name));
+        Assert.Equal(
+            new[] { "enable", "disable", "reset_counters" },
+            properties["operation"]!["enum"]!.Values<string>());
+        Assert.False((bool)control["annotations"]!["readOnlyHint"]!);
+        Assert.DoesNotContain("force_stop", properties["operation"]!["enum"]!.Values<string>());
     }
 
     private static JObject Tool(string name)

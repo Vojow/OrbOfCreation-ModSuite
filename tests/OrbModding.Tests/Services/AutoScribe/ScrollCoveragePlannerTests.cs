@@ -23,12 +23,14 @@ public sealed class ScrollCoveragePlannerTests
             enabledRoles: null,
             afterCraftCostOrder: -1,
             out var selected,
-            out var blocked);
+            out var blocked,
+            out var evidenceBlocked);
 
         Assert.True(found);
         Assert.Equal("scribe.advancement", selected.Role.Value);
         Assert.Equal(0, selected.CraftCostOrder);
         Assert.Equal(default, blocked);
+        Assert.False(evidenceBlocked);
     }
 
     [Fact]
@@ -53,15 +55,17 @@ public sealed class ScrollCoveragePlannerTests
                 enabledRoles: null,
                 cursor,
                 out var selected,
-                out var blocked));
+                out var blocked,
+                out var evidenceBlocked));
             Assert.Equal(expected[index], selected.Role.Value);
             Assert.Equal(default, blocked);
+            Assert.False(evidenceBlocked);
             cursor = selected.CraftCostOrder;
         }
     }
 
     [Fact]
-    public void CoveredRoleProbesItsOwnNextLevel()
+    public void OwnedFrontierSupplySuppressesTheNextLevelProbe()
     {
         var role = _profile.Roles[0];
         var world = World() with
@@ -79,9 +83,116 @@ public sealed class ScrollCoveragePlannerTests
 
         Assert.Equal(ScrollCoverageState.Covered, coverage.State);
         Assert.False(coverage.ShouldProduce);
-        Assert.True(coverage.ShouldProbeProgression);
+        Assert.False(coverage.ShouldProbeProgression);
         Assert.Equal(3, coverage.TargetLevel);
-        Assert.Equal(4, coverage.RequestedCraftLevel);
+        Assert.Equal(0, coverage.ProgressionLevel);
+    }
+
+    [Fact]
+    public void PendingUseAtAnyLevelBlocksCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            ConsumableUsages = Table(new WorldConsumableUsage(
+                role.Scroll.Uuid,
+                Guid.NewGuid(),
+                level: 1,
+                engaged: false,
+                remainingDuration: BigDouble.Zero,
+                maximumDuration: BigDouble.Zero)),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, coverage.State);
+        Assert.Equal(0, coverage.PendingUseSupply);
+        Assert.Equal(1, coverage.Deficit);
+        Assert.False(coverage.ShouldProduce);
+        Assert.False(coverage.ShouldProbeProgression);
+        Assert.Equal(0, coverage.ProgressionLevel);
+    }
+
+    [Fact]
+    public void EngagedUseAtAnyLevelBlocksCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            ConsumableUsages = Table(new WorldConsumableUsage(
+                role.Scroll.Uuid,
+                Guid.NewGuid(),
+                level: 1,
+                engaged: true,
+                remainingDuration: BigDouble.One,
+                maximumDuration: BigDouble.One)),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(0, coverage.PendingUseSupply);
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, coverage.State);
+        Assert.Equal(1, coverage.Deficit);
+        Assert.False(coverage.ShouldProduce);
+        Assert.False(coverage.ShouldProbeProgression);
+        Assert.Equal(0, coverage.ProgressionLevel);
+        Assert.Equal(0, coverage.RequestedCraftLevel);
+    }
+
+    [Fact]
+    public void RepeatedHigherLevelSupplyCannotStarveItsConsumerAndProgressionResumesAfterUse()
+    {
+        var role = _profile.Roles[0];
+        for (var level = 3; level <= 9; level++)
+        {
+            var supplied = World() with
+            {
+                Consumables = ScrollsWithOverride(role.Key, level),
+                ConsumableCounts = Table(new WorldConsumableCount(
+                    role.Scroll.Uuid,
+                    level,
+                    quantity: 1,
+                    freeQuantity: 1)),
+            };
+
+            var waiting = FindRole(
+                ScrollCoveragePlanner.Build(supplied, _profile),
+                role.Key);
+
+            Assert.Equal(level, waiting.TargetLevel);
+            Assert.Equal(1, waiting.OwnedSupply);
+            Assert.False(waiting.ShouldProbeProgression);
+        }
+
+        var consumed = World() with
+        {
+            Consumables = ScrollsWithOverride(role.Key, maxCreatedLevel: 9),
+        };
+        var target = Assert.Single(
+            consumed.ScrollTargets.AsSpan().ToArray(),
+            candidate => candidate.ConsumableId == role.Scroll.Uuid);
+        consumed = consumed with
+        {
+            StructureEnchantments = Table(new WorldStructureEnchantment(
+                target.StructureId,
+                role.Enchantment.Uuid,
+                level: 9)),
+        };
+
+        var resumed = FindRole(
+            ScrollCoveragePlanner.Build(consumed, _profile),
+            role.Key);
+
+        Assert.Equal(ScrollCoverageState.Covered, resumed.State);
+        Assert.Equal(0, resumed.OwnedSupply);
+        Assert.Equal(0, resumed.QueuedSupply);
+        Assert.Equal(0, resumed.PendingUseSupply);
+        Assert.True(resumed.ShouldProbeProgression);
+        Assert.Equal(10, resumed.RequestedCraftLevel);
     }
 
     [Fact]
@@ -157,9 +268,11 @@ public sealed class ScrollCoveragePlannerTests
             enabledRoles: null,
             afterCraftCostOrder: -1,
             out var selected,
-            out var blocked);
+            out var blocked,
+            out var evidenceBlocked);
 
         Assert.False(found);
+        Assert.True(evidenceBlocked);
         Assert.Equal(default, selected);
         Assert.Equal("scribe.development", blocked.Role.Value);
         Assert.Equal(AutoScribeEvidenceReason.TargetEvidenceMissing, blocked.EvidenceReason);
@@ -177,7 +290,7 @@ public sealed class ScrollCoveragePlannerTests
             ScribeWork = Table(new WorldScribeWork(
                 _profile.AutomaticInstances.Uuid,
                 automaticRole.Recipe!.Value.Uuid,
-                level: 3,
+                level: 1,
                 isAutomatic: true,
                 isExpired: false)),
         };
@@ -186,6 +299,140 @@ public sealed class ScrollCoveragePlannerTests
 
         Assert.Equal(ScrollCoverageState.ExternallyProducing, plan.Roles[0].State);
         Assert.False(plan.Roles[0].ShouldProduce);
+    }
+
+    [Fact]
+    public void ManualWorkAtAnyLevelBlocksCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            ScribeWork = Table(new WorldScribeWork(
+                _profile.ActiveInstances.Uuid,
+                role.Recipe!.Value.Uuid,
+                level: 1,
+                isAutomatic: false,
+                isExpired: false)),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, coverage.State);
+        Assert.Equal(1, coverage.Deficit);
+        Assert.False(coverage.ShouldProduce);
+        Assert.False(coverage.ShouldProbeProgression);
+    }
+
+    [Fact]
+    public void QueuedConsumableQuantityBlocksCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 3,
+                queuedQuantity: 1),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, coverage.State);
+        Assert.Equal(1, coverage.Deficit);
+        Assert.False(coverage.ShouldAttemptCraft);
+    }
+
+    [Fact]
+    public void ActivePreparationBlocksCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 3,
+                currentPrepTime: BigDouble.One),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(ScrollCoverageState.ExternallyProducing, coverage.State);
+        Assert.Equal(1, coverage.Deficit);
+        Assert.False(coverage.ShouldAttemptCraft);
+    }
+
+    [Fact]
+    public void ExpiredUsageDoesNotBlockCapacityReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            ConsumableUsages = Table(new WorldConsumableUsage(
+                role.Scroll.Uuid,
+                Guid.NewGuid(),
+                level: 1,
+                engaged: true,
+                remainingDuration: BigDouble.Zero,
+                maximumDuration: BigDouble.One)),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+        Assert.True(coverage.ShouldProduce);
+    }
+
+    [Fact]
+    public void FullNativeCarryCapacitySuppressesFutileSameLevelCrafts()
+    {
+        var role = _profile.Roles[0];
+        var world = World(candidateCount: 5) with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 3,
+                maximumCarryLoad: 2),
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 2,
+                freeQuantity: 2)),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(5, coverage.ValidTargets);
+        Assert.Equal(2, coverage.OwnedSupply);
+        Assert.Equal(0, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.Covered, coverage.State);
+        Assert.False(coverage.ShouldAttemptCraft);
+    }
+
+    [Fact]
+    public void FullLowerLevelCapacityStillAllowsStrongerReplacement()
+    {
+        var role = _profile.Roles[0];
+        var world = World(candidateCount: 5) with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 4,
+                maximumCarryLoad: 2),
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 2,
+                freeQuantity: 2)),
+        };
+
+        var coverage = FindRole(ScrollCoveragePlanner.Build(world, _profile), role.Key);
+
+        Assert.Equal(4, coverage.TargetLevel);
+        Assert.Equal(0, coverage.OwnedSupply);
+        Assert.Equal(2, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+        Assert.True(coverage.ShouldProduce);
+        Assert.Equal(4, coverage.RequestedCraftLevel);
     }
 
     [Fact]
@@ -233,14 +480,23 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(0, blocked);
         Assert.Equal(
             WakePolicy.OnPublication,
-            Evaluate(World(candidateCount: 0), active, out var idle));
+            Evaluate(World(candidateCount: 0), active, out var idle, out var idleMetrics));
         Assert.Equal(0, idle);
+        Assert.Equal(AutoScribeDecisionKind.Idle, idleMetrics.Kind);
+        Assert.Equal(AutoScribeEvidenceReason.None, idleMetrics.BlockedReason);
     }
 
     private WakePolicy Evaluate(
         GameWorldState world,
         SuiteRuntimeConfiguration configuration,
-        out int actionCount)
+        out int actionCount) =>
+        Evaluate(world, configuration, out actionCount, out _);
+
+    private WakePolicy Evaluate(
+        GameWorldState world,
+        SuiteRuntimeConfiguration configuration,
+        out int actionCount,
+        out AutoScribeDecisionMetrics metrics)
     {
         var store = new ReusableActionStore<AutoScribeCycleAction>();
         store.BeginWrite();
@@ -251,7 +507,7 @@ public sealed class ScrollCoveragePlannerTests
             enabledRoles: null,
             afterCraftCostOrder: -1,
             new ServiceActionWriter<AutoScribeCycleAction>(store),
-            out _);
+            out metrics);
         actionCount = store.Count;
         return wake;
     }
@@ -275,12 +531,11 @@ public sealed class ScrollCoveragePlannerTests
                 visible: true,
                 usesQuantityAsLevel: true));
             consumables.Add(Scroll(role.Scroll.Uuid, maxCreatedLevel: 3));
-            var structure = Guid.NewGuid();
-            if (candidateCount > 0)
+            for (var targetIndex = 0; targetIndex < candidateCount; targetIndex++)
                 targets.Add(new WorldScrollTarget(
                     role.Scroll.Uuid,
                     role.Enchantment.Uuid,
-                    structure));
+                    Guid.NewGuid()));
             if (index != omitTargetEvidenceForRole)
                 evidence.Add(new WorldScrollTargetEvidence(
                     role.Scroll.Uuid,
@@ -340,7 +595,10 @@ public sealed class ScrollCoveragePlannerTests
 
     private PublicationTable<WorldConsumable> ScrollsWithOverride(
         ScrollRoleKey overrideRole,
-        int maxCreatedLevel)
+        int maxCreatedLevel,
+        int queuedQuantity = 0,
+        BigDouble currentPrepTime = default,
+        int maximumCarryLoad = 0)
     {
         var rows = new List<WorldConsumable>();
         for (var index = 0; index < _profile.Roles.Count; index++)
@@ -349,7 +607,10 @@ public sealed class ScrollCoveragePlannerTests
             if (!role.IsProducible) continue;
             rows.Add(Scroll(
                 role.Scroll.Uuid,
-                role.Key == overrideRole ? maxCreatedLevel : 3));
+                role.Key == overrideRole ? maxCreatedLevel : 3,
+                maximumCarryLoad: role.Key == overrideRole ? maximumCarryLoad : 0,
+                queuedQuantity: role.Key == overrideRole ? queuedQuantity : 0,
+                currentPrepTime: role.Key == overrideRole ? currentPrepTime : BigDouble.Zero));
         }
         return Table(rows.ToArray());
     }
@@ -357,7 +618,9 @@ public sealed class ScrollCoveragePlannerTests
     private static WorldConsumable Scroll(
         Guid scrollId,
         int maxCreatedLevel,
-        int maximumCarryLoad = 0)
+        int maximumCarryLoad = 0,
+        int queuedQuantity = 0,
+        BigDouble currentPrepTime = default)
     {
         var modifiers = default(RawConsumableModifiers);
         return new WorldConsumable(
@@ -365,11 +628,11 @@ public sealed class ScrollCoveragePlannerTests
             visible: true,
             randomized: true,
             quantity: 0,
-            queuedQuantity: 0,
+            queuedQuantity,
             maximumCarryLoad,
             gainedSince: 0,
             maxCreatedLevel,
-            currentPrepTime: BigDouble.Zero,
+            currentPrepTime,
             currentCooldown: BigDouble.Zero,
             currentCooldownTime: BigDouble.Zero,
             in modifiers,

@@ -18,6 +18,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
     private AutoItemsDecisionKind _decisionKind;
     private Guid _quarantinedTemporaryItem;
     private AutoItemsTemporaryQuarantineCause _temporaryQuarantineCause;
+    private Guid _quarantinedPermanentItem;
+    private AutoItemsPermanentQuarantineCause _permanentQuarantineCause;
     private long _publishedHealthRevision = -1;
     private ServiceCycleServiceDiagnosticsSnapshot[] _services =
         new ServiceCycleServiceDiagnosticsSnapshot[8];
@@ -46,17 +48,27 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
                 pump,
                 out var decisionKind,
                 out var quarantinedTemporaryItem,
-                out var temporaryQuarantineCause))
+                out var temporaryQuarantineCause,
+                out var quarantinedPermanentItem,
+                out var permanentQuarantineCause))
         {
             changed = changed ||
                 !_cycleObserved ||
                 _decisionKind != decisionKind ||
                 _quarantinedTemporaryItem != quarantinedTemporaryItem ||
-                _temporaryQuarantineCause != temporaryQuarantineCause;
+                _temporaryQuarantineCause != temporaryQuarantineCause ||
+                _quarantinedPermanentItem != quarantinedPermanentItem ||
+                _permanentQuarantineCause != permanentQuarantineCause;
             _cycleObserved = true;
             _decisionKind = decisionKind;
             _quarantinedTemporaryItem = quarantinedTemporaryItem;
             _temporaryQuarantineCause = temporaryQuarantineCause;
+            _quarantinedPermanentItem = quarantinedPermanentItem;
+            _permanentQuarantineCause = permanentQuarantineCause;
+            if (decisionKind is not AutoItemsDecisionKind.Relic and
+                not AutoItemsDecisionKind.Scroll and
+                not AutoItemsDecisionKind.TemporaryItem)
+                changed |= _health.ClearTransient();
         }
         if (_publishedHealthRevision != _health.Revision)
         {
@@ -74,6 +86,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         _decisionKind = AutoItemsDecisionKind.Disabled;
         _quarantinedTemporaryItem = Guid.Empty;
         _temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
+        _quarantinedPermanentItem = Guid.Empty;
+        _permanentQuarantineCause = AutoItemsPermanentQuarantineCause.None;
     }
 
     internal void ObserveLifecycle(
@@ -87,6 +101,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         _decisionKind = AutoItemsDecisionKind.Disabled;
         _quarantinedTemporaryItem = Guid.Empty;
         _temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
+        _quarantinedPermanentItem = Guid.Empty;
+        _permanentQuarantineCause = AutoItemsPermanentQuarantineCause.None;
         _health.InvalidateLifecycle();
         _publishedHealthRevision = _health.Revision;
         Publish();
@@ -104,6 +120,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
             _decisionKind,
             _quarantinedTemporaryItem,
             _temporaryQuarantineCause,
+            _quarantinedPermanentItem,
+            _permanentQuarantineCause,
             _health);
         _dependencies.FeatureStatus.ObserveRuntimeLifecycle(
             status.State,
@@ -117,7 +135,9 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         SuiteFramePump pump,
         out AutoItemsDecisionKind decisionKind,
         out Guid quarantinedTemporaryItem,
-        out AutoItemsTemporaryQuarantineCause temporaryQuarantineCause)
+        out AutoItemsTemporaryQuarantineCause temporaryQuarantineCause,
+        out Guid quarantinedPermanentItem,
+        out AutoItemsPermanentQuarantineCause permanentQuarantineCause)
     {
         var copy = ServiceCycleDiagnostics.CopyServices(pump, _services);
         if (copy.RequiredCount > _services.Length)
@@ -136,11 +156,15 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
                 in projection,
                 out decisionKind,
                 out quarantinedTemporaryItem,
-                out temporaryQuarantineCause);
+                out temporaryQuarantineCause,
+                out quarantinedPermanentItem,
+                out permanentQuarantineCause);
         }
         decisionKind = AutoItemsDecisionKind.Disabled;
         quarantinedTemporaryItem = Guid.Empty;
         temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
+        quarantinedPermanentItem = Guid.Empty;
+        permanentQuarantineCause = AutoItemsPermanentQuarantineCause.None;
         return false;
     }
 }

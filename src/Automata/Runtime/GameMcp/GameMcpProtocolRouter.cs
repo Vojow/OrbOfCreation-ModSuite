@@ -149,6 +149,8 @@ internal sealed class GameMcpProtocolRouter
             "game_concept" => SubmitConcept(state, arguments),
             "game_harvest" => SubmitHarvest(state, arguments),
             "game_spell_level" => SubmitSpellLevel(state, arguments),
+            "game_action_queue_recover" => SubmitActionQueueRecovery(state, arguments),
+            "game_audio_loop_control" => SubmitAudioLoopControl(state, arguments),
             "suite_config_set" => SubmitConfiguration(state, arguments),
             "suite_emergency_stop" => SubmitEmergencyStop(state, arguments),
             "game_screenshot" => SubmitScreenshot(state, arguments),
@@ -453,6 +455,55 @@ internal sealed class GameMcpProtocolRouter
             1);
     }
 
+    private GameMcpToolExecution SubmitActionQueueRecovery(
+        GameMcpStateSnapshot state,
+        JObject arguments)
+    {
+        if (state.World is null || state.LifecycleGeneration <= 0 ||
+            !state.ConfigurationGeneration.IsValid)
+        {
+            return TerminalRejection(
+                state,
+                arguments,
+                "runtime_not_available",
+                "queue recovery requires a published world, lifecycle, and configuration");
+        }
+        if (!string.Equals(
+                RequireString(arguments, "proof"),
+                "pre_shutdown_dump",
+                StringComparison.Ordinal))
+        {
+            throw new GameMcpInvalidParamsException(
+                "proof must be exactly 'pre_shutdown_dump'; live post-restart arithmetic alone " +
+                "cannot authorize removal");
+        }
+
+        var queueId = RequireUuid(arguments, "queueUuid");
+        if (queueId != KnownEntities.ActiveActionables.Uuid)
+            throw new GameMcpInvalidParamsException("queueUuid is not ActiveActionables");
+        var memberId = RequireUuid(arguments, "memberUuid");
+        var exactType = RequireOneOf(arguments, "exactNativeType", "StructureSO", "UpgradeSO");
+        var observedStacks = RequiredInt(arguments, "observedStacks", 1, 1_000_000);
+        var observedPending = RequiredInt(arguments, "observedPending", 0, 1_000_000);
+        var excess = RequiredInt(arguments, "excessStacks", 1, 1_000_000);
+        if (observedStacks - observedPending != excess)
+            throw new GameMcpInvalidParamsException(
+                "observedStacks - observedPending must equal excessStacks");
+
+        return WaitForTerminal(
+            state,
+            _commands.SubmitActionQueueRecovery(
+                OptionalUlong(arguments, "worldGeneration"),
+                state.LifecycleGeneration,
+                state.ConfigurationGeneration.Value,
+                queueId,
+                memberId,
+                exactType,
+                excess,
+                observedStacks,
+                observedPending));
+    }
+
     private GameMcpToolExecution SubmitAction(
         GameMcpStateSnapshot state,
         JObject arguments,
@@ -587,7 +638,31 @@ internal sealed class GameMcpProtocolRouter
         SubmitGadget(
             state,
             GameMcpCommandKind.Probe,
-            RequireOneOf(arguments, "probe", "runtime", "action_queue_room", "navigation"),
+            RequireOneOf(
+                arguments,
+                "probe",
+                "runtime",
+                "action_queue_room",
+                "audio_pool",
+                "navigation"),
+            Guid.Empty,
+            1,
+            string.Empty,
+            capture: false,
+            saveCapture: false);
+
+    private GameMcpToolExecution SubmitAudioLoopControl(
+        GameMcpStateSnapshot state,
+        JObject arguments) =>
+        SubmitGadget(
+            state,
+            GameMcpCommandKind.AudioLoopControl,
+            RequireOneOf(
+                arguments,
+                "operation",
+                "enable",
+                "disable",
+                "reset_counters"),
             Guid.Empty,
             1,
             string.Empty,
@@ -939,6 +1014,26 @@ internal sealed class GameMcpProtocolRouter
                     },
                     "mode", "spellRecipeUuid")),
             Tool(
+                "game_action_queue_recover",
+                "Recover one proven excess action-queue stack",
+                "Operator-only recovery from pre-shutdown dump evidence. Revalidates exact queue/member UUID, exact type, lifecycle, stacks, pending, totals, and room on the Unity main thread; never completes work or edits a save.",
+                ObjectSchema(
+                    new JObject
+                    {
+                        ["proof"] = EnumSchema("pre_shutdown_dump"),
+                        ["queueUuid"] = StringSchema("Exact ActiveActionables queue UUID."),
+                        ["memberUuid"] = StringSchema("Exact StructureSO or UpgradeSO UUID from the dump."),
+                        ["exactNativeType"] = EnumSchema("StructureSO", "UpgradeSO"),
+                        ["observedStacks"] = IntegerSchema(1, 1_000_000),
+                        ["observedPending"] = IntegerSchema(0, 1_000_000),
+                        ["excessStacks"] = IntegerSchema(1, 1_000_000),
+                        ["worldGeneration"] = UlongSchema("Optional decision-audit generation."),
+                    },
+                    "proof", "queueUuid", "memberUuid", "exactNativeType",
+                    "observedStacks", "observedPending", "excessStacks"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "suite_config_set",
                 "Commit one suite setting",
                 "Write one allowlisted setting through the single committed configuration-store publication path.",
@@ -966,6 +1061,18 @@ internal sealed class GameMcpProtocolRouter
                     "configurationGeneration", "mode"),
                 readOnly: false,
                 idempotent: false),
+            Tool(
+                "game_audio_loop_control",
+                "Control Upgrade processing-loop aggregation",
+                "Enable or disable future Upgrade audio-loop aggregation, or reset its lifecycle counters. Existing loop leases are preserved and no native audio is force-stopped.",
+                ObjectSchema(
+                    new JObject
+                    {
+                        ["operation"] = EnumSchema("enable", "disable", "reset_counters"),
+                    },
+                    "operation"),
+                readOnly: false,
+                idempotent: true),
             Tool(
                 "game_screenshot",
                 "Capture the game framebuffer",
@@ -1025,11 +1132,15 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_probe",
                 "Run an allowlisted native value probe",
-                "Read runtime/lifecycle, navigation, or live action-queue facts absent from the published world.",
+                "Read runtime/lifecycle, navigation, live action-queue, or native audio-pool facts absent from the published world.",
                 ObjectSchema(
                     new JObject
                     {
-                        ["probe"] = EnumSchema("runtime", "action_queue_room", "navigation"),
+                        ["probe"] = EnumSchema(
+                            "runtime",
+                            "action_queue_room",
+                            "audio_pool",
+                            "navigation"),
                     },
                     "probe")),
         },

@@ -13,13 +13,15 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
     private readonly Func<bool> _ownsActionFamily;
     private readonly Func<string> _readOwnershipFailure;
     private readonly AutoScribeActionHealth _health;
+    private readonly ConsumableMutationPublicationGapCoordinator _publicationGap;
 
     internal AutoScribeCycleActionAdapter(
         AutoScribeOneShotCraftGameAction gameAction,
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
         Func<string> readOwnershipFailure,
-        AutoScribeActionHealth health)
+        AutoScribeActionHealth health,
+        ConsumableMutationPublicationGapCoordinator publicationGap)
     {
         _gameAction = gameAction ?? throw new ArgumentNullException(nameof(gameAction));
         _readLifecycleEpoch = readLifecycleEpoch ??
@@ -29,6 +31,8 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         _health = health ?? throw new ArgumentNullException(nameof(health));
+        _publicationGap = publicationGap ??
+            throw new ArgumentNullException(nameof(publicationGap));
     }
 
     public ServiceActionResult TryExecute(
@@ -52,10 +56,12 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
         }
         if (!EpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
+        if (_publicationGap.BlocksMutation(action.CollectedAtEpoch))
+            return ServiceActionResult.Rejected(AutoScribeActionResultCodes.PublicationGap);
 
         var submission = _gameAction.Submit(in action);
-        _health.Observe(in submission);
-        if (!submission.Verified)
+        var failureRecorded = _health.Observe(in submission);
+        if (failureRecorded)
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Scribe {submission.Stage}/{submission.Preflight}: {submission.Reason}");
         return Map(in submission);

@@ -44,6 +44,7 @@ internal static class GameMcpWorldQuery
         {
             ["actionQueues"] = world.ActionQueues.Count,
             ["occupiedActionQueueSlots"] = world.ActionQueueSlots.Count,
+            ["actionQueueMembers"] = world.ActionQueueMembers.Count,
             ["equippedSpellSlots"] = world.SpellSlots.Count,
             ["activeConceptAssignments"] = world.AlchemyInstances.Count,
             ["plotActionInstances"] = world.PlotActionInstances.Count,
@@ -666,6 +667,7 @@ internal static class GameMcpWorldQuery
             Composite(nameof(GameWorldState.PlotActionInstances), world => world.PlotActionInstances),
             Entity(nameof(GameWorldState.ActionQueues), world => world.ActionQueues),
             Composite(nameof(GameWorldState.ActionQueueSlots), world => world.ActionQueueSlots),
+            Composite(nameof(GameWorldState.ActionQueueMembers), world => world.ActionQueueMembers),
             Composite(nameof(GameWorldState.SpellSlots), world => world.SpellSlots),
             Composite(nameof(GameWorldState.SpellCosts), world => world.SpellCosts),
             Composite(nameof(GameWorldState.MasteryExperience), world => world.MasteryExperience),
@@ -756,6 +758,7 @@ internal static class GameMcpWorldQuery
         "plot-action-instances" => "PlotNodeActionInstance",
         "action-queues" => "ActionQueueVariable",
         "action-queue-slots" => "PlotNodeActionInstance",
+        "action-queue-members" => "StructureSO|UpgradeSO",
         "spell-slots" => "Spell",
         "spell-costs" => "Spell",
         "mastery-experience" => "SpellRecipeSO|AlchemyRecipeSO|EquipmentSO",
@@ -784,7 +787,7 @@ internal static class GameMcpWorldQuery
         },
         "plot-actions" => new[] { "plot-nodes", "plot-node-actions", "plot-actions" },
         "plot-action-instances" => new[] { "plot-actions" },
-        "action-queue-slots" => new[] { "action-queues" },
+        "action-queue-slots" or "action-queue-members" => new[] { "action-queues" },
         "spell-costs" => new[] { "spell-slots" },
         "concept-recipes" or "alchemy-instances" or "alchemy-costs" =>
             new[] { "concept-instances" },
@@ -956,12 +959,19 @@ internal static class GameMcpWorldQuery
         "action-queues" => new[]
         {
             "entityId", "queueId", "slotCount", "usedSlots", "emptySlots",
-            "hasEmptySlot", "consistent",
+            "hasEmptySlot", "kind", "totalStacks", "remainingStackRoom",
+            "hasStackRoom", "consistent",
         },
         "action-queue-slots" => new[]
         {
             "queueId", "index", "empty", "plotNodeId", "plotNodeActionId",
             "quantity", "engaged",
+        },
+        "action-queue-members" => new[]
+        {
+            "queueId", "index", "actionableId", "kind", "stackCount",
+            "nativeQueuedCount", "consistency", "actionTime", "actionTimeTotal",
+            "buildSpeed", "timingReadable",
         },
         "spell-slots" => new[]
         {

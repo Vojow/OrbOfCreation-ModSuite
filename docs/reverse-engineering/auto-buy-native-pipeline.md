@@ -67,8 +67,10 @@ these under the owner *Automata Auto Buy refusal diagnostics* at place `action`;
 `IsAvailable` remains at place `capture`, since collection already calls it on
 every entity of every cycle.
 
-The shared queue contract is `ActionManager.GetRemainingRoom()` plus
-`ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Upgrade
+The shared queue contract includes unique members plus stack-aware
+`ActionableListVariable.GetTotalStacks()/GetRemainingRoom()/HasRoom()`; capacity
+is not `value.Count`. WORLD publishes the detached model, while the action boundary
+rechecks exact member UUID/type and stack-versus-pending parity. Upgrade
 single-level isolation additionally uses `GlobalVariables.GetMultiBuy()` and
 `IntVariable.AsInt()/SetValue(int)`. Structure fallback grouping may read
 `Player.GetBulkDevelopment()`.
@@ -97,13 +99,18 @@ startup snapshot.
 Every action the worker planned is revalidated on the Unity main thread before it
 is allowed to mutate:
 
-1. read live queue room through `ActionManager.GetRemainingRoom()` and subtract
+1. require a healthy queue in the pinned WORLD, then re-scan exact live native
+   member stack-versus-pending parity at the action boundary;
+2. require two reusable audio elements for Structure, or three for Upgrade, leaving one true spare
+   after immediate/completion demand and the Upgrade processing loop, without changing native audio
+   ownership;
+3. read live queue room through `ActionManager.GetRemainingRoom()` and subtract
    the configured reserve; the worker does not bound its plan by the queue at all,
    so this read is the only queue authority;
-2. resolve the candidate from its stable UUID to the live native object;
-3. call `CanPurchase()`, which folds in live requirements and queue admission —
+4. resolve the candidate from its stable UUID to the live native object;
+5. call `CanPurchase()`, which folds in live requirements and queue admission —
    the two things that can change between planning and acting;
-4. call the candidate adapter.
+6. call the candidate adapter.
 
 `IsAvailable()` is deliberately *not* read on the admitting path. Availability is
 a published snapshot field, so the worker never plans an unavailable candidate,
@@ -133,6 +140,30 @@ term passes, the parameterized per-level prerequisite is the remaining term by
 elimination. Those cases remain invariant violations: they terminate the batch
 and stand Auto Buy down after writing the full diagnostic. None of these cold
 reads happen on an admitted purchase.
+
+## Upgrade processing-loop containment
+
+Installed IL shows `UpgradeSO.PlayProcessSound()` starts `customProcessingSound.PlayLoop()` for
+queued Upgrade work, and `CancelProcessSound()` fades its stored handle only after that native owner
+finishes. Many simultaneous queued Upgrades can therefore pin the fixed audio pool with identical
+processing loops. The other loop producers are toggled Spell persistence and the Brewing station;
+they have different ownership lifecycles and are not merged here.
+
+The suite establishes a thread-local scope only while the exact private
+`UpgradeSO.PlayProcessSound()` body runs. Within that scope, exact clip-reference and exact-volume
+matches share one `AudioElement`. Every native request adds a lease. The exact public
+`AudioElement.FadeOutDestroy(float)` boundary consumes one lease. Intermediate owners suppress the
+native fade; the final proven owner synchronously invokes `AudioElement.Stop()` on that exact tracked
+element and returns it to the pool. Runtime evidence showed that the game's delayed fade coroutine
+could leave completed Upgrade loops pinned under sustained churn. A new unique Upgrade loop is
+refused at the one-slot reserve floor because the
+audited Upgrade caller only stores the nullable result and its cancel path accepts null. If the
+allocator topology cannot be read, native `PlayLoop` runs unchanged.
+
+This does not patch `SoundManager.Play`, so callers that immediately configure the returned
+one-shot handle keep their native contract. It also does not aggregate Spell or Brewing loops,
+advance the allocator index, stop unrelated live audio, or retain Unity references across lifecycle
+changes.
 
 ## Mutation transaction
 

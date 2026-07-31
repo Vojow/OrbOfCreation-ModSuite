@@ -120,6 +120,13 @@ is deliberately absent is not the reading but the *authority*. A collected queue
 plan and may never admit an action into a slot, because both services consume the slots they are
 competing for. See [W53](world-collection-decisions.md).
 
+The attribute queue has two native views that must not be conflated. Its list contains unique
+actionables, while its item stack counts every capacity-consuming queued unit. `ActionQueues`
+publishes both views and the native remaining-room answer. `ActionQueueMembers` publishes one
+composite row per unique member with exact native kind, UUID, stack count, native queued count, and
+timing evidence. Count disagreements remain visible as consistency classifications; collection does
+not repair them.
+
 ## Acting twice on one world
 
 A service that attempts a game-facing action must not decide again until the world has been re-read
@@ -182,6 +189,23 @@ main-thread fact-capture stages left to measure.
 | `ActionManager` active-action list | Whether this pair is already queued or running, and whether a slot is free. Published now, but read where it is *acted on*: a collected reading admits nothing ([W53](world-collection-decisions.md)). |
 | The plot's own `actionInstances`, per submission | The instance to submit into. A live object rather than a fact — every fact the decision rested on rode in on the action. |
 | The two pairs' plot and action objects | Resolved once per lifecycle by uuid. Needed to mutate, not to decide. |
+
+**Auto Items** plans from published consumable rows and relations. Any consumable with positive
+`CurrentPrepTime` closes planning for every family, matching the game's global preparation gate.
+An owned Scroll is eligible only when the publication contains the exact strongest-level target
+evidence row and its candidate count is positive. The action boundary then re-resolves the item,
+rechecks `Inventory.CanUseConsumable()`, and repeats the authored target chain immediately before
+mutation; those live reads revalidate a plan and never substitute for missing background-world
+evidence.
+
+Auto Items and Auto Scribe share one additional ordering gate around that publication. Their native
+boundaries record the lifecycle and actual Unity frame of every mutation attempt, including thrown
+or unverified attempts. Both adapters reject while the gate is open, and the Auto Items worker pauses
+permanent settlement before inspecting consumable topology. The world source closes the gate only
+after it has published a clean `consumables` category from the same lifecycle with
+`CollectedAtFrame` strictly greater than the last mutation frame. Closing at publication rather than
+capture keeps the gate active throughout asynchronous derivation; comparing collection frames means
+a pre-mutation capture published late still cannot acknowledge a mutation it never observed.
 
 Exempting it from the migration on the grounds that its capture was narrow was a mistake, for reasons
 that had nothing to do with what Auto Harvest gains — see [W14](world-collection-decisions.md),

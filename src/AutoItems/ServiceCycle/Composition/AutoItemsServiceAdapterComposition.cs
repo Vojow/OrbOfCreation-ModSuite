@@ -27,15 +27,18 @@ internal sealed class AutoItemsServiceAdapterComposition
         var gameAction = new AutoItemsConsumableUseGameAction(
             dependencies.RegistryResolver,
             dependencies.TryCaptureMutationPermit,
-            dependencies.ReadOwnershipFailure);
+            dependencies.ReadOwnershipFailure,
+            dependencies.ReadFrameIdentity,
+            dependencies.PublicationGap.ObserveMutationAttempt);
         var actions = new AutoItemsCycleActionAdapter(
             gameAction,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
             dependencies.ReadOwnershipFailure,
-            health);
+            health,
+            dependencies.PublicationGap);
         return new AutoItemsServiceAdapterComposition(
-            AutoItemsService.Define(actions),
+            AutoItemsService.Define(actions, dependencies.PublicationGap),
             gameAction,
             health);
     }

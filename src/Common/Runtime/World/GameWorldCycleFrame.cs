@@ -65,6 +65,12 @@ internal sealed class GameWorldCycleFrame
     internal WorldActionQueueSlotBuffer ActionQueueSlots { get; } = new();
 
     /// <summary>
+    /// Unique members of the stack-backed attribute queue, with both native stack occupancy and the
+    /// owning Structure/Upgrade's queued count.
+    /// </summary>
+    internal WorldActionQueueMemberBuffer ActionQueueMembers { get; } = new();
+
+    /// <summary>
     /// The equipped spell loadout, and what casting out of it costs. One reader fills both, because
     /// a slot's price is only answerable from the same equipped instance the slot was read from.
     /// </summary>
@@ -124,6 +130,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldRelationBuffer<WorldStructureEnchantment> StructureEnchantments { get; } = new();
     internal WorldRelationBuffer<WorldScrollTarget> ScrollTargets { get; } = new();
     internal WorldRelationBuffer<WorldScrollTargetEvidence> ScrollTargetEvidence { get; } = new();
+    internal WorldRelationBuffer<WorldScrollUseTargetEvidence> ScrollUseTargetEvidence { get; } = new();
     internal WorldSampleBuffer<WorldRitual, WorldRitual> Rituals { get; } = new();
     internal WorldSampleBuffer<WorldAchievement, WorldAchievement> Achievements { get; } = new();
     internal WorldSampleBuffer<WorldAdvancement, WorldAdvancement> Advancements { get; } = new();
@@ -313,6 +320,13 @@ internal static class GameWorldFrameDeriver
                         ? item
                         : left.EnchantmentId.CompareTo(right.EnchantmentId);
                 }),
+            ScrollUseTargetEvidence = WorldScribeRelationDeriver.Build(
+                frame.ScrollUseTargetEvidence,
+                static (left, right) =>
+                {
+                    var item = left.ConsumableId.CompareTo(right.ConsumableId);
+                    return item != 0 ? item : left.Level.CompareTo(right.Level);
+                }),
             Rituals = frame.Rituals.Build(WorldIdentityDeriver<WorldRitual>.Shared),
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),
@@ -330,6 +344,7 @@ internal static class GameWorldFrameDeriver
             PlotActionInstances = WorldPlotActionInstanceDeriver.Build(frame.PlotActionInstances),
             ActionQueues = frame.ActionQueues.Build(WorldIdentityDeriver<WorldActionQueue>.Shared),
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
+            ActionQueueMembers = WorldActionQueueMemberDeriver.Build(frame.ActionQueueMembers),
             SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
             SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),
             MasteryExperience = WorldMasteryExperienceDeriver.Build(frame.MasteryExperience),

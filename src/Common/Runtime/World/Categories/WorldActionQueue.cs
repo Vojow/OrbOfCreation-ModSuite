@@ -1,13 +1,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Reflection;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
 
 /// <summary>
-/// One of the game's action queues as read: how many slots it holds, how many are in use, and
-/// whether the game's own occupancy answer agrees with the slots that were walked.
+/// One of the game's action queues as read: either physical-slot occupancy or the unique-member and
+/// total-stack views of a stack-backed queue, plus whether those native answers agree.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,18 +30,26 @@ internal readonly struct WorldActionQueue : IWorldEntity
     internal WorldActionQueue(
         Guid queueId,
         Guid maxQueuedItemsId,
+        WorldActionQueueKind kind,
         int slotCount,
         int usedSlots,
         int emptySlots,
         bool hasEmptySlot,
+        int totalStacks,
+        int remainingStackRoom,
+        bool hasStackRoom,
         bool consistent)
     {
         QueueId = queueId;
         MaxQueuedItemsId = maxQueuedItemsId;
+        Kind = kind;
         SlotCount = slotCount;
         UsedSlots = usedSlots;
         EmptySlots = emptySlots;
         HasEmptySlot = hasEmptySlot;
+        TotalStacks = totalStacks;
+        RemainingStackRoom = remainingStackRoom;
+        HasStackRoom = hasStackRoom;
         Consistent = consistent;
     }
 
@@ -52,6 +62,9 @@ internal readonly struct WorldActionQueue : IWorldEntity
     /// for a queue whose capacity is the length of its own list rather than a variable.
     /// </summary>
     internal Guid MaxQueuedItemsId { get; }
+
+    /// <summary>Whether capacity is represented by physical slots or by stacks on unique members.</summary>
+    internal WorldActionQueueKind Kind { get; }
 
     /// <summary>
     /// How many entries the queue's own list holds, occupied or not. That is the capacity of a queue
@@ -73,13 +86,109 @@ internal readonly struct WorldActionQueue : IWorldEntity
     internal bool HasEmptySlot { get; }
 
     /// <summary>
-    /// Whether the reading contradicts itself. Where the slots are walked that is the game's own
-    /// occupancy against them — <c>UsedSlots == SlotCount - EmptySlots</c>; where they are not it is
-    /// occupancy no larger than the list it counts. A reading that contradicts itself is published as
-    /// contradictory rather than dropped, because a consumer that cannot see the disagreement would
-    /// act on either half of it.
+    /// Capacity-consuming occupancy. For the attribute queue this is
+    /// <c>itemStack.GetTotalStacks()</c>, not the unique-member count returned by
+    /// <c>GetUsedSpots()</c>.
+    /// </summary>
+    internal int TotalStacks { get; }
+
+    /// <summary>The queue's own remaining stack-capacity answer.</summary>
+    internal int RemainingStackRoom { get; }
+
+    /// <summary>The queue's own stack-aware admission answer.</summary>
+    internal bool HasStackRoom { get; }
+
+    /// <summary>
+    /// Whether the reading contradicts itself. For a slotted queue this compares native occupancy
+    /// with the walked slots. For a stack-backed queue it checks the unique-member view, total-stack
+    /// view, remaining room, and the corresponding native booleans. A contradiction is published
+    /// rather than dropped so a consumer can see the unsafe evidence.
     /// </summary>
     internal bool Consistent { get; }
+}
+
+internal enum WorldActionQueueKind
+{
+    Slotted = 0,
+    Stacked = 1,
+}
+
+internal enum WorldActionQueueMemberKind
+{
+    Unknown = 0,
+    Structure = 1,
+    Upgrade = 2,
+}
+
+internal enum WorldActionQueueMemberConsistency
+{
+    UnknownNativeType = 0,
+    Consistent = 1,
+    ExcessStacks = 2,
+    MissingStacks = 3,
+    InvalidCount = 4,
+}
+
+/// <summary>One unique member of the stack-backed native action queue.</summary>
+/// <remarks>
+/// The row is keyed by queue and list position rather than by <see cref="ActionableId"/>. The same
+/// Structure or Upgrade already owns that UUID in its primary world table; treating this relation
+/// row as another entity would manufacture an identity collision.
+/// </remarks>
+internal readonly struct WorldActionQueueMember
+{
+    internal WorldActionQueueMember(
+        Guid queueId,
+        int index,
+        Guid actionableId,
+        WorldActionQueueMemberKind kind,
+        int stackCount,
+        int nativeQueuedCount,
+        BigDouble actionTime,
+        BigDouble actionTimeTotal,
+        BigDouble buildSpeed,
+        bool timingReadable)
+    {
+        QueueId = queueId;
+        Index = index;
+        ActionableId = actionableId;
+        Kind = kind;
+        StackCount = stackCount;
+        NativeQueuedCount = nativeQueuedCount;
+        ActionTime = actionTime;
+        ActionTimeTotal = actionTimeTotal;
+        BuildSpeed = buildSpeed;
+        TimingReadable = timingReadable;
+        Consistency = Classify(kind, stackCount, nativeQueuedCount);
+    }
+
+    internal Guid QueueId { get; }
+    internal int Index { get; }
+    internal Guid ActionableId { get; }
+    internal WorldActionQueueMemberKind Kind { get; }
+    internal int StackCount { get; }
+    internal int NativeQueuedCount { get; }
+    internal BigDouble ActionTime { get; }
+    internal BigDouble ActionTimeTotal { get; }
+    internal BigDouble BuildSpeed { get; }
+    internal bool TimingReadable { get; }
+    internal WorldActionQueueMemberConsistency Consistency { get; }
+
+    private static WorldActionQueueMemberConsistency Classify(
+        WorldActionQueueMemberKind kind,
+        int stackCount,
+        int nativeQueuedCount)
+    {
+        if (kind == WorldActionQueueMemberKind.Unknown)
+            return WorldActionQueueMemberConsistency.UnknownNativeType;
+        if (stackCount < 0 || nativeQueuedCount < 0)
+            return WorldActionQueueMemberConsistency.InvalidCount;
+        if (stackCount > nativeQueuedCount)
+            return WorldActionQueueMemberConsistency.ExcessStacks;
+        if (stackCount < nativeQueuedCount)
+            return WorldActionQueueMemberConsistency.MissingStacks;
+        return WorldActionQueueMemberConsistency.Consistent;
+    }
 }
 
 /// <summary>One slot of one queue, and what is running in it.</summary>
@@ -94,9 +203,9 @@ internal readonly struct WorldActionQueue : IWorldEntity
 /// </para>
 /// <para>
 /// Only the plot-action queue produces slots. Its occupants are the pairs Auto Harvest already reads
-/// one by one at its action boundary; a queue whose occupancy is effectively an integer has nothing
-/// per-slot worth publishing, and inventing it would be describing a shape nobody has asked the game
-/// about.
+/// one by one at its action boundary. The stack-backed attribute queue instead produces
+/// <see cref="WorldActionQueueMember"/> rows because its list indexes unique actionables rather than
+/// physical capacity slots.
 /// </para>
 /// </remarks>
 internal readonly struct WorldActionQueueSlot
@@ -244,6 +353,42 @@ internal static class WorldActionQueueSlotDeriver
     }
 }
 
+internal sealed class WorldActionQueueMemberBuffer
+{
+    private const int InitialCapacity = 32;
+    private WorldActionQueueMember[] _samples = new WorldActionQueueMember[InitialCapacity];
+    private int _count;
+
+    internal int Count => _count;
+    internal ref readonly WorldActionQueueMember this[int index] => ref _samples[index];
+    internal void Reset() => _count = 0;
+
+    internal void Append(in WorldActionQueueMember sample)
+    {
+        if (_count >= _samples.Length) Array.Resize(ref _samples, _samples.Length * 2);
+        _samples[_count++] = sample;
+    }
+}
+
+internal static class WorldActionQueueMemberDeriver
+{
+    internal static PublicationTable<WorldActionQueueMember> Build(
+        WorldActionQueueMemberBuffer buffer)
+    {
+        if (buffer is null) throw new ArgumentNullException(nameof(buffer));
+        if (buffer.Count == 0) return PublicationTable<WorldActionQueueMember>.Empty;
+
+        var rows = new WorldActionQueueMember[buffer.Count];
+        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
+        Array.Sort(rows, static (left, right) =>
+        {
+            var queue = left.QueueId.CompareTo(right.QueueId);
+            return queue != 0 ? queue : left.Index.CompareTo(right.Index);
+        });
+        return PublicationTable<WorldActionQueueMember>.Create(rows, rows.Length);
+    }
+}
+
 /// <summary>
 /// Reads the game's action queues.
 /// </summary>
@@ -255,10 +400,10 @@ internal static class WorldActionQueueSlotDeriver
 /// manager singleton entirely.
 /// </para>
 /// <para>
-/// The two queues are read differently on purpose. The plot-action queue holds a fixed row of slots
-/// whose occupants Auto Harvest already reads one at a time, so every slot is published; the
-/// attribute queue Auto Buy competes for answers occupancy and names the variable holding its
-/// maximum, and nothing else about it is asked, because nothing else about it is known.
+/// The two queues are read differently on purpose. The plot-action queue holds a fixed row of slots,
+/// so every slot is published. The attribute queue stores one list member per actionable while its
+/// item stack stores the capacity-consuming count; both views and their exact per-member counts are
+/// published so stale and contradictory completion state is observable without granting authority.
 /// </para>
 /// </remarks>
 internal sealed class WorldActionQueueReader : IWorldCategoryReader
@@ -284,15 +429,27 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
     private readonly Func<object, int>? _occupancyQueueUsedSlots;
     private readonly Func<object, bool>? _occupancyQueueHasEmptySlot;
     private readonly Func<object, Guid>? _occupancyQueueMaximumId;
+    private readonly Func<object, int>? _occupancyQueueTotalStacks;
+    private readonly Func<object, int>? _occupancyQueueRemainingRoom;
+    private readonly Func<object, bool>? _occupancyQueueHasRoom;
+    private readonly Func<object, object, int>? _occupancyQueueMemberStacks;
+    private readonly Type? _structureType;
+    private readonly Type? _upgradeType;
+    private readonly QueueMemberAccessors? _structure;
+    private readonly QueueMemberAccessors? _upgrade;
 
     internal WorldActionQueueReader(
         Type? registryType,
         Type? slotQueueType,
-        Type? occupancyQueueType)
+        Type? occupancyQueueType,
+        Type? structureType,
+        Type? upgradeType)
     {
         _registryType = registryType;
         _slotQueueType = slotQueueType;
         _occupancyQueueType = occupancyQueueType;
+        _structureType = structureType;
+        _upgradeType = upgradeType;
         if (registryType is null)
         {
             _unavailable = "the IdScriptableObject type was not found on this build";
@@ -331,8 +488,35 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
         _occupancyQueueUsedSlots = actionables.Call<int>("GetUsedSpots");
         _occupancyQueueHasEmptySlot = actionables.Call<bool>("HasEmptySpot");
         _occupancyQueueMaximumId = actionables.ReferenceGuid("maxQueuedItems");
+        _occupancyQueueTotalStacks = actionables.Call<int>("GetTotalStacks");
+        _occupancyQueueRemainingRoom = actionables.Call<int>("GetRemainingRoom");
+        _occupancyQueueHasRoom = actionables.Call<bool>("HasRoom");
+        _occupancyQueueMemberStacks = BindMemberStacks(
+            occupancyQueueType,
+            actionables.CollectionElementType("value"));
 
-        _unavailable = plotActions.Failure.Length != 0 ? plotActions.Failure : actionables.Failure;
+        _structure = QueueMemberAccessors.TryCreate(
+            structureType,
+            WorldActionQueueMemberKind.Structure,
+            queuedMethod: "GetQueuedQuantity",
+            queuedField: null,
+            actionTimeField: "queueTimeLeft");
+        _upgrade = QueueMemberAccessors.TryCreate(
+            upgradeType,
+            WorldActionQueueMemberKind.Upgrade,
+            queuedMethod: null,
+            queuedField: "queuedLevels",
+            actionTimeField: "buildTime");
+
+        _unavailable = plotActions.Failure.Length != 0
+            ? plotActions.Failure
+            : actionables.Failure.Length != 0
+                ? actionables.Failure
+                : _occupancyQueueMemberStacks is null
+                    ? "ActionableListVariable did not expose GetStacks(IActionable) on this build"
+                    : _structure is null || _upgrade is null
+                        ? "StructureSO or UpgradeSO did not expose the queue-member diagnostic contract on this build"
+                        : string.Empty;
     }
 
     public string Category => "action queues";
@@ -347,8 +531,10 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
     {
         var queues = frame.ActionQueues;
         var slots = frame.ActionQueueSlots;
+        var members = frame.ActionQueueMembers;
         queues.Reset();
         slots.Reset();
+        members.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
         var registry = NativeAccessorBinder.StaticDictionary(_registryType, "RuntimeLookup");
@@ -386,7 +572,7 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
             try
             {
                 Record(
-                    ReadOccupancy(actionables, claimed, queues),
+                    ReadOccupancy(actionables, claimed, queues, members),
                     "attribute",
                     ref sampled,
                     ref skipped,
@@ -472,43 +658,225 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
         queues.Append(new WorldActionQueue(
             queueId,
             Guid.Empty,
+            WorldActionQueueKind.Slotted,
             slotCount,
             used,
             empty,
             _slotQueueHasEmptySlot!(queue),
+            used,
+            empty,
+            empty > 0,
             used >= 0 && used == slotCount - empty));
         return string.Empty;
     }
 
     /// <summary>
-    /// Reads the queue that is effectively an integer: how many entries are in it, whether the game
-    /// says another fits, and which variable holds how many it admits.
+    /// Reads the stack-backed queue: its unique members, total capacity-consuming stacks, remaining
+    /// room, and which variable holds the maximum.
     /// </summary>
     /// <remarks>
-    /// Its entries are actionables of every kind the game queues, and what one of them is doing is a
-    /// question nobody has asked the game yet. Occupancy is what a plan can be shaped by, so
-    /// occupancy is what is published.
+    /// Each unique member is classified by exact native type and paired with its stack count and
+    /// native queued count. A disagreement is evidence of a stale completion mutation and is
+    /// published explicitly; it is never repaired by collection.
     /// </remarks>
     private string ReadOccupancy(
         object queue,
         HashSet<Guid> claimed,
-        WorldSampleBuffer<WorldActionQueue, WorldActionQueue> queues)
+        WorldSampleBuffer<WorldActionQueue, WorldActionQueue> queues,
+        WorldActionQueueMemberBuffer members)
     {
         var queueId = _occupancyQueueId!(queue);
         if (queueId == Guid.Empty) return "carried no identity";
         if (!claimed.Add(queueId)) return $"identity {queueId} appeared more than once";
 
-        var entryCount = _occupancyQueueEntries!(queue)?.Count ?? 0;
+        var entries = _occupancyQueueEntries!(queue);
+        var entryCount = entries?.Count ?? 0;
         var used = _occupancyQueueUsedSlots!(queue);
+        var totalStacks = _occupancyQueueTotalStacks!(queue);
+        var remaining = _occupancyQueueRemainingRoom!(queue);
+        var hasRoom = _occupancyQueueHasRoom!(queue);
+        for (var index = 0; index < entryCount; index++)
+        {
+            var entry = entries![index];
+            if (entry is null)
+            {
+                members.Reset();
+                return "held a null unique member";
+            }
+
+            var access = entry.GetType() == _structureType
+                ? _structure
+                : entry.GetType() == _upgradeType
+                    ? _upgrade
+                    : null;
+            var stackCount = _occupancyQueueMemberStacks!(queue, entry);
+            if (access is null)
+            {
+                members.Append(new WorldActionQueueMember(
+                    queueId,
+                    index,
+                    ReadUnknownId(entry),
+                    WorldActionQueueMemberKind.Unknown,
+                    stackCount,
+                    -1,
+                    default,
+                    default,
+                    default,
+                    timingReadable: false));
+                continue;
+            }
+
+            members.Append(access.Read(queueId, index, entry, stackCount));
+        }
+
         queues.Append(new WorldActionQueue(
             queueId,
             _occupancyQueueMaximumId!(queue),
+            WorldActionQueueKind.Stacked,
             entryCount,
             used,
             Math.Max(entryCount - used, 0),
             _occupancyQueueHasEmptySlot!(queue),
-            used >= 0 && used <= entryCount));
+            totalStacks,
+            remaining,
+            hasRoom,
+            used >= 0 && used == entryCount && totalStacks >= used && remaining >= 0 &&
+            hasRoom == (remaining > 0)));
         return string.Empty;
+    }
+
+    private static Guid ReadUnknownId(object entry)
+    {
+        try
+        {
+            var method = entry.GetType().GetMethod(
+                "GetGuid",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                Type.EmptyTypes,
+                null);
+            return method?.ReturnType == typeof(Guid) && method.Invoke(entry, null) is Guid id
+                ? id
+                : Guid.Empty;
+        }
+        catch
+        {
+            return Guid.Empty;
+        }
+    }
+
+    private static Func<object, object, int>? BindMemberStacks(Type owner, Type? memberType)
+    {
+        if (memberType is null) return null;
+        var method = owner.GetMethod(
+            "GetStacks",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            new[] { memberType },
+            null);
+        if (method is null || method.ReturnType != typeof(int)) return null;
+
+        try
+        {
+            var queue = Expression.Parameter(typeof(object), "queue");
+            var member = Expression.Parameter(typeof(object), "member");
+            var call = Expression.Call(
+                Expression.Convert(queue, owner),
+                method,
+                Expression.Convert(member, memberType));
+            return Expression.Lambda<Func<object, object, int>>(call, queue, member).Compile();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private sealed class QueueMemberAccessors
+    {
+        private readonly WorldActionQueueMemberKind _kind;
+        private readonly Func<object, Guid> _id;
+        private readonly Func<object, int> _queued;
+        private readonly Func<object, BigDouble> _actionTime;
+        private readonly Func<object, BigDouble> _actionTimeTotal;
+        private readonly Func<object, BigDouble> _buildSpeed;
+
+        private QueueMemberAccessors(
+            WorldActionQueueMemberKind kind,
+            Func<object, Guid> id,
+            Func<object, int> queued,
+            Func<object, BigDouble> actionTime,
+            Func<object, BigDouble> actionTimeTotal,
+            Func<object, BigDouble> buildSpeed)
+        {
+            _kind = kind;
+            _id = id;
+            _queued = queued;
+            _actionTime = actionTime;
+            _actionTimeTotal = actionTimeTotal;
+            _buildSpeed = buildSpeed;
+        }
+
+        internal static QueueMemberAccessors? TryCreate(
+            Type? type,
+            WorldActionQueueMemberKind kind,
+            string? queuedMethod,
+            string? queuedField,
+            string actionTimeField)
+        {
+            if (type is null) return null;
+            var bind = new WorldMemberBinding(type, type.Name);
+            var id = bind.Call<Guid>("GetGuid");
+            var queued = queuedMethod is null
+                ? bind.Field<int>(queuedField!)
+                : bind.Call<int>(queuedMethod);
+            var actionTime = bind.Field<BigDouble>(actionTimeField);
+            var actionTimeTotal = bind.Call<BigDouble>("GetActionTime");
+            var buildSpeed = bind.Call<BigDouble>("GetBuildSpeed");
+            return bind.Failure.Length == 0 && id is not null && queued is not null &&
+                actionTime is not null && actionTimeTotal is not null && buildSpeed is not null
+                ? new QueueMemberAccessors(
+                    kind, id, queued, actionTime, actionTimeTotal, buildSpeed)
+                : null;
+        }
+
+        internal WorldActionQueueMember Read(
+            Guid queueId,
+            int index,
+            object member,
+            int stackCount)
+        {
+            var id = _id(member);
+            var queued = _queued(member);
+            try
+            {
+                return new WorldActionQueueMember(
+                    queueId,
+                    index,
+                    id,
+                    _kind,
+                    stackCount,
+                    queued,
+                    _actionTime(member),
+                    _actionTimeTotal(member),
+                    _buildSpeed(member),
+                    timingReadable: true);
+            }
+            catch
+            {
+                return new WorldActionQueueMember(
+                    queueId,
+                    index,
+                    id,
+                    _kind,
+                    stackCount,
+                    queued,
+                    default,
+                    default,
+                    default,
+                    timingReadable: false);
+            }
+        }
     }
 
     private static void Skip(ref int skipped, ref string firstFailure, string reason)

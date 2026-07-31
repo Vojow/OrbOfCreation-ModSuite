@@ -230,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("measure-reads")
     commands.add_parser("catalog")
     commands.add_parser("continue")
+    commands.add_parser("audio-status")
+    audio_control = commands.add_parser("audio-control")
+    audio_control.add_argument(
+        "operation", choices=("enable", "disable", "reset_counters")
+    )
     tooltips = commands.add_parser("tooltips")
     tooltips.add_argument("--offset", type=int, default=0)
     tooltips.add_argument("--limit", type=int, default=25)
@@ -292,6 +297,7 @@ def doctor(client: GameMcpClient, initialized: dict[str, Any]) -> dict[str, Any]
         "game_navigate",
         "game_tooltips",
         "game_tooltip",
+        "game_audio_loop_control",
     }
     missing = sorted(required.difference(names))
     if missing:
@@ -524,6 +530,12 @@ def main() -> int:
             result = client.call_tool("game_screen_catalog", {})
         elif args.command == "continue":
             result = client.call_tool("game_continue", {})
+        elif args.command == "audio-status":
+            result = client.call_tool("game_probe", {"probe": "audio_pool"})
+        elif args.command == "audio-control":
+            result = client.call_tool(
+                "game_audio_loop_control", {"operation": args.operation}
+            )
         elif args.command == "tooltips":
             result = client.call_tool(
                 "game_tooltips",

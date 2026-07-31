@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json.Linq;
 using OrbAutomata.GameMcp;
 using Xunit;
 
@@ -108,6 +109,54 @@ public sealed class GameMcpCommandBusTests
         Assert.Equal((ulong)0, screenshot.ExpectedConfigurationGeneration);
         Assert.True(bus.TryDequeue(out var dequeued));
         Assert.Same(screenshot, dequeued);
+    }
+
+    [Fact]
+    public void AudioLoopControlIsAConfigurationIndependentMainThreadGadget()
+    {
+        var bus = new GameMcpCommandBus();
+        var command = bus.SubmitGadget(
+            GameMcpCommandKind.AudioLoopControl,
+            "disable",
+            Guid.Empty,
+            1,
+            string.Empty,
+            capture: false,
+            saveCapture: false);
+
+        Assert.Equal((ulong)0, command.ExpectedConfigurationGeneration);
+        Assert.Equal("disable", command.Mode);
+        Assert.True(bus.TryDequeue(out var dequeued));
+        Assert.Same(command, dequeued);
+    }
+
+    [Fact]
+    public void ExactQueueRecoveryCarriesDetachedEvidenceAndUsesPriorityAdmission()
+    {
+        var bus = new GameMcpCommandBus();
+        var member = Guid.NewGuid();
+        var queue = Guid.NewGuid();
+        var command = bus.SubmitActionQueueRecovery(
+            decisionWorldGeneration: 27,
+            expectedLifecycleGeneration: 8,
+            expectedConfigurationGeneration: 9,
+            queue,
+            member,
+            "UpgradeSO",
+            excessStacks: 1,
+            observedStacks: 1,
+            observedPending: 0);
+
+        Assert.True(bus.TryDequeue(out var dequeued));
+        Assert.Same(command, dequeued);
+        Assert.Equal(GameMcpCommandKind.ActionQueueRecovery, command.Kind);
+        Assert.Equal(member, command.TargetId);
+        Assert.Equal(queue, command.SecondaryId);
+        Assert.Equal("UpgradeSO", command.DerivedNativeType);
+        Assert.Equal(1, command.Amount);
+        var payload = JObject.Parse(command.PayloadValue);
+        Assert.Equal(1, (int?)payload["observedStacks"]);
+        Assert.Equal(0, (int?)payload["observedPending"]);
     }
 
     private static GameMcpCommand SubmitHarvest(GameMcpCommandBus bus) =>

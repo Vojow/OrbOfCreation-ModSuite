@@ -38,6 +38,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 {
     private readonly IAutoBuyNativePurchasePort _purchases;
     private readonly IAutoBuyQueueRoomPort _queueRoom;
+    private readonly IAutoBuyQueueIntegrityPort _queueIntegrity;
+    private readonly IAutoBuyAudioReadinessPort _audioReadiness;
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<AutoBuyCandidateKinds> _ownershipMask;
     private readonly IAutoBuyRefusalResponsePort _refusals;
@@ -62,10 +64,14 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 #if SERVICE_CYCLE_PROFILE
         , Func<AutoBuyCandidateKind, bool>? gameMcpOwnership = null
 #endif
+        , IAutoBuyAudioReadinessPort? audioReadiness = null
+        , IAutoBuyQueueIntegrityPort? queueIntegrity = null
         )
     {
         _purchases = purchases ?? throw new ArgumentNullException(nameof(purchases));
         _queueRoom = queueRoom ?? throw new ArgumentNullException(nameof(queueRoom));
+        _audioReadiness = audioReadiness ?? AutoBuyPermissiveAudioReadinessPort.Instance;
+        _queueIntegrity = queueIntegrity ?? AutoBuyPermissiveQueueIntegrityPort.Instance;
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _ownershipMask = ownershipMask ?? throw new ArgumentNullException(nameof(ownershipMask));
         _refusals = refusals ?? throw new ArgumentNullException(nameof(refusals));
@@ -131,6 +137,36 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
 
         if (!NativeEpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
+
+        // WORLD supplies the queue facts used by planning. Re-read only the exact integrity
+        // invariant here, immediately before mutation, so a completion fault or manual action in
+        // the publication-to-action window cannot admit more poisoned work.
+        if (!_queueIntegrity.TryReadHealthy(out var queueHealthy, out var queueReason) ||
+            !queueHealthy)
+        {
+            Plugin.Log?.LogAutomataWarning(
+                $"Auto Buy deferred {action.Kind} {action.Uuid:D}: native action queue is " +
+                $"unreadable or contradictory ({queueReason}).");
+            return ServiceActionResult.Rejected(
+                AutoBuyActionResultCodes.ActionQueueInconsistent);
+        }
+
+        // Do not add work while the native audio allocator cannot provide the completion sound that
+        // follows progression mutation. Every admission leaves one allocator entry genuinely spare;
+        // an Upgrade additionally needs the slot its processing loop can pin. This reads only; it
+        // never advances SoundManager.currentIndex or takes a slot. The SoundManager.Play guard is
+        // still the safety net for native/manual/already-queued work because availability now cannot
+        // promise availability later.
+        var requiredAudioSlots = action.Kind == AutoBuyCandidateKind.Upgrade ? 3 : 2;
+        if (!_audioReadiness.TryReadReusableSlots(out var reusableAudioSlots, out var audioReason) ||
+            reusableAudioSlots < requiredAudioSlots)
+        {
+            Plugin.Log?.LogAutomataInfo(
+                $"Auto Buy deferred {action.Kind} {action.Uuid:D}: native audio reserve " +
+                $"requires {requiredAudioSlots}, observed {Math.Max(0, reusableAudioSlots)} " +
+                $"({audioReason}).");
+            return ServiceActionResult.Rejected(AutoBuyActionResultCodes.AudioUnavailable);
+        }
 
         // Re-check the LIVE queue room against the operator's reserve before every submission. The
         // worker does not bound the plan by the queue at all (W39), and both services consume the

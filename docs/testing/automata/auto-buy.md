@@ -7,13 +7,18 @@ incremental catalog, dirty-resource index, retry dictionaries, completion
 settlement model, and synthetic scheduler simulations are not compatibility
 surfaces.
 
+The audio regression scope requires Structure admission to leave a true spare returnable element,
+Upgrade admission to leave that spare after its possible processing loop, and exact Upgrade-only
+loop aggregation to preserve one-shot, Spell-loop, and Brewing-loop native behavior.
+
 ## Risk contract
 
 Auto Buy must decide from the published world snapshot rather than reading the
 game — it has no capture; `AutoBuyFrameProjector` runs on the worker — evaluate
 only native-free immutable facts, preserve UUID plus exact-type identity, respect
-reserves and live queue room, and freshly revalidate lifecycle and native
-admission before every mutation. Structures commit one exact queued
+reserves, stacked queue integrity, completion-audio capacity and live queue room,
+and freshly revalidate lifecycle and native admission before every mutation. A
+queue fault blocks Auto Buy only; it does not gate AutoScribe. Structures commit one exact queued
 level. Upgrades may commit a verified partial or full native multi-buy, with the
 global multiplier restored on every exit.
 
@@ -24,7 +29,12 @@ global multiplier restored on every exit.
 | Worker admission, reserves, ranking, grouping, and batch shape | [AutoBuyCycleEvaluatorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleEvaluatorTests.cs) |
 | Worker input, eligibility, full/reduced/ledger-starved grouping, action, and requested-level cardinality | `AutoBuyCycleEvaluatorTests` and the decision-journal state projection |
 | Worker-side frame projection from the shared world snapshot | [AutoBuyFrameProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyFrameProjectorTests.cs) |
+| WORLD stacked queue integrity and fail-closed planning | `AutoBuyWorldQueueIntegrityTests.cs` and `GameWorldCollectorTests.cs` |
 | Final lifecycle, queue-room, native admission, mutation, and postcondition gates | [AutoBuyCycleActionAdapterTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyCycleActionAdapterTests.cs) |
+| Completion exception omitted-unstack containment and original exception preservation | `tests/OrbModding.Tests/Runtime/Coordination/ActionQueueCompletionFaultBridgeTests.cs` |
+| Audio allocator reserve without slot stealing | `AutoBuyAudioReadinessAdapterTests.cs` |
+| Exact Upgrade-loop sharing, reserve suppression, synchronous final stop, stop-failure containment, lifecycle reset, and policy control | `tests/OrbModding.Tests/Runtime/Coordination/NativeUpgradeLoopAggregationTests.cs` |
+| Exact ticketed excess-stack recovery and post-restart Upgrade refusal | `tests/OrbModding.Tests/Runtime/Coordination/ActionQueueRecoveryGameActionTests.cs` |
 | Typed registration on the shared Automata host | [AutoBuyServiceCompositionTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyServiceCompositionTests.cs) |
 | Human-readable purchase outcomes | [AutoBuyPurchaseNarrationTests.cs](../../../tests/OrbModding.Tests/Services/AutoBuy/Runtime/ServiceCycle/AutoBuyPurchaseNarrationTests.cs) |
 | Native multiplier restoration and quarantine | [NativeMultiBuyScopeTests.cs](../../../tests/OrbModding.Tests/NativeMultiBuyScopeTests.cs) |

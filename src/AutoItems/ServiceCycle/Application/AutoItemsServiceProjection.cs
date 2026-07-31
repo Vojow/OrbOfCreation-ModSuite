@@ -17,6 +17,9 @@ internal static class AutoItemsServiceProjection
     internal const int TemporaryQuarantineCauseKey = 18;
     internal const int TemporaryQuarantineGuidLowKey = 19;
     internal const int TemporaryQuarantineGuidHighKey = 20;
+    internal const int PermanentQuarantineCauseKey = 21;
+    internal const int PermanentQuarantineGuidLowKey = 22;
+    internal const int PermanentQuarantineGuidHighKey = 23;
 
     internal static void Write(
         in AutoItemsCycleState state,
@@ -46,19 +49,36 @@ internal static class AutoItemsServiceProjection
         output.Add(
             new ServiceProjectionKey(TemporaryQuarantineGuidHighKey),
             Integer(BinaryPrimitives.ReadInt64LittleEndian(itemBytes.Slice(8, 8))));
+        output.Add(
+            new ServiceProjectionKey(PermanentQuarantineCauseKey),
+            Integer((int)state.LastPermanentQuarantineCause));
+        if (!state.LastQuarantinedPermanentItem.TryWriteBytes(itemBytes))
+            throw new InvalidOperationException(
+                "Auto Items could not project its exact quarantined permanent-item UUID.");
+        output.Add(
+            new ServiceProjectionKey(PermanentQuarantineGuidLowKey),
+            Integer(BinaryPrimitives.ReadInt64LittleEndian(itemBytes.Slice(0, 8))));
+        output.Add(
+            new ServiceProjectionKey(PermanentQuarantineGuidHighKey),
+            Integer(BinaryPrimitives.ReadInt64LittleEndian(itemBytes.Slice(8, 8))));
     }
 
     internal static bool TryReadDecision(
         in ServiceStateProjectionSnapshot projection,
         out AutoItemsDecisionKind kind,
         out Guid quarantinedItem,
-        out AutoItemsTemporaryQuarantineCause quarantineCause)
+        out AutoItemsTemporaryQuarantineCause quarantineCause,
+        out Guid quarantinedPermanentItem,
+        out AutoItemsPermanentQuarantineCause permanentQuarantineCause)
     {
         var foundKind = false;
         var quarantineLow = 0L;
         var quarantineHigh = 0L;
+        var permanentQuarantineLow = 0L;
+        var permanentQuarantineHigh = 0L;
         kind = AutoItemsDecisionKind.Disabled;
         quarantineCause = AutoItemsTemporaryQuarantineCause.None;
+        permanentQuarantineCause = AutoItemsPermanentQuarantineCause.None;
         for (var index = 0; index < projection.Count; index++)
         {
             var entry = projection.GetEntry(index);
@@ -67,7 +87,7 @@ internal static class AutoItemsServiceProjection
             {
                 case DecisionKindKey when entry.Value.Integer is
                     >= (int)AutoItemsDecisionKind.Disabled and
-                    <= (int)AutoItemsDecisionKind.TemporaryItemQuarantined:
+                    <= (int)AutoItemsDecisionKind.PermanentSettlementQuarantined:
                     kind = (AutoItemsDecisionKind)entry.Value.Integer;
                     foundKind = true;
                     break;
@@ -83,12 +103,27 @@ internal static class AutoItemsServiceProjection
                 case TemporaryQuarantineGuidHighKey:
                     quarantineHigh = entry.Value.Integer;
                     break;
+                case PermanentQuarantineCauseKey when entry.Value.Integer is
+                    >= (int)AutoItemsPermanentQuarantineCause.None and
+                    <= (int)AutoItemsPermanentQuarantineCause.QueueClearedWhileUsagePresent:
+                    permanentQuarantineCause =
+                        (AutoItemsPermanentQuarantineCause)entry.Value.Integer;
+                    break;
+                case PermanentQuarantineGuidLowKey:
+                    permanentQuarantineLow = entry.Value.Integer;
+                    break;
+                case PermanentQuarantineGuidHighKey:
+                    permanentQuarantineHigh = entry.Value.Integer;
+                    break;
             }
         }
         Span<byte> itemBytes = stackalloc byte[16];
         BinaryPrimitives.WriteInt64LittleEndian(itemBytes.Slice(0, 8), quarantineLow);
         BinaryPrimitives.WriteInt64LittleEndian(itemBytes.Slice(8, 8), quarantineHigh);
         quarantinedItem = new Guid(itemBytes);
+        BinaryPrimitives.WriteInt64LittleEndian(itemBytes.Slice(0, 8), permanentQuarantineLow);
+        BinaryPrimitives.WriteInt64LittleEndian(itemBytes.Slice(8, 8), permanentQuarantineHigh);
+        quarantinedPermanentItem = new Guid(itemBytes);
         return foundKind;
     }
 

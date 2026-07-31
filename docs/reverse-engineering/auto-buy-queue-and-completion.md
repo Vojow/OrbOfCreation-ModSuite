@@ -2,24 +2,19 @@
 
 [Reverse-engineering index](README.md) · [Native purchase pipeline](auto-buy-native-pipeline.md) · [Runtime validation](../testing/runtime-validation.md)
 
-> **Scope.** This records the game's queue and completion behavior. The Automata side it describes is
-> the legacy Auto Buy runtime, which has been deleted: the queue-signal patches are gone, there is no
-> `AutoBuyEngine` and no incremental catalog, and Auto Buy no longer polls the queue — it reads
-> structure and upgrade levels off the world snapshot and paces on `AfterDecision`. The
-> `CompleteAction` postfix is gone too: it nudged unmigrated Spell Leveling, which now gates on the
-> world generation like every other migrated service. Read the native
-> observations as current and every Automata mechanism named below as history.
+> **Scope.** This records the installed game's stack-backed action queue and the current ServiceCycle
+> containment. Auto Buy plans from immutable WORLD rows, then revalidates queue integrity and room
+> at the Unity-main-thread action boundary. AutoScribe is not a consumer of this queue.
 
 ## Shared queue authority
 
-Automata does not use an Auto Buy-only queue count. The authoritative snapshot
-combines:
+The native list has two different counts. `value.Count`/`GetUsedSpots()` counts
+unique actionable members; capacity is consumed by `itemStack.GetTotalStacks()`.
+WORLD therefore publishes both the queue summary and ordered member rows:
 
-- native total capacity from
-  `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`;
-- native remaining room from `ActionManager.GetRemainingRoom()`;
-- the configured automation usage limit; and
-- the configured manual reservation.
+- queue UUID, unique-member count, total stacks, remaining room and native room verdict;
+- exact member UUID/type, stack count, authoritative pending count and timing;
+- a semantic member verdict (`consistent`, `excess`, `missing`, `unknown`, or invalid).
 
 `QueueCapacitySnapshot` rejects negative capacity, negative remaining room,
 remaining room greater than capacity, and negative policy inputs. For a valid
@@ -31,10 +26,32 @@ room after reservation = max(0, native remaining room - manual reservation)
 usable automation room = min(automation usage limit, room after reservation)
 ```
 
-The manual reservation is applied exactly once. A queue snapshot is live
-admission evidence only; every individual purchase captures it again.
+An absent, partially collected, duplicated, unknown, or contradictory queue stops
+Auto Buy planning. The action adapter then scans the live native queue immediately
+before every purchase, so a completion/manual mutation after publication cannot
+slip through. Only the room read and configured reservation decide how much of an
+otherwise healthy queue may be consumed.
 
-## Queue signals
+## Completion exception containment
+
+`ActionableListVariable.Process(float)` calls `CompleteAction()` before its outer
+`Unstack()`. If completion mutates the actionable's pending count and then throws,
+the outer unstack is skipped and later processing lanes are aborted for that frame.
+
+The suite prefixes/finalizes exact `StructureSO.CompleteAction()` and
+`UpgradeSO.CompleteAction()`. On a non-fatal exception it removes exactly one
+stack only when lifecycle, native reference, UUID and exact type still match; the
+action began with `stacks == pending`; pending decreased; and the fault left exactly
+one excess stack. It verifies the repair and returns the original exception unchanged.
+Every disagreement is diagnostic-only and performs no mutation.
+
+New Auto Buy work also requires reusable native audio capacity: two slots for a
+Structure immediate/completion path and true spare, and three for an Upgrade processing loop,
+immediate/completion demand, and true spare. The probe is read-only. Identical Upgrade processing
+loops are separately coalesced with reference-counted native release; no Spell/Brewing loop or
+one-shot audio is stolen, stopped, or suppressed.
+
+## Historical legacy queue signals (deleted)
 
 ```mermaid
 flowchart LR
@@ -57,7 +74,7 @@ Suppression does not bypass safety: the engine still recaptures queue room,
 availability, cost, reserve, level, and ownership before the next individual
 level.
 
-## Full queue and reopening
+## Historical legacy full-queue scheduler (deleted)
 
 When the shared queue has no usable automation room, the engine retains the next
 prepared ranked candidate instead of rescanning. Ten-hertz queue polling wakes
@@ -70,7 +87,7 @@ snapshot fails closed. Capacity shrinkage is safe only when the native capacity
 and remaining-room pair is internally consistent; a synthetic capacity below
 current occupancy is deliberately rejected by the simulator/catalog contract.
 
-## Completion signal and settlement
+## Historical legacy completion settlement (deleted)
 
 ```mermaid
 sequenceDiagram
@@ -118,7 +135,7 @@ Same-UUID replacement native references are treated as a new epoch. Attempted
 but unverified mutation blocks recover only through the audited lifecycle/circuit
 contract; stale wrappers do not gain authority over replacement objects.
 
-## Modeled completion behaviors
+## Historical modeled completion behaviors
 
 The deterministic simulator additionally models:
 

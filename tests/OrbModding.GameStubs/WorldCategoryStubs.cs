@@ -142,6 +142,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool ThrowDuringConstruction;
     public bool ThrowAfterInitiation;
     public bool ThrowAfterInstantAdmission;
+    public Action? AfterPayment;
     public int PurchaseCalls;
 
     public bool IsVisible() => visible;
@@ -158,6 +159,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     {
         PurchaseCalls++;
         TotalCost.PerformCost();
+        AfterPayment?.Invoke();
         if (MainType.isLevelType)
             MainType.maxStartingLevel = Math.Max(
                 MainType.maxStartingLevel,
@@ -316,6 +318,76 @@ public sealed class ConsumableTypeSO : IdScriptableObject
     public string GetName() => DisplayName;
 }
 
+public sealed class AudioElement : UnityEngine.MonoBehaviour
+{
+    private UnityEngine.AudioSource? audioSource = new UnityEngine.AudioSource();
+    public bool Playing;
+    public bool Looping;
+    public int FadeOutDestroyCalls;
+    public int StopCalls;
+    public bool ThrowOnStop;
+
+    public void SetAudioSourceForTests(UnityEngine.AudioSource? value) => audioSource = value;
+    public bool IsPlaying() => Playing;
+    public bool IsLooping() => Looping;
+    public AudioElement FadeOutDestroy(float time = 0.5f)
+    {
+        FadeOutDestroyCalls++;
+        Playing = false;
+        Looping = false;
+        return this;
+    }
+
+    public void Stop()
+    {
+        StopCalls++;
+        if (ThrowOnStop) throw new InvalidOperationException("simulated stop failure");
+        Playing = false;
+    }
+}
+
+public sealed class AudioInstance
+{
+    public UnityEngine.AudioClip? audioClip;
+    public float volume = 1f;
+}
+
+public sealed class SoundManager : UnityEngine.MonoBehaviour
+{
+    public AudioElement audioElement = new AudioElement();
+    public int audioMaximum = 2;
+    private List<AudioElement>? audioElements =
+        new List<AudioElement> { new AudioElement(), new AudioElement() };
+    private int currentIndex;
+    public static SoundManager? instance = new SoundManager();
+    public int PlayCalls;
+    public int PlayLoopCalls;
+
+    public static AudioElement Play(UnityEngine.AudioClip clip, float volume)
+    {
+        instance!.PlayCalls++;
+        return instance.audioElement;
+    }
+
+    public static AudioElement PlayLoop(UnityEngine.AudioClip clip, float volume)
+    {
+        instance!.PlayLoopCalls++;
+        return new AudioElement { Playing = true, Looping = true };
+    }
+
+    public void SetPoolForTests(
+        List<AudioElement>? elements,
+        int maximum,
+        int index = 0)
+    {
+        audioElements = elements;
+        audioMaximum = maximum;
+        currentIndex = index;
+    }
+
+    public static void ResetForTests() => instance = new SoundManager();
+}
+
 public sealed partial class ConsumableSO : IdScriptableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();
@@ -345,6 +417,8 @@ public sealed partial class ConsumableSO : IdScriptableObject
     private int gainedSince;
     public bool FireAllowed = true;
     public bool SelectionNoOp;
+    public Exception? SelectionException;
+    public int? PreparedUsageLevelOverride;
     public int MaximumCarryLoad;
 
     public void SetStock(int quantityN, int queuedN, int gainedSinceN)
@@ -368,6 +442,7 @@ public sealed partial class ConsumableSO : IdScriptableObject
 
     public void SelectAndFire()
     {
+        if (SelectionException is not null) throw SelectionException;
         if (!CanFire() || !Inventory.CanUseConsumable()) return;
         if (SelectionNoOp) return;
 
@@ -375,17 +450,20 @@ public sealed partial class ConsumableSO : IdScriptableObject
         queuedQuantity += accepted;
         if (accepted > 0)
         {
+            var selected = GetStrongest();
             quantity--;
             consumeCost.PerformCost();
-            if (hasDuration)
+            consumableUsages.Add(new ConsumableUsage
             {
-                consumableUsages.Add(new ConsumableUsage
+                baseSi = new ScalingInfo
                 {
-                    en = false,
-                    dr = new BigDouble(durationBase),
-                    maxDr = new BigDouble(durationBase),
-                });
-            }
+                    Level = PreparedUsageLevelOverride ?? selected.GetLevel(),
+                },
+                en = false,
+                dr = new BigDouble(durationBase),
+                maxDr = new BigDouble(durationBase),
+            });
+            currentPrepTime = new BigDouble(preparationTime);
         }
         Inventory.BeginPreparing();
     }

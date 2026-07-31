@@ -9,16 +9,20 @@ internal sealed class AutoScribeFeatureDependencies
         TypedRegistryResolver registryResolver,
         AutoScribeIdentityProfile profile,
         Func<long> readLifecycleEpoch,
+        Func<long> readFrameIdentity,
         Func<bool> ownsActionFamily,
         Func<bool> tryCaptureMutationPermit,
         Func<string> readOwnershipFailure,
-        AutomataFeatureStatusReporter featureStatus)
+        AutomataFeatureStatusReporter featureStatus,
+        ConsumableMutationPublicationGapCoordinator publicationGap)
     {
         RegistryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
         Profile = profile ?? throw new ArgumentNullException(nameof(profile));
         ReadLifecycleEpoch = readLifecycleEpoch ??
             throw new ArgumentNullException(nameof(readLifecycleEpoch));
+        ReadFrameIdentity = readFrameIdentity ??
+            throw new ArgumentNullException(nameof(readFrameIdentity));
         OwnsActionFamily = ownsActionFamily ??
             throw new ArgumentNullException(nameof(ownsActionFamily));
         TryCaptureMutationPermit = tryCaptureMutationPermit ??
@@ -27,13 +31,17 @@ internal sealed class AutoScribeFeatureDependencies
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         FeatureStatus = featureStatus ??
             throw new ArgumentNullException(nameof(featureStatus));
+        PublicationGap = publicationGap ??
+            throw new ArgumentNullException(nameof(publicationGap));
     }
 
     internal TypedRegistryResolver RegistryResolver { get; }
     internal AutoScribeIdentityProfile Profile { get; }
     internal Func<long> ReadLifecycleEpoch { get; }
+    internal Func<long> ReadFrameIdentity { get; }
     internal Func<bool> OwnsActionFamily { get; }
     internal Func<bool> TryCaptureMutationPermit { get; }
     internal Func<string> ReadOwnershipFailure { get; }
     internal AutomataFeatureStatusReporter FeatureStatus { get; }
+    internal ConsumableMutationPublicationGapCoordinator PublicationGap { get; }
 }

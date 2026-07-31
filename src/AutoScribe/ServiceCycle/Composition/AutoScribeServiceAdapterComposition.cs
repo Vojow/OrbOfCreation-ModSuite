@@ -27,13 +27,16 @@ internal sealed class AutoScribeServiceAdapterComposition
             dependencies.RegistryResolver,
             dependencies.Profile,
             dependencies.TryCaptureMutationPermit,
-            dependencies.ReadOwnershipFailure);
+            dependencies.ReadOwnershipFailure,
+            dependencies.ReadFrameIdentity,
+            dependencies.PublicationGap.ObserveMutationAttempt);
         var actionPort = new AutoScribeCycleActionAdapter(
             gameAction,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
             dependencies.ReadOwnershipFailure,
-            health);
+            health,
+            dependencies.PublicationGap);
         return new AutoScribeServiceAdapterComposition(
             AutoScribeService.Define(dependencies.Profile, actionPort),
             gameAction,

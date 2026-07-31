@@ -46,18 +46,8 @@ internal static class AutoItemsTemporaryActivationPolicy
 {
     internal static void ReconcileReceipt(
         in BatchReceipt receipt,
-        ref AutoItemsCycleState state)
-    {
-        if (!state.HasPendingReceipt || !receipt.IsPresent) return;
-        var planned = state.PendingReceiptAction;
-        state.ClearPendingReceipt();
-        if (receipt.ActionCount == 1 &&
-            receipt.CommittedCount == 1 &&
-            AutoItemsConsumableFamilies.IsTemporary(planned.Family))
-        {
-            state.RecordSubmittedTemporary(in planned);
-        }
-    }
+        ref AutoItemsCycleState state) =>
+        AutoItemsPermanentSettlementPolicy.ReconcileReceipt(in receipt, ref state);
 
     internal static AutoItemsTemporaryActivationObservation Observe(
         GameWorldState world,

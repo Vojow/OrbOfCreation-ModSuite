@@ -51,7 +51,9 @@ internal sealed class AutoBuyServiceAdapterComposition
             profileOperations,
             dependencies.RefusalResponse,
             worldGenerations,
-            dependencies.GameMcpOwnership);
+            dependencies.GameMcpOwnership,
+            new AutoBuyNativeAudioReadinessAdapter(),
+            new AutoBuyNativeQueueIntegrityAdapter());
 #else
         var actions = new AutoBuyCycleActionAdapter(
             new AutoBuyNativePurchaseAdapter(),
@@ -59,7 +61,9 @@ internal sealed class AutoBuyServiceAdapterComposition
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnershipMask,
             dependencies.RefusalResponse,
-            worldGenerations);
+            worldGenerations,
+            audioReadiness: new AutoBuyNativeAudioReadinessAdapter(),
+            queueIntegrity: new AutoBuyNativeQueueIntegrityAdapter());
 #endif
         return new AutoBuyServiceAdapterComposition(AutoBuyService.Define(actions), actions);
     }

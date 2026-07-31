@@ -16,6 +16,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     private readonly AutoScribeIdentityProfile _profile;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readOwnershipFailure;
+    private readonly Func<long> _readFrameIdentity;
+    private readonly Action<long, long> _observeMutationAttempt;
     private AutoScribeNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
@@ -24,7 +26,9 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         TypedRegistryResolver registry,
         AutoScribeIdentityProfile profile,
         Func<bool> tryCaptureMutationPermit,
-        Func<string> readOwnershipFailure)
+        Func<string> readOwnershipFailure,
+        Func<long> readFrameIdentity,
+        Action<long, long> observeMutationAttempt)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
@@ -32,6 +36,10 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
+        _readFrameIdentity = readFrameIdentity ??
+            throw new ArgumentNullException(nameof(readFrameIdentity));
+        _observeMutationAttempt = observeMutationAttempt ??
+            throw new ArgumentNullException(nameof(observeMutationAttempt));
         BindLifecycle();
     }
 
@@ -84,7 +92,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     AutoScribePreflight.Unaffordable,
                     $"Recipe {action.RecipeId:D} could not afford requested level " +
                     $"{action.Level} or any stronger level.");
-            if (HasCompetingSupply(native, action.RecipeId, craftLevel, out reason))
+            if (HasCapacityReplacement(native, scroll, action.RecipeId, out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.CompetingSupply,
                     reason);
@@ -105,10 +113,76 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     AutoScribePreflight.Unaffordable,
                     $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {action.RecipeId:D}.");
 
-            var before = CaptureBefore(native, recipeType, activeQueue, scroll, craftLevel, totalCost);
+            if (!TryCaptureBeforeCosts(
+                    native,
+                    totalCost,
+                    out var costs,
+                    out reason,
+                    out rejection))
+                return AutoScribeSubmission.Reject(rejection, reason);
+            var before = CaptureBefore(
+                native,
+                recipeType,
+                activeQueue,
+                scroll,
+                craftLevel,
+                costs);
             if (!TryCaptureMutationPermit(out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.MutationPermitUnavailable,
+                    reason);
+
+            // Every mutable native admission signal is repeated after the mutation permit and
+            // immediately before payment. The world snapshot selects work; these live reads retain
+            // native authority over capacity, targets, queue room, and affordability.
+            if (!Invoke<bool>(native.RecipeVisible, recipe))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.RecipeUnavailable,
+                    $"CraftingRecipeSO.IsVisible() refused recipe {action.RecipeId:D} immediately before payment.");
+            if (!Invoke<bool>(native.QueueHasRoom, activeQueue))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.QueueFull,
+                    "ActiveScribeInstances.HasEmptySpot() refused immediately before payment.");
+            if (!CanBuyAt(native, recipe, craftLevel))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.Unaffordable,
+                    $"CraftingRecipeSO.CanBuyAt({craftLevel}) refused immediately before payment.");
+            if (HasCapacityReplacement(native, scroll, action.RecipeId, out reason))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.CompetingSupply,
+                    reason);
+            if (!TryValidateTarget(native, scroll, action.ScrollId, craftLevel, out reason))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.TargetUnavailable,
+                    reason);
+
+            totalCost = InvokeObject(native.RecipeTotalCost, recipe, zero, level);
+            if (totalCost.GetType() != native.ResourceCostType)
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.ContractUnavailable,
+                    "CraftingRecipeSO.GetTotalCost returned a non-ResourceCostList value immediately before payment.");
+            if (!Invoke<bool>(native.CostHasEnough, totalCost))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.Unaffordable,
+                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused immediately before payment.");
+            if (!TryCaptureBeforeCosts(
+                    native,
+                    totalCost,
+                    out costs,
+                    out reason,
+                    out rejection))
+                return AutoScribeSubmission.Reject(rejection, reason);
+            before = CaptureBefore(
+                native,
+                recipeType,
+                activeQueue,
+                scroll,
+                craftLevel,
+                costs);
+
+            if (!TryReadMutationFrame(out var mutationFrame, out reason))
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.ContractUnavailable,
                     reason);
 
             // Payment is deliberately the final pre-native risk. From here onward no metadata is
@@ -123,6 +197,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 totalCost,
                 craftLevel,
                 level,
+                mutationFrame,
                 in before);
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -159,6 +234,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         object totalCost,
         int craftLevel,
         BigDouble level,
+        long mutationFrame,
         in BeforeState before)
     {
         var stage = AutoScribeNativeStage.Payment;
@@ -167,7 +243,16 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         try
         {
             paymentInvoked = true;
-            native.RecipePurchase.Invoke(recipe, new object[] { level, BigDouble.Zero });
+            try
+            {
+                native.RecipePurchase.Invoke(recipe, new object[] { level, BigDouble.Zero });
+            }
+            finally
+            {
+                // Payment is Auto Scribe's first irreversible native call. The gap opens for both
+                // success and throw paths before any later construction/admission work continues.
+                _observeMutationAttempt(action.CollectedAtEpoch, mutationFrame);
+            }
 
             stage = AutoScribeNativeStage.Construction;
             nativeCalls = 2;
@@ -199,7 +284,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 craftLevel,
                 totalCost,
                 in before,
-                paymentInvoked);
+                paymentInvoked,
+                out var costMismatch);
             var verified =
                 receipt.CostMatched &&
                 receipt.CeilingTransitionObserved &&
@@ -212,7 +298,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     NativeMutationOutcome.PostconditionFailed,
                     nativeCalls,
                     in receipt,
-                    "Auto Scribe verification failed: " + Describe(in receipt));
+                    "Auto Scribe verification failed: " +
+                    Describe(in receipt, in costMismatch));
             return new AutoScribeSubmission(
                 AutoScribePreflight.Proceeded,
                 stage,
@@ -232,7 +319,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 craftLevel,
                 totalCost,
                 in before,
-                paymentInvoked);
+                paymentInvoked,
+                out var costMismatch);
             return Quarantine(
                 in action,
                 AutoScribePreflight.PostPaymentFault,
@@ -241,8 +329,31 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 nativeCalls,
                 in receipt,
                 $"Auto Scribe native {stage} failed after payment began: " +
-                ex.GetBaseException().Message + "; " + Describe(in receipt));
+                ex.GetBaseException().Message + "; " +
+                Describe(in receipt, in costMismatch));
         }
+    }
+
+    private bool TryReadMutationFrame(out long frame, out string reason)
+    {
+        try
+        {
+            frame = _readFrameIdentity();
+            if (frame >= 0)
+            {
+                reason = string.Empty;
+                return true;
+            }
+            reason = "The shared frame identity was negative immediately before Scribe payment.";
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            frame = 0;
+            reason =
+                "The shared frame identity was unavailable immediately before Scribe payment: " +
+                ex.GetBaseException().Message;
+        }
+        return false;
     }
 
     private AutoScribeSubmission Quarantine(
@@ -512,12 +623,50 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         return true;
     }
 
-    private bool HasCompetingSupply(
+    private bool HasCapacityReplacement(
         AutoScribeNativeBindings native,
+        object scroll,
         Guid recipeId,
-        int level,
         out string reason)
     {
+        var queued = Invoke<int>(native.ConsumableQueued, scroll);
+        if (queued > 0)
+        {
+            reason = $"The live Scroll already has {queued} queued consumable production.";
+            return true;
+        }
+        var prep = Require<BigDouble>(
+            native.ConsumableCurrentPrepTime.GetValue(scroll),
+            "ConsumableSO.currentPrepTime");
+        if (prep.CompareTo(BigDouble.Zero) > 0)
+        {
+            reason = $"The live Scroll has active preparation time {prep}.";
+            return true;
+        }
+        foreach (var value in RequireEnumerable(
+                     native.ConsumableUsages.GetValue(scroll),
+                     "ConsumableSO.consumableUsages"))
+        {
+            if (value is null || value.GetType() != native.ConsumableUsageType)
+            {
+                reason = "ConsumableSO.consumableUsages contained a non-ConsumableUsage value.";
+                return true;
+            }
+            var engaged = Require<bool>(
+                native.UsageEngaged.GetValue(value),
+                "ConsumableUsage.en");
+            var remaining = Require<BigDouble>(
+                native.UsageRemainingDuration.GetValue(value),
+                "ConsumableUsage.dr");
+            if (!engaged || remaining.CompareTo(BigDouble.Zero) > 0)
+            {
+                reason = !engaged
+                    ? "The live Scroll has a pending consumable usage."
+                    : $"The live Scroll has an active consumable usage with {remaining} duration remaining.";
+                return true;
+            }
+        }
+
         foreach (var queueIdentity in new[]
         {
             _profile.ActiveInstances,
@@ -544,12 +693,11 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     return true;
                 }
                 if (Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
-                    Level(InvokeObject(native.InstanceQuantity, value)) >= level &&
                     !Invoke<bool>(native.InstanceExpired, value))
                 {
+                    var level = Level(InvokeObject(native.InstanceQuantity, value));
                     reason =
-                        $"{queueIdentity.Uuid:D} already supplies recipe {recipeId:D} at level " +
-                        $"{level} or higher.";
+                        $"{queueIdentity.Uuid:D} already supplies recipe {recipeId:D} at level {level}.";
                     return true;
                 }
             }
@@ -702,7 +850,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         object activeQueue,
         object scroll,
         int level,
-        object totalCost)
+        CostState[] costs)
     {
         return new BeforeState(
             Require<int>(
@@ -712,7 +860,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 native.InstanceListValue.GetValue(activeQueue),
                 "ActiveScribeInstances.value")),
             StockAt(native, scroll, level),
-            CaptureCosts(native, totalCost));
+            costs);
     }
 
     private static AutoScribeMutationReceipt CaptureReceipt(
@@ -724,15 +872,16 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         int level,
         object totalCost,
         in BeforeState before,
-        bool paymentInvoked)
+        bool paymentInvoked,
+        out CostMismatch costMismatch)
     {
         var afterQueue = RequireList(
             native.InstanceListValue.GetValue(activeQueue),
             "ActiveScribeInstances.value");
         var queueCount = CountNonNull(afterQueue);
         var stock = StockAt(native, scroll, level);
-        var costs = CaptureCosts(native, totalCost);
-        var costMatched = CostsMatch(before.Costs, costs);
+        var costs = CaptureObservedCosts(native, totalCost);
+        var costMatched = CostsMatch(before.Costs, costs, out costMismatch);
         var resourcesCharged = AnyCharge(before.Costs, costs);
         var ceiling = Require<int>(
             native.MaxStartingLevel.GetValue(recipeType),
@@ -763,7 +912,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         int level,
         object totalCost,
         in BeforeState before,
-        bool paymentInvoked)
+        bool paymentInvoked,
+        out CostMismatch costMismatch)
     {
         try
         {
@@ -776,10 +926,12 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 level,
                 totalCost,
                 in before,
-                paymentInvoked);
+                paymentInvoked,
+                out costMismatch);
         }
         catch (Exception) when (paymentInvoked)
         {
+            costMismatch = CostMismatch.EvidenceUnavailable;
             return new AutoScribeMutationReceipt(
                 evidenceAvailable: false,
                 paymentInvoked,
@@ -793,13 +945,15 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         }
     }
 
-    private static CostState[] CaptureCosts(
+    private static bool TryCaptureBeforeCosts(
         AutoScribeNativeBindings native,
-        object totalCost)
+        object totalCost,
+        out CostState[] costs,
+        out string reason,
+        out AutoScribePreflight rejection)
     {
         var values = RequireList(native.Costs.GetValue(totalCost), "ResourceCostList.costs");
         var result = new CostState[values.Count];
-        var count = 0;
         for (var index = 0; index < values.Count; index++)
         {
             var tuple = values[index];
@@ -813,51 +967,217 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             var expected = Require<BigDouble>(
                 native.TupleValue.Invoke(tuple, Array.Empty<object>()),
                 "ResourceTuple.GetValue");
-            var quantity = Require<BigDouble>(
-                native.ResourceQuantity.Invoke(resource, Array.Empty<object>()),
-                "ResourceSO.GetTrueQuantity");
-            var found = -1;
-            for (var existing = 0; existing < count; existing++)
+            if (expected.CompareTo(BigDouble.Zero) < 0)
+                throw new InvalidOperationException(
+                    $"ResourceTuple.GetValue returned a negative cost for {resourceId:D}.");
+            if (Invoke<bool>(native.ResourceIsBandwidth, resource))
             {
-                if (result[existing].ResourceId == resourceId)
-                {
-                    found = existing;
-                    break;
-                }
+                costs = Array.Empty<CostState>();
+                reason =
+                    $"Recipe cost resource {resourceId:D} is a bandwidth resource and cannot " +
+                    "provide an exact debit receipt.";
+                rejection = AutoScribePreflight.ContractUnavailable;
+                return false;
             }
-            if (found >= 0)
-                result[found] = new CostState(
-                    resourceId,
-                    result[found].Expected + expected,
-                    quantity);
-            else
-                result[count++] = new CostState(resourceId, expected, quantity);
+            var quantity = Invoke<BigDouble>(native.ResourceRawQuantity, resource);
+            var rawSpend = Invoke<BigDouble>(native.ResourceTrueSpend, resource, expected);
+            if (rawSpend.CompareTo(BigDouble.Zero) < 0)
+                throw new InvalidOperationException(
+                    $"ResourceSO.GetTrueSpend returned a negative debit for {resourceId:D}.");
+            var decayApplied = Invoke<bool>(native.ResourceHasDecay, resource);
+            var decayPercent = decayApplied
+                ? Invoke<BigDouble>(native.ResourceDecayPercent, resource)
+                : BigDouble.Zero;
+            if (decayPercent.CompareTo(BigDouble.Zero) < 0 ||
+                decayPercent.CompareTo(BigDouble.One) > 0)
+                throw new InvalidOperationException(
+                    $"ResourceSO.GetDecayPercent returned an invalid value for {resourceId:D}.");
+            var expectedRawDebit = rawSpend * (BigDouble.One - decayPercent);
+            for (var existing = 0; existing < index; existing++)
+            {
+                if (result[existing].ResourceId != resourceId) continue;
+                if (!ReferenceEquals(result[existing].Resource, resource) ||
+                    result[existing].DecayApplied != decayApplied ||
+                    result[existing].DecayPercent.CompareTo(decayPercent) != 0 ||
+                    result[existing].RawQuantity.CompareTo(quantity) != 0)
+                    throw new InvalidOperationException(
+                        $"Duplicate recipe cost rows disagreed for resource {resourceId:D}.");
+            }
+            result[index] = new CostState(
+                resourceId,
+                resource,
+                expected,
+                expectedRawDebit,
+                quantity,
+                decayApplied,
+                decayPercent);
         }
-        if (count != result.Length) Array.Resize(ref result, count);
-        Array.Sort(result, static (left, right) => left.ResourceId.CompareTo(right.ResourceId));
+        for (var index = 0; index < result.Length; index++)
+        {
+            if (HasEarlierResource(result, index)) continue;
+            var aggregateDebit = BigDouble.Zero;
+            for (var row = index; row < result.Length; row++)
+                if (result[row].ResourceId == result[index].ResourceId)
+                    aggregateDebit += result[row].ExpectedRawDebit;
+            if (result[index].RawQuantity.CompareTo(aggregateDebit) >= 0)
+                continue;
+            costs = Array.Empty<CostState>();
+            reason =
+                $"Aggregated native debit for cost resource {result[index].ResourceId:D} " +
+                $"requires {aggregateDebit} raw units but only " +
+                $"{result[index].RawQuantity} are available.";
+            rejection = AutoScribePreflight.Unaffordable;
+            return false;
+        }
+        costs = result;
+        reason = string.Empty;
+        rejection = AutoScribePreflight.Proceeded;
+        return true;
+    }
+
+    private static CostState[] CaptureObservedCosts(
+        AutoScribeNativeBindings native,
+        object totalCost)
+    {
+        var values = RequireList(native.Costs.GetValue(totalCost), "ResourceCostList.costs");
+        var result = new CostState[values.Count];
+        for (var index = 0; index < values.Count; index++)
+        {
+            var tuple = values[index];
+            if (tuple is null || tuple.GetType() != native.ResourceTupleType)
+                throw new InvalidOperationException(
+                    "ResourceCostList.costs contained a non-ResourceTuple value.");
+            var resource = native.TupleResource.GetValue(tuple);
+            if (resource is null || resource.GetType() != native.ResourceType)
+                throw new InvalidOperationException("ResourceTuple.resource changed type.");
+            var resourceId = Invoke<Guid>(native.ResourceIdentity, resource);
+            var expected = Require<BigDouble>(
+                native.TupleValue.Invoke(tuple, Array.Empty<object>()),
+                "ResourceTuple.GetValue");
+            var quantity = Invoke<BigDouble>(native.ResourceRawQuantity, resource);
+            for (var existing = 0; existing < index; existing++)
+            {
+                if (result[existing].ResourceId != resourceId) continue;
+                if (!ReferenceEquals(result[existing].Resource, resource) ||
+                    result[existing].RawQuantity.CompareTo(quantity) != 0)
+                    throw new InvalidOperationException(
+                        $"Duplicate recipe cost rows disagreed for resource {resourceId:D}.");
+            }
+            result[index] = new CostState(
+                resourceId,
+                resource,
+                expected,
+                BigDouble.Zero,
+                quantity,
+                decayApplied: false,
+                BigDouble.Zero);
+        }
         return result;
     }
 
-    private static bool CostsMatch(CostState[] before, CostState[] after)
+    private static bool CostsMatch(
+        CostState[] before,
+        CostState[] after,
+        out CostMismatch mismatch)
     {
-        if (before.Length != after.Length) return false;
+        if (before.Length != after.Length)
+        {
+            mismatch = CostMismatch.ShapeChanged;
+            return false;
+        }
         for (var index = 0; index < before.Length; index++)
         {
             if (before[index].ResourceId != after[index].ResourceId ||
-                before[index].Expected.CompareTo(after[index].Expected) != 0 ||
-                (before[index].Quantity - after[index].Quantity)
-                    .CompareTo(before[index].Expected) != 0)
+                !ReferenceEquals(before[index].Resource, after[index].Resource))
+            {
+                mismatch = CostMismatch.ShapeChanged;
                 return false;
+            }
+            if (before[index].Expected.CompareTo(after[index].Expected) != 0)
+            {
+                mismatch = CostMismatch.NominalChanged(
+                    in before[index],
+                    after[index].RawQuantity);
+                return false;
+            }
         }
+
+        var matchedKind = CostMismatchKind.None;
+        for (var index = 0; index < before.Length; index++)
+        {
+            if (HasEarlierResource(before, index)) continue;
+            var expectedAfter = before[index].RawQuantity;
+            var aggregateNominal = BigDouble.Zero;
+            var aggregateDebit = BigDouble.Zero;
+            for (var row = 0; row < before.Length; row++)
+            {
+                if (before[row].ResourceId != before[index].ResourceId) continue;
+                aggregateNominal += before[row].Expected;
+                aggregateDebit += before[row].ExpectedRawDebit;
+                // ResourceCostList.PerformCost invokes ResourceSO.Spend once per authored row.
+                // BigDouble subtraction is rounded and non-associative, so reproduce that exact
+                // row order instead of subtracting one mathematically aggregated debit.
+                expectedAfter = BigDouble.Max(
+                    expectedAfter - before[row].ExpectedRawDebit,
+                    BigDouble.Zero);
+            }
+            var observedAfter = after[index].RawQuantity;
+            if (observedAfter.CompareTo(expectedAfter) != 0)
+            {
+                mismatch = CostMismatch.DebitChanged(
+                    in before[index],
+                    aggregateNominal,
+                    aggregateDebit,
+                    expectedAfter,
+                    observedAfter);
+                return false;
+            }
+            for (var row = index + 1; row < after.Length; row++)
+                if (after[row].ResourceId == before[index].ResourceId &&
+                    after[row].RawQuantity.CompareTo(observedAfter) != 0)
+                {
+                    mismatch = CostMismatch.ShapeChanged;
+                    return false;
+                }
+
+            var resourceKind = expectedAfter.CompareTo(before[index].RawQuantity) == 0
+                ? CostMismatchKind.MatchedBelowResolution
+                : expectedAfter.CompareTo(BigDouble.Zero) == 0
+                    ? CostMismatchKind.MatchedClampedToZero
+                    : CostMismatchKind.MatchedRepresentable;
+            matchedKind = MergeMatchedKind(matchedKind, resourceKind);
+        }
+        mismatch = CostMismatch.Matched(matchedKind);
         return true;
+    }
+
+    private static bool HasEarlierResource(CostState[] rows, int index)
+    {
+        for (var earlier = 0; earlier < index; earlier++)
+            if (rows[earlier].ResourceId == rows[index].ResourceId)
+                return true;
+        return false;
+    }
+
+    private static CostMismatchKind MergeMatchedKind(
+        CostMismatchKind current,
+        CostMismatchKind next)
+    {
+        if (current == CostMismatchKind.None) return next;
+        if (current == next) return current;
+        return CostMismatchKind.MatchedMixed;
     }
 
     private static bool AnyCharge(CostState[] before, CostState[] after)
     {
         if (before.Length != after.Length) return false;
         for (var index = 0; index < before.Length; index++)
-            if ((before[index].Quantity - after[index].Quantity).CompareTo(BigDouble.Zero) > 0)
+        {
+            if (HasEarlierResource(before, index)) continue;
+            if ((before[index].RawQuantity - after[index].RawQuantity)
+                    .CompareTo(BigDouble.Zero) > 0)
                 return true;
+        }
         return before.Length == 0;
     }
 
@@ -939,12 +1259,15 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         return "An Auto Scribe live identity was unavailable.";
     }
 
-    private static string Describe(in AutoScribeMutationReceipt receipt) =>
+    private static string Describe(
+        in AutoScribeMutationReceipt receipt,
+        in CostMismatch costMismatch) =>
         $"evidenceAvailable={receipt.EvidenceAvailable}; paymentInvoked={receipt.PaymentInvoked}; " +
         $"resourcesCharged={receipt.ResourcesCharged}; " +
         $"costMatched={receipt.CostMatched}; ceiling={receipt.CeilingTransitionObserved}; " +
         $"queueAdmitted={receipt.AdmittedToQueue}; instantStock={receipt.AdmittedToInstantStock}; " +
-        $"queueDelta={receipt.QueueDelta}; stockDelta={receipt.StockDelta}.";
+        $"queueDelta={receipt.QueueDelta}; stockDelta={receipt.StockDelta}; " +
+        costMismatch.Format();
 
     private static int CountNonNull(IList values)
     {
@@ -1009,16 +1332,167 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
 
     private readonly struct CostState
     {
-        internal CostState(Guid resourceId, BigDouble expected, BigDouble quantity)
+        internal CostState(
+            Guid resourceId,
+            object resource,
+            BigDouble expected,
+            BigDouble expectedRawDebit,
+            BigDouble rawQuantity,
+            bool decayApplied,
+            BigDouble decayPercent)
         {
             ResourceId = resourceId;
+            Resource = resource;
             Expected = expected;
-            Quantity = quantity;
+            ExpectedRawDebit = expectedRawDebit;
+            RawQuantity = rawQuantity;
+            DecayApplied = decayApplied;
+            DecayPercent = decayPercent;
         }
 
         internal Guid ResourceId { get; }
+        internal object Resource { get; }
         internal BigDouble Expected { get; }
-        internal BigDouble Quantity { get; }
+        internal BigDouble ExpectedRawDebit { get; }
+        internal BigDouble RawQuantity { get; }
+        internal bool DecayApplied { get; }
+        internal BigDouble DecayPercent { get; }
+    }
+
+    private enum CostMismatchKind
+    {
+        None = 0,
+        MatchedRepresentable = 1,
+        MatchedBelowResolution = 2,
+        MatchedClampedToZero = 3,
+        MatchedMixed = 4,
+        ShapeChanged = 5,
+        NominalChanged = 6,
+        DebitChanged = 7,
+        EvidenceUnavailable = 8,
+    }
+
+    private readonly struct CostMismatch
+    {
+        private CostMismatch(
+            CostMismatchKind kind,
+            Guid resourceId,
+            BigDouble nominalCost,
+            BigDouble expectedRawDebit,
+            BigDouble rawQuantityBefore,
+            BigDouble expectedRawQuantityAfter,
+            BigDouble observedRawQuantityAfter,
+            bool decayApplied,
+            BigDouble decayPercent)
+        {
+            Kind = kind;
+            ResourceId = resourceId;
+            NominalCost = nominalCost;
+            ExpectedRawDebit = expectedRawDebit;
+            RawQuantityBefore = rawQuantityBefore;
+            ExpectedRawQuantityAfter = expectedRawQuantityAfter;
+            ObservedRawQuantityAfter = observedRawQuantityAfter;
+            DecayApplied = decayApplied;
+            DecayPercent = decayPercent;
+        }
+
+        internal static CostMismatch ShapeChanged => new(
+            CostMismatchKind.ShapeChanged,
+            Guid.Empty,
+            default,
+            default,
+            default,
+            default,
+            default,
+            decayApplied: false,
+            default);
+
+        internal static CostMismatch EvidenceUnavailable => new(
+            CostMismatchKind.EvidenceUnavailable,
+            Guid.Empty,
+            default,
+            default,
+            default,
+            default,
+            default,
+            decayApplied: false,
+            default);
+
+        internal static CostMismatch Matched(CostMismatchKind kind) => new(
+            kind,
+            Guid.Empty,
+            default,
+            default,
+            default,
+            default,
+            default,
+            decayApplied: false,
+            default);
+
+        internal static CostMismatch NominalChanged(
+            in CostState before,
+            BigDouble observedRawQuantityAfter) =>
+            new(
+                CostMismatchKind.NominalChanged,
+                before.ResourceId,
+                before.Expected,
+                before.ExpectedRawDebit,
+                before.RawQuantity,
+                before.RawQuantity,
+                observedRawQuantityAfter,
+                before.DecayApplied,
+                before.DecayPercent);
+
+        internal static CostMismatch DebitChanged(
+            in CostState before,
+            BigDouble aggregateNominal,
+            BigDouble aggregateRawDebit,
+            BigDouble expectedRawQuantityAfter,
+            BigDouble observedRawQuantityAfter) =>
+            new(
+                CostMismatchKind.DebitChanged,
+                before.ResourceId,
+                aggregateNominal,
+                aggregateRawDebit,
+                before.RawQuantity,
+                expectedRawQuantityAfter,
+                observedRawQuantityAfter,
+                before.DecayApplied,
+                before.DecayPercent);
+
+        private CostMismatchKind Kind { get; }
+        private Guid ResourceId { get; }
+        private BigDouble NominalCost { get; }
+        private BigDouble ExpectedRawDebit { get; }
+        private BigDouble RawQuantityBefore { get; }
+        private BigDouble ExpectedRawQuantityAfter { get; }
+        private BigDouble ObservedRawQuantityAfter { get; }
+        private bool DecayApplied { get; }
+        private BigDouble DecayPercent { get; }
+
+        internal string Format() => Kind switch
+        {
+            CostMismatchKind.None => "costEvidence=matchedNoCosts.",
+            CostMismatchKind.MatchedRepresentable =>
+                "costEvidence=matchedRepresentableDebit.",
+            CostMismatchKind.MatchedBelowResolution =>
+                "costEvidence=matchedBelowBigDoubleResolution.",
+            CostMismatchKind.MatchedClampedToZero =>
+                "costEvidence=matchedClampedToZero.",
+            CostMismatchKind.MatchedMixed => "costEvidence=matchedMixedNativeArithmetic.",
+            CostMismatchKind.ShapeChanged => "costEvidence=shapeChanged.",
+            CostMismatchKind.EvidenceUnavailable => "costEvidence=unavailable.",
+            CostMismatchKind.NominalChanged or CostMismatchKind.DebitChanged =>
+                $"costEvidence={Kind}; costResource={ResourceId:D}; " +
+                $"nominalCost={NominalCost}; expectedRawDebit={ExpectedRawDebit}; " +
+                $"rawQuantityBefore={RawQuantityBefore}; " +
+                $"expectedRawQuantityAfter={ExpectedRawQuantityAfter}; " +
+                $"observedRawQuantityAfter={ObservedRawQuantityAfter}; " +
+                $"observedRawDebit={RawQuantityBefore - ObservedRawQuantityAfter}; " +
+                $"decayApplied={DecayApplied}; " +
+                $"decayPercent={DecayPercent}.",
+            _ => "costEvidence=unknown.",
+        };
     }
 
     private readonly struct BeforeState

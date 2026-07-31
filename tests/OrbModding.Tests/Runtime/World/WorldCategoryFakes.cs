@@ -41,6 +41,7 @@ internal static class WorldCategoryFakes
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
+        ["ConsumableCount"] = typeof(FakeConsumableCount),
         ["EnchantmentSO"] = typeof(FakeScribeEnchantment),
         ["EnchantmentSO+EnchantTable"] = typeof(FakeScribeEnchantTable),
         ["EnchantmentInstance"] = typeof(FakeScribeEnchantmentInstance),
@@ -256,7 +257,9 @@ internal sealed class FakeScribeEnchantmentInstance
 
 internal sealed class FakeScribeScalingInfo
 {
-    public static FakeScribeScalingInfo Basic(BigDouble level) => new();
+    internal FakeScribeScalingInfo(int level = 1) => Level = level;
+    internal int Level { get; }
+    public static FakeScribeScalingInfo Basic(BigDouble level) => new((int)level.ToDouble());
 }
 
 internal class FakeScribeBaseTargetSelection
@@ -318,6 +321,7 @@ internal sealed class FakeAttributeQueue
     public Guid Identity = Guid.NewGuid();
     public List<object?> value = new();
     public FakeQueueCapacity? maxQueuedItems;
+    private readonly Dictionary<object, int> stacks = new();
 
     public Guid GetGuid() => Identity;
 
@@ -333,6 +337,30 @@ internal sealed class FakeAttributeQueue
     }
 
     public bool HasEmptySpot() => maxQueuedItems is null || GetUsedSpots() < maxQueuedItems.Maximum;
+
+    public int GetStacks(object item) => stacks.TryGetValue(item, out var count)
+        ? count
+        : value.Contains(item) ? 1 : 0;
+
+    public int GetTotalStacks()
+    {
+        var total = 0;
+        foreach (var entry in value)
+            if (entry is not null) total += GetStacks(entry);
+        return total;
+    }
+
+    public int GetRemainingRoom() => maxQueuedItems is null
+        ? int.MaxValue
+        : maxQueuedItems.Maximum - GetTotalStacks();
+
+    public bool HasRoom() => GetRemainingRoom() > 0;
+
+    internal void SetStacks(object item, int count)
+    {
+        if (!value.Contains(item)) value.Add(item);
+        stacks[item] = count;
+    }
 }
 
 /// <summary>The global variable a queue's maximum lives in, which is a row of its own elsewhere.</summary>
@@ -1068,6 +1096,20 @@ internal sealed class FakeConsumable
     public int maximumCarryLoad = 100;
 
     public Guid GetGuid() => Identity;
+    public int GetQuantity() => quantity;
+    public FakeConsumableCount GetStrongest()
+    {
+        if (consumableCounts.Count == 0)
+            throw new InvalidOperationException("No consumable count was available.");
+        var strongest = consumableCounts[0];
+        for (var index = 1; index < consumableCounts.Count; index++)
+            if (consumableCounts[index].Level > strongest.Level)
+                strongest = consumableCounts[index];
+        return strongest;
+    }
+    public int GetStrongestLevel() => GetStrongest().Level;
+    public FakeScribeScalingInfo GetCountScalingInfo(FakeConsumableCount count) =>
+        new(count.Level);
     public int GetMaximumCarryLoad() => maximumCarryLoad;
     public double preparationTime;
     public bool canBeRandomized;

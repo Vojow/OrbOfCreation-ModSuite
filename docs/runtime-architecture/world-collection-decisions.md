@@ -1018,6 +1018,14 @@ occupants are the pairs Auto Harvest already reads one at a time at its boundary
 queue is effectively an integer — occupancy, plus an edge to the `IntVariable` holding its maximum,
 because that registry is collected whole and the link is then the one the game states.
 
+**Corrected stack model.** The attribute queue is not an integer and its list count is not capacity
+occupancy. The list contains each actionable once; `itemStack.GetTotalStacks()` is the number that
+consumes capacity. `ActionQueues` therefore keeps unique-member occupancy, total stacks, remaining
+stack room, and the native boolean answers distinct. `ActionQueueMembers` publishes each unique
+member's exact native type, UUID, stack count, native queued count, and timing evidence. A count
+disagreement is published as a consistency classification, never silently normalized and never
+repaired by the collector. Live admission remains at the action boundary.
+
 **Neither is reached by a registry walk.** A list variable's `All` is declared on its generic base and
 the member binder does not walk base types, so both queues are resolved by uuid through the identity
 registry every other lookup already goes through — which keeps the action-manager singleton out of
@@ -1448,5 +1456,6 @@ Weighted admission, soft and hard elapsed-time budgets, mutation leases, starvat
 thresholds, work-identity registration, and their separate evidence profile consequently
 described contention that no longer existed. They are deleted rather than retained as a
 second scheduler. The two local guards remain because they bound their own delivery queues.
+
 ServiceCycle's debug profiler, full trace, decision journal, and dashboard remain the
 performance and causal evidence for feature work; their formats did not change.

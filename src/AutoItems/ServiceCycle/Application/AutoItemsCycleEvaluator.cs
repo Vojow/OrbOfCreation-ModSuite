@@ -17,6 +17,7 @@ internal static class AutoItemsCycleEvaluator
         in ServiceCycleContext context,
         ref AutoItemsCycleState state,
         ServiceActionWriter<AutoItemsCycleAction> actions,
+        ConsumableMutationPublicationGapCoordinator publicationGap,
         out AutoItemsDecisionMetrics metrics)
     {
         var previousReceipt = context.PreviousReceipt;
@@ -25,7 +26,34 @@ internal static class AutoItemsCycleEvaluator
             ref state);
         if (state.HasPendingReceipt)
         {
-            metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingTemporaryActivation);
+            metrics = EmptyMetrics(
+                world,
+                AutoItemsConsumableFamilies.IsTemporary(
+                    state.PendingReceiptAction.Family)
+                    ? AutoItemsDecisionKind.AwaitingTemporaryActivation
+                    : AutoItemsDecisionKind.AwaitingPermanentSettlement);
+            return WakePolicy.OnPublication;
+        }
+
+        // A mutation can occur after a world capture but before that capture is published. Until a
+        // strictly later clean consumables capture closes the shared gap, settlement must not consume
+        // the late publication and mistake its pre-mutation topology for a drained native action.
+        if (publicationGap.BlocksMutation(
+                checked((long)context.Identity.Lifecycle.Value)))
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingPermanentSettlement);
+            return WakePolicy.OnPublication;
+        }
+
+        var permanent = AutoItemsPermanentSettlementPolicy.Observe(world, ref state);
+        if (permanent.State == AutoItemsPermanentSettlementState.AwaitingSettlement)
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingPermanentSettlement);
+            return WakePolicy.OnPublication;
+        }
+        if (permanent.State == AutoItemsPermanentSettlementState.Quarantined)
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.PermanentSettlementQuarantined);
             return WakePolicy.OnPublication;
         }
 
@@ -52,11 +80,21 @@ internal static class AutoItemsCycleEvaluator
             return WakePolicy.OnPublication;
         }
 
+        var consumables = world.Consumables.AsSpan();
+        for (var index = 0; index < consumables.Length; index++)
+        {
+            if (consumables[index].CurrentPrepTime.CompareTo(BigDouble.Zero) <= 0) continue;
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.NativePreparationActive);
+            return WakePolicy.OnPublication;
+        }
+
         var scan = AutoItemsCandidateScanner.Scan(
             world,
             in configuration,
             state.QuarantinedTemporaryItems,
-            state.TemporaryAllowlist);
+            state.TemporaryAllowlist,
+            state.RelicSettlementQuarantined,
+            state.ScrollSettlementQuarantined);
         if (scan.TemporaryUsagePresent)
         {
             metrics = scan.ToMetrics(AutoItemsDecisionKind.TemporaryEffectActive);
@@ -114,8 +152,7 @@ internal static class AutoItemsCycleEvaluator
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
-        if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
-            state.RecordPlannedTemporary(in action);
+        state.RecordPlannedAction(in action);
         metrics = scan.ToMetrics(kind, plannedActions: 1);
         return WakePolicy.OnPublication;
     }

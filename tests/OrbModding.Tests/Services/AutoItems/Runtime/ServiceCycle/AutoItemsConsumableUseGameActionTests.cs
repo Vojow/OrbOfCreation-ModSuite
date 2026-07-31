@@ -14,6 +14,8 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     public AutoItemsConsumableUseGameActionTests()
     {
         Inventory.Preparing = false;
+        TargetingManager.Reset();
+        SoundManager.ResetForTests();
         ConsumableSO.All.Clear();
         GlobalVariables.MultiBuy = new IntVariable { Value = 1 };
         NativeMultiBuyScope.ResetQuarantineForTests();
@@ -22,6 +24,8 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     public void Dispose()
     {
         Inventory.Preparing = false;
+        TargetingManager.Reset();
+        SoundManager.ResetForTests();
         ConsumableSO.All.Clear();
         NativeMultiBuyScope.ResetQuarantineForTests();
     }
@@ -45,6 +49,24 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
+    public void StrongerScrollPublicationInvalidatesTheExactLevelPlanBeforeMutation()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        scroll.consumableCounts.Add(new ConsumableCount { Level = 2, Quantity = 1 });
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.TargetUnavailable, result.Preflight);
+        Assert.Contains("changed from planned 1 to 2", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(0, scroll.GetQueued());
+        Assert.False(scroll.IsRandomized());
+    }
+
+    [Fact]
     public void RelicSubmissionVerifiesOneNativeTransaction()
     {
         var relic = Item(AutoItemsConsumableFamily.Relic);
@@ -60,14 +82,155 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
+    public void MissingSoundManagerRejectsScrollBeforeAnyMutation()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        SoundManager.instance = null;
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("SoundManager.instance", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(0, scroll.GetQueued());
+        Assert.False(scroll.IsRandomized());
+    }
+
+    [Fact]
+    public void IncompleteAudioPoolRejectsRelicBeforeAnyMutation()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+        SoundManager.instance!.SetPoolForTests(
+            new List<AudioElement> { new AudioElement() },
+            maximum: 2);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("contained 1 entries for audioMaximum=2", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, relic.GetQueued());
+    }
+
+    [Fact]
+    public void MissingReachableAudioSourceRejectsPermanentUse()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+        var element = new AudioElement();
+        element.SetAudioSourceForTests(null);
+        SoundManager.instance!.SetPoolForTests(
+            new List<AudioElement> { element },
+            maximum: 1);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("AudioElement.audioSource", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, relic.GetQueued());
+    }
+
+    [Fact]
+    public void FullyOccupiedLoopingAudioPoolRejectsPermanentUse()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        SoundManager.instance!.SetPoolForTests(
+            new List<AudioElement>
+            {
+                new AudioElement { Playing = true, Looping = true },
+                new AudioElement { Playing = true, Looping = true },
+            },
+            maximum: 2,
+            index: 1);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("had 0 idle or reusable non-looping entries", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(0, scroll.GetQueued());
+        Assert.False(scroll.IsRandomized());
+    }
+
+    [Fact]
+    public void OneReusableAudioEntryIsReservedInsteadOfStartingPermanentUse()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+        SoundManager.instance!.SetPoolForTests(
+            new List<AudioElement>
+            {
+                new AudioElement { Playing = true, Looping = true },
+                new AudioElement { Playing = false, Looping = false },
+            },
+            maximum: 2);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("requires two", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, relic.GetQueued());
+    }
+
+    [Fact]
+    public void TemporaryUseDoesNotDependOnPermanentPreparationAudio()
+    {
+        var temporary = Item(AutoItemsConsumableFamily.Thread);
+        using var gameAction = GameAction();
+        var action = Action(temporary, AutoItemsConsumableFamily.Thread);
+        SoundManager.instance = null;
+
+        var result = gameAction.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(0, temporary.GetQuantity());
+        Assert.Equal(1, temporary.GetQueued());
+    }
+
+    [Fact]
+    public void NativeAttemptReportsItsActualLifecycleAndFrameToTheSharedGap()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        var observedLifecycle = 0L;
+        var observedFrame = 0L;
+        using var gameAction = GameAction(
+            readFrame: static () => 37,
+            observeMutation: (lifecycle, frame) =>
+            {
+                observedLifecycle = lifecycle;
+                observedFrame = frame;
+            });
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(action.CollectedAtEpoch, observedLifecycle);
+        Assert.Equal(37, observedFrame);
+    }
+
+    [Fact]
     public void ContinuousCoconutFruitRelicTopologyRevalidatesAsPermanentRelic()
     {
         var relic = Item(
             AutoItemsConsumableFamily.Relic,
             itemId: Guid.Parse("a1799c52-f9ff-4556-b052-f577ac3e7270"));
-        var fruit = new ConsumableTypeSO();
-        fruit.SetGuid(KnownEntities.ConsumableFruitType.Uuid);
-        relic.consumableTypes.Insert(0, fruit);
+        AddFamily(relic, AutoItemsConsumableFamily.Fruit);
         using var gameAction = GameAction();
         var action = Action(relic, AutoItemsConsumableFamily.Relic);
 
@@ -76,7 +239,6 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(0, relic.GetQuantity());
         Assert.Equal(1, relic.GetQueued());
-        Assert.Empty(relic.consumableUsages);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
 
         var incoherent = Item(AutoItemsConsumableFamily.Relic);
@@ -232,6 +394,23 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
+    public void OpenNativeTargetRequestBlocksScrollBeforeMutation()
+    {
+        TargetingManager.OpenRequests = 1;
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.NativeBusy, result.Preflight);
+        Assert.Contains("TargetingManager.IsTargeting()", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.False(scroll.randomized);
+        Assert.Equal(1, scroll.GetQuantity());
+    }
+
+    [Fact]
     public void LostMutationPermitPreservesTheExactOwnershipReason()
     {
         var scroll = Item(AutoItemsConsumableFamily.Scroll);
@@ -270,6 +449,123 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.Contains("ambiguous consumable mutation", result.Reason);
         Assert.Contains("quarantined", result.Reason);
         Assert.Equal(new NativeMutationCallOutcome(2, 1, 0), result.CallOutcome);
+    }
+
+    [Fact]
+    public void PermanentSubmissionQuarantinesAnUnexpectedPreparedUsageLevel()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        scroll.PreparedUsageLevelOverride = 2;
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.Contains("usageLevel=2", result.Reason);
+        Assert.Equal(new NativeMutationCallOutcome(2, 1, 0), result.CallOutcome);
+    }
+
+    [Fact]
+    public void PermanentSubmissionRequiresSynchronousPreparationEvidence()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        relic.preparationTime = 0;
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.Contains("prep=0", result.Reason);
+        Assert.Equal(new NativeMutationCallOutcome(1, 1, 0), result.CallOutcome);
+    }
+
+    [Fact]
+    public void AmbiguousScrollMutationQuarantinesOnlyScrollsAndStillAllowsRelics()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        scroll.SelectionNoOp = true;
+        using var gameAction = GameAction();
+        var scrollAction = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        var relicAction = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var ambiguous = gameAction.Submit(in scrollAction);
+        var scrollBlocked = gameAction.Submit(in scrollAction);
+        var relicResult = gameAction.Submit(in relicAction);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, ambiguous.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, ambiguous.Outcome);
+        Assert.Contains("Scroll use is quarantined", ambiguous.Reason);
+        Assert.Equal(AutoItemsPreflight.Quarantined, scrollBlocked.Preflight);
+        Assert.Equal(0, scrollBlocked.CallOutcome.NativeCallsAttempted);
+        Assert.True(relicResult.Verified, relicResult.Reason);
+        Assert.Equal(0, relic.GetQuantity());
+        Assert.Equal(1, relic.GetQueued());
+    }
+
+    [Fact]
+    public void ThrownScrollMutationReportsStageStackAndExactBeforeAfterState()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        scroll.SelectionException = new NullReferenceException("native scroll boom");
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.ExecutionThrew, result.Outcome);
+        Assert.Contains("exceptionStage=SelectAndFire", result.Reason);
+        Assert.Contains("innerExceptionType=System.NullReferenceException", result.Reason);
+        Assert.Contains("innerExceptionMessage=native scroll boom", result.Reason);
+        Assert.Contains("before=level=1,qty=1,queued=0", result.Reason);
+        Assert.Contains("after=level=1,qty=1,queued=0", result.Reason);
+        Assert.Contains("innerExceptionStack=", result.Reason);
+        Assert.Equal(new NativeMutationCallOutcome(2, 1, 0), result.CallOutcome);
+    }
+
+    [Fact]
+    public void IdleClaimWithQueuedConsumableQuarantinesOnlyScrollUseBeforeMutation()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        scroll.SetStock(1, 1, 0);
+        using var gameAction = GameAction();
+        var scrollAction = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        var relicAction = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var inconsistent = gameAction.Submit(in scrollAction);
+        scroll.SetStock(1, 0, 0);
+        var relicResult = gameAction.Submit(in relicAction);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, inconsistent.Preflight);
+        Assert.Contains("inconsistent native queue evidence", inconsistent.Reason);
+        Assert.Contains("queuedQuantity=1", inconsistent.Reason);
+        Assert.Equal(0, inconsistent.CallOutcome.NativeCallsAttempted);
+        Assert.False(scroll.randomized);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.True(relicResult.Verified, relicResult.Reason);
+    }
+
+    [Fact]
+    public void IdleClaimWithPendingScrollUsageQuarantinesBeforeMutation()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        scroll.consumableUsages.Add(new ConsumableUsage());
+        using var gameAction = GameAction();
+        var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, result.Preflight);
+        Assert.Contains("pendingUsages=1", result.Reason);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.False(scroll.randomized);
+        Assert.Equal(1, scroll.GetQuantity());
     }
 
     [Fact]
@@ -338,7 +634,9 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
 
     private AutoItemsConsumableUseGameAction GameAction(
         Func<bool>? permit = null,
-        Func<string>? failure = null)
+        Func<string>? failure = null,
+        Func<long>? readFrame = null,
+        Action<long, long>? observeMutation = null)
     {
         IDictionary dictionary = _registry;
         var resolver = new TypedRegistryResolver(
@@ -348,7 +646,9 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         return new AutoItemsConsumableUseGameAction(
             resolver,
             permit ?? (static () => true),
-            failure ?? (static () => string.Empty));
+            failure ?? (static () => string.Empty),
+            readFrame ?? (static () => 1),
+            observeMutation ?? (static (_, _) => { }));
     }
 
     private ConsumableSO Item(
@@ -362,6 +662,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         {
             visible = true,
             canBeRandomized = family == AutoItemsConsumableFamily.Scroll,
+            preparationTime = 1,
         };
         item.SetGuid(itemId ?? Guid.NewGuid());
         item.SetStock(1, 0, 0);
@@ -396,6 +697,15 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         return item;
     }
 
+    private static void AddFamily(
+        ConsumableSO item,
+        AutoItemsConsumableFamily family)
+    {
+        var familyType = new ConsumableTypeSO();
+        familyType.SetGuid(FamilyId(family));
+        item.consumableTypes.Add(familyType);
+    }
+
     private static Guid FamilyId(AutoItemsConsumableFamily family) =>
         family switch
         {
@@ -411,7 +721,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         ConsumableSO item,
         AutoItemsConsumableFamily family) =>
         new(item.GetGuid(), family, collectedAtEpoch: 1, plannedLevel: family ==
-            AutoItemsConsumableFamily.Scroll ? 1 : 0);
+            AutoItemsConsumableFamily.Scroll || family == AutoItemsConsumableFamily.Relic ? 1 : 0);
 
     private sealed class Target : Targeting.ITargetable
     {

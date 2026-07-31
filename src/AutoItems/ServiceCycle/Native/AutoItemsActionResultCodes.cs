@@ -19,4 +19,6 @@ internal static class AutoItemsActionResultCodes
     internal static ServiceActionResultCode TemporaryDurationChanged => new(4108);
     internal static ServiceActionResultCode TemporaryCostChanged => new(4109);
     internal static ServiceActionResultCode TemporaryEffectPresent => new(4110);
+    internal static ServiceActionResultCode PublicationGap => new(4111);
+    internal static ServiceActionResultCode AudioUnavailable => new(4112);
 }

@@ -34,7 +34,8 @@ public sealed class AutoItemsServiceCycleTypeSafetyTests
     {
         ServiceCycleWorkerDefinitionValidator.EnsureSeparated(
             new SafetyMain(),
-            new AutoItemsWorkerDefinition());
+            new AutoItemsWorkerDefinition(
+                new ConsumableMutationPublicationGapCoordinator()));
     }
 
     [Fact]

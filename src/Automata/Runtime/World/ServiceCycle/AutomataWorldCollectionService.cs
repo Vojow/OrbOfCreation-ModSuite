@@ -64,7 +64,8 @@ internal static class AutomataWorldCollectionService
         AutomataWorldCollectionState,
         AutomataWorldCollectionAction> Define(
         IAutomataWorldCapturePort capture,
-        IServiceWorldPublicationSink<GameWorldState> publish)
+        IServiceWorldPublicationSink<GameWorldState> publish,
+        ConsumableMutationPublicationGapCoordinator? publicationGap = null)
     {
         if (capture is null) throw new ArgumentNullException(nameof(capture));
         if (publish is null) throw new ArgumentNullException(nameof(publish));
@@ -107,10 +108,29 @@ internal static class AutomataWorldCollectionService
         ServiceActionResult Execute(
             in AutomataWorldCollectionAction action,
             in SuiteRuntimeConfiguration config,
-            in ServiceActionContext context) =>
-            ServiceActionResult.CommittedPublication(
+            in ServiceActionContext context)
+        {
+            var publication = publish.Publish(action.World, action.Generation);
+            publicationGap?.ObserveConsumablesCapture(
+                action.World.CollectedAtEpoch,
+                action.World.CollectedAtFrame,
+                ConsumablesWereCollectedCleanly(action.World));
+            return ServiceActionResult.CommittedPublication(
                 CommonActionResultCodes.Committed,
-                ServicePublicationEvidence.World(publish.Publish(action.World, action.Generation)));
+                ServicePublicationEvidence.World(publication));
+        }
+    }
+
+    private static bool ConsumablesWereCollectedCleanly(GameWorldState world)
+    {
+        var categories = world.CollectionCategories.AsSpan();
+        for (var index = 0; index < categories.Length; index++)
+        {
+            ref readonly var category = ref categories[index];
+            if (string.Equals(category.Category, "consumables", StringComparison.Ordinal))
+                return category.IsClean;
+        }
+        return false;
     }
 
     /// <summary>

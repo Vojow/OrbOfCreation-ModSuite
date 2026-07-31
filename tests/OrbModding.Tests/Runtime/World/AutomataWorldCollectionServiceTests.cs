@@ -239,6 +239,44 @@ public sealed class AutomataWorldCollectionServiceTests
     }
 
     [Fact]
+    public void FreshConsumablesCaptureClosesTheGapOnlyWhenItsWorldIsPublished()
+    {
+        var gap = new ConsumableMutationPublicationGapCoordinator();
+        gap.ObserveMutationAttempt(lifecycle: 1, mutationFrame: 0);
+        var capture = new FakeCapture((frame, _) => frame.CollectedAtEpoch = 1)
+        {
+            Report = new WorldCollectionReport(
+                new WorldCategoryReport(
+                    "consumables",
+                    WorldCategoryOutcome.Collected,
+                    sampled: 0,
+                    skipped: 0,
+                    string.Empty)),
+        };
+        var publish = new FakePublish();
+        var definition = AutomataWorldCollectionService.Define(capture, publish, gap);
+        var worker = definition.CreateWorkerDefinition();
+        var frame = new GameWorldCycleFrame();
+        var state = worker.CreateState(new LifecycleGeneration(1));
+        var config = new SuiteRuntimeConfiguration();
+        var store = new ReusableActionStore<AutomataWorldCollectionAction>();
+        store.BeginWrite();
+
+        definition.Capture(frame, in config, CaptureContext());
+        worker.Evaluate(
+            frame,
+            in config,
+            default,
+            ref state,
+            new ServiceActionWriter<AutomataWorldCollectionAction>(store));
+
+        Assert.True(gap.BlocksMutation(1));
+        ref readonly var action = ref store.GetCurrent();
+        definition.TryExecute(in action, in config, ActionContext());
+        Assert.False(gap.BlocksMutation(1));
+    }
+
+    [Fact]
     public void TheProjectionReportsWhatTheLastPassManaged()
     {
         var capture = new FakeCapture((frame, _) =>

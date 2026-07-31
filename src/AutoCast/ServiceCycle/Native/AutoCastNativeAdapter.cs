@@ -25,6 +25,9 @@ internal enum AutoCastPreflight
     /// <summary>The game says the caster is not free.</summary>
     CasterBusy,
 
+    /// <summary>A consumable is queued, preparing, or owns an unresolved pending usage.</summary>
+    ConsumableBusy,
+
     /// <summary>The position no longer holds the spell the plan named.</summary>
     SlotIdentityChanged,
 
@@ -149,6 +152,8 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
     private Type? _managerType;
     private Type? _spellType;
     private Type? _targetingType;
+    private Type? _consumableType;
+    private Type? _consumableUsageType;
     private object? _manager;
     private object? _activeSpells;
     private FieldInfo? _activeSpellsValue;
@@ -161,6 +166,11 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
     private MethodInfo? _getReference;
     private MethodInfo? _setChargeInput;
     private MethodInfo? _getScalingInfo;
+    private FieldInfo? _allConsumables;
+    private FieldInfo? _currentConsumablePrepTime;
+    private FieldInfo? _consumableUsages;
+    private FieldInfo? _usageEngaged;
+    private MethodInfo? _getQueuedConsumable;
     private string? _blockedReason;
 
     private bool IsBound =>
@@ -205,6 +215,22 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
             {
                 return AutoCastSubmission.Rejected(
                     AutoCastPreflight.NoValidTarget, "the native target selector has no valid target");
+            }
+
+            // This is the final live read before taking a charge hold and invoking Spell.Fire.
+            // Consumables and spells share native effect/target execution state, so a publication
+            // that looked idle is insufficient authority to start a new cast.
+            if (!TryInitializeConsumableInterlock(out var consumableContractReason))
+            {
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.ContractUnavailable,
+                    consumableContractReason);
+            }
+            if (HasConsumableInterlock(out var interlockReason))
+            {
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.ConsumableBusy,
+                    interlockReason);
             }
 
             if (holdFullCharge && !TrySetChargeHold(spell, true, out var holdReason))
@@ -295,6 +321,8 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         _managerType = null;
         _spellType = null;
         _targetingType = null;
+        _consumableType = null;
+        _consumableUsageType = null;
         _manager = null;
         _activeSpells = null;
         _activeSpellsValue = null;
@@ -307,7 +335,119 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         _getReference = null;
         _setChargeInput = null;
         _getScalingInfo = null;
+        _allConsumables = null;
+        _currentConsumablePrepTime = null;
+        _consumableUsages = null;
+        _usageEngaged = null;
+        _getQueuedConsumable = null;
         _blockedReason = null;
+    }
+
+    private bool HasConsumableInterlock(out string reason)
+    {
+        if (_allConsumables!.GetValue(null) is not IList consumables)
+            throw new InvalidOperationException("ConsumableSO.All is unreadable");
+
+        for (var index = 0; index < consumables.Count; index++)
+        {
+            var consumable = consumables[index];
+            if (consumable is null || consumable.GetType() != _consumableType)
+                throw new InvalidOperationException(
+                    "ConsumableSO.All contained a value of an unexpected native type");
+
+            if (_getQueuedConsumable!.Invoke(consumable, Array.Empty<object>()) is not int queued ||
+                queued < 0)
+            {
+                throw new InvalidOperationException(
+                    "ConsumableSO.GetQueued() returned an invalid quantity");
+            }
+            if (queued > 0)
+            {
+                reason = $"a native consumable is queued (registryIndex={index}, queued={queued})";
+                return true;
+            }
+
+            if (_currentConsumablePrepTime!.GetValue(consumable) is not BigDouble prepTime)
+                throw new InvalidOperationException(
+                    "ConsumableSO.currentPrepTime was not a BigDouble");
+            if (prepTime.CompareTo(BigDouble.Zero) > 0)
+            {
+                reason =
+                    $"a native consumable is preparing (registryIndex={index}, " +
+                    $"currentPrepTime={prepTime})";
+                return true;
+            }
+
+            if (_consumableUsages!.GetValue(consumable) is not IList usages)
+                throw new InvalidOperationException(
+                    "ConsumableSO.consumableUsages is unreadable");
+            for (var usageIndex = 0; usageIndex < usages.Count; usageIndex++)
+            {
+                var usage = usages[usageIndex];
+                if (usage is null || usage.GetType() != _consumableUsageType)
+                    throw new InvalidOperationException(
+                        "ConsumableSO.consumableUsages contained an unexpected native type");
+                // WorldConsumableUsage.Expired can only be true for an engaged usage. Therefore an
+                // exact native en=false is both pending and non-expired without guessing duration.
+                if (_usageEngaged!.GetValue(usage) is false)
+                {
+                    reason =
+                        $"a native consumable has a non-expired pending usage " +
+                        $"(registryIndex={index}, usageIndex={usageIndex})";
+                    return true;
+                }
+            }
+        }
+
+        reason = string.Empty;
+        return false;
+    }
+
+    private bool TryInitializeConsumableInterlock(out string reason)
+    {
+        if (_consumableType is not null && _allConsumables is not null &&
+            _currentConsumablePrepTime is not null && _consumableUsages is not null &&
+            _consumableUsageType is not null && _usageEngaged is not null &&
+            _getQueuedConsumable is not null)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        _consumableType = ReflectionUtil.FindLoadedType("ConsumableSO");
+        if (_consumableType is null)
+        {
+            reason = "the native ConsumableSO type is not registered yet";
+            return false;
+        }
+
+        _allConsumables = _consumableType.GetField("All", StaticFlags);
+        _currentConsumablePrepTime = FindField(_consumableType, "currentPrepTime");
+        _consumableUsages = FindField(_consumableType, "consumableUsages");
+        _consumableUsageType = CollectionElementType(_consumableUsages?.FieldType);
+        _usageEngaged = _consumableUsageType is null
+            ? null
+            : FindField(_consumableUsageType, "en");
+        _getQueuedConsumable = _consumableType.GetMethod(
+            "GetQueued",
+            ReflectionUtil.InstanceFlags,
+            null,
+            Type.EmptyTypes,
+            null);
+
+        if (_allConsumables is null ||
+            CollectionElementType(_allConsumables.FieldType) != _consumableType ||
+            _currentConsumablePrepTime?.FieldType != typeof(BigDouble) ||
+            _consumableUsages is null || _consumableUsageType is null ||
+            _usageEngaged?.FieldType != typeof(bool) ||
+            _getQueuedConsumable?.ReturnType != typeof(int))
+        {
+            reason = "native consumable interlock accessors are unavailable";
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
     }
 
     /// <summary>
@@ -347,13 +487,26 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
 
     private bool FireAndResolveTargets(int slotIndex, ref int nativeCalls, out string reason)
     {
+        Exception? fireException = null;
+
         // The service's own fire must not read as the player's. The scope is around this call only,
         // exactly as before: a target submission that re-entered Spell.Fire would be a different
         // cast, and counting it as ours would hide it.
-        using (AutoCastManualSignal.EnterAutomatedFire())
+        try
         {
-            nativeCalls++;
-            _fireSpellIndex!.Invoke(_manager, new object[] { slotIndex });
+            using (AutoCastManualSignal.EnterAutomatedFire())
+            {
+                nativeCalls++;
+                _fireSpellIndex!.Invoke(_manager, new object[] { slotIndex });
+            }
+        }
+        catch (Exception ex) when (IsReflectionFailure(ex))
+        {
+            // Spell.Fire can mutate first and throw afterwards. In that case the game may already
+            // own an open target request, which consumes normal UI input until it is answered. Drain
+            // only requests opened by this cast (the preflight proved there were none beforehand),
+            // then rethrow so the verifier still records the native failure and quarantines the spell.
+            fireException = ex;
         }
 
         for (var round = 0; round < MaximumTargetRounds && IsTargeting(); round++)
@@ -392,6 +545,9 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
             reason = "target request limit exceeded";
             return false;
         }
+
+        if (fireException is not null)
+            throw fireException;
 
         reason = string.Empty;
         return true;
@@ -666,6 +822,22 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
 
     private static MethodInfo? FindMethod(Type type, string name) =>
         type.GetMethod(name, ReflectionUtil.InstanceFlags, null, Type.EmptyTypes, null);
+
+    private static Type? CollectionElementType(Type? type)
+    {
+        if (type is null) return null;
+        if (type.IsGenericType && type.GetGenericArguments().Length == 1)
+            return type.GetGenericArguments()[0];
+        foreach (var candidate in type.GetInterfaces())
+        {
+            if (candidate.IsGenericType &&
+                candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                return candidate.GetGenericArguments()[0];
+            }
+        }
+        return null;
+    }
 
     private bool Block(string message, out string reason)
     {

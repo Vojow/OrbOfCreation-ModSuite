@@ -66,6 +66,11 @@ public sealed class Plugin : BaseUnityPlugin
     internal static readonly Type[] HarmonyPatchTypes =
     {
         typeof(SpellFirePatch),
+        typeof(UpgradeProcessingSoundScopePatch),
+        typeof(SoundManagerPlayLoopAggregationPatch),
+        typeof(AudioElementFadeOutDestroyAggregationPatch),
+        typeof(StructureCompletionFaultPatch),
+        typeof(UpgradeCompletionFaultPatch),
         typeof(MentorSpellMasteryPatch),
         typeof(MentorAlchemyMasteryPatch),
         typeof(MentorArtifactTickPatch),
@@ -370,6 +375,8 @@ public sealed class Plugin : BaseUnityPlugin
                 // that compiles and looks like a quiet game. The world publication is not
                 // here at all: the registry owns it, because there is one game.
                 Func<long> readFrameIdentity = static () => Time.frameCount;
+                var consumableMutationPublicationGap =
+                    new ConsumableMutationPublicationGapCoordinator();
                 var scribeCatalog = new AutoScribeIdentityCatalog();
                 IAutomataServiceCycleFeature autoScribeFeature =
                     scribeCatalog.TryGetProfile(_auditedBaselineId, out var scribeProfile)
@@ -378,6 +385,7 @@ public sealed class Plugin : BaseUnityPlugin
                                 autoHarvestRegistryResolver,
                                 scribeProfile,
                                 readAutoHarvestLifecycleEpoch,
+                                readFrameIdentity,
                                 ownsActionFamily: () =>
                                     _automataActionFamilyOwnership!.OwnsScribe,
                                 tryCaptureMutationPermit: () =>
@@ -386,7 +394,8 @@ public sealed class Plugin : BaseUnityPlugin
                                 readOwnershipFailure: () =>
                                     _automataActionFamilyOwnership!
                                         .ScribeOwnershipFailure,
-                                featureStatus: featureStatuses.AutoScribe))
+                                featureStatus: featureStatuses.AutoScribe,
+                                publicationGap: consumableMutationPublicationGap))
                         : new AutoScribeUnavailableServiceCycleFeature(
                             featureStatuses.AutoScribe);
                 return AutomataServiceCycleComposition.TryCreate(
@@ -419,11 +428,13 @@ public sealed class Plugin : BaseUnityPlugin
                                 else Log.LogWarning(report.Describe());
                             },
                             createCollector: () =>
-                                new GameWorldCollector(_mentorMasteryJournal)),
+                                new GameWorldCollector(_mentorMasteryJournal),
+                            publicationGap: consumableMutationPublicationGap),
                         new AutoItemsServiceCycleFeature(
                             new AutoItemsFeatureDependencies(
                                 autoHarvestRegistryResolver,
                                 readAutoHarvestLifecycleEpoch,
+                                readFrameIdentity,
                                 ownsActionFamily: () =>
                                     _automataActionFamilyOwnership!.OwnsItems,
                                 tryCaptureMutationPermit: () =>
@@ -432,7 +443,8 @@ public sealed class Plugin : BaseUnityPlugin
                                 readOwnershipFailure: () =>
                                     _automataActionFamilyOwnership!
                                         .ItemsOwnershipFailure,
-                                featureStatus: featureStatuses.AutoItems)),
+                                featureStatus: featureStatuses.AutoItems,
+                                publicationGap: consumableMutationPublicationGap)),
                         autoScribeFeature,
                         new AutoHarvestServiceCycleFeature(
                             new AutoHarvestFeatureDependencies(
@@ -1204,8 +1216,13 @@ public sealed class Plugin : BaseUnityPlugin
                 {
                     result = ExecuteAdministrativeGameMcp(command);
                 }
-                else if (command.Kind is >= GameMcpCommandKind.Screenshot and
-                         <= GameMcpCommandKind.ContinueRun)
+                else if (command.Kind == GameMcpCommandKind.ActionQueueRecovery)
+                {
+                    result = ExecuteActionQueueRecoveryGameMcp(command);
+                }
+                else if ((command.Kind is >= GameMcpCommandKind.Screenshot and
+                          <= GameMcpCommandKind.ContinueRun) ||
+                         command.Kind == GameMcpCommandKind.AudioLoopControl)
                 {
                     completeNow = TryExecuteGameMcpGadget(command, out result);
                 }
@@ -1317,6 +1334,101 @@ public sealed class Plugin : BaseUnityPlugin
                 _configurationStore.CurrentGeneration.Value);
     }
 
+    private GameMcpCommandResult ExecuteActionQueueRecoveryGameMcp(
+        GameMcpCommand command)
+    {
+        var lifecycle = GameLifecycleMonitor.Shared.Current.Generation;
+        var configuration = _configurationStore?.CurrentGeneration.Value ?? 0;
+        var worldGeneration = command.DecisionWorldGeneration ?? 0;
+        if (!IsLifecycleReady() || lifecycle != command.ExpectedLifecycleGeneration)
+        {
+            return GameMcpCommandResult.Rejected(
+                "stale_lifecycle_generation",
+                "the exact recovery ticket lifecycle is no longer current",
+                worldGeneration,
+                lifecycle,
+                configuration);
+        }
+        if (configuration == 0 || configuration != command.ExpectedConfigurationGeneration)
+        {
+            return GameMcpCommandResult.Rejected(
+                "stale_configuration_generation",
+                "the exact recovery ticket configuration generation is no longer current",
+                worldGeneration,
+                lifecycle,
+                configuration);
+        }
+
+        var payload = JObject.Parse(command.PayloadValue);
+        var observedStacks = (int?)payload["observedStacks"] ?? -1;
+        var observedPending = (int?)payload["observedPending"] ?? -1;
+        var observation = new ActionQueueMemberObservation(
+            lifecycle,
+            worldGeneration == 0 ? 1UL : worldGeneration,
+            command.SecondaryId,
+            command.TargetId,
+            command.DerivedNativeType,
+            observedStacks,
+            observedPending,
+            Math.Max(observedStacks, 0),
+            0,
+            observedAfterRestart: false);
+        var finding = ActionQueueIntegrityClassifier.Classify(in observation);
+        if (!finding.CanIssueRecoveryTicket || finding.ExcessStacks != command.Amount)
+        {
+            return GameMcpCommandResult.Rejected(
+                "invalid_recovery_ticket",
+                finding.Reason,
+                worldGeneration,
+                lifecycle,
+                configuration);
+        }
+
+        var ticket = new ActionQueueRecoveryTicket(
+            Guid.NewGuid(),
+            in observation,
+            in finding);
+        var native = new ActionQueueNativeRecoveryAdapter(
+            static () => true,
+            () => GameLifecycleMonitor.Shared.Current.Generation);
+        var recovery = new ActionQueueRecoveryGameAction(native).Execute(in ticket);
+        var details = new JObject
+        {
+            ["outcome"] = recovery.Outcome.ToString(),
+            ["mutationAttempted"] = recovery.MutationAttempted,
+            ["unloadedStacks"] = recovery.UnloadedStacks,
+            ["queueUuid"] = command.SecondaryId.ToString("D"),
+            ["memberUuid"] = command.TargetId.ToString("D"),
+            ["exactNativeType"] = command.DerivedNativeType,
+        }.ToString(Formatting.None);
+
+        if (recovery.IsCommitted)
+        {
+            return GameMcpCommandResult.Committed(
+                "action_queue_recovered",
+                recovery.Reason,
+                worldGeneration,
+                lifecycle,
+                configuration,
+                details);
+        }
+        if (recovery.MutationAttempted)
+        {
+            return GameMcpCommandResult.Faulted(
+                "action_queue_recovery_unverified",
+                recovery.Reason,
+                worldGeneration,
+                lifecycle,
+                configuration);
+        }
+        return GameMcpCommandResult.Rejected(
+            "action_queue_recovery_rejected",
+            recovery.Reason,
+            worldGeneration,
+            lifecycle,
+            configuration);
+    }
+
     private bool TryExecuteGameMcpGadget(
         GameMcpCommand command,
         out GameMcpCommandResult result)
@@ -1346,6 +1458,7 @@ public sealed class Plugin : BaseUnityPlugin
             GameMcpCommandKind.TooltipCatalog => CaptureTooltipCatalogGameMcp(command),
             GameMcpCommandKind.TooltipRead => ReadTooltipGameMcp(command),
             GameMcpCommandKind.ContinueRun => ContinueRunGameMcp(),
+            GameMcpCommandKind.AudioLoopControl => ControlAudioLoopsGameMcp(command),
             _ => GameMcpCommandResult.Rejected(
                 "unsupported_gadget",
                 "the requested gadget is not allowlisted",
@@ -2007,6 +2120,26 @@ public sealed class Plugin : BaseUnityPlugin
                     ["nativeContract"] = "ActionManager.GetRemainingRoom()",
                 };
                 break;
+            case "audio_pool":
+                if (!NativeAudioPoolReadinessAdapter.Shared.TryRead(
+                        out var audioPool,
+                        out var audioReason))
+                    return GadgetRejected("native_probe_unavailable", audioReason);
+                var aggregation = NativeUpgradeLoopAggregation.Capture();
+                details = new JObject
+                {
+                    ["probe"] = "audio_pool",
+                    ["maximum"] = audioPool.Maximum,
+                    ["currentIndex"] = audioPool.CurrentIndex,
+                    ["idle"] = audioPool.Idle,
+                    ["reusableNonLooping"] = audioPool.ReusableNonLooping,
+                    ["playingLooping"] = audioPool.PlayingLooping,
+                    ["reusable"] = audioPool.Reusable,
+                    ["upgradeLoopAggregation"] = ProjectAudioLoopAggregation(aggregation),
+                    ["nativeContract"] =
+                        "SoundManager.GetAudioElement() availability rule",
+                };
+                break;
             case "navigation":
                 var tabs = _uiShell is not null && _uiShell.IsAlive
                     ? _uiShell.CaptureNativeTabsForGameMcp()
@@ -2025,13 +2158,47 @@ public sealed class Plugin : BaseUnityPlugin
                     "unsupported_probe",
                     "probe '" + command.Mode +
                     "' is not allowlisted; supported probes are runtime, " +
-                    "action_queue_room, and navigation");
+                    "action_queue_room, audio_pool, and navigation");
         }
         return GadgetCommitted(
             "probe_read",
             "the allowlisted read-only probe completed on Unity's main thread",
             details);
     }
+
+    private GameMcpCommandResult ControlAudioLoopsGameMcp(GameMcpCommand command)
+    {
+        var snapshot = command.Mode switch
+        {
+            "enable" => NativeUpgradeLoopAggregation.SetEnabled(true),
+            "disable" => NativeUpgradeLoopAggregation.SetEnabled(false),
+            "reset_counters" => NativeUpgradeLoopAggregation.ResetCounters(),
+            _ => throw new InvalidOperationException(
+                "Unsupported audio-loop control operation '" + command.Mode + "'."),
+        };
+        return GadgetCommitted(
+            "audio_loop_policy_updated",
+            "Upgrade processing-loop aggregation policy was updated on Unity's main thread",
+            new JObject
+            {
+                ["operation"] = command.Mode,
+                ["upgradeLoopAggregation"] = ProjectAudioLoopAggregation(snapshot),
+            });
+    }
+
+    private static JObject ProjectAudioLoopAggregation(
+        NativeUpgradeLoopAggregationSnapshot snapshot) => new()
+    {
+        ["lifecycleGeneration"] = snapshot.Lifecycle,
+        ["enabled"] = snapshot.Enabled,
+        ["activeGroups"] = snapshot.ActiveGroups,
+        ["activeLeases"] = snapshot.ActiveLeases,
+        ["nativeLoopsStarted"] = snapshot.NativeLoopsStarted,
+        ["coalescedRequests"] = snapshot.CoalescedRequests,
+        ["reserveSuppressions"] = snapshot.ReserveSuppressions,
+        ["finalStops"] = snapshot.FinalStops,
+        ["stopFailures"] = snapshot.StopFailures,
+    };
 
     private GameMcpCommandResult GadgetCommitted(
         string code,
