@@ -7,22 +7,23 @@ namespace OrbModConfig;
 
 internal static class AutomaticSaveBackupWording
 {
-    internal static string StartSummary(AutomaticSaveBackupStatus status)
+    internal static string ReleaseStartSummary(AutomaticSaveBackupStatus status)
     {
         if (status is null) throw new ArgumentNullException(nameof(status));
-        if (!status.AllowsAutomation)
-        {
-            return "Save backup failed · automation blocked · " +
-                   NormalizeFailure(status.FailureReason);
-        }
+        if (!status.AllowsAutomation) return FailedStartSummary(status);
+        if (status.HasRetentionFailure) return RetentionStartSummary(status);
+        return "Saves are backed up automatically on startup.";
+    }
 
+    internal static string PerformanceStartSummary(AutomaticSaveBackupStatus status)
+    {
+        if (status is null) throw new ArgumentNullException(nameof(status));
+        if (!status.AllowsAutomation) return FailedStartSummary(status);
+        if (status.HasRetentionFailure) return RetentionStartSummary(status);
         return "Save backup " +
                (status.BackupCreated ? "created" : "ready") +
                " · " +
-               FileCount(status.FileCount) +
-               " · " +
-               status.BackupPath +
-               (status.HasRetentionFailure ? " · retention warning" : string.Empty);
+               FileCount(status.FileCount);
     }
 
     internal static string BlockingReason(AutomaticSaveBackupStatus status) =>
@@ -43,6 +44,19 @@ internal static class AutomaticSaveBackupWording
     private static string FileCount(int count) =>
         count.ToString("N0", CultureInfo.InvariantCulture) +
         (count == 1 ? " file" : " files");
+
+    private static string FailedStartSummary(AutomaticSaveBackupStatus status) =>
+        "Save backup failed · automation blocked · " +
+        NormalizeFailure(status.FailureReason);
+
+    private static string RetentionStartSummary(AutomaticSaveBackupStatus status) =>
+        "Save backup " +
+        (status.BackupCreated ? "created" : "ready") +
+        " · " +
+        FileCount(status.FileCount) +
+        " · " +
+        status.BackupPath +
+        " · retention warning";
 
     private static string NormalizeFailure(string failure)
     {

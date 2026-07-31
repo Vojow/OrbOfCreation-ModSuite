@@ -8,50 +8,75 @@ namespace OrbModding.Tests.OrbModConfig;
 public sealed class ModConfigStartStatusPresentationTests
 {
     [Fact]
-    public void ReleaseBuildContainsIdentityCompatibilityAndVerifiedBackupPath()
+    public void ReleaseBuildUsesTheSameCalmBackupGuaranteeAfterCreationAndOnNoOp()
     {
-        var backup = AutomaticSaveBackupStatus.Ready(
+        foreach (var backupCreated in new[] { true, false })
+        {
+            var backup = AutomaticSaveBackupStatus.Ready(
+                backupCreated,
+                trigger: backupCreated
+                    ? AutomaticSaveBackupTrigger.FreshInstall
+                    : AutomaticSaveBackupTrigger.None,
+                backupPath: "/save/backups/auto-modsuite-backup-20260731T101112Z",
+                fileCount: 2,
+                prunedBackupCount: 0,
+                retentionFailures: Array.Empty<string>());
+            var presentation = ModConfigStartStatusPresenter.Build(
+                "0.5.0-beta.1",
+                controlPlaneReady: true,
+                auditedBuild: true,
+                runtimeActivationAllowed: true,
+                saveBackup: backup);
+
+            Assert.Equal(
+                new[]
+                {
+                    "Orb ModSuite  ·  v0.5.0-beta.1",
+                    "Release build",
+                    "Audited game verified",
+                    "Saves are backed up automatically on startup.",
+                },
+                presentation.Rows);
+            Assert.Equal(ModConfigStartStatusTone.Ready, presentation.Tone);
+
+            var visibleText = string.Join("\n", presentation.Rows);
+            Assert.DoesNotContain(backup.BackupPath, visibleText, StringComparison.Ordinal);
+            Assert.DoesNotContain("2 files", visibleText, StringComparison.Ordinal);
+            foreach (var forbidden in new[]
+                     {
+                         "MCP",
+                         "agent",
+                         "perf-debug",
+                         "performance-debug",
+                         "PID",
+                         "localhost",
+                         "trace",
+                         "probe",
+                     })
+            {
+                Assert.DoesNotContain(forbidden, visibleText, StringComparison.OrdinalIgnoreCase);
+            }
+            Assert.Equal(4, presentation.Rows.Count);
+            Assert.All(presentation.Rows, row => Assert.False(string.IsNullOrWhiteSpace(row)));
+        }
+
+        var retention = AutomaticSaveBackupStatus.Ready(
             backupCreated: true,
             trigger: AutomaticSaveBackupTrigger.FreshInstall,
             backupPath: "/save/backups/auto-modsuite-backup-20260731T101112Z",
             fileCount: 2,
             prunedBackupCount: 0,
-            retentionFailures: Array.Empty<string>());
-        var presentation = ModConfigStartStatusPresenter.Build(
+            retentionFailures: new[] { "Could not prune one owned automatic backup." });
+        var retentionPresentation = ModConfigStartStatusPresenter.Build(
             "0.5.0-beta.1",
             controlPlaneReady: true,
             auditedBuild: true,
             runtimeActivationAllowed: true,
-            saveBackup: backup);
-
-        Assert.Equal(
-            new[]
-            {
-                "Orb ModSuite  ·  v0.5.0-beta.1",
-                "Release build",
-                "Audited game verified",
-                "Save backup created · 2 files · /save/backups/auto-modsuite-backup-20260731T101112Z",
-            },
-            presentation.Rows);
-        Assert.Equal(ModConfigStartStatusTone.Ready, presentation.Tone);
-
-        var visibleText = string.Join("\n", presentation.Rows);
-        foreach (var forbidden in new[]
-                 {
-                     "MCP",
-                     "agent",
-                     "perf-debug",
-                     "performance-debug",
-                     "PID",
-                     "localhost",
-                     "trace",
-                     "probe",
-                 })
-        {
-            Assert.DoesNotContain(forbidden, visibleText, StringComparison.OrdinalIgnoreCase);
-        }
-        Assert.Equal(4, presentation.Rows.Count);
-        Assert.All(presentation.Rows, row => Assert.False(string.IsNullOrWhiteSpace(row)));
+            saveBackup: retention);
+        Assert.Contains(
+            "Save backup created · 2 files · /save/backups/auto-modsuite-backup-20260731T101112Z · retention warning",
+            retentionPresentation.Rows);
+        Assert.Equal(ModConfigStartStatusTone.Attention, retentionPresentation.Tone);
     }
 
     [Fact]

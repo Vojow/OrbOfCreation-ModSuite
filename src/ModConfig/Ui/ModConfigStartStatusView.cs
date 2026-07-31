@@ -70,7 +70,7 @@ internal static class ModConfigStartStatusPresenter
             Headline(releaseVersion),
             "Performance-debug build",
             mcpStatus + "  ·  " + compatibility,
-            AutomaticSaveBackupWording.StartSummary(saveBackup),
+            AutomaticSaveBackupWording.PerformanceStartSummary(saveBackup),
             endpoint + "  ·  PID " + processId + "  ·  Localhost only");
     }
 #else
@@ -92,7 +92,7 @@ internal static class ModConfigStartStatusPresenter
             Headline(releaseVersion),
             "Release build",
             Compatibility(controlPlaneReady, auditedBuild, runtimeActivationAllowed),
-            AutomaticSaveBackupWording.StartSummary(saveBackup));
+            AutomaticSaveBackupWording.ReleaseStartSummary(saveBackup));
     }
 #endif
 
