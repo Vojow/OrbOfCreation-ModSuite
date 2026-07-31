@@ -112,7 +112,7 @@ action types: they do not select a configuration generic or build feature-specif
 around it. Every saved-value writer feeds the store. Quick buttons and shortcuts compute their next value
 from its committed snapshot and drain the write synchronously. Mods-page apply/revert, BepInEx's configuration
 manager, and external-file changes coalesce behind the binding and commit at the start of the next application
-frame. A pending raw edit cannot affect ownership, button visibility, resume preview, or host activation before
+frame. A pending raw edit cannot affect ownership, button visibility, emergency state, or host activation before
 that commit.
 
 The store sends the same `(snapshot, ConfigGeneration)` to two consumers: the registry publication and one

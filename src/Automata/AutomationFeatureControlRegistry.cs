@@ -45,7 +45,7 @@ internal sealed class AutomationFeatureControlRegistration
 
 /// <summary>
 /// The one registered automation-feature control roster shared by the Mods headers and the
-/// gameplay quick-controls column. Construction consumers enumerate this roster; they do not
+/// gameplay feature drawer. Construction consumers enumerate this roster; they do not
 /// maintain their own feature lists.
 /// </summary>
 internal sealed class AutomationFeatureControlRegistry

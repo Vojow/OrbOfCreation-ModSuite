@@ -45,10 +45,12 @@ Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, featu
 ## Shared gameplay controls
 
 `AutomationFeatureControlRegistry` is the one ordered roster for the Mods feature headers and the
-gameplay quick-controls column. The column enumerates every registration and adds the emergency
-stop; it never maintains a second feature list. It owns every control object and pixel and anchors
-one vertical column under the native top-left gear and character buttons through the declared,
-scene-bound `UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure.
+gameplay quick controls. The closed surface is exactly two buttons under the native top-left gear
+and character buttons: the emergency stop and a disclosure. The disclosure enumerates the registry
+into one transient horizontal drawer opening to the right; it never maintains a second feature
+list. The closed disclosure carries a separate exclamation marker plus red color whenever a
+contained feature is faulted or blocked. The surface anchors through the declared, scene-bound
+`UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure.
 Every suite-created UI node requests `RectTransform` through
 `GameObject(string, Type[])`; a plain `GameObject(string)` exposes only the declared
 `Transform` contract and is never cast to a UI transform.
@@ -58,8 +60,9 @@ Each live feature control requires its audited native glyph plus both
 uses the raised active frame. Gray, green, red, and orange remain secondary health channels, and
 tooltips carry the same joined feature status as Mods Runtime. A missing anchor, glyph, or frame
 pair creates no corresponding live control and publishes the exact failure. STOP is separately
-spaced and uses a suite-owned exclamation glyph while retaining the same immediate
-`Safety/EmergencyDisable` semantics. Capture/construction failures name the member plus expected
+visible and uses a suite-owned exclamation glyph with immediate press-to-stop and press-to-resume
+`Safety/EmergencyDisable` semantics. General uses that same command instead of staging the safety
+switch behind Apply. Capture/construction failures name the member plus expected
 and actual types, log that installation will retry on the shared five-second UI cadence, and become
 terminal diagnostics only on the third failed attempt, matching the Mods rail.
 

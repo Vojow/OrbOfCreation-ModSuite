@@ -18,15 +18,13 @@ internal sealed class EmergencyStopTooltip : ITooltipable
     public bool HasAltTooltips() => false;
     public string GetDescription() => !_control.IsStopped
         ? "Immediately discards prepared work and prevents every suite automation from starting new actions."
-        : _control.ResumeArmed
-            ? "Click again to clear the stop. " + _control.ResumePreview
-            : "Click once to review what will resume, then click again to clear the stop.";
+        : "Immediately clears the stop. Configured automation resumes through the ordinary fresh-world safety gate.";
     public List<TooltipNode> GetTooltipNodes() => new()
     {
-        new TooltipNode(_control.IsStopped ? _control.ResumePreview : "One click stops every automation service."),
         new TooltipNode(_control.IsStopped
-            ? _control.ResumeArmed ? "Click again to resume." : "Click to arm resume."
-            : "No confirmation is required to stop."),
+            ? "One click resumes every automation service that is configured on."
+            : "One click stops every automation service and discards prepared work."),
+        new TooltipNode("The emergency state changes immediately; no confirmation step is used."),
     };
     public List<TooltipNode> GetAltTooltipNodes() => new();
 }

@@ -13,7 +13,7 @@ restyled. The PNG evidence is intentionally an untracked local validation artifa
 | Magic and Scholar | A second `SubviewRadio` level inside the active screen; live list items use the native subview frame and text vocabulary | Runtime `UIViewRadioButton` items are direct children of `Canvas/ContentArea/MainContentContainer/SubviewRadio`. Their root owns `buttonImage`; `baseImage` and `activeImage` are populated; `viewImage` is null. | Reuse the native subview frame pair as a vertical suite rail, with exact native icons rather than pretending the source list items contain icons. |
 | Settings | `Main`, `Game`, and `Graphics` horizontal text tabs inside a native framed modal | Native text-tab and framed-panel vocabulary | Retain as evidence that horizontal text tabs are native, but do not use them for nine suite sections. |
 | Main navigation | `Magic`, `Scholar`, `Time`, and `Mods` horizontal `ViewRadio` controls | Direct children of `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; these `UIViewRadioButton` instances populate `viewImage.sprite` and provide audited Time, Magic, Scholar, Alchemy, World, and Workshop icons. | Keep the Mods entry as the outer level and reuse named top-bar icons for Runtime, General, Concept, Advanced, Auto Items, and Auto Scribe. |
-| Help buttons | Gear and character buttons in one top-left group | The declared scene-bound `UIContentArea.canvas` field resolves the exact direct child `Canvas/HelpButtons`, whose direct `SettingsButton` and `PlayerStatsButton` children prove the expected anchor structure. | Parent one suite-owned vertical quick-control column below those native buttons; no exact anchor means no column. |
+| Help buttons | Gear and character buttons in one top-left group | The declared scene-bound `UIContentArea.canvas` field resolves the exact direct child `Canvas/HelpButtons`, whose direct `SettingsButton` and `PlayerStatsButton` children prove the expected anchor structure. | Parent exactly two closed suite buttons below the native pair: emergency stop and a disclosure whose transient feature drawer opens to the right. No exact anchor means no controls. |
 
 Evidence:
 
@@ -39,12 +39,13 @@ objects such as `ScreenAlchemy` remain valid sources.
 
 ## Quick-button frame and icon comparison
 
-The quick-controls column speaks the same selected/unselected vocabulary as the native
+The two-button shell and its transient feature drawer speak the same selected/unselected vocabulary as the native
 `UIViewRadioButton` family used by the Mods rail. The populated `baseImage` is the dim,
 recessed/hollow OFF frame; `activeImage` is the solid, raised ON frame. The suite creates each
 button and icon itself, releases `Selectable.targetGraphic`, and swaps the audited frame sprite
 before applying its own gray, green, red, or orange glyph color. Thus configured intent cannot be
-color-only, while degraded, faulted, and emergency-stopped status keeps color and tooltip detail.
+color-only. The disclosure uses recessed/raised frames plus different closed/open chevrons, and a
+contained fault or block adds a separate exclamation marker plus red color while closed.
 
 Frame capture requires every exact direct-child SubviewRadio candidate to own `buttonImage` and
 agree on both sprites. A failed capture includes the typed candidate census. A control is created

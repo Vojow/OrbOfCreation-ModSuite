@@ -6,7 +6,7 @@ internal readonly record struct UiInstallationRetryObservation(
     bool IsTerminal);
 
 /// <summary>
-/// Shared retry-reporting discipline for the Mods rail and quick-controls column.
+/// Shared retry-reporting discipline for the Mods rail and quick-controls surface.
 /// Capture cadence remains owned by the plugin's single UI retry interval.
 /// </summary>
 internal sealed class UiInstallationRetryState

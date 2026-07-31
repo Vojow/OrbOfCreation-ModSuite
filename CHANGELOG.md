@@ -35,11 +35,12 @@
   payment, and verifies the exact resource charge, progression ceiling, and queued or instant-stock
   result. A post-payment fault records the partial commit and quarantines Scribe until the game
   lifecycle changes.
-- Replace the compact gameplay tray with one top-left quick-controls column below the native gear
-  and character buttons. OFF and ON use the game's recessed and raised view-button frames, color is
-  secondary, and Auto Concept, Auto Items, Auto Scribe, and Advanced use distinct Scholar, World,
-  Workshop, and Alchemy glyphs shared with their corrected Mods rail entries. Auto Cast uses the
-  audited Casting Speed glyph instead of an equipped-spell icon.
+- Replace the compact gameplay tray with exactly two top-left suite buttons below the native gear
+  and character buttons: an immediate emergency-stop toggle and a disclosure that opens all seven
+  feature toggles in a transient rightward drawer. The closed disclosure shows a structural
+  exclamation marker plus red color when a contained feature is faulted or blocked. Open/closed and
+  OFF/ON states use the game's raised/recessed frame idiom, and the feature glyphs remain the audited
+  native icons shared with their Mods rail entries.
 - Add the localhost Game MCP server to performance-debug builds only, replacing the F10/F11/F12
   validation shortcuts with closed-world run and navigation tools. The Start screen reports build
   mode, MCP status, audit health, endpoint, and process ID; release builds contain no MCP server.
@@ -95,7 +96,7 @@
 - Replace the cramped quick-strip labels with native spell-frame icon controls for Mentor, Auto
   Harvest, Auto Concept, Auto Cast, and Auto Buy. Desired Off, desired On, unhealthy, and
   emergency-stopped states share one renderer; STOP uses a separated alert control and retains its
-  two-step resume confirmation.
+  immediate press-to-stop, press-to-resume semantics.
 - Reframe the Mods surface with the game's audited vertical subview-radio vocabulary and preserve
   the full `Orb Of Creation ModSuite` title.
 - Replace the nine legacy section tabs with a Runtime/General/feature/Advanced rail, merge Mentor's
@@ -124,7 +125,7 @@
   one `ConfigGeneration`. Feature bridges publish runtime health only; one status join combines it
   with committed saved intent for every player-facing feature.
 - Make one configuration store the application source of truth. BepInEx entries only deserialize and
-  persist explicit values; controls, ownership, activation, resume previews, button visibility, status,
+  persist explicit values; controls, ownership, activation, emergency state, button visibility, status,
   and services all read the store's committed snapshot.
 - Absorb binding-time notifications into generation 1, compute quick-control changes from committed
   state even while an external edit is pending, and route STOP/resume and fail-closed Auto Buy

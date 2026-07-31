@@ -38,7 +38,8 @@ must run `PerformanceAll` and the checked suite performance evaluator.
 - Runtime status reports saved configuration separately from actual readiness.
 - Every control, ownership decision, host activation, and status join reads the configuration store's
   committed snapshot; raw BepInEx state is persistence input only.
-- STOP/resume cancels prepared work before synchronously committing its one saved emergency state.
+- Each STOP/resume press cancels prepared work before synchronously committing its one saved
+  emergency state; no resume-arming state exists.
 
 ## Runtime handoff
 

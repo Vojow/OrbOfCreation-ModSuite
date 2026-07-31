@@ -72,8 +72,7 @@ internal sealed class ModSettingListView : IDisposable
     private float CreateFeatureHeader(ModConfigFeatureCommand command, float topOffset)
     {
         const float headerHeight = 82f;
-        var status = command.Status;
-        var presentation = FeatureStatusPresenter.Present(status);
+        var presentation = command.Presentation;
         var row = ModConfigUiFactory.CreateRectObject(
             "Feature." + command.DisplayName,
             _content,
@@ -101,7 +100,7 @@ internal sealed class ModSettingListView : IDisposable
             new Vector2(0.025f, 0.08f),
             new Vector2(0.74f, 0.5f),
             _labelTemplate,
-            FeatureStatusPresenter.Format(status),
+            presentation.StatusText,
             TextAlignmentOptions.MidlineLeft,
             0.56f);
         ModConfigUiFactory.CreateButton(
@@ -110,14 +109,14 @@ internal sealed class ModSettingListView : IDisposable
             new Vector2(0.77f, 0.18f),
             new Vector2(0.975f, 0.82f),
             _labelTemplate,
-            presentation.IsConfiguredOn ? "Turn off" : "Turn on",
+            presentation.ButtonLabel,
             () =>
             {
                 command.Toggle();
                 _session.RefreshExternalValues();
                 _rebuildRequested();
             },
-            active: presentation.IsConfiguredOn);
+            active: presentation.IsActive);
         return headerHeight;
     }
 

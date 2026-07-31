@@ -7,6 +7,7 @@ using OrbMentor;
 using OrbModConfig;
 using OrbModding.Common;
 using UnityEngine;
+using UnityEngine.UI;
 using Xunit;
 
 namespace OrbModding.Tests;
@@ -59,7 +60,7 @@ public sealed class QuickControlColumnTests
     }
 
     [Fact]
-    public void ColumnBuildsEveryRegisteredAutomationFeaturePlusEmergencyStopWithoutAnEquippedSpell()
+    public void DrawerBuildsEveryRegisteredAutomationFeatureWithoutAnEquippedSpell()
     {
         using var context = new Context();
         var previousSpellManager = global::SpellManager.instance;
@@ -83,20 +84,113 @@ public sealed class QuickControlColumnTests
                     context.Registry.Features
                         .Select(feature => feature.FeatureId)
                         .Append(QuickControlColumn.EmergencyStopId)
+                        .Append(QuickControlColumn.DrawerControlId)
                         .OrderBy(value => value, StringComparer.Ordinal),
                     liveColumn.ControlIds.OrderBy(value => value, StringComparer.Ordinal));
+                Assert.Equal(
+                    context.Registry.Features.Select(feature => feature.FeatureId),
+                    liveColumn.DrawerControlIds);
                 Assert.Empty(liveColumn.Failures);
                 var columnRoot = Assert.IsType<RectTransform>(
                     context.Native.Anchor.GetChild(0));
                 Assert.Equal(QuickControlColumn.ObjectName, columnRoot.name);
-                Assert.All(
-                    Enumerable.Range(0, columnRoot.childCount),
-                    index => Assert.IsType<RectTransform>(columnRoot.GetChild(index)));
+                AssertAllRectTransforms(columnRoot);
             }
         }
         finally
         {
             global::SpellManager.instance = previousSpellManager;
+        }
+    }
+
+    [Fact]
+    public void ClosedFootprintHasExactlyTwoLiveControlsAndDisclosureTogglesTheRightwardDrawer()
+    {
+        using var context = new Context();
+        Assert.True(
+            QuickControlColumn.TryCreate(
+                context.Registry,
+                context.EmergencyStop,
+                context.Native,
+                allowFeatureControls: true,
+                out var column,
+                out var reason,
+                context.ResolveIcon),
+            reason);
+        using (var liveColumn = Assert.IsType<QuickControlColumn>(column))
+        {
+            var root = context.Native.Anchor.GetChild(0);
+            var drawer = Assert.IsType<RectTransform>(FindDescendant(
+                root,
+                QuickControlColumn.DrawerObjectName));
+            Assert.False(drawer.gameObject.activeSelf);
+            Assert.True(drawer.anchoredPosition.x > 0f);
+            Assert.Equal(2, CountLiveButtons(root));
+
+            Assert.True(liveColumn.TryGetButton(
+                QuickControlColumn.DrawerControlId,
+                out var disclosure));
+            disclosure.onClick.Invoke();
+
+            Assert.True(liveColumn.IsDrawerOpen);
+            Assert.True(drawer.gameObject.activeSelf);
+            Assert.Equal(2 + context.Registry.Features.Count, CountLiveButtons(root));
+            Assert.False(DirectChild(disclosure.transform, "ClosedGlyph").gameObject.activeSelf);
+            Assert.True(DirectChild(disclosure.transform, "OpenGlyph").gameObject.activeSelf);
+
+            disclosure.onClick.Invoke();
+
+            Assert.False(liveColumn.IsDrawerOpen);
+            Assert.False(drawer.gameObject.activeSelf);
+            Assert.Equal(2, CountLiveButtons(root));
+        }
+    }
+
+    [Fact]
+    public void FaultedFeatureRaisesColorAndStructuralAttentionOnTheClosedDrawer()
+    {
+        using var context = new Context();
+        Assert.True(
+            QuickControlColumn.TryCreate(
+                context.Registry,
+                context.EmergencyStop,
+                context.Native,
+                allowFeatureControls: true,
+                out var column,
+                out var reason,
+                context.ResolveIcon),
+            reason);
+        using (var liveColumn = Assert.IsType<QuickControlColumn>(column))
+        {
+            Assert.True(liveColumn.TryGetButton(
+                QuickControlColumn.DrawerControlId,
+                out var disclosure));
+            Assert.True(liveColumn.TryGetDrawerPresentation(out var healthy));
+            Assert.False(healthy.IsOpen);
+            Assert.False(healthy.HasAttention);
+            Assert.False(DirectChild(
+                disclosure.transform,
+                "AttentionMarker").gameObject.activeSelf);
+
+            context.Statuses.AutoItems.Observe(
+                configuredEnabled: true,
+                FeatureStatusState.Faulted,
+                FeatureStatusReasonCode.RuntimeFailure,
+                "Auto Items failed.");
+            liveColumn.Render();
+
+            Assert.True(liveColumn.TryGetDrawerPresentation(out var attention));
+            Assert.False(attention.IsOpen);
+            Assert.True(attention.HasAttention);
+            Assert.Equal(
+                ConfiguredIntentFrameTreatment.InactiveRecessed,
+                attention.FrameTreatment);
+            Assert.Equal(ConfiguredIntentIconButtonVisual.UnhealthyColor, attention.Color);
+            Assert.True(DirectChild(
+                disclosure.transform,
+                "AttentionMarker").gameObject.activeSelf);
+            Assert.True(DirectChild(disclosure.transform, "ClosedGlyph").gameObject.activeSelf);
+            Assert.False(DirectChild(disclosure.transform, "OpenGlyph").gameObject.activeSelf);
         }
     }
 
@@ -136,6 +230,9 @@ public sealed class QuickControlColumnTests
             Assert.Contains(
                 AutomataFeatureStatuses.AutoItemsFeatureId,
                 liveColumn.Failures.Keys);
+            Assert.DoesNotContain(
+                AutomataFeatureStatuses.AutoItemsFeatureId,
+                liveColumn.DrawerControlIds);
             Assert.Contains("Auto Items", reason);
             Assert.Contains("ScreenWorld capture missing", reason);
         }
@@ -218,6 +315,18 @@ public sealed class QuickControlColumnTests
             Assert.NotNull(tooltip);
             Assert.Equal("STOPPED", tooltip!.GetDisplayType());
             Assert.Equal(presentation.Color, tooltip.GetColor());
+
+            button.onClick.Invoke();
+
+            Assert.False(context.Configuration.EmergencyDisable.Value);
+            Assert.Equal(new[] { true, false }, context.EmergencyChanges);
+            Assert.True(liveColumn.TryGetPresentation(
+                QuickControlColumn.EmergencyStopId,
+                out var cleared));
+            Assert.Equal(
+                ConfiguredIntentFrameTreatment.InactiveRecessed,
+                cleared.FrameTreatment);
+            Assert.Equal("READY / STOP ALL", cleared.TooltipLabel);
         }
     }
 
@@ -278,6 +387,43 @@ public sealed class QuickControlColumnTests
         return child;
     }
 
+    private static Transform FindDescendant(Transform root, string name)
+    {
+        if (string.Equals(root.name, name, StringComparison.Ordinal)) return root;
+        for (var index = 0; index < root.childCount; index++)
+        {
+            var candidate = FindDescendant(root.GetChild(index), name);
+            if (candidate is not null) return candidate;
+        }
+        return null!;
+    }
+
+    private static Transform DirectChild(Transform parent, string name)
+    {
+        for (var index = 0; index < parent.childCount; index++)
+        {
+            var child = parent.GetChild(index);
+            if (string.Equals(child.name, name, StringComparison.Ordinal)) return child;
+        }
+        return null!;
+    }
+
+    private static int CountLiveButtons(Transform root, bool ancestorsActive = true)
+    {
+        var active = ancestorsActive && root.gameObject.activeSelf;
+        var count = active && root.gameObject.GetComponent<Button>() is not null ? 1 : 0;
+        for (var index = 0; index < root.childCount; index++)
+            count += CountLiveButtons(root.GetChild(index), active);
+        return count;
+    }
+
+    private static void AssertAllRectTransforms(Transform root)
+    {
+        Assert.IsType<RectTransform>(root);
+        for (var index = 0; index < root.childCount; index++)
+            AssertAllRectTransforms(root.GetChild(index));
+    }
+
     private sealed class FakeContentArea : Behaviour
     {
         public RectTransform? canvas;
@@ -302,6 +448,7 @@ public sealed class QuickControlColumnTests
             Statuses = new AutomataFeatureStatuses(
                 Store.Current,
                 lifecycleGeneration: 1,
+                registry: new FeatureStatusRegistry(),
                 configurationGeneration: Store.CurrentGeneration);
             Registry = AutomationFeatureControlRegistry.Create(
                 Store,
@@ -310,7 +457,6 @@ public sealed class QuickControlColumnTests
                 mentor);
             EmergencyStop = new EmergencyStopControl(
                 Store,
-                () => Array.Empty<string>(),
                 stopped => EmergencyChanges.Add(stopped));
             var anchor = (RectTransform)new GameObject(
                 "HelpButtons",

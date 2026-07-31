@@ -218,7 +218,10 @@ public sealed class ModConfigTests
         Assert.DoesNotContain(mod.Sections.SelectMany(section => section.Settings), setting => setting.Key == "AcceptedUnverifiedBuildFingerprint");
 
         var autoBuyMode = mod.Sections.Single(section => section.Name == "Auto Buy").Settings.Single(setting => setting.Key == "Mode");
-        Assert.True(ModSettingsPage.IsImmediateModeSetting(autoBuyMode));
+        Assert.True(ModSettingsPage.IsImmediateCommandSetting(autoBuyMode));
+        var emergencyDisable = mod.Sections.Single(section => section.Name == "General")
+            .Settings.Single(setting => setting.Key == "EmergencyDisable");
+        Assert.True(ModSettingsPage.IsImmediateCommandSetting(emergencyDisable));
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoBuyMode.SettingType));
         var autoConceptMode = mod.Sections.Single(section => section.Name == "Auto Concept").Settings.Single(setting => setting.Key == "Mode");
         Assert.Equal(new[] { "Disabled", "Active" }, Enum.GetNames(autoConceptMode.SettingType));
@@ -287,8 +290,43 @@ public sealed class ModConfigTests
         Assert.Equal(10, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
         Assert.All(
             mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Items" or "Auto Scribe" or "Mentor"),
-            section => Assert.True(ModSettingsPage.IsImmediateModeSetting(
+            section => Assert.True(ModSettingsPage.IsImmediateCommandSetting(
                 section.Settings.Single(setting => setting.Key == "Mode"))));
+    }
+
+    [Fact]
+    public void GeneralEmergencyCommandUsesTheSameImmediateToggleInBothDirections()
+    {
+        var file = new ConfigFile();
+        var config = BepInExAutomataConfiguration.Bind(file);
+        var mentor = MentorConfig.Bind(file);
+        config.AttachMentor(mentor);
+        var store = new AutomataConfigurationStore(config, (_, _) => { });
+        using var statuses = new AutomataFeatureStatuses(
+            store.Current,
+            lifecycleGeneration: 1,
+            registry: new FeatureStatusRegistry(),
+            configurationGeneration: store.CurrentGeneration);
+        var registry = AutomationFeatureControlRegistry.Create(
+            store,
+            statuses,
+            new SpellLevelCapabilityState(),
+            mentor);
+        var emergency = new EmergencyStopControl(store, _ => { });
+        var commands = new ModConfigFeatureCommands(registry, emergency);
+
+        Assert.True(commands.TryGet(PluginIds.SuiteGuid, "General", out var command));
+        Assert.Equal("Stop all", command.Presentation.ButtonLabel);
+
+        command.Toggle();
+
+        Assert.True(store.Current.Safety.EmergencyDisable);
+        Assert.Equal("Resume all", command.Presentation.ButtonLabel);
+
+        command.Toggle();
+
+        Assert.False(store.Current.Safety.EmergencyDisable);
+        Assert.Equal("Stop all", command.Presentation.ButtonLabel);
     }
 
     [Fact]

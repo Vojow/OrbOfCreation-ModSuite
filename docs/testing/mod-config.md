@@ -55,12 +55,16 @@ installation, recovery, or layout work changes.
   combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
 - Disabled/absent plugins remain honest status-only or absent entries.
-- Feature modes appear only in the feature header and gameplay quick-controls column; both publish through
-  the committed store, while policy fields remain staged.
+- Feature modes appear only in the feature header and gameplay feature drawer; both publish through
+  the committed store, while policy fields remain staged. General's emergency command uses the same
+  immediate committed-state toggle as STOP and is not staged behind Apply.
 - Every suite-owned `Button` has `targetGraphic == null`, so hover, press, release, selection, and
   interactable changes cannot repaint a suite-rendered state.
 - Inactive audited rail candidates remain capturable while Mods is open. Quick controls reuse that
   family’s inactive/active frame pair rather than sampling spell buttons.
+- The closed gameplay hierarchy has exactly two live suite buttons; the seven feature controls are
+  live only under the open rightward drawer. A closed contained-feature fault or block changes the
+  disclosure's color and activates a separate marker, while open/closed uses different frames and glyphs.
 - Feature quick controls cannot retain or construct a text-rendering path or clone a native toggle.
   Suite-created UI nodes explicitly request `RectTransform`; a plain `GameObject` remains a
   `Transform` in the portable stub just as its installed Unity contract declares. Both UI surfaces

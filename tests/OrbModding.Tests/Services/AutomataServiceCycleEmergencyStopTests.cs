@@ -15,7 +15,7 @@ namespace OrbModding.Tests.Services;
 public sealed class AutomataServiceCycleEmergencyStopTests
 {
     [Fact]
-    public void ConfirmedResumeRestoresServiceDispatchInTheSameRuntime()
+    public void PlainToggleResumeRestoresServiceDispatchInTheSameRuntime()
     {
         var configuration = BepInExAutomataConfiguration.Bind(new ConfigFile());
         var feature = new DispatchFeature();
@@ -33,7 +33,6 @@ public sealed class AutomataServiceCycleEmergencyStopTests
             runtime.PublishSavedConfiguration);
         var control = new EmergencyStopControl(
             store,
-            () => new[] { "Test service" },
             _ => runtime.CancelPreparedWork());
 
         AssertDispatchesAfter(runtime, feature.Definition, 0);
@@ -46,8 +45,6 @@ public sealed class AutomataServiceCycleEmergencyStopTests
         Assert.True(runtime.EmergencyStopEngaged);
         Assert.Equal(actionsAtStop, feature.Definition.ActionExecutionCount);
 
-        control.Activate();
-        Assert.True(control.ResumeArmed);
         control.Activate();
         feature.CollectAfterResume();
 

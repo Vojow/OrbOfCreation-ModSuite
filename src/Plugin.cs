@@ -215,9 +215,7 @@ public sealed class Plugin : BaseUnityPlugin
             message => Log.LogAutomataInfo(message));
         _emergencyStopControl = new EmergencyStopControl(
             _configurationStore,
-            ReadEmergencyStopResumePreview,
-            OnEmergencyStopChanged,
-            canResume: () => _runtimeActivationAllowed);
+            OnEmergencyStopChanged);
         _automationFeatureControls = AutomationFeatureControlRegistry.Create(
             _configurationStore,
             _featureStatuses,
@@ -249,7 +247,7 @@ public sealed class Plugin : BaseUnityPlugin
         else if (!_runtimeActivationAllowed)
         {
             Log.LogAutomataWarning(
-                "Compatibility emergency stop is active. Clear Emergency disable in Mods > General to accept and resume, or use Advanced to accept while keeping STOP engaged.");
+                "Compatibility emergency stop is active. Press Resume all in Mods > General or the top-left STOP control to accept and resume, or use Advanced to accept while keeping STOP engaged.");
         }
         else
         {
@@ -488,7 +486,10 @@ public sealed class Plugin : BaseUnityPlugin
         _modConfigFeatureCommands = new ModConfigFeatureCommands(
             _automationFeatureControls ??
             throw new InvalidOperationException(
-                "Automation feature control registry was not composed."));
+                "Automation feature control registry was not composed."),
+            _emergencyStopControl ??
+            throw new InvalidOperationException(
+                "Emergency stop control was not composed."));
         _runUiMaintenance = RunUiMaintenance;
         _uiWork = new ModConfigFrameWork(() => Time.frameCount);
         ResetSceneState(SceneManager.GetActiveScene());
@@ -579,7 +580,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (decision.RuntimeAllowed)
         {
             Logger.LogWarning(emergencyClearRequested
-                ? "The player cleared the General emergency stop and accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk."
+                ? "The player cleared the emergency stop and accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk."
                 : "The player accepted this exact unverified game assembly pair. Runtime composition is now permitted at the player's own risk; the emergency stop remains engaged until explicitly resumed.");
             return;
         }
@@ -909,6 +910,13 @@ public sealed class Plugin : BaseUnityPlugin
             _quickControls.Dispose();
             _quickControls = null;
         }
+        if (_quickControls is not null &&
+            _quickControls.AllowsFeatureControls != _nativeContractsAvailable)
+        {
+            _quickControls.Dispose();
+            _quickControls = null;
+            ResetQuickControlsFailure();
+        }
         _quickControls?.Render();
         if (_quickControls is not null && _quickControls.Failures.Count == 0)
         {
@@ -992,31 +1000,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiMaintenanceDue = true;
         Logger.LogWarning(stopped
             ? "Suite emergency stop engaged; prepared automation work was discarded."
-            : "Suite emergency stop cleared after resume confirmation.");
-    }
-
-    private System.Collections.Generic.IReadOnlyList<string> ReadEmergencyStopResumePreview()
-    {
-        var result = new System.Collections.Generic.List<string>();
-        var config = _configurationStore?.Current;
-        if (config is not null)
-        {
-            if (config.AutoBuy.Mode == AutoBuyOperationMode.Active) result.Add("Auto Buy");
-            if (config.AutoBuy.Mode == AutoBuyOperationMode.Active && config.AutoBuy.AutoLevelSpells)
-                result.Add("Spell Leveling");
-            if (config.AutoCast.Mode == AutoCastOperationMode.Active) result.Add("Auto Cast");
-            if (config.AutoConcept.Mode == AutoConceptOperationMode.Active) result.Add("Auto Concept");
-            if (config.AutoHarvest.Mode == AutoHarvestOperationMode.Active &&
-                (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees))
-                result.Add("Auto Harvest");
-            if (config.AutoItems.Mode == AutoItemsOperationMode.Active &&
-                AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems))
-                result.Add("Auto Items");
-            if (config.AutoScribe.Mode == AutoScribeOperationMode.Active)
-                result.Add("Auto Scribe");
-        }
-        if (_mentorConfig?.Mode.Value == MentorOperationMode.Active) result.Add("Mentor");
-        return result;
+            : "Suite emergency stop cleared by immediate toggle.");
     }
 
     private void OnActiveSceneChanged(Scene previous, Scene next)

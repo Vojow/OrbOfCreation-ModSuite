@@ -15,7 +15,6 @@ internal enum ConfiguredIntentIconState
     Unhealthy = 2,
     Stopped = 3,
     StopReady = 4,
-    ResumeArmed = 5,
 }
 
 internal enum ConfiguredIntentFrameTreatment
@@ -41,7 +40,6 @@ internal sealed class ConfiguredIntentIconButtonVisual
     internal static readonly Color UnhealthyColor = new(1.0f, 0.3f, 0.3f, 1.0f);
     internal static readonly Color StoppedColor = new(1.0f, 0.55f, 0.2f, 1.0f);
     internal static readonly Color ReadyColor = new(1.0f, 0.78f, 0.28f, 1.0f);
-    internal static readonly Color ArmedColor = new(0.45f, 0.9f, 1.0f, 1.0f);
 
     private readonly Image _frame;
     private readonly IReadOnlyList<Image> _glyphs;
@@ -167,12 +165,6 @@ internal sealed class ConfiguredIntentIconButtonVisual
         EmergencyStopControl control)
     {
         if (control is null) throw new ArgumentNullException(nameof(control));
-        if (control.ResumeArmed)
-            return Present(
-                ConfiguredIntentIconState.ResumeArmed,
-                ConfiguredIntentFrameTreatment.ActiveRaised,
-                ArmedColor,
-                "STOPPED / RESUME ARMED");
         return control.IsStopped
             ? Present(
                 ConfiguredIntentIconState.Stopped,

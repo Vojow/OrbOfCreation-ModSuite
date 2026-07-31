@@ -36,9 +36,11 @@ icons.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
    At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
    the ten rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
-5. Confirm all seven feature icons plus separated STOP form one top-left vertical column under the
-   native gear and character buttons. The column must not cover those buttons, join the expanding
-   spell-slot row, or leave any old control in `RightSidebar/AttributeBar`.
+5. Confirm the closed top-left suite footprint is exactly two buttons under the native gear and
+   character buttons: STOP first and the feature disclosure second. Nothing else from the suite may
+   occupy that left lane while closed. Open the disclosure and confirm one transient row containing
+   all seven feature icons extends to the right; press the disclosure again and confirm the row is
+   removed from the live layout.
 
 ## Profile-build validation navigation
 
@@ -57,7 +59,7 @@ palette; a small IMGUI/debug overlay is not an acceptable substitute.
 ## Pixel ownership and icon states
 
 For Mods, every feature header, Apply/Revert/Default/conflict action, all Runtime actions, the seven
-quick icons, and STOP:
+drawer icons, the disclosure, and STOP:
 
 1. Capture the idle appearance, then hover, press and hold, drag out, release, keyboard-select where
    supported, disable/re-enable the control, and hover again.
@@ -70,11 +72,13 @@ quick icons, and STOP:
    mastery XP and Auto Harvest the harvest-speed glyph.
 4. Confirm tooltips identify the feature, configured intent, runtime health, and reason without
    clipped text.
+5. With the drawer closed, fault or safety-block one contained feature. Confirm the disclosure gains
+   a visible exclamation marker and red color. Clear the condition and confirm both cues clear.
 
 ## Commands, staging, and conflicts
 
 1. For every registered automation feature, toggle once in the feature header and once in the
-   quick column. Confirm the other surface updates from the same committed
+   open drawer. Confirm the other surface updates from the same committed
    value and no duplicate mode row exists.
 2. Stage policy changes on at least two feature pages without applying. Navigate through Runtime,
    close/reopen Mods, and confirm staged values and each remembered scroll position survive.
@@ -90,25 +94,25 @@ quick icons, and STOP:
 
 0. With an unknown complete assembly pair, confirm Mods and differential verification load, STOP is engaged,
    no feature quick control or gameplay service starts, and General shows an engaged **Emergency disable**
-   switch. Clear it and Apply; confirm the exact pair is accepted and the runtime composes without the switch
+   command. Press **Resume all** once; confirm the exact pair is accepted and the runtime composes without STOP
    being forced on again. Separately confirm **Allow this unverified game build** composes the runtime while
-   STOP stays engaged until the ordinary two-click resume. Change either test hash and confirm the
+   STOP stays engaged until the ordinary one-click resume. Change either test hash and confirm the
    acknowledgement resets on next launch.
-1. Configure a resume set containing Auto Buy/Spell Leveling, Auto Cast, Auto Concept, Auto Harvest,
-   and Mentor. Hover STOP and confirm its tooltip lists that exact desired-On set.
-2. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On
+1. Click STOP once. Confirm prepared work is discarded, no new native action starts, every desired-On
    quick icon reads stopped, and feature headers/Runtime agree.
-3. Click STOP once to arm resume. Confirm automation remains stopped and the tooltip still lists the
-   resume set. Click again to resume and confirm only the listed configured-On features recover.
+2. Click STOP once more. Confirm the saved emergency state clears immediately, no intermediate armed
+   state appears, and only configured-On features recover after a fresh world publication.
+3. Repeat both directions from the General page. Confirm each single press changes the same committed
+   emergency state immediately and no Apply or confirmation step is offered.
 4. Rebuild the game UI through an ordinary supported scene/UI transition, then return to Main.
-   Confirm exactly one Mods entry, one seven-feature column, and one STOP exist; ordering, gap, tooltips,
+   Confirm exactly one Mods entry, one two-button shell, and one seven-feature drawer exist; ordering, tooltips,
    listeners, staged navigation bookmark, and native-view restoration still work.
 
 ## Runtime actions
 
 1. Confirm the seven-feature grid appears first and orders failure/attention before waiting/healthy
    states, with configured intent, runtime state, and one readable reason.
-2. Confirm the **Suite UI** diagnostic card contains healthy **Quick controls column native visuals** and
+2. Confirm the **Suite UI** diagnostic card contains healthy **Quick controls shell and drawer native visuals** and
    **Mods rail native visuals** capabilities. If either failed, confirm the exact BepInEx error
    reason is repeated there.
 3. Click **Run verifier**. Confirm it becomes queued, prevents a duplicate request, completes, and
@@ -125,6 +129,6 @@ quick icons, and STOP:
    latest evidence, and reasons are readable; cards with failures or attention appear before healthy
    cards.
 
-Record screenshots for the top-left quick-control matrix, Mods rail at minimum resolution, staged conflict,
-emergency armed state, Runtime grid, and every failed checklist item. A visual failure blocks the
+Record screenshots for the closed two-button footprint, open drawer, closed attention cue, Mods rail at
+minimum resolution, staged conflict, stopped state, Runtime grid, and every failed checklist item. A visual failure blocks the
 install even when portable and contract gates are green.

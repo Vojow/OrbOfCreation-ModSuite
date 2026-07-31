@@ -369,7 +369,7 @@ internal sealed class BepInExAutomataConfiguration
     /// </summary>
     /// <remarks>
     /// Initial config binding does not raise this signal. On an unverified build, that distinction
-    /// lets the General emergency switch act as explicit consent without treating a persisted
+    /// lets an immediate emergency-control clear act as explicit consent without treating a persisted
     /// false default as consent after the game assemblies change.
     /// </remarks>
     internal bool TryTakeEmergencyClearRequest() =>

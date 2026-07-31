@@ -32,7 +32,7 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         _logInfo = logInfo ?? throw new ArgumentNullException(nameof(logInfo));
         _logError = logError ?? throw new ArgumentNullException(nameof(logError));
         _quickControls = SurfaceState.Waiting(
-            "Native quick-controls column capture has not run yet.");
+            "Native quick-controls shell and drawer capture has not run yet.");
         _modsRail = SurfaceState.Waiting("Native Mods-rail capture has not run yet.");
         _registration = registry.Register(BuildSnapshot());
     }
@@ -106,7 +106,7 @@ internal sealed class SuiteUiSurfaceDiagnostics : IDisposable
         {
             Capability(
                 "QuickControls",
-                "Quick controls column native visuals",
+                "Quick controls shell and drawer native visuals",
                 _quickControls),
             Capability("ModsRail", "Mods rail native visuals", _modsRail),
         });

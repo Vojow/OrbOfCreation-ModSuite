@@ -22,16 +22,19 @@ The Mods button is cloned from native top-level navigation, remains last, and op
 
 Restyled suite controls sample the audited native `UIViewRadioButton` subview frame pair. OFF uses
 `baseImage`; configured ON uses `activeImage`, so intent differs structurally before the
-suite-owned gray/green/red/orange icon color is applied. Quick controls are suite-created pixels in
-one top-left column under `Canvas/HelpButtons`, resolved through the declared scene-bound
-`UIContentArea.canvas` contract. Missing required types, fields, sprites, or structural paths are
+suite-owned gray/green/red/orange icon color is applied. Quick controls close to an emergency-stop
+button and one disclosure under `Canvas/HelpButtons`. The disclosure opens the seven registered
+feature controls to the right; when closed, faults and blocks add an exclamation marker as well as
+red color. General invokes the same immediate STOP/resume command instead of staging
+`EmergencyDisable`. The anchor is resolved through the declared scene-bound `UIContentArea.canvas`
+contract. Missing required types, fields, sprites, or structural paths are
 suite defects on the matching audited baseline: installation retries bounded startup timing, then
 logs the exact terminal reason and a typed-candidate census at error level and publishes it to
 Runtime. There is no cloned native toggle, text quick-control, or alternate shell fallback. See the
 [native UI inventory](../../docs/testing/ui-native-inventory.md).
 
 Suite-owned UI objects request `RectTransform` explicitly from the native
-`GameObject(string, Type[])` constructor. Both the quick column and Mods rail use the same
+`GameObject(string, Type[])` constructor. Both the quick-control surface and Mods rail use the same
 five-second retry cadence and three-attempt waiting-to-terminal diagnostic policy; the first
 failure logs that installation will retry, and type failures name the member plus expected and
 actual managed types.

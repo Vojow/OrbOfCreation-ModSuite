@@ -13,36 +13,59 @@ internal delegate bool QuickControlIconResolver(
     out Sprite? icon,
     out string reason);
 
+internal readonly record struct QuickControlDrawerPresentation(
+    bool IsOpen,
+    bool HasAttention,
+    ConfiguredIntentFrameTreatment FrameTreatment,
+    Color Color,
+    string TooltipLabel);
+
 /// <summary>
-/// Suite-owned, single-column gameplay controls under the audited native HelpButtons anchor.
-/// Every live entry has already acquired both structural state frames and its complete glyph.
+/// Suite-owned emergency stop and disclosure under the audited native HelpButtons anchor. The
+/// disclosure opens the registered feature controls in one transient row to the right.
 /// </summary>
 internal sealed class QuickControlColumn : IDisposable
 {
     internal const string ObjectName = "OrbModSuite.QuickControls";
     internal const string EmergencyStopId = "emergency-stop";
+    internal const string DrawerControlId = "feature-drawer";
+    internal const string DrawerObjectName = "FeatureDrawer";
     internal const float ControlSize = 52f;
     internal const float Spacing = 6f;
-    internal const float SafetyGap = 12f;
+    internal const float DrawerGap = 12f;
     internal const float AnchorOffsetY = -158f;
 
     private readonly GameObject _root;
     private readonly Dictionary<string, Entry> _entries;
+    private readonly DrawerEntry _drawer;
+    private readonly IReadOnlyCollection<string> _controlIds;
+    private readonly IReadOnlyCollection<string> _drawerControlIds;
     private readonly IReadOnlyDictionary<string, string> _failures;
     private bool _disposed;
 
     private QuickControlColumn(
         GameObject root,
         Dictionary<string, Entry> entries,
+        DrawerEntry drawer,
+        IReadOnlyCollection<string> controlIds,
+        IReadOnlyCollection<string> drawerControlIds,
+        bool allowsFeatureControls,
         IReadOnlyDictionary<string, string> failures)
     {
         _root = root;
         _entries = entries;
+        _drawer = drawer;
+        _controlIds = controlIds;
+        _drawerControlIds = drawerControlIds;
+        AllowsFeatureControls = allowsFeatureControls;
         _failures = failures;
     }
 
     internal bool IsAlive => !_disposed && _root != null;
-    internal IReadOnlyCollection<string> ControlIds => _entries.Keys;
+    internal bool AllowsFeatureControls { get; }
+    internal bool IsDrawerOpen => _drawer.IsOpen;
+    internal IReadOnlyCollection<string> ControlIds => _controlIds;
+    internal IReadOnlyCollection<string> DrawerControlIds => _drawerControlIds;
     internal IReadOnlyDictionary<string, string> Failures => _failures;
 
     internal static bool TryCreate(
@@ -89,9 +112,35 @@ internal sealed class QuickControlColumn : IDisposable
 
             var entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
             var failures = new Dictionary<string, string>(StringComparer.Ordinal);
-            var slot = 0;
+            if (!TryCreateEmergencyEntry(
+                    rootRect,
+                    slot: 0,
+                    emergencyStop,
+                    native.StateVisuals,
+                    out var stopEntry,
+                    out var stopReason))
+            {
+                UnityEngine.Object.Destroy(root);
+                reason = "Suite emergency stop state visual unavailable: " + stopReason;
+                return false;
+            }
+            entries.Add(EmergencyStopId, stopEntry!);
+
+            if (!TryCreateDrawerContainer(
+                    rootRect,
+                    registry.Features.Count,
+                    out var drawerObject,
+                    out var drawerRect,
+                    out var drawerContainerReason))
+            {
+                UnityEngine.Object.Destroy(root);
+                reason = "feature drawer container unavailable: " + drawerContainerReason;
+                return false;
+            }
+
             if (allowFeatureControls)
             {
+                var slot = 0;
                 foreach (var registration in registry.Features)
                 {
                     if (!resolveIcon(registration, out var icon, out var iconReason) ||
@@ -103,7 +152,7 @@ internal sealed class QuickControlColumn : IDisposable
                         continue;
                     }
                     if (!TryCreateFeatureEntry(
-                            rootRect,
+                            drawerRect,
                             slot++,
                             registration,
                             icon,
@@ -119,30 +168,39 @@ internal sealed class QuickControlColumn : IDisposable
                 }
             }
 
-            var stopSlot = allowFeatureControls ? registry.Features.Count : 0;
-            if (!TryCreateEmergencyEntry(
+            if (!TryCreateDrawerEntry(
                     rootRect,
-                    stopSlot,
-                    emergencyStop,
+                    slot: 1,
+                    drawerObject,
+                    registry,
+                    allowFeatureControls,
                     native.StateVisuals,
-                    out var stopEntry,
-                    out var stopReason))
+                    out var drawer,
+                    out var drawerReason))
             {
-                failures[EmergencyStopId] =
-                    "Suite emergency stop: state visual unavailable: " + stopReason;
-            }
-            else
-            {
-                entries.Add(EmergencyStopId, stopEntry!);
+                UnityEngine.Object.Destroy(root);
+                reason = "feature drawer disclosure unavailable: " + drawerReason;
+                return false;
             }
 
-            var featureHeight = allowFeatureControls
-                ? registry.Features.Count * (ControlSize + Spacing)
-                : 0f;
             rootRect.sizeDelta = new Vector2(
                 ControlSize,
-                featureHeight + ControlSize + (allowFeatureControls ? SafetyGap : 0f));
-            column = new QuickControlColumn(root, entries, failures);
+                (2f * ControlSize) + Spacing);
+            var drawerControlIds = registry.Features
+                .Where(feature => entries.ContainsKey(feature.FeatureId))
+                .Select(feature => feature.FeatureId)
+                .ToArray();
+            var controlIds = entries.Keys
+                .Append(DrawerControlId)
+                .ToArray();
+            column = new QuickControlColumn(
+                root,
+                entries,
+                drawer!,
+                controlIds,
+                drawerControlIds,
+                allowFeatureControls,
+                failures);
             column.Render(force: true);
             root.SetActive(true);
             reason = failures.Count == 0
@@ -169,10 +227,16 @@ internal sealed class QuickControlColumn : IDisposable
     {
         if (!IsAlive) return;
         foreach (var entry in _entries.Values) entry.Render(force);
+        _drawer.Render(force);
     }
 
     internal bool TryGetButton(string controlId, out Button button)
     {
+        if (string.Equals(controlId, DrawerControlId, StringComparison.Ordinal))
+        {
+            button = _drawer.Button;
+            return true;
+        }
         if (_entries.TryGetValue(controlId, out var entry))
         {
             button = entry.Button;
@@ -196,12 +260,54 @@ internal sealed class QuickControlColumn : IDisposable
         return false;
     }
 
+    internal bool TryGetDrawerPresentation(
+        out QuickControlDrawerPresentation presentation)
+    {
+        if (_drawer.Rendered is { } rendered)
+        {
+            presentation = rendered;
+            return true;
+        }
+        presentation = default;
+        return false;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         foreach (var entry in _entries.Values) entry.Button.onClick.RemoveAllListeners();
+        _drawer.Button.onClick.RemoveAllListeners();
         if (_root != null) UnityEngine.Object.Destroy(_root);
+    }
+
+    private static bool TryCreateDrawerContainer(
+        RectTransform parent,
+        int featureCount,
+        out GameObject drawer,
+        out RectTransform drawerRect,
+        out string reason)
+    {
+        if (!TryCreateRectTransformObject(
+                DrawerObjectName,
+                out drawer,
+                out drawerRect,
+                out reason))
+            return false;
+        drawer.SetActive(false);
+        drawerRect.SetParent(parent, false);
+        drawerRect.anchorMin = new Vector2(0f, 1f);
+        drawerRect.anchorMax = new Vector2(0f, 1f);
+        drawerRect.pivot = new Vector2(0f, 1f);
+        drawerRect.anchoredPosition = new Vector2(
+            ControlSize + DrawerGap,
+            -(ControlSize + Spacing));
+        drawerRect.sizeDelta = new Vector2(
+            Math.Max(1f, (featureCount * ControlSize) +
+                (Math.Max(0, featureCount - 1) * Spacing)),
+            ControlSize);
+        reason = string.Empty;
+        return true;
     }
 
     private static bool TryCreateFeatureEntry(
@@ -216,7 +322,7 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateControlObject(
                 "Feature." + registration.FeatureId,
                 parent,
-                PositionFor(slot, safety: false),
+                DrawerPositionFor(slot),
                 out var root,
                 out reason))
         {
@@ -276,7 +382,7 @@ internal sealed class QuickControlColumn : IDisposable
         if (!TryCreateControlObject(
                 "Safety.EmergencyStop",
                 parent,
-                PositionFor(slot, safety: slot > 0),
+                ColumnPositionFor(slot),
                 out var root,
                 out reason))
         {
@@ -329,6 +435,180 @@ internal sealed class QuickControlColumn : IDisposable
             created.Render(force: true);
         });
         entry = created;
+        return true;
+    }
+
+    private static bool TryCreateDrawerEntry(
+        RectTransform parent,
+        int slot,
+        GameObject drawerObject,
+        AutomationFeatureControlRegistry registry,
+        bool allowFeatureControls,
+        NativeButtonStateVisualPrimitives stateVisuals,
+        out DrawerEntry? entry,
+        out string reason)
+    {
+        if (!TryCreateControlObject(
+                "Drawer.Disclosure",
+                parent,
+                ColumnPositionFor(slot),
+                out var root,
+                out reason))
+        {
+            entry = null;
+            return false;
+        }
+        var button = root.AddComponent<Button>();
+        if (!TryCreateDrawerGlyph(
+                "ClosedGlyph",
+                root.transform,
+                closed: true,
+                out var closedGlyph,
+                out var closedImages,
+                out reason) ||
+            !TryCreateDrawerGlyph(
+                "OpenGlyph",
+                root.transform,
+                closed: false,
+                out var openGlyph,
+                out var openImages,
+                out reason) ||
+            !TryCreateAttentionMarker(
+                root.transform,
+                out var attentionMarker,
+                out var attentionImages,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(root);
+            entry = null;
+            return false;
+        }
+        var glyphs = closedImages
+            .Concat(openImages)
+            .Concat(attentionImages)
+            .ToArray();
+        if (!ConfiguredIntentIconButtonVisual.TryCreate(
+                root,
+                button,
+                glyphs,
+                stateVisuals,
+                out var visual,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(root);
+            entry = null;
+            return false;
+        }
+        var created = new DrawerEntry(
+            button,
+            visual!,
+            drawerObject,
+            closedGlyph,
+            openGlyph,
+            attentionMarker,
+            registry,
+            allowFeatureControls);
+        root.AddComponent<HoverTooltip>().Setup(new QuickControlDrawerTooltip(created));
+        if (allowFeatureControls)
+            button.onClick.AddListener(created.Toggle);
+        else
+            button.interactable = false;
+        entry = created;
+        return true;
+    }
+
+    private static bool TryCreateDrawerGlyph(
+        string name,
+        Transform parent,
+        bool closed,
+        out GameObject glyph,
+        out IReadOnlyList<Image> images,
+        out string reason)
+    {
+        if (!TryCreateGlyphObject(
+                name,
+                parent,
+                Vector2.zero,
+                Vector2.one,
+                out glyph,
+                out reason))
+        {
+            images = Array.Empty<Image>();
+            return false;
+        }
+        var anchors = closed
+            ? new[]
+            {
+                (new Vector2(0.34f, 0.58f), new Vector2(0.46f, 0.70f)),
+                (new Vector2(0.46f, 0.44f), new Vector2(0.58f, 0.56f)),
+                (new Vector2(0.34f, 0.30f), new Vector2(0.46f, 0.42f)),
+            }
+            : new[]
+            {
+                (new Vector2(0.54f, 0.58f), new Vector2(0.66f, 0.70f)),
+                (new Vector2(0.42f, 0.44f), new Vector2(0.54f, 0.56f)),
+                (new Vector2(0.54f, 0.30f), new Vector2(0.66f, 0.42f)),
+            };
+        var created = new List<Image>(anchors.Length);
+        for (var index = 0; index < anchors.Length; index++)
+        {
+            if (!TryCreateGlyphObject(
+                    "Segment." + index,
+                    glyph.transform,
+                    anchors[index].Item1,
+                    anchors[index].Item2,
+                    out var segment,
+                    out reason))
+            {
+                UnityEngine.Object.Destroy(glyph);
+                images = Array.Empty<Image>();
+                return false;
+            }
+            created.Add(segment.AddComponent<Image>());
+        }
+        images = created;
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryCreateAttentionMarker(
+        Transform parent,
+        out GameObject marker,
+        out IReadOnlyList<Image> images,
+        out string reason)
+    {
+        if (!TryCreateGlyphObject(
+                "AttentionMarker",
+                parent,
+                new Vector2(0.66f, 0.60f),
+                new Vector2(0.92f, 0.90f),
+                out marker,
+                out reason))
+        {
+            images = Array.Empty<Image>();
+            return false;
+        }
+        if (!TryCreateGlyphObject(
+                "Bar",
+                marker.transform,
+                new Vector2(0.40f, 0.32f),
+                new Vector2(0.60f, 0.90f),
+                out var bar,
+                out reason) ||
+            !TryCreateGlyphObject(
+                "Dot",
+                marker.transform,
+                new Vector2(0.36f, 0.06f),
+                new Vector2(0.64f, 0.26f),
+                out var dot,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(marker);
+            images = Array.Empty<Image>();
+            return false;
+        }
+        images = new[] { bar.AddComponent<Image>(), dot.AddComponent<Image>() };
+        reason = string.Empty;
         return true;
     }
 
@@ -422,11 +702,11 @@ internal sealed class QuickControlColumn : IDisposable
         return false;
     }
 
-    private static Vector2 PositionFor(int slot, bool safety)
-    {
-        var gap = safety ? SafetyGap : 0f;
-        return new Vector2(0f, -(slot * (ControlSize + Spacing) + gap));
-    }
+    private static Vector2 ColumnPositionFor(int slot) =>
+        new(0f, -(slot * (ControlSize + Spacing)));
+
+    private static Vector2 DrawerPositionFor(int slot) =>
+        new(slot * (ControlSize + Spacing), 0f);
 
     private static bool ResolveNativeIcon(
         AutomationFeatureControlRegistration registration,
@@ -437,6 +717,141 @@ internal sealed class QuickControlColumn : IDisposable
             capturedRail: null,
             out icon,
             out reason);
+
+    private sealed class DrawerEntry
+    {
+        private readonly GameObject _drawerObject;
+        private readonly GameObject _closedGlyph;
+        private readonly GameObject _openGlyph;
+        private readonly GameObject _attentionMarker;
+        private readonly AutomationFeatureControlRegistry _registry;
+        private readonly bool _allowFeatureControls;
+        private bool _isOpen;
+
+        internal DrawerEntry(
+            Button button,
+            ConfiguredIntentIconButtonVisual visual,
+            GameObject drawerObject,
+            GameObject closedGlyph,
+            GameObject openGlyph,
+            GameObject attentionMarker,
+            AutomationFeatureControlRegistry registry,
+            bool allowFeatureControls)
+        {
+            Button = button;
+            Visual = visual;
+            _drawerObject = drawerObject;
+            _closedGlyph = closedGlyph;
+            _openGlyph = openGlyph;
+            _attentionMarker = attentionMarker;
+            _registry = registry;
+            _allowFeatureControls = allowFeatureControls;
+        }
+
+        internal Button Button { get; }
+        internal ConfiguredIntentIconButtonVisual Visual { get; }
+        internal bool IsOpen => _isOpen;
+        internal QuickControlDrawerPresentation? Rendered { get; private set; }
+
+        internal void Toggle()
+        {
+            if (!_allowFeatureControls) return;
+            _isOpen = !_isOpen;
+            _drawerObject.SetActive(_isOpen);
+            Render(force: true);
+        }
+
+        internal void Render(bool force)
+        {
+            var presentation = ReadPresentation();
+            if (!force && Rendered == presentation) return;
+            Rendered = presentation;
+            _closedGlyph.SetActive(!presentation.IsOpen);
+            _openGlyph.SetActive(presentation.IsOpen);
+            _attentionMarker.SetActive(presentation.HasAttention);
+            Visual.Render(
+                new ConfiguredIntentPresentation(
+                    presentation.HasAttention
+                        ? ConfiguredIntentIconState.Unhealthy
+                        : presentation.IsOpen
+                            ? ConfiguredIntentIconState.On
+                            : ConfiguredIntentIconState.Off,
+                    presentation.FrameTreatment,
+                    presentation.Color,
+                    presentation.TooltipLabel),
+                force);
+        }
+
+        internal QuickControlDrawerPresentation ReadPresentation()
+        {
+            var hasAttention = HasAttention();
+            return new QuickControlDrawerPresentation(
+                _isOpen,
+                hasAttention,
+                _isOpen
+                    ? ConfiguredIntentFrameTreatment.ActiveRaised
+                    : ConfiguredIntentFrameTreatment.InactiveRecessed,
+                hasAttention
+                    ? ConfiguredIntentIconButtonVisual.UnhealthyColor
+                    : _isOpen
+                        ? ConfiguredIntentIconButtonVisual.OnColor
+                        : ConfiguredIntentIconButtonVisual.ReadyColor,
+                !_allowFeatureControls
+                    ? "FEATURES / UNAVAILABLE"
+                    : _isOpen
+                        ? hasAttention
+                            ? "FEATURES / OPEN / ATTENTION"
+                            : "FEATURES / OPEN"
+                        : hasAttention
+                            ? "FEATURES / CLOSED / ATTENTION"
+                            : "FEATURES / CLOSED");
+        }
+
+        private bool HasAttention()
+        {
+            if (!_allowFeatureControls) return false;
+            foreach (var registration in _registry.Features)
+            {
+                var status = registration.Status;
+                var runtime = FeatureStatusPresenter.Present(status).RuntimeState;
+                if (runtime == FeatureRuntimePresentationState.Blocked ||
+                    ConfiguredIntentIconButtonVisual.FromFeatureStatus(status).State ==
+                    ConfiguredIntentIconState.Unhealthy)
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    private sealed class QuickControlDrawerTooltip : ITooltipable
+    {
+        private readonly DrawerEntry _drawer;
+
+        internal QuickControlDrawerTooltip(DrawerEntry drawer) => _drawer = drawer;
+        public string GetName() => "Automation feature drawer";
+        public string GetDisplayType() => _drawer.ReadPresentation().TooltipLabel;
+        public Sprite GetIcon() => null!;
+        public Color GetColor() => _drawer.ReadPresentation().Color;
+        public bool IsColoredIcon() => false;
+        public bool HasAltTooltips() => false;
+        public string GetDescription() => _drawer.IsOpen
+            ? "Closes the transient feature-toggle drawer."
+            : "Opens the seven automation feature toggles to the right.";
+        public List<TooltipNode> GetTooltipNodes()
+        {
+            var presentation = _drawer.ReadPresentation();
+            return new List<TooltipNode>
+            {
+                new(presentation.IsOpen
+                    ? "Click to close the feature drawer."
+                    : "Click to open the feature drawer."),
+                new(presentation.HasAttention
+                    ? "One or more contained features is faulted or blocked."
+                    : "No contained feature currently needs attention."),
+            };
+        }
+        public List<TooltipNode> GetAltTooltipNodes() => new();
+    }
 
     private sealed class Entry
     {
