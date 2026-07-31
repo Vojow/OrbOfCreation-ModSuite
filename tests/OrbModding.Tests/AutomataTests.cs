@@ -42,6 +42,7 @@ public sealed class AutomataTests
         Assert.Equal(AutoItemsOperationMode.Disabled, config.AutoItemsMode.Value);
         Assert.True(config.AutoItemsUseScrolls.Value);
         Assert.True(config.AutoItemsUseRelics.Value);
+        Assert.Empty(config.AutoItemsTemporaryItemAllowlist.Value);
         Assert.Equal(AutoConceptSlotManagementMode.TimedCycle, config.AutoConceptSlotManagement.Value);
         Assert.True(config.AutoConceptShowToggleButton.Value);
         Assert.True(config.AutoLevelSpells.Value);

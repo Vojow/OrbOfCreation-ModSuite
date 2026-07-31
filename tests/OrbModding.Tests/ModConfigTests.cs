@@ -192,7 +192,7 @@ public sealed class ModConfigTests
             new[] { "Mode", "CollectFruitTrees", "CollectTreasureTrees" },
             mod.Sections.Single(section => section.Name == "Auto Harvest").Settings.Select(setting => setting.Key));
         Assert.Equal(
-            new[] { "Mode", "UseScrolls", "UseRelics" },
+            new[] { "Mode", "UseScrolls", "UseRelics", "TemporaryItemAllowlist" },
             mod.Sections.Single(section => section.Name == "Auto Items").Settings.Select(setting => setting.Key));
         Assert.Equal(
             new[] { "Mode", "Roles" },

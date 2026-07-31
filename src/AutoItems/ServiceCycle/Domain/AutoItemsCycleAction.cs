@@ -9,11 +9,12 @@ internal readonly struct AutoItemsCycleAction
         Guid itemId,
         AutoItemsConsumableFamily family,
         long collectedAtEpoch,
-        int plannedLevel)
+        int plannedLevel,
+        long collectedAtFrame = 0)
     {
         if (itemId == Guid.Empty)
             throw new ArgumentException("An Auto Items action requires an item identity.", nameof(itemId));
-        if (family is not (AutoItemsConsumableFamily.Relic or AutoItemsConsumableFamily.Scroll))
+        if (family == AutoItemsConsumableFamily.Unknown)
             throw new ArgumentOutOfRangeException(nameof(family), family, "A supported item family is required.");
         if (family == AutoItemsConsumableFamily.Scroll && plannedLevel < 1)
             throw new ArgumentOutOfRangeException(
@@ -21,12 +22,14 @@ internal readonly struct AutoItemsCycleAction
                 "A Scroll action requires the strongest owned level from its world reading.");
         ItemId = itemId;
         Family = family;
+        CollectedAtFrame = collectedAtFrame;
         CollectedAtEpoch = collectedAtEpoch;
         PlannedLevel = plannedLevel;
     }
 
     internal Guid ItemId { get; }
     internal AutoItemsConsumableFamily Family { get; }
+    internal long CollectedAtFrame { get; }
     internal long CollectedAtEpoch { get; }
     internal int PlannedLevel { get; }
 }

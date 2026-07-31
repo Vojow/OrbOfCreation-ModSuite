@@ -17,6 +17,9 @@ internal enum AutoItemsPreflight
     MultiBuyUnavailable = 9,
     Quarantined = 10,
     TargetUnavailable = 11,
+    TemporaryDurationChanged = 12,
+    TemporaryCostChanged = 13,
+    TemporaryEffectPresent = 14,
 }
 
 internal readonly struct AutoItemsSubmission

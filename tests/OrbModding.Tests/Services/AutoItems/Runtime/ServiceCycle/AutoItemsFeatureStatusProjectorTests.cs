@@ -1,3 +1,4 @@
+using System;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -23,6 +24,8 @@ public sealed class AutoItemsFeatureStatusProjectorTests
             bindingFailure: string.Empty,
             cycleObserved: true,
             AutoItemsDecisionKind.Scroll,
+            Guid.Empty,
+            AutoItemsTemporaryQuarantineCause.None,
             health);
 
         Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
@@ -47,10 +50,35 @@ public sealed class AutoItemsFeatureStatusProjectorTests
             bindingFailure: string.Empty,
             cycleObserved: true,
             AutoItemsDecisionKind.Relic,
+            Guid.Empty,
+            AutoItemsTemporaryQuarantineCause.None,
             health);
 
         Assert.Equal(FeatureStatusState.Faulted, status.State);
         Assert.Equal(FeatureStatusReasonCode.MutationQuarantined, status.Reason);
         Assert.Equal(submission.Reason, status.Summary);
+    }
+
+    [Fact]
+    public void TemporaryFollowUpQuarantineNamesTheExactItemAndCause()
+    {
+        var itemId = Guid.Parse("00000000-0000-0000-0000-000000000777");
+
+        var status = AutoItemsFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            ownershipReason: string.Empty,
+            bindingsAvailable: true,
+            bindingFailure: string.Empty,
+            cycleObserved: true,
+            AutoItemsDecisionKind.TemporaryItemQuarantined,
+            itemId,
+            AutoItemsTemporaryQuarantineCause.MultipleUsages,
+            new AutoItemsActionHealth());
+
+        Assert.Equal(FeatureStatusState.Faulted, status.State);
+        Assert.Equal(FeatureStatusReasonCode.MutationQuarantined, status.Reason);
+        Assert.Contains(itemId.ToString("D"), status.Summary);
+        Assert.Contains("more than one native usage", status.Summary);
     }
 }

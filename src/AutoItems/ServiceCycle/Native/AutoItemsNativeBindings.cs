@@ -7,7 +7,7 @@ using OrbModding.Common;
 namespace OrbAutomata;
 
 /// <summary>
-/// The complete reflected Scroll/Relic transaction schema. Only metadata is retained, and one
+/// The complete reflected consumable-use transaction schema. Only metadata is retained, and one
 /// instance is validated for each game lifecycle before any item is resolved or mutated.
 /// </summary>
 internal sealed class AutoItemsNativeBindings
@@ -20,6 +20,8 @@ internal sealed class AutoItemsNativeBindings
     private AutoItemsNativeBindings(
         Type consumableType,
         Type familyType,
+        Type resourceType,
+        Type costEntryType,
         Type countType,
         Type scalingType,
         Type instantBlockType,
@@ -29,11 +31,21 @@ internal sealed class AutoItemsNativeBindings
         Type baseSelectionType,
         Type targetStructureType,
         FieldInfo families,
+        FieldInfo allConsumables,
+        FieldInfo usages,
         FieldInfo canBeRandomized,
+        FieldInfo hasDuration,
+        FieldInfo durationBase,
+        FieldInfo consumeCost,
+        FieldInfo usageCost,
+        FieldInfo costs,
+        FieldInfo costResource,
+        FieldInfo costAmount,
         FieldInfo onUseEffects,
         FieldInfo effectScripts,
         FieldInfo targetOptions,
         MethodInfo familyGuid,
+        MethodInfo resourceGuid,
         MethodInfo canFire,
         MethodInfo isVisible,
         MethodInfo selectAndFire,
@@ -50,6 +62,8 @@ internal sealed class AutoItemsNativeBindings
     {
         ConsumableType = consumableType;
         FamilyType = familyType;
+        ResourceType = resourceType;
+        CostEntryType = costEntryType;
         CountType = countType;
         ScalingType = scalingType;
         InstantBlockType = instantBlockType;
@@ -59,11 +73,21 @@ internal sealed class AutoItemsNativeBindings
         BaseSelectionType = baseSelectionType;
         TargetStructureType = targetStructureType;
         Families = families;
+        AllConsumables = allConsumables;
+        Usages = usages;
         CanBeRandomized = canBeRandomized;
+        HasDuration = hasDuration;
+        DurationBase = durationBase;
+        ConsumeCost = consumeCost;
+        UsageCost = usageCost;
+        Costs = costs;
+        CostResource = costResource;
+        CostAmount = costAmount;
         OnUseEffects = onUseEffects;
         EffectScripts = effectScripts;
         TargetOptions = targetOptions;
         FamilyGuid = familyGuid;
+        ResourceGuid = resourceGuid;
         CanFire = canFire;
         IsVisible = isVisible;
         SelectAndFire = selectAndFire;
@@ -81,6 +105,8 @@ internal sealed class AutoItemsNativeBindings
 
     internal Type ConsumableType { get; }
     internal Type FamilyType { get; }
+    internal Type ResourceType { get; }
+    internal Type CostEntryType { get; }
     internal Type CountType { get; }
     internal Type ScalingType { get; }
     internal Type InstantBlockType { get; }
@@ -90,11 +116,21 @@ internal sealed class AutoItemsNativeBindings
     internal Type BaseSelectionType { get; }
     internal Type TargetStructureType { get; }
     internal FieldInfo Families { get; }
+    internal FieldInfo AllConsumables { get; }
+    internal FieldInfo Usages { get; }
     internal FieldInfo CanBeRandomized { get; }
+    internal FieldInfo HasDuration { get; }
+    internal FieldInfo DurationBase { get; }
+    internal FieldInfo ConsumeCost { get; }
+    internal FieldInfo UsageCost { get; }
+    internal FieldInfo Costs { get; }
+    internal FieldInfo CostResource { get; }
+    internal FieldInfo CostAmount { get; }
     internal FieldInfo OnUseEffects { get; }
     internal FieldInfo EffectScripts { get; }
     internal FieldInfo TargetOptions { get; }
     internal MethodInfo FamilyGuid { get; }
+    internal MethodInfo ResourceGuid { get; }
     internal MethodInfo CanFire { get; }
     internal MethodInfo IsVisible { get; }
     internal MethodInfo SelectAndFire { get; }
@@ -114,6 +150,7 @@ internal sealed class AutoItemsNativeBindings
         bindings = null;
         var consumable = ReflectionUtil.FindLoadedType("ConsumableSO");
         var family = ReflectionUtil.FindLoadedType("ConsumableTypeSO");
+        var resource = ReflectionUtil.FindLoadedType("ResourceSO");
         var inventory = ReflectionUtil.FindLoadedType("Inventory");
         var count = ReflectionUtil.FindLoadedType("ConsumableCount");
         var scaling = ReflectionUtil.FindLoadedType("ScalingInfo");
@@ -124,13 +161,13 @@ internal sealed class AutoItemsNativeBindings
         var selection = ReflectionUtil.FindLoadedType("Targeting.BaseTargetSelection");
         var structure = ReflectionUtil.FindLoadedType("Targeting.TargetStructure");
         var targetable = ReflectionUtil.FindLoadedType("Targeting.ITargetable");
-        if (consumable is null || family is null || inventory is null || count is null ||
+        if (consumable is null || family is null || resource is null || inventory is null || count is null ||
             scaling is null || block is null || script is null || request is null ||
             options is null || selection is null || structure is null || targetable is null)
         {
             reason =
                 "The complete Auto Items type set is unavailable: ConsumableSO, " +
-                "ConsumableTypeSO, Inventory, ConsumableCount, ScalingInfo, InstantEffectBlock, " +
+                "ConsumableTypeSO, ResourceSO, Inventory, ConsumableCount, ScalingInfo, InstantEffectBlock, " +
                 "IInstantEffectScript, RequestTargetEffectScript, Targeting.TargetSelectOptions, " +
                 "Targeting.BaseTargetSelection, Targeting.TargetStructure, and " +
                 "Targeting.ITargetable are all required.";
@@ -138,11 +175,22 @@ internal sealed class AutoItemsNativeBindings
         }
 
         var families = consumable.GetField("consumableTypes", AnyInstance);
+        var allConsumables = consumable.GetField("All", PublicStatic);
+        var usages = consumable.GetField("consumableUsages", AnyInstance);
         var randomizable = consumable.GetField("canBeRandomized", AnyInstance);
+        var hasDuration = consumable.GetField("hasDuration", AnyInstance);
+        var durationBase = consumable.GetField("durationBase", AnyInstance);
+        var consumeCost = consumable.GetField("consumeCost", AnyInstance);
+        var usageCost = consumable.GetField("usageCost", AnyInstance);
+        var costs = consumeCost?.FieldType.GetField("costs", AnyInstance);
+        var costEntryType = costs is null ? null : CollectionElementType(costs.FieldType);
+        var costResource = costEntryType?.GetField("resource", AnyInstance);
+        var costAmount = costEntryType?.GetField("valueBig", AnyInstance);
         var onUse = consumable.GetField("onUseEffects", AnyInstance);
         var scripts = block.GetField("effectScripts", AnyInstance);
         var targetOptions = request.GetField("targetOptions", AnyInstance);
         var familyGuid = ExactMethod(family, "GetGuid", typeof(Guid), PublicInstance);
+        var resourceGuid = ExactMethod(resource, "GetGuid", typeof(Guid), PublicInstance);
         var canFire = ExactMethod(consumable, "CanFire", typeof(bool), PublicInstance);
         var isVisible = ExactMethod(consumable, "IsVisible", typeof(bool), PublicInstance);
         var selectAndFire = ExactMethod(consumable, "SelectAndFire", typeof(void), PublicInstance);
@@ -167,8 +215,27 @@ internal sealed class AutoItemsNativeBindings
 
         if (families is null || CollectionElementType(families.FieldType) != family)
             return Missing("ConsumableSO.consumableTypes : List<ConsumableTypeSO>", out reason);
+        if (allConsumables is null ||
+            CollectionElementType(allConsumables.FieldType) != consumable)
+            return Missing("ConsumableSO.All : List<ConsumableSO>", out reason);
+        if (usages is null || !typeof(ICollection).IsAssignableFrom(usages.FieldType))
+            return Missing("ConsumableSO.consumableUsages : ICollection", out reason);
         if (randomizable?.FieldType != typeof(bool))
             return Missing("ConsumableSO.canBeRandomized : Boolean", out reason);
+        if (hasDuration?.FieldType != typeof(bool))
+            return Missing("ConsumableSO.hasDuration : Boolean", out reason);
+        if (durationBase?.FieldType != typeof(double))
+            return Missing("ConsumableSO.durationBase : Double", out reason);
+        if (consumeCost is null)
+            return Missing("ConsumableSO.consumeCost : ResourceCostList", out reason);
+        if (usageCost?.FieldType != consumeCost.FieldType)
+            return Missing("ConsumableSO.usageCost : ResourceCostList", out reason);
+        if (costs is null || costEntryType is null)
+            return Missing("ResourceCostList.costs : List<ResourceTuple>", out reason);
+        if (costResource?.FieldType != resource)
+            return Missing("ResourceTuple.resource : ResourceSO", out reason);
+        if (costAmount?.FieldType != typeof(BigDouble))
+            return Missing("ResourceTuple.valueBig : BigDouble", out reason);
         if (onUse is null || CollectionElementType(onUse.FieldType) != block)
             return Missing("ConsumableSO.onUseEffects : List<InstantEffectBlock>", out reason);
         if (scripts is null || CollectionElementType(scripts.FieldType) != script)
@@ -180,6 +247,7 @@ internal sealed class AutoItemsNativeBindings
         if (!script.IsAssignableFrom(request))
             return Missing("RequestTargetEffectScript : IInstantEffectScript", out reason);
         if (familyGuid is null) return Missing("ConsumableTypeSO.GetGuid() : Guid", out reason);
+        if (resourceGuid is null) return Missing("ResourceSO.GetGuid() : Guid", out reason);
         if (canFire is null) return Missing("ConsumableSO.CanFire() : Boolean", out reason);
         if (isVisible is null) return Missing("ConsumableSO.IsVisible() : Boolean", out reason);
         if (selectAndFire is null)
@@ -214,6 +282,8 @@ internal sealed class AutoItemsNativeBindings
         bindings = new AutoItemsNativeBindings(
             consumable,
             family,
+            resource,
+            costEntryType,
             count,
             scaling,
             block,
@@ -223,11 +293,21 @@ internal sealed class AutoItemsNativeBindings
             selection,
             structure,
             families,
+            allConsumables,
+            usages,
             randomizable,
+            hasDuration,
+            durationBase,
+            consumeCost,
+            usageCost,
+            costs,
+            costResource,
+            costAmount,
             onUse,
             scripts,
             targetOptions,
             familyGuid,
+            resourceGuid,
             canFire,
             isVisible,
             selectAndFire,

@@ -39,7 +39,10 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         // This is the cycle-pinned policy reading by design. There is no current-configuration
         // reader in this adapter or in the GameAction beneath it.
         if (!AutoItemsConfigurationPolicy.IsOperational(config) ||
-            !AutoItemsConfigurationPolicy.Allows(config.AutoItems, action.Family))
+            !AutoItemsConfigurationPolicy.Allows(
+                config.AutoItems,
+                action.Family,
+                action.ItemId))
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
         if (!Owns())
         {
@@ -95,6 +98,12 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.MultiBuyUnavailable,
             AutoItemsPreflight.Quarantined =>
                 AutoItemsActionResultCodes.Quarantined,
+            AutoItemsPreflight.TemporaryDurationChanged =>
+                AutoItemsActionResultCodes.TemporaryDurationChanged,
+            AutoItemsPreflight.TemporaryCostChanged =>
+                AutoItemsActionResultCodes.TemporaryCostChanged,
+            AutoItemsPreflight.TemporaryEffectPresent =>
+                AutoItemsActionResultCodes.TemporaryEffectPresent,
             AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };
@@ -128,7 +137,10 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             AutoItemsPreflight.CanFireRefused or
             AutoItemsPreflight.RandomizationUnavailable or
             AutoItemsPreflight.MutationPermitUnavailable or
-            AutoItemsPreflight.TargetUnavailable;
+            AutoItemsPreflight.TargetUnavailable or
+            AutoItemsPreflight.TemporaryDurationChanged or
+            AutoItemsPreflight.TemporaryCostChanged or
+            AutoItemsPreflight.TemporaryEffectPresent;
 
     private bool Owns()
     {

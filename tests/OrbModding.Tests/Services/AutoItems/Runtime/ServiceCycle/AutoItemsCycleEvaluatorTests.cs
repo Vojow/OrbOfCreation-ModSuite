@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -85,9 +86,24 @@ public sealed class AutoItemsCycleEvaluatorTests
         var store = new ReusableActionStore<AutoItemsCycleAction>();
         store.BeginWrite();
         var writer = new ServiceActionWriter<AutoItemsCycleAction>(store);
+        var identity = new ServiceCycleIdentity(
+            AutoItemsServicePolicies.ServiceId,
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            StrategyGeneration.Initial,
+            new WorldGeneration(1),
+            new CycleId(1));
+        var context = new ServiceCycleContext(
+            identity,
+            default,
+            new MonotonicTimestamp(1));
+        var state = AutoItemsCycleState.Create(identity.Lifecycle);
+        state.ObserveConfiguration(identity.Config, configuration.AutoItems);
         wake = AutoItemsCycleEvaluator.Evaluate(
             world,
             in configuration,
+            in context,
+            ref state,
             writer,
             out _);
         var actions = new List<AutoItemsCycleAction>(store.Count);

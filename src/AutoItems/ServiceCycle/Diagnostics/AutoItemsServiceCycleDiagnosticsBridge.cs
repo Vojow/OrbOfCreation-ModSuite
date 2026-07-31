@@ -16,6 +16,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
     private bool _emergencyDisabled;
     private bool _cycleObserved;
     private AutoItemsDecisionKind _decisionKind;
+    private Guid _quarantinedTemporaryItem;
+    private AutoItemsTemporaryQuarantineCause _temporaryQuarantineCause;
     private long _publishedHealthRevision = -1;
     private ServiceCycleServiceDiagnosticsSnapshot[] _services =
         new ServiceCycleServiceDiagnosticsSnapshot[8];
@@ -40,11 +42,21 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         var changed = _emergencyDisabled != pump.IsEmergencyStopEngaged;
         _emergencyDisabled = pump.IsEmergencyStopEngaged;
         if (report.ResponsesAcquired != 0 &&
-            TryReadLatestDecision(pump, out var decisionKind))
+            TryReadLatestDecision(
+                pump,
+                out var decisionKind,
+                out var quarantinedTemporaryItem,
+                out var temporaryQuarantineCause))
         {
-            changed = changed || !_cycleObserved || _decisionKind != decisionKind;
+            changed = changed ||
+                !_cycleObserved ||
+                _decisionKind != decisionKind ||
+                _quarantinedTemporaryItem != quarantinedTemporaryItem ||
+                _temporaryQuarantineCause != temporaryQuarantineCause;
             _cycleObserved = true;
             _decisionKind = decisionKind;
+            _quarantinedTemporaryItem = quarantinedTemporaryItem;
+            _temporaryQuarantineCause = temporaryQuarantineCause;
         }
         if (_publishedHealthRevision != _health.Revision)
         {
@@ -60,6 +72,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         _configurationGeneration = configurationGeneration;
         _cycleObserved = false;
         _decisionKind = AutoItemsDecisionKind.Disabled;
+        _quarantinedTemporaryItem = Guid.Empty;
+        _temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
     }
 
     internal void ObserveLifecycle(
@@ -71,6 +85,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
         _configurationGeneration = configurationGeneration;
         _cycleObserved = false;
         _decisionKind = AutoItemsDecisionKind.Disabled;
+        _quarantinedTemporaryItem = Guid.Empty;
+        _temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
         _health.InvalidateLifecycle();
         _publishedHealthRevision = _health.Revision;
         Publish();
@@ -86,6 +102,8 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
             _gameAction.BindingFailure,
             _cycleObserved,
             _decisionKind,
+            _quarantinedTemporaryItem,
+            _temporaryQuarantineCause,
             _health);
         _dependencies.FeatureStatus.ObserveRuntimeLifecycle(
             status.State,
@@ -97,7 +115,9 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
 
     private bool TryReadLatestDecision(
         SuiteFramePump pump,
-        out AutoItemsDecisionKind decisionKind)
+        out AutoItemsDecisionKind decisionKind,
+        out Guid quarantinedTemporaryItem,
+        out AutoItemsTemporaryQuarantineCause temporaryQuarantineCause)
     {
         var copy = ServiceCycleDiagnostics.CopyServices(pump, _services);
         if (copy.RequiredCount > _services.Length)
@@ -112,11 +132,15 @@ internal sealed class AutoItemsServiceCycleDiagnosticsBridge
                 !service.LatestProjection.IsPresent)
                 continue;
             var projection = service.LatestProjection.Snapshot;
-            return AutoItemsServiceProjection.TryReadDecisionKind(
+            return AutoItemsServiceProjection.TryReadDecision(
                 in projection,
-                out decisionKind);
+                out decisionKind,
+                out quarantinedTemporaryItem,
+                out temporaryQuarantineCause);
         }
         decisionKind = AutoItemsDecisionKind.Disabled;
+        quarantinedTemporaryItem = Guid.Empty;
+        temporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
         return false;
     }
 }

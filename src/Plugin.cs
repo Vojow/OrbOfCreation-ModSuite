@@ -480,6 +480,8 @@ public sealed class Plugin : BaseUnityPlugin
             $"AutoItemsMode={runtimeConfig.AutoItems.Mode}, " +
             $"AutoItemsUseScrolls={runtimeConfig.AutoItems.UseScrolls}, " +
             $"AutoItemsUseRelics={runtimeConfig.AutoItems.UseRelics}, " +
+            $"AutoItemsTemporaryItemAllowlistConfigured=" +
+            $"{AutoItemsTemporaryItemAllowlist.HasAnyValidEntry(runtimeConfig.AutoItems.TemporaryItemAllowlist)}, " +
             $"AutoScribeMode={runtimeConfig.AutoScribe.Mode}, " +
             $"AutoScribeRoles={runtimeConfig.AutoScribe.Roles}, " +
             $"AutoLevelSpells={runtimeConfig.AutoBuy.AutoLevelSpells}, " +

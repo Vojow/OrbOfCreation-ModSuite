@@ -15,8 +15,8 @@ or action-family ownership is affected.
   mutation verification, and controls.
 - [Auto Concept](auto-concept.md) — catalog classification, slot policy,
   mastery balancing, drain, and lifecycle behavior.
-- [Auto Items](auto-items.md) — Scroll/Relic policy, freshness-classified native
-  submission, exact evidence, quarantine, and lifecycle behavior.
+- [Auto Items](auto-items.md) — Scroll/Relic/temporary policy, freshness-classified
+  native submission, exact evidence, quarantine, and lifecycle behavior.
 - [Auto Scribe](auto-scribe.md) — coverage policy, complete-evidence blocking,
   exact payment/admission receipts, partial commits, quarantine, and lifecycle behavior.
 - [Spell leveling](spell-leveling.md) — capability unlocks, single/all modes,

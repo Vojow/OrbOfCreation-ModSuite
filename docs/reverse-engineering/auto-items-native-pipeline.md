@@ -1,6 +1,6 @@
 # Auto Items native pipeline
 
-> **Evidence status: accepted metadata contracts and guarded Scroll/Relic submission.**
+> **Evidence status: accepted metadata contracts and guarded Scroll/Relic/temporary submission.**
 > Serialized asset topology and live effect completion have not been validated in a running game.
 
 [Back to reverse-engineering index](README.md) ·
@@ -9,10 +9,9 @@
 ## Scope and audited baseline
 
 This dossier reconciles the useful native evidence from the Auto Items work on PR #102 with the
-suite's one-cadence ServiceCycle runtime and game-boundary doctrine. This lane implements only
-Scrolls and Relics. Fruit, Potion, and Thread automation, an item allowlist, Auto Scribe, quick
-controls, and installer work belong to later lanes and are neither implemented nor represented by
-placeholder configuration.
+suite's one-cadence ServiceCycle runtime and game-boundary doctrine. Auto Items supports Scrolls,
+Relics, and exact-UUID-approved temporary Fruits, Potions, and Threads. Auto Scribe is a separate
+feature. Auto Items quick controls remain deliberately absent.
 
 The declared contracts were checked against the read-only `artifacts/game-v105` managed
 assemblies for Orb of Creation v1.0.5-2. No game binary, installation, or save was changed.
@@ -24,8 +23,11 @@ names. The exact supported `ConsumableTypeSO` identities are:
 
 | Family | UUID | Canonical native name |
 |---|---|---|
+| Fruit | `46e0ab83-df7c-4f35-8012-3d9a3c97b753` | `Fruit` |
+| Potion | `8103dae4-6945-4d18-b562-d2ffcd7ef49e` | `Potion` |
 | Relic | `5d27b76e-eed3-49cc-a069-b9106000ede4` | `Relic` |
 | Scroll | `70b36536-64e5-4f70-ad6f-af5787d719cc` | `ScrollConsumable` |
+| Thread | `66a50127-5210-4a3a-93f4-952287858b90` | `ThreadConsumable` |
 
 The collector publishes all native type memberships rather than reducing them to one guessed
 family. Policy accepts exactly one supported family; no supported membership and conflicting
@@ -66,6 +68,25 @@ Scrolls additionally require `canBeRandomized`, enable the native randomized fla
 for the strongest live owned level, and refuses an empty list with that exact explanation. It never
 enters the manual targeting branch.
 
+Temporary items use the same `ConsumableUse` action. They have no service, lease, health row, or
+action family of their own. Worker admission requires the exact item UUID in
+`AutoItems.TemporaryItemAllowlist`, finite positive duration, no preparation or cooldown, stock,
+Toxicity headroom, and immediate/held cost vectors containing no resource category other than
+Toxicity. The boundary repeats exact UUID/type/family, duration, and toxicity-only vector checks,
+then applies the same live `CanUseConsumable()`, `CanFire()`, ownership, and quantity/queue proof.
+It additionally requires exactly one new native usage.
+
+Mutual exclusion is global across temporary families: any pending or active temporary usage blocks
+Scroll, Relic, and temporary submissions. Conversely, native Scroll or Relic preparation makes
+`Inventory.CanUseConsumable()` refuse a temporary submission.
+
+After a committed temporary receipt, lifecycle-scoped worker state follows only that exact item.
+Later world publications must show exactly one usage and at least one engaged reading before it
+disappears. Multiple usages, an expired usage before proof completes, or disappearance without
+observed engagement quarantines that exact UUID for the lifecycle and publishes the exact cause in
+Runtime health. There is no expiry timer; disappearance and expiry are facts from later ordinary
+world publications.
+
 ## Freshness classification
 
 The protocol applies these classes from the
@@ -76,11 +97,14 @@ The protocol applies these classes from the
 | Stable UUID plus exact `ConsumableSO` resolution | Pure | Resolve from the lifecycle-stamped native registry immediately before use; a missing or differently typed object rejects. |
 | `consumableTypes` plus `ConsumableTypeSO.GetGuid()` | Pure | Re-read the complete live membership and require exactly one supported family matching the plan. |
 | `IsVisible()`, `canBeRandomized`, `IsRandomized()` | Pure | Read live. Randomized mode is confirmed again after `SetRandomization(true)`. |
+| `hasDuration` and `durationBase` | Pure | Re-read the live fields for a temporary item and require a finite positive duration immediately before admission. |
+| `consumeCost.costs` and `usageCost.costs`, exact `ResourceTuple.resource` UUID/type, and `valueBig` | Pure | Traverse both complete live vectors. Immediate cost must contain Toxicity; neither vector may contain another resource or an invalid magnitude. `CanFire()` remains the affordability oracle. |
+| `ConsumableSO.All`, each temporary family membership, and `consumableUsages` | Pure | Re-read all exact native consumables and refuse every family while any temporary usage is pending or active. An unreadable row refuses with its exact reason. |
 | Native busy check, `Inventory.CanUseConsumable()` | Pure | Read the live shared preparation state immediately before mutation. A false result is a named `NativeBusy` refusal. |
 | `ConsumableSO.CanFire()` | Pure | Read live stock, cooldown, and native cost admission immediately before the ownership permit and mutation. A false result is a named `CanFireRefused` refusal. |
 | `GetStrongestLevel()`, `GetStrongest()`, `GetCountScalingInfo()` | Pure | Rebuild the strongest-level scaling input from the live item; a change from the planned level rejects. |
 | `TargetSelectOptions.GetTargeting()` and `TargetStructure.GetRandomList(ScalingInfo)` | UI-cached, revalidatable | Treat published or previously computed targets as stale-capable. Invoke this exact authored chain as the declared scoped recomputation and require a non-empty result; no ambient screen visit or blanket cache warming is trusted. |
-| The target that `SelectAndFire()` will ultimately choose and the later durable effect | Unrefreshable / side-effectful | Never pre-trust an injected or cached chosen target and never claim effect completion. Submit once, verify only the immediate stock/queue/randomization evidence, and let the next world publication observe later game state. |
+| `SelectAndFire()` and the later durable effect | Unrefreshable / attempt-and-verify | Submit exactly once. Verify stock -1 and queue +1; also verify randomization for Scroll or usage +1 for a temporary item. Never claim durable effect completion, and let later publications supply activation evidence. |
 
 There is no feature-side configuration freshness check. Dispatch deliberately uses the
 cycle-pinned configuration, as specified by the doctrine. Configuration staleness is bounded by the
@@ -90,10 +114,11 @@ the consumable-use ownership lease as a fast backstop, not as the policy-correct
 
 ## GameAction boundary
 
-`AutoItemsConsumableUseGameAction` is the sole Scroll/Relic mutation definition. At each lifecycle
+`AutoItemsConsumableUseGameAction` is the sole consumable-use mutation definition. At each lifecycle
 it validates the complete reflected binding set before resolving an item:
 
-- `ConsumableSO`, `ConsumableTypeSO`, `Inventory`, `ConsumableCount`, and `ScalingInfo`;
+- `ConsumableSO`, `ConsumableTypeSO`, `ResourceSO`, `Inventory`, `ConsumableCount`,
+  `ConsumableUsage`, `ResourceCostList`, `ResourceTuple`, and `ScalingInfo`;
 - `InstantEffectBlock`, `IInstantEffectScript`, and exact `RequestTargetEffectScript`;
 - exact target options, base selection, target structure, and targetable types;
 - every field and method used for family, visibility, randomization, targeting, busy/readiness
@@ -106,21 +131,24 @@ another use.
 The action order is:
 
 1. resolve stable UUID plus exact native type;
-2. revalidate live family, visibility, and Scroll randomization capability;
-3. run the scoped Scroll target recomputation when applicable;
-4. check native busy and `CanFire()`;
-5. capture current cooperative ownership permits with their exact conflict explanation;
-6. enter native multi-buy quantity one;
-7. capture stock, queue, and randomization state;
-8. perform the native randomization/use mutation;
-9. capture again and require the exact immediate deltas.
+2. revalidate live family and visibility;
+3. repeat temporary duration and complete immediate/held toxicity-only cost checks, or Scroll
+   randomization capability and the scoped target recomputation;
+4. scan all temporary families for pending or active usage;
+5. check native busy and `CanFire()`;
+6. capture current cooperative ownership permits with their exact conflict explanation;
+7. enter native multi-buy quantity one;
+8. capture stock, queue, randomization, and usage-count state;
+9. perform the native randomization/use mutation;
+10. capture again and require the exact family-specific immediate deltas.
 
 An unavailable complete binding set is `ContractUnavailable`. Lost identity, changed family,
 native busy, lost visibility, a native fire refusal, an empty target result, and a lost permit are
 named refusals. A mutation attempt that throws or cannot prove its postcondition faults the receipt
-with its native-call evidence and quarantines the entire consumable GameAction for the lifecycle.
-Health and diagnostics retain the same exact reason. A later ordinary publication cannot retry an
-ambiguous mutation; lifecycle replacement is the explicit recovery boundary.
+with its native-call evidence. Scroll or Relic ambiguity quarantines the entire consumable
+GameAction; temporary ambiguity quarantines only the exact item UUID. Health and diagnostics retain
+the same exact reason. A later ordinary publication cannot retry the quarantined target; lifecycle
+replacement is the explicit recovery boundary.
 
 The pattern is local because the binding topology, preflight vocabulary, and postcondition are
 capability-specific. A follow-up Common extraction should be limited to a small lifecycle-scoped
@@ -140,20 +168,28 @@ The additive configuration is:
 - `AutoItems.Mode`, default `Disabled`;
 - `AutoItems.UseScrolls`, default `true` behind the master mode;
 - `AutoItems.UseRelics`, default `true` behind the master mode.
+- `AutoItems.TemporaryItemAllowlist`, default empty; comma-separated exact UUIDs only.
+
+The allowlist has no family switch: naming an exact UUID is the complete player approval, a near
+miss authorizes nothing, and an empty list leaves temporary-item behavior inert. The worker parses
+it once per committed `ConfigGeneration` and pins that table to the cycle. The action carries no
+configuration key, and neither adapter nor GameAction has a current-configuration reader.
 
 These keys join the existing committed store and one configuration generation. They require no
-configuration schema migration because no prior shipped key is rewritten or removed. Auto Items
-has a Mods feature page and Runtime health reporter, but this lane deliberately adds no gameplay
-quick control.
+configuration schema migration because no prior shipped key is rewritten or removed. The allowlist
+appears on the existing consolidated Auto Items Mods page, so there is no new rail entry or icon.
+Auto Items has no gameplay quick control.
 
 ## Evidence limits
 
 Portable tests use exact-shape game stubs. They cover live-family change, native busy, lost permit,
 manual stock race, empty Scroll targets, ambiguous postconditions, lifecycle reset, direct adapter
-mapping, and publication-driven planning. The target stub injects a candidate list and therefore
-does not reproduce the game's complete structure-eligibility calculation or eventual random choice.
-The installed-contract gate proves the exact members and signatures, not the authored topology of
-every Scroll asset or the durable result of any Scroll or Relic.
+mapping, publication-driven planning, exact/near-miss allowlisting, every temporary shape guard,
+mutual exclusion in both directions, native stock/duration/Toxicity/usage evidence, exact-item
+quarantine, and injected double-usage, premature-expiry, and missing-engagement publications. The
+target stub injects a candidate list and therefore does not reproduce the game's complete
+structure-eligibility calculation or eventual random choice. The installed-contract gate proves
+the exact members and signatures, not authored item topology or any durable effect.
 
 Before claiming live gameplay completion, a runtime validation lane must observe at least one
 Scroll and one Relic on the accepted game build: idle/busy admission, consume-cost and stock/queue

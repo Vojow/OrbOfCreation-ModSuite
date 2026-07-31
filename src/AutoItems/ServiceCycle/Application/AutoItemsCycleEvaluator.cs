@@ -1,4 +1,3 @@
-using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -7,127 +6,117 @@ using OrbModding.Common.Runtime.World;
 namespace OrbAutomata;
 
 /// <summary>
-/// Plans at most one use from one immutable world publication. There is no feature-local timer,
-/// cooldown, continuation cursor, or candidate memory.
+/// Plans at most one use from one immutable world publication. Every path waits for another world
+/// or committed-configuration publication; temporary expiry is observed rather than scheduled.
 /// </summary>
 internal static class AutoItemsCycleEvaluator
 {
     internal static WakePolicy Evaluate(
         GameWorldState world,
         in SuiteRuntimeConfiguration configuration,
+        in ServiceCycleContext context,
+        ref AutoItemsCycleState state,
         ServiceActionWriter<AutoItemsCycleAction> actions,
         out AutoItemsDecisionMetrics metrics)
     {
-        if (!AutoItemsConfigurationPolicy.IsOperational(configuration))
+        var previousReceipt = context.PreviousReceipt;
+        AutoItemsTemporaryActivationPolicy.ReconcileReceipt(
+            in previousReceipt,
+            ref state);
+        if (state.HasPendingReceipt)
         {
-            metrics = new AutoItemsDecisionMetrics(
-                world.Consumables.Count, 0, 0, 0, 0, AutoItemsDecisionKind.Disabled);
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.AwaitingTemporaryActivation);
             return WakePolicy.OnPublication;
         }
 
-        var rows = world.Consumables.AsSpan();
-        var rejected = 0;
-        var eligibleRelics = 0;
-        var eligibleScrolls = 0;
-        AutoItemsCycleAction firstRelic = default;
-        AutoItemsCycleAction firstScroll = default;
-        for (var index = 0; index < rows.Length; index++)
+        var activation = AutoItemsTemporaryActivationPolicy.Observe(world, ref state);
+        if (activation.State is AutoItemsTemporaryActivationState.AwaitingActivation or
+            AutoItemsTemporaryActivationState.Active)
         {
-            var profile = AutoItemsConsumableProfileBuilder.Build(
+            metrics = EmptyMetrics(
                 world,
-                rows[index].ConsumableId);
-            if (!profile.IsReady)
-            {
-                rejected++;
-                continue;
-            }
-            if (!AutoItemsConfigurationPolicy.Allows(configuration.AutoItems, profile.Family) ||
-                !IsWorldEligible(in profile))
-                continue;
-
-            if (profile.Family == AutoItemsConsumableFamily.Relic)
-            {
-                eligibleRelics++;
-                if (firstRelic.ItemId == System.Guid.Empty)
-                    firstRelic = new AutoItemsCycleAction(
-                        profile.Consumable.ConsumableId,
-                        profile.Family,
-                        world.CollectedAtEpoch,
-                        plannedLevel: 0);
-                continue;
-            }
-
-            if (!profile.Consumable.CanBeRandomized ||
-                !WorldConsumableCountLookup.TryGetStrongestOwnedLevel(
-                    world.ConsumableCounts,
-                    profile.Consumable.ConsumableId,
-                    out var strongestLevel))
-                continue;
-            eligibleScrolls++;
-            if (firstScroll.ItemId == System.Guid.Empty)
-                firstScroll = new AutoItemsCycleAction(
-                    profile.Consumable.ConsumableId,
-                    profile.Family,
-                    world.CollectedAtEpoch,
-                    strongestLevel);
+                activation.State == AutoItemsTemporaryActivationState.Active
+                    ? AutoItemsDecisionKind.TemporaryEffectActive
+                    : AutoItemsDecisionKind.AwaitingTemporaryActivation);
+            return WakePolicy.OnPublication;
+        }
+        if (activation.State == AutoItemsTemporaryActivationState.Quarantined)
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.TemporaryItemQuarantined);
+            return WakePolicy.OnPublication;
         }
 
-        if (firstRelic.ItemId != System.Guid.Empty)
+        if (!AutoItemsConfigurationPolicy.IsOperational(configuration))
+        {
+            metrics = EmptyMetrics(world, AutoItemsDecisionKind.Disabled);
+            return WakePolicy.OnPublication;
+        }
+
+        var scan = AutoItemsCandidateScanner.Scan(
+            world,
+            in configuration,
+            state.QuarantinedTemporaryItems,
+            state.TemporaryAllowlist);
+        if (scan.TemporaryUsagePresent)
+        {
+            metrics = scan.ToMetrics(AutoItemsDecisionKind.TemporaryEffectActive);
+            return WakePolicy.OnPublication;
+        }
+        if (scan.EligibleRelics > 0)
+        {
+            var action = scan.FirstRelic;
             return Plan(
-                in firstRelic,
-                rows.Length,
-                rejected,
-                eligibleRelics,
-                eligibleScrolls,
+                in action,
+                in scan,
                 AutoItemsDecisionKind.Relic,
                 actions,
+                ref state,
                 out metrics);
-        if (firstScroll.ItemId != System.Guid.Empty)
+        }
+        if (scan.EligibleTemporaryItems > 0)
+        {
+            var action = scan.FirstTemporary;
             return Plan(
-                in firstScroll,
-                rows.Length,
-                rejected,
-                eligibleRelics,
-                eligibleScrolls,
+                in action,
+                in scan,
+                AutoItemsDecisionKind.TemporaryItem,
+                actions,
+                ref state,
+                out metrics);
+        }
+        if (scan.EligibleScrolls > 0)
+        {
+            var action = scan.FirstScroll;
+            return Plan(
+                in action,
+                in scan,
                 AutoItemsDecisionKind.Scroll,
                 actions,
+                ref state,
                 out metrics);
+        }
 
-        metrics = new AutoItemsDecisionMetrics(
-            rows.Length,
-            rejected,
-            eligibleRelics,
-            eligibleScrolls,
-            0,
-            AutoItemsDecisionKind.Idle);
+        metrics = scan.ToMetrics(AutoItemsDecisionKind.Idle);
         return WakePolicy.OnPublication;
     }
 
-    private static bool IsWorldEligible(in AutoItemsConsumableProfile profile) =>
-        profile.Consumable.Visible &&
-        profile.Consumable.Quantity - profile.Consumable.QueuedQuantity > 0 &&
-        profile.Consumable.CurrentPrepTime.CompareTo(BigDouble.Zero) <= 0 &&
-        profile.Consumable.CurrentCooldown.CompareTo(BigDouble.Zero) <= 0 &&
-        profile.Toxicity.TrueQuantity.CompareTo(profile.ImmediateToxicityCost) >= 0;
+    private static AutoItemsDecisionMetrics EmptyMetrics(
+        GameWorldState world,
+        AutoItemsDecisionKind kind) =>
+        new(world.Consumables.Count, 0, 0, 0, 0, 0, 0, kind);
 
     private static WakePolicy Plan(
         in AutoItemsCycleAction action,
-        int captured,
-        int rejected,
-        int eligibleRelics,
-        int eligibleScrolls,
+        in AutoItemsCandidateScan scan,
         AutoItemsDecisionKind kind,
         ServiceActionWriter<AutoItemsCycleAction> actions,
+        ref AutoItemsCycleState state,
         out AutoItemsDecisionMetrics metrics)
     {
         actions.Add(action);
-        metrics = new AutoItemsDecisionMetrics(
-            captured,
-            rejected,
-            eligibleRelics,
-            eligibleScrolls,
-            1,
-            kind);
+        if (AutoItemsConsumableFamilies.IsTemporary(action.Family))
+            state.RecordPlannedTemporary(in action);
+        metrics = scan.ToMetrics(kind, plannedActions: 1);
         return WakePolicy.OnPublication;
     }
 }

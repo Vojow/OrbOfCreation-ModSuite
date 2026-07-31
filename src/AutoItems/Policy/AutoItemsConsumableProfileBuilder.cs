@@ -19,8 +19,9 @@ internal enum AutoItemsConsumableProfileStatus
 }
 
 /// <summary>
-/// The complete native-free policy view of one Scroll or Relic. Other resource costs remain
-/// explicit evidence; live <c>CanFire()</c>, not this projection, is authoritative for them.
+/// The complete native-free policy view of one supported consumable. Resource-cost categories
+/// remain explicit so temporary-item policy can reject any additional immediate or held category;
+/// live <c>CanFire()</c> remains authoritative for native affordability.
 /// </summary>
 internal readonly struct AutoItemsConsumableProfile
 {
@@ -30,7 +31,8 @@ internal readonly struct AutoItemsConsumableProfile
         in WorldConsumable consumable,
         in WorldResource toxicity,
         BigDouble immediateToxicityCost,
-        bool hasAdditionalImmediateCosts)
+        bool hasAdditionalImmediateCosts,
+        bool hasAdditionalHeldCosts)
     {
         Status = status;
         Family = family;
@@ -38,6 +40,7 @@ internal readonly struct AutoItemsConsumableProfile
         Toxicity = toxicity;
         ImmediateToxicityCost = immediateToxicityCost;
         HasAdditionalImmediateCosts = hasAdditionalImmediateCosts;
+        HasAdditionalHeldCosts = hasAdditionalHeldCosts;
     }
 
     internal AutoItemsConsumableProfileStatus Status { get; }
@@ -47,6 +50,7 @@ internal readonly struct AutoItemsConsumableProfile
     internal WorldResource Toxicity { get; }
     internal BigDouble ImmediateToxicityCost { get; }
     internal bool HasAdditionalImmediateCosts { get; }
+    internal bool HasAdditionalHeldCosts { get; }
 }
 
 internal static class AutoItemsConsumableProfileBuilder
@@ -95,6 +99,16 @@ internal static class AutoItemsConsumableProfileBuilder
                 family,
                 in consumable,
                 in toxicity);
+        var held = SumCosts(
+            world.ConsumableCosts,
+            consumableId,
+            WorldConsumableCostKind.Usage);
+        if (!held.IsValid)
+            return Failure(
+                AutoItemsConsumableProfileStatus.CostAmountInvalid,
+                family,
+                in consumable,
+                in toxicity);
 
         return new AutoItemsConsumableProfile(
             AutoItemsConsumableProfileStatus.Ready,
@@ -102,7 +116,8 @@ internal static class AutoItemsConsumableProfileBuilder
             in consumable,
             in toxicity,
             immediate.Toxicity,
-            immediate.HasOtherResource);
+            immediate.HasOtherResource,
+            held.HasOtherResource);
     }
 
     private static AutoItemsConsumableFamily Classify(
@@ -182,7 +197,8 @@ internal static class AutoItemsConsumableProfileBuilder
             in consumable,
             in toxicity,
             BigDouble.Zero,
-            hasAdditionalImmediateCosts: false);
+            hasAdditionalImmediateCosts: false,
+            hasAdditionalHeldCosts: false);
 
     private readonly struct CostSummary
     {

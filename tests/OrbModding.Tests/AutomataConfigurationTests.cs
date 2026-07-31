@@ -130,6 +130,8 @@ public sealed class AutomataConfigurationTests
         config.AutoHarvestTreasureTrees.Value = false;
         config.AutoItemsMode.Value = AutoItemsOperationMode.Active;
         config.AutoItemsUseScrolls.Value = false;
+        config.AutoItemsTemporaryItemAllowlist.Value =
+            "00000000-0000-0000-0000-000000000123";
         config.EmergencyDisable.Value = true;
         config.AbsoluteReserve.Value = "42";
 
@@ -143,6 +145,9 @@ public sealed class AutomataConfigurationTests
         Assert.Equal(AutoItemsOperationMode.Active, snapshot.AutoItems.Mode);
         Assert.False(snapshot.AutoItems.UseScrolls);
         Assert.True(snapshot.AutoItems.UseRelics);
+        Assert.Equal(
+            "00000000-0000-0000-0000-000000000123",
+            snapshot.AutoItems.TemporaryItemAllowlist);
         Assert.True(snapshot.Safety.EmergencyDisable);
         Assert.Equal("42", snapshot.Reserves.AbsoluteReserve);
 

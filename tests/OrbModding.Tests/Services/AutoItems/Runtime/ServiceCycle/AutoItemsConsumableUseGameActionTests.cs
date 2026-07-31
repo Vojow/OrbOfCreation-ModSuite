@@ -60,6 +60,114 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
+    public void TemporarySubmissionModelsStockDurationToxicityAndUsageEvidence()
+    {
+        var temporary = Item(AutoItemsConsumableFamily.Thread);
+        var toxicity = temporary.consumeCost.costs[0].resource;
+        using var gameAction = GameAction();
+        var action = Action(temporary, AutoItemsConsumableFamily.Thread);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(0, temporary.GetQuantity());
+        Assert.Equal(1, temporary.GetQueued());
+        var usage = Assert.Single(temporary.consumableUsages);
+        Assert.False(usage.en);
+        Assert.Equal(new BigDouble(60), usage.dr);
+        Assert.Equal(new BigDouble(60), usage.maxDr);
+        Assert.Equal(new BigDouble(4), toxicity.quantity);
+        Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
+    }
+
+    [Fact]
+    public void TemporaryBoundaryRepeatsDurationAndToxicityOnlyCostChecks()
+    {
+        var durationChanged = Item(AutoItemsConsumableFamily.Thread);
+        durationChanged.durationBase = double.PositiveInfinity;
+        using var gameAction = GameAction();
+        var durationAction = Action(durationChanged, AutoItemsConsumableFamily.Thread);
+
+        var durationResult = gameAction.Submit(in durationAction);
+
+        Assert.Equal(AutoItemsPreflight.TemporaryDurationChanged, durationResult.Preflight);
+        Assert.Contains("durationBase", durationResult.Reason);
+
+        var costChanged = Item(AutoItemsConsumableFamily.Potion);
+        var otherResource = new ResourceSO();
+        costChanged.usageCost.costs.Add(new ResourceTuple(otherResource, new BigDouble(1)));
+        var costAction = Action(costChanged, AutoItemsConsumableFamily.Potion);
+
+        var costResult = gameAction.Submit(in costAction);
+
+        Assert.Equal(AutoItemsPreflight.TemporaryCostChanged, costResult.Preflight);
+        Assert.Contains("extra resource", costResult.Reason);
+    }
+
+    [Fact]
+    public void TemporaryUsageBlocksScrollAndAnotherTemporaryItem()
+    {
+        var active = Item(AutoItemsConsumableFamily.Fruit);
+        active.consumableUsages.Add(new ConsumableUsage
+        {
+            en = true,
+            dr = new BigDouble(30),
+            maxDr = new BigDouble(60),
+        });
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        var anotherTemporary = Item(AutoItemsConsumableFamily.Thread);
+        using var gameAction = GameAction();
+        var scrollAction = Action(scroll, AutoItemsConsumableFamily.Scroll);
+        var temporaryAction = Action(anotherTemporary, AutoItemsConsumableFamily.Thread);
+
+        var blockedScroll = gameAction.Submit(in scrollAction);
+        var blockedTemporary = gameAction.Submit(in temporaryAction);
+
+        Assert.Equal(AutoItemsPreflight.TemporaryEffectPresent, blockedScroll.Preflight);
+        Assert.Contains("pending or active", blockedScroll.Reason);
+        Assert.Equal(AutoItemsPreflight.TemporaryEffectPresent, blockedTemporary.Preflight);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(1, anotherTemporary.GetQuantity());
+    }
+
+    [Fact]
+    public void NativeScrollOrRelicPreparationBlocksTemporaryUse()
+    {
+        Inventory.Preparing = true;
+        var temporary = Item(AutoItemsConsumableFamily.Thread);
+        using var gameAction = GameAction();
+        var action = Action(temporary, AutoItemsConsumableFamily.Thread);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.NativeBusy, result.Preflight);
+        Assert.Contains("Inventory.CanUseConsumable()", result.Reason);
+        Assert.Equal(1, temporary.GetQuantity());
+        Assert.Empty(temporary.consumableUsages);
+    }
+
+    [Fact]
+    public void AmbiguousTemporaryMutationQuarantinesOnlyTheExactItem()
+    {
+        var broken = Item(AutoItemsConsumableFamily.Thread);
+        var healthy = Item(AutoItemsConsumableFamily.Thread);
+        broken.SelectionNoOp = true;
+        using var gameAction = GameAction();
+        var brokenAction = Action(broken, AutoItemsConsumableFamily.Thread);
+        var healthyAction = Action(healthy, AutoItemsConsumableFamily.Thread);
+
+        var ambiguous = gameAction.Submit(in brokenAction);
+        var exactBlocked = gameAction.Submit(in brokenAction);
+        var unrelated = gameAction.Submit(in healthyAction);
+
+        Assert.Equal(AutoItemsPreflight.Quarantined, ambiguous.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, ambiguous.Outcome);
+        Assert.Equal(AutoItemsPreflight.Quarantined, exactBlocked.Preflight);
+        Assert.Contains(broken.GetGuid().ToString("D"), exactBlocked.Reason);
+        Assert.True(unrelated.Verified, unrelated.Reason);
+    }
+
+    [Fact]
     public void ChangedFamilyDoesNotMutate()
     {
         var item = Item(AutoItemsConsumableFamily.Relic);
@@ -215,10 +323,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         bool withTarget = true)
     {
         var familyType = new ConsumableTypeSO();
-        familyType.SetGuid(
-            family == AutoItemsConsumableFamily.Scroll
-                ? KnownEntities.ConsumableScrollType.Uuid
-                : KnownEntities.ConsumableRelicType.Uuid);
+        familyType.SetGuid(FamilyId(family));
         var item = new ConsumableSO
         {
             visible = true,
@@ -240,10 +345,33 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
             block.effectScripts.Add(request);
             item.onUseEffects.Add(block);
         }
+        if (AutoItemsConsumableFamilies.IsTemporary(family))
+        {
+            var toxicity = new ResourceSO
+            {
+                uuid = KnownEntities.PotionToxicity.Uuid.ToString("D"),
+                quantity = new BigDouble(5),
+            };
+            item.hasDuration = true;
+            item.durationBase = 60;
+            item.consumeCost.costs.Add(
+                new ResourceTuple(toxicity, new BigDouble(1)));
+        }
         ConsumableSO.All.Add(item);
         _registry.Add(item.GetGuid(), item);
         return item;
     }
+
+    private static Guid FamilyId(AutoItemsConsumableFamily family) =>
+        family switch
+        {
+            AutoItemsConsumableFamily.Scroll => KnownEntities.ConsumableScrollType.Uuid,
+            AutoItemsConsumableFamily.Relic => KnownEntities.ConsumableRelicType.Uuid,
+            AutoItemsConsumableFamily.Fruit => KnownEntities.ConsumableFruitType.Uuid,
+            AutoItemsConsumableFamily.Potion => KnownEntities.ConsumablePotionType.Uuid,
+            AutoItemsConsumableFamily.Thread => KnownEntities.ConsumableThreadType.Uuid,
+            _ => throw new ArgumentOutOfRangeException(nameof(family), family, null),
+        };
 
     private static AutoItemsCycleAction Action(
         ConsumableSO item,

@@ -1,3 +1,5 @@
+using System;
+using System.Reflection;
 using OrbAutomata;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
@@ -33,6 +35,18 @@ public sealed class AutoItemsServiceCycleTypeSafetyTests
         ServiceCycleWorkerDefinitionValidator.EnsureSeparated(
             new SafetyMain(),
             new AutoItemsWorkerDefinition());
+    }
+
+    [Fact]
+    public void ActionCarriesIdentityAndFactsButNoConfigurationKey()
+    {
+        var fields = typeof(AutoItemsCycleAction).GetFields(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.DoesNotContain(fields, field => field.FieldType == typeof(string));
+        Assert.DoesNotContain(
+            fields,
+            field => field.Name.Contains("Allowlist", StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class SafetyMain :

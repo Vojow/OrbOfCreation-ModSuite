@@ -1,4 +1,6 @@
+using System;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -8,6 +10,10 @@ internal enum AutoItemsDecisionKind
     Idle = 1,
     Relic = 2,
     Scroll = 3,
+    TemporaryItem = 4,
+    AwaitingTemporaryActivation = 5,
+    TemporaryEffectActive = 6,
+    TemporaryItemQuarantined = 7,
 }
 
 internal readonly struct AutoItemsDecisionMetrics
@@ -15,6 +21,8 @@ internal readonly struct AutoItemsDecisionMetrics
     internal AutoItemsDecisionMetrics(
         int captured,
         int rejectedProfiles,
+        int temporaryItems,
+        int eligibleTemporaryItems,
         int eligibleRelics,
         int eligibleScrolls,
         int plannedActions,
@@ -22,6 +30,8 @@ internal readonly struct AutoItemsDecisionMetrics
     {
         Captured = captured;
         RejectedProfiles = rejectedProfiles;
+        TemporaryItems = temporaryItems;
+        EligibleTemporaryItems = eligibleTemporaryItems;
         EligibleRelics = eligibleRelics;
         EligibleScrolls = eligibleScrolls;
         PlannedActions = plannedActions;
@@ -30,6 +40,8 @@ internal readonly struct AutoItemsDecisionMetrics
 
     internal int Captured { get; }
     internal int RejectedProfiles { get; }
+    internal int TemporaryItems { get; }
+    internal int EligibleTemporaryItems { get; }
     internal int EligibleRelics { get; }
     internal int EligibleScrolls { get; }
     internal int PlannedActions { get; }
@@ -42,11 +54,99 @@ internal struct AutoItemsCycleState
     {
         Lifecycle = lifecycle;
         Decision = default;
+        _allowlistConfiguration = default;
+        _temporaryAllowlist = null;
+        _quarantinedTemporaryItems = PublicationTable<Guid>.Empty;
+        PendingReceiptAction = default;
+        HasPendingReceipt = false;
+        PendingTemporaryItem = Guid.Empty;
+        TemporarySubmittedFromFrame = 0;
+        TemporaryActivationSeen = false;
+        LastQuarantinedTemporaryItem = Guid.Empty;
+        LastTemporaryQuarantineCause = AutoItemsTemporaryQuarantineCause.None;
     }
+
+    private ConfigGeneration _allowlistConfiguration;
+    private PublicationTable<Guid>? _temporaryAllowlist;
+    private PublicationTable<Guid> _quarantinedTemporaryItems;
 
     internal LifecycleGeneration Lifecycle { get; }
     internal AutoItemsDecisionMetrics Decision { get; private set; }
+    internal PublicationTable<Guid>? TemporaryAllowlist => _temporaryAllowlist;
+    internal PublicationTable<Guid> QuarantinedTemporaryItems => _quarantinedTemporaryItems;
+    internal AutoItemsCycleAction PendingReceiptAction { get; private set; }
+    internal bool HasPendingReceipt { get; private set; }
+    internal Guid PendingTemporaryItem { get; private set; }
+    internal long TemporarySubmittedFromFrame { get; private set; }
+    internal bool TemporaryActivationSeen { get; private set; }
+    internal Guid LastQuarantinedTemporaryItem { get; private set; }
+    internal AutoItemsTemporaryQuarantineCause LastTemporaryQuarantineCause { get; private set; }
 
     internal static AutoItemsCycleState Create(LifecycleGeneration lifecycle) => new(lifecycle);
     internal void RecordDecision(in AutoItemsDecisionMetrics decision) => Decision = decision;
+
+    internal void ObserveConfiguration(
+        ConfigGeneration generation,
+        AutoItemsConfiguration configuration)
+    {
+        if (_allowlistConfiguration == generation) return;
+        _temporaryAllowlist = AutoItemsTemporaryItemAllowlist.ParsePublication(
+            configuration.TemporaryItemAllowlist);
+        _allowlistConfiguration = generation;
+    }
+
+    internal void RecordPlannedTemporary(in AutoItemsCycleAction action)
+    {
+        PendingReceiptAction = action;
+        HasPendingReceipt = true;
+    }
+
+    internal void ClearPendingReceipt()
+    {
+        PendingReceiptAction = default;
+        HasPendingReceipt = false;
+    }
+
+    internal void RecordSubmittedTemporary(in AutoItemsCycleAction action)
+    {
+        if (IsTemporaryQuarantined(action.ItemId)) return;
+        PendingTemporaryItem = action.ItemId;
+        TemporarySubmittedFromFrame = action.CollectedAtFrame;
+        TemporaryActivationSeen = false;
+    }
+
+    internal void MarkTemporaryActivationSeen() => TemporaryActivationSeen = true;
+
+    internal void ClearPendingTemporary()
+    {
+        PendingTemporaryItem = Guid.Empty;
+        TemporarySubmittedFromFrame = 0;
+        TemporaryActivationSeen = false;
+    }
+
+    internal bool IsTemporaryQuarantined(Guid itemId) =>
+        AutoItemsTemporaryItemAllowlist.Contains(_quarantinedTemporaryItems, itemId);
+
+    internal void QuarantinePendingTemporary(AutoItemsTemporaryQuarantineCause cause)
+    {
+        if (cause == AutoItemsTemporaryQuarantineCause.None)
+            throw new ArgumentOutOfRangeException(nameof(cause));
+        var itemId = PendingTemporaryItem;
+        if (itemId == Guid.Empty)
+            throw new InvalidOperationException(
+                "A temporary-item quarantine requires a pending exact item.");
+
+        if (!IsTemporaryQuarantined(itemId))
+        {
+            var previous = _quarantinedTemporaryItems.AsSpan();
+            var rows = new Guid[previous.Length + 1];
+            previous.CopyTo(rows);
+            rows[previous.Length] = itemId;
+            Array.Sort(rows);
+            _quarantinedTemporaryItems = PublicationTable<Guid>.Create(rows, rows.Length);
+        }
+        LastQuarantinedTemporaryItem = itemId;
+        LastTemporaryQuarantineCause = cause;
+        ClearPendingTemporary();
+    }
 }

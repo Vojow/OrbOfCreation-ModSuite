@@ -15,4 +15,5 @@ internal sealed record AutoItemsConfiguration
     internal AutoItemsOperationMode Mode { get; init; }
     internal bool UseScrolls { get; init; } = true;
     internal bool UseRelics { get; init; } = true;
+    internal string TemporaryItemAllowlist { get; init; } = string.Empty;
 }

@@ -83,6 +83,7 @@ internal sealed class BepInExAutomataConfiguration
         ConfigEntry<AutoItemsOperationMode> autoItemsMode,
         ConfigEntry<bool> autoItemsUseScrolls,
         ConfigEntry<bool> autoItemsUseRelics,
+        ConfigEntry<string> autoItemsTemporaryItemAllowlist,
         ConfigEntry<AutoScribeOperationMode> autoScribeMode,
         ConfigEntry<string> autoScribeRoles,
         ConfigEntry<bool> allowUnverifiedGameBuild,
@@ -118,6 +119,7 @@ internal sealed class BepInExAutomataConfiguration
         AutoItemsMode = autoItemsMode;
         AutoItemsUseScrolls = autoItemsUseScrolls;
         AutoItemsUseRelics = autoItemsUseRelics;
+        AutoItemsTemporaryItemAllowlist = autoItemsTemporaryItemAllowlist;
         AutoScribeMode = autoScribeMode;
         AutoScribeRoles = autoScribeRoles;
         AllowUnverifiedGameBuild = allowUnverifiedGameBuild;
@@ -179,6 +181,7 @@ internal sealed class BepInExAutomataConfiguration
     public ConfigEntry<AutoItemsOperationMode> AutoItemsMode { get; }
     public ConfigEntry<bool> AutoItemsUseScrolls { get; }
     public ConfigEntry<bool> AutoItemsUseRelics { get; }
+    public ConfigEntry<string> AutoItemsTemporaryItemAllowlist { get; }
     public ConfigEntry<AutoScribeOperationMode> AutoScribeMode { get; }
     public ConfigEntry<string> AutoScribeRoles { get; }
     public ConfigEntry<bool> AllowUnverifiedGameBuild { get; }
@@ -314,6 +317,7 @@ internal sealed class BepInExAutomataConfiguration
             AutoItemsMode,
             AutoItemsUseScrolls,
             AutoItemsUseRelics,
+            AutoItemsTemporaryItemAllowlist,
             AutoScribeMode,
             AutoScribeRoles,
             AbsoluteReserve,
@@ -448,9 +452,10 @@ internal sealed class BepInExAutomataConfiguration
                 Bind(config, "AutoHarvest", "Mode", AutoHarvestOperationMode.Disabled, "Disabled performs no harvest work. Active queues one audited native fruit-tree or treasure-tree collect action at a time.", 18, 0),
                 Bind(config, "AutoHarvest", "CollectFruitTrees", true, "Collect ready fruit trees through their native plot action.", 18, 10, dependencies: AutoHarvestActiveDependencies),
                 Bind(config, "AutoHarvest", "CollectTreasureTrees", true, "Collect ready treasure trees through their native plot action.", 18, 20, dependencies: AutoHarvestActiveDependencies),
-                Bind(config, "AutoItems", "Mode", AutoItemsOperationMode.Disabled, "Disabled performs no item work. Active uses one eligible Scroll or Relic from each fresh world publication.", 19, 0),
+                Bind(config, "AutoItems", "Mode", AutoItemsOperationMode.Disabled, "Disabled performs no item work. Active uses one eligible Scroll, Relic, or exact allowlisted temporary item from each fresh world publication.", 19, 0),
                 Bind(config, "AutoItems", "UseScrolls", true, "Use visible Scrolls with native randomized targeting after exact live target revalidation.", 19, 10, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoItems", "UseRelics", true, "Use visible Relics when live native preparation and firing checks permit.", 19, 20, dependencies: AutoItemsActiveDependencies),
+                Bind(config, "AutoItems", "TemporaryItemAllowlist", string.Empty, "Comma-separated exact temporary-item UUIDs approved for automated use. Empty permits no Fruit, Potion, or Thread; family membership never grants approval.", 19, 30, dependencies: AutoItemsActiveDependencies),
                 Bind(config, "AutoScribe", "Mode", AutoScribeOperationMode.Disabled, "Disabled performs no Scribe work. Active produces at most one audited Scroll from each fresh world publication.", 20, 0),
                 Bind(config, "AutoScribe", "Roles", string.Empty, "Comma-separated semantic Scribe role keys. Empty selects every audited producible role; use none to select no roles.", 20, 10, dependencies: AutoScribeActiveDependencies),
                 Bind(config, "Compatibility", "AllowUnverifiedGameBuild", false, "Advanced risk acknowledgement. Allows gameplay patches and services on the exact unaudited assembly pair observed when this is enabled. A later game update automatically returns the suite to quarantine.", 50, 0),
@@ -499,6 +504,7 @@ internal sealed class BepInExAutomataConfiguration
             "Roles" => "Roles",
             "UseScrolls" => "Use Scrolls",
             "UseRelics" => "Use Relics",
+            "TemporaryItemAllowlist" => "Temporary item UUID allowlist",
             "CollectFruitTrees" => "Collect fruit trees",
             "CollectTreasureTrees" => "Collect treasure trees",
             "SlotManagementMode" => "Slot management",

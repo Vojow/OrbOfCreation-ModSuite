@@ -13,6 +13,12 @@
 - Recheck each item's exact family, visibility, inventory readiness, native firing decision,
   ownership, and Scroll targets before submission. An unverified attempted use stops Auto Items
   for the current game lifecycle and reports the exact reason on Runtime.
+- Allow exact-UUID-approved temporary Fruits, Potions, and Threads on the existing Auto Items page.
+  Temporary use requires finite duration, toxicity-only costs and headroom, and excludes every
+  other consumable use until one native usage has engaged and later disappeared.
+- Quarantine only the exact temporary item when native mutation or activation evidence is
+  ambiguous, doubled, prematurely expired, or missing. Every decision remains publication-driven;
+  Auto Items adds no timer, family switch, rail entry, or quick button.
 - Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It consumes
   complete role, recipe, Scroll, enchantment, levelled inventory, target, queue, and native
   automatic-production facts and blocks the whole publication when any enabled role is unknown.

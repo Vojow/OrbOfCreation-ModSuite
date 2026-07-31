@@ -16,8 +16,12 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj \
 The required defect cases are live family change, native busy, lost ownership permit, manual stock
 race, empty Scroll target selection, ambiguous postcondition quarantine, lifecycle reset, direct
 action-adapter result mapping, one-attempt publication planning, and exact health explanations.
-Cross-feature action-family tests prove that committed master disable releases consumable ownership
-even when Auto Buy keeps the shared multi-buy lease.
+Temporary-item coverage additionally requires exact and near-miss allowlists, visibility/stock/
+preparation/cooldown/duration/cost/Toxicity guard failures, stock/queue/usage/Toxicity mutation
+evidence, mutual exclusion in both directions, exact-item mutation quarantine, and publication
+injections for double usage, premature expiry, and missing engagement evidence. Cross-feature
+action-family tests prove that committed master disable releases consumable ownership even when
+Auto Buy keeps the shared multi-buy lease.
 
 Run the complete portable gate after the focused scope. Any reflected member or exact native type
 change also requires both the portable contract project and the installed contract project against
@@ -25,5 +29,5 @@ the accepted game baseline.
 
 Portable target fakes preserve the exact authored object shape but inject the target candidate list.
 They do not prove the game's complete structure-eligibility calculation, eventual random choice,
-preparation completion, or durable Scroll/Relic effect. Those remain runtime-validation evidence and
-must not be inferred from a passing portable or metadata gate.
+preparation completion, or any durable consumable effect. Those remain runtime-validation evidence
+and must not be inferred from a passing portable or metadata gate.

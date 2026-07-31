@@ -345,7 +345,10 @@ public sealed partial class ConsumableSO : IdScriptableObject
     }
 
     public bool CanFire() =>
-        FireAllowed && quantity > 0 && currentCooldown <= BigDouble.Zero;
+        FireAllowed &&
+        quantity > 0 &&
+        currentCooldown <= BigDouble.Zero &&
+        consumeCost.HasEnough();
 
     public bool IsVisible() => visible;
 
@@ -357,7 +360,19 @@ public sealed partial class ConsumableSO : IdScriptableObject
         var accepted = Math.Min(GlobalVariables.GetMultiBuy().AsInt(), quantity);
         queuedQuantity += accepted;
         if (accepted > 0)
+        {
             quantity--;
+            consumeCost.PerformCost();
+            if (hasDuration)
+            {
+                consumableUsages.Add(new ConsumableUsage
+                {
+                    en = false,
+                    dr = new BigDouble(durationBase),
+                    maxDr = new BigDouble(durationBase),
+                });
+            }
+        }
         Inventory.BeginPreparing();
     }
 

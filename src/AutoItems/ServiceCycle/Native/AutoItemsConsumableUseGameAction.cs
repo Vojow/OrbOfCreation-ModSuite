@@ -1,12 +1,13 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
 
 namespace OrbAutomata;
 
 /// <summary>
-/// The single Scroll/Relic GameAction: lifecycle-scoped complete bindings, live preflights,
+/// The single consumable-use GameAction: lifecycle-scoped complete bindings, live preflights,
 /// one native transaction, and exact before/after evidence.
 /// </summary>
 internal sealed class AutoItemsConsumableUseGameAction : IDisposable
@@ -16,6 +17,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     private readonly TypedRegistryResolver _registryResolver;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readMutationPermitFailure;
+    private readonly Dictionary<Guid, string> _temporaryQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
@@ -40,6 +42,10 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 
     internal AutoItemsSubmission Submit(in AutoItemsCycleAction action)
     {
+        if (_temporaryQuarantine.TryGetValue(action.ItemId, out var exactQuarantineReason))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.Quarantined,
+                exactQuarantineReason);
         if (_quarantineReason.Length != 0)
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.Quarantined,
@@ -79,6 +85,30 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         {
             return AutoItemsSubmission.Reject(AutoItemsPreflight.TargetUnavailable, reason);
         }
+
+        var temporary = AutoItemsConsumableFamilies.IsTemporary(action.Family);
+        if (temporary &&
+            !TryHasFinitePositiveDuration(item, action.ItemId, native, out reason))
+        {
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TemporaryDurationChanged,
+                reason);
+        }
+        if (temporary &&
+            !TryHasSafeTemporaryCosts(item, action.ItemId, native, out reason))
+        {
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TemporaryCostChanged,
+                reason);
+        }
+        if (!TryAnyTemporaryUsage(native, out var temporaryUsagePresent, out reason))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.ContractUnavailable,
+                reason);
+        if (temporaryUsagePresent)
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TemporaryEffectPresent,
+                reason);
         if (!InvokeBool(native.CanUseConsumable, null))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.NativeBusy,
@@ -102,12 +132,15 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             evidence = NativeMutationVerifier.Execute(
                 "Auto Items consumable use",
                 itemId.ToString("D"),
-                "one item leaves stock and one item enters the native preparation queue",
+                temporary
+                    ? "one item leaves stock, one enters the native queue, and one temporary usage appears"
+                    : "one item leaves stock and one item enters the native preparation queue",
                 () => Capture(item, native),
                 () => Mutate(item, family, native),
                 (before, after) =>
                     after.Quantity == before.Quantity - 1 &&
                     after.Queued == before.Queued + 1 &&
+                    (!temporary || after.Usages == before.Usages + 1) &&
                     (family != AutoItemsConsumableFamily.Scroll || after.Randomized));
         }
 
@@ -121,11 +154,21 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         var failureReason = string.Empty;
         if (evidence.MutationWasAttempted && !evidence.IsVerified)
         {
-            _quarantineReason =
-                "Auto Items is quarantined for this lifecycle after an ambiguous consumable " +
-                $"mutation on {action.ItemId:D}: {evidence.Detail}";
+            if (temporary)
+            {
+                failureReason =
+                    $"Temporary item {action.ItemId:D} is quarantined for this lifecycle after " +
+                    $"an ambiguous consumable mutation: {evidence.Detail}";
+                _temporaryQuarantine[action.ItemId] = failureReason;
+            }
+            else
+            {
+                _quarantineReason =
+                    "Auto Items is quarantined for this lifecycle after an ambiguous consumable " +
+                    $"mutation on {action.ItemId:D}: {evidence.Detail}";
+                failureReason = _quarantineReason;
+            }
             preflight = AutoItemsPreflight.Quarantined;
-            failureReason = _quarantineReason;
         }
         else if (!evidence.IsVerified)
         {
@@ -139,7 +182,8 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             evidence.Outcome,
             callOutcome,
             evidence.IsVerified
-                ? $"Verified {action.Family} {action.ItemId:D}: stock -1, queue +1."
+                ? $"Verified {action.Family} {action.ItemId:D}: stock -1, queue +1" +
+                  (temporary ? ", usage +1." : ".")
                 : failureReason);
     }
 
@@ -148,6 +192,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindings = null;
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
+        _temporaryQuarantine.Clear();
         BindLifecycle();
     }
 
@@ -156,6 +201,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindings = null;
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
+        _temporaryQuarantine.Clear();
     }
 
     private void BindLifecycle()
@@ -199,14 +245,217 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         AutoItemsNativeBindings native,
         out string reason)
     {
+        if (!TryReadSupportedFamilyEvidence(
+                item,
+                native,
+                out var actual,
+                out var supportedCount,
+                out var hasTemporaryFamily,
+                out reason))
+        {
+            return false;
+        }
+        if (supportedCount == 1 && actual == expected)
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason =
+            $"Expected exactly one live {expected} family for the planned consumable, but " +
+            $"observed {supportedCount} supported families, resolved {actual}, and " +
+            $"temporary-family membership was {hasTemporaryFamily}.";
+        return false;
+    }
+
+    private static bool TryHasFinitePositiveDuration(
+        object item,
+        Guid itemId,
+        AutoItemsNativeBindings native,
+        out string reason)
+    {
+        if (native.HasDuration.GetValue(item) is not true)
+        {
+            reason = $"Temporary item {itemId:D} no longer has ConsumableSO.hasDuration=true.";
+            return false;
+        }
+        if (native.DurationBase.GetValue(item) is not double durationBase)
+        {
+            reason = $"Temporary item {itemId:D} did not expose ConsumableSO.durationBase as Double.";
+            return false;
+        }
+        if (durationBase <= 0d || double.IsNaN(durationBase) || double.IsInfinity(durationBase))
+        {
+            reason =
+                $"Temporary item {itemId:D} has non-finite or non-positive " +
+                $"ConsumableSO.durationBase={durationBase}.";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryHasSafeTemporaryCosts(
+        object item,
+        Guid itemId,
+        AutoItemsNativeBindings native,
+        out string reason)
+    {
+        if (!TryHasToxicityOnlyCosts(
+                native.ConsumeCost.GetValue(item),
+                "ConsumableSO.consumeCost",
+                itemId,
+                native,
+                requireToxicity: true,
+                out reason))
+        {
+            return false;
+        }
+        return TryHasToxicityOnlyCosts(
+            native.UsageCost.GetValue(item),
+            "ConsumableSO.usageCost",
+            itemId,
+            native,
+            requireToxicity: false,
+            out reason);
+    }
+
+    private static bool TryHasToxicityOnlyCosts(
+        object? costList,
+        string category,
+        Guid itemId,
+        AutoItemsNativeBindings native,
+        bool requireToxicity,
+        out string reason)
+    {
+        if (costList is null)
+        {
+            reason = $"Temporary item {itemId:D} has null {category}.";
+            return false;
+        }
+        if (native.Costs.GetValue(costList) is not IEnumerable costs)
+        {
+            reason = $"Temporary item {itemId:D} has unreadable {category}.costs.";
+            return false;
+        }
+
+        var hasToxicity = false;
+        var index = 0;
+        foreach (var entry in costs)
+        {
+            if (entry is null || entry.GetType() != native.CostEntryType)
+            {
+                reason =
+                    $"Temporary item {itemId:D} {category}.costs[{index}] is not the exact " +
+                    "ResourceTuple type.";
+                return false;
+            }
+            var resource = native.CostResource.GetValue(entry);
+            if (resource is null || resource.GetType() != native.ResourceType)
+            {
+                reason =
+                    $"Temporary item {itemId:D} {category}.costs[{index}].resource is not " +
+                    "the exact ResourceSO type.";
+                return false;
+            }
+            var resourceId = Invoke<Guid>(native.ResourceGuid, resource);
+            if (resourceId != KnownEntities.PotionToxicity.Uuid)
+            {
+                reason =
+                    $"Temporary item {itemId:D} {category}.costs[{index}] names extra resource " +
+                    $"{resourceId:D}; only Potion Toxicity is permitted.";
+                return false;
+            }
+            if (native.CostAmount.GetValue(entry) is not BigDouble amount ||
+                BigDouble.IsNaN(amount) ||
+                BigDouble.IsInfinity(amount) ||
+                amount.CompareTo(BigDouble.Zero) < 0)
+            {
+                reason =
+                    $"Temporary item {itemId:D} {category}.costs[{index}].valueBig is invalid.";
+                return false;
+            }
+            hasToxicity = true;
+            index++;
+        }
+
+        if (requireToxicity && !hasToxicity)
+        {
+            reason = $"Temporary item {itemId:D} {category} has no Potion Toxicity entry.";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryAnyTemporaryUsage(
+        AutoItemsNativeBindings native,
+        out bool present,
+        out string reason)
+    {
+        present = false;
+        if (native.AllConsumables.GetValue(null) is not IEnumerable all)
+        {
+            reason = "ConsumableSO.All was unavailable while checking temporary usage exclusion.";
+            return false;
+        }
+
+        foreach (var candidate in all)
+        {
+            if (candidate is null || candidate.GetType() != native.ConsumableType)
+            {
+                reason =
+                    "ConsumableSO.All contained a value that was not the exact ConsumableSO type.";
+                return false;
+            }
+            if (!TryReadSupportedFamilyEvidence(
+                    candidate,
+                    native,
+                    out var family,
+                    out var supportedCount,
+                    out var hasTemporaryFamily,
+                    out reason))
+            {
+                return false;
+            }
+            if (!hasTemporaryFamily) continue;
+            if (native.Usages.GetValue(candidate) is not ICollection usages)
+            {
+                reason =
+                    $"Temporary-family consumable family={family}, " +
+                    $"supportedFamilies={supportedCount} did not expose " +
+                    "ConsumableSO.consumableUsages as ICollection.";
+                return false;
+            }
+            if (usages.Count <= 0) continue;
+            present = true;
+            reason =
+                "A native temporary-item usage is already pending or active: " +
+                $"family={family}, supportedFamilies={supportedCount}, usages={usages.Count}.";
+            return true;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryReadSupportedFamilyEvidence(
+        object item,
+        AutoItemsNativeBindings native,
+        out AutoItemsConsumableFamily family,
+        out int supportedCount,
+        out bool hasTemporaryFamily,
+        out string reason)
+    {
+        family = AutoItemsConsumableFamily.Unknown;
+        supportedCount = 0;
+        hasTemporaryFamily = false;
         if (native.Families.GetValue(item) is not IEnumerable families)
         {
             reason = "ConsumableSO.consumableTypes was unavailable on the live item.";
             return false;
         }
 
-        var actual = AutoItemsConsumableFamily.Unknown;
-        var supportedCount = 0;
         foreach (var entry in families)
         {
             if (entry is null || entry.GetType() != native.FamilyType)
@@ -218,19 +467,12 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             var candidate = AutoItemsConsumableFamilies.FromTypeId(
                 Invoke<Guid>(native.FamilyGuid, entry));
             if (candidate == AutoItemsConsumableFamily.Unknown) continue;
-            actual = candidate;
+            family = candidate;
             supportedCount++;
+            hasTemporaryFamily |= AutoItemsConsumableFamilies.IsTemporary(candidate);
         }
-        if (supportedCount == 1 && actual == expected)
-        {
-            reason = string.Empty;
-            return true;
-        }
-
-        reason =
-            $"Expected exactly one live {expected} family for the planned consumable, but " +
-            $"observed {supportedCount} supported families and resolved {actual}.";
-        return false;
+        reason = string.Empty;
+        return true;
     }
 
     private static void Mutate(
@@ -252,7 +494,11 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         new(
             Invoke<int>(native.GetQuantity, item),
             Invoke<int>(native.GetQueued, item),
-            InvokeBool(native.IsRandomized, item));
+            InvokeBool(native.IsRandomized, item),
+            native.Usages.GetValue(item) is ICollection usages
+                ? usages.Count
+                : throw new InvalidOperationException(
+                    "ConsumableSO.consumableUsages was unavailable during mutation evidence capture."));
 
     private static bool InvokeBool(MethodInfo method, object? target) =>
         Invoke<bool>(method, target);
@@ -265,15 +511,17 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 
     private readonly struct ItemState
     {
-        internal ItemState(int quantity, int queued, bool randomized)
+        internal ItemState(int quantity, int queued, bool randomized, int usages)
         {
             Quantity = quantity;
             Queued = queued;
             Randomized = randomized;
+            Usages = usages;
         }
 
         internal int Quantity { get; }
         internal int Queued { get; }
         internal bool Randomized { get; }
+        internal int Usages { get; }
     }
 }

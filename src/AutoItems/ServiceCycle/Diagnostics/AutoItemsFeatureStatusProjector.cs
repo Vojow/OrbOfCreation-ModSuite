@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common;
 
 namespace OrbAutomata;
@@ -29,6 +30,8 @@ internal static class AutoItemsFeatureStatusProjector
         string bindingFailure,
         bool cycleObserved,
         AutoItemsDecisionKind decisionKind,
+        Guid quarantinedTemporaryItem,
+        AutoItemsTemporaryQuarantineCause temporaryQuarantineCause,
         AutoItemsActionHealth health)
     {
         if (emergencyDisabled)
@@ -48,6 +51,10 @@ internal static class AutoItemsFeatureStatusProjector
                 string.IsNullOrWhiteSpace(bindingFailure)
                     ? "The lifecycle-scoped Auto Items native binding set is unavailable."
                     : bindingFailure);
+        if (temporaryQuarantineCause != AutoItemsTemporaryQuarantineCause.None)
+            return TemporaryQuarantine(
+                quarantinedTemporaryItem,
+                temporaryQuarantineCause);
         if (health.HasFailure)
             return FromActionFailure(health.Preflight, health.Reason);
         if (!cycleObserved)
@@ -63,8 +70,34 @@ internal static class AutoItemsFeatureStatusProjector
             {
                 AutoItemsDecisionKind.Relic => "Auto Items planned a Relic from the latest world.",
                 AutoItemsDecisionKind.Scroll => "Auto Items planned a Scroll from the latest world.",
-                _ => "Auto Items is active and waiting for an eligible Scroll or Relic.",
+                AutoItemsDecisionKind.TemporaryItem =>
+                    "Auto Items planned one exact allowlisted temporary item from the latest world.",
+                AutoItemsDecisionKind.AwaitingTemporaryActivation =>
+                    "Auto Items is waiting for one submitted temporary usage to engage.",
+                AutoItemsDecisionKind.TemporaryEffectActive =>
+                    "Auto Items observed a pending or active temporary usage and is excluding every consumable use.",
+                _ => "Auto Items is active and waiting for an eligible Scroll, Relic, or exact allowlisted temporary item.",
             });
+    }
+
+    private static AutoItemsFeatureStatus TemporaryQuarantine(
+        Guid itemId,
+        AutoItemsTemporaryQuarantineCause cause)
+    {
+        var evidence = cause switch
+        {
+            AutoItemsTemporaryQuarantineCause.MultipleUsages =>
+                "more than one native usage appeared",
+            AutoItemsTemporaryQuarantineCause.PrematureExpiry =>
+                "its usage expired before the activation proof completed",
+            AutoItemsTemporaryQuarantineCause.MissingEngagementEvidence =>
+                "the usage disappeared without any observed engagement",
+            _ => "its activation evidence was invalid",
+        };
+        return new AutoItemsFeatureStatus(
+            FeatureStatusState.Faulted,
+            FeatureStatusReasonCode.MutationQuarantined,
+            $"Temporary item {itemId:D} is quarantined for this lifecycle because {evidence}.");
     }
 
     private static AutoItemsFeatureStatus FromActionFailure(

@@ -26,7 +26,14 @@ internal sealed class AutoItemsWorkerDefinition :
     {
         if (state.Lifecycle != context.Identity.Lifecycle)
             throw new InvalidOperationException("Auto Items state belongs to a different lifecycle.");
-        var wake = AutoItemsCycleEvaluator.Evaluate(world, in config, actions, out var decision);
+        state.ObserveConfiguration(context.Identity.Config, config.AutoItems);
+        var wake = AutoItemsCycleEvaluator.Evaluate(
+            world,
+            in config,
+            in context,
+            ref state,
+            actions,
+            out var decision);
         state.RecordDecision(in decision);
         return wake;
     }

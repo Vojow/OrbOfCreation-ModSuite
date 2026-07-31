@@ -56,6 +56,8 @@ internal static class BepInExAutomataConfigurationReader
                 Mode = source.AutoItemsMode.Value,
                 UseScrolls = source.AutoItemsUseScrolls.Value,
                 UseRelics = source.AutoItemsUseRelics.Value,
+                TemporaryItemAllowlist =
+                    source.AutoItemsTemporaryItemAllowlist.Value ?? string.Empty,
             },
             AutoScribe = new AutoScribeConfiguration
             {
