@@ -84,6 +84,44 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(4, coverage.RequestedCraftLevel);
     }
 
+    [Theory]
+    [InlineData(4, 3)]
+    [InlineData(1, 1)]
+    public void PositiveCarryLimitKeepsOneSlotFreeWithoutDroppingBelowOne(
+        int maximumCarryLoad,
+        int expectedDeficit)
+    {
+        var role = _profile.Roles[0];
+        var world = World(candidateCount: 7) with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 3,
+                maximumCarryLoad),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(expectedDeficit, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+    }
+
+    [Fact]
+    public void ZeroCarryLimitContinuesToFollowUncoveredDemand()
+    {
+        var role = _profile.Roles[0];
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(World(candidateCount: 3), _profile),
+            role.Key);
+
+        Assert.Equal(3, coverage.ValidTargets);
+        Assert.Equal(3, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+    }
+
     [Fact]
     public void SharedScribeMaximumDoesNotRaiseAnotherRecipesFrontier()
     {
@@ -275,12 +313,11 @@ public sealed class ScrollCoveragePlannerTests
                 visible: true,
                 usesQuantityAsLevel: true));
             consumables.Add(Scroll(role.Scroll.Uuid, maxCreatedLevel: 3));
-            var structure = Guid.NewGuid();
-            if (candidateCount > 0)
+            for (var candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
                 targets.Add(new WorldScrollTarget(
                     role.Scroll.Uuid,
                     role.Enchantment.Uuid,
-                    structure));
+                    Guid.NewGuid()));
             if (index != omitTargetEvidenceForRole)
                 evidence.Add(new WorldScrollTargetEvidence(
                     role.Scroll.Uuid,
@@ -340,7 +377,8 @@ public sealed class ScrollCoveragePlannerTests
 
     private PublicationTable<WorldConsumable> ScrollsWithOverride(
         ScrollRoleKey overrideRole,
-        int maxCreatedLevel)
+        int maxCreatedLevel,
+        int maximumCarryLoad = 0)
     {
         var rows = new List<WorldConsumable>();
         for (var index = 0; index < _profile.Roles.Count; index++)
@@ -349,7 +387,8 @@ public sealed class ScrollCoveragePlannerTests
             if (!role.IsProducible) continue;
             rows.Add(Scroll(
                 role.Scroll.Uuid,
-                role.Key == overrideRole ? maxCreatedLevel : 3));
+                role.Key == overrideRole ? maxCreatedLevel : 3,
+                role.Key == overrideRole ? maximumCarryLoad : 0));
         }
         return Table(rows.ToArray());
     }

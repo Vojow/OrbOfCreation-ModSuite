@@ -269,7 +269,7 @@ internal static class ScrollCoveragePlanner
         var queued = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: false);
         var automatic = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: true);
         var pending = CountPending(world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
-        var desired = carry > 0 ? Math.Max(uncovered, carry) : uncovered;
+        var desired = carry > 0 ? Math.Max(1, carry - 1) : uncovered;
         var deficit = Math.Max(0, desired - owned - queued - pending);
         var state = automatic > 0 && deficit > 0
             ? ScrollCoverageState.ExternallyProducing

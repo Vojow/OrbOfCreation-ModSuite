@@ -22,8 +22,9 @@ Each visible recipe owns an independent progression frontier derived from that S
 `maxStartingLevel` is not copied onto every recipe. A covered stable role probes its next level;
 the guarded action then brackets and binary-searches the monotonic native affordability boundary
 and crafts the strongest affordable level at or above that request. This advances cheaper and more
-expensive Scroll families independently while still allowing stronger stock to replace weaker
-stock up to the native carry cap.
+expensive Scroll families independently. For a positive native carry limit, coverage maintains at
+least one Scroll while reserving one inventory slot; a zero/unbounded limit continues to follow
+uncovered demand.
 
 `AutoScribeOneShotCraftGameAction` owns the only mutation boundary. It resolves one complete
 lifecycle-scoped binding set before use, re-resolves the action's recipe, Scroll, enchantment,
