@@ -10,7 +10,7 @@
     <Authors>Vojow</Authors>
     <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <SuiteVersion>0.5.0-beta.1</SuiteVersion>
+    <SuiteVersion>0.5.0</SuiteVersion>
     <GameRoot>$(OOC_GAME_DIR)</GameRoot>
     <WindowsManagedDir>$(GameRoot)/Orb Of Creation_Data/Managed</WindowsManagedDir>
     <MacAppManagedDir>$(GameRoot)/Contents/Resources/Data/Managed</MacAppManagedDir>

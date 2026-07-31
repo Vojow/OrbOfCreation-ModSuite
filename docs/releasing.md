@@ -26,14 +26,14 @@ export OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creati
 Always rehearse the exact commit first:
 
 ```bash
-tools/release.sh 0.5.0-beta.1 --dry-run
+tools/release.sh 0.5.0 --dry-run
 ```
 
 Read the printed commit, repository target, tag, title, asset path, and DLL SHA-256. If all are
 correct, run the real release:
 
 ```bash
-tools/release.sh 0.5.0-beta.1
+tools/release.sh 0.5.0
 ```
 
 The real run repeats every check, gate, and build. Before anything irreversible it prints the

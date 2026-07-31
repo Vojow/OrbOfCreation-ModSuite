@@ -10,7 +10,7 @@ namespace OrbModding.Tests;
 
 public sealed class AutomaticSaveBackupTests
 {
-    private const string Version = "0.5.0-beta.1";
+    private const string Version = "0.5.0";
     private static readonly DateTime FirstRun =
         new(2026, 7, 31, 10, 11, 12, DateTimeKind.Utc);
 

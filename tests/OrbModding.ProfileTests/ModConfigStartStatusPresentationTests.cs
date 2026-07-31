@@ -22,7 +22,7 @@ public sealed class ModConfigStartStatusPresentationTests
                 prunedBackupCount: 0,
                 retentionFailures: Array.Empty<string>());
             var presentation = ModConfigStartStatusPresenter.Build(
-                "0.5.0-beta.1",
+                "0.5.0",
                 controlPlaneReady: true,
                 auditedBuild: true,
                 runtimeActivationAllowed: true,
@@ -33,7 +33,7 @@ public sealed class ModConfigStartStatusPresentationTests
             Assert.Equal(
                 new[]
                 {
-                    "Orb ModSuite  ·  v0.5.0-beta.1",
+                    "Orb ModSuite  ·  v0.5.0",
                     "Performance-debug build",
                     "MCP ready  ·  Audited game verified",
                     "Save backup " + (backupCreated ? "created" : "ready") + " · 2 files",
@@ -52,7 +52,7 @@ public sealed class ModConfigStartStatusPresentationTests
             AutomaticSaveBackupTrigger.VersionChanged,
             "Could not read active save file 'ooc_save_1.sav' cleanly.");
         var failurePresentation = ModConfigStartStatusPresenter.Build(
-            "0.5.0-beta.1",
+            "0.5.0",
             controlPlaneReady: true,
             auditedBuild: true,
             runtimeActivationAllowed: false,
@@ -72,7 +72,7 @@ public sealed class ModConfigStartStatusPresentationTests
             prunedBackupCount: 0,
             retentionFailures: new[] { "Could not prune one owned automatic backup." });
         var retentionPresentation = ModConfigStartStatusPresenter.Build(
-            "0.5.0-beta.1",
+            "0.5.0",
             controlPlaneReady: true,
             auditedBuild: true,
             runtimeActivationAllowed: true,

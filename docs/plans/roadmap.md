@@ -18,6 +18,6 @@ to state, not this file's.
   legacy native-contract surface, operations-per-frame and CPU-budget settings,
   shared performance coordinator, and coordinator evidence product are retired.
 - Combined-suite runtime and package validation completed and the reviewed
-  0.5.0-beta.1 release prepared.
+  0.5.0 release prepared.
 
 New automation features should use the shared lifecycle, ownership, diagnostics, and ServiceCycle contracts instead of introducing another scheduler.
