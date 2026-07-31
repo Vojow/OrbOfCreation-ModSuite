@@ -62,8 +62,11 @@ installation, recovery, or layout work changes.
 - Inactive audited rail candidates remain capturable while Mods is open. Quick controls reuse that
   family’s inactive/active frame pair rather than sampling spell buttons.
 - Feature quick controls cannot retain or construct a text-rendering path or clone a native toggle.
-  Every terminal native
-  surface failure publishes a Runtime failure and an error log containing the exact reason.
+  Suite-created UI nodes explicitly request `RectTransform`; a plain `GameObject` remains a
+  `Transform` in the portable stub just as its installed Unity contract declares. Both UI surfaces
+  log the first failed attempt as retrying on their shared cadence. The third consecutive failure
+  publishes a Runtime failure and an error log naming the exact member/check and
+  expected-versus-actual types where applicable.
 
 ## Runtime handoff
 

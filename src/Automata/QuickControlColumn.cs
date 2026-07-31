@@ -74,9 +74,13 @@ internal sealed class QuickControlColumn : IDisposable
         GameObject? root = null;
         try
         {
-            root = new GameObject(ObjectName);
+            if (!TryCreateRectTransformObject(
+                    ObjectName,
+                    out root,
+                    out var rootRect,
+                    out reason))
+                return false;
             root.SetActive(false);
-            var rootRect = (RectTransform)root.transform;
             rootRect.SetParent(native.Anchor, false);
             rootRect.anchorMin = new Vector2(0f, 1f);
             rootRect.anchorMax = new Vector2(0f, 1f);
@@ -152,7 +156,11 @@ internal sealed class QuickControlColumn : IDisposable
         catch (Exception ex)
         {
             if (root is not null) UnityEngine.Object.Destroy(root);
-            reason = ex.GetBaseException().Message;
+            var failure = ex.GetBaseException();
+            reason =
+                "quick-control column construction failed after the " +
+                "UnityEngine.GameObject..ctor(System.String, System.Type[]) RectTransform check: " +
+                $"{failure.GetType().FullName}: {failure.Message}";
             return false;
         }
     }
@@ -205,16 +213,29 @@ internal sealed class QuickControlColumn : IDisposable
         out Entry? entry,
         out string reason)
     {
-        var root = CreateControlObject(
-            "Feature." + registration.FeatureId,
-            parent,
-            PositionFor(slot, safety: false));
+        if (!TryCreateControlObject(
+                "Feature." + registration.FeatureId,
+                parent,
+                PositionFor(slot, safety: false),
+                out var root,
+                out reason))
+        {
+            entry = null;
+            return false;
+        }
         var button = root.AddComponent<Button>();
-        var iconObject = CreateGlyphObject(
-            "Icon",
-            root.transform,
-            new Vector2(0.16f, 0.16f),
-            new Vector2(0.84f, 0.84f));
+        if (!TryCreateGlyphObject(
+                "Icon",
+                root.transform,
+                new Vector2(0.16f, 0.16f),
+                new Vector2(0.84f, 0.84f),
+                out var iconObject,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(root);
+            entry = null;
+            return false;
+        }
         var icon = iconObject.AddComponent<Image>();
         icon.sprite = iconSprite;
         if (!ConfiguredIntentIconButtonVisual.TryCreate(
@@ -252,21 +273,36 @@ internal sealed class QuickControlColumn : IDisposable
         out Entry? entry,
         out string reason)
     {
-        var root = CreateControlObject(
-            "Safety.EmergencyStop",
-            parent,
-            PositionFor(slot, safety: slot > 0));
+        if (!TryCreateControlObject(
+                "Safety.EmergencyStop",
+                parent,
+                PositionFor(slot, safety: slot > 0),
+                out var root,
+                out reason))
+        {
+            entry = null;
+            return false;
+        }
         var button = root.AddComponent<Button>();
-        var barObject = CreateGlyphObject(
-            "ExclamationBar",
-            root.transform,
-            new Vector2(0.44f, 0.27f),
-            new Vector2(0.56f, 0.73f));
-        var dotObject = CreateGlyphObject(
-            "ExclamationDot",
-            root.transform,
-            new Vector2(0.42f, 0.13f),
-            new Vector2(0.58f, 0.24f));
+        if (!TryCreateGlyphObject(
+                "ExclamationBar",
+                root.transform,
+                new Vector2(0.44f, 0.27f),
+                new Vector2(0.56f, 0.73f),
+                out var barObject,
+                out reason) ||
+            !TryCreateGlyphObject(
+                "ExclamationDot",
+                root.transform,
+                new Vector2(0.42f, 0.13f),
+                new Vector2(0.58f, 0.24f),
+                out var dotObject,
+                out reason))
+        {
+            UnityEngine.Object.Destroy(root);
+            entry = null;
+            return false;
+        }
         var bar = barObject.AddComponent<Image>();
         var dot = dotObject.AddComponent<Image>();
         if (!ConfiguredIntentIconButtonVisual.TryCreate(
@@ -296,13 +332,15 @@ internal sealed class QuickControlColumn : IDisposable
         return true;
     }
 
-    private static GameObject CreateControlObject(
+    private static bool TryCreateControlObject(
         string name,
         Transform parent,
-        Vector2 position)
+        Vector2 position,
+        out GameObject root,
+        out string reason)
     {
-        var root = new GameObject(name);
-        var rect = (RectTransform)root.transform;
+        if (!TryCreateRectTransformObject(name, out root, out var rect, out reason))
+            return false;
         rect.SetParent(parent, false);
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(0f, 1f);
@@ -310,23 +348,78 @@ internal sealed class QuickControlColumn : IDisposable
         rect.anchoredPosition = position;
         rect.sizeDelta = new Vector2(ControlSize, ControlSize);
         root.AddComponent<Image>();
-        return root;
+        reason = string.Empty;
+        return true;
     }
 
-    private static GameObject CreateGlyphObject(
+    private static bool TryCreateGlyphObject(
         string name,
         Transform parent,
         Vector2 anchorMin,
-        Vector2 anchorMax)
+        Vector2 anchorMax,
+        out GameObject glyph,
+        out string reason)
     {
-        var glyph = new GameObject(name);
-        var rect = (RectTransform)glyph.transform;
+        if (!TryCreateRectTransformObject(name, out glyph, out var rect, out reason))
+            return false;
         rect.SetParent(parent, false);
         rect.anchorMin = anchorMin;
         rect.anchorMax = anchorMax;
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
-        return glyph;
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryCreateRectTransformObject(
+        string name,
+        out GameObject gameObject,
+        out RectTransform rect,
+        out string reason)
+    {
+        try
+        {
+            gameObject = new GameObject(name, typeof(RectTransform));
+        }
+        catch (Exception ex)
+        {
+            gameObject = null!;
+            rect = null!;
+            var root = ex.GetBaseException();
+            reason =
+                $"UnityEngine.GameObject..ctor(System.String, System.Type[]) failed for '{name}' " +
+                "while requesting UnityEngine.RectTransform: " +
+                $"{root.GetType().FullName}: {root.Message}";
+            return false;
+        }
+        if (TryRequireRectTransform(
+                gameObject,
+                $"UnityEngine.GameObject('{name}').transform",
+                out rect,
+                out reason))
+            return true;
+        UnityEngine.Object.Destroy(gameObject);
+        gameObject = null!;
+        return false;
+    }
+
+    internal static bool TryRequireRectTransform(
+        GameObject gameObject,
+        string member,
+        out RectTransform rect,
+        out string reason)
+    {
+        if (gameObject.transform is RectTransform actual)
+        {
+            rect = actual;
+            reason = string.Empty;
+            return true;
+        }
+        rect = null!;
+        reason =
+            $"{member} type check failed: expected UnityEngine.RectTransform, actual " +
+            $"{gameObject.transform?.GetType().FullName ?? "<null>"}";
+        return false;
     }
 
     private static Vector2 PositionFor(int slot, bool safety)

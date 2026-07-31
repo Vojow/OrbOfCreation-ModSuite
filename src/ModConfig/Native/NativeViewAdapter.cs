@@ -57,7 +57,9 @@ internal static class NativeViewAdapter
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            reason = DescribeCaptureException(
+                "UIViewRadioButton.baseImage/activeImage state-frame capture",
+                ex);
             return false;
         }
     }
@@ -144,7 +146,9 @@ internal static class NativeViewAdapter
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            reason = DescribeCaptureException(
+                "UIViewRadioButton rail frame and top-bar viewImage capture",
+                ex);
             return false;
         }
     }
@@ -175,7 +179,9 @@ internal static class NativeViewAdapter
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            reason = DescribeCaptureException(
+                $"UIViewRadioButton.viewImage sprite capture for '{itemName}'",
+                ex);
             return false;
         }
     }
@@ -478,10 +484,10 @@ internal static class NativeViewAdapter
         public static NativeButtonContract Create(Type type) => new(
             FindField(type, "item") ??
                 throw new MissingFieldException(type.FullName, "item"),
-            FindField(type, "baseImage"),
-            FindField(type, "activeImage"),
-            FindField(type, "buttonImage"),
-            FindField(type, "viewImage"),
+            RequireField(type, "baseImage", typeof(Sprite)),
+            RequireField(type, "activeImage", typeof(Sprite)),
+            RequireField(type, "buttonImage", typeof(Image)),
+            RequireField(type, "viewImage", typeof(Image)),
             FindField(type, "viewText"));
     }
 
@@ -520,4 +526,10 @@ internal static class NativeViewAdapter
 
     private static FieldInfo RequireField(Type type, string name) =>
         FindField(type, name) ?? throw new MissingFieldException(type.FullName, name);
+
+    private static string DescribeCaptureException(string check, Exception exception)
+    {
+        var root = exception.GetBaseException();
+        return $"{check} failed: {root.GetType().FullName}: {root.Message}";
+    }
 }

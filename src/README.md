@@ -49,6 +49,9 @@ gameplay quick-controls column. The column enumerates every registration and add
 stop; it never maintains a second feature list. It owns every control object and pixel and anchors
 one vertical column under the native top-left gear and character buttons through the declared,
 scene-bound `UIContentArea.canvas` contract and exact `Canvas/HelpButtons` structure.
+Every suite-created UI node requests `RectTransform` through
+`GameObject(string, Type[])`; a plain `GameObject(string)` exposes only the declared
+`Transform` contract and is never cast to a UI transform.
 
 Each live feature control requires its audited native glyph plus both
 `UIViewRadioButton.baseImage` and `activeImage`. OFF uses the recessed inactive frame; configured ON
@@ -56,7 +59,9 @@ uses the raised active frame. Gray, green, red, and orange remain secondary heal
 tooltips carry the same joined feature status as Mods Runtime. A missing anchor, glyph, or frame
 pair creates no corresponding live control and publishes the exact failure. STOP is separately
 spaced and uses a suite-owned exclamation glyph while retaining the same immediate
-`Safety/EmergencyDisable` semantics.
+`Safety/EmergencyDisable` semantics. Capture/construction failures name the member plus expected
+and actual types, log that installation will retry on the shared five-second UI cadence, and become
+terminal diagnostics only on the third failed attempt, matching the Mods rail.
 
 ## Shared alchemy gameplay-domain classifier
 

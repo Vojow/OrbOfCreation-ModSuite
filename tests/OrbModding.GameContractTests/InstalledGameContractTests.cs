@@ -635,6 +635,18 @@ public sealed class InstalledGameContractTests
         AssertMethod(
             assembly,
             "GlobalVariables",
+            "GetGlobalStructureType",
+            true,
+            "StructureTypeSO");
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
+            "GetCastingSpeedAttr",
+            true,
+            "AttributeSO");
+        AssertMethod(
+            assembly,
+            "GlobalVariables",
             "GetHarvestSpeedAttr",
             true,
             "AttributeSO");
@@ -644,12 +656,39 @@ public sealed class InstalledGameContractTests
             "GetMasteryExpAttr",
             true,
             "AttributeSO");
+        Assert.Equal("TooltipableObject", assembly.GetBaseType("AttributeSO"));
+        Assert.Equal("UpgradeableObject", assembly.GetBaseType("StructureTypeSO"));
+        Assert.Equal("TooltipableObject", assembly.GetBaseType("UpgradeableObject"));
         AssertMethod(
             assembly,
             "TooltipableObject",
             "GetIcon",
             false,
             "UnityEngine.Sprite");
+    }
+
+    [GameAssemblyFact]
+    public void QuickControlUiObjects_MatchUnityRectTransformConstructionContract()
+    {
+        using var unity = new GameAssemblyMetadata(GameAssemblyPaths.Require().UnityCore);
+
+        AssertMethod(
+            unity,
+            "UnityEngine.GameObject",
+            ".ctor",
+            false,
+            "System.Void",
+            "System.String",
+            "System.Type[]");
+        AssertMethod(
+            unity,
+            "UnityEngine.GameObject",
+            "get_transform",
+            false,
+            "UnityEngine.Transform");
+        Assert.Equal(
+            "UnityEngine.Transform",
+            unity.GetBaseType("UnityEngine.RectTransform"));
     }
 
     private static void AssertMethod(

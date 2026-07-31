@@ -114,7 +114,7 @@ public sealed class Plugin : BaseUnityPlugin
     private AutomataDifferentialVerificationControl? _mathVerification;
     private float _quickControlsUiRetrySeconds;
     private string _quickControlsUiFailureReason = string.Empty;
-    private float _quickControlsFailureSeconds;
+    private readonly UiInstallationRetryState _quickControlsRetry = new();
     private bool _knownOwnershipWarningLogged;
     private bool _nativeContractsAvailable = true;
     private bool _auditedBuild;
@@ -130,8 +130,7 @@ public sealed class Plugin : BaseUnityPlugin
     private float _mainSceneElapsed;
     private float _uiRetrySeconds;
     private float _uiIntegritySeconds;
-    private bool _uiFailureLogged;
-    private int _uiFailureAttempts;
+    private readonly UiInstallationRetryState _modsUiRetry = new();
     private bool _uiMaintenanceDue;
     private bool _uiIntegrityDue;
     private int _deferInstallUntilFrame;
@@ -537,7 +536,6 @@ public sealed class Plugin : BaseUnityPlugin
 #endif
         UpdateMentor();
         UpdateQuickControls(Time.unscaledDeltaTime);
-        UpdateQuickControlsSurface(Time.unscaledDeltaTime);
         UpdateModConfig();
 #if SERVICE_CYCLE_PROFILE
         _gameMcpCaptureElapsed += Time.unscaledDeltaTime;
@@ -902,8 +900,8 @@ public sealed class Plugin : BaseUnityPlugin
         {
             _quickControls?.Dispose();
             _quickControls = null;
-            _quickControlsUiFailureReason = string.Empty;
             _quickControlsUiRetrySeconds = 0f;
+            ResetQuickControlsFailure();
             return;
         }
         if (_quickControls is not null && !_quickControls.IsAlive)
@@ -914,7 +912,8 @@ public sealed class Plugin : BaseUnityPlugin
         _quickControls?.Render();
         if (_quickControls is not null && _quickControls.Failures.Count == 0)
         {
-            _quickControlsUiFailureReason = string.Empty;
+            ResetQuickControlsFailure();
+            _uiSurfaceDiagnostics?.ReportSuccess(SuiteUiSurface.QuickControls);
             return;
         }
 
@@ -923,7 +922,7 @@ public sealed class Plugin : BaseUnityPlugin
         _quickControlsUiRetrySeconds = UiRetryIntervalSeconds;
         if (!QuickControlNativeAdapter.TryCapture(out var native, out var captureReason))
         {
-            _quickControlsUiFailureReason = captureReason;
+            ReportQuickControlsRetry(captureReason);
             return;
         }
         if (!QuickControlColumn.TryCreate(
@@ -934,7 +933,7 @@ public sealed class Plugin : BaseUnityPlugin
                 out var candidate,
                 out var constructionReason))
         {
-            _quickControlsUiFailureReason = constructionReason;
+            ReportQuickControlsRetry(constructionReason);
             return;
         }
 
@@ -948,7 +947,41 @@ public sealed class Plugin : BaseUnityPlugin
         {
             candidate!.Dispose();
         }
-        _quickControlsUiFailureReason = constructionReason;
+        if (_quickControls is not null && _quickControls.Failures.Count == 0)
+        {
+            ResetQuickControlsFailure();
+            _uiSurfaceDiagnostics?.ReportSuccess(SuiteUiSurface.QuickControls);
+            return;
+        }
+        ReportQuickControlsRetry(constructionReason);
+    }
+
+    private void ReportQuickControlsRetry(string reason)
+    {
+        _quickControlsUiFailureReason = string.IsNullOrWhiteSpace(reason)
+            ? "audited native objects are not ready"
+            : reason;
+        var observation = _quickControlsRetry.ObserveFailure();
+        if (observation.ShouldLogRetry)
+        {
+            Logger.LogInfo(
+                "Quick controls are not ready; installation will retry: " +
+                _quickControlsUiFailureReason);
+        }
+        if (observation.IsTerminal)
+            _uiSurfaceDiagnostics?.ReportFailure(
+                SuiteUiSurface.QuickControls,
+                _quickControlsUiFailureReason);
+        else
+            _uiSurfaceDiagnostics?.ReportWaiting(
+                SuiteUiSurface.QuickControls,
+                _quickControlsUiFailureReason);
+    }
+
+    private void ResetQuickControlsFailure()
+    {
+        _quickControlsUiFailureReason = string.Empty;
+        _quickControlsRetry.Reset();
     }
 
     private void OnEmergencyStopChanged(bool stopped)
@@ -1012,9 +1045,8 @@ public sealed class Plugin : BaseUnityPlugin
         // lifecycle generation may retain the previous column.
         _quickControls?.Dispose();
         _quickControls = null;
-        _quickControlsFailureSeconds = 0f;
         _quickControlsUiRetrySeconds = 0f;
-        _quickControlsUiFailureReason = string.Empty;
+        ResetQuickControlsFailure();
 
         // Mod Config rebuilds its shell only when the game entered a scene; every other transition
         // leaves the installed UI alone.
@@ -1995,35 +2027,6 @@ public sealed class Plugin : BaseUnityPlugin
 
     internal static bool AssemblyAuditAllowsMutation(AssemblyAuditResult audit) => audit.MatchesExpected;
 
-    private void UpdateQuickControlsSurface(float unscaledDeltaTime)
-    {
-        if (_uiSurfaceDiagnostics is null ||
-            SceneManager.GetActiveScene().name != "Main")
-            return;
-
-        var expectedCount =
-            (_nativeContractsAvailable ? _automationFeatureControls!.Features.Count : 0) + 1;
-        if (_quickControls is not null &&
-            _quickControls.ControlIds.Count == expectedCount &&
-            _quickControls.Failures.Count == 0)
-        {
-            _quickControlsFailureSeconds = 0.0f;
-            _uiSurfaceDiagnostics.ReportSuccess(SuiteUiSurface.QuickControls);
-            return;
-        }
-
-        _quickControlsFailureSeconds += Math.Max(0.0f, unscaledDeltaTime);
-        var reason = string.IsNullOrWhiteSpace(_quickControlsUiFailureReason)
-            ? "audited native objects are not ready; retry is pending"
-            : _quickControlsUiFailureReason;
-        if (_quickControlsFailureSeconds < 10.0f)
-        {
-            _uiSurfaceDiagnostics.ReportWaiting(SuiteUiSurface.QuickControls, reason);
-            return;
-        }
-        _uiSurfaceDiagnostics.ReportFailure(SuiteUiSurface.QuickControls, reason);
-    }
-
     private static void BeforeSaveLoad(object __instance) =>
         ObserveLifecycle(GameLifecycleTransitionKind.SaveLoadStarted, SceneManager.GetActiveScene().name, __instance);
     private static void AfterSaveLoaded(object __instance) =>
@@ -2143,20 +2146,18 @@ public sealed class Plugin : BaseUnityPlugin
                 out _uiShell,
                 out var reason))
         {
-            _uiFailureAttempts++;
-            if (!_uiFailureLogged)
+            var observation = _modsUiRetry.ObserveFailure();
+            if (observation.ShouldLogRetry)
             {
-                _uiFailureLogged = true;
                 Logger.LogInfo("Mod Config UI is not ready; installation will retry: " + reason);
             }
-            if (_uiFailureAttempts < 3)
-                _uiSurfaceDiagnostics?.ReportWaiting(SuiteUiSurface.ModsRail, reason);
-            else
+            if (observation.IsTerminal)
                 _uiSurfaceDiagnostics?.ReportFailure(SuiteUiSurface.ModsRail, reason);
+            else
+                _uiSurfaceDiagnostics?.ReportWaiting(SuiteUiSurface.ModsRail, reason);
             return;
         }
-        _uiFailureLogged = false;
-        _uiFailureAttempts = 0;
+        _modsUiRetry.Reset();
         _uiSurfaceDiagnostics?.ReportSuccess(SuiteUiSurface.ModsRail);
         _uiIntegritySeconds = UiIntegrityIntervalSeconds;
     }
@@ -2191,8 +2192,7 @@ public sealed class Plugin : BaseUnityPlugin
         _uiShell.Dispose();
         _uiShell = null;
         _uiRetrySeconds = 0f;
-        _uiFailureLogged = false;
-        _uiFailureAttempts = 0;
+        _modsUiRetry.Reset();
     }
 
     private void ResetSceneState(Scene scene)
@@ -2200,13 +2200,11 @@ public sealed class Plugin : BaseUnityPlugin
         _mainSceneElapsed = 0f;
         _uiRetrySeconds = 0f;
         _uiIntegritySeconds = 0f;
-        _uiFailureLogged = false;
-        _uiFailureAttempts = 0;
+        _modsUiRetry.Reset();
         _quickControls?.Dispose();
         _quickControls = null;
-        _quickControlsFailureSeconds = 0f;
         _quickControlsUiRetrySeconds = 0f;
-        _quickControlsUiFailureReason = string.Empty;
+        ResetQuickControlsFailure();
         _uiMaintenanceDue = false;
         _uiIntegrityDue = false;
         _deferInstallUntilFrame = 0;

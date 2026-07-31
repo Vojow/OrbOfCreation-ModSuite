@@ -30,6 +30,12 @@ logs the exact terminal reason and a typed-candidate census at error level and p
 Runtime. There is no cloned native toggle, text quick-control, or alternate shell fallback. See the
 [native UI inventory](../../docs/testing/ui-native-inventory.md).
 
+Suite-owned UI objects request `RectTransform` explicitly from the native
+`GameObject(string, Type[])` constructor. Both the quick column and Mods rail use the same
+five-second retry cadence and three-attempt waiting-to-terminal diagnostic policy; the first
+failure logs that installation will retry, and type failures name the member plus expected and
+actual managed types.
+
 The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.
 The cloned native behavior is removed from Mods navigation, and suite buttons have no

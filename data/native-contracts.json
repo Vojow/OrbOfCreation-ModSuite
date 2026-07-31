@@ -4538,6 +4538,51 @@
       "place": "patch"
     },
     {
+      "id": "attribute-so.tooltipable-base",
+      "assembly": "assembly-csharp",
+      "type": "AttributeSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "baseType": "TooltipableObject",
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "structure-type-so.upgradeable-base",
+      "assembly": "assembly-csharp",
+      "type": "StructureTypeSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "baseType": "UpgradeableObject",
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "upgradeable-object.tooltipable-base",
+      "assembly": "assembly-csharp",
+      "type": "UpgradeableObject",
+      "typeVisibility": "public",
+      "kind": "type",
+      "baseType": "TooltipableObject",
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "global-variables.get-casting-speed-attr",
       "assembly": "assembly-csharp",
       "type": "GlobalVariables",

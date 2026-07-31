@@ -302,7 +302,9 @@ public sealed class ModConfigTests
             new ConfigPluginSource("suite", "Orb Of Creation ModSuite", "test", config),
         });
         var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
-        var prototypeObject = new GameObject("NativeRailPrototype");
+        var prototypeObject = new GameObject(
+            "NativeRailPrototype",
+            typeof(RectTransform));
         var prototype = prototypeObject.AddComponent<Behaviour>();
         var inactive = new Sprite();
         var active = new Sprite();
@@ -316,7 +318,9 @@ public sealed class ModConfigTests
             new Sprite(),
             new Sprite(),
             new Sprite());
-        var parent = (RectTransform)new GameObject("RailParent").transform;
+        var parent = (RectTransform)new GameObject(
+            "RailParent",
+            typeof(RectTransform)).transform;
         var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
         var owned = new List<GameObject>();
         var previousSpellManager = global::SpellManager.instance;
@@ -350,7 +354,9 @@ public sealed class ModConfigTests
     [Fact]
     public void ModsRailRejectsAnyDuplicateRegisteredPageGlyph()
     {
-        var prototypeObject = new GameObject("NativeRailPrototype");
+        var prototypeObject = new GameObject(
+            "NativeRailPrototype",
+            typeof(RectTransform));
         var prototype = prototypeObject.AddComponent<Behaviour>();
         var duplicate = new Sprite();
         var primitives = new NativeFeatureRailVisualPrimitives(
@@ -363,7 +369,9 @@ public sealed class ModConfigTests
             new Sprite(),
             new Sprite(),
             new Sprite());
-        var parent = (RectTransform)new GameObject("RailParent").transform;
+        var parent = (RectTransform)new GameObject(
+            "RailParent",
+            typeof(RectTransform)).transform;
         var template = new GameObject("LabelTemplate").AddComponent<TextMeshProUGUI>();
         var owned = new List<GameObject>();
 

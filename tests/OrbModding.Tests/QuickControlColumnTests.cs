@@ -14,6 +14,51 @@ namespace OrbModding.Tests;
 public sealed class QuickControlColumnTests
 {
     [Fact]
+    public void GameObjectTransformMatchesTheInstalledUnityConstructorContract()
+    {
+        var ordinary = new GameObject("Ordinary");
+        var ui = new GameObject("Ui", typeof(RectTransform));
+
+        Assert.IsType<Transform>(ordinary.transform);
+        Assert.IsType<RectTransform>(ui.transform);
+    }
+
+    [Fact]
+    public void RectTransformMismatchNamesTheMemberAndExpectedVersusActualTypes()
+    {
+        var ordinary = new GameObject("Ordinary");
+
+        Assert.False(
+            QuickControlColumn.TryRequireRectTransform(
+                ordinary,
+                "UnityEngine.GameObject('Ordinary').transform",
+                out var rect,
+                out var reason));
+
+        Assert.Null(rect);
+        Assert.Contains("UnityEngine.GameObject('Ordinary').transform", reason);
+        Assert.Contains("expected UnityEngine.RectTransform", reason);
+        Assert.Contains("actual UnityEngine.Transform", reason);
+    }
+
+    [Theory]
+    [InlineData("Auto Buy")]
+    [InlineData("Auto Cast")]
+    [InlineData("Auto Harvest")]
+    [InlineData("Mentor")]
+    public void TooltipableFeatureIconsResolveThroughExactNativeReturnTypes(string pageLabel)
+    {
+        Assert.True(
+            NativeFeatureIconResolver.TryResolve(
+                pageLabel,
+                capturedRail: null,
+                out var icon,
+                out var reason),
+            reason);
+        Assert.NotNull(icon);
+    }
+
+    [Fact]
     public void ColumnBuildsEveryRegisteredAutomationFeaturePlusEmergencyStopWithoutAnEquippedSpell()
     {
         using var context = new Context();
@@ -41,6 +86,12 @@ public sealed class QuickControlColumnTests
                         .OrderBy(value => value, StringComparer.Ordinal),
                     liveColumn.ControlIds.OrderBy(value => value, StringComparer.Ordinal));
                 Assert.Empty(liveColumn.Failures);
+                var columnRoot = Assert.IsType<RectTransform>(
+                    context.Native.Anchor.GetChild(0));
+                Assert.Equal(QuickControlColumn.ObjectName, columnRoot.name);
+                Assert.All(
+                    Enumerable.Range(0, columnRoot.childCount),
+                    index => Assert.IsType<RectTransform>(columnRoot.GetChild(index)));
             }
         }
         finally
@@ -173,7 +224,7 @@ public sealed class QuickControlColumnTests
     [Fact]
     public void AnchorResolutionRequiresTheExactAuditedHelpButtonsStructure()
     {
-        var canvasObject = new GameObject("Canvas");
+        var canvasObject = new GameObject("Canvas", typeof(RectTransform));
         var contentObject = Child(canvasObject, "ContentArea");
         var contentArea = contentObject.AddComponent<FakeContentArea>();
         contentArea.canvas = (RectTransform)canvasObject.transform;
@@ -189,7 +240,7 @@ public sealed class QuickControlColumnTests
             reason);
         Assert.Same(helpButtons.transform, anchor);
 
-        var missing = new GameObject("WrongCanvas");
+        var missing = new GameObject("WrongCanvas", typeof(RectTransform));
         var wrongContent = Child(missing, "ContentArea").AddComponent<FakeContentArea>();
         wrongContent.canvas = (RectTransform)missing.transform;
         Assert.False(
@@ -201,9 +252,28 @@ public sealed class QuickControlColumnTests
         Assert.Contains(QuickControlNativeAdapter.AnchorPath, missingReason);
     }
 
+    [Fact]
+    public void AnchorResolutionNamesCanvasDeclaredTypeMismatch()
+    {
+        var contentObject = new GameObject("ContentArea");
+        var contentArea = contentObject.AddComponent<WrongCanvasContentArea>();
+        contentArea.canvas = contentObject.transform;
+
+        Assert.False(
+            QuickControlNativeAdapter.TryResolveAnchor(
+                new Component[] { contentArea },
+                out var anchor,
+                out var reason));
+
+        Assert.Null(anchor);
+        Assert.Contains("WrongCanvasContentArea.canvas declared type check failed", reason);
+        Assert.Contains("expected UnityEngine.RectTransform", reason);
+        Assert.Contains("actual UnityEngine.Transform", reason);
+    }
+
     private static GameObject Child(GameObject parent, string name)
     {
-        var child = new GameObject(name);
+        var child = new GameObject(name, typeof(RectTransform));
         child.transform.SetParent(parent.transform, false);
         return child;
     }
@@ -211,6 +281,11 @@ public sealed class QuickControlColumnTests
     private sealed class FakeContentArea : Behaviour
     {
         public RectTransform? canvas;
+    }
+
+    private sealed class WrongCanvasContentArea : Behaviour
+    {
+        public Transform? canvas;
     }
 
     private sealed class Context : IDisposable
@@ -237,7 +312,9 @@ public sealed class QuickControlColumnTests
                 Store,
                 () => Array.Empty<string>(),
                 stopped => EmergencyChanges.Add(stopped));
-            var anchor = (RectTransform)new GameObject("HelpButtons").transform;
+            var anchor = (RectTransform)new GameObject(
+                "HelpButtons",
+                typeof(RectTransform)).transform;
             Native = new QuickControlNativePrimitives(
                 anchor,
                 new NativeButtonStateVisualPrimitives(new Sprite(), new Sprite()));

@@ -77,10 +77,10 @@ public sealed class IntVariable
 public static class GlobalVariables
 {
     private static IntVariable multiBuy = IntVariable.Register(KnownVariableIds.MultiBuy);
-    private static readonly TooltipableObject GlobalStructureType = new TooltipableObject();
-    private static readonly TooltipableObject CastingSpeedAttribute = new TooltipableObject();
-    private static readonly TooltipableObject HarvestSpeedAttribute = new TooltipableObject();
-    private static readonly TooltipableObject MasteryExperienceAttribute = new TooltipableObject();
+    private static readonly StructureTypeSO GlobalStructureType = new StructureTypeSO();
+    private static readonly AttributeSO CastingSpeedAttribute = new AttributeSO();
+    private static readonly AttributeSO HarvestSpeedAttribute = new AttributeSO();
+    private static readonly AttributeSO MasteryExperienceAttribute = new AttributeSO();
 
     // Registered in IntVariable.All under the uuid the game ships, because world collection finds
     // these by identity in the registry rather than through the accessor beside them.
@@ -91,10 +91,10 @@ public static class GlobalVariables
     }
 
     public static IntVariable GetMultiBuy() => MultiBuy;
-    public static TooltipableObject GetGlobalStructureType() => GlobalStructureType;
-    public static TooltipableObject GetCastingSpeedAttr() => CastingSpeedAttribute;
-    public static TooltipableObject GetHarvestSpeedAttr() => HarvestSpeedAttribute;
-    public static TooltipableObject GetMasteryExpAttr() => MasteryExperienceAttribute;
+    public static StructureTypeSO GetGlobalStructureType() => GlobalStructureType;
+    public static AttributeSO GetCastingSpeedAttr() => CastingSpeedAttribute;
+    public static AttributeSO GetHarvestSpeedAttr() => HarvestSpeedAttribute;
+    public static AttributeSO GetMasteryExpAttr() => MasteryExperienceAttribute;
 }
 
 public static class KnownVariableIds
@@ -762,7 +762,7 @@ public class Prerequisites
 /// The base every entity an effect can point at derives from, modelled only as far as the reference
 /// edge reads it: the identity a published row carries instead of the object.
 /// </summary>
-public abstract class UpgradeableObject
+public abstract class UpgradeableObject : TooltipableObject
 {
     /// <summary>One effect's modification of one named property of one upgradeable object.</summary>
     /// <remarks>
@@ -778,9 +778,9 @@ public abstract class UpgradeableObject
         public bool useTargetRef;
     }
 
-    public string uuid = Guid.NewGuid().ToString();
+    public new string uuid = Guid.NewGuid().ToString();
 
-    public Guid GetGuid() => Guid.Parse(uuid);
+    public new Guid GetGuid() => Guid.Parse(uuid);
 
 }
 
@@ -882,7 +882,7 @@ public class ResourceSO : UpgradeableObject
     // The per-type registry the game keeps for every entity category, and the traversal entry point
     // world collection uses. Tests populate it directly.
     public static List<ResourceSO> All = new List<ResourceSO>();
-    public string name = "Resource";
+    public new string name = "Resource";
     public BigDouble quantity = new BigDouble(1.0, 3);
     public BigDouble trueRate = new BigDouble(0.0, 0);
     public bool available = true;
@@ -1614,10 +1614,14 @@ public interface ITooltipable
     List<TooltipNode> GetAltTooltipNodes();
 }
 
-public class TooltipableObject : UnityEngine.ScriptableObject
+public class TooltipableObject : IdScriptableObject
 {
     public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public UnityEngine.Sprite GetIcon() => Icon;
+}
+
+public sealed class AttributeSO : TooltipableObject
+{
 }
 
 public class TooltipNode
@@ -2184,7 +2188,10 @@ namespace UnityEngine
 
         public static T Instantiate<T>(T original, Transform parent, bool worldPositionStays) where T : Object, new()
         {
-            var clone = new T();
+            var clone = original is GameObject originalGameObject &&
+                        originalGameObject.transform is RectTransform
+                ? (T)(Object)new GameObject(original.name, typeof(RectTransform))
+                : new T();
             if (clone is GameObject gameObject)
             {
                 gameObject.transform.SetParent(parent, worldPositionStays);
@@ -2248,7 +2255,9 @@ namespace UnityEngine
         public GameObject(string name, params Type[] components)
         {
             this.name = name;
-            transform = new RectTransform { gameObject = this, name = name };
+            transform = components.Contains(typeof(RectTransform))
+                ? new RectTransform { gameObject = this, name = name }
+                : new Transform { gameObject = this, name = name };
             transform.transform = transform;
             _components.Add(transform);
             foreach (var type in components.Where(type => type != typeof(RectTransform) && typeof(Component).IsAssignableFrom(type)))

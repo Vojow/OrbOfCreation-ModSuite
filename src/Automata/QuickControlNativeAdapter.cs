@@ -54,7 +54,11 @@ internal static class QuickControlNativeAdapter
         }
         catch (Exception ex)
         {
-            reason = ex.GetBaseException().Message;
+            var root = ex.GetBaseException();
+            reason =
+                "quick-control native capture failed while checking UIContentArea.canvas and " +
+                "UIViewRadioButton state frames: " +
+                $"{root.GetType().FullName}: {root.Message}";
             return false;
         }
     }
@@ -75,10 +79,29 @@ internal static class QuickControlNativeAdapter
         foreach (var contentArea in contentAreas)
         {
             var canvasField = FindField(contentArea.GetType(), "canvas");
-            if (canvasField?.GetValue(contentArea) is not RectTransform canvas)
+            if (canvasField is null)
             {
                 failures.Add(
-                    $"'{NativeObjectPath.Build(contentArea)}' has no populated RectTransform canvas");
+                    $"{contentArea.GetType().FullName}.canvas field check failed at " +
+                    $"'{NativeObjectPath.Build(contentArea)}': expected UnityEngine.RectTransform, " +
+                    "actual <missing>");
+                continue;
+            }
+            if (canvasField.FieldType != typeof(RectTransform))
+            {
+                failures.Add(
+                    $"{canvasField.DeclaringType?.FullName}.canvas declared type check failed at " +
+                    $"'{NativeObjectPath.Build(contentArea)}': expected UnityEngine.RectTransform, " +
+                    $"actual {canvasField.FieldType.FullName}");
+                continue;
+            }
+            var canvasValue = canvasField.GetValue(contentArea);
+            if (canvasValue is not RectTransform canvas)
+            {
+                failures.Add(
+                    $"{canvasField.DeclaringType?.FullName}.canvas value type check failed at " +
+                    $"'{NativeObjectPath.Build(contentArea)}': expected UnityEngine.RectTransform, " +
+                    $"actual {canvasValue?.GetType().FullName ?? "<null>"}");
                 continue;
             }
             var helpButtons = FindDirectChild(canvas, "HelpButtons");

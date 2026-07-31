@@ -21,8 +21,9 @@ icons.
    - `Mods rail: native visuals active`
    Any `Quick controls: native state frames or icons failed: <reason>` or
    `Mods rail: native visuals failed: <reason>` is a blocking suite defect. A temporary
-   informational `Mod Config UI is not ready; installation will retry: <reason>` is allowed only if it is
-   followed by the Mods-rail success line.
+   informational `Quick controls are not ready; installation will retry: <reason>` or
+   `Mod Config UI is not ready; installation will retry: <reason>` is allowed only if it is
+   followed by the corresponding success line.
 
 ## Native shell and responsive layout
 

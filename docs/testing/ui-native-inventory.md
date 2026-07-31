@@ -75,4 +75,11 @@ The native-contract manifest declares six visual/anchor fields and five icon acc
   `GlobalVariables.GetMasteryExpAttr`, and
   `TooltipableObject.GetIcon`.
 
+The installed gate also pins the inheritance that makes those accessor results tooltipable
+(`AttributeSO -> TooltipableObject` and
+`StructureTypeSO -> UpgradeableObject -> TooltipableObject`) plus Unity's UI-construction
+contract: `GameObject.transform` is declared as `Transform`,
+`RectTransform` derives from it, and `GameObject(string, Type[])` is the constructor used to
+request `RectTransform` for every suite-created UI node.
+
 All are capture-only UI contracts. Manifest schema 3 remains unchanged.

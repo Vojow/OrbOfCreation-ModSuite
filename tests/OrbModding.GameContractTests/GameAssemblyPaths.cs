@@ -23,12 +23,14 @@ internal sealed class GameAssemblyPaths
         string gameRoot,
         string managedDirectory,
         string assemblyCSharp,
-        string firstPass)
+        string firstPass,
+        string unityCore)
     {
         GameRoot = gameRoot;
         ManagedDirectory = managedDirectory;
         AssemblyCSharp = assemblyCSharp;
         FirstPass = firstPass;
+        UnityCore = unityCore;
     }
 
     public string GameRoot { get; }
@@ -38,6 +40,8 @@ internal sealed class GameAssemblyPaths
     public string AssemblyCSharp { get; }
 
     public string FirstPass { get; }
+
+    public string UnityCore { get; }
 
     public static bool TryResolve(out GameAssemblyPaths paths, out string reason)
     {
@@ -56,10 +60,15 @@ internal sealed class GameAssemblyPaths
         }
         var assemblyCSharp = Path.Combine(managed, "Assembly-CSharp.dll");
         var firstPass = Path.Combine(managed, "Assembly-CSharp-firstpass.dll");
-        if (!File.Exists(assemblyCSharp) || !File.Exists(firstPass))
+        var unityCore = Path.Combine(managed, "UnityEngine.CoreModule.dll");
+        if (!File.Exists(assemblyCSharp) ||
+            !File.Exists(firstPass) ||
+            !File.Exists(unityCore))
         {
             paths = null!;
-            reason = "OOC_GAME_DIR does not contain both audited game assemblies.";
+            reason =
+                "OOC_GAME_DIR does not contain both audited game assemblies and " +
+                "UnityEngine.CoreModule.dll.";
             return false;
         }
 
@@ -67,7 +76,8 @@ internal sealed class GameAssemblyPaths
             Path.GetFullPath(gameRoot),
             Path.GetFullPath(managed),
             assemblyCSharp,
-            firstPass);
+            firstPass,
+            unityCore);
         reason = string.Empty;
         return true;
     }

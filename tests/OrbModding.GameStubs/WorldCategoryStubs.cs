@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class StructureTypeSO : IdScriptableObject
+public sealed class StructureTypeSO : UpgradeableObject
 {
 }
 
