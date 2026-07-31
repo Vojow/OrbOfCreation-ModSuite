@@ -55,6 +55,6 @@ internal static class AutoConceptFeatureStatusProjector
         return new AutoConceptFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,
-            "Auto Concept is active.");
+            string.Empty);
     }
 }

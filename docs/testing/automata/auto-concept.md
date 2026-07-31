@@ -31,7 +31,7 @@ next lifecycle.
   owns worker-to-action composition, publication wake-up,
   idle-reason handoff to feature health, and structural worker-state safety.
 - [AutoConceptFeatureStatusProjectorTests.cs](../../../tests/OrbModding.Tests/Services/AutoConcept/Diagnostics/AutoConceptFeatureStatusProjectorTests.cs)
-  owns feature health projection.
+  owns feature health projection, including reasonless and summary-free operational status.
 - [AutoConceptDomainClassifierAdoptionTests.cs](../../../tests/OrbModding.Tests/AutoConceptDomainClassifierAdoptionTests.cs)
   owns action-boundary adoption of the shared typed classifier.
 - [GameWorldCollectorTests.cs](../../../tests/OrbModding.Tests/Runtime/World/GameWorldCollectorTests.cs)
@@ -75,7 +75,8 @@ native-boundary change.
 - A committed depth change records its queued target as suite-owned before native settlement; later
   settlement must not restart the active Timed Cycle session.
 - Feature health distinguishes an active training wait from the post-training
-  absence of another unlocked, assignable replacement.
+  absence of another unlocked, assignable replacement; operational health carries no reason or
+  positive summary text.
 - The world snapshot publishes `AlchemyRecipeSO.GetMaxUsageSlots()` rather than the raw
   `maxUsageSlots` modifier, so the native `-1` sentinel resolves before breadth, rotation, or depth.
 - Depth clamps to the live native mastery limit.

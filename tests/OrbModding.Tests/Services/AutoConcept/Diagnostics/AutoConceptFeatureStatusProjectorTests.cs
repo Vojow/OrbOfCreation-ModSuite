@@ -28,6 +28,7 @@ public sealed class AutoConceptFeatureStatusProjectorTests
 
         Assert.Equal(FeatureStatusState.Operational, status.State);
         Assert.Equal(FeatureStatusReasonCode.None, status.Reason);
+        Assert.Equal(string.Empty, status.Summary);
     }
 
     [Fact]
