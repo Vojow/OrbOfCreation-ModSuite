@@ -347,7 +347,9 @@ internal sealed class QuickControlColumn : IDisposable
         frame.sprite = panelFrameSprite;
         frame.type = Image.Type.Sliced;
         frame.color = Color.white;
-        frame.raycastTarget = false;
+        // Own the complete drawer rectangle so wheel and pointer input cannot pass through its
+        // padding or grid gaps to a native control underneath. Child buttons still raycast first.
+        frame.raycastTarget = true;
         if (!TryCreateGlyphObject(
                 DrawerFillObjectName,
                 drawerRect,

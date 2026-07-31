@@ -231,7 +231,7 @@ public sealed class QuickControlColumnTests
             Assert.Same(context.Native.StateVisuals.InactiveFrame, panelFrame.sprite);
             Assert.Equal(Image.Type.Sliced, panelFrame.type);
             Assert.Equal(Color.white, panelFrame.color);
-            Assert.False(panelFrame.raycastTarget);
+            Assert.True(panelFrame.raycastTarget);
             var fillRect = Assert.IsType<RectTransform>(DirectChild(
                 drawer,
                 QuickControlColumn.DrawerFillObjectName));

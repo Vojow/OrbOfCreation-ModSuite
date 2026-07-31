@@ -63,6 +63,21 @@ public sealed class ModConfigPanelLayoutTests
     }
 
     [Fact]
+    public void NativePanelSkinRetainsRaycastOwnershipForWheelDelivery()
+    {
+        var root = new GameObject("Panel");
+        var frame = root.AddComponent<Image>();
+        frame.raycastTarget = false;
+        var sprite = new Sprite();
+
+        ModConfigNativeRailFactory.SkinPanel(frame, sprite, Color.white);
+
+        Assert.Same(sprite, frame.sprite);
+        Assert.Equal(Image.Type.Sliced, frame.type);
+        Assert.True(frame.raycastTarget);
+    }
+
+    [Fact]
     public void ClonedModsNavigationHasNoUnityTransitionPixelWriter()
     {
         var root = new GameObject("Mods");

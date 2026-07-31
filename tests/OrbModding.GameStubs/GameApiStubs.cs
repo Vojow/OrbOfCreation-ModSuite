@@ -2548,7 +2548,7 @@ namespace UnityEngine.UI
     public class Graphic : UnityEngine.Behaviour
     {
         public UnityEngine.Color color { get; set; } = UnityEngine.Color.white;
-        public bool raycastTarget { get; set; }
+        public bool raycastTarget { get; set; } = true;
         public UnityEngine.RectTransform rectTransform =>
             (UnityEngine.RectTransform)transform;
 

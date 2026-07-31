@@ -55,6 +55,9 @@ installation, recovery, or layout work changes.
 - Feature health cannot change configured intent; the central join is the only status projection that
   combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
+- Native-skinned panel frames remain raycast targets. Wheel delivery is continuous across the
+  settings viewport, including row gutters, runtime-card text, and blank padding; the open feature
+  drawer also blocks wheel input across its padding and grid gaps rather than passing it to native UI.
 - Disabled/absent plugins remain honest status-only or absent entries.
 - Feature modes appear only in the feature header and gameplay feature drawer; both publish through
   the committed store, while policy fields remain staged. General's emergency command uses the same

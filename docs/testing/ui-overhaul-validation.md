@@ -34,7 +34,8 @@ icons.
    Advanced.
 3. Confirm no old Safety/Spells/Artifacts/Alchemy row and no per-feature Mode row remains.
 4. Check 1365×768, 1920×1080, the player's highest resolution, and every supported UI-scale step.
-   At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits,
+   At each size, inspect long descriptions, editors, Default, conflicts, footer, scroll limits, and
+   wheel scrolling over row bodies, inter-row gaps, runtime-card text, and viewport padding. Inspect
    the ten rail entries, Runtime grid, diagnostic cards, and graph for clipping or overlap.
 5. Confirm the closed top-left suite footprint is one compound control under the native gear and
    character buttons: an emergency square exactly matching their size and alignment, plus a

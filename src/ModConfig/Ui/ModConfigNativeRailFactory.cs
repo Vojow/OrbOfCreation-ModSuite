@@ -24,7 +24,10 @@ internal static class ModConfigNativeRailFactory
         image.sprite = sprite;
         image.type = Image.Type.Sliced;
         image.color = color;
-        image.raycastTarget = false;
+        // These frames are the suite-owned pixel surface, not decoration. Keeping them in the
+        // GraphicRaycaster closes the gaps between child controls and lets a parent ScrollRect
+        // receive wheel events from every visible point in its viewport.
+        image.raycastTarget = true;
     }
 
     public static bool TryBuild(

@@ -45,6 +45,10 @@ The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.
 The cloned native behavior is removed from Mods navigation, and suite buttons have no
 `Selectable.targetGraphic`; suite rendering remains the only pixel writer.
+Native-skinned suite panel frames remain raycast targets: the settings viewport therefore routes
+wheel input to its own `ScrollRect` across rows, text, gutters, and padding, while the quick-control
+drawer frame owns its complete rectangle so input cannot pass through its grid gaps to native UI.
+Decorative text, icons, and inset fills remain non-raycasting.
 
 The Auto Items picker uses those same captured base/active frames for raised/recessed approval
 rows. Its suite-owned images display icon sprites captured from the item's audited
