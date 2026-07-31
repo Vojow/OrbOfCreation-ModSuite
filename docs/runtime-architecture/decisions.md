@@ -207,12 +207,16 @@ container. Collecting entities but no edges leaves the snapshot holding numbers 
 skip fields the game never writes. It was measured and rejected: classifying the 270 members remaining
 after the first three rules by whether the declaring type assigns them put 186 in "runtime" and 84 in
 "definition", and the definition bucket contained `HarvestElementSO.harvestRate` and
-`AlchemyRecipeSO.cachedRequiredXp`, which are plainly caches written from other classes. A rule whose
-failure mode is silently dropping a cached value is the rule this decision exists to replace.
+`AlchemyRecipeSO.cachedRequiredXp`. A later v1.0.5 IL audit proved the latter is an orphan alias with
+no managed reader or writer, so that one collector binding was replaced by the game's maintained
+`GetRequiredExperience()` accessor. That exact correction is not a new heuristic for dropping the
+other fields: a rule whose failure mode is silently dropping an externally maintained value is the
+rule this decision exists to replace.
 
-So: every declared instance scalar and every `ValueModifierRecord` on a collected type is collected,
-without asking what writes it. The reads are compiled delegates over fields; the price is a wider row,
-and a wider row is the cheap side of this trade.
+So: every declared instance scalar and every `ValueModifierRecord` on a collected type is collected by
+default, without guessing what writes it. A per-member IL audit may supersede an orphan only when an
+exact game-owned accessor replaces it, as required experience now does. The reads are compiled
+delegates; the price is a wider row, and a wider row is the cheap side of this trade.
 
 **A record that distributes is not a record that holds.** `OrderedMultiplierRecord` and
 `MergingModifierRecord` derive from `ModifierRecord`, not from `ValueModifierRecord`, and have no

@@ -192,6 +192,7 @@ public sealed class InstalledGameContractTests
         Assert.Equal("System.Collections.Generic.List`1<AlchemyTypeSO>", assembly.GetFieldType("AlchemyRecipeSO", "alchemyTypes"));
         Assert.Equal("ResourceCostList", assembly.GetFieldType("AlchemyRecipeSO", "drainCost"));
         Assert.Equal("System.Int32", assembly.GetFieldType("AlchemyRecipeSO", "masteryLevel"));
+        AssertMethod(assembly, "AlchemyRecipeSO", "GetRequiredExperience", false, "BigDouble");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetMaxUsageSlots", false, "System.Int32");
         AssertMethod(assembly, "AlchemyRecipeSO", "GetCoreType", false, "AlchemyTypeSO");
         AssertMethod(assembly, "AlchemyRecipeSO", "IsDiscovered", false, "System.Boolean");
@@ -231,6 +232,12 @@ public sealed class InstalledGameContractTests
             "GetMaxUsageSlots",
             false,
             "System.Int32");
+        AssertMethod(
+            assembly,
+            "AlchemyRecipeSO",
+            "GetRequiredExperience",
+            false,
+            "BigDouble");
     }
 
     [GameAssemblyFact]

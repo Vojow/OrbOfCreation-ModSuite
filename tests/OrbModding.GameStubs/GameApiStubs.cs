@@ -284,6 +284,7 @@ public sealed class AlchemyTypeSO : IdScriptableObject
 public sealed class AlchemyRecipeSO : IdScriptableObject
 {
     public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
+    private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
 
     public AlchemyRecipeSO()
     {
@@ -326,7 +327,7 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public bool IsAvailable() => discovered;
     public int GetExperienceLevel() => masteryLevel;
     public BigDouble GetExperience() => masteryXp;
-    public BigDouble GetRequiredExperience() => new BigDouble(1.0, 0);
+    public BigDouble GetRequiredExperience() => experienceContainer.GetRequiredExperience();
     public int GetMaxUsageSlots() => maxUsageSlots.GetValue().ToInt();
     public AlchemyTypeSO GetCoreType() => coreType;
     public string GetName() => name;
@@ -1345,7 +1346,7 @@ public sealed class ExperienceContainer
 {
     private BigDouble experience;
     private int currentLevel;
-    private BigDouble experiencePerLevel = new BigDouble(1, 100);
+    private BigDouble cachedRequiredXp = new BigDouble(1, 100);
     public List<BigDouble> Grants { get; } = new List<BigDouble>();
     public Action? AfterGainExperience { get; set; }
     public bool SuppressGain { get; set; }
@@ -1354,7 +1355,7 @@ public sealed class ExperienceContainer
     {
         currentLevel = level;
         experience = currentExperience;
-        experiencePerLevel = requiredPerLevel;
+        cachedRequiredXp = requiredPerLevel;
     }
 
     public void GainExperience(BigDouble amount)
@@ -1367,9 +1368,9 @@ public sealed class ExperienceContainer
     public int GetGainedLevels()
     {
         var gained = 0;
-        while (Compare(experience, experiencePerLevel) >= 0 && gained < 10000)
+        while (Compare(experience, cachedRequiredXp) >= 0 && gained < 10000)
         {
-            experience = Subtract(experience, experiencePerLevel);
+            experience = Subtract(experience, cachedRequiredXp);
             currentLevel++;
             gained++;
         }
@@ -1378,12 +1379,14 @@ public sealed class ExperienceContainer
 
     public BigDouble GetExperience() => experience;
 
+    public BigDouble GetRequiredExperience() => cachedRequiredXp;
+
     public int GetLevel() => currentLevel;
 
     public ExperienceContainer Clone()
     {
         var clone = new ExperienceContainer();
-        clone.SetState(currentLevel, experience, experiencePerLevel);
+        clone.SetState(currentLevel, experience, cachedRequiredXp);
         return clone;
     }
 

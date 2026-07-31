@@ -1223,8 +1223,11 @@ service's.
 reason to collect it, and this is that decision.
 
 **Why a call and not a comparison.** Every other mastery track publishes both halves and lets the
-worker subtract: `WorldAlchemyRecipe` carries `MasteryXp` and `CachedRequiredXp`, and readiness is
-arithmetic. A spell has no such pair. The threshold lives in a `masteryXpContainer` the snapshot does
+worker subtract: `WorldAlchemyRecipe` carries `MasteryXp` and `RequiredExperience`, read through
+`AlchemyRecipeSO.GetRequiredExperience()`, and readiness is arithmetic. The recipe accessor is the
+game's own pure read of the nested, lifecycle/setter-maintained `ExperienceContainer` cache; the
+orphan `AlchemyRecipeSO.cachedRequiredXp` field is not a source. A spell has no such pair. The
+threshold lives in a `masteryXpContainer` the snapshot does
 not publish and whose members are not in the manifest at all, so `MasteryXp` has nothing to be
 compared against. Publishing the composed boolean is not a shortcut around a number that exists; it is
 the only readable form of the fact.

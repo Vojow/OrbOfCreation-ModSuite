@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using OrbAutomata;
 using Xunit;
 using OrbModding.Common;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
 
 namespace OrbModding.Tests.Runtime.World;
@@ -287,7 +291,11 @@ public sealed class GameWorldCollectorTests : IDisposable
             timeReqMod = new FakeModifierRecord(25d),
             timeScalingMod = new FakeModifierRecord(80d),
             cachedCompletionTime = new BigDouble(4d),
-            cachedRequiredXp = new BigDouble(12d),
+            cachedRequiredXp = default,
+            experienceContainer = new FakeExperienceContainer
+            {
+                cachedRequiredXp = new BigDouble(12d),
+            },
             drainCost = new FakeSpellCostList().With(resource, 7d),
         };
         FakeAlchemyRecipe.All.Add(recipe);
@@ -324,7 +332,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(25d, alchemyRecipe.TimeReqMod.ToDouble());
         Assert.Equal(80d, alchemyRecipe.TimeScalingMod.ToDouble());
         Assert.Equal(4d, alchemyRecipe.CachedCompletionTime.ToDouble());
-        Assert.Equal(12d, alchemyRecipe.CachedRequiredXp.ToDouble());
+        Assert.Equal(0d, recipe.cachedRequiredXp.ToDouble());
+        Assert.Equal(12d, alchemyRecipe.RequiredExperience.ToDouble());
 
         Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
         Assert.Equal(2, instance.Quantity);
@@ -352,6 +361,92 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
     }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void ConceptRankingUsesTheNestedRequiredExperienceWhenTheOrphanAliasesAreDefault()
+    {
+        var alphaId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var betaId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var coreType = new FakeAlchemyType { Identity = Guid.NewGuid() };
+        var alpha = RankedRecipe(alphaId, coreType, masteryXp: 90d, requiredExperience: 100d);
+        var beta = RankedRecipe(betaId, coreType, masteryXp: 10d, requiredExperience: 100d);
+        FakeAlchemyRecipe.All.AddRange(new[] { alpha, beta });
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.AddRange(new[] { alpha, beta });
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] =
+            new FakeAlchemyInstanceList();
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.Equal(0d, alpha.cachedRequiredXp.ToDouble());
+        Assert.Equal(0d, beta.cachedRequiredXp.ToDouble());
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, alphaId, out var alphaRow));
+        Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, betaId, out var betaRow));
+        Assert.Equal(100d, alphaRow.RequiredExperience.ToDouble());
+        Assert.Equal(100d, betaRow.RequiredExperience.ToDouble());
+
+        var config = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoConcept = new AutoConceptConfiguration
+            {
+                Mode = AutoConceptOperationMode.Active,
+                SlotManagement = AutoConceptSlotManagementMode.RotateAll,
+                TrainingPeriodSeconds = 60,
+                MinimumDrainRatio = 0.25f,
+            },
+        };
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+        var actions = new ReusableActionStore<AutoConceptCycleAction>();
+        actions.BeginWrite();
+        var writer = new ServiceActionWriter<AutoConceptCycleAction>(actions);
+        var identity = new ServiceCycleIdentity(
+            new ServiceId("auto-concept"),
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            StrategyGeneration.Initial,
+            new WorldGeneration(1),
+            new CycleId(1));
+        var context = new ServiceCycleContext(
+            identity,
+            default,
+            new MonotonicTimestamp(1));
+
+        AutoConceptCycleEvaluator.Evaluate(
+            world,
+            in config,
+            in context,
+            ref state,
+            writer,
+            out _);
+
+        Assert.Equal(1, actions.Count);
+        Assert.Equal(betaId, actions.GetCurrent().RecipeId);
+    }
+
+    private static FakeAlchemyRecipe RankedRecipe(
+        Guid id,
+        FakeAlchemyType coreType,
+        double masteryXp,
+        double requiredExperience) =>
+        new()
+        {
+            Identity = id,
+            discovered = true,
+            coreType = coreType,
+            masteryXp = new BigDouble(masteryXp),
+            maxUsageSlots = new FakeModifierRecord(1d),
+            cachedRequiredXp = default,
+            experienceContainer = new FakeExperienceContainer
+            {
+                cachedRequiredXp = new BigDouble(requiredExperience),
+            },
+        };
 
     [Fact]
     public void AlchemyRecipeResolvesNativeUsageSentinelBeforeAutoConceptPlanning()

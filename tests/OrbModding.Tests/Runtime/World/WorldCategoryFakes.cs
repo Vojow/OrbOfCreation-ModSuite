@@ -538,11 +538,16 @@ internal sealed class FakeAlchemyRecipe
     public FakeModifierRecord freeUsageSlots = new(0d);
     public FakeModifierRecord maxUsageSlots = new(0d);
     public BigDouble cachedCompletionTime;
+    // Deliberately orphaned like the v1.0.5 field. The collector must not read this.
     public BigDouble cachedRequiredXp;
+    public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
+
+    public BigDouble GetRequiredExperience() =>
+        experienceContainer.GetRequiredExperience();
 
     public int GetMaxUsageSlots()
     {
@@ -550,6 +555,13 @@ internal sealed class FakeAlchemyRecipe
         var maximum = maxUsageSlots.GetValue().ToDouble();
         return maximum < 0 ? int.MaxValue : (int)Math.Floor(maximum);
     }
+}
+
+internal sealed class FakeExperienceContainer
+{
+    public BigDouble cachedRequiredXp;
+
+    public BigDouble GetRequiredExperience() => cachedRequiredXp;
 }
 
 internal sealed class FakeAlchemyRecipeList

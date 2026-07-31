@@ -35,7 +35,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         BigDouble freeUsageSlots,
         BigDouble maxUsageSlots,
         BigDouble cachedCompletionTime,
-        BigDouble cachedRequiredXp)
+        BigDouble requiredExperience)
     {
         RecipeId = recipeId;
         CoreTypeId = coreTypeId;
@@ -66,7 +66,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         FreeUsageSlots = freeUsageSlots;
         ResolvedMaxUsageSlots = maxUsageSlots;
         CachedCompletionTime = cachedCompletionTime;
-        CachedRequiredXp = cachedRequiredXp;
+        RequiredExperience = requiredExperience;
     }
 
     internal Guid RecipeId { get; }
@@ -98,8 +98,10 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
     internal BigDouble RecipeTime { get; }
 
     /// <summary>
-    /// The rest of what the runtime type carries: the two times the game caches rather than persists,
-    /// the flags that classify the recipe, and the fourteen records a batch is a function of.
+    /// The rest of what the runtime type carries: completion timing the game caches rather than
+    /// persists, the flags that classify the recipe, and the fourteen records a batch is a function
+    /// of. Required mastery experience is published separately through the game's maintained
+    /// accessor.
     /// </summary>
     internal bool IsRequiredDiscovery { get; }
 
@@ -145,7 +147,12 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
 
     internal BigDouble CachedCompletionTime { get; }
 
-    internal BigDouble CachedRequiredXp { get; }
+    /// <summary>
+    /// The game's maintained mastery threshold, read through <c>GetRequiredExperience()</c>. The
+    /// accessor delegates to the recipe's nested <c>ExperienceContainer</c>; it does not read the
+    /// orphan <c>AlchemyRecipeSO.cachedRequiredXp</c> field.
+    /// </summary>
+    internal BigDouble RequiredExperience { get; }
 }
 
 internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRecipe>
@@ -179,7 +186,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
     private Func<object, BigDouble>? _freeUsageSlots;
     private Func<object, int>? _maxUsageSlots;
     private Func<object, BigDouble>? _cachedCompletionTime;
-    private Func<object, BigDouble>? _cachedRequiredXp;
+    private Func<object, BigDouble>? _requiredExperience;
 
     internal override string Category => "alchemy recipes";
 
@@ -217,7 +224,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
         _freeUsageSlots = bind.ModifierRecord("freeUsageSlots");
         _maxUsageSlots = bind.Call<int>("GetMaxUsageSlots");
         _cachedCompletionTime = bind.Field<BigDouble>("cachedCompletionTime");
-        _cachedRequiredXp = bind.Field<BigDouble>("cachedRequiredXp");
+        _requiredExperience = bind.Call<BigDouble>("GetRequiredExperience");
         return bind.Failure;
     }
 
@@ -252,5 +259,5 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
             _freeUsageSlots!(entity),
             new BigDouble(_maxUsageSlots!(entity)),
             _cachedCompletionTime!(entity),
-            _cachedRequiredXp!(entity));
+            _requiredExperience!(entity));
 }

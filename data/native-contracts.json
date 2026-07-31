@@ -753,6 +753,25 @@
       "static": false,
       "valueType": "BigDouble",
       "owners": [
+        "Automata world collection shape audit (orphan; not read)"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "alchemy-recipe.get-required-experience",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRequiredExperience",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
         "Automata world collection"
       ],
       "usages": [

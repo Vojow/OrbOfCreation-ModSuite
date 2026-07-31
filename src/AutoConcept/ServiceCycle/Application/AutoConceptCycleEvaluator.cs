@@ -140,7 +140,7 @@ internal static class AutoConceptCycleEvaluator
                 continue;
             var instanceFound = WorldAlchemyInstanceLookup.TryFind(
                 world.AlchemyInstances, concept.RecipeId, out var instance);
-            var required = recipe.CachedRequiredXp.ToDouble();
+            var required = recipe.RequiredExperience.ToDouble();
             var progress = required > 0
                 ? Math.Clamp(recipe.MasteryXp.ToDouble() / required, 0.0, 1.0)
                 : 1.0;
