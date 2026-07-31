@@ -104,6 +104,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.TemporaryCostChanged,
             AutoItemsPreflight.TemporaryEffectPresent =>
                 AutoItemsActionResultCodes.TemporaryEffectPresent,
+            AutoItemsPreflight.TargetingInProgress =>
+                AutoItemsActionResultCodes.TargetingInProgress,
             AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };
@@ -140,7 +142,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             AutoItemsPreflight.TargetUnavailable or
             AutoItemsPreflight.TemporaryDurationChanged or
             AutoItemsPreflight.TemporaryCostChanged or
-            AutoItemsPreflight.TemporaryEffectPresent;
+            AutoItemsPreflight.TemporaryEffectPresent or
+            AutoItemsPreflight.TargetingInProgress;
 
     private bool Owns()
     {

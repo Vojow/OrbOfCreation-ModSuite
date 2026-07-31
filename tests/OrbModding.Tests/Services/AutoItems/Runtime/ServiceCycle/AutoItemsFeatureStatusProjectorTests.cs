@@ -60,6 +60,32 @@ public sealed class AutoItemsFeatureStatusProjectorTests
     }
 
     [Fact]
+    public void TargetingRefusalIsATemporaryTargetingBlock()
+    {
+        var health = new AutoItemsActionHealth();
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.TargetingInProgress,
+            "TargetingManager.IsTargeting() reported an active native targeting interaction.");
+        health.Observe(in submission);
+
+        var status = AutoItemsFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            owned: true,
+            ownershipReason: string.Empty,
+            bindingsAvailable: true,
+            bindingFailure: string.Empty,
+            cycleObserved: true,
+            AutoItemsDecisionKind.Scroll,
+            Guid.Empty,
+            AutoItemsTemporaryQuarantineCause.None,
+            health);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, status.State);
+        Assert.Equal(FeatureStatusReasonCode.TargetingInProgress, status.Reason);
+        Assert.Equal(submission.Reason, status.Summary);
+    }
+
+    [Fact]
     public void TemporaryFollowUpQuarantineNamesTheExactItemAndCause()
     {
         var itemId = Guid.Parse("00000000-0000-0000-0000-000000000777");

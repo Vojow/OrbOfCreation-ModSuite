@@ -56,6 +56,10 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
                 _bindingFailure.Length == 0
                     ? "The lifecycle-scoped Auto Items binding set is unavailable."
                     : _bindingFailure);
+        if (InvokeBool(native.IsTargeting, null))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.TargetingInProgress,
+                "TargetingManager.IsTargeting() reported an active native targeting interaction.");
 
         var resolution = _registryResolver.Resolve(action.ItemId, native.ConsumableType);
         if (!resolution.IsResolved)

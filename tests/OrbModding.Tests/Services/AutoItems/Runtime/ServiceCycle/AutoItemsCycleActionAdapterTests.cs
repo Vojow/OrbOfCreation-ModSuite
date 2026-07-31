@@ -80,6 +80,19 @@ public sealed class AutoItemsCycleActionAdapterTests
     }
 
     [Fact]
+    public void TargetingInProgressMapsToANamedExpectedResultCode()
+    {
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.TargetingInProgress,
+            "A native targeting interaction is active.");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.TargetingInProgress, result.Code);
+    }
+
+    [Fact]
     public void AmbiguousMutationReceiptNamesQuarantineAndRetainsAttemptEvidence()
     {
         var submission = new AutoItemsSubmission(

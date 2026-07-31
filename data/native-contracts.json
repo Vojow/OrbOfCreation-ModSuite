@@ -12910,7 +12910,8 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Cast targeting"
+        "Automata Auto Cast targeting",
+        "Automata Auto Items action boundary"
       ],
       "usages": [
         "reflection"

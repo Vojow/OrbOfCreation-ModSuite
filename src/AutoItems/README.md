@@ -13,7 +13,8 @@ or configuration publication; the engine prevents a second attempt against the s
 
 `AutoItemsConsumableUseGameAction` owns the native boundary. It validates its complete reflection
 schema at lifecycle scope, re-resolves stable UUID plus exact type, rechecks family, visibility,
-native inventory idleness, `CanFire()`, Scroll randomization/live targeting, and temporary
+global live targeting idleness, native inventory idleness, `CanFire()`, Scroll randomization/live
+targeting, and temporary
 duration/toxicity-only cost vectors. It captures ownership permits, submits through
 `SelectAndFire()` under native multi-buy quantity one, and verifies exact stock/queue evidence plus
 temporary usage creation where applicable. A Scroll/Relic ambiguous mutation quarantines the whole

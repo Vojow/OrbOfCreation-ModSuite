@@ -20,6 +20,7 @@ internal enum AutoItemsPreflight
     TemporaryDurationChanged = 12,
     TemporaryCostChanged = 13,
     TemporaryEffectPresent = 14,
+    TargetingInProgress = 15,
 }
 
 internal readonly struct AutoItemsSubmission

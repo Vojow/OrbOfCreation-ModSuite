@@ -14,6 +14,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     public AutoItemsConsumableUseGameActionTests()
     {
         Inventory.Preparing = false;
+        TargetingManager.OpenRequests = 0;
         ConsumableSO.All.Clear();
         GlobalVariables.MultiBuy = new IntVariable { Value = 1 };
         NativeMultiBuyScope.ResetQuarantineForTests();
@@ -22,6 +23,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     public void Dispose()
     {
         Inventory.Preparing = false;
+        TargetingManager.OpenRequests = 0;
         ConsumableSO.All.Clear();
         NativeMultiBuyScope.ResetQuarantineForTests();
     }
@@ -229,6 +231,23 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.Contains("Inventory.CanUseConsumable()", result.Reason);
         Assert.False(scroll.randomized);
         Assert.Equal(1, scroll.GetQuantity());
+    }
+
+    [Fact]
+    public void LiveTargetingInteractionRefusesBeforeAnyConsumableMutation()
+    {
+        TargetingManager.OpenRequests = 1;
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        using var gameAction = GameAction();
+        var action = Action(relic, AutoItemsConsumableFamily.Relic);
+
+        var result = gameAction.Submit(in action);
+
+        Assert.Equal(AutoItemsPreflight.TargetingInProgress, result.Preflight);
+        Assert.Contains("TargetingManager.IsTargeting()", result.Reason);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, relic.GetQueued());
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
     }
 
     [Fact]

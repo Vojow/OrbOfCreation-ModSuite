@@ -13,7 +13,8 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj \
   -p:UseGameStubs=true --filter "FullyQualifiedName~AutoItems"
 ```
 
-The required defect cases are live family change, native busy, lost ownership permit, manual stock
+The required defect cases are live family change, an already-open native targeting interaction,
+native busy, lost ownership permit, manual stock
 race, empty Scroll target selection, ambiguous postcondition quarantine, lifecycle reset, direct
 action-adapter result mapping, one-attempt publication planning, and exact health explanations.
 Temporary-item coverage additionally requires exact and near-miss allowlists, visibility/stock/

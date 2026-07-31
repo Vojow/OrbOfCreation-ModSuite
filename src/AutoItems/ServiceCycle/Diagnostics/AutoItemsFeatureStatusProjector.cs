@@ -136,6 +136,8 @@ internal static class AutoItemsFeatureStatusProjector
                     summary),
             AutoItemsPreflight.NativeBusy or AutoItemsPreflight.CanFireRefused =>
                 Blocked(FeatureStatusReasonCode.NativeBusy, summary),
+            AutoItemsPreflight.TargetingInProgress =>
+                Blocked(FeatureStatusReasonCode.TargetingInProgress, summary),
             AutoItemsPreflight.MutationPermitUnavailable =>
                 Blocked(FeatureStatusReasonCode.ActionFamilyConflict, summary),
             _ => Blocked(FeatureStatusReasonCode.TemporarySafetyBlock, summary),

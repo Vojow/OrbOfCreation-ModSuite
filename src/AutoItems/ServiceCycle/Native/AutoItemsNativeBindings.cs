@@ -54,6 +54,7 @@ internal sealed class AutoItemsNativeBindings
         MethodInfo getQuantity,
         MethodInfo getQueued,
         MethodInfo canUseConsumable,
+        MethodInfo isTargeting,
         MethodInfo strongest,
         MethodInfo strongestLevel,
         MethodInfo countScaling,
@@ -96,6 +97,7 @@ internal sealed class AutoItemsNativeBindings
         GetQuantity = getQuantity;
         GetQueued = getQueued;
         CanUseConsumable = canUseConsumable;
+        IsTargeting = isTargeting;
         Strongest = strongest;
         StrongestLevel = strongestLevel;
         CountScaling = countScaling;
@@ -139,6 +141,7 @@ internal sealed class AutoItemsNativeBindings
     internal MethodInfo GetQuantity { get; }
     internal MethodInfo GetQueued { get; }
     internal MethodInfo CanUseConsumable { get; }
+    internal MethodInfo IsTargeting { get; }
     internal MethodInfo Strongest { get; }
     internal MethodInfo StrongestLevel { get; }
     internal MethodInfo CountScaling { get; }
@@ -152,6 +155,7 @@ internal sealed class AutoItemsNativeBindings
         var family = ReflectionUtil.FindLoadedType("ConsumableTypeSO");
         var resource = ReflectionUtil.FindLoadedType("ResourceSO");
         var inventory = ReflectionUtil.FindLoadedType("Inventory");
+        var targetingManager = ReflectionUtil.FindLoadedType("TargetingManager");
         var count = ReflectionUtil.FindLoadedType("ConsumableCount");
         var scaling = ReflectionUtil.FindLoadedType("ScalingInfo");
         var block = ReflectionUtil.FindLoadedType("InstantEffectBlock");
@@ -161,13 +165,15 @@ internal sealed class AutoItemsNativeBindings
         var selection = ReflectionUtil.FindLoadedType("Targeting.BaseTargetSelection");
         var structure = ReflectionUtil.FindLoadedType("Targeting.TargetStructure");
         var targetable = ReflectionUtil.FindLoadedType("Targeting.ITargetable");
-        if (consumable is null || family is null || resource is null || inventory is null || count is null ||
+        if (consumable is null || family is null || resource is null || inventory is null ||
+            targetingManager is null || count is null ||
             scaling is null || block is null || script is null || request is null ||
             options is null || selection is null || structure is null || targetable is null)
         {
             reason =
                 "The complete Auto Items type set is unavailable: ConsumableSO, " +
-                "ConsumableTypeSO, ResourceSO, Inventory, ConsumableCount, ScalingInfo, InstantEffectBlock, " +
+                "ConsumableTypeSO, ResourceSO, Inventory, TargetingManager, ConsumableCount, " +
+                "ScalingInfo, InstantEffectBlock, " +
                 "IInstantEffectScript, RequestTargetEffectScript, Targeting.TargetSelectOptions, " +
                 "Targeting.BaseTargetSelection, Targeting.TargetStructure, and " +
                 "Targeting.ITargetable are all required.";
@@ -200,6 +206,8 @@ internal sealed class AutoItemsNativeBindings
         var getQuantity = ExactMethod(consumable, "GetQuantity", typeof(int), PublicInstance);
         var getQueued = ExactMethod(consumable, "GetQueued", typeof(int), PublicInstance);
         var canUse = ExactMethod(inventory, "CanUseConsumable", typeof(bool), PublicStatic);
+        var isTargeting = ExactMethod(
+            targetingManager, "IsTargeting", typeof(bool), PublicStatic);
         var strongest = ExactMethod(consumable, "GetStrongest", count, PublicInstance);
         var strongestLevel = ExactMethod(
             consumable, "GetStrongestLevel", typeof(int), PublicInstance);
@@ -262,6 +270,8 @@ internal sealed class AutoItemsNativeBindings
             return Missing("ConsumableSO.GetQueued() : Int32", out reason);
         if (canUse is null)
             return Missing("Inventory.CanUseConsumable() : Boolean", out reason);
+        if (isTargeting is null)
+            return Missing("TargetingManager.IsTargeting() : Boolean", out reason);
         if (strongest is null)
             return Missing("ConsumableSO.GetStrongest() : ConsumableCount", out reason);
         if (strongestLevel is null)
@@ -316,6 +326,7 @@ internal sealed class AutoItemsNativeBindings
             getQuantity,
             getQueued,
             canUse,
+            isTargeting,
             strongest,
             strongestLevel,
             countScaling,
