@@ -7,7 +7,8 @@
 Mod Config must project supported configuration without changing serialized
 meaning, preserve staged edits and scroll/navigation state, isolate plugin and
 subscriber failures, display saved configuration separately from runtime
-health, and retry startup until the audited native UI exists. Once the supported game baseline has
+health, and select like a native tab. Its first install is triggered after the native top-tab Start
+boundary; retry startup remains bounded for genuine failures. Once the supported game baseline has
 created its UI objects, a missing audited shape is a surfaced suite failure rather than a request
 for alternate chrome.
 
@@ -19,7 +20,7 @@ for alternate chrome.
 | Responsive row/layout behavior | [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
 | Runtime health/status projection | [ModRuntimeStatusProjectionTests.cs](../../tests/OrbModding.Tests/ModRuntimeStatusProjectionTests.cs), [ConfigurationSchemaStatusProjectionTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaStatusProjectionTests.cs) |
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
-| Navigation cadence and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
+| Native tab selection, first-install trigger, navigation cadence, and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |
 | Schema 4 to 5 retirement transaction | [SuiteConfigurationSchemaFiveTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaFiveTests.cs) |
 | Schema 5 to 6 Auto Concept fallback migration | [SuiteConfigurationSchemaSixTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaSixTests.cs) |
@@ -55,6 +56,11 @@ installation, recovery, or layout work changes.
 - Feature health cannot change configured intent; the central join is the only status projection that
   combines those axes.
 - Same-page rebuilds preserve scroll position; page changes reset it.
+- Selecting Mods requests open state whether it was inactive or already active. Only selecting a
+  native sibling closes it, and MCP tab selection invokes that same button path.
+- Elapsed seconds alone cannot authorize the first Mods install. The first attempt becomes eligible
+  at the end-of-frame boundary after `Main` scene load, when the native `UIViewRadio` Start path has
+  generated its children; only a failed attempt enters the five-second retry cadence.
 - Native-skinned panel frames remain raycast targets. Wheel delivery is continuous across the
   settings viewport, including row gutters, runtime-card text, and blank padding; the open feature
   drawer also blocks wheel input across its padding and grid gaps rather than passing it to native UI.

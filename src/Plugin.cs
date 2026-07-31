@@ -55,7 +55,6 @@ public sealed class Plugin : BaseUnityPlugin
     private const bool AutoStartServiceCycleDiagnostics = false;
 #endif
     private const float UiRetryIntervalSeconds = 5.0f;
-    private const float UiInstallDelaySeconds = 2.0f;
     private const float UiIntegrityIntervalSeconds = 5.0f;
 
     /// <summary>
@@ -128,12 +127,14 @@ public sealed class Plugin : BaseUnityPlugin
     private MentorActionFamilyOwnership? _mentorActionFamilyOwnership;
 
     private ModConfigSettings? _modConfigSettings;
-    private float _mainSceneElapsed;
     private float _uiRetrySeconds;
     private float _uiIntegritySeconds;
     private readonly UiInstallationRetryState _modsUiRetry = new();
     private bool _uiMaintenanceDue;
     private bool _uiIntegrityDue;
+    private bool _nativeUiStartBoundaryReached;
+    private bool _nativeUiStartBoundaryScheduled;
+    private int _uiSceneEpoch;
     private int _deferInstallUntilFrame;
     private ModConfigUiShell? _uiShell;
     private ConfigCatalogSnapshot? _catalog;
@@ -248,6 +249,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
         GameLifecycleMonitor.Shared.Transitioned += OnLifecycleTransition;
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        SceneManager.sceneLoaded += OnSceneLoaded;
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
@@ -557,7 +559,9 @@ public sealed class Plugin : BaseUnityPlugin
                 "Emergency stop control was not composed."));
         _runUiMaintenance = RunUiMaintenance;
         _uiWork = new ModConfigFrameWork(() => Time.frameCount);
-        ResetSceneState(SceneManager.GetActiveScene());
+        var activeScene = SceneManager.GetActiveScene();
+        ResetSceneState(activeScene);
+        if (activeScene.name == "Main") ScheduleFirstUiInstallation(activeScene);
     }
 
     private void Update()
@@ -843,8 +847,7 @@ public sealed class Plugin : BaseUnityPlugin
             return;
         }
 
-        _mainSceneElapsed += Time.unscaledDeltaTime;
-        if (_mainSceneElapsed < UiInstallDelaySeconds)
+        if (!ModConfigFirstInstallationPolicy.CanAttempt(_nativeUiStartBoundaryReached))
         {
             _uiWork?.SetState(true, false);
             return;
@@ -930,6 +933,7 @@ public sealed class Plugin : BaseUnityPlugin
         _invalidationBus = null;
         GameLifecycleMonitor.Shared.Transitioned -= OnLifecycleTransition;
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+        SceneManager.sceneLoaded -= OnSceneLoaded;
         _serviceCycleActivation?.Dispose();
         _serviceCycleActivation = null;
         _automataActionFamilyOwnership?.Dispose();
@@ -1061,6 +1065,35 @@ public sealed class Plugin : BaseUnityPlugin
     {
         ObserveLifecycle(GameLifecycleTransitionKind.SceneExited, previous.name);
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, next.name);
+        if (next.name == "Main") ScheduleFirstUiInstallation(next);
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "Main") ScheduleFirstUiInstallation(scene);
+    }
+
+    private void ScheduleFirstUiInstallation(Scene scene)
+    {
+        if (_nativeUiStartBoundaryScheduled) return;
+        _nativeUiStartBoundaryScheduled = true;
+        var sceneEpoch = _uiSceneEpoch;
+        StartCoroutine(ObserveNativeUiStartBoundary(scene, sceneEpoch));
+    }
+
+    private IEnumerator ObserveNativeUiStartBoundary(Scene scene, int sceneEpoch)
+    {
+        // UIViewRadio creates the native top tabs from its Unity Start path. sceneLoaded runs
+        // before Start, so the first end-of-frame boundary is the earliest point at which the
+        // complete native rail can be captured without polling for its children.
+        yield return new WaitForEndOfFrame();
+        if (sceneEpoch != _uiSceneEpoch ||
+            scene.name != "Main" ||
+            SceneManager.GetActiveScene().name != "Main")
+            yield break;
+        _nativeUiStartBoundaryReached = true;
+        _uiRetrySeconds = 0f;
+        _uiMaintenanceDue = true;
     }
 
     private void OnLifecycleTransition(GameLifecycleTransition transition)
@@ -2237,7 +2270,9 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void ResetSceneState(Scene scene)
     {
-        _mainSceneElapsed = 0f;
+        _uiSceneEpoch++;
+        _nativeUiStartBoundaryReached = false;
+        _nativeUiStartBoundaryScheduled = false;
         _uiRetrySeconds = 0f;
         _uiIntegritySeconds = 0f;
         _modsUiRetry.Reset();

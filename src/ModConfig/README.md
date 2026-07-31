@@ -20,7 +20,11 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 - Preserves same-page scroll position and remeasures variable-height rows when the available width changes.
 - Removes its owned Unity objects and listeners on scene exit or plugin unload.
 
-The Mods button is cloned from native top-level navigation, remains last, and opens a mod-owned overlay rather than modifying native content panels. `[Interface] EnableButtonShell = false` disables that integration if the game UI changes incompatibly.
+The Mods tab is cloned from native top-level navigation, remains last, and selects a mod-owned
+overlay rather than modifying native content panels. Selecting Mods again while it is active keeps
+it open, matching the native `ViewRadio` reselect behavior; selecting another native tab closes it.
+`[Interface] EnableButtonShell = false` disables that integration if the game UI changes
+incompatibly.
 
 Restyled suite controls sample the audited native `UIViewRadioButton` subview frame pair. OFF uses
 `baseImage`; configured ON uses `activeImage`, so intent differs structurally before the
@@ -39,7 +43,10 @@ Suite-owned UI objects request `RectTransform` explicitly from the native
 `GameObject(string, Type[])` constructor. Both the quick-control surface and Mods rail use the same
 five-second retry cadence and three-attempt waiting-to-terminal diagnostic policy; the first
 failure logs that installation will retry, and type failures name the member plus expected and
-actual managed types.
+actual managed types. The Mods rail's first attempt is not a retry tick: `Main` scene load schedules
+it across one end-of-frame boundary, after the native `UIViewRadio` Start path has generated the
+top tabs. Normal appearance is therefore the next update after the native tabs; five seconds is
+used only after a real capture or construction failure.
 
 The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.

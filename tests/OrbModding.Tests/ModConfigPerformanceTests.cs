@@ -11,6 +11,22 @@ namespace OrbModding.Tests;
 public sealed class ModConfigPerformanceTests
 {
     [Fact]
+    public void ModsTabSelectionAlwaysRequestsTheOpenState()
+    {
+        Assert.True(ModConfigTabSelectionPolicy.RequestedOpenState(currentlyOpen: false));
+        Assert.True(ModConfigTabSelectionPolicy.RequestedOpenState(currentlyOpen: true));
+    }
+
+    [Fact]
+    public void FirstInstallationWaitsForNativeStartBoundaryRatherThanElapsedSeconds()
+    {
+        Assert.False(ModConfigFirstInstallationPolicy.CanAttempt(
+            nativeUiStartBoundaryReached: false));
+        Assert.True(ModConfigFirstInstallationPolicy.CanAttempt(
+            nativeUiStartBoundaryReached: true));
+    }
+
+    [Fact]
     [Trait("Category", "PerformanceSimulation")]
     public void UiMaintenanceRunsAtMostOncePerFrameAndRetainsDueRepair()
     {

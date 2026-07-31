@@ -92,7 +92,7 @@ internal sealed class ModConfigUiShell : IDisposable
                 nativeRail);
             panel.RestoreNavigation(navigationBookmark);
             shell = new ModConfigUiShell(log, navigation, panel, maintenanceRequested);
-            navigation.Connect(shell.Toggle, shell.CloseFromNativeTab, navigationMaintenanceRequested);
+            navigation.Connect(shell.SelectMods, shell.CloseFromNativeTab, navigationMaintenanceRequested);
             log.LogInfo(
                 $"Mod Config UI shell installed. ButtonPath={NativeObjectPath.Build(navigation.ButtonObject)}; " +
                 $"PanelPath={NativeObjectPath.Build(panel.Root)}; " +
@@ -110,7 +110,11 @@ internal sealed class ModConfigUiShell : IDisposable
         }
     }
 
-    public void Toggle() => TrySetOpen(!_open, restorePreviousNativeView: _open);
+    public void SelectMods()
+    {
+        var requestedOpen = ModConfigTabSelectionPolicy.RequestedOpenState(_open);
+        TrySetOpen(requestedOpen, restorePreviousNativeView: !requestedOpen);
+    }
 
     public ModConfigNavigationBookmark CaptureNavigation() => _panel.CaptureNavigation();
 
@@ -132,14 +136,7 @@ internal sealed class ModConfigUiShell : IDisposable
         _navigation.NativeTabCountForGameMcp();
 
     internal bool TrySelectNativeTabForGameMcp(int index, out string reason)
-    {
-        if (_open && index == _navigation.NativeTabCountForGameMcp() - 1)
-        {
-            reason = string.Empty;
-            return true;
-        }
-        return _navigation.TrySelectNativeTabForGameMcp(index, out reason);
-    }
+        => _navigation.TrySelectNativeTabForGameMcp(index, out reason);
 
     internal bool TrySelectPageForGameMcp(int index, out string reason) =>
         _panel.TrySelectPageForGameMcp(index, out reason);
@@ -169,8 +166,6 @@ internal sealed class ModConfigUiShell : IDisposable
         _refresh.Complete();
         RefreshDiagnosticsIfDue();
     }
-
-    public void Close() => TrySetOpen(false, restorePreviousNativeView: true);
 
     public void Dispose()
     {

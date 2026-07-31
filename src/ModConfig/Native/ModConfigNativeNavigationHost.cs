@@ -79,10 +79,10 @@ internal sealed class ModConfigNativeNavigationHost : IDisposable
         NativeViewAdapter.IsAlive(panel) && NativeViewAdapter.IsAlive(panel.transform.parent) &&
         ReferenceEquals(panel.transform.parent, PanelParent);
 
-    public void Connect(Action modsRequested, Action nativeTabSelected, Action? hierarchyChanged)
+    public void Connect(Action modsSelected, Action nativeTabSelected, Action? hierarchyChanged)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(ModConfigNativeNavigationHost));
-        _modsListener = () => modsRequested();
+        _modsListener = () => modsSelected();
         _nativeTabSelected = nativeTabSelected;
         _button.onClick.AddListener(_modsListener);
         foreach (var nativeButton in EnumerateNativeButtons()) BindNativeButton(nativeButton);

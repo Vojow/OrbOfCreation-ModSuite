@@ -33,9 +33,17 @@ views are inactive: Mods is the active view when the panel is constructed, so re
 Live census proved that these runtime list items exist while inactive and are not destroyed on view
 close. It also proved their real field population: owned `buttonImage`, populated `baseImage` and
 `activeImage`, and null `viewImage`. The named top-bar icon instances are direct children of
-`Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`; they are created shortly after Main
-loads, so an initial absence is startup timing and receives a bounded retry. Once present, inactive
-objects such as `ScreenAlchemy` remain valid sources.
+`Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`. Assembly IL establishes their exact
+startup point: `UIGenericPlainList.RegisterStart` calls `UIViewRadio.PostRegisterStart`, whose
+`Setup` renders the button children during Unity Start. The suite schedules its first capture from
+`Main` scene load across the first end-of-frame boundary, then uses the next update; bounded retry
+begins only if that attempt actually fails. Once present, inactive objects such as
+`ScreenAlchemy` remain valid sources.
+
+The same IL establishes the interaction grammar. `UIViewRadio.PostSetupItem` wires each button to
+`SwapToView`; `ViewListVariable.SwapToView` writes the selected `ViewSO` active and every sibling
+inactive. Selecting an already active native tab therefore reselects it without closing the view.
+The Mods tab follows that same state transition.
 
 ## Quick-button frame and icon comparison
 

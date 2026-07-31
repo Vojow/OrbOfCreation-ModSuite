@@ -226,6 +226,8 @@ the supplied UUID as a published `PlotNodeSO` and invokes the one audited active
 For a compound request, the server selects the top tab, waits one Unity frame for its native
 content hierarchy, then resolves and selects the requested subtab or plot. The whole operation
 still returns one terminal tool result; callers never split it into a retry sequence.
+Mods uses that identical catalog-indexed button path. Selecting Mods while it is already active is
+an idempotent tab reselect and leaves its page open; the MCP does not carry a Mods-only toggle case.
 
 ```sh
 tools/game-mcp-client.py catalog

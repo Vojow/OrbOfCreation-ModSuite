@@ -27,8 +27,11 @@ icons.
 
 ## Native shell and responsive layout
 
-1. Open Mods from each unlocked top-level native view. Confirm Mods remains last and returning to
-   Magic, Scholar, or Time restores the previously selected native view.
+0. Enter Main and watch the first top-bar render. Confirm Mods appears on the next update after the
+   native tabs, with no player-visible two- or seven-second delay.
+1. Open Mods from each unlocked top-level native view. Click the active Mods tab again and confirm
+   it stays open. Confirm Mods remains last and selecting Magic, Scholar, or Time closes Mods and
+   selects that native view.
 2. Confirm the title is exactly **Orb Of Creation ModSuite** and the left rail is Runtime,
    General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, Mentor,
    Advanced.
@@ -51,7 +54,9 @@ The `perf-debug` MCP server replaces the retired F10/F11/F12 validation shortcut
 
 1. On Start, `game_continue` invokes the audited native `SaveStateManager.StartGame` action.
 2. On Main, `game_screen_catalog` lists native tabs plus the suite-owned Mods rail entry.
-3. `game_navigate` selects Mods and its live page catalog by exact name or index.
+3. `game_navigate` selects Mods and its live page catalog by exact name or index. Invoke the same
+   Mods destination while it is active and confirm it remains open through the ordinary indexed
+   button path.
 
 The Start screen also carries a large native-styled ModSuite status card beneath the game's version
 number in both build modes. A screenshot must distinguish no mod, release (`MCP OFF`), perf-debug
