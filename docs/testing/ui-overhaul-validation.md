@@ -27,9 +27,10 @@ icons.
 
 ## Native shell and responsive layout
 
-0. Enter Main and watch the progressive top-bar render. Confirm quick controls and Mods appear
-   together no more than 100 ms after all six native icon tabs are present, with no five-second
-   quantization or staggered pop-in.
+0. Enter Main and watch the progressive top-bar render. Icon birth is machine/load-dependent and
+   may be seconds after scene entry; confirm quick controls and Mods appear together no more than
+   100 ms after all six native icon tabs are present, with no five-second quantization or staggered
+   pop-in. A top bar that remains absent for 30 seconds must enter the loud ordinary failure path.
 1. Open Mods from each unlocked top-level native view. Click the active Mods tab again and confirm
    it stays open. Confirm Mods remains last and selecting Magic, Scholar, or Time closes Mods and
    selects that native view.

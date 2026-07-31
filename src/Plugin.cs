@@ -1104,8 +1104,8 @@ public sealed class Plugin : BaseUnityPlugin
     private IEnumerator ObserveUiStartupReadinessBoundary(Scene scene, int sceneEpoch)
     {
         // Scene load precedes the native UI lifecycle. Start the bounded shared-readiness window
-        // after the first frame; UIViewRadio's icon entries are actually instantiated later by
-        // UIGenericPlainList.DelayedRegisterStart once GameManager's startup predicate clears.
+        // after the first frame; the game renders UIViewRadio's icon entries later on a
+        // machine/load-dependent schedule that is not coordinated with the suite scene clock.
         yield return new WaitForEndOfFrame();
         if (sceneEpoch != _uiSceneEpoch ||
             scene.name != "Main" ||

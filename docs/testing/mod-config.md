@@ -60,10 +60,11 @@ installation, recovery, or layout work changes.
 - Selecting Mods requests open state whether it was inactive or already active. Only selecting a
   native sibling closes it, and MCP tab selection invokes that same button path.
 - After the first `Main` end-of-frame boundary, one shared gate inspects all six required direct
-  top-bar icon candidates at most every 100 ms for at most two seconds. Zero or partial-zero counts
-  stay on that bounded startup lane without incrementing either surface's failure state. Once all
-  six populated icons exist, quick controls and Mods are admitted in the same Update. Duplicates,
-  null icons, type/field mismatches, and absence after the window enter the existing five-second,
+  top-bar icon candidates at most every 100 ms for at most 30 seconds. Their birth is
+  machine/load-dependent and observed seconds after scene entry, so zero or partial-zero counts stay
+  on that bounded startup lane without incrementing either surface's failure state. Once all six
+  populated icons exist, quick controls and Mods are admitted in the same Update. Duplicates, null
+  icons, type/field mismatches, and absence after the window enter the existing five-second,
   terminal-after-three failure path immediately.
 - Native-skinned panel frames remain raycast targets. Wheel delivery is continuous across the
   settings viewport, including row gutters, runtime-card text, and blank padding; the open feature

@@ -34,16 +34,16 @@ Live census proved that these runtime list items exist while inactive and are no
 close. It also proved their real field population: owned `buttonImage`, populated `baseImage` and
 `activeImage`, and null `viewImage`. The named top-bar icon instances are direct children of
 `Canvas/ContentArea/MainContentContainer/TopBar/ViewRadio`. Assembly IL establishes their exact
-startup point. `GameManager.InitGame` records `startTime`; `GameManager.IsStillStarting` remains
-true while `Time.time - startTime < 0.3`. `UIRenderGroupElement.Update` waits for that predicate to
-clear, then calls its one-shot virtual `DelayedRegisterStart`. The `UIGenericPlainList` override
-calls `EnsureRendered`; `RenderChildren` instantiates each button, and
+construction path, but not a usable time relative to suite scene entry.
+`UIRenderGroupElement.Update` eventually calls its one-shot virtual `DelayedRegisterStart`. The
+`UIGenericPlainList` override calls `EnsureRendered`; `RenderChildren` instantiates each button, and
 `UIGenericItem.Setup`/`UIViewRadioButton.RenderContent` synchronously populate its `ViewSO` and
-`viewImage.sprite`. This is later than Unity Start and independent of fade completion, and the game
-publishes no event for it.
+`viewImage.sprite`. The game publishes no event for that completion, and production launches show
+that its relationship to the suite's `sceneLoaded` boundary is machine/load-dependent and
+seconds-scale: current evidence places icon birth roughly two to four seconds after scene entry.
 
 The suite therefore starts a bounded readiness window after Main's first end-of-frame boundary. It
-checks the six required icon candidates at 100 ms cadence for at most two seconds. A zero or
+checks the six required icon candidates at 100 ms cadence for at most 30 seconds. A zero or
 partial-zero set is still loading; duplicates, null icons, and structural mismatches are failures.
 All six ready icons release quick controls and Mods together in one suite Update. Once present,
 inactive objects such as `ScreenAlchemy` remain valid sources.

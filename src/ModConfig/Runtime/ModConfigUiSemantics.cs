@@ -60,18 +60,16 @@ internal static class NativeTopBarReadinessPolicy
 
 internal readonly record struct UiSurfaceAdmission(
     bool QuickControls,
-    bool ModsRail,
-    bool UsesSlowFailureCadence)
+    bool ModsRail)
 {
-    internal static UiSurfaceAdmission Waiting => new(false, false, false);
-    internal static UiSurfaceAdmission Ready => new(true, true, false);
-    internal static UiSurfaceAdmission SlowFailure => new(true, true, true);
+    internal static UiSurfaceAdmission Waiting => new(false, false);
+    internal static UiSurfaceAdmission Both => new(true, true);
 }
 
 internal sealed class UiStartupReadinessGate
 {
     internal const float FastRetryIntervalSeconds = 0.1f;
-    internal const float StartupWindowSeconds = 2.0f;
+    internal const float StartupWindowSeconds = 30.0f;
 
     private bool _active;
     private float _elapsedSeconds;
@@ -100,10 +98,10 @@ internal sealed class UiStartupReadinessGate
     internal UiSurfaceAdmission Observe(NativeUiStartupReadinessKind readiness)
     {
         if (readiness == NativeUiStartupReadinessKind.Ready)
-            _admission = UiSurfaceAdmission.Ready;
+            _admission = UiSurfaceAdmission.Both;
         else if (readiness == NativeUiStartupReadinessKind.Mismatch ||
                  _elapsedSeconds >= StartupWindowSeconds)
-            _admission = UiSurfaceAdmission.SlowFailure;
+            _admission = UiSurfaceAdmission.Both;
         else
         {
             _untilNextInspection = FastRetryIntervalSeconds;

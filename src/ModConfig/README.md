@@ -42,11 +42,11 @@ Runtime. There is no cloned native toggle, text quick-control, or alternate shel
 Suite-owned UI objects request `RectTransform` explicitly from the native
 `GameObject(string, Type[])` constructor. Quick controls and Mods share one startup-readiness gate.
 After Main's first end-of-frame boundary it checks the six required direct top-bar icon candidates
-at 100 ms cadence for at most two seconds. The game's own delayed list renderer creates and
-populates those entries only after `GameManager.IsStillStarting()` clears, not during Start. Zero or
-partial-zero counts remain startup waiting and do not increment either failure state. All six
-populated icons admit both suite surfaces in the same Update, so normal appearance is within
-100 ms of native icon readiness.
+at 100 ms cadence for at most 30 seconds. The game's own delayed list renderer creates and
+populates those entries on a machine/load-dependent, seconds-scale schedule after suite scene entry;
+the suite observes rather than predicts that moment. Zero or partial-zero counts remain startup
+waiting and do not increment either failure state. All six populated icons admit both suite
+surfaces in the same Update, so normal appearance is within 100 ms of native icon readiness.
 
 Duplicates, null icons, wrong fields/types, or continued absence after that bounded window bypass
 the startup lane. Each surface then retains the same five-second retry cadence and three-attempt

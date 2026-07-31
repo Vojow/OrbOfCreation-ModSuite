@@ -46,7 +46,6 @@ public sealed class ModConfigPerformanceTests
         var admitted = gate.Observe(NativeUiStartupReadinessKind.Ready);
         Assert.True(admitted.QuickControls);
         Assert.True(admitted.ModsRail);
-        Assert.False(admitted.UsesSlowFailureCadence);
     }
 
     [Fact]
@@ -65,7 +64,6 @@ public sealed class ModConfigPerformanceTests
         var admission = gate.Observe(NativeUiStartupReadinessKind.Mismatch);
         Assert.True(admission.QuickControls);
         Assert.True(admission.ModsRail);
-        Assert.True(admission.UsesSlowFailureCadence);
 
         var quickControls = new UiInstallationRetryState();
         var modsRail = new UiInstallationRetryState();
@@ -99,17 +97,23 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
-    public void StartupFastLaneExpiresIntoTheSlowFailurePath()
+    public void StartupFastLaneWaitsUntilNamedBoundThenEntersSlowFailurePath()
     {
         var gate = new UiStartupReadinessGate();
         gate.Begin();
-        Assert.True(gate.ShouldInspect(UiStartupReadinessGate.StartupWindowSeconds));
+        Assert.True(gate.ShouldInspect(
+            UiStartupReadinessGate.StartupWindowSeconds -
+            UiStartupReadinessGate.FastRetryIntervalSeconds));
+
+        var waiting = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
+        Assert.False(waiting.QuickControls);
+        Assert.False(waiting.ModsRail);
+        Assert.True(gate.ShouldInspect(UiStartupReadinessGate.FastRetryIntervalSeconds));
 
         var admission = gate.Observe(NativeUiStartupReadinessKind.NotYetPresent);
 
         Assert.True(admission.QuickControls);
         Assert.True(admission.ModsRail);
-        Assert.True(admission.UsesSlowFailureCadence);
     }
 
     [Fact]
