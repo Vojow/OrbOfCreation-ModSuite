@@ -1,5 +1,52 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.5.0-beta.1 — 2026-07-31
+
+- Drive ordinary automation from one shared 250-millisecond world publication and every committed
+  configuration publication, with no per-feature cadence settings or fallback polls. After any
+  attempted game-facing action—success, refusal, or fault—the service waits for a strictly newer
+  world reading before deciding again.
+- Make Auto Buy reserve the exact summed cost of every level in a grouped purchase, then buy the
+  largest exactly priced positive group the remaining batch budget can afford instead of dropping
+  an otherwise affordable candidate. If live affordability changes after collection, Auto Buy logs
+  the exact cost evidence, skips without changing the player's settings, and replans from the next
+  world publication; structural contradictions still fail closed.
+- Reduce Auto Concept's default settled training period from 300 seconds to 30 seconds.
+  Configuration schema 6 removes the retired cadence keys and rewrites every serialized 300-second
+  period, whether inherited or deliberately saved, while preserving every other customized period.
+- Make Auto Concept's Timed Cycle rotate through all unlocked concepts instead of partitioning them
+  by type. Resolve native usage limits before planning, keep settled-training deadlines stable
+  across owned depth changes, record queued depth as suite-owned immediately, and start a full new
+  training period after an accepted replacement.
+- Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
+  rate. Verified quantity changes and native refusals now name both rotation identities, while the
+  tooltip, Runtime page, journal, and trace dashboard distinguish settled training, no alternative
+  assignment, and a refusal that is waiting for fresh world facts.
+- Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue and
+  randomized Scroll targeting, rechecks exact family, visibility, inventory, readiness, ownership,
+  and targets immediately before submission, and stops for the current game lifecycle when an
+  attempted use cannot be verified.
+- Allow exact-UUID-approved temporary Fruits, Potions, and Threads on the Auto Items page. Temporary
+  use requires a finite duration and toxicity-only costs and headroom, excludes every other
+  consumable until one native usage has engaged and disappeared, and quarantines only the exact item
+  when activation evidence is ambiguous, doubled, premature, or missing.
+- Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It blocks a
+  publication when any enabled role is unknown, revalidates the live role and every preflight before
+  payment, and verifies the exact resource charge, progression ceiling, and queued or instant-stock
+  result. A post-payment fault records the partial commit and quarantines Scribe until the game
+  lifecycle changes.
+- Replace the compact gameplay tray with one top-left quick-controls column below the native gear
+  and character buttons. OFF and ON use the game's recessed and raised view-button frames, color is
+  secondary, and Auto Concept, Auto Items, Auto Scribe, and Advanced use distinct Scholar, World,
+  Workshop, and Alchemy glyphs shared with their corrected Mods rail entries. Auto Cast uses the
+  audited Casting Speed glyph instead of an equipped-spell icon.
+- Add the localhost Game MCP server to performance-debug builds only, replacing the F10/F11/F12
+  validation shortcuts with closed-world run and navigation tools. The Start screen reports build
+  mode, MCP status, audit health, endpoint, and process ID; release builds contain no MCP server.
+- Harden the installer for Windows Git-for-Windows/MSYS: normalize supplied game and save paths with
+  `cygpath -u`, accept either `shasum` or `sha256sum`, and query native Windows processes through
+  PowerShell before any POSIX fallback so an inspection failure cannot authorize installation.
+
 ## Orb Of Creation ModSuite 0.4.0 Beta 1 — 2026-07-29
 
 - Support Orb of Creation `1.0.5-2` on Windows after checking the current game assemblies and
@@ -8,61 +55,10 @@
   captured game state, and every action is checked again immediately before it changes the game.
 - Add Auto Harvest, spell leveling, clearer Runtime diagnostics, compact gameplay controls, and a
   Mods screen that uses the game's own visual style.
-- Replace the compact gameplay tray with one top-left column under the native gear and character
-  buttons. Every automation feature now has one control; OFF uses the game’s recessed view-button
-  frame, ON uses its raised frame, and color remains secondary. Auto Concept, Auto Items, Auto
-  Scribe, and Advanced use distinct Scholar, World, Workshop, and Alchemy glyphs shared with their
-  Mods rail entries.
-- Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue,
-  native randomized Scroll targeting, and one fresh world publication per attempted use.
-- Recheck each item's exact family, visibility, inventory readiness, native firing decision,
-  ownership, and Scroll targets before submission. An unverified attempted use stops Auto Items
-  for the current game lifecycle and reports the exact reason on Runtime.
-- Allow exact-UUID-approved temporary Fruits, Potions, and Threads on the existing Auto Items page.
-  Temporary use requires finite duration, toxicity-only costs and headroom, and excludes every
-  other consumable use until one native usage has engaged and later disappeared.
-- Quarantine only the exact temporary item when native mutation or activation evidence is
-  ambiguous, doubled, prematurely expired, or missing. Every decision remains publication-driven;
-  Auto Items adds no timer, family switch, rail entry, or separate temporary-item quick button.
-- Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It consumes
-  complete role, recipe, Scroll, enchantment, levelled inventory, target, queue, and native
-  automatic-production facts and blocks the whole publication when any enabled role is unknown.
-- Re-drive the native one-shot Scribe transaction behind one lifecycle-bound GameAction. It proves
-  the live role relation and every preflight before payment, then verifies the exact resource
-  charge, progression ceiling, and queue or instant-stock outcome. A post-payment fault records the
-  partial commit, names its stage on Runtime, and quarantines Scribe until lifecycle replacement.
 - Put **Emergency disable** on the General page. Unknown but complete game builds now open in a safe
   compatibility mode, with all gameplay changes stopped until the player chooses to continue.
 - Keep incomplete game installations closed, bind an unverified-build choice to the exact two game
   files, and reset that choice automatically after another game update.
-- Drive ordinary automation from the shared 250-millisecond world publication and every committed
-  configuration publication, with no per-feature cadence settings or fallback polls. Configuration
-  schema 6 removes those retired keys and changes every serialized 300-second Auto Concept training
-  period to 30 seconds while preserving every other customized period.
-- Make Timed Cycle rotate through all unlocked concepts rather than partitioning its order
-  by concept type. The game remains authoritative for whether releasing the active assignment opens
-  a compatible typed or typeless slot, and locked concepts are revalidated again before mutation.
-- Resolve each concept's native usage limit before planning. The raw `-1` modifier sentinel no
-  longer makes unlocked replacements look ineligible or prevents an active concept gaining levels.
-- Keep Timed Cycle's settled-active deadline stable when an automated depth change finishes. Native
-  queued quantity is recorded as suite-owned immediately, so later settlement is not mistaken for a
-  manual edit that restarts training.
-- End a service's work on the current world reading after every attempted game-facing action,
-  including a native rejection or fault. Auto Concept reconciles a rejected replacement on the next
-  world publication and plans again from those fresh facts; a persistently refused candidate remains
-  loud and may deliberately starve later candidates until collection exposes the missing constraint.
-- Start a new Timed Cycle training session when an automated replacement assignment is accepted, so
-  its full settled-active period elapses and its rotation-order history advances before replacement.
-- Roll back only Auto Concept-owned depth as soon as a drained resource has a negative live net
-  rate, rather than waiting for that resource to reach zero.
-- Add a trace-derived Auto Concept reliability lane with native integration, queued-versus-settled
-  headless journeys, and deterministic multi-slot and round-robin simulations. Journey publications
-  now model the runtime's one shared world generation across immediate receipt/action follow-ups.
-- Log every verified Auto Concept quantity change and the exact native reason for every rejected
-  change, including both rotation identities.
-- Show whether Auto Concept is waiting for settled training or has no other unlocked
-  assignment in its tooltip, Runtime status, decision journal, and trace dashboard. A refused set of
-  replacements is shown separately as waiting for another publication.
 
 ## Game-native UI overhaul — 2026-07-28
 
@@ -73,11 +69,9 @@
 - Use the full Mods frame: the native title panel now spans the top edge, the rail and detail pane
   fill the middle, and the staged Apply/Revert footer occupies the bottom edge with only deliberate
   gutters between them.
-- Replace the profile-only F10/F11/F12 validation shortcuts with the localhost MCP run and
-  closed-world navigation tools, and show build mode, MCP status, audit health, endpoint, and PID
-  in a native-styled card beneath the Start screen's game version. `game_continue` invokes the
-  audited native Continue action; the generic screen catalog exposes the Mods entry and its pages
-  without arbitrary keys or clicks.
+- Retain profile-build-only UI validation shortcuts: F12 invokes the audited native Continue
+  action on Start, F11 toggles Mods on Main, and F10 advances the Mods rail. These keys do not
+  mutate configuration or native gameplay state.
 - Correct native visual capture against the production view state: the Magic/Scholar rail is sampled
   while its source view is inactive, and spell frames come only from direct children of the audited
   gameplay `CastingBar/SmallSpellList` instead of requiring unrelated active spell buttons to agree.
@@ -88,14 +82,12 @@
 - Source Auto Buy's quick icon from audited
   `GlobalVariables.GetGlobalStructureType().GetIcon()` instead of the cloned queue toggle's optional
   image, while preserving the single pixel writer and the existing status contract.
-- Give Auto Cast one audited Casting Speed attribute glyph shared by its Mods rail entry and quick
-  control, removing the equipped-spell icon dependency.
 - Advance the unified configuration file to schema 5 and transactionally discard the retired Auto Buy
   scan cap, rejection cap, global logging switches, Mentor detailed logging, mastery event probe, and
   verifier shortcut. ServiceCycle plans from complete published snapshots; maintained diagnostics are
   explicit Runtime actions, traces, journals, warnings, and errors.
-- Replace per-service cadence controls with one shared world/configuration publication cadence, while
-  retaining explicit gameplay deadlines and fault backoffs for the semantics that need them.
+- Keep cadence controls, but describe them as minimum service-planning intervals or maximum idle
+  fallback delays instead of per-frame scan budgets.
 - Audit the game's native nested-navigation and spell-button visual contracts. The suite samples
   the exact inactive-capable `MainContentContainer/SubviewRadio` frame family, exact named top-bar
   icons, and bottom-bar spell-frame structural paths; a mismatch is a suite defect on the audited
@@ -140,7 +132,8 @@
 - Centralize host-construction failure and unavailable projection, remove seven startup-failure
   callbacks and the production-composition forwarding file, and require feature diagnostics/status
   dependencies instead of silently running without presentation.
-- Preserve trace wire format, assembly shape, and native-contract manifest schema 3.
+- Preserve trace wire format, assembly shape, native-contract manifest schema 3, and the
+  `spell.get-icon` legacy allowlist.
 
 ## Mentor on the shared engine — 2026-07-28
 

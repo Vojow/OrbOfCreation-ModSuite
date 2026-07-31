@@ -12,7 +12,7 @@ and an optional native-styled configuration UI. Back up your save before using b
 
 ## Project status
 
-The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.vojow.orbofcreation.modsuite`, version `0.4.0` beta — with one configuration file. The earlier separately versioned Orb Automata, Orb Mod Config, Orb Mentor, and Orb Modding Common plugins are retired and no longer exist as loadable identities.
+The suite ships as one BepInEx 5 plugin — `OrbModSuite.dll`, plugin GUID `dev.vojow.orbofcreation.modsuite`, release version `0.5.0-beta.1` — with one configuration file. The earlier separately versioned Orb Automata, Orb Mod Config, Orb Mentor, and Orb Modding Common plugins are retired and no longer exist as loadable identities.
 
 | Feature area | Status | Description |
 |---|---|---|

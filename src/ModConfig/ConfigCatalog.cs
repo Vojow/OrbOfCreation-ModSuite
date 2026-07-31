@@ -182,9 +182,14 @@ internal static class ConfigCatalog
             .Select(plugin => new ConfigPluginSource(
                 plugin.Metadata.GUID,
                 plugin.Metadata.Name,
-                plugin.Metadata.Version.ToString(),
+                ReportedVersion(plugin.Metadata.GUID, plugin.Metadata.Version.ToString()),
                 plugin.Instance!.Config))
             .ToArray();
+
+    internal static string ReportedVersion(string pluginGuid, string loaderVersion) =>
+        string.Equals(pluginGuid, PluginIds.SuiteGuid, StringComparison.Ordinal)
+            ? PluginIds.ReleaseVersion
+            : loaderVersion;
 
     public static ConfigCatalogSnapshot Build(IEnumerable<ConfigPluginSource> sources) =>
         Build(sources, schemaStatuses: null);

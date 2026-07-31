@@ -641,7 +641,7 @@ public sealed class Plugin : BaseUnityPlugin
         _startStatusView ??= new ModConfigStartStatusView();
         if (_startStatusView.TryRender(
                 new ModConfigStartStatusPresentation(
-                    "Orb ModSuite  ·  v" + PluginIds.Version,
+                    "Orb ModSuite  ·  v" + PluginIds.ReleaseVersion,
                     mode,
                     mcpStatus + "  ·  " + compatibility,
                     endpoint,
