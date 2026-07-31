@@ -30,6 +30,7 @@ internal readonly record struct ScrollRoleCoverage(
     Guid RecipeId,
     int CraftCostOrder,
     int TargetLevel,
+    int ProgressionLevel,
     int ValidTargets,
     int CoveredTargets,
     int OwnedSupply,
@@ -43,6 +44,13 @@ internal readonly record struct ScrollRoleCoverage(
 {
     internal bool ShouldProduce =>
         State == ScrollCoverageState.ProductionNeeded && RecipeId != Guid.Empty && Deficit > 0;
+    internal bool ShouldProbeProgression =>
+        State == ScrollCoverageState.Covered &&
+        RecipeId != Guid.Empty &&
+        ProgressionLevel > TargetLevel;
+    internal bool ShouldAttemptCraft => ShouldProduce || ShouldProbeProgression;
+    internal int RequestedCraftLevel =>
+        ShouldProduce ? TargetLevel : ProgressionLevel;
 }
 
 internal sealed class ScrollCoveragePlan
@@ -70,33 +78,52 @@ internal sealed class ScrollCoveragePlan
         return false;
     }
 
-    internal bool TryChooseProduction(out ScrollRoleCoverage coverage) =>
-        TryChooseProduction(enabledRoles: null, out coverage);
+    internal bool TryChooseCraft(out ScrollRoleCoverage coverage) =>
+        TryChooseCraft(enabledRoles: null, out coverage);
 
-    internal bool TryChooseProduction(
+    internal bool TryChooseCraft(
         PublicationTable<ScrollRoleKey>? enabledRoles,
+        out ScrollRoleCoverage coverage) =>
+        TryChooseCraft(enabledRoles, afterCraftCostOrder: -1, out coverage);
+
+    internal bool TryChooseCraft(
+        PublicationTable<ScrollRoleKey>? enabledRoles,
+        int afterCraftCostOrder,
         out ScrollRoleCoverage coverage)
     {
         coverage = default;
-        var found = false;
+        var foundAfter = false;
+        var foundWrapped = false;
+        var wrapped = default(ScrollRoleCoverage);
         for (var index = 0; index < Roles.Length; index++)
         {
             var candidate = Roles[index];
-            if (!candidate.ShouldProduce ||
+            if (!candidate.ShouldAttemptCraft ||
                 !AutoScribeRoleSelection.Contains(enabledRoles, candidate.Role))
             {
                 continue;
             }
-            if (!found ||
-                candidate.CraftCostOrder < coverage.CraftCostOrder ||
-                (candidate.CraftCostOrder == coverage.CraftCostOrder &&
-                 candidate.Role.CompareTo(coverage.Role) < 0))
+            if (candidate.CraftCostOrder > afterCraftCostOrder &&
+                (!foundAfter ||
+                 candidate.CraftCostOrder < coverage.CraftCostOrder ||
+                 (candidate.CraftCostOrder == coverage.CraftCostOrder &&
+                  candidate.Role.CompareTo(coverage.Role) < 0)))
             {
                 coverage = candidate;
-                found = true;
+                foundAfter = true;
+            }
+            if (!foundWrapped ||
+                candidate.CraftCostOrder < wrapped.CraftCostOrder ||
+                (candidate.CraftCostOrder == wrapped.CraftCostOrder &&
+                 candidate.Role.CompareTo(wrapped.Role) < 0))
+            {
+                wrapped = candidate;
+                foundWrapped = true;
             }
         }
-        return found;
+        if (foundAfter) return true;
+        coverage = wrapped;
+        return foundWrapped;
     }
 }
 
@@ -125,7 +152,6 @@ internal static class ScrollCoveragePlanner
         GameWorldState world,
         in AutoScribeRoleDescriptor role)
     {
-        var targetLevel = TargetLevel(world);
         var strongest = WorldConsumableCountLookup.StrongestOwnedLevel(
             world.ConsumableCounts, role.Scroll.Uuid);
         var useTargets = false;
@@ -146,20 +172,32 @@ internal static class ScrollCoveragePlanner
                 ScrollCoverageState.CoverageOnly);
 
         var recipeId = role.Recipe!.Value.Uuid;
-        if (targetLevel <= 0 ||
-            !WorldScribeLookup.TryGetRecipe(world.ScribeRecipes, recipeId, out var recipe) ||
+        if (!WorldScribeLookup.TryGetRecipe(world.ScribeRecipes, recipeId, out var recipe) ||
             recipe.RecipeTypeId != KnownEntities.ScribeCrafting.Uuid ||
             recipe.OutputConsumableId != role.Scroll.Uuid ||
             !recipe.UsesQuantityAsLevel)
         {
             return Row(
-                role, targetLevel, 0, 0, 0, 0, strongest, usableCandidates,
+                role, 0, 0, 0, 0, 0, strongest, usableCandidates,
                 ScrollUseDirective.BlockUnknown, ScrollCoverageState.EvidenceUnknown);
         }
         if (!recipe.Visible)
             return Row(
-                role, targetLevel, 0, 0, 0, 0, strongest, usableCandidates,
+                role, 0, 0, 0, 0, 0, strongest, usableCandidates,
                 useDirective, ScrollCoverageState.Unavailable);
+        if (!TryRoleFrontier(
+                world,
+                role.Scroll.Uuid,
+                recipeId,
+                strongest,
+                out var targetLevel,
+                out var progressionLevel,
+                out var carryTarget))
+        {
+            return Row(
+                role, 0, 0, 0, 0, 0, strongest, usableCandidates,
+                ScrollUseDirective.BlockUnknown, ScrollCoverageState.EvidenceUnknown);
+        }
 
         var uncovered = CountUncovered(world, role, targetLevel, out var completeTargets);
         if (!completeTargets)
@@ -177,7 +215,6 @@ internal static class ScrollCoveragePlanner
         var pending = CountPendingUsesAtOrAbove(
             world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
         var automatic = CountAutomaticWork(world, recipeId, targetLevel);
-        var carryTarget = FindMaximumCarryLoad(world, role.Scroll.Uuid);
         var desiredSupply = carryTarget > 0
             ? Math.Max(uncovered, carryTarget)
             : uncovered;
@@ -187,10 +224,13 @@ internal static class ScrollCoveragePlanner
             : deficit > 0
                 ? ScrollCoverageState.ProductionNeeded
                 : ScrollCoverageState.Covered;
+        if (targets == 0 && carryTarget == 0)
+            progressionLevel = 0;
         return new ScrollRoleCoverage(
             role.Key, role.DisplayName, role.Scroll.Uuid, role.Enchantment.Uuid,
-            recipeId, role.CraftCostOrder, targetLevel, targets, covered, owned,
-            queued, pending, deficit, strongest, usableCandidates, useDirective, state);
+            recipeId, role.CraftCostOrder, targetLevel, progressionLevel, targets,
+            covered, owned, queued, pending, deficit, strongest, usableCandidates,
+            useDirective, state);
     }
 
     private static ScrollRoleCoverage Row(
@@ -206,26 +246,51 @@ internal static class ScrollCoveragePlanner
         ScrollCoverageState state) =>
         new(
             role.Key, role.DisplayName, role.Scroll.Uuid, role.Enchantment.Uuid,
-            role.Recipe?.Uuid ?? Guid.Empty, role.CraftCostOrder, targetLevel,
+            role.Recipe?.Uuid ?? Guid.Empty, role.CraftCostOrder, targetLevel, 0,
             targets, covered, owned, queued, 0, 0, strongest, usable, directive,
             state);
 
-    private static int TargetLevel(GameWorldState world)
+    private static bool TryRoleFrontier(
+        GameWorldState world,
+        Guid scrollId,
+        Guid recipeId,
+        int strongestOwnedLevel,
+        out int targetLevel,
+        out int progressionLevel,
+        out int carryTarget)
     {
-        var rows = world.CraftingRecipeTypes.AsSpan();
-        for (var index = 0; index < rows.Length; index++)
-            if (rows[index].CraftingRecipeTypeId == KnownEntities.ScribeCrafting.Uuid)
-                return rows[index].MaxStartingLevel;
-        return 0;
-    }
+        targetLevel = 0;
+        progressionLevel = 0;
+        carryTarget = 0;
+        if (!WorldLookup.TryFind(world.Consumables, scrollId, out var scroll))
+            return false;
 
-    private static int FindMaximumCarryLoad(GameWorldState world, Guid scrollId)
-    {
-        var rows = world.Consumables.AsSpan();
-        for (var index = 0; index < rows.Length; index++)
-            if (rows[index].ConsumableId == scrollId)
-                return Math.Max(0, rows[index].MaximumCarryLoad);
-        return 0;
+        targetLevel = Math.Max(1, Math.Max(
+            scroll.MaxCreatedLevel,
+            strongestOwnedLevel));
+        var stableFrontier = targetLevel;
+        carryTarget = Math.Max(0, scroll.MaximumCarryLoad);
+
+        var hasActiveWork = false;
+        var work = world.ScribeWork.AsSpan();
+        for (var index = 0; index < work.Length; index++)
+            if (work[index].RecipeId == recipeId && !work[index].IsExpired)
+            {
+                hasActiveWork = true;
+                targetLevel = Math.Max(targetLevel, work[index].Level);
+            }
+
+        var usages = world.ConsumableUsages.AsSpan();
+        for (var index = 0; index < usages.Length; index++)
+            if (usages[index].ConsumableId == scrollId && !usages[index].Expired)
+                targetLevel = Math.Max(targetLevel, usages[index].Level);
+
+        if (!hasActiveWork && targetLevel == stableFrontier &&
+            stableFrontier < int.MaxValue)
+        {
+            progressionLevel = stableFrontier + 1;
+        }
+        return true;
     }
 
     private static int CountUncovered(

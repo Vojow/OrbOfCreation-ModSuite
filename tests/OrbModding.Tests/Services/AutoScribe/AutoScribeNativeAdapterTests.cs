@@ -116,6 +116,73 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
     }
 
     [Fact]
+    public void MoreExpensiveRecipeUsesItsOwnAffordableLevelBelowSharedCeiling()
+    {
+        Assert.True(_profile.TryFind(
+            new ScrollRoleKey("scribe.power"),
+            out var powerRole));
+        _recipe.MainType.maxStartingLevel = 67;
+        var powerRecipe = Register(
+            new CraftingRecipeSO
+            {
+                visible = true,
+                useQuantityAsLevel = true,
+                MaximumAffordableLevel = 24,
+                MainType = _recipe.MainType,
+            },
+            powerRole.Recipe!.Value.Uuid);
+        var powerScroll = Register(
+            new ConsumableSO { visible = true },
+            powerRole.Scroll.Uuid);
+        AddTarget(powerScroll);
+
+        var result = Execute(Adapter(), powerRole, level: 1);
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        var queued = Assert.Single(_active.value);
+        Assert.Same(powerRecipe, queued.Recipe);
+        Assert.Equal(24d, queued.Quantity.ToDouble());
+        Assert.Equal(67, powerRecipe.MainType.maxStartingLevel);
+    }
+
+    [Fact]
+    public void CoveredRecipeWaitsUntilItsOwnNextLevelBecomesAffordable()
+    {
+        Assert.True(_profile.TryFind(
+            new ScrollRoleKey("scribe.power"),
+            out var powerRole));
+        _recipe.MainType.maxStartingLevel = 67;
+        var powerRecipe = Register(
+            new CraftingRecipeSO
+            {
+                visible = true,
+                useQuantityAsLevel = true,
+                MaximumAffordableLevel = 24,
+                MainType = _recipe.MainType,
+            },
+            powerRole.Recipe!.Value.Uuid);
+        var powerScroll = Register(
+            new ConsumableSO { visible = true },
+            powerRole.Scroll.Uuid);
+        AddTarget(powerScroll);
+        powerScroll.consumableCounts.Add(
+            new ConsumableCount { Level = 24, Quantity = 1 });
+
+        var waiting = Execute(Adapter(), powerRole, level: 25);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, waiting.Disposition);
+        Assert.Empty(_active.value);
+        Assert.Equal(0, powerRecipe.PurchaseCalls);
+
+        powerRecipe.MaximumAffordableLevel = 25;
+        var advanced = Execute(Adapter(), powerRole, level: 25);
+
+        Assert.Equal(ServiceActionDisposition.Committed, advanced.Disposition);
+        Assert.Equal(25d, Assert.Single(_active.value).Quantity.ToDouble());
+        Assert.Equal(67, powerRecipe.MainType.maxStartingLevel);
+    }
+
+    [Fact]
     public void InstantCraftCommitsOnlyWhenSameLevelStockIncreases()
     {
         _recipe.InstantCraftEnabled = true;
@@ -285,10 +352,18 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
         Assert.True(_profile.TryFind(
             new ScrollRoleKey("scribe.advancement"),
             out var role));
+        return Execute(adapter, role, level: 12);
+    }
+
+    private ServiceActionResult Execute(
+        AutoScribeNativeAdapter adapter,
+        AutoScribeRoleDescriptor role,
+        int level)
+    {
         var action = new AutoScribeCycleAction(
             role.Recipe!.Value.Uuid,
             role.Scroll.Uuid,
-            level: 12,
+            level,
             collectedAtFrame: 8,
             collectedAtEpoch: 2);
         var config = new SuiteRuntimeConfiguration
@@ -317,6 +392,17 @@ public sealed class AutoScribeNativeAdapterTests : IDisposable
             actionIndex: 0,
             new MonotonicTimestamp(1));
         return adapter.TryExecute(in action, in config, in context);
+    }
+
+    private static void AddTarget(ConsumableSO scroll)
+    {
+        var targets = new Targeting.TargetStructure();
+        targets.Candidates.Add(new Target());
+        var options = new Targeting.TargetSelectOptions { Targeting = targets };
+        var block = new InstantEffectBlock();
+        block.effectScripts.Add(
+            new RequestTargetEffectScript { targetOptions = options });
+        scroll.onUseEffects.Add(block);
     }
 
     private T Register<T>(T value, Guid id) where T : IdScriptableObject

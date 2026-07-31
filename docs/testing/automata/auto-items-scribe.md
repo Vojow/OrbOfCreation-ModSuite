@@ -16,7 +16,7 @@ fresh world publications.
 | Installed assembly metadata | Exact types, members, overloads, fields, constructors, and UUID/type relationships used by reflection | Method semantics, visible UI result, or save persistence |
 | Retained 2026-07-30 journal | Actual service cadence, action dispositions, native-call counts, mutation evidence, faults, and world-gate behavior for the installed DLL | Which structure visibly changed or whether a later save/load retained it |
 | Portable stubs and tests | Deterministic policy, ordering, lifecycle rejection, final revalidation, postconditions, quarantine, and multi-publication convergence | Fidelity beyond the exact native contracts represented by the stubs |
-| Product plan and observed game knowledge | Highest same-type Scroll level replaces lower effective coverage; current maximum Scribe level is desired; native targeting owns structure choice; automatic Scribe work belongs to the player | Release-grade proof until the corresponding P5 scenario is observed on a disposable save |
+| Product plan and observed game knowledge | Highest same-type Scroll level replaces lower effective coverage; recipes have independent affordability frontiers; native targeting owns structure choice; automatic Scribe work belongs to the player | Release-grade proof until the corresponding P5 scenario is observed on a disposable save |
 
 The toxicity resource's inverted headroom representation, exact-zero recovery
 boundary, rest boost, single prepared-consumable behavior, and visible
@@ -37,14 +37,18 @@ the model rather than being normalized away.
 - One prepared consumable blocks another native item submission. Healthy
   verified chains resume after a fresh world publication and poll native-busy
   state at no more than 250 ms.
-- Auto Scribe re-reads the native maximum starting level and affordability at
-  every mutation boundary, probes above that frontier, and crafts the highest
-  currently affordable level. Native purchase advances the shared ceiling; an
-  unaffordable frontier falls back to useful lower production. It tries
-  deficient visible recipes in semantic cheapest-to-most-expensive order and
-  fills each unlocked Scroll family to its native carry cap, so stronger future
-  Scrolls can replace weaker stock. It reserves same-or-higher stock, queued
-  work, and pending use, and never edits persistent player automation.
+- Auto Scribe re-reads the native maximum starting level and the selected
+  recipe's affordability at every mutation boundary, probes above that
+  frontier, and crafts that recipe's highest currently affordable level.
+  Native purchase advances the shared ceiling; an unaffordable frontier falls
+  back to useful lower production. Coverage targets remain recipe-specific,
+  based on that Scroll's created level, stronger stock, pending use, and queued
+  work. Selection rotates through deficient visible roles in semantic order
+  and fills each unlocked Scroll family to its native carry cap, so cheaper
+  recipes cannot starve Development, Echoing, or another audited facade role.
+  Covered roles continue bounded next-level affordability probes, while
+  nonexpired Scribe work suppresses duplicate probes. Auto Scribe never edits
+  persistent player automation.
 - Manual one-shot Scribe work is queued supply. Player-owned automatic work is
   external production pressure: it suppresses competing production but remains
   reported separately.
@@ -96,7 +100,7 @@ The retained 2026-07-30 run produced five concrete regression classes:
 | Auto Scribe completed 164/164 mutations with 492 native calls | one healthy queue action commits one mutation with the expected three-call evidence |
 | Auto Items waited a full idle interval between healthy Scrolls | a committed Scroll chain continues immediately after fresh publication; native-busy polling is bounded at 250 ms |
 | A Scroll backlog outgrew serial single-item submissions | one native submission reserves the largest safe batch, restores the player's multi-buy setting, and projects the requested quantity into the journal |
-| Newly unlocked Scroll recipes and higher Scribe levels were missed | invisible recipes are dormant rather than degraded; every fresh publication reopens newly visible roles, while the native boundary probes above the current maximum and cheapest-first selection drives ceiling progression |
+| Newly unlocked Scroll recipes and higher Scribe levels were missed | invisible recipes are dormant rather than degraded; every fresh publication reopens newly visible roles, while the native boundary probes each selected recipe above the current maximum and fair facade-order rotation drives ceiling progression |
 | Lifecycle readiness and the shared host were previously unavailable | stale epoch, lost ownership, lost Scroll consumption, and lost capture permit all reject before a native call |
 
 These are permanent regression cases. A future dump can add cases but cannot
@@ -150,11 +154,12 @@ Auto Scribe must cover:
 - missing, lower, equal, and higher enchantment levels;
 - missing, lower, equal, higher, queued, pending-use, expired, and surplus stock;
 - manual one-shot queue reservation versus external automatic production;
-- largest-deficit then stable-role selection, disabled roles, no starvation;
+- facade-order round-robin selection, disabled roles, wraparound, and no starvation;
 - target level increase, structure appearance, zero targets, incomplete target
   evidence, recipe mismatch, and unknown baseline;
 - gradual recipe unlock, locked-role dormancy, native carry-cap stock fill,
-  lower-stock replacement pressure, and highest-affordable-level fallback;
+  lower-stock replacement pressure, covered-role affordability probes,
+  queued-work probe suppression, and highest-affordable-level fallback;
 - queue and instant-craft success, stale epoch, dependency loss, full queue,
   live supply race, live target race, native refusal, and quarantine recovery.
 - feature-runtime status after evaluation, emergency stop, ownership loss,

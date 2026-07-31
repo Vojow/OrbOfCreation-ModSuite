@@ -43,7 +43,10 @@ internal sealed class AutoScribeWorker :
             ObserveRole(plan.Roles[index], ref state);
 
         if (!AutoScribeServiceCycleFeature.IsOperational(config) ||
-            !plan.TryChooseProduction(state.EnabledRoles, out var selected))
+            !plan.TryChooseCraft(
+                state.EnabledRoles,
+                state.LastSelectedCraftCostOrder,
+                out var selected))
         {
             return WakePolicy.AfterDecision(interval);
         }
@@ -51,11 +54,12 @@ internal sealed class AutoScribeWorker :
         actions.Add(new AutoScribeCycleAction(
             selected.RecipeId,
             selected.ScrollId,
-            selected.TargetLevel,
+            selected.RequestedCraftLevel,
             plan.CollectedAtFrame,
             plan.CollectedAtEpoch));
+        state.ObserveSelection(selected.CraftCostOrder);
         state.PlannedActions = 1;
-        state.TargetLevel = selected.TargetLevel;
+        state.TargetLevel = selected.RequestedCraftLevel;
         return WakePolicy.AfterDecision(interval);
     }
 

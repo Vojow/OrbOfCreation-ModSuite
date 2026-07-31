@@ -95,17 +95,22 @@ CraftingRecipeSO.PurchaseQuantity(purchasedQuantity, previousQuantity)
 ```
 
 `SetMaxStartingLevel` keeps the larger of the existing and proposed values. When the resulting
-Scroll is delivered, `ConsumableSO.Gain` separately raises that Scroll's `maxCreatedLv` to the
-created level. Therefore `maxStartingLevel` is the current coverage target but not a safe cap on
-an autonomous one-shot purchase: purchasing an affordable level above it is how the native
-ceiling advances. Auto Scribe probes upward through `CanBuyAt(BigDouble)`, uses the highest
-affordable level, and does not change the player's `startingLevel`.
+Scroll is delivered, `ConsumableSO.Gain` separately raises only that Scroll's `maxCreatedLv` to
+the created level. The shared `maxStartingLevel` is therefore a progression frontier and the
+manual selector's cap, not a coverage requirement shared by recipes with different cost curves.
+Purchasing an affordable level above it is how the native ceiling advances. Auto Scribe probes
+the selected recipe upward through `CanBuyAt(BigDouble)`, uses that recipe's highest affordable
+level, and does not change the player's `startingLevel`. Once current coverage and carry supply are
+complete, the planner continues with a bounded request for that recipe's next level. The native
+boundary rejects it without mutation while that next level remains unaffordable, then advances
+when resource growth makes it affordable. Existing nonexpired Scribe work suppresses duplicate
+progression requests for its role.
 
-The observed player-facing unlock/cost sequence is represented as an explicit semantic cost rank
-in the baseline identity facade. Selection tries Advancement, Power, Learning, then Excellence
-for the four progressively exposed recipes; the additional audited Development and Echoing
-recipes follow if a lifecycle makes them visible. UUID order, serialized registry order, and
-localized names never decide production priority.
+The observed player-facing unlock/cost sequence is represented as an explicit semantic rank in the
+baseline identity facade. Selection rotates Advancement, Power, Learning, Excellence, Development,
+and Echoing when those recipes are visible and deficient, then wraps. The rank provides stable
+ordering without allowing a cheaper recipe to starve later roles. UUID order, serialized registry
+order, and localized names never decide production priority.
 
 ## Native Scribe lists and one-shot queue
 

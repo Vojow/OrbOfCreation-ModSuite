@@ -35,7 +35,7 @@ Last updated: **2026-07-30**
 | 12. Gameplay quick control | **Implemented; interactive layout gate open** | Auto Scribe shares one committed mode with its Mods command, renders native configured-intent/health state, and occupies the new paired tray row with Auto Items |
 | 13. Full test pyramid | **Automated layers complete; runtime gates open** | Direct guarded-adapter, coverage convergence, installed-reflection, retained-journal, and disposable-save layers have explicit ownership and acceptance criteria |
 | 14. Carry-fill and live progression replanning | **Implemented; runtime validation open** | Locked roles remain dormant until visible, every fresh publication observes new roles and level ceilings, the native boundary advances to the highest affordable level, and stronger stock replaces weaker stock up to the native carry limit |
-| 15. Scribe ceiling progression and cost order | **Implemented; runtime validation open** | A needed craft probes above `maxStartingLevel`, native purchase raises the ceiling, and the baseline facade prioritizes visible enabled recipes from cheapest to most expensive |
+| 15. Per-recipe frontier and fair ceiling progression | **Corrected; runtime validation open** | Every facade role tracks its own created/queued frontier, selection rotates without starvation, and covered roles keep making bounded next-level affordability probes so native purchase can raise the ceiling after resource growth |
 
 ### Current resume point
 
@@ -43,12 +43,15 @@ Last updated: **2026-07-30**
 - Branch: `agent/auto-scribe-plan`
 - Stacked base: `agent/auto-items-plan` at `9f01300`
 - Dependency: draft PR #99, which supplies lifecycle-safe Scroll consumption.
-- Current task: interactively validate the reviewed Scribe ceiling-progression build.
+- Current task: validate the corrected per-recipe Scribe frontier and fair role rotation.
   Native decompilation confirms that `PurchaseQuantity(purchasedQuantity, previousQuantity)`
   raises `maxStartingLevel` to their sum and that completed output raises the Scroll's
-  `maxCreatedLv`. Source probes above the live ceiling for the highest affordable level, falls
-  back to useful lower production when the frontier is unaffordable, and chooses the cheapest
-  enabled visible recipe through the baseline identity facade.
+  `maxCreatedLv`. Runtime evidence showed why those facts must remain distinct: Advancement's
+  cheaper affordability frontier raised the shared ceiling to 67 and the old planner incorrectly
+  imposed 67 on every recipe. Source now derives each role's target from its own `maxCreatedLv`,
+  stronger stock, pending use, and queued work; rotates every enabled producible facade role; and
+  keeps covered roles probing their own next level so the selected recipe can advance as soon as it
+  becomes affordable. Active Scribe work suppresses duplicate progression probes.
 - The post-install branch review consolidated semantic role parsing and production ordering,
   caches the immutable role selection by configuration generation, enforces lifecycle ownership
   in both production workers, and shares one fail-closed reflection exception policy across Auto
@@ -237,10 +240,12 @@ Auto Scribe reports it as coverage-only and does not invent a production path. A
 to Auto Scribe's completion goal only when its exact native Scribe recipe is proven.
 
 The exact Scribe recipe type is `ee001474-8209-4238-9566-84899a877226`
-(`CraftingRecipeTypeSO`, `ScribeCrafting`). Its native `maxStartingLevel` is the target level.
-The player's selected `startingLevel` is a UI preference and is not changed by the feature.
+(`CraftingRecipeTypeSO`, `ScribeCrafting`). Its native `maxStartingLevel` is the shared progression
+frontier and manual selector cap, not every recipe's coverage target. Each role instead uses its
+own Scroll's proven created/queued frontier. The player's selected `startingLevel` is a UI
+preference and is not changed by the feature.
 
-For one visible Scroll role at unlocked ceiling `L`:
+For one visible Scroll role at its own frontier `L`:
 
 ```text
 coverage demand = native-valid structures with no matching enchantment at level >= L
@@ -285,11 +290,14 @@ configuration, or Auto Items integration. An absent, ambiguous, or mismatched pr
 
 1. **Separate stacked feature.** Auto Scribe is an ordinary ServiceCycle service and a separate
    reviewable PR stacked on Auto Items. It does not enlarge Auto Items into a crafting service.
-2. **Advance the native Scribe ceiling.** The exact native
-   `ScribeCrafting.maxStartingLevel` is the current coverage target, not a production cap. A needed
-   craft probes above it and queues the highest affordable level. Native `PurchaseQuantity` then
-   raises the shared ceiling. If no frontier advance is affordable, the boundary falls back to the
-   highest affordable useful level. The player's selected starting level is not a policy input.
+2. **Advance the native Scribe ceiling without sharing recipe targets.** The exact native
+   `ScribeCrafting.maxStartingLevel` is a progression frontier, not a production cap or a coverage
+   requirement for recipes with different costs. A needed craft probes the selected recipe above
+   it and queues that recipe's highest affordable level. Native `PurchaseQuantity` then raises the
+   shared ceiling. If no frontier advance is affordable, the boundary falls back to the highest
+   affordable useful level. The player's selected starting level is not a policy input.
+   A covered role continues requesting its own next level, so new affordability is discovered
+   without borrowing another recipe's frontier. Active Scribe work suppresses duplicate requests.
 3. **Complete native catalog, not a screen list.** Every audited recipe registered to the exact
    Scribe type is considered. A role is supported only when its recipe, Scroll family, structure
    target, and enchantment relationship form one accepted graph. Names are diagnostics only.
@@ -322,10 +330,12 @@ configuration, or Auto Items integration. An absent, ambiguous, or mismatched pr
 
 ## Implemented rulings
 
-1. **Deterministic cheapest-first selection.** The worker selects the enabled visible deficit with
-   the lowest semantic craft-cost rank, then stable `ScrollRoleKey`. The rank is stored in the
-   baseline identity facade rather than inferred from UUIDs or display names. Disabled or locked
-   cheaper roles cannot starve a later enabled role.
+1. **Deterministic fair selection.** The worker rotates enabled visible deficits by the semantic
+   rank stored in the baseline identity facade, wrapping after the last role. Covered roles with no
+   active Scribe work join the rotation as next-level affordability probes. Disabled, locked,
+   externally produced, or already queued roles are skipped, and a rejected or continuously
+   cheaper recipe cannot starve Development, Echoing, or another audited future facade role. UUIDs
+   and display names never decide order.
 2. **External automation accounting.** Active one-shot work reserves supply. Matching automatic
    work suppresses competing production and is reported as external production; Auto Scribe never
    creates or edits the player's persistent automatic entries.

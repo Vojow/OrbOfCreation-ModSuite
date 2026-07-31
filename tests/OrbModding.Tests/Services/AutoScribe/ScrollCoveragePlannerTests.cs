@@ -25,7 +25,7 @@ public sealed class ScrollCoveragePlannerTests
 
         var plan = ScrollCoveragePlanner.Build(world, Profile());
 
-        Assert.True(plan.TryChooseProduction(out var selected));
+        Assert.True(plan.TryChooseCraft(out var selected));
         Assert.Equal(new ScrollRoleKey("scribe.advancement"), selected.Role);
         Assert.Equal(12, selected.TargetLevel);
         Assert.Equal(1, selected.Deficit);
@@ -105,12 +105,14 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(0, role.Deficit);
         Assert.Equal(ScrollCoverageState.Covered, role.State);
         Assert.Equal(ScrollUseDirective.AllowUse, role.UseDirective);
-        Assert.False(ScrollCoveragePlanner.Build(world, Profile())
-            .TryChooseProduction(out _));
+        Assert.True(ScrollCoveragePlanner.Build(world, Profile())
+            .TryChooseCraft(out var selected));
+        Assert.Equal(13, selected.RequestedCraftLevel);
+        Assert.True(selected.ShouldProbeProgression);
     }
 
     [Fact]
-    public void CompleteCoverageBlocksScrollUseAndProduction()
+    public void CompleteCoverageBlocksUseButStillProbesTheNextAffordableLevel()
     {
         var structure = Guid.NewGuid();
         var world = World(
@@ -128,6 +130,9 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(0, role.Deficit);
         Assert.Equal(ScrollUseDirective.BlockNoCandidate, role.UseDirective);
         Assert.Equal(0, role.UsableCandidates);
+        Assert.True(role.ShouldProbeProgression);
+        Assert.Equal(13, role.ProgressionLevel);
+        Assert.Equal(13, role.RequestedCraftLevel);
     }
 
     [Fact]
@@ -179,8 +184,9 @@ public sealed class ScrollCoveragePlannerTests
 
         Assert.Equal(1, role.PendingUseSupply);
         Assert.Equal(0, role.Deficit);
-        Assert.False(ScrollCoveragePlanner.Build(world, Profile())
-            .TryChooseProduction(out _));
+        Assert.True(ScrollCoveragePlanner.Build(world, Profile())
+            .TryChooseCraft(out var selected));
+        Assert.Equal(13, selected.RequestedCraftLevel);
     }
 
     [Fact]
@@ -195,7 +201,7 @@ public sealed class ScrollCoveragePlannerTests
             epoch: 2,
             new[] { disabled, enabled });
 
-        Assert.True(plan.TryChooseProduction(
+        Assert.True(plan.TryChooseCraft(
             AutoScribeRoleSelection.ParsePublication(
                 "scribe.power",
                 Profile().Roles),
@@ -204,21 +210,45 @@ public sealed class ScrollCoveragePlannerTests
     }
 
     [Fact]
-    public void CheapestEnabledRecipeDrivesProgressionBeforeLargerDeficits()
+    public void ProductionSelectionRotatesAcrossEveryProducibleFacadeRole()
     {
-        var cheapest = Production(
-            "scribe.advancement", deficit: 1, craftCostOrder: 0);
-        var expensive = Production(
-            "scribe.power", deficit: 5, craftCostOrder: 5);
+        var advancement = Production(
+            "scribe.advancement", deficit: 6, craftCostOrder: 0);
+        var power = Production(
+            "scribe.power", deficit: 5, craftCostOrder: 1);
+        var learning = Production(
+            "scribe.learning", deficit: 4, craftCostOrder: 2);
+        var excellence = Production(
+            "scribe.excellence", deficit: 3, craftCostOrder: 3);
+        var development = Production(
+            "scribe.development", deficit: 2, craftCostOrder: 4);
+        var echo = Production(
+            "scribe.echo", deficit: 1, craftCostOrder: 5);
         var plan = new ScrollCoveragePlan(
             frame: 8,
             epoch: 2,
-            new[] { expensive, cheapest });
+            new[] { development, power, echo, advancement, excellence, learning });
 
-        Assert.True(plan.TryChooseProduction(
-            enabledRoles: null,
-            out var selected));
-        Assert.Equal(new ScrollRoleKey("scribe.advancement"), selected.Role);
+        var expected = new[]
+        {
+            "scribe.advancement",
+            "scribe.power",
+            "scribe.learning",
+            "scribe.excellence",
+            "scribe.development",
+            "scribe.echo",
+            "scribe.advancement",
+        };
+        var cursor = -1;
+        for (var index = 0; index < expected.Length; index++)
+        {
+            Assert.True(plan.TryChooseCraft(
+                enabledRoles: null,
+                cursor,
+                out var selected));
+            Assert.Equal(new ScrollRoleKey(expected[index]), selected.Role);
+            cursor = selected.CraftCostOrder;
+        }
     }
 
     [Fact]
@@ -277,6 +307,9 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(1, matchingRole.QueuedSupply);
         Assert.Equal(0, matchingRole.Deficit);
         Assert.False(matchingRole.ShouldProduce);
+        Assert.False(matchingRole.ShouldProbeProgression);
+        Assert.False(ScrollCoveragePlanner.Build(matching, Profile())
+            .TryChooseCraft(out _));
     }
 
     [Fact]
@@ -352,7 +385,7 @@ public sealed class ScrollCoveragePlannerTests
     }
 
     [Fact]
-    public void HigherUnlockedScribeLevelReopensCoverageThatWasComplete()
+    public void HigherCreatedScrollLevelReopensOnlyThatRolesCoverage()
     {
         var structure = Guid.NewGuid();
         var levelTwelve = World(
@@ -362,7 +395,9 @@ public sealed class ScrollCoveragePlannerTests
             work: Array.Empty<WorldScribeWork>());
         var levelThirteen = levelTwelve with
         {
-            CraftingRecipeTypes = Table(RecipeType(maxStartingLevel: 13)),
+            Consumables = Table(Scroll(
+                maxCreatedLevel: 13,
+                maximumCarryLoad: 0)),
         };
 
         var complete = FindAdvancement(
@@ -371,9 +406,85 @@ public sealed class ScrollCoveragePlannerTests
             ScrollCoveragePlanner.Build(levelThirteen, Profile()));
 
         Assert.Equal(ScrollCoverageState.Covered, complete.State);
+        Assert.True(complete.ShouldProbeProgression);
+        Assert.Equal(13, complete.ProgressionLevel);
         Assert.Equal(ScrollCoverageState.ProductionNeeded, reopened.State);
         Assert.Equal(13, reopened.TargetLevel);
         Assert.Equal(1, reopened.Deficit);
+    }
+
+    [Fact]
+    public void SharedScribeMaximumRaisedByCheaperRecipeDoesNotRaiseAnotherRolesTarget()
+    {
+        var structure = Guid.NewGuid();
+        var world = World(
+            structure,
+            enchantmentLevel: 24,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: Array.Empty<WorldScribeWork>(),
+            scrollId: KnownEntities.ScrollPower.Uuid,
+            recipeId: KnownEntities.CraftScrollPower.Uuid,
+            enchantmentId: KnownEntities.EnchantPower.Uuid) with
+        {
+            CraftingRecipeTypes = Table(RecipeType(maxStartingLevel: 67)),
+            Consumables = Table(Scroll(
+                KnownEntities.ScrollPower.Uuid,
+                maxCreatedLevel: 24,
+                maximumCarryLoad: 0)),
+        };
+
+        var plan = ScrollCoveragePlanner.Build(world, Profile());
+        Assert.True(plan.TryFind(KnownEntities.ScrollPower.Uuid, out var role));
+
+        Assert.Equal(24, role.TargetLevel);
+        Assert.Equal(ScrollCoverageState.Covered, role.State);
+        Assert.False(role.ShouldProduce);
+        Assert.True(role.ShouldProbeProgression);
+        Assert.Equal(25, role.ProgressionLevel);
+    }
+
+    [Fact]
+    public void VisibleRecipeWithoutItsScrollFrontierFailsClosed()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 0,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: Array.Empty<WorldScribeWork>()) with
+        {
+            Consumables = PublicationTable<WorldConsumable>.Empty,
+        };
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(ScrollCoverageState.EvidenceUnknown, role.State);
+        Assert.Equal(ScrollUseDirective.BlockUnknown, role.UseDirective);
+        Assert.False(role.ShouldProduce);
+    }
+
+    [Fact]
+    public void HigherQueuedWorkRaisesOnlyItsRecipeFrontierBeforeDelivery()
+    {
+        var world = World(
+            Guid.NewGuid(),
+            enchantmentLevel: 12,
+            owned: Array.Empty<WorldConsumableCount>(),
+            work: new[]
+            {
+                new WorldScribeWork(
+                    KnownEntities.ActiveScribeInstances.Uuid,
+                    KnownEntities.CraftScrollAdvancement.Uuid,
+                    level: 17,
+                    isAutomatic: false,
+                    isExpired: false),
+            });
+
+        var role = FindAdvancement(ScrollCoveragePlanner.Build(world, Profile()));
+
+        Assert.Equal(17, role.TargetLevel);
+        Assert.Equal(1, role.QueuedSupply);
+        Assert.Equal(0, role.Deficit);
+        Assert.False(role.ShouldProbeProgression);
     }
 
     [Fact]
@@ -418,7 +529,9 @@ public sealed class ScrollCoveragePlannerTests
             },
             work: Array.Empty<WorldScribeWork>()) with
         {
-            Consumables = Table(Scroll(maximumCarryLoad: 5)),
+            Consumables = Table(Scroll(
+                maxCreatedLevel: 12,
+                maximumCarryLoad: 5)),
         };
 
         var role = FindAdvancement(
@@ -514,6 +627,7 @@ public sealed class ScrollCoveragePlannerTests
             Guid.NewGuid(),
             CraftCostOrder: craftCostOrder,
             TargetLevel: 12,
+            ProgressionLevel: 0,
             ValidTargets: deficit,
             CoveredTargets: 0,
             OwnedSupply: 0,
@@ -537,8 +651,15 @@ public sealed class ScrollCoveragePlannerTests
         Guid structure,
         int enchantmentLevel,
         WorldConsumableCount[] owned,
-        WorldScribeWork[] work)
+        WorldScribeWork[] work,
+        Guid? scrollId = null,
+        Guid? recipeId = null,
+        Guid? enchantmentId = null)
     {
+        var resolvedScrollId = scrollId ?? KnownEntities.ScrollAdvancement.Uuid;
+        var resolvedRecipeId = recipeId ?? KnownEntities.CraftScrollAdvancement.Uuid;
+        var resolvedEnchantmentId =
+            enchantmentId ?? KnownEntities.EnchantAdvancement.Uuid;
         var recipeType = RecipeType(maxStartingLevel: 12);
         return new GameWorldState
         {
@@ -546,25 +667,29 @@ public sealed class ScrollCoveragePlannerTests
             CollectedAtEpoch = 2,
             CraftingRecipeTypes = Table(recipeType),
             ScribeRecipes = Table(new WorldScribeRecipe(
-                KnownEntities.CraftScrollAdvancement.Uuid,
+                resolvedRecipeId,
                 KnownEntities.ScribeCrafting.Uuid,
-                KnownEntities.ScrollAdvancement.Uuid,
+                resolvedScrollId,
                 visible: true,
                 usesQuantityAsLevel: true)),
             ScrollTargets = Table(new WorldScrollTarget(
-                KnownEntities.ScrollAdvancement.Uuid,
-                KnownEntities.EnchantAdvancement.Uuid,
+                resolvedScrollId,
+                resolvedEnchantmentId,
                 structure)),
             ScrollTargetEvidence = Table(new WorldScrollTargetEvidence(
-                KnownEntities.ScrollAdvancement.Uuid,
-                KnownEntities.EnchantAdvancement.Uuid,
+                resolvedScrollId,
+                resolvedEnchantmentId,
                 candidateCount: 1)),
             StructureEnchantments = Table(new WorldStructureEnchantment(
                 structure,
-                KnownEntities.EnchantAdvancement.Uuid,
+                resolvedEnchantmentId,
                 enchantmentLevel)),
             ConsumableCounts = PublicationTable<WorldConsumableCount>.Create(
                 owned, owned.Length),
+            Consumables = Table(Scroll(
+                resolvedScrollId,
+                maxCreatedLevel: 12,
+                maximumCarryLoad: 0)),
             ScribeWork = PublicationTable<WorldScribeWork>.Create(
                 work, work.Length),
         };
@@ -589,15 +714,26 @@ public sealed class ScrollCoveragePlannerTests
             autoPenaltyModModifiers: 0,
             multiPenaltyModModifiers: 0);
 
-    private static WorldConsumable Scroll(int maximumCarryLoad) =>
-        new(
+    private static WorldConsumable Scroll(
+        int maxCreatedLevel,
+        int maximumCarryLoad) =>
+        Scroll(
             KnownEntities.ScrollAdvancement.Uuid,
+            maxCreatedLevel,
+            maximumCarryLoad);
+
+    private static WorldConsumable Scroll(
+        Guid scrollId,
+        int maxCreatedLevel,
+        int maximumCarryLoad) =>
+        new(
+            scrollId,
             visible: true,
             randomized: true,
             quantity: 0,
             queuedQuantity: 0,
             gainedSince: 0,
-            maxCreatedLevel: 1,
+            maxCreatedLevel,
             currentPrepTime: BigDouble.Zero,
             currentCooldown: BigDouble.Zero,
             currentCooldownTime: BigDouble.Zero,

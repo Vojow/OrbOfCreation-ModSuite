@@ -1,10 +1,11 @@
 # Auto Scribe
 
-Auto Scribe keeps the six audited producible Scroll roles supplied at the strongest currently
-affordable Scribe level, replacing weaker stock until the game's native per-item carry limit is
-filled. Each required craft first probes above the current unlocked ceiling so native Scribe
-progression can advance. It is disabled by default and runs only while Auto Items Scroll use is
-active and healthy.
+Auto Scribe keeps every producible Scroll role in the accepted identity facade supplied at that
+recipe's strongest currently affordable level, replacing weaker stock until the game's native
+per-item carry limit is filled. The current facade contains six producible roles, including
+Development and Echoing. Each required craft probes above the current unlocked ceiling for the
+selected recipe so native Scribe progression can advance. It is disabled by default and runs only
+while Auto Items Scroll use is active and healthy.
 
 ## Responsibility boundaries
 
@@ -12,8 +13,10 @@ active and healthy.
   craft-cost order. Policy, configuration, and normal UI use stable `ScrollRoleKey` values.
   Worker-visible roles are copied into Common's audited immutable publication table.
 - `Coverage` owns the native-free plan shared by Auto Scribe production and Auto Items Scroll-use
-  admission. It also owns semantic role-list parsing and production ordering, so the UI and worker
-  cannot drift; worker state reparses that list only when the configuration generation changes.
+  admission. Each role's frontier comes from that Scroll's own created level plus stronger stock,
+  pending use, and queued work; the shared Scribe ceiling is not imposed on other recipes. It also
+  owns semantic role-list parsing and production ordering, so the UI and worker cannot drift;
+  worker state reparses that list only when the configuration generation changes.
 - shared world readers publish levelled inventory, pending uses, recipes, target evidence,
   enchantments, and active/automatic Scribe work. They never retain Unity objects in the snapshot.
 - `ServiceCycle/AutoScribeWorker` selects at most one enabled deficit from one immutable world
@@ -36,10 +39,15 @@ Unknown baseline identity, incomplete target evidence, dependency loss, action-f
 stale lifecycle, missing queue room, failed affordability, or ambiguous postconditions reject work.
 Worker state is tied to one lifecycle generation and rejects cross-lifecycle evaluation.
 Locked recipe roles are dormant rather than degraded and are reconsidered from every fresh world
-publication. The native adapter re-reads the live unlocked maximum, probes monotonically for the
-highest affordable level above it, and falls back below the frontier when progression is not yet
-affordable. The cheapest enabled visible recipe is tried first. This advances native
-`maxStartingLevel` without changing the player's manual starting-level selector.
+publication. The native adapter re-reads the live unlocked maximum, probes the selected recipe
+monotonically for its highest affordable level above it, and falls back below that recipe's
+frontier when progression is not yet affordable. Production rotates through all enabled visible
+deficits and covered-role progression probes in audited semantic order, wrapping after the last
+role. A covered role asks for its own next level so later resource growth is noticed; active Scribe
+work suppresses a duplicate probe until publication shows it completed or expired. A successful
+higher-level purchase still advances native `maxStartingLevel` without changing the player's
+manual starting-level selector, but that shared ceiling does not raise another Scroll's coverage
+target.
 Auto Scribe does not write enchantments, invoke Scroll consumption, edit persistent automatic
 Scribe entries, change the player's selected Scribe level, discard inventory, or edit saves.
 

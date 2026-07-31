@@ -34,6 +34,7 @@ internal struct AutoScribeCycleState
         Lifecycle = lifecycle;
         _roleConfiguration = default;
         _enabledRoles = null;
+        _lastSelectedCraftCostOrder = -1;
         DeficientRoles = 0;
         EvidenceUnknownRoles = 0;
         ExternallyProducingRoles = 0;
@@ -44,9 +45,11 @@ internal struct AutoScribeCycleState
 
     private ConfigGeneration _roleConfiguration;
     private PublicationTable<ScrollRoleKey>? _enabledRoles;
+    private int _lastSelectedCraftCostOrder;
 
     internal LifecycleGeneration Lifecycle { get; }
     internal PublicationTable<ScrollRoleKey>? EnabledRoles => _enabledRoles;
+    internal int LastSelectedCraftCostOrder => _lastSelectedCraftCostOrder;
     internal int DeficientRoles;
     internal int EvidenceUnknownRoles;
     internal int ExternallyProducingRoles;
@@ -66,6 +69,10 @@ internal struct AutoScribeCycleState
         _enabledRoles = AutoScribeRoleSelection.ParsePublication(
             configuration.Roles,
             roles);
+        _lastSelectedCraftCostOrder = -1;
         _roleConfiguration = generation;
     }
+
+    internal void ObserveSelection(int craftCostOrder) =>
+        _lastSelectedCraftCostOrder = craftCostOrder;
 }
