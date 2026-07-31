@@ -1,6 +1,6 @@
 # Changelog
 
-## Orb Of Creation ModSuite 0.5.0-beta.1 — 2026-07-31
+## Orb Of Creation ModSuite 0.5.0-beta.1 — 2026-08-01
 
 - Back up every active save automatically on the first ModSuite run and after each ModSuite update,
   before automation starts. Backups live under the game's save folder in
@@ -27,6 +27,15 @@
   rate. Verified quantity changes and native refusals now name both rotation identities, while the
   tooltip, Runtime page, journal, and trace dashboard distinguish settled training, no alternative
   assignment, and a refusal that is waiting for fresh world facts.
+- Level every affordable spell when spell leveling levels all ready spells at once. One
+  unaffordable spell no longer blocks the whole batch, and when no ready spell has an affordable
+  level cost the Runtime page reports that the service is waiting instead of claiming success.
+- Let Auto Harvest work with the Agromancy screen closed. The game refreshes a plot action's
+  prerequisite flag only while its screen renders, so the suite now asks the game to validate
+  prerequisites directly, immediately before each harvest, and refuses without a penalty when they
+  are genuinely unmet.
+- Rank Auto Concept's mastery progress with the game's real required-experience values instead of
+  an unmaintained cached field, so training priority matches the progress the game displays.
 - Add disabled-by-default Auto Items for Scrolls and Relics. It uses the native consumable queue and
   randomized Scroll targeting, rechecks exact family, visibility, inventory, readiness, ownership,
   and targets immediately before submission, and stops for the current game lifecycle when an
@@ -55,6 +64,17 @@
   validation shortcuts with closed-world run and navigation tools. In performance-debug builds, the
   Start screen reports build mode, MCP status, audit health, endpoint, and process ID. Release builds
   show only build mode and audit health and contain no MCP server.
+- Replace the Runtime page's pump-timing charts with an automation activity timeline: completed
+  actions per minute over the last thirty minutes, stacked and colored per feature, with a
+  selectable per-minute breakdown of completed, not applied, skipped, and failed outcomes and a
+  single quiet service-timing summary line.
+- Show the suite's controls together as soon as the game's own top-bar icons exist after a load,
+  instead of surfacing one surface at a time, and make the Mods tab follow the game's navigation:
+  selecting it again keeps it open, and selecting a native tab is what closes it.
+- Capture mouse-wheel scrolling reliably across every suite surface, and stop clicks on suite
+  panel padding from falling through to the game underneath.
+- Collapse repeated identical suite log lines into periodic summaries that name the exact line and
+  the span it repeated over, keeping the BepInEx log readable through long sessions.
 - Harden the installer for Windows Git-for-Windows/MSYS: normalize supplied game and save paths with
   `cygpath -u`, accept either `shasum` or `sha256sum`, and query native Windows processes through
   PowerShell before any POSIX fallback so an inspection failure cannot authorize installation.
