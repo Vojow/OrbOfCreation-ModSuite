@@ -4538,6 +4538,25 @@
       "place": "patch"
     },
     {
+      "id": "global-variables.get-casting-speed-attr",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCastingSpeedAttr",
+      "visibility": "public",
+      "static": true,
+      "returnType": "AttributeSO",
+      "parameters": [],
+      "owners": [
+        "Suite quick-control icons"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "global-variables.get-global-structure-type",
       "assembly": "assembly-csharp",
       "type": "GlobalVariables",
@@ -11762,25 +11781,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "spell.get-icon",
-      "assembly": "assembly-csharp",
-      "type": "Spell",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetIcon",
-      "visibility": "public",
-      "static": false,
-      "returnType": "UnityEngine.Sprite",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Cast toggle"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "legacy"
     },
     {
       "id": "spell.get-reference",

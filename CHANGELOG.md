@@ -88,6 +88,8 @@
 - Source Auto Buy's quick icon from audited
   `GlobalVariables.GetGlobalStructureType().GetIcon()` instead of the cloned queue toggle's optional
   image, while preserving the single pixel writer and the existing status contract.
+- Give Auto Cast one audited Casting Speed attribute glyph shared by its Mods rail entry and quick
+  control, removing the equipped-spell icon dependency.
 - Advance the unified configuration file to schema 5 and transactionally discard the retired Auto Buy
   scan cap, rejection cap, global logging switches, Mentor detailed logging, mastery event probe, and
   verifier shortcut. ServiceCycle plans from complete published snapshots; maintained diagnostics are
@@ -138,8 +140,7 @@
 - Centralize host-construction failure and unavailable projection, remove seven startup-failure
   callbacks and the production-composition forwarding file, and require feature diagnostics/status
   dependencies instead of silently running without presentation.
-- Preserve trace wire format, assembly shape, native-contract manifest schema 3, and the
-  `spell.get-icon` legacy allowlist.
+- Preserve trace wire format, assembly shape, and native-contract manifest schema 3.
 
 ## Mentor on the shared engine — 2026-07-28
 

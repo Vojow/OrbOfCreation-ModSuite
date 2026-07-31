@@ -243,7 +243,7 @@ A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and re
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 
-The button shows desired intent as `AC OFF` or `AC ON`; emergency blocking preserves that intent and renders `AC ON / STOPPED`. Runtime readiness and fault detail remain in the same published status shown by the tooltip and Mods Runtime. It uses the first equipped spell icon when available.
+The button shows desired intent as `AC OFF` or `AC ON`; emergency blocking preserves that intent and renders `AC ON / STOPPED`. Runtime readiness and fault detail remain in the same published status shown by the tooltip and Mods Runtime. Its quick control and Mods rail entry share the static audited Casting Speed attribute glyph, independent of the equipped-spell loadout.
 
 ## Auto Concept
 

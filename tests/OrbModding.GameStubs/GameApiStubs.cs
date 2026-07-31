@@ -78,6 +78,7 @@ public static class GlobalVariables
 {
     private static IntVariable multiBuy = IntVariable.Register(KnownVariableIds.MultiBuy);
     private static readonly TooltipableObject GlobalStructureType = new TooltipableObject();
+    private static readonly TooltipableObject CastingSpeedAttribute = new TooltipableObject();
     private static readonly TooltipableObject HarvestSpeedAttribute = new TooltipableObject();
     private static readonly TooltipableObject MasteryExperienceAttribute = new TooltipableObject();
 
@@ -91,6 +92,7 @@ public static class GlobalVariables
 
     public static IntVariable GetMultiBuy() => MultiBuy;
     public static TooltipableObject GetGlobalStructureType() => GlobalStructureType;
+    public static TooltipableObject GetCastingSpeedAttr() => CastingSpeedAttribute;
     public static TooltipableObject GetHarvestSpeedAttr() => HarvestSpeedAttribute;
     public static TooltipableObject GetMasteryExpAttr() => MasteryExperienceAttribute;
 }

@@ -117,14 +117,7 @@ public sealed class NativeContractManifestTests
     /// Harmony patches remain migration debt until their owning service moves.
     /// </para>
     /// </remarks>
-    private static readonly string[] LegacyBoundaryExceptions =
-    {
-        // Auto Cast's toggle button, which is not a service and did not migrate with one. It walks
-        // live SpellManager state for the equipped spell's icon, and that read is the last native
-        // access the feature makes outside its action boundary. It leaves this list when the button
-        // stops reflecting, not when a runtime moves.
-        "spell.get-icon",
-    };
+    private static readonly string[] LegacyBoundaryExceptions = Array.Empty<string>();
 
     /// <summary>The places a contract may sit in once its service is on ServiceCycle.</summary>
     private static readonly string[] LivePlaces = { "capture", "action", "patch" };

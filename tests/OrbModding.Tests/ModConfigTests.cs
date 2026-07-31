@@ -292,7 +292,7 @@ public sealed class ModConfigTests
     }
 
     [Fact]
-    public void ModsRailBuildsEveryRegisteredConsolidatedPageWithAnAuditedIcon()
+    public void ModsRailBuildsEveryRegisteredConsolidatedPageWithDistinctAuditedIconsWithoutAnEquippedSpell()
     {
         var config = new ConfigFile();
         BepInExAutomataConfiguration.Bind(config);
@@ -321,9 +321,9 @@ public sealed class ModConfigTests
         var owned = new List<GameObject>();
         var previousSpellManager = global::SpellManager.instance;
         global::SpellManager.instance = new global::SpellManager();
-        global::SpellManager.instance.activeSpells.Add(new global::Spell());
         try
         {
+            Assert.Empty(global::SpellManager.instance.activeSpells.value);
             Assert.True(
                 ModConfigNativeRailFactory.TryBuild(
                     parent,

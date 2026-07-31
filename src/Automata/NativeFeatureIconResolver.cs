@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Reflection;
 using OrbModConfig;
 using UnityEngine;
@@ -26,7 +25,8 @@ internal static class NativeFeatureIconResolver
                 capturedRail?.GeneralIcon, "ScreenMagic", out icon, out reason),
             "Auto Buy" => TryGetTooltipableIcon(
                 "GetGlobalStructureType", out icon, out reason),
-            "Auto Cast" => TryGetEquippedSpellIcon(out icon, out reason),
+            "Auto Cast" => TryGetTooltipableIcon(
+                "GetCastingSpeedAttr", out icon, out reason),
             "Auto Concept" => FromCaptured(
                 capturedRail?.ConceptIcon, "ScreenScholar", out icon, out reason),
             "Auto Harvest" => TryGetTooltipableIcon(
@@ -56,41 +56,6 @@ internal static class NativeFeatureIconResolver
             return true;
         }
         return NativeViewAdapter.TryCaptureNamedTopBarIcon(auditedItemName, out icon, out reason);
-    }
-
-    private static bool TryGetEquippedSpellIcon(out Sprite? icon, out string reason)
-    {
-        icon = null;
-        reason = "no equipped spell icon is available";
-        try
-        {
-            var managerType = Type.GetType("SpellManager, Assembly-CSharp", false);
-            var manager = managerType?
-                .GetField(
-                    "instance",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?
-                .GetValue(null);
-            var activeSpells = ReadField(manager, "activeSpells") as IEnumerable;
-            if (activeSpells is null)
-            {
-                reason = "audited SpellManager.instance.activeSpells is unavailable";
-                return false;
-            }
-            foreach (var spell in activeSpells)
-            {
-                if (spell is null || InvokeNoArgs(spell, "IsEmpty") is true) continue;
-                icon = InvokeNoArgs(spell, "GetIcon") as Sprite;
-                if (icon is null) continue;
-                reason = string.Empty;
-                return true;
-            }
-            return false;
-        }
-        catch (Exception ex)
-        {
-            reason = ex.GetBaseException().Message;
-            return false;
-        }
     }
 
     private static bool TryGetTooltipableIcon(
@@ -144,40 +109,6 @@ internal static class NativeFeatureIconResolver
         {
             reason = ex.GetBaseException().Message;
             return false;
-        }
-    }
-
-    private static object? ReadField(object? instance, string fieldName)
-    {
-        if (instance is null) return null;
-        for (var type = instance.GetType(); type is not null; type = type.BaseType)
-        {
-            var field = type.GetField(
-                fieldName,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
-                BindingFlags.DeclaredOnly);
-            if (field is not null) return field.GetValue(instance);
-        }
-        return null;
-    }
-
-    private static object? InvokeNoArgs(object instance, string methodName)
-    {
-        try
-        {
-            return instance.GetType()
-                .GetMethod(
-                    methodName,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    Type.EmptyTypes,
-                    null)?
-                .Invoke(instance, Array.Empty<object>());
-        }
-        catch (Exception ex) when (ex is TargetInvocationException or ArgumentException
-                                   or InvalidOperationException)
-        {
-            return null;
         }
     }
 

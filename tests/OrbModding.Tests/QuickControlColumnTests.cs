@@ -14,29 +14,38 @@ namespace OrbModding.Tests;
 public sealed class QuickControlColumnTests
 {
     [Fact]
-    public void ColumnBuildsEveryRegisteredAutomationFeaturePlusEmergencyStop()
+    public void ColumnBuildsEveryRegisteredAutomationFeaturePlusEmergencyStopWithoutAnEquippedSpell()
     {
         using var context = new Context();
-
-        Assert.True(
-            QuickControlColumn.TryCreate(
-                context.Registry,
-                context.EmergencyStop,
-                context.Native,
-                allowFeatureControls: true,
-                out var column,
-                out var reason,
-                context.ResolveIcon),
-            reason);
-        using (var liveColumn = Assert.IsType<QuickControlColumn>(column))
+        var previousSpellManager = global::SpellManager.instance;
+        global::SpellManager.instance = new global::SpellManager();
+        try
         {
-            Assert.Equal(
-                context.Registry.Features
-                    .Select(feature => feature.FeatureId)
-                    .Append(QuickControlColumn.EmergencyStopId)
-                    .OrderBy(value => value, StringComparer.Ordinal),
-                liveColumn.ControlIds.OrderBy(value => value, StringComparer.Ordinal));
-            Assert.Empty(liveColumn.Failures);
+            Assert.Empty(global::SpellManager.instance.activeSpells.value);
+            Assert.True(
+                QuickControlColumn.TryCreate(
+                    context.Registry,
+                    context.EmergencyStop,
+                    context.Native,
+                    allowFeatureControls: true,
+                    out var column,
+                    out var reason,
+                    context.ResolveIcon),
+                reason);
+            using (var liveColumn = Assert.IsType<QuickControlColumn>(column))
+            {
+                Assert.Equal(
+                    context.Registry.Features
+                        .Select(feature => feature.FeatureId)
+                        .Append(QuickControlColumn.EmergencyStopId)
+                        .OrderBy(value => value, StringComparer.Ordinal),
+                    liveColumn.ControlIds.OrderBy(value => value, StringComparer.Ordinal));
+                Assert.Empty(liveColumn.Failures);
+            }
+        }
+        finally
+        {
+            global::SpellManager.instance = previousSpellManager;
         }
     }
 
@@ -247,6 +256,14 @@ public sealed class QuickControlColumnTests
             out Sprite? icon,
             out string reason)
         {
+            if (registration.PageLabel == "Auto Cast")
+            {
+                return NativeFeatureIconResolver.TryResolve(
+                    registration.PageLabel,
+                    capturedRail: null,
+                    out icon,
+                    out reason);
+            }
             if (!_icons.TryGetValue(registration.FeatureId, out var resolved))
             {
                 resolved = new Sprite();

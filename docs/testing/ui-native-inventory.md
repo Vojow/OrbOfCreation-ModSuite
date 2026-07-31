@@ -58,18 +58,20 @@ The runtime `SubviewRadio` items have no icon at all, so central feature icon re
 audited `ScreenScholar` top-bar book for Auto Concept, `ScreenWorld` for Auto Items, and
 `ScreenWorkshop` for Auto Scribe. Advanced keeps `ScreenAlchemy`; the rail rejects any duplicate
 page sprite. Auto Buy, Auto Harvest, and Mentor retain their distinct audited native tooltipable
-glyphs, and Auto Cast uses the first equipped spell. The same resolver serves each feature's rail
-entry and quick control.
+glyphs. Auto Cast uses the static audited Casting Speed attribute glyph from
+`GlobalVariables.GetCastingSpeedAttr().GetIcon()`. The same resolver serves each feature's rail
+entry and quick control, so neither surface depends on the equipped-spell loadout.
 
 Evidence: `artifacts/ui-overhaul-evidence/native-mastery-icon-context.png`.
 
 ## Audited fields
 
-The native-contract manifest declares six visual/anchor fields and four icon accessors:
+The native-contract manifest declares six visual/anchor fields and five icon accessors:
 
 - `UIContentArea`: `canvas`.
 - `UIViewRadioButton`: `viewText`, `viewImage`, `activeImage`, `buttonImage`, and `baseImage`.
-- `GlobalVariables.GetGlobalStructureType`, `GlobalVariables.GetHarvestSpeedAttr`,
+- `GlobalVariables.GetGlobalStructureType`, `GlobalVariables.GetCastingSpeedAttr`,
+  `GlobalVariables.GetHarvestSpeedAttr`,
   `GlobalVariables.GetMasteryExpAttr`, and
   `TooltipableObject.GetIcon`.
 
