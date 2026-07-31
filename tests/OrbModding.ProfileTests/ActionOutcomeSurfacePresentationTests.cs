@@ -12,57 +12,87 @@ namespace OrbModding.ProfileTests;
 public sealed class ActionOutcomeSurfacePresentationTests
 {
     [Fact]
-    public void PerformanceDebugAddsExactCountsAndLastBoundaryReason()
+    public void PerformanceDebugUsesTheSameStableCommittedWorkTimeline()
     {
-        var outcome = new ServiceActionOutcomeSnapshot(
-            new ServiceId("orbautomata.auto-buy"),
-            ServiceShape.Ordinary,
-            observationCount: 3,
-            planned: 4,
-            committed: 2,
-            skipped: 1,
-            rejected: 1,
-            faulted: 0,
-            new ServiceActionOutcomeBoundary(
-                ServiceActionOutcomeBoundaryKind.Rejected,
-                CommonActionResultCodes.PolicyRejected.Value));
+        var cells = new[]
+        {
+            new ServiceActionTimelineCellSnapshot(
+                minuteKey: 10,
+                new ServiceId("orbautomata.world-collection"),
+                ServiceShape.Source,
+                committed: 50,
+                skipped: 0,
+                rejected: 0,
+                faulted: 0),
+            new ServiceActionTimelineCellSnapshot(
+                minuteKey: 10,
+                new ServiceId("orbautomata.auto-buy"),
+                ServiceShape.Ordinary,
+                committed: 2,
+                skipped: 0,
+                rejected: 0,
+                faulted: 0),
+            new ServiceActionTimelineCellSnapshot(
+                minuteKey: 10,
+                new ServiceId("orbautomata.auto-cast"),
+                ServiceShape.Ordinary,
+                committed: 0,
+                skipped: 0,
+                rejected: 0,
+                faulted: 0),
+            new ServiceActionTimelineCellSnapshot(
+                minuteKey: 10,
+                new ServiceId("orbmentor.mastery-sharing"),
+                ServiceShape.Ordinary,
+                committed: 200,
+                skipped: 0,
+                rejected: 0,
+                faulted: 1),
+        };
 
         var presentation = ActionOutcomeSurfacePresentation.Build(
-            new[] { outcome },
+            cells,
+            serviceCount: 4,
+            bucketCount: 1,
             ReadOnlySpan<ServiceCyclePumpTimingSample>.Empty);
 
-        var row = Assert.Single(presentation.Rows);
-        Assert.Equal("Auto Buy", row.DisplayName);
-        Assert.Equal("★ Completed  ·  – Skipped  ·  ○ Not completed", row.Summary);
-        Assert.Equal(
-            "planned 4 · committed 2 · skipped 1 · rejected 1 · faulted 0 · last rejected (6)",
-            row.Detail);
-        Assert.Equal(ActionOutcomeTone.Completed, row.Tone);
+        Assert.True(presentation.ShowsTimeline);
+        Assert.Equal(2, presentation.MaximumCommitted);
+        Assert.False(presentation.Buckets[0].HasFault);
+        var legend = Assert.Single(presentation.Legend);
+        Assert.Equal("Auto Buy", legend.DisplayName);
+        Assert.Equal(ActionOutcomeServiceColor.Amber, legend.Color);
     }
 
     [Fact]
-    public void PerformanceDebugKeepsSourceExclusionAndSlimTimingComposition()
+    public void PerformanceDebugMinuteDetailUsesExactOutcomeTerms()
     {
-        var source = new ServiceActionOutcomeSnapshot(
-            new ServiceId("orbautomata.world-collection"),
-            ServiceShape.Source,
-            observationCount: 1,
-            planned: 1,
-            committed: 1,
-            skipped: 0,
-            rejected: 0,
-            faulted: 0,
-            default);
-        var idle = new ServiceActionOutcomeSnapshot(
-            new ServiceId("orbautomata.auto-cast"),
-            ServiceShape.Ordinary,
-            observationCount: 0,
-            planned: 0,
-            committed: 0,
-            skipped: 0,
-            rejected: 0,
-            faulted: 0,
-            default);
+        var cells = new[]
+        {
+            new ServiceActionTimelineCellSnapshot(
+                minuteKey: 12,
+                new ServiceId("orbautomata.auto-buy"),
+                ServiceShape.Ordinary,
+                committed: 4,
+                skipped: 2,
+                rejected: 1,
+                faulted: 3),
+        };
+
+        var presentation = ActionOutcomeSurfacePresentation.Build(
+            cells,
+            serviceCount: 1,
+            bucketCount: 1,
+            ReadOnlySpan<ServiceCyclePumpTimingSample>.Empty);
+
+        var detail = Assert.Single(presentation.Buckets[0].Details);
+        Assert.Equal("Auto Buy · committed 4 · rejected 1 · skipped 2 · faulted 3", detail.Summary);
+        Assert.Equal("Completed actions / minute", ActionOutcomeSurfacePresentation.AxisLabel);
+    }
+
+    [Fact]
+    public void PerformanceDebugKeepsExactQuietAndTimingLinesWithoutCardCopy()
+    {
         var report = new SuiteFramePumpReport(
             frameIdentity: 1,
             accepted: true,
@@ -81,19 +111,19 @@ public sealed class ActionOutcomeSurfacePresentationTests
         var timing = new ServiceCyclePumpTimingSample(in report);
 
         var presentation = ActionOutcomeSurfacePresentation.Build(
-            new[] { source, idle },
+            ReadOnlySpan<ServiceActionTimelineCellSnapshot>.Empty,
+            0,
+            0,
             new[] { timing });
 
-        var row = Assert.Single(presentation.Rows);
-        Assert.Equal("Auto Cast", row.DisplayName);
-        Assert.Equal("○ Waiting", row.Summary);
+        Assert.False(presentation.ShowsTimeline);
         Assert.Equal(
-            "planned 0 · committed 0 · skipped 0 · rejected 0 · faulted 0 · last none",
-            row.Detail);
+            "No automation activity in the last 30 minutes",
+            presentation.QuietMessage);
         Assert.Equal(
             "Recent processing · average 0.250 ms · worst 0.250 ms",
             presentation.TimingSummary);
         Assert.Null(typeof(ActionOutcomeSurfacePresentation).Assembly.GetType(
-            "OrbModConfig.PumpTimingGraphView"));
+            "OrbModConfig.ActionOutcomeRowPresentation"));
     }
 }

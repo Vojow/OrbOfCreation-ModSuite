@@ -11,24 +11,38 @@ namespace OrbModConfig;
 internal sealed class ActionOutcomeView : IDisposable
 {
     private const float HeaderHeight = 38f;
-#if SERVICE_CYCLE_PROFILE
-    private const float CellHeight = 94f;
-#else
-    private const float CellHeight = 78f;
-#endif
-    private const float RowGap = 7f;
+    private const float QuietHeight = 46f;
+    private const float PlotHeight = 148f;
+    private const float LegendRowHeight = 24f;
+    private const int LegendColumns = 4;
+    private const float DetailHeight = 102f;
+    private const float DetailHeaderHeight = 22f;
+    private const float DetailRowHeight = 20f;
+    private const int DetailColumns = 2;
     private const float TimingHeight = 34f;
+    private const float BottomGap = 7f;
     private readonly IServiceActionOutcomeWindowSource _outcomes;
     private readonly IServiceCyclePumpTimingSource _timings;
     private readonly TextMeshProUGUI _template;
     private readonly GameObject _root;
     private readonly RectTransform _rect;
+    private readonly GameObject _plot;
+    private readonly ActionOutcomeTimelineGraphic _graphic;
+    private readonly GameObject _selectorRoot;
+    private readonly TextMeshProUGUI _axisTop;
+    private readonly TextMeshProUGUI _detailHeader;
+    private readonly TextMeshProUGUI _detailEmpty;
+    private readonly GameObject _detailRoot;
+    private readonly TextMeshProUGUI _quiet;
     private readonly TextMeshProUGUI _timing;
-    private readonly List<Cell> _cells = new();
-    private ServiceActionOutcomeSnapshot[] _outcomeBuffer;
+    private readonly List<LegendEntry> _legend = new();
+    private readonly List<DetailEntry> _details = new();
+    private readonly List<GameObject> _bucketSelectors = new();
+    private ServiceActionTimelineCellSnapshot[] _timelineBuffer;
     private ServiceCyclePumpTimingSample[] _timingBuffer;
-    private long _outcomeRevision = -1;
-    private long _timingRevision = -1;
+    private long _timelineRevision = -1;
+    private long _selectedMinuteKey = long.MinValue;
+    private int _selectedBucket = -1;
     private ActionOutcomeSurfacePresentation _presentation;
 
     internal ActionOutcomeView(
@@ -42,30 +56,143 @@ internal sealed class ActionOutcomeView : IDisposable
         _timings = timings ?? throw new ArgumentNullException(nameof(timings));
         if (timings.Capacity <= 0)
             throw new ArgumentException("Pump timing source capacity must be positive.", nameof(timings));
-        _outcomeBuffer = new ServiceActionOutcomeSnapshot[Math.Max(1, outcomes.ServiceCount)];
+        _timelineBuffer = new ServiceActionTimelineCellSnapshot[
+            Math.Max(1, outcomes.TimelineCellCapacity)];
         _timingBuffer = new ServiceCyclePumpTimingSample[timings.Capacity];
         _root = ModConfigUiFactory.CreateRectObject(
-            "ActionOutcomes",
+            "ActionTimelinePanel",
             parent,
             new Vector2(0.01f, 1f),
-            new Vector2(0.99f, 1f));
+            new Vector2(0.99f, 1f),
+            ModConfigPalette.Row);
         _rect = (RectTransform)_root.transform;
         _rect.pivot = new Vector2(0.5f, 1f);
+        ModConfigNativeRailFactory.SkinPanel(
+            _root.GetComponent<UnityEngine.UI.Image>()!,
+            ModConfigUiFactory.NativeVisuals.FeatureRailBaseFrame,
+            ModConfigPalette.Row);
         var title = ModConfigUiFactory.CreateText(
             "Title",
             _root.transform,
-            new Vector2(0.015f, 1f),
-            new Vector2(0.985f, 1f),
+            new Vector2(0.02f, 1f),
+            new Vector2(0.98f, 1f),
             template,
             ActionOutcomeSurfacePresentation.Title,
             TextAlignmentOptions.TopLeft,
-            0.82f);
-        ModConfigUiFactory.SetTopAnchoredHeight((RectTransform)title.transform, 0f, 32f);
+            0.78f);
+        ModConfigUiFactory.SetTopAnchoredHeight((RectTransform)title.transform, 8f, 28f);
+
+        _quiet = ModConfigUiFactory.CreateText(
+            "QuietWindow",
+            _root.transform,
+            new Vector2(0.025f, 1f),
+            new Vector2(0.975f, 1f),
+            template,
+            ActionOutcomeSurfacePresentation.QuietWindow,
+            TextAlignmentOptions.MidlineLeft,
+            0.54f,
+            TextOverflowModes.Overflow);
+        _quiet.color = new Color(template.color.r, template.color.g, template.color.b, 0.72f);
+
+        _plot = ModConfigUiFactory.CreateRectObject(
+            "MinuteBuckets",
+            _root.transform,
+            new Vector2(0.02f, 1f),
+            new Vector2(0.98f, 1f),
+            ModConfigPalette.Background);
+        var timeline = ModConfigUiFactory.CreateRectObject(
+            "CommittedActions",
+            _plot.transform,
+            new Vector2(0.055f, 0.06f),
+            new Vector2(0.995f, 0.80f));
+        _graphic = timeline.AddComponent<ActionOutcomeTimelineGraphic>();
+        _graphic.raycastTarget = false;
+
+        var axisLabel = ModConfigUiFactory.CreateText(
+            "ScaleLabel",
+            _plot.transform,
+            new Vector2(0.058f, 0.81f),
+            new Vector2(0.50f, 0.99f),
+            template,
+            ActionOutcomeSurfacePresentation.AxisLabel,
+            TextAlignmentOptions.MidlineLeft,
+            0.43f,
+            TextOverflowModes.Overflow);
+        axisLabel.color = new Color(template.color.r, template.color.g, template.color.b, 0.68f);
+        _axisTop = ModConfigUiFactory.CreateText(
+            "ScaleMaximum",
+            _plot.transform,
+            new Vector2(0.005f, 0.68f),
+            new Vector2(0.052f, 0.84f),
+            template,
+            "0",
+            TextAlignmentOptions.MidlineLeft,
+            0.42f,
+            TextOverflowModes.Overflow);
+        _axisTop.color = axisLabel.color;
+        var axisZero = ModConfigUiFactory.CreateText(
+            "ScaleZero",
+            _plot.transform,
+            new Vector2(0.005f, 0.03f),
+            new Vector2(0.052f, 0.19f),
+            template,
+            "0",
+            TextAlignmentOptions.MidlineLeft,
+            0.42f,
+            TextOverflowModes.Overflow);
+        axisZero.color = axisLabel.color;
+
+        _selectorRoot = ModConfigUiFactory.CreateRectObject(
+            "MinuteSelectors",
+            _plot.transform,
+            new Vector2(0.055f, 0.06f),
+            new Vector2(0.995f, 0.80f),
+            new Color(0f, 0f, 0f, 0f));
+        _selectorRoot.GetComponent<Image>()!.raycastTarget = false;
+
+        _detailRoot = ModConfigUiFactory.CreateRectObject(
+            "SelectedMinute",
+            _root.transform,
+            new Vector2(0.02f, 1f),
+            new Vector2(0.98f, 1f),
+            new Color(0f, 0f, 0f, 0f));
+        _detailRoot.GetComponent<Image>()!.raycastTarget = false;
+        _detailHeader = ModConfigUiFactory.CreateText(
+            "MinuteLabel",
+            _detailRoot.transform,
+            new Vector2(0.01f, 1f),
+            new Vector2(0.99f, 1f),
+            template,
+            string.Empty,
+            TextAlignmentOptions.TopLeft,
+            0.49f,
+            TextOverflowModes.Overflow);
+        ModConfigUiFactory.SetTopAnchoredHeight(
+            (RectTransform)_detailHeader.transform,
+            0f,
+            DetailHeaderHeight);
+        _detailHeader.color = new Color(template.color.r, template.color.g, template.color.b, 0.78f);
+        _detailEmpty = ModConfigUiFactory.CreateText(
+            "EmptyMinute",
+            _detailRoot.transform,
+            new Vector2(0.01f, 1f),
+            new Vector2(0.99f, 1f),
+            template,
+            ActionOutcomeSurfacePresentation.EmptyMinute,
+            TextAlignmentOptions.TopLeft,
+            0.46f,
+            TextOverflowModes.Overflow);
+        ModConfigUiFactory.SetTopAnchoredHeight(
+            (RectTransform)_detailEmpty.transform,
+            DetailHeaderHeight,
+            DetailRowHeight);
+        _detailEmpty.color = new Color(template.color.r, template.color.g, template.color.b, 0.62f);
+
         _timing = ModConfigUiFactory.CreateText(
             "TimingSummary",
             _root.transform,
-            new Vector2(0.015f, 1f),
-            new Vector2(0.985f, 1f),
+            new Vector2(0.025f, 1f),
+            new Vector2(0.975f, 1f),
             template,
             ActionOutcomeSurfacePresentation.EmptyTiming,
             TextAlignmentOptions.MidlineLeft,
@@ -79,189 +206,305 @@ internal sealed class ActionOutcomeView : IDisposable
     {
         _ = contentWidth;
         Refresh();
-        var rows = Math.Max(1, (_presentation.Rows.Length + 1) / 2);
-        var height = HeaderHeight + rows * (CellHeight + RowGap) + TimingHeight;
+        var legendRows = _presentation.ShowsTimeline
+            ? (_presentation.Legend.Length + LegendColumns - 1) / LegendColumns
+            : 0;
+        var activityHeight = _presentation.ShowsTimeline
+            ? PlotHeight + legendRows * LegendRowHeight + DetailHeight
+            : QuietHeight;
+        var height = HeaderHeight + activityHeight + TimingHeight + BottomGap;
         _rect.anchoredPosition = new Vector2(0f, -topOffset);
         _rect.sizeDelta = new Vector2(0f, height);
         _root.transform.SetSiblingIndex(siblingIndex);
         ModConfigUiFactory.SetTopAnchoredHeight(
+            (RectTransform)_quiet.transform,
+            HeaderHeight,
+            QuietHeight);
+        ModConfigUiFactory.SetTopAnchoredHeight(
+            (RectTransform)_plot.transform,
+            HeaderHeight,
+            PlotHeight - 6f);
+        LayoutLegend(HeaderHeight + PlotHeight - 2f);
+        ModConfigUiFactory.SetTopAnchoredHeight(
+            (RectTransform)_detailRoot.transform,
+            HeaderHeight + PlotHeight + legendRows * LegendRowHeight,
+            DetailHeight);
+        ModConfigUiFactory.SetTopAnchoredHeight(
             (RectTransform)_timing.transform,
-            height - TimingHeight,
+            height - TimingHeight - BottomGap,
             TimingHeight);
-        return height;
+        return height + 7f;
     }
 
     internal void Refresh()
     {
         EnsureCapacity();
-        if (_outcomeRevision == _outcomes.Revision && _timingRevision == _timings.Revision) return;
-        var outcomes = _outcomes.CopyTo(_outcomeBuffer);
-        var timings = _timings.CopyTo(_timingBuffer);
-        _outcomeRevision = outcomes.Revision;
-        _timingRevision = timings.Revision;
-        _presentation = ActionOutcomeSurfacePresentation.Build(
-            _outcomeBuffer.AsSpan(0, outcomes.WrittenCount),
-            _timingBuffer.AsSpan(0, timings.WrittenCount));
-        while (_cells.Count < _presentation.Rows.Length) _cells.Add(new Cell(_rect, _template));
-        for (var index = 0; index < _cells.Count; index++)
+        if (_timelineRevision == _outcomes.TimelineRevision) return;
+        var timeline = _outcomes.CopyTimelineTo(_timelineBuffer);
+        if (!timeline.IsComplete)
         {
-            var active = index < _presentation.Rows.Length;
-            _cells[index].SetActive(active);
-            if (active) _cells[index].Render(_presentation.Rows[index], index);
+            _timelineBuffer = new ServiceActionTimelineCellSnapshot[timeline.AvailableCount];
+            timeline = _outcomes.CopyTimelineTo(_timelineBuffer);
+            if (!timeline.IsComplete)
+                throw new InvalidOperationException("The action timeline changed while it was being copied.");
         }
+        var timings = _timings.CopyTo(_timingBuffer);
+        _timelineRevision = timeline.Revision;
+        _presentation = ActionOutcomeSurfacePresentation.Build(
+            _timelineBuffer.AsSpan(0, timeline.WrittenCount),
+            timeline.ServiceCount,
+            timeline.BucketCount,
+            _timingBuffer.AsSpan(0, timings.WrittenCount));
+        _plot.SetActive(_presentation.ShowsTimeline);
+        _detailRoot.SetActive(_presentation.ShowsTimeline);
+        _quiet.gameObject.SetActive(!_presentation.ShowsTimeline);
+        _quiet.text = _presentation.QuietMessage;
+        _axisTop.text = _presentation.MaximumCommitted.ToString();
+        _graphic.SetTimeline(_presentation.Buckets, _presentation.MaximumCommitted);
+        EnsureBucketSelectors(_presentation.Buckets.Length);
+        while (_legend.Count < _presentation.Legend.Length)
+            _legend.Add(new LegendEntry(_rect, _template));
+        for (var index = 0; index < _legend.Count; index++)
+        {
+            var active = _presentation.ShowsTimeline && index < _presentation.Legend.Length;
+            _legend[index].SetActive(active);
+            if (active) _legend[index].Render(_presentation.Legend[index]);
+        }
+        ResolveSelectedBucket();
+        RenderSelectedBucket();
         _timing.text = _presentation.TimingSummary;
     }
 
     public void Dispose()
     {
-        foreach (var cell in _cells) cell.Dispose();
-        _cells.Clear();
+        foreach (var entry in _legend) entry.Dispose();
+        _legend.Clear();
+        foreach (var entry in _details) entry.Dispose();
+        _details.Clear();
+        foreach (var selector in _bucketSelectors)
+            selector.GetComponent<Button>()?.onClick.RemoveAllListeners();
+        _bucketSelectors.Clear();
         UnityEngine.Object.Destroy(_root);
     }
 
     private void EnsureCapacity()
     {
-        if (_outcomeBuffer.Length < _outcomes.ServiceCount)
-            _outcomeBuffer = new ServiceActionOutcomeSnapshot[_outcomes.ServiceCount];
+        if (_timelineBuffer.Length < _outcomes.TimelineCellCapacity)
+            _timelineBuffer = new ServiceActionTimelineCellSnapshot[_outcomes.TimelineCellCapacity];
         if (_timingBuffer.Length < _timings.Capacity)
             _timingBuffer = new ServiceCyclePumpTimingSample[_timings.Capacity];
     }
 
-    private sealed class Cell : IDisposable
+    private void LayoutLegend(float top)
     {
-        private static readonly Color CompletedFrame = new(0.08f, 0.22f, 0.16f, 0.98f);
-        private static readonly Color QuietIssueFrame = new(0.14f, 0.13f, 0.10f, 0.98f);
-        private static readonly Color FaultedFrame = new(0.32f, 0.10f, 0.10f, 0.98f);
-        private static readonly Color CompletedSegment = new(0.22f, 0.50f, 0.34f, 1f);
-        private static readonly Color SkippedSegment = new(0.25f, 0.27f, 0.31f, 1f);
-        private static readonly Color RejectedSegment = new(0.44f, 0.30f, 0.13f, 1f);
+        for (var index = 0; index < _presentation.Legend.Length; index++)
+        {
+            var column = index % LegendColumns;
+            var row = index / LegendColumns;
+            _legend[index].Layout(column, row, top);
+        }
+    }
+
+    private void EnsureBucketSelectors(int count)
+    {
+        if (_bucketSelectors.Count == count) return;
+        foreach (var selector in _bucketSelectors) UnityEngine.Object.Destroy(selector);
+        _bucketSelectors.Clear();
+        if (count <= 0) return;
+        for (var index = 0; index < count; index++)
+        {
+            var left = index / (float)count;
+            var right = (index + 1f) / count;
+            var selector = ModConfigUiFactory.CreateRectObject(
+                "Minute." + index,
+                _selectorRoot.transform,
+                new Vector2(left, 0f),
+                new Vector2(right, 1f),
+                new Color(0f, 0f, 0f, 0f));
+            selector.GetComponent<Image>()!.raycastTarget = true;
+            var button = selector.AddComponent<Button>();
+            var captured = index;
+            button.onClick.AddListener(() => SelectBucket(captured));
+            _bucketSelectors.Add(selector);
+        }
+    }
+
+    private void ResolveSelectedBucket()
+    {
+        _selectedBucket = -1;
+        for (var index = 0; index < _presentation.Buckets.Length; index++)
+        {
+            if (_presentation.Buckets[index].MinuteKey != _selectedMinuteKey) continue;
+            _selectedBucket = index;
+            break;
+        }
+        if (_selectedBucket >= 0) return;
+        for (var index = _presentation.Buckets.Length - 1; index >= 0; index--)
+        {
+            var bucket = _presentation.Buckets[index];
+            if (bucket.Details.Length == 0 && bucket.Committed == 0 && !bucket.HasFault) continue;
+            _selectedBucket = index;
+            _selectedMinuteKey = bucket.MinuteKey;
+            return;
+        }
+    }
+
+    private void SelectBucket(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _presentation.Buckets.Length) return;
+        _selectedBucket = bucketIndex;
+        _selectedMinuteKey = _presentation.Buckets[bucketIndex].MinuteKey;
+        RenderSelectedBucket();
+    }
+
+    private void RenderSelectedBucket()
+    {
+        _graphic.SetSelectedBucket(_selectedBucket);
+        if (_selectedBucket < 0 || _selectedBucket >= _presentation.Buckets.Length)
+        {
+            _detailHeader.text = string.Empty;
+            _detailEmpty.gameObject.SetActive(false);
+            SetDetails(Array.Empty<ActionOutcomeServiceDetailPresentation>());
+            return;
+        }
+        var minutesAgo = _presentation.Buckets.Length - 1 - _selectedBucket;
+        _detailHeader.text = minutesAgo switch
+        {
+            0 => "This minute",
+            1 => "1 minute ago",
+            _ => minutesAgo + " minutes ago",
+        };
+        var details = _presentation.Buckets[_selectedBucket].Details;
+        _detailEmpty.gameObject.SetActive(details.Length == 0);
+        SetDetails(details);
+    }
+
+    private void SetDetails(ActionOutcomeServiceDetailPresentation[] details)
+    {
+        while (_details.Count < details.Length)
+            _details.Add(new DetailEntry((RectTransform)_detailRoot.transform, _template));
+        for (var index = 0; index < _details.Count; index++)
+        {
+            var active = index < details.Length;
+            _details[index].SetActive(active);
+            if (!active) continue;
+            _details[index].Render(details[index]);
+            _details[index].Layout(index % DetailColumns, index / DetailColumns);
+        }
+    }
+
+    private sealed class LegendEntry : IDisposable
+    {
         private readonly GameObject _root;
         private readonly RectTransform _rect;
-        private readonly Image _frame;
-        private readonly TextMeshProUGUI _title;
-        private readonly TextMeshProUGUI _body;
-        private readonly RectTransform _completed;
-        private readonly RectTransform _skipped;
-        private readonly RectTransform _rejected;
-        private readonly RectTransform _faulted;
-        private readonly RectTransform _waiting;
+        private readonly UnityEngine.UI.Image _swatch;
+        private readonly TextMeshProUGUI _label;
 
-        internal Cell(RectTransform parent, TextMeshProUGUI template)
+        internal LegendEntry(RectTransform parent, TextMeshProUGUI template)
         {
             _root = ModConfigUiFactory.CreateRectObject(
-                "ActionOutcome",
+                "ServiceLegend",
                 parent,
-                new Vector2(0f, 1f),
-                new Vector2(0f, 1f),
-                ModConfigPalette.Row);
+                Vector2.zero,
+                Vector2.zero);
             _rect = (RectTransform)_root.transform;
             _rect.pivot = new Vector2(0.5f, 1f);
-            _frame = _root.GetComponent<Image>()!;
-            ModConfigNativeRailFactory.SkinPanel(
-                _frame,
-                ModConfigUiFactory.NativeVisuals.FeatureRailBaseFrame,
-                ModConfigPalette.Row);
-            _title = ModConfigUiFactory.CreateText(
+            var swatch = ModConfigUiFactory.CreateRectObject(
+                "Color",
+                _root.transform,
+                new Vector2(0.02f, 0.28f),
+                new Vector2(0.08f, 0.72f),
+                Color.white);
+            _swatch = swatch.GetComponent<UnityEngine.UI.Image>()!;
+            _label = ModConfigUiFactory.CreateText(
                 "Service",
                 _root.transform,
-                new Vector2(0.035f, 0.62f),
-                new Vector2(0.965f, 0.94f),
+                new Vector2(0.105f, 0f),
+                new Vector2(0.99f, 1f),
                 template,
                 string.Empty,
                 TextAlignmentOptions.MidlineLeft,
-                0.70f);
-            _body = ModConfigUiFactory.CreateText(
-                "Outcome",
-                _root.transform,
-                new Vector2(0.035f, 0.20f),
-                new Vector2(0.965f, 0.64f),
-                template,
-                string.Empty,
-                TextAlignmentOptions.MidlineLeft,
-                0.50f,
-                TextOverflowModes.Overflow);
-            var track = ModConfigUiFactory.CreateRectObject(
-                "OutcomeRail",
-                _root.transform,
-                new Vector2(0.035f, 0.08f),
-                new Vector2(0.965f, 0.16f),
-                ModConfigPalette.Bar);
-            _completed = Segment("Completed", track.transform, CompletedSegment);
-            _skipped = Segment("Skipped", track.transform, SkippedSegment);
-            _rejected = Segment("NotCompleted", track.transform, RejectedSegment);
-            _faulted = Segment("NeedsAttention", track.transform, ModConfigPalette.Invalid);
-            _waiting = Segment("Waiting", track.transform, ModConfigPalette.Button);
+                0.46f,
+                TextOverflowModes.Ellipsis);
         }
 
         internal void SetActive(bool active) => _root.SetActive(active);
 
-        internal void Render(ActionOutcomeRowPresentation row, int index)
+        internal void Render(ActionOutcomeLegendPresentation legend)
         {
-            var column = index % 2;
-            var gridRow = index / 2;
-            _rect.anchorMin = new Vector2(column == 0 ? 0.01f : 0.505f, 1f);
-            _rect.anchorMax = new Vector2(column == 0 ? 0.495f : 0.99f, 1f);
-            _rect.anchoredPosition = new Vector2(
-                0f,
-                -HeaderHeight - gridRow * (CellHeight + RowGap));
-            _rect.sizeDelta = new Vector2(0f, CellHeight);
-            _title.text = row.DisplayName;
-            _body.text = row.Detail.Length == 0 ? row.Summary : row.Summary + "\n" + row.Detail;
-            _frame.color = row.Tone switch
-            {
-                ActionOutcomeTone.Completed => CompletedFrame,
-                ActionOutcomeTone.QuietIssue => QuietIssueFrame,
-                ActionOutcomeTone.Faulted => FaultedFrame,
-                _ => ModConfigPalette.Row,
-            };
-            RenderRail(row);
+            _swatch.color = ActionOutcomeTimelineGraphic.ColorFor(legend.Color);
+            _label.text = legend.DisplayName;
+        }
+
+        internal void Layout(int column, int row, float top)
+        {
+            var left = 0.02f + column * 0.245f;
+            _rect.anchorMin = new Vector2(left, 1f);
+            _rect.anchorMax = new Vector2(left + 0.235f, 1f);
+            _rect.anchoredPosition = new Vector2(0f, -top - row * LegendRowHeight);
+            _rect.sizeDelta = new Vector2(0f, LegendRowHeight);
         }
 
         public void Dispose() => UnityEngine.Object.Destroy(_root);
+    }
 
-        private void RenderRail(ActionOutcomeRowPresentation row)
+    private sealed class DetailEntry : IDisposable
+    {
+        private readonly GameObject _root;
+        private readonly RectTransform _rect;
+        private readonly Image _swatch;
+        private readonly TextMeshProUGUI _label;
+
+        internal DetailEntry(RectTransform parent, TextMeshProUGUI template)
         {
-            var total = SaturatingAdd(
-                SaturatingAdd(row.Committed, row.Skipped),
-                SaturatingAdd(row.Rejected, row.Faulted));
-            _waiting.gameObject.SetActive(total == 0);
-            SetSegment(_waiting, 0f, 1f);
-            var start = 0d;
-            start = SetSegment(_completed, start, row.Committed, total);
-            start = SetSegment(_skipped, start, row.Skipped, total);
-            start = SetSegment(_rejected, start, row.Rejected, total);
-            _ = SetSegment(_faulted, start, row.Faulted, total);
-        }
-
-        private static RectTransform Segment(string name, Transform parent, Color color) =>
-            (RectTransform)ModConfigUiFactory.CreateRectObject(
-                name,
+            _root = ModConfigUiFactory.CreateRectObject(
+                "ServiceOutcome",
                 parent,
                 Vector2.zero,
-                Vector2.one,
-                color).transform;
-
-        private static double SetSegment(
-            RectTransform rect,
-            double start,
-            long value,
-            long total)
-        {
-            rect.gameObject.SetActive(value > 0 && total > 0);
-            var end = total <= 0 ? start : start + value / (double)total;
-            SetSegment(rect, (float)start, (float)Math.Min(1d, end));
-            return end;
+                Vector2.zero,
+                new Color(0f, 0f, 0f, 0f));
+            _root.GetComponent<Image>()!.raycastTarget = false;
+            _rect = (RectTransform)_root.transform;
+            _rect.pivot = new Vector2(0.5f, 1f);
+            var swatch = ModConfigUiFactory.CreateRectObject(
+                "Color",
+                _root.transform,
+                new Vector2(0.01f, 0.28f),
+                new Vector2(0.035f, 0.72f),
+                Color.white);
+            _swatch = swatch.GetComponent<Image>()!;
+            _swatch.raycastTarget = false;
+            _label = ModConfigUiFactory.CreateText(
+                "Outcome",
+                _root.transform,
+                new Vector2(0.05f, 0f),
+                new Vector2(0.99f, 1f),
+                template,
+                string.Empty,
+                TextAlignmentOptions.MidlineLeft,
+                0.43f,
+                TextOverflowModes.Ellipsis);
         }
 
-        private static void SetSegment(RectTransform rect, float start, float end)
+        internal void SetActive(bool active) => _root.SetActive(active);
+
+        internal void Render(ActionOutcomeServiceDetailPresentation detail)
         {
-            rect.anchorMin = new Vector2(start, 0f);
-            rect.anchorMax = new Vector2(end, 1f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            _swatch.color = ActionOutcomeTimelineGraphic.ColorFor(detail.Color);
+            _label.text = detail.Summary;
         }
 
-        private static long SaturatingAdd(long left, long right) =>
-            right > long.MaxValue - left ? long.MaxValue : left + right;
+        internal void Layout(int column, int row)
+        {
+            var left = 0.01f + column * 0.495f;
+            _rect.anchorMin = new Vector2(left, 1f);
+            _rect.anchorMax = new Vector2(left + 0.485f, 1f);
+            _rect.anchoredPosition = new Vector2(
+                0f,
+                -DetailHeaderHeight - row * DetailRowHeight);
+            _rect.sizeDelta = new Vector2(0f, DetailRowHeight);
+        }
+
+        public void Dispose() => UnityEngine.Object.Destroy(_root);
     }
 }

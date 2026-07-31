@@ -86,7 +86,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _hostTraceDumpRevision != _hostTraceDump.Revision ||
         _differentialVerificationRevision != _differentialVerification.Revision ||
         _decisionJournalRevision != _decisionJournal.Revision ||
-        _actionOutcomeRevision != _actionOutcomes.Revision
+        _actionOutcomeRevision != _actionOutcomes.TimelineRevision
 #if SERVICE_CYCLE_PROFILE
         || _performanceProfileRevision != _performanceProfile.Revision
 #endif
@@ -135,7 +135,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
             _actionOutcomes,
             _pumpTiming);
         top += _actionOutcomeView.Layout(_content.rect.width, top, siblingIndex++);
-        _actionOutcomeRevision = _actionOutcomes.Revision;
+        _actionOutcomeRevision = _actionOutcomes.TimelineRevision;
         var journalView = GetOrCreate(DecisionJournalCardKey);
         top += journalView.LayoutStatic(
             "Decision journal",

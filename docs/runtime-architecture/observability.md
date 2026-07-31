@@ -643,20 +643,34 @@ all, because the profiler is compiled out of one. A missing product leaves its p
 that the dashboard renders as a banner under the header, so the reader is told what is not there instead of
 being refused a dashboard.
 
-Common also exposes one owner-thread rolling action-outcome projection for the in-game Runtime page. It
-consumes the same assembled `DecisionJournalObservation` and lifecycle-transition evidence as the rolling
-journal, before storage coalescing, and therefore retains exact planned, committed, skipped, rejected, and
-faulted totals plus the latest real boundary reason per registered service. It adds no feature bookkeeping,
-native read, second service poll, storage path, or disk I/O. The live projection is composed in both build
-flavors and remains available if journal storage cannot initialize; optional disk recording and the
-always-on in-memory projection receive the same evidence through one fan-out observer.
+Common also exposes one owner-thread rolling action-outcome projection for future outcome-truthful health
+and the in-game Runtime page. It consumes the same assembled `DecisionJournalObservation` and lifecycle
+transition evidence as the rolling journal, before storage coalescing, and therefore retains exact planned,
+committed, skipped, rejected, and faulted totals plus the latest real boundary reason per registered
+service. It adds no feature bookkeeping, native read, second service poll, storage path, or disk I/O. The
+live projection is composed in both build flavors and remains available if journal storage cannot
+initialize; optional disk recording and the always-on in-memory projection receive the same evidence
+through one fan-out observer.
 
-The projection carries the registration's typed action-dispatch shape. Mod Config includes every
-`Ordinary` automation row and excludes `Source` infrastructure by that shape, never by matching a display
-name. Each service retains its newest 32 assembled observations as whole entries; eviction subtracts that
-entry's outcome totals and recomputes the latest surviving boundary. A registered idle or disabled service
-still has a zeroed row. Release presents only calm outcome words and non-color cues; performance-debug may
-also present the exact counts and numeric last-boundary reason.
+The projection carries the registration's typed action-dispatch shape and retains each service's newest 32
+assembled observations as whole entries; eviction subtracts that entry's outcome totals and recomputes the
+latest surviving boundary. Alongside that health window it exposes a fixed 30-minute action timeline. The
+minute key is derived only from the monotonic timestamp already carried by the evidence stream. Each minute
+stores committed actions by registered service plus fault presence; planned, skipped, rejected, and waiting
+evidence never becomes charted work. `Advance` revises the timeline only when its journal timestamp crosses
+a minute boundary, so a closed bucket never changes and no within-minute no-commit cycle can trigger a
+repaint. A lifecycle
+generation change clears every timeline bucket before the new world can contribute.
+
+Mod Config renders one linear stacked chart from the 30 fixed slots. `Source` infrastructure is excluded by
+typed shape, never by a display-name match. Mentor's steady per-recipient mastery grants are explicitly
+excluded by registered service identity: they are truthful committed evidence retained for health and trace
+diagnosis, but not discrete player-facing automation events for this chart. Each remaining known `Ordinary`
+service owns one deterministic palette color, and only services with committed work in the window enter the
+compact legend. Empty minutes remain visible baseline slots. A fault in an included automation bucket adds
+one small red triangle at its base; waiting and rejected evidence stays with the feature-health grid. With no
+included commit or fault evidence the entire plot is replaced by the exact calm line
+`No automation activity in the last 30 minutes`.
 
 The existing 1,200-frame owner-thread pump-timing projection remains, but the Runtime page now reduces it
 to one average/worst line. The former 224-pixel percentile column chart, per-frame phase colors, p95, clipped

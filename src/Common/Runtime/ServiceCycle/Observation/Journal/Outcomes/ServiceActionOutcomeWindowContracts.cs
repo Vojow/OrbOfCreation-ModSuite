@@ -112,7 +112,7 @@ public readonly struct ServiceActionOutcomeWindowCopyResult
     public bool IsComplete => AvailableCount == WrittenCount;
 }
 
-public interface IServiceActionOutcomeWindowSource
+public interface IServiceActionOutcomeWindowSource : IServiceActionTimelineSource
 {
     int ServiceCount { get; }
     int WindowCapacityPerService { get; }
@@ -136,6 +136,10 @@ public sealed class ServiceActionOutcomeWindowRegistry : IServiceActionOutcomeWi
     public int ServiceCount => _source?.ServiceCount ?? 0;
     public int WindowCapacityPerService => _source?.WindowCapacityPerService ?? 0;
     public long Revision => checked(_baseRevision + (_source?.Revision ?? 0));
+    public int TimelineServiceCount => _source?.TimelineServiceCount ?? 0;
+    public int TimelineBucketCapacity => _source?.TimelineBucketCapacity ?? 0;
+    public int TimelineCellCapacity => _source?.TimelineCellCapacity ?? 0;
+    public long TimelineRevision => checked(_baseRevision + (_source?.TimelineRevision ?? 0));
 
     public ServiceActionOutcomeWindowCopyResult CopyTo(
         Span<ServiceActionOutcomeSnapshot> destination)
@@ -148,6 +152,21 @@ public sealed class ServiceActionOutcomeWindowRegistry : IServiceActionOutcomeWi
             copied.AvailableCount,
             copied.WrittenCount,
             Revision);
+    }
+
+    public ServiceActionTimelineCopyResult CopyTimelineTo(
+        Span<ServiceActionTimelineCellSnapshot> destination)
+    {
+        var source = _source;
+        if (source is null)
+            return new ServiceActionTimelineCopyResult(0, 0, 0, 0, TimelineRevision);
+        var copied = source.CopyTimelineTo(destination);
+        return new ServiceActionTimelineCopyResult(
+            copied.ServiceCount,
+            copied.BucketCount,
+            copied.AvailableCount,
+            copied.WrittenCount,
+            TimelineRevision);
     }
 
     internal ServiceActionOutcomeWindowRegistration Register(

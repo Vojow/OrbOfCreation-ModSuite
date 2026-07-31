@@ -20,7 +20,7 @@ than a request for alternate chrome.
 | Catalog, typed values, apply/revert/default | [ModConfigTests.cs](../../tests/OrbModding.Tests/ModConfigTests.cs) |
 | Responsive row/layout behavior | [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
 | Runtime health/status projection | [ModRuntimeStatusProjectionTests.cs](../../tests/OrbModding.Tests/ModRuntimeStatusProjectionTests.cs), [ConfigurationSchemaStatusProjectionTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaStatusProjectionTests.cs) |
-| Runtime action outcomes and per-flavor copy | [ActionOutcomeSurfacePresentationTests.cs](../../tests/OrbModding.Tests/OrbModConfig/ActionOutcomeSurfacePresentationTests.cs), [profile presentation tests](../../tests/OrbModding.ProfileTests/ActionOutcomeSurfacePresentationTests.cs) |
+| Runtime committed-work timeline, calm refresh contract, and per-flavor copy | [ActionOutcomeSurfacePresentationTests.cs](../../tests/OrbModding.Tests/OrbModConfig/ActionOutcomeSurfacePresentationTests.cs), [profile presentation tests](../../tests/OrbModding.ProfileTests/ActionOutcomeSurfacePresentationTests.cs) |
 | Shared invalidation handoff | [ModConfigGameplayInvalidationTests.cs](../../tests/OrbModding.Tests/ModConfigGameplayInvalidationTests.cs) |
 | Native tab selection, first-install trigger, navigation cadence, and work budgets | [ModConfigPerformanceTests.cs](../../tests/OrbModding.Tests/ModConfigPerformanceTests.cs) |
 | Cross-plugin schema transactions | [ConfigurationSchemaTests.cs](../../tests/OrbModding.Tests/ConfigurationSchemaTests.cs), [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs) |

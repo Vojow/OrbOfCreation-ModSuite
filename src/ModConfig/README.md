@@ -92,15 +92,35 @@ It presents:
 - explicit start/stop controls for manual full traces;
 - start/stop controls for profiling builds;
 - read-only rolling decision-journal health; and
-- a per-automation recent-action surface showing completed, skipped, not-completed, waiting, and
-  needs-attention outcomes, followed by one quiet average/worst processing-time line.
+- one 30-minute automation timeline of committed work, followed by one quiet average/worst
+  processing-time line.
 
 The page receives neutral status and command ports only. It has no pump, trace buffer, writer, storage adapter, or filesystem authority. The health grid is a presentation over the same joined feature snapshots used elsewhere; detailed plugin cards remain sorted by severity. Cards update through the existing open-page cadence. Pending refresh work has a hard 30-frame admission bound and the Runtime footer exposes pending and last-refresh age.
-The action surface excludes `Source`-shaped infrastructure such as World collection and retains
-every `Ordinary` automation service, including quiet rows that have no recent work. Release copy
-uses only the exact player-facing outcome words; performance-debug copy adds counts and the last
-numeric journal boundary reason. Outcome rails reuse their Unity objects and encode completion,
-quiet non-completion, and faults with shape/copy as well as color.
+The action timeline excludes `Source`-shaped infrastructure such as World collection. It also excludes
+Mentor by its exact registered service identity: Mentor's per-recipient mastery grants remain available
+to health and trace consumers, but that steady fan-out is not a discrete player-facing automation event
+for this chart. The view renders 30 fixed one-minute baseline slots and stacks committed action counts
+for the remaining `Ordinary` services, using one deterministic suite-palette color per service. The
+linear height scale is the largest visible bucket. Only active included services enter the compact color
+legend. Empty minutes remain quiet baseline slots; a fully quiet window is the single line
+`No automation activity in the last 30 minutes`. Waiting, skipped, rejected, and merely planned work is
+not charted. Any fault in an included automation bucket adds one small red triangular base marker so
+fault presence does not depend on color alone.
+
+The plot labels its linear scale `Completed actions / minute`, with zero and the current visible maximum.
+Selecting any minute highlights its slot and shows the included services' outcomes for that minute below
+the legend. Release copy uses `completed`, `not applied`, `skipped`, and `failed`; the profile build uses
+the exact diagnostic terms `committed`, `rejected`, `skipped`, and `faulted`. A selected minute with no
+outcomes says `No automation outcomes in this minute`. These outcome lines do not turn rejected or skipped
+work into bar height, and Mentor and `Source` services remain excluded from both chart and detail.
+
+The timeline revision changes only at a minute boundary, for committed work, for a newly visible fault
+marker, or for lifecycle clear. Ordinary within-minute no-commit cycles leave the rendered presentation
+byte-identical. Skipped, rejected, and repeated-fault counts accumulate behind that stable revision and
+become visible on the next commit, first fault, or minute boundary rather than repainting at cycle cadence.
+A lifecycle change
+discards all 30 buckets, and the existing journal monotonic timestamp supplies fixed minute keys; no
+UI timer, coroutine, second clock, game read, or disk path participates.
 
 ## Configuration behavior
 

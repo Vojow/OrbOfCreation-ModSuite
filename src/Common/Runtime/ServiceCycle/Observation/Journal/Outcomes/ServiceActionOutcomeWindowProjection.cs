@@ -14,6 +14,8 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     IServiceActionOutcomeWindowSource
 {
     internal const int DefaultWindowCapacityPerService = 32;
+    internal const int TimelineBucketCount = 30;
+    private const long TicksPerMinute = TimeSpan.TicksPerMinute;
     private readonly ServiceActionOutcomeService[] _services;
     private readonly ServiceActionOutcomeDelta[] _window;
     private readonly int[] _next;
@@ -24,7 +26,15 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     private readonly long[] _rejected;
     private readonly long[] _faulted;
     private readonly ServiceActionOutcomeBoundary[] _lastBoundary;
+    private readonly long[] _timelineMinuteKeys;
+    private readonly long[] _timelineCommitted;
+    private readonly long[] _timelineSkipped;
+    private readonly long[] _timelineRejected;
+    private readonly long[] _timelineFaulted;
+    private ulong _timelineLifecycle;
+    private long _timelineCurrentMinute = -1;
     private long _revision;
+    private long _timelineRevision;
 
     private ServiceActionOutcomeWindowProjection(
         ServiceActionOutcomeService[] services,
@@ -45,6 +55,12 @@ internal sealed class ServiceActionOutcomeWindowProjection :
         _rejected = new long[services.Length];
         _faulted = new long[services.Length];
         _lastBoundary = new ServiceActionOutcomeBoundary[services.Length];
+        _timelineMinuteKeys = new long[TimelineBucketCount];
+        Array.Fill(_timelineMinuteKeys, long.MinValue);
+        _timelineCommitted = new long[checked(TimelineBucketCount * services.Length)];
+        _timelineSkipped = new long[_timelineCommitted.Length];
+        _timelineRejected = new long[_timelineCommitted.Length];
+        _timelineFaulted = new long[_timelineCommitted.Length];
     }
 
     internal static ServiceActionOutcomeWindowProjection Create(
@@ -63,12 +79,18 @@ internal sealed class ServiceActionOutcomeWindowProjection :
                 slot.ServiceId,
                 slot.ActionDispatchPolicy.Shape);
         }
-        return new ServiceActionOutcomeWindowProjection(services, windowCapacityPerService);
+        var projection = new ServiceActionOutcomeWindowProjection(services, windowCapacityPerService);
+        projection._timelineLifecycle = registry.CurrentLifecycle.Value;
+        return projection;
     }
 
     public int ServiceCount => _services.Length;
     public int WindowCapacityPerService { get; }
     public long Revision => _revision;
+    public int TimelineServiceCount => _services.Length;
+    public int TimelineBucketCapacity => TimelineBucketCount;
+    public int TimelineCellCapacity => checked(_services.Length * TimelineBucketCount);
+    public long TimelineRevision => _timelineRevision;
     public bool IsFaulted => false;
 
     public ServiceActionOutcomeWindowCopyResult CopyTo(
@@ -92,6 +114,47 @@ internal sealed class ServiceActionOutcomeWindowProjection :
         return new ServiceActionOutcomeWindowCopyResult(_services.Length, written, _revision);
     }
 
+    public ServiceActionTimelineCopyResult CopyTimelineTo(
+        Span<ServiceActionTimelineCellSnapshot> destination)
+    {
+        var available = TimelineCellCapacity;
+        var written = Math.Min(available, destination.Length);
+        if (_timelineCurrentMinute < 0)
+        {
+            return new ServiceActionTimelineCopyResult(
+                0,
+                0,
+                0,
+                0,
+                _timelineRevision);
+        }
+
+        var firstMinute = _timelineCurrentMinute - TimelineBucketCount + 1;
+        for (var cell = 0; cell < written; cell++)
+        {
+            var bucket = cell / _services.Length;
+            var serviceIndex = cell % _services.Length;
+            var minute = firstMinute + bucket;
+            var slot = Slot(minute);
+            var retained = _timelineMinuteKeys[slot] == minute;
+            var service = _services[serviceIndex];
+            destination[cell] = new ServiceActionTimelineCellSnapshot(
+                minute,
+                service.Service,
+                service.Shape,
+                retained ? _timelineCommitted[TimelineIndex(slot, serviceIndex)] : 0,
+                retained ? _timelineSkipped[TimelineIndex(slot, serviceIndex)] : 0,
+                retained ? _timelineRejected[TimelineIndex(slot, serviceIndex)] : 0,
+                retained ? _timelineFaulted[TimelineIndex(slot, serviceIndex)] : 0);
+        }
+        return new ServiceActionTimelineCopyResult(
+            _services.Length,
+            TimelineBucketCount,
+            available,
+            written,
+            _timelineRevision);
+    }
+
     public void Observe(in DecisionJournalObservation observation)
     {
         var index = ServiceIndex(observation.Service);
@@ -105,11 +168,14 @@ internal sealed class ServiceActionOutcomeWindowProjection :
                 observation.Fault.IsValid ? 1 : 0,
             Boundary(in observation));
         Add(index, in delta);
+        ObserveTimeline(index, in observation);
     }
 
     public void ObserveTransition(in DecisionJournalRecord transition)
     {
         DecisionJournalRecordValidation.Validate(in transition);
+        if (transition.Kind == DecisionJournalRecordKind.LifecycleChanged)
+            ResetTimeline(transition.Lifecycle);
         var boundary = TransitionBoundary(in transition);
         if (!boundary.IsPresent) return;
         var delta = new ServiceActionOutcomeDelta(0, 0, 0, 0, 0, boundary);
@@ -131,8 +197,98 @@ internal sealed class ServiceActionOutcomeWindowProjection :
         _ = observedAt;
     }
 
-    public void Advance(MonotonicTimestamp now) => _ = now;
-    public void Stop(MonotonicTimestamp now) => _ = now;
+    public void Advance(MonotonicTimestamp now) => AdvanceTimeline(now);
+    public void Stop(MonotonicTimestamp now) => AdvanceTimeline(now);
+
+    private void ObserveTimeline(
+        int serviceIndex,
+        in DecisionJournalObservation observation)
+    {
+        if (observation.Lifecycle != _timelineLifecycle)
+            ResetTimeline(observation.Lifecycle);
+        var committed = observation.Terminal.IsPresent
+            ? observation.Terminal.CommittedCount
+            : 0;
+        var skipped = observation.Terminal.IsPresent
+            ? observation.Terminal.SkippedCount
+            : 0;
+        var rejected = observation.Terminal.IsPresent &&
+            observation.Terminal.Disposition == BatchTerminalDisposition.Rejected ? 1 : 0;
+        var faulted = (observation.Terminal.IsPresent &&
+                observation.Terminal.Disposition == BatchTerminalDisposition.Faulted) ||
+            observation.Fault.IsValid ? 1 : 0;
+        if (committed <= 0 && skipped <= 0 && rejected <= 0 && faulted <= 0) return;
+
+        var minute = Minute(observation.LastObservedAt);
+        if (minute < _timelineCurrentMinute) return;
+        AdvanceTimeline(observation.LastObservedAt);
+        var slot = Slot(minute);
+        EnsureTimelineSlot(slot, minute);
+        var index = TimelineIndex(slot, serviceIndex);
+        var visibleChange = false;
+        if (committed > 0)
+        {
+            _timelineCommitted[index] = SaturatingAdd(_timelineCommitted[index], committed);
+            visibleChange = true;
+        }
+        if (skipped > 0)
+            _timelineSkipped[index] = SaturatingAdd(_timelineSkipped[index], skipped);
+        if (rejected > 0)
+            _timelineRejected[index] = SaturatingAdd(_timelineRejected[index], rejected);
+        if (faulted > 0)
+        {
+            if (_timelineFaulted[index] == 0) visibleChange = true;
+            _timelineFaulted[index] = SaturatingAdd(_timelineFaulted[index], faulted);
+        }
+        if (visibleChange) _timelineRevision = checked(_timelineRevision + 1);
+    }
+
+    private void AdvanceTimeline(MonotonicTimestamp observedAt)
+    {
+        var minute = Minute(observedAt);
+        if (minute <= _timelineCurrentMinute) return;
+        var hadCurrentMinute = _timelineCurrentMinute >= 0;
+        _timelineCurrentMinute = minute;
+        if (hadCurrentMinute) _timelineRevision = checked(_timelineRevision + 1);
+    }
+
+    private void ResetTimeline(ulong lifecycle)
+    {
+        if (lifecycle == 0 || lifecycle == _timelineLifecycle) return;
+        _timelineLifecycle = lifecycle;
+        Array.Fill(_timelineMinuteKeys, long.MinValue);
+        Array.Clear(_timelineCommitted, 0, _timelineCommitted.Length);
+        Array.Clear(_timelineSkipped, 0, _timelineSkipped.Length);
+        Array.Clear(_timelineRejected, 0, _timelineRejected.Length);
+        Array.Clear(_timelineFaulted, 0, _timelineFaulted.Length);
+        _timelineCurrentMinute = -1;
+        _timelineRevision = checked(_timelineRevision + 1);
+    }
+
+    private void EnsureTimelineSlot(int slot, long minute)
+    {
+        if (_timelineMinuteKeys[slot] == minute) return;
+        _timelineMinuteKeys[slot] = minute;
+        var start = checked(slot * _services.Length);
+        Array.Clear(_timelineCommitted, start, _services.Length);
+        Array.Clear(_timelineSkipped, start, _services.Length);
+        Array.Clear(_timelineRejected, start, _services.Length);
+        Array.Clear(_timelineFaulted, start, _services.Length);
+    }
+
+    private int TimelineIndex(int slot, int serviceIndex) =>
+        checked(slot * _services.Length + serviceIndex);
+
+    private static long Minute(MonotonicTimestamp timestamp) => timestamp.Ticks / TicksPerMinute;
+
+    private static int Slot(long minute)
+    {
+        var slot = minute % TimelineBucketCount;
+        return checked((int)(slot < 0 ? slot + TimelineBucketCount : slot));
+    }
+
+    private static long SaturatingAdd(long left, long right) =>
+        right > long.MaxValue - left ? long.MaxValue : left + right;
 
     private void Add(int serviceIndex, in ServiceActionOutcomeDelta delta)
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using OrbAutomata;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -7,136 +8,314 @@ using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 
 namespace OrbModConfig;
 
-internal enum ActionOutcomeTone
+internal enum ActionOutcomeServiceColor
 {
-    Waiting = 0,
-    Completed = 1,
-    QuietIssue = 2,
-    Faulted = 3,
+    Leaf = 0,
+    Amber = 1,
+    Sky = 2,
+    Violet = 3,
+    Cyan = 4,
+    Orange = 5,
+    Rose = 6,
+    Teal = 7,
 }
 
-internal readonly struct ActionOutcomeRowPresentation
+internal static class ActionOutcomeTimelineServicePolicy
 {
-    internal ActionOutcomeRowPresentation(
-        string displayName,
-        string summary,
-        string detail,
-        ActionOutcomeTone tone,
-        long committed,
-        long skipped,
-        long rejected,
-        long faulted)
+    private const string MentorServiceId = "orbmentor.mastery-sharing";
+
+    internal static bool Includes(ServiceId service, ServiceShape shape) =>
+        shape == ServiceShape.Ordinary &&
+        !string.Equals(service.Value, MentorServiceId, StringComparison.Ordinal);
+}
+
+internal readonly struct ActionOutcomeStackPresentation
+{
+    internal ActionOutcomeStackPresentation(
+        ServiceId service,
+        ActionOutcomeServiceColor color,
+        long committed)
     {
-        DisplayName = displayName;
-        Summary = summary;
-        Detail = detail;
-        Tone = tone;
+        Service = service;
+        Color = color;
         Committed = committed;
-        Skipped = skipped;
-        Rejected = rejected;
-        Faulted = faulted;
     }
 
-    internal string DisplayName { get; }
-    internal string Summary { get; }
-    internal string Detail { get; }
-    internal ActionOutcomeTone Tone { get; }
+    internal ServiceId Service { get; }
+    internal ActionOutcomeServiceColor Color { get; }
     internal long Committed { get; }
-    internal long Skipped { get; }
-    internal long Rejected { get; }
-    internal long Faulted { get; }
+}
+
+internal readonly struct ActionOutcomeBucketPresentation
+{
+    internal ActionOutcomeBucketPresentation(
+        long minuteKey,
+        ActionOutcomeStackPresentation[] stacks,
+        ActionOutcomeServiceDetailPresentation[] details,
+        long committed,
+        bool hasFault)
+    {
+        MinuteKey = minuteKey;
+        Stacks = stacks ?? throw new ArgumentNullException(nameof(stacks));
+        Details = details ?? throw new ArgumentNullException(nameof(details));
+        Committed = committed;
+        HasFault = hasFault;
+    }
+
+    internal long MinuteKey { get; }
+    internal ActionOutcomeStackPresentation[] Stacks { get; }
+    internal ActionOutcomeServiceDetailPresentation[] Details { get; }
+    internal long Committed { get; }
+    internal bool HasFault { get; }
+}
+
+internal readonly struct ActionOutcomeServiceDetailPresentation
+{
+    internal ActionOutcomeServiceDetailPresentation(
+        ServiceId service,
+        ActionOutcomeServiceColor color,
+        string summary)
+    {
+        Service = service;
+        Color = color;
+        Summary = summary ?? throw new ArgumentNullException(nameof(summary));
+    }
+
+    internal ServiceId Service { get; }
+    internal ActionOutcomeServiceColor Color { get; }
+    internal string Summary { get; }
+}
+
+internal readonly struct ActionOutcomeLegendPresentation
+{
+    internal ActionOutcomeLegendPresentation(
+        ServiceId service,
+        string displayName,
+        ActionOutcomeServiceColor color)
+    {
+        Service = service;
+        DisplayName = displayName ?? throw new ArgumentNullException(nameof(displayName));
+        Color = color;
+    }
+
+    internal ServiceId Service { get; }
+    internal string DisplayName { get; }
+    internal ActionOutcomeServiceColor Color { get; }
 }
 
 internal readonly struct ActionOutcomeSurfacePresentation
 {
-    internal const string Title = "Recent automation activity";
-    internal const string Waiting = "○ Waiting";
-    internal const string Completed = "★ Completed";
-    internal const string Skipped = "– Skipped";
-    internal const string Rejected = "○ Not completed";
-    internal const string Faulted = "! Needs attention";
+    internal const string Title = "Automation activity · last 30 minutes";
+    internal const string QuietWindow = "No automation activity in the last 30 minutes";
+    internal const string AxisLabel = "Completed actions / minute";
+    internal const string EmptyMinute = "No automation outcomes in this minute";
     internal const string EmptyTiming = "Recent processing · waiting for activity";
 
     internal ActionOutcomeSurfacePresentation(
-        ActionOutcomeRowPresentation[] rows,
+        ActionOutcomeBucketPresentation[] buckets,
+        ActionOutcomeLegendPresentation[] legend,
+        bool showsTimeline,
+        long maximumCommitted,
         string timingSummary)
     {
-        Rows = rows ?? throw new ArgumentNullException(nameof(rows));
+        Buckets = buckets ?? throw new ArgumentNullException(nameof(buckets));
+        Legend = legend ?? throw new ArgumentNullException(nameof(legend));
+        ShowsTimeline = showsTimeline;
+        MaximumCommitted = maximumCommitted;
         TimingSummary = timingSummary ?? throw new ArgumentNullException(nameof(timingSummary));
     }
 
-    internal ActionOutcomeRowPresentation[] Rows { get; }
+    internal ActionOutcomeBucketPresentation[] Buckets { get; }
+    internal ActionOutcomeLegendPresentation[] Legend { get; }
+    internal bool ShowsTimeline { get; }
+    internal string QuietMessage => ShowsTimeline ? string.Empty : QuietWindow;
+    internal long MaximumCommitted { get; }
     internal string TimingSummary { get; }
 
     internal static ActionOutcomeSurfacePresentation Build(
-        ReadOnlySpan<ServiceActionOutcomeSnapshot> outcomes,
+        ReadOnlySpan<ServiceActionTimelineCellSnapshot> cells,
+        int serviceCount,
+        int bucketCount,
         ReadOnlySpan<ServiceCyclePumpTimingSample> timings)
     {
-        var automationCount = 0;
-        for (var index = 0; index < outcomes.Length; index++)
-            if (outcomes[index].Shape == ServiceShape.Ordinary) automationCount++;
-
-        var rows = new ActionOutcomeRowPresentation[automationCount];
-        var written = 0;
-        for (var index = 0; index < outcomes.Length; index++)
+        if (serviceCount < 0) throw new ArgumentOutOfRangeException(nameof(serviceCount));
+        if (bucketCount < 0) throw new ArgumentOutOfRangeException(nameof(bucketCount));
+        if (cells.Length == 0)
         {
-            var outcome = outcomes[index];
-            if (outcome.Shape != ServiceShape.Ordinary) continue;
-            rows[written++] = Row(in outcome);
+            return new ActionOutcomeSurfacePresentation(
+                Array.Empty<ActionOutcomeBucketPresentation>(),
+                Array.Empty<ActionOutcomeLegendPresentation>(),
+                showsTimeline: false,
+                maximumCommitted: 0,
+                Timing(timings));
         }
-        return new ActionOutcomeSurfacePresentation(rows, Timing(timings));
+        if (cells.Length != checked(serviceCount * bucketCount))
+            throw new ArgumentException("The timeline must contain every service cell for every bucket.", nameof(cells));
+
+        ValidateShape(cells, serviceCount, bucketCount);
+        var totals = new long[serviceCount];
+        var buckets = new ActionOutcomeBucketPresentation[bucketCount];
+        long maximum = 0;
+        var hasFault = false;
+        for (var bucket = 0; bucket < bucketCount; bucket++)
+        {
+            var offset = checked(bucket * serviceCount);
+            var stacks = new List<ActionOutcomeStackPresentation>(serviceCount);
+            var details = new List<ActionOutcomeServiceDetailPresentation>(serviceCount);
+            long total = 0;
+            var bucketFault = false;
+            for (var serviceIndex = 0; serviceIndex < serviceCount; serviceIndex++)
+            {
+                var cell = cells[offset + serviceIndex];
+                if (!ActionOutcomeTimelineServicePolicy.Includes(cell.Service, cell.Shape)) continue;
+                var displayName = AutomataServiceCycleTraceRoster.DisplayName(cell.Service);
+                if (string.IsNullOrEmpty(displayName)) displayName = cell.Service.Value;
+                if (cell.Committed > 0)
+                {
+                    total = SaturatingAdd(total, cell.Committed);
+                    totals[serviceIndex] = SaturatingAdd(totals[serviceIndex], cell.Committed);
+                    stacks.Add(new ActionOutcomeStackPresentation(
+                        cell.Service,
+                        ColorFor(cell.Service),
+                        cell.Committed));
+                }
+                if (cell.Committed > 0 || cell.Rejected > 0 || cell.Skipped > 0 || cell.FaultedCount > 0)
+                {
+                    details.Add(new ActionOutcomeServiceDetailPresentation(
+                        cell.Service,
+                        ColorFor(cell.Service),
+                        DetailSummary(displayName, in cell)));
+                }
+                bucketFault |= cell.Faulted;
+            }
+            stacks.Sort(CompareStacks);
+            details.Sort(CompareDetails);
+            if (total > maximum) maximum = total;
+            hasFault |= bucketFault;
+            buckets[bucket] = new ActionOutcomeBucketPresentation(
+                cells[offset].MinuteKey,
+                stacks.ToArray(),
+                details.ToArray(),
+                total,
+                bucketFault);
+        }
+
+        var legend = new List<ActionOutcomeLegendPresentation>(serviceCount);
+        for (var serviceIndex = 0; serviceIndex < serviceCount; serviceIndex++)
+        {
+            if (totals[serviceIndex] <= 0) continue;
+            var service = cells[serviceIndex].Service;
+            if (!ActionOutcomeTimelineServicePolicy.Includes(
+                    service,
+                    cells[serviceIndex].Shape)) continue;
+            var displayName = AutomataServiceCycleTraceRoster.DisplayName(service);
+            if (string.IsNullOrEmpty(displayName)) displayName = service.Value;
+            legend.Add(new ActionOutcomeLegendPresentation(
+                service,
+                displayName,
+                ColorFor(service)));
+        }
+        legend.Sort(CompareLegend);
+        return new ActionOutcomeSurfacePresentation(
+            buckets,
+            legend.ToArray(),
+            showsTimeline: maximum > 0 || hasFault,
+            maximum,
+            Timing(timings));
     }
 
-    private static ActionOutcomeRowPresentation Row(in ServiceActionOutcomeSnapshot outcome)
+    internal static ActionOutcomeServiceColor ColorFor(ServiceId service) => service.Value switch
     {
-        var name = AutomataServiceCycleTraceRoster.DisplayName(outcome.Service);
-        if (string.IsNullOrEmpty(name)) name = outcome.Service.Value;
-        var summary = Summary(in outcome);
-        var tone = outcome.Faulted > 0
-            ? ActionOutcomeTone.Faulted
-            : outcome.Committed > 0
-                ? ActionOutcomeTone.Completed
-                : outcome.Skipped > 0 || outcome.Rejected > 0
-                    ? ActionOutcomeTone.QuietIssue
-                    : ActionOutcomeTone.Waiting;
+        "orbautomata.auto-harvest" => ActionOutcomeServiceColor.Leaf,
+        "orbautomata.auto-buy" => ActionOutcomeServiceColor.Amber,
+        "orbautomata.spell-level" => ActionOutcomeServiceColor.Sky,
+        "orbautomata.auto-cast" => ActionOutcomeServiceColor.Violet,
+        "orbautomata.auto-concept" => ActionOutcomeServiceColor.Cyan,
+        "orbautomata.auto-items" => ActionOutcomeServiceColor.Orange,
+        "orbautomata.auto-scribe" => ActionOutcomeServiceColor.Rose,
+        "orbmentor.mastery-sharing" => ActionOutcomeServiceColor.Teal,
+        _ => (ActionOutcomeServiceColor)(StableHash(service.Value) % 8u),
+    };
+
+    private static void ValidateShape(
+        ReadOnlySpan<ServiceActionTimelineCellSnapshot> cells,
+        int serviceCount,
+        int bucketCount)
+    {
+        for (var bucket = 0; bucket < bucketCount; bucket++)
+        {
+            var offset = checked(bucket * serviceCount);
+            var minute = cells[offset].MinuteKey;
+            for (var serviceIndex = 0; serviceIndex < serviceCount; serviceIndex++)
+            {
+                var current = cells[offset + serviceIndex];
+                if (current.MinuteKey != minute)
+                    throw new ArgumentException("Every cell in a bucket must share its minute key.", nameof(cells));
+                if (bucket == 0) continue;
+                var prior = cells[serviceIndex];
+                if (current.Service != prior.Service || current.Shape != prior.Shape)
+                    throw new ArgumentException("Timeline service order must remain stable across buckets.", nameof(cells));
+            }
+        }
+    }
+
+    private static int CompareStacks(
+        ActionOutcomeStackPresentation left,
+        ActionOutcomeStackPresentation right)
+    {
+        var color = left.Color.CompareTo(right.Color);
+        return color != 0
+            ? color
+            : string.Compare(left.Service.Value, right.Service.Value, StringComparison.Ordinal);
+    }
+
+    private static int CompareLegend(
+        ActionOutcomeLegendPresentation left,
+        ActionOutcomeLegendPresentation right)
+    {
+        var color = left.Color.CompareTo(right.Color);
+        return color != 0
+            ? color
+            : string.Compare(left.Service.Value, right.Service.Value, StringComparison.Ordinal);
+    }
+
+    private static int CompareDetails(
+        ActionOutcomeServiceDetailPresentation left,
+        ActionOutcomeServiceDetailPresentation right)
+    {
+        var color = left.Color.CompareTo(right.Color);
+        return color != 0
+            ? color
+            : string.Compare(left.Service.Value, right.Service.Value, StringComparison.Ordinal);
+    }
+
+    private static string DetailSummary(
+        string displayName,
+        in ServiceActionTimelineCellSnapshot cell)
+    {
+        var outcomes = new List<string>(4);
 #if SERVICE_CYCLE_PROFILE
-        var detail = string.Format(
-            CultureInfo.InvariantCulture,
-            "planned {0} · committed {1} · skipped {2} · rejected {3} · faulted {4} · last {5}",
-            outcome.Planned,
-            outcome.Committed,
-            outcome.Skipped,
-            outcome.Rejected,
-            outcome.Faulted,
-            Boundary(outcome.LastBoundary));
+        if (cell.Committed > 0) outcomes.Add($"committed {cell.Committed}");
+        if (cell.Rejected > 0) outcomes.Add($"rejected {cell.Rejected}");
+        if (cell.Skipped > 0) outcomes.Add($"skipped {cell.Skipped}");
+        if (cell.FaultedCount > 0) outcomes.Add($"faulted {cell.FaultedCount}");
 #else
-        const string detail = "";
+        if (cell.Committed > 0) outcomes.Add($"{cell.Committed} completed");
+        if (cell.Rejected > 0) outcomes.Add($"{cell.Rejected} not applied");
+        if (cell.Skipped > 0) outcomes.Add($"{cell.Skipped} skipped");
+        if (cell.FaultedCount > 0) outcomes.Add($"{cell.FaultedCount} failed");
 #endif
-        return new ActionOutcomeRowPresentation(
-            name,
-            summary,
-            detail,
-            tone,
-            outcome.Committed,
-            outcome.Skipped,
-            outcome.Rejected,
-            outcome.Faulted);
+        return displayName + " · " + string.Join(" · ", outcomes);
     }
 
-    private static string Summary(in ServiceActionOutcomeSnapshot outcome)
+    private static uint StableHash(string value)
     {
-        var text = string.Empty;
-        Append(ref text, outcome.Committed > 0, Completed);
-        Append(ref text, outcome.Skipped > 0, Skipped);
-        Append(ref text, outcome.Rejected > 0, Rejected);
-        Append(ref text, outcome.Faulted > 0, Faulted);
-        return text.Length == 0 ? Waiting : text;
-    }
-
-    private static void Append(ref string text, bool include, string value)
-    {
-        if (!include) return;
-        text = text.Length == 0 ? value : text + "  ·  " + value;
+        const uint offset = 2166136261;
+        const uint prime = 16777619;
+        var hash = offset;
+        for (var index = 0; index < value.Length; index++)
+            hash = unchecked((hash ^ value[index]) * prime);
+        return hash;
     }
 
     private static string Timing(ReadOnlySpan<ServiceCyclePumpTimingSample> timings)
@@ -147,7 +326,7 @@ internal readonly struct ActionOutcomeSurfacePresentation
         for (var index = 0; index < timings.Length; index++)
         {
             var ticks = timings[index].TotalDuration.Ticks;
-            total = ticks > long.MaxValue - total ? long.MaxValue : total + ticks;
+            total = SaturatingAdd(total, ticks);
             if (ticks > worst) worst = ticks;
         }
         return string.Format(
@@ -157,24 +336,6 @@ internal readonly struct ActionOutcomeSurfacePresentation
             worst / (double)TimeSpan.TicksPerMillisecond);
     }
 
-#if SERVICE_CYCLE_PROFILE
-    private static string Boundary(ServiceActionOutcomeBoundary boundary)
-    {
-        var reason = boundary.Kind switch
-        {
-            ServiceActionOutcomeBoundaryKind.Waiting => "waiting",
-            ServiceActionOutcomeBoundaryKind.Committed => "committed",
-            ServiceActionOutcomeBoundaryKind.Skipped => "skipped",
-            ServiceActionOutcomeBoundaryKind.Rejected => "rejected",
-            ServiceActionOutcomeBoundaryKind.Faulted => "faulted",
-            ServiceActionOutcomeBoundaryKind.LifecycleChanged => "lifecycle changed",
-            ServiceActionOutcomeBoundaryKind.WorldGateHeld => "waiting for a newer world",
-            ServiceActionOutcomeBoundaryKind.EmergencyStopped => "emergency stopped",
-            _ => "none",
-        };
-        return boundary.Code == 0
-            ? reason
-            : string.Format(CultureInfo.InvariantCulture, "{0} ({1})", reason, boundary.Code);
-    }
-#endif
+    private static long SaturatingAdd(long left, long right) =>
+        right > long.MaxValue - left ? long.MaxValue : left + right;
 }
