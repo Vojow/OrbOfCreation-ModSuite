@@ -12,7 +12,9 @@ internal static class AutomaticSaveBackupWording
         if (status is null) throw new ArgumentNullException(nameof(status));
         if (!status.AllowsAutomation) return FailedStartSummary(status);
         if (status.HasRetentionFailure) return RetentionStartSummary(status);
-        return "Saves are backed up automatically on startup.";
+        return status.BackupCreated
+            ? "Save backup created."
+            : "Save backup ready.";
     }
 
     internal static string PerformanceStartSummary(AutomaticSaveBackupStatus status)

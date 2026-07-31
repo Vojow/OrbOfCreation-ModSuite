@@ -8,7 +8,7 @@ namespace OrbModding.Tests.OrbModConfig;
 public sealed class ModConfigStartStatusPresentationTests
 {
     [Fact]
-    public void ReleaseBuildUsesTheSameCalmBackupGuaranteeAfterCreationAndOnNoOp()
+    public void ReleaseBuildUsesTheExactTransactionOutcomeWithoutCountOrPath()
     {
         foreach (var backupCreated in new[] { true, false })
         {
@@ -34,7 +34,7 @@ public sealed class ModConfigStartStatusPresentationTests
                     "Orb ModSuite  ·  v0.5.0-beta.1",
                     "Release build",
                     "Audited game verified",
-                    "Saves are backed up automatically on startup.",
+                    backupCreated ? "Save backup created." : "Save backup ready.",
                 },
                 presentation.Rows);
             Assert.Equal(ModConfigStartStatusTone.Ready, presentation.Tone);
@@ -42,6 +42,10 @@ public sealed class ModConfigStartStatusPresentationTests
             var visibleText = string.Join("\n", presentation.Rows);
             Assert.DoesNotContain(backup.BackupPath, visibleText, StringComparison.Ordinal);
             Assert.DoesNotContain("2 files", visibleText, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Saves are backed up automatically on startup.",
+                visibleText,
+                StringComparison.Ordinal);
             foreach (var forbidden in new[]
                      {
                          "MCP",

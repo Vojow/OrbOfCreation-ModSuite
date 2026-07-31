@@ -41,10 +41,11 @@ The last successful suite version, normalized save root, verified backup path, a
 stored in a strict stamp beside the BepInEx suite configuration. A missing, unreadable, malformed,
 wrong-version, wrong-root, or missing-backup stamp triggers another backup. Copy or stamp failure
 leaves automation disarmed for the launch and does not publish a success stamp, so the next launch
-retries. The release Start card gives one calm automatic-backup guarantee; the performance-debug
-card keeps only the created/ready status and verified file count. Runtime diagnostics retain the
-completed path and count. Both Start shapes and Runtime health show the exact blocking failure;
-accepting an unverified game build and clearing STOP cannot bypass this gate.
+retries. The release Start card reports the transaction's created/ready outcome without a count or
+path; the performance-debug card keeps that outcome and the verified file count. Runtime
+diagnostics retain the completed path and count. Both Start shapes and Runtime health show the
+exact blocking failure; accepting an unverified game build and clearing STOP cannot bypass this
+gate.
 
 ## Shared configuration schemas
 
