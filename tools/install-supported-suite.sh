@@ -41,17 +41,65 @@ case "$1" in
 esac
 mode="$1"
 
-for command_name in dotnet git find cp cmp shasum awk grep pgrep; do
+for command_name in dotnet git find cp cmp awk grep; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
     fi
 done
+if ! command -v shasum >/dev/null 2>&1 &&
+    ! command -v sha256sum >/dev/null 2>&1; then
+    echo "Required SHA-256 command is unavailable: shasum or sha256sum" >&2
+    exit 1
+fi
+
+is_windows_environment() {
+    if [[ -n "${WINDIR:-}" || -n "${SYSTEMROOT:-}" ]]; then
+        return 0
+    fi
+    case "${OSTYPE:-}" in
+        cygwin* | msys* | win32*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+if is_windows_environment &&
+    ! command -v powershell.exe >/dev/null 2>&1; then
+    echo "Native Windows process inspection is unavailable: powershell.exe" >&2
+    exit 1
+fi
+if ! command -v pgrep >/dev/null 2>&1 &&
+    ! command -v powershell.exe >/dev/null 2>&1; then
+    echo "Required process inspection is unavailable: pgrep or powershell.exe" >&2
+    exit 1
+fi
+
+normalize_directory() {
+    local candidate="$1"
+    if [[ -d "${candidate}" ]]; then
+        printf '%s\n' "${candidate}"
+        return 0
+    fi
+    if command -v cygpath >/dev/null 2>&1; then
+        local unix_candidate
+        unix_candidate="$(cygpath -u "${candidate}" 2>/dev/null || true)"
+        if [[ -n "${unix_candidate}" && -d "${unix_candidate}" ]]; then
+            printf '%s\n' "${unix_candidate}"
+            return 0
+        fi
+    fi
+    return 1
+}
 
 resolve_game_root() {
     if [[ -n "${OOC_GAME_DIR:-}" ]]; then
-        printf '%s\n' "${OOC_GAME_DIR}"
-        return
+        if normalize_directory "${OOC_GAME_DIR}"; then
+            return
+        fi
+        echo "OOC_GAME_DIR is not an existing directory: ${OOC_GAME_DIR}" >&2
+        exit 1
     fi
 
     local candidate
@@ -71,8 +119,11 @@ resolve_game_root() {
 
 resolve_save_root() {
     if [[ -n "${OOC_SAVE_DIR:-}" ]]; then
-        printf '%s\n' "${OOC_SAVE_DIR}"
-        return
+        if normalize_directory "${OOC_SAVE_DIR}"; then
+            return
+        fi
+        echo "OOC_SAVE_DIR is not an existing directory: ${OOC_SAVE_DIR}" >&2
+        exit 1
     fi
 
     local candidate
@@ -99,10 +150,65 @@ if [[ ! -d "${plugins_root}" || ! -f "${bepinex_core}/BepInEx.dll" ||
     exit 1
 fi
 
+pgrep_has_process() {
+    local pgrep_status=0
+    pgrep "$@" >/dev/null 2>&1 || pgrep_status="$?"
+    case "${pgrep_status}" in
+        0)
+            return 0
+            ;;
+        1)
+            return 1
+            ;;
+        *)
+            echo "POSIX process inspection failed; treating the game as running." >&2
+            return 2
+            ;;
+    esac
+}
+
 game_is_running() {
-    pgrep -x "Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" >/dev/null 2>&1 ||
-        pgrep -f "[O]rb Of Creation\\.exe" >/dev/null 2>&1
+    # A native Windows query is authoritative whenever it is available. Git-for-Windows may also
+    # provide pgrep, but that process view cannot be trusted to include native Windows processes.
+    if command -v powershell.exe >/dev/null 2>&1; then
+        local powershell_status=0
+        powershell.exe -NoProfile -NonInteractive -Command \
+            '$ErrorActionPreference = "Stop"; try { $process = @(Get-Process | Where-Object { $_.ProcessName -eq "Orb Of Creation" }) } catch { exit 2 }; if ($process.Count -gt 0) { exit 0 }; exit 1' \
+            >/dev/null 2>&1 || powershell_status="$?"
+        case "${powershell_status}" in
+            0)
+                return 0
+                ;;
+            1)
+                ;;
+            *)
+                echo "Native Windows process inspection failed; treating the game as running." >&2
+                return 0
+                ;;
+        esac
+    fi
+
+    if ! command -v pgrep >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local pgrep_status=0
+    pgrep_has_process -x "Orb Of Creation" || pgrep_status="$?"
+    if [[ "${pgrep_status}" -eq 0 || "${pgrep_status}" -eq 2 ]]; then
+        return 0
+    fi
+    pgrep_status=0
+    pgrep_has_process -f "[O]rb Of Creation\\.app/Contents/MacOS/Orb Of Creation" ||
+        pgrep_status="$?"
+    if [[ "${pgrep_status}" -eq 0 || "${pgrep_status}" -eq 2 ]]; then
+        return 0
+    fi
+    pgrep_status=0
+    pgrep_has_process -f "[O]rb Of Creation\\.exe" || pgrep_status="$?"
+    if [[ "${pgrep_status}" -eq 0 || "${pgrep_status}" -eq 2 ]]; then
+        return 0
+    fi
+    return 1
 }
 
 if game_is_running; then
@@ -342,7 +448,11 @@ verify_install "${suite_source}" "${suite_target}"
 print_hash() {
     local installed_file="$1"
     local digest
-    digest="$(shasum -a 256 "${installed_file}" | awk '{print $1}')"
+    if command -v shasum >/dev/null 2>&1; then
+        digest="$(shasum -a 256 "${installed_file}" | awk '{print $1}')"
+    else
+        digest="$(sha256sum "${installed_file}" | awk '{print $1}')"
+    fi
     echo "  ${digest}  $(basename "${installed_file}")"
 }
 
