@@ -15,7 +15,8 @@ dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj \
 
 The required defect cases are fair semantic cost-rank rotation, per-Scroll progression frontiers,
 shared-ceiling isolation, positive carry-limit one-slot reserve, zero/unbounded carry demand,
-next-level affordability probes, highest-affordable bounded search,
+typed idle/selected/evidence-blocked selection, next-level affordability probes,
+highest-affordable bounded search,
 cycle-pinned role narrowing, whole publication blocking when one enabled role has unknown evidence,
 player-owned automatic production pressure, exact recipe/Scroll mismatch, queue-full and no-target
 preflights, exact queue and instant-stock verification, duplicate resource-cost rows, lifecycle

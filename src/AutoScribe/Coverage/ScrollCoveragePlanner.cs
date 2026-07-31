@@ -58,6 +58,64 @@ internal readonly record struct ScrollRoleCoverage(
         ShouldProduce ? TargetLevel : ProgressionLevel;
 }
 
+internal enum ScrollCraftSelectionKind
+{
+    Invalid = 0,
+    Idle = 1,
+    Selected = 2,
+    EvidenceBlocked = 3,
+}
+
+internal readonly struct ScrollCraftSelectionResult
+{
+    private readonly ScrollRoleCoverage _selected;
+
+    private ScrollCraftSelectionResult(
+        ScrollCraftSelectionKind kind,
+        in ScrollRoleCoverage selected,
+        int blockedRoleOrdinal,
+        AutoScribeEvidenceReason blockedReason)
+    {
+        Kind = kind;
+        _selected = selected;
+        BlockedRoleOrdinal = blockedRoleOrdinal;
+        BlockedReason = blockedReason;
+    }
+
+    internal ScrollCraftSelectionKind Kind { get; }
+    internal ScrollRoleCoverage SelectedScroll =>
+        Kind == ScrollCraftSelectionKind.Selected
+            ? _selected
+            : throw new InvalidOperationException("The Scribe selection does not contain a Scroll.");
+    internal int BlockedRoleOrdinal { get; }
+    internal AutoScribeEvidenceReason BlockedReason { get; }
+
+    internal static ScrollCraftSelectionResult Idle() =>
+        new(ScrollCraftSelectionKind.Idle, default, -1, AutoScribeEvidenceReason.None);
+
+    internal static ScrollCraftSelectionResult Selected(in ScrollRoleCoverage selected)
+    {
+        if (!selected.ShouldAttemptCraft)
+            throw new ArgumentException("The selected Scribe role has no craft to attempt.", nameof(selected));
+        return new(
+            ScrollCraftSelectionKind.Selected,
+            in selected,
+            -1,
+            AutoScribeEvidenceReason.None);
+    }
+
+    internal static ScrollCraftSelectionResult EvidenceBlocked(
+        int roleOrdinal,
+        AutoScribeEvidenceReason reason)
+    {
+        if (roleOrdinal < 0)
+            throw new ArgumentOutOfRangeException(nameof(roleOrdinal));
+        if (reason == AutoScribeEvidenceReason.None)
+            throw new ArgumentException("Evidence blocking requires an exact reason.", nameof(reason));
+        return new(ScrollCraftSelectionKind.EvidenceBlocked, default, roleOrdinal, reason);
+    }
+}
+
 internal sealed class ScrollCoveragePlan
 {
     internal ScrollCoveragePlan(long frame, long epoch, ScrollRoleCoverage[] roles)
@@ -75,26 +133,24 @@ internal sealed class ScrollCoveragePlan
     /// F4 fail-closed selection: an unknown enabled role blocks the whole publication before cost
     /// rank can select a different, apparently healthy role.
     /// </summary>
-    internal bool TryChooseCraft(
+    internal ScrollCraftSelectionResult ChooseCraft(
         PublicationTable<ScrollRoleKey>? enabledRoles,
-        int afterCraftCostOrder,
-        out ScrollRoleCoverage coverage,
-        out ScrollRoleCoverage blocked)
+        int afterCraftCostOrder)
     {
-        coverage = default;
-        blocked = default;
         for (var index = 0; index < Roles.Length; index++)
         {
             var candidate = Roles[index];
             if (!AutoScribeRoleSelection.Contains(enabledRoles, candidate.Role) ||
                 candidate.State != ScrollCoverageState.EvidenceUnknown)
                 continue;
-            blocked = candidate;
-            return false;
+            return ScrollCraftSelectionResult.EvidenceBlocked(
+                candidate.RoleOrdinal,
+                candidate.EvidenceReason);
         }
 
         var foundAfter = false;
         var foundWrapped = false;
+        var selected = default(ScrollRoleCoverage);
         var wrapped = default(ScrollRoleCoverage);
         for (var index = 0; index < Roles.Length; index++)
         {
@@ -104,11 +160,11 @@ internal sealed class ScrollCoveragePlan
                 continue;
             if (candidate.CraftCostOrder > afterCraftCostOrder &&
                 (!foundAfter ||
-                 candidate.CraftCostOrder < coverage.CraftCostOrder ||
-                 (candidate.CraftCostOrder == coverage.CraftCostOrder &&
-                  candidate.Role.CompareTo(coverage.Role) < 0)))
+                 candidate.CraftCostOrder < selected.CraftCostOrder ||
+                 (candidate.CraftCostOrder == selected.CraftCostOrder &&
+                  candidate.Role.CompareTo(selected.Role) < 0)))
             {
-                coverage = candidate;
+                selected = candidate;
                 foundAfter = true;
             }
             if (!foundWrapped ||
@@ -120,9 +176,9 @@ internal sealed class ScrollCoveragePlan
                 foundWrapped = true;
             }
         }
-        if (foundAfter) return true;
-        coverage = wrapped;
-        return foundWrapped;
+        if (foundAfter) return ScrollCraftSelectionResult.Selected(in selected);
+        if (foundWrapped) return ScrollCraftSelectionResult.Selected(in wrapped);
+        return ScrollCraftSelectionResult.Idle();
     }
 }
 

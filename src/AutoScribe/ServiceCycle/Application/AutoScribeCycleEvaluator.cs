@@ -42,12 +42,10 @@ internal static class AutoScribeCycleEvaluator
                 external++;
         }
 
-        if (plan.TryChooseCraft(
-                enabledRoles,
-                afterCraftCostOrder,
-                out var selected,
-                out var blocked))
+        var selection = plan.ChooseCraft(enabledRoles, afterCraftCostOrder);
+        if (selection.Kind == ScrollCraftSelectionKind.Selected)
         {
+            var selected = selection.SelectedScroll;
             actions.Add(new AutoScribeCycleAction(
                 selected.RecipeId,
                 selected.ScrollId,
@@ -64,7 +62,7 @@ internal static class AutoScribeCycleEvaluator
                 AutoScribeEvidenceReason.None);
             return WakePolicy.OnPublication;
         }
-        if (blocked.State == ScrollCoverageState.EvidenceUnknown)
+        if (selection.Kind == ScrollCraftSelectionKind.EvidenceBlocked)
         {
             metrics = new AutoScribeDecisionMetrics(
                 enabled,
@@ -73,10 +71,14 @@ internal static class AutoScribeCycleEvaluator
                 0,
                 -1,
                 AutoScribeDecisionKind.EvidenceBlocked,
-                blocked.RoleOrdinal,
-                blocked.EvidenceReason);
+                selection.BlockedRoleOrdinal,
+                selection.BlockedReason);
             return WakePolicy.OnPublication;
         }
+
+        if (selection.Kind != ScrollCraftSelectionKind.Idle)
+            throw new System.InvalidOperationException(
+                $"Scribe coverage returned invalid selection kind {selection.Kind}.");
 
         metrics = new AutoScribeDecisionMetrics(
             enabled,

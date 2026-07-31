@@ -19,16 +19,14 @@ public sealed class ScrollCoveragePlannerTests
     {
         var plan = ScrollCoveragePlanner.Build(World(), _profile);
 
-        var found = plan.TryChooseCraft(
+        var selection = plan.ChooseCraft(
             enabledRoles: null,
-            afterCraftCostOrder: -1,
-            out var selected,
-            out var blocked);
+            afterCraftCostOrder: -1);
+        var selected = selection.SelectedScroll;
 
-        Assert.True(found);
+        Assert.Equal(ScrollCraftSelectionKind.Selected, selection.Kind);
         Assert.Equal("scribe.advancement", selected.Role.Value);
         Assert.Equal(0, selected.CraftCostOrder);
-        Assert.Equal(default, blocked);
     }
 
     [Fact]
@@ -49,13 +47,12 @@ public sealed class ScrollCoveragePlannerTests
 
         for (var index = 0; index < expected.Length; index++)
         {
-            Assert.True(plan.TryChooseCraft(
+            var selection = plan.ChooseCraft(
                 enabledRoles: null,
-                cursor,
-                out var selected,
-                out var blocked));
+                cursor);
+            var selected = selection.SelectedScroll;
+            Assert.Equal(ScrollCraftSelectionKind.Selected, selection.Kind);
             Assert.Equal(expected[index], selected.Role.Value);
-            Assert.Equal(default, blocked);
             cursor = selected.CraftCostOrder;
         }
     }
@@ -191,19 +188,62 @@ public sealed class ScrollCoveragePlannerTests
             World(omitTargetEvidenceForRole: 1),
             _profile);
 
-        var found = plan.TryChooseCraft(
+        var selection = plan.ChooseCraft(
             enabledRoles: null,
-            afterCraftCostOrder: -1,
-            out var selected,
-            out var blocked);
+            afterCraftCostOrder: -1);
+        var blocked = plan.Roles[selection.BlockedRoleOrdinal];
 
-        Assert.False(found);
-        Assert.Equal(default, selected);
+        Assert.Equal(ScrollCraftSelectionKind.EvidenceBlocked, selection.Kind);
         Assert.Equal("scribe.development", blocked.Role.Value);
-        Assert.Equal(AutoScribeEvidenceReason.TargetEvidenceMissing, blocked.EvidenceReason);
+        Assert.Equal(AutoScribeEvidenceReason.TargetEvidenceMissing, selection.BlockedReason);
         Assert.Contains("Development", ScrollCoveragePlanner.DescribeEvidence(in blocked));
         Assert.Contains("target relationship was unavailable",
             ScrollCoveragePlanner.DescribeEvidence(in blocked));
+    }
+
+    [Fact]
+    public void DefaultSelectionResultIsInvalid()
+    {
+        var selection = default(ScrollCraftSelectionResult);
+
+        Assert.Equal(ScrollCraftSelectionKind.Invalid, selection.Kind);
+        Assert.Throws<InvalidOperationException>(() => selection.SelectedScroll);
+    }
+
+    [Fact]
+    public void IdleSelectionDoesNotMasqueradeAsEvidenceBlocked()
+    {
+        var world = World(candidateCount: 0);
+        var selection = ScrollCoveragePlanner.Build(world, _profile).ChooseCraft(
+            enabledRoles: null,
+            afterCraftCostOrder: -1);
+        var active = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+            },
+            AutoScribe = new AutoScribeConfiguration { Mode = AutoScribeOperationMode.Active },
+        };
+        var store = new ReusableActionStore<AutoScribeCycleAction>();
+        store.BeginWrite();
+
+        AutoScribeCycleEvaluator.Evaluate(
+            world,
+            in active,
+            _profile,
+            enabledRoles: null,
+            afterCraftCostOrder: -1,
+            new ServiceActionWriter<AutoScribeCycleAction>(store),
+            out var metrics);
+
+        Assert.Equal(ScrollCraftSelectionKind.Idle, selection.Kind);
+        Assert.Equal(AutoScribeDecisionKind.Idle, metrics.Kind);
+        Assert.Equal(-1, metrics.BlockedRoleOrdinal);
+        Assert.Equal(AutoScribeEvidenceReason.None, metrics.BlockedReason);
+        Assert.Equal(0, store.Count);
     }
 
     [Fact]
