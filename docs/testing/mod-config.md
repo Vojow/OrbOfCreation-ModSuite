@@ -26,6 +26,7 @@ for alternate chrome.
 | Schema 6 to 7 Auto Concept training-period migration | [SuiteConfigurationSchemaSevenTests.cs](../../tests/OrbModding.Tests/SuiteConfigurationSchemaSevenTests.cs) |
 | One-path quick-control publication | [AutomataConfigurationTests.cs](../../tests/OrbModding.Tests/AutomataConfigurationTests.cs), [AutomataFeatureStatusTests.cs](../../tests/OrbModding.Tests/AutomataFeatureStatusTests.cs) |
 | Native frame and single-pixel-writer ownership | [ConfiguredIntentIconButtonVisualTests.cs](../../tests/OrbModding.Tests/ConfiguredIntentIconButtonVisualTests.cs), [ModConfigPanelLayoutTests.cs](../../tests/OrbModding.Tests/ModConfigPanelLayoutTests.cs) |
+| Auto Items staged picker and raw-editor exclusion | [AutoItemsTemporaryItemPickerViewTests.cs](../../tests/OrbModding.Tests/Services/AutoItems/AutoItemsTemporaryItemPickerViewTests.cs) |
 | Native-surface install reporting | [SuiteUiSurfaceDiagnosticsTests.cs](../../tests/OrbModding.Tests/OrbModConfig/SuiteUiSurfaceDiagnosticsTests.cs) |
 | Installed native navigation shape | `OrbModding.GameContractTests` Mod Config contract |
 
@@ -58,6 +59,9 @@ installation, recovery, or layout work changes.
 - Feature modes appear only in the feature header and gameplay feature drawer; both publish through
   the committed store, while policy fields remain staged. General's emergency command uses the same
   immediate committed-state toggle as STOP and is not staged behind Apply.
+- The Auto Items temporary allowlist renders only its specialized discovered-item picker. Its rows
+  stage exact UUIDs and flow through the same Apply/Revert transaction as generic settings; no
+  `TMP_InputField`, raw editor, family/bulk switch, or immediate persistence path may exist.
 - Every suite-owned `Button` has `targetGraphic == null`, so hover, press, release, selection, and
   interactable changes cannot repaint a suite-rendered state.
 - Inactive audited rail candidates remain capturable while Mods is open. Quick controls reuse that

@@ -26,10 +26,12 @@
   randomized Scroll targeting, rechecks exact family, visibility, inventory, readiness, ownership,
   and targets immediately before submission, and stops for the current game lifecycle when an
   attempted use cannot be verified.
-- Allow exact-UUID-approved temporary Fruits, Potions, and Threads on the Auto Items page. Temporary
-  use requires a finite duration and toxicity-only costs and headroom, excludes every other
-  consumable until one native usage has engaged and disappeared, and quarantines only the exact item
-  when activation evidence is ambiguous, doubled, premature, or missing.
+- Allow temporary Fruits, Potions, and Threads approved from a picker of the player's discovered
+  items on the Auto Items page. The picker shows native names, icons, families, current stock, and
+  an explicit approval count; unresolved stored UUIDs remain visible and removable. Temporary use
+  requires a finite duration and toxicity-only costs and headroom, excludes every other consumable
+  until one native usage has engaged and disappeared, and quarantines only the exact item when
+  activation evidence is ambiguous, doubled, premature, or missing.
 - Add disabled-by-default Auto Scribe for the six audited levelled Scroll recipes. It blocks a
   publication when any enabled role is unknown, revalidates the live role and every preflight before
   payment, and verifies the exact resource charge, progression ceiling, and queued or instant-stock

@@ -260,11 +260,20 @@ public sealed class InstalledGameContractTests
         Assert.Equal("BigDouble", assembly.GetFieldType("ResourceTuple", "valueBig"));
         Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableSO", "hasDuration"));
         Assert.Equal("System.Double", assembly.GetFieldType("ConsumableSO", "durationBase"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableSO", "visible"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("ConsumableSO", "quantity"));
         Assert.Equal("UpgradeableObject", assembly.GetBaseType("ConsumableTypeSO"));
         Assert.Equal("UpgradeableObject", assembly.GetBaseType("ResourceSO"));
         Assert.Equal("TooltipableObject", assembly.GetBaseType("UpgradeableObject"));
         Assert.Equal("IdScriptableObject", assembly.GetBaseType("TooltipableObject"));
         AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        AssertMethod(assembly, "TooltipableObject", "GetName", false, "System.String");
+        AssertMethod(
+            assembly,
+            "TooltipableObject",
+            "GetIcon",
+            false,
+            "UnityEngine.Sprite");
         AssertMethod(assembly, "ConsumableSO", "GetMaximumCarryLoad", false, "System.Int32");
 
         Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));

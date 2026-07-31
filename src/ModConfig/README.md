@@ -10,6 +10,8 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 - Groups settings into Runtime, General, seven automation feature pages, and Advanced while preserving the original section/key contract.
 - Renders feature mode once in the page header as an immediate committed-store command; mode is not repeated in the staged setting list.
 - Supports booleans, enums, bounded and unbounded numbers, strings, and keyboard shortcuts.
+- Replaces the Auto Items temporary allowlist's generic string editor with a whitelist-only picker
+  of discovered native items while retaining the same staged string setting and Apply/Revert path.
 - Stages edits until Apply, supports per-setting Default and selected-mod Revert, and rolls back earlier writes if Apply fails.
 - Honors optional presentation metadata for labels, dependencies, restart guidance, and hidden compatibility keys.
 - Keeps unstaged fields synchronized with external changes.
@@ -43,6 +45,13 @@ The Mods shell uses the subview-radio sample for a left-hand navigation rail,
 active and inactive page frames, the outer detail frame, settings controls, and footer controls.
 The cloned native behavior is removed from Mods navigation, and suite buttons have no
 `Selectable.targetGraphic`; suite rendering remains the only pixel writer.
+
+The Auto Items picker uses those same captured base/active frames for raised/recessed approval
+rows. Its suite-owned images display icon sprites captured from the item's audited
+`TooltipableObject.GetIcon()` contract; no live native UI object is retained, cloned, or mutated.
+Item identity, discovery visibility, family, name, and stock are validated as one complete read
+before a healthy catalog is rendered. A missing contract, invalid item, or read exception produces
+the picker's explicit failure panel instead of an empty list or a fallback label/icon.
 
 At installation, the BepInEx log reports exactly:
 

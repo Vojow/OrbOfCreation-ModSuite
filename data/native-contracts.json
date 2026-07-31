@@ -2974,7 +2974,8 @@
       "valueType": "System.Collections.Generic.List`1<ConsumableSO>",
       "owners": [
         "Automata world collection",
-        "Automata world-collection verification"
+        "Automata world-collection verification",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -3227,7 +3228,8 @@
       "static": false,
       "valueType": "System.Int32",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -3317,7 +3319,8 @@
       "static": false,
       "valueType": "System.Boolean",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -5380,7 +5383,8 @@
         "Automata cost-math verification",
         "Automata world collection",
         "Automata world-collection verification",
-        "Common world collection"
+        "Common world collection",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -13216,7 +13220,8 @@
       "returnType": "UnityEngine.Sprite",
       "parameters": [],
       "owners": [
-        "Suite quick-control icons"
+        "Suite quick-control icons",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -13241,6 +13246,25 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "tooltipable-object.get-name-picker",
+      "assembly": "assembly-csharp",
+      "type": "TooltipableObject",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetName",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.String",
+      "parameters": [],
+      "owners": [
+        "Auto Items temporary-item picker"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     },
     {
       "id": "treasure-pool.all",
@@ -14312,7 +14336,8 @@
       "static": false,
       "valueType": "System.Collections.Generic.List`1<ConsumableTypeSO>",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"
@@ -14472,7 +14497,8 @@
       "typeVisibility": "public",
       "kind": "type",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Auto Items temporary-item picker"
       ],
       "usages": [
         "reflection"

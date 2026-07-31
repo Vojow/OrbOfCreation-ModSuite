@@ -176,9 +176,25 @@ miss authorizes nothing, and an empty list leaves temporary-item behavior inert.
 it once per committed `ConfigGeneration` and pins that table to the cycle. The action carries no
 configuration key, and neither adapter nor GameAction has a current-configuration reader.
 
+The Mods-page picker is UI over this unchanged serialized key. Its main-thread display capture reads
+`ConsumableSO.All`; exact `GetGuid()` identity; the `visible` discovery flag; the
+`consumableTypes` relationship and each type's `GetGuid()`; the native `GetName()` and `GetIcon()`;
+and the current private `quantity` stock field. It retains immutable facts plus the captured sprite,
+never a consumable or native UI object. Fruit, Potion, and Thread rows sort by family, native name,
+then UUID and use the same captured base/active frame pair as the Mods rail and quick controls.
+
+The picker always renders `<approved> of <discovered> approved`. Unknown valid UUIDs and malformed
+hand-edited tokens remain explicit removable rows instead of being normalized away. A genuinely
+empty catalog says `No discovered temporary items yet.`; a binding, identity, family, name, icon,
+stock, or enumeration failure says `Discovery read failed` in the failure color and recessed frame.
+Stored entries remain visible and removable beside that failure. There is no blacklist, family
+toggle, bulk selection, filter, or raw editor. Row clicks only call
+`ConfigEditValue.Stage`; the existing Apply/Revert transaction remains the sole persistence path.
+
 These keys join the existing committed store and one configuration generation. They require no
-configuration schema migration because no prior shipped key is rewritten or removed. The allowlist
-appears on the existing consolidated Auto Items Mods page, so there is no new rail entry or icon.
+configuration schema migration because no prior shipped key is rewritten or removed. The picker
+appears on the existing consolidated Auto Items Mods page, so there is no new rail entry or feature
+icon.
 The existing Auto Items feature-wide quick control changes the same master mode and never changes
 the exact-UUID allowlist.
 

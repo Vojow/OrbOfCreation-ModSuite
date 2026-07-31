@@ -76,6 +76,12 @@ The native-contract manifest declares six visual/anchor fields and five icon acc
   `GlobalVariables.GetMasteryExpAttr`, and
   `TooltipableObject.GetIcon`.
 
+The Auto Items temporary-item picker reuses the captured subview-radio base/active frame pair and
+the already-declared `TooltipableObject.GetIcon()` capture for each discovered item. Its one added
+capture contract is `TooltipableObject.GetName()` in the picker boundary; identity, discovery,
+family, registry, and stock reads reuse the existing world-capture contracts. The picker creates
+its own row and `Image` objects and never captures a native UI object.
+
 The installed gate also pins the inheritance that makes those accessor results tooltipable
 (`AttributeSO -> TooltipableObject` and
 `StructureTypeSO -> UpgradeableObject -> TooltipableObject`) plus Unity's UI-construction

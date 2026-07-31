@@ -34,6 +34,16 @@ configuration generation and pinned to the cycle; actions carry no configuration
 current-configuration reader in the adapter or GameAction. Committed master disable releases the
 ownership lease as a fast backstop.
 
+The Mods page is the only in-game editor for exact temporary-item approval. It lists only discovered
+Fruit, Potion, and Thread items, ordered by family then native name, and shows each native icon,
+family, and current stock beside a raised/recessed approval row. The state line always says how many
+discovered items are approved. Stored UUIDs that do not resolve remain explicit removable rows; a
+failed native discovery read is a red failure state and never masquerades as the healthy
+`No discovered temporary items yet` state; stored entries remain visible and removable alongside
+that failure. Every click changes only the staged serialized value,
+so Apply, Revert, external-conflict handling, and persistence remain the ordinary Mod Config path.
+There is no raw-text, family, select-all, or blacklist control.
+
 The shared quick control changes only `AutoItems.Mode`; exact temporary-item approval remains on
 the Mods page. Native evidence and remaining live-validation limits are documented in the
 [Auto Items native pipeline](../../docs/reverse-engineering/auto-items-native-pipeline.md).

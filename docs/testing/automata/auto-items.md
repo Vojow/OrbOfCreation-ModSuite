@@ -23,6 +23,12 @@ injections for double usage, premature expiry, and missing engagement evidence. 
 action-family tests prove that committed master disable releases consumable ownership even when
 Auto Buy keeps the shared multi-buy lease.
 
+Picker coverage additionally requires discovered-only family/name/stock/icon enumeration and
+ordering, exact staged serialization through Apply, an always-visible approval count, removable
+unresolvable stored entries, visually distinct healthy-empty and discovery-failure states, and a
+composition assertion that the allowlist has no text input. Filters, family toggles, select-all,
+blacklists, and raw editing are forbidden regressions.
+
 Run the complete portable gate after the focused scope. Any reflected member or exact native type
 change also requires both the portable contract project and the installed contract project against
 the accepted game baseline.

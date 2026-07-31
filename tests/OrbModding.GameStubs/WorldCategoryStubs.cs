@@ -316,6 +316,8 @@ public sealed class ConsumableTypeSO : IdScriptableObject
 public sealed partial class ConsumableSO : IdScriptableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();
+    public string DisplayName = string.Empty;
+    public UnityEngine.Sprite Icon = new UnityEngine.Sprite();
     public bool visible;
     public bool randomized;
     public int maxCreatedLv;
@@ -356,6 +358,10 @@ public sealed partial class ConsumableSO : IdScriptableObject
         consumeCost.HasEnough();
 
     public bool IsVisible() => visible;
+
+    public string GetName() => DisplayName;
+
+    public UnityEngine.Sprite GetIcon() => Icon;
 
     public void SelectAndFire()
     {
