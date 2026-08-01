@@ -3,83 +3,63 @@
 [Runtime validation](../testing/runtime-validation.md) ·
 [Release procedure](../releasing.md)
 
-The publication procedure itself — building, tagging, and creating the GitHub release with
-`tools/release.sh` — is documented in [Releasing Orb Of Creation ModSuite](../releasing.md). The
-published GitHub release attaches the single `OrbModSuite.dll` asset. This page is the review
-checklist that precedes it.
+Every change reaches `main` through a PR. An ordinary merged PR publishes a
+game-free beta when the current stable tag exists. A PR titled `release: ...`
+that advances `VERSION` and adds its curated changelog section is the full
+promotion. GitHub Actions alone creates tags and releases.
 
-## Supported package
+## Release PR
 
-`script/package` additionally builds a standalone distribution archive for manual installs:
+The maintainer writes the release PR by hand. It changes only the two tracked
+version authorities:
 
-```text
-OrbOfCreation-ModSuite-<SuiteVersion>.zip
-|-- BepInEx/plugins/OrbModSuite/OrbModSuite.dll
-|-- README.md
-|-- CHANGELOG.md
-|-- LICENSE
-`-- THIRD_PARTY_NOTICES.md
-```
+- `VERSION`: one stable SemVer greater than the newest stable `suite-v` tag;
+- `CHANGELOG.md`: one matching, dated, player-facing release section.
 
-There is one version. `SuiteVersion` in `Directory.Build.props` names the archive;
-`<Version>` in `src/OrbModSuite.csproj` and `PluginIds.Version` name the assembly and the
-loaded plugin, and the packaging script fails if the two disagree. There are no
-per-component versions to reconcile.
+There is no `Unreleased` section and no promotion helper. The PR title starts
+exactly with `release:`. Configure the `release-policy` status check as required
+so ordinary PRs cannot change either file. Squash-merge the approved PR without
+changing its title; the main-push policy uses the squash subject as a second
+ownership check.
 
 ## Candidate review
 
-Before publishing, record:
+Before approval, record:
 
-- exact clean commit and intended tag;
-- prerelease or stable status;
-- suite version and plugin GUID;
-- installed game, BepInEx, and audited assembly hashes;
-- exact archive entries and SHA-256 checksums;
-- portable, real-reference, installed-contract, and interactive evidence; and
-- known limitations.
+- the exact commit and intended stable version;
+- audited game, BepInEx, and source-assembly hashes;
+- portable, profile, refs-contract, installed-contract, and interactive evidence;
+- Release zero-profile-string evidence;
+- Release and perf-debug asset names and SHA-256 values;
+- configuration schema and reconciled test, contract, exemption, entity, and
+  compiler-warning counts; and
+- known limitations and validation scope.
 
-Build success alone is not publication approval.
+Run portable tests first and installed contracts second, never in parallel.
+Install and playtest with `./script/install release`; it installs the same kind
+of refs-built Release artifact that CI publishes. Hand-written test stubs are
+never an installation or publication input.
 
-## Package gate
+Installed contracts remain the private real-game proof. The
+`ReleaseAssemblyCheck` comparison runs only with a regenerated refs closure;
+see [reference-change faithfulness](../releasing.md#reference-change-faithfulness).
 
-Run `./script/package` from a clean commit with `OOC_GAME_DIR` pointing at a game
-installation. It refuses a dirty or moved working tree, then runs the bounded portable
-gate, the installed-game contracts, and a real-reference Release build before staging the
-archive.
+## CI publication review
 
-It fails the release when:
+For every main push, confirm the workflow:
 
-- the built output is missing `OrbModSuite.dll`, or game/loader assemblies leaked beside it;
-- the archive entries differ from the five expected paths above in either direction;
-- the project version and `PluginIds.Version` disagree; or
-- an output archive or checksum file for that version already exists.
+- passed portable, profile, refs-contract, required promotion-policy, and
+  manifest-based hygiene gates without a game installation;
+- built `OrbModSuite-release.dll` and `OrbModSuite-perf-debug.dll` from refs;
+- proved the Release flavor contains zero profiling components; and
+- refused any pre-existing target tag or release.
 
-Confirm by inspection that no game, Unity, Harmony, BepInEx, test-stub, debug-symbol, save,
-configuration, trace, or experimental artifact reached the archive, and verify the generated
-checksums against the final file.
+If `suite-v<VERSION>` exists, verify a prerelease tag
+`suite-v<VERSION>+main.<N>` whose count comes from the newest stable tag and
+whose notes use the associated PR body or merge-message fallback. If the stable
+tag is absent, verify exact Ubuntu/Windows byte identity for both flavors,
+stable tag `suite-v<VERSION>`, and notes from the matching changelog section.
 
-## Runtime gate
-
-Use a clean BepInEx profile and a freshly generated configuration file. Complete the
-applicable V0–V7 [runtime validation](../testing/runtime-validation.md), including:
-
-- save backup, reload, removal, and restoration;
-- representative automation and Mentor behavior;
-- emergency, lifecycle, ownership, queue, reserve, and native postcondition checks;
-- the configuration UI's Apply/Revert and Runtime-page behavior;
-- a load-gate check: confirm the suite loads against the audited baseline, enters control-plane-only
-  quarantine against an unknown complete pair, resets stale acknowledgement after either hash
-  changes, and refuses an incomplete assembly audit;
-- quiet-log acceptance; and
-- representative desktop and Steam Deck/Proton performance where claimed.
-
-## Publication
-
-Create the tag and artifacts only from the reviewed clean commit. Release notes must state
-the supported game/BepInEx baseline, the audited assembly baselines, important behavior
-changes, known limitations, and validation scope. A release that changes the plugin GUID or
-the configuration schema must say so as a breaking change, because settings do not migrate
-across a GUID change.
-
-Replacing or deleting an existing public release or tag requires explicit maintainer
-authorization naming that target.
+`script/package` remains a local archive rehearsal, not a publication owner.
+For partial tags, transient failures, or reproducibility mismatches, follow the
+[recovery runbook](../releasing.md#recovery-runbook).

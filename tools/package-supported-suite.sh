@@ -4,13 +4,16 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_directory="${repository_root}/artifacts/releases"
 game_root="${OOC_GAME_DIR:-${repository_root}/lib}"
+checked_in_references="${repository_root}/lib/game-refs/v1.0.5"
+# shellcheck source=release-common.sh
+source "${repository_root}/tools/release-common.sh"
 
 if [[ "$#" -ne 0 ]]; then
     echo "Usage: ./script/package" >&2
     exit 2
 fi
 
-for command_name in dotnet git zip unzip shasum; do
+for command_name in dotnet git zip unzip shasum env; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
@@ -32,11 +35,32 @@ assert_clean_head() {
 }
 assert_clean_head
 
+for required_reference in \
+    Assembly-CSharp.dll \
+    Assembly-CSharp-firstpass.dll \
+    UnityEngine.dll \
+    UnityEngine.CoreModule.dll \
+    UnityEngine.UI.dll \
+    UnityEngine.UIModule.dll \
+    Unity.TextMeshPro.dll \
+    BepInEx.dll \
+    0Harmony.dll; do
+    if [[ ! -f "${checked_in_references}/${required_reference}" ]]; then
+        echo "Required checked-in reference is missing: ${checked_in_references}/${required_reference}" >&2
+        exit 1
+    fi
+done
+
 managed_directory="${game_root}/Orb Of Creation_Data/Managed"
 bepinex_core_directory="${game_root}/BepInEx/core"
 for required_reference in \
     "${managed_directory}/Assembly-CSharp.dll" \
     "${managed_directory}/Assembly-CSharp-firstpass.dll" \
+    "${managed_directory}/UnityEngine.dll" \
+    "${managed_directory}/UnityEngine.CoreModule.dll" \
+    "${managed_directory}/UnityEngine.UI.dll" \
+    "${managed_directory}/UnityEngine.UIModule.dll" \
+    "${managed_directory}/Unity.TextMeshPro.dll" \
     "${bepinex_core_directory}/BepInEx.dll" \
     "${bepinex_core_directory}/0Harmony.dll"; do
     if [[ ! -f "${required_reference}" ]]; then
@@ -45,66 +69,7 @@ for required_reference in \
     fi
 done
 
-read_project_version() {
-    local project_path="$1"
-    local version
-    version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "${project_path}")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read one project version from ${project_path}." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-read_suite_version() {
-    local version
-    version="$(sed -n 's:.*<SuiteVersion>\([^<]*\)</SuiteVersion>.*:\1:p' \
-        "${repository_root}/Directory.Build.props")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read one SuiteVersion from Directory.Build.props." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-read_plugin_version() {
-    local constant_name="$1"
-    local version
-    version="$(sed -n "s/.*public const string ${constant_name} = \"\([^\"]*\)\";.*/\1/p" \
-        "${repository_root}/src/Common/PluginIds.cs")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read PluginIds.${constant_name}." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-assert_version() {
-    local component="$1"
-    local project_version="$2"
-    local plugin_version="$3"
-    if [[ "${project_version}" != "${plugin_version}" ]]; then
-        echo "${component} version mismatch: project=${project_version}, PluginIds=${plugin_version}" >&2
-        exit 1
-    fi
-}
-
-suite_project_version="$(read_project_version "${repository_root}/src/OrbModSuite.csproj")"
-suite_version="$(read_suite_version)"
-suite_numeric_version="${suite_project_version%%[-+]*}"
-assert_version "Orb Of Creation ModSuite release" \
-    "${suite_project_version}" "$(read_plugin_version ReleaseVersion)"
-assert_version "Orb Of Creation ModSuite loader" \
-    "${suite_numeric_version}" "$(read_plugin_version Version)"
-
-# The archive is named from SuiteVersion, the assembly informational version and user-visible
-# surfaces carry the csproj Version, and BepInEx receives the numeric core through PluginIds.Version
-# because BepInEx 5 parses it as System.Version.
-if [[ "${suite_version}" != "${suite_project_version}" ]]; then
-    echo "Package version mismatch: Directory.Build.props SuiteVersion=${suite_version}," >&2
-    echo "src/OrbModSuite.csproj Version=${suite_project_version}." >&2
-    exit 1
-fi
+suite_version="$(read_released_version "${repository_root}/VERSION")"
 
 package_name="OrbOfCreation-ModSuite-${suite_version}"
 zip_path="${output_directory}/${package_name}.zip"
@@ -117,26 +82,44 @@ fi
 echo "Running the bounded portable gate..."
 "${repository_root}/script/test"
 
-# The portable gate above restores the stub configuration only. The two commands below are the
-# real-reference one, and they pass --no-restore deliberately: a release build must not quietly
-# acquire a package mid-flight. That makes this the only place their dependencies are fetched, and
-# without it packaging a clean checkout fails on the first of them.
-echo "Restoring the real-reference configuration..."
-for project in \
+# Installed contracts are intentionally local and inspect the audited full assemblies. CI
+# publication does not use this package path and must not claim metadata-only refs repeat them.
+echo "Restoring the installed-game contract configuration..."
+OOC_GAME_DIR="${game_root}" dotnet restore \
     "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-    "${repository_root}/src/OrbModSuite.csproj"; do
-    OOC_GAME_DIR="${game_root}" dotnet restore "${project}" -p:Configuration=Release
-done
+    -p:Configuration=Release
 
-echo "Running installed-game contracts against staged references..."
+echo "Running installed-game contracts against the audited game assemblies..."
 OOC_GAME_DIR="${game_root}" dotnet test \
     "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
     --configuration Release --no-restore
 
-echo "Building the supported suite against staged references..."
-OOC_GAME_DIR="${game_root}" dotnet build \
+echo "Cleaning the canonical checked-in-reference build..."
+env -u OOC_GAME_DIR dotnet clean \
     "${repository_root}/src/OrbModSuite.csproj" \
-    --configuration Release --no-restore
+    --configuration Release \
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
+
+echo "Restoring the canonical checked-in-reference build..."
+env -u OOC_GAME_DIR dotnet restore \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --force-evaluate \
+    --disable-build-servers \
+    -p:Configuration=Release \
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
+
+echo "Building the canonical suite against checked-in references..."
+env -u OOC_GAME_DIR dotnet build \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --configuration Release \
+    --disable-build-servers \
+    -m:1 \
+    --no-incremental \
+    --no-restore \
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
 
 assert_plugin_output() {
     local output="${repository_root}/src/bin/Release/netstandard2.1"

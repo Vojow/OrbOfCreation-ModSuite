@@ -1,6 +1,6 @@
 # Third-party projects and acknowledgements
 
-OrbOfCreation-ModSuite is an unofficial fan project and is not affiliated with or endorsed by MarpleGames or the publishers of Orb of Creation. Orb of Creation names and assets belong to their respective owners. This repository does not distribute game binaries.
+OrbOfCreation-ModSuite is an unofficial fan project and is not affiliated with or endorsed by MarpleGames or the publishers of Orb of Creation. Orb of Creation names and assets belong to their respective owners.
 
 The project builds on and interoperates with:
 
@@ -9,8 +9,34 @@ The project builds on and interoperates with:
 - [Harmony](https://github.com/pardeike/Harmony), used for runtime method patching.
 - [AutobuyOrb](https://github.com/IngoHHacks/AutobuyOrb) by IngoHHacks, used as a behavioral and reverse-engineering reference for Auto Buy. This suite is an independent implementation and does not depend on AutobuyOrb at runtime.
 - [ILSpy](https://github.com/icsharpcode/ILSpy), used during managed-assembly inspection.
+- [Refasmer](https://github.com/JetBrains/Refasmer) by JetBrains, used to generate the
+  metadata-only reference assemblies described below.
 
-Each third-party project remains governed by its own license. No Orb of Creation or third-party binaries are included in source control.
+Each third-party project remains governed by its own license.
+
+## Distributed reference assemblies
+
+This repository distributes twelve metadata-only reference assemblies produced by Refasmer
+from an audited Orb of Creation v1.0.5 installation. They retain the complete type and member
+surface, including private and internal metadata, but contain no executable code or game assets.
+Their input and output SHA-256 values and pinned generation tool are recorded in
+`lib/game-refs/v1.0.5/manifest.json`.
+
+The reference set covers:
+
+- MarpleGames game assemblies: `Assembly-CSharp.dll` and
+  `Assembly-CSharp-firstpass.dll`.
+- Unity Technologies engine modules: `UnityEngine.dll`, `UnityEngine.CoreModule.dll`,
+  `UnityEngine.UI.dll`, `UnityEngine.UIModule.dll`, `UnityEngine.ScreenCaptureModule.dll`, and
+  `UnityEngine.ImageConversionModule.dll`.
+- Unity Technologies TextMesh Pro: `Unity.TextMeshPro.dll`.
+- BepInEx: `BepInEx.dll`.
+- Harmony by Andreas Pardeike: `0Harmony.dll`.
+- Newtonsoft.Json by James Newton-King: `Newtonsoft.Json.dll`.
+
+They are committed solely to support game-free compilation and member-exact native-contract
+verification, and they are not packaged with the mod release. These reference assemblies are
+distributed with the game developer MarpleGames' knowledge and consent.
 
 ## Vendored source
 
@@ -50,5 +76,6 @@ interoperating with the game safely.
 
 That content is not this project's to license. It remains the property of MarpleGames and is
 **not** covered by this repository's MIT grant, which applies to the project's own source code.
-It is data about the game rather than any part of the game itself: no game code, assets, art,
-audio, or binaries are included here, and none of it is redistributed in the release package.
+It is data about the game rather than executable game code or a game asset: no game code, assets,
+art, or audio are included in those data files, and none of the data is redistributed in the
+release package. The separately distributed metadata-only assemblies are described above.

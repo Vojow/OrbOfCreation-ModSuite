@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -78,7 +78,7 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -108,7 +108,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -151,15 +151,75 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Reject proprietary or generated artifacts
+      - name: Enforce tracked artifact boundaries
         shell: pwsh
         run: |
-          $forbidden = git ls-files | Where-Object {
+          $manifestPath = 'lib/game-refs/v1.0.5/manifest.json'
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            Write-Error "Checked-in game-reference manifest is missing: $manifestPath"
+            exit 1
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $manifestAssemblies = @($manifest.assemblies)
+          if ($manifestAssemblies.Count -eq 0) {
+            Write-Error 'Checked-in game-reference manifest lists no assemblies.'
+            exit 1
+          }
+
+          $manifestFiles = @(
+            foreach ($assembly in $manifestAssemblies) {
+              $file = [string]$assembly.file
+              if ([string]::IsNullOrWhiteSpace($file) -or
+                  $file -ne [IO.Path]::GetFileName($file) -or
+                  -not $file.EndsWith('.dll', [StringComparison]::OrdinalIgnoreCase)) {
+                Write-Error "Invalid game-reference manifest file name: '$file'"
+                exit 1
+              }
+
+              $expectedHash = [string]$assembly.outputSha256
+              if ($expectedHash -notmatch '^[a-fA-F0-9]{64}$') {
+                Write-Error "Invalid output SHA-256 for game reference: $file"
+                exit 1
+              }
+
+              $path = "lib/game-refs/v1.0.5/$file"
+              if (-not (Test-Path -LiteralPath $path)) {
+                Write-Error "Manifest-listed game reference is missing: $path"
+                exit 1
+              }
+
+              $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+              if ($actualHash -ne $expectedHash) {
+                Write-Error "Game-reference SHA-256 mismatch for ${path}: expected $expectedHash, actual $actualHash"
+                exit 1
+              }
+
+              $path
+            }
+          )
+          if (@($manifestFiles | Sort-Object -Unique).Count -ne $manifestFiles.Count) {
+            Write-Error 'Checked-in game-reference manifest contains duplicate file names.'
+            exit 1
+          }
+
+          $expectedGameRefs = @($manifestPath) + $manifestFiles
+          $trackedFiles = @(git ls-files)
+          $forbidden = $trackedFiles | Where-Object {
             $_ -match '(^|/)(bin|obj|bin-stubs|obj-stubs|bin-profile|obj-profile|bin-profile-stubs|obj-profile-stubs)/' -or
-            $_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$'
+            ($_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$' -and $_ -notin $manifestFiles)
           }
           if ($forbidden) {
             $forbidden | ForEach-Object { Write-Error "Forbidden tracked artifact: $_" }
+            exit 1
+          }
+
+          $trackedGameRefs = @(git ls-files 'lib/game-refs/**')
+          $gameRefDelta = Compare-Object $expectedGameRefs $trackedGameRefs
+          if ($gameRefDelta) {
+            $gameRefDelta | ForEach-Object {
+              Write-Error "Checked-in game-reference set mismatch: $($_.SideIndicator) $($_.InputObject)"
+            }
             exit 1
           }
 
@@ -170,3 +230,34 @@ jobs:
               exit 1
             }
           }
+
+  release-policy:
+    name: Release promotion policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out release history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Test release helpers
+        run: tools/test-release-helpers.sh
+
+      - name: Guard VERSION and CHANGELOG ownership
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            tools/check-release-policy.sh pull-request "${PR_BASE_SHA}" "${GITHUB_SHA}" "${PR_TITLE}"
+          elif [[ -n "${PUSH_BEFORE_SHA}" && "${PUSH_BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            tools/check-release-policy.sh push "${PUSH_BEFORE_SHA}" "${GITHUB_SHA}"
+          else
+            tools/check-release-policy.sh push "${GITHUB_SHA}^" "${GITHUB_SHA}"
+          fi

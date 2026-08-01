@@ -41,7 +41,7 @@ case "$1" in
 esac
 mode="$1"
 
-for command_name in dotnet git find cp cmp awk grep; do
+for command_name in dotnet git find cp cmp awk grep env; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
@@ -244,6 +244,9 @@ for required_reference in \
     "${reference_root}/Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll" \
     "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.dll" \
     "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll" \
+    "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.UI.dll" \
+    "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.UIModule.dll" \
+    "${reference_root}/Orb Of Creation_Data/Managed/Unity.TextMeshPro.dll" \
     "${reference_root}/BepInEx/core/BepInEx.dll" \
     "${reference_root}/BepInEx/core/0Harmony.dll"; do
     if [[ ! -f "${required_reference}" ]]; then
@@ -272,19 +275,45 @@ OOC_GAME_DIR="${reference_root}" dotnet test \
     --configuration "${configuration}" \
     --no-restore
 
-echo "Building the supported suite in ${mode} mode..."
-OOC_GAME_DIR="${reference_root}" dotnet restore \
-    "${repository_root}/src/OrbModSuite.csproj" \
-    --force-evaluate \
-    --disable-build-servers \
-    "${profile_build_arguments[@]}"
-OOC_GAME_DIR="${reference_root}" dotnet build \
-    "${repository_root}/src/OrbModSuite.csproj" \
-    --configuration "${configuration}" \
-    --disable-build-servers \
-    -m:1 \
-    --no-incremental \
-    "${profile_build_arguments[@]}"
+if [[ "${mode}" == "release" ]]; then
+    echo "Cleaning the canonical release build..."
+    env -u OOC_GAME_DIR dotnet clean \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration "${configuration}" \
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
+    echo "Building the canonical release artifact from checked-in game references..."
+    env -u OOC_GAME_DIR dotnet restore \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --force-evaluate \
+        --disable-build-servers \
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
+    env -u OOC_GAME_DIR dotnet build \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration "${configuration}" \
+        --disable-build-servers \
+        -m:1 \
+        --no-incremental \
+        --no-restore \
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
+else
+    echo "Building the supported suite in ${mode} mode against the real game references..."
+    OOC_GAME_DIR="${reference_root}" dotnet restore \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --force-evaluate \
+        --disable-build-servers \
+        "${profile_build_arguments[@]}"
+    OOC_GAME_DIR="${reference_root}" dotnet build \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration "${configuration}" \
+        --disable-build-servers \
+        -m:1 \
+        --no-incremental \
+        --no-restore \
+        "${profile_build_arguments[@]}"
+fi
 
 output_directory() {
     printf '%s/src/%s/%s/netstandard2.1\n' \

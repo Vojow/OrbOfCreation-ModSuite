@@ -12,15 +12,18 @@
     <Authors>Vojow</Authors>
     <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <SuiteVersion>0.5.0</SuiteVersion>
+    <SuiteVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</SuiteVersion>
     <GameRoot>$(OOC_GAME_DIR)</GameRoot>
     <WindowsManagedDir>$(GameRoot)/Orb Of Creation_Data/Managed</WindowsManagedDir>
     <MacAppManagedDir>$(GameRoot)/Contents/Resources/Data/Managed</MacAppManagedDir>
     <MacInstallManagedDir>$(GameRoot)/Orb Of Creation.app/Contents/Resources/Data/Managed</MacInstallManagedDir>
+    <CheckedInGameReferenceDir>$(MSBuildThisFileDirectory)lib/game-refs/v1.0.5</CheckedInGameReferenceDir>
     <ManagedDir Condition="'$(GameRoot)' != '' and Exists('$(WindowsManagedDir)/Assembly-CSharp.dll') and Exists('$(WindowsManagedDir)/Assembly-CSharp-firstpass.dll')">$(WindowsManagedDir)</ManagedDir>
     <ManagedDir Condition="'$(ManagedDir)' == '' and '$(GameRoot)' != '' and Exists('$(MacAppManagedDir)/Assembly-CSharp.dll') and Exists('$(MacAppManagedDir)/Assembly-CSharp-firstpass.dll')">$(MacAppManagedDir)</ManagedDir>
     <ManagedDir Condition="'$(ManagedDir)' == '' and '$(GameRoot)' != '' and Exists('$(MacInstallManagedDir)/Assembly-CSharp.dll') and Exists('$(MacInstallManagedDir)/Assembly-CSharp-firstpass.dll')">$(MacInstallManagedDir)</ManagedDir>
+    <ManagedDir Condition="'$(ManagedDir)' == '' and '$(GameRoot)' == '' and Exists('$(CheckedInGameReferenceDir)/Assembly-CSharp.dll') and Exists('$(CheckedInGameReferenceDir)/Assembly-CSharp-firstpass.dll')">$(CheckedInGameReferenceDir)</ManagedDir>
     <BepInExCoreDir>$(GameRoot)/BepInEx/core</BepInExCoreDir>
+    <BepInExCoreDir Condition="'$(GameRoot)' == '' and '$(ManagedDir)' == '$(CheckedInGameReferenceDir)'">$(CheckedInGameReferenceDir)</BepInExCoreDir>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;bin-stubs/**;obj/**;obj-stubs/**;bin-profile/**;obj-profile/**;bin-profile-stubs/**;obj-profile-stubs/**</DefaultItemExcludes>
   </PropertyGroup>
 
