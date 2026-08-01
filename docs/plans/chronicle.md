@@ -18,6 +18,12 @@ The current implementation supplies the trustworthy backend, bounded sidecar his
 comparison projection, native Mods UI, and Game MCP controls. Interactive end-to-end evidence is
 tracked separately in Slice 4.
 
+### Installed-game capture
+
+[Download the full-resolution MCP capture](../screenshots/chronicle-runs.png).
+
+![Chronicle open at Mods and Runs](../screenshots/chronicle-runs.png)
+
 ## Verified supported-build contracts
 
 The exact supported Windows Steam pair was re-audited on 2026-08-01:
