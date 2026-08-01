@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -16,6 +19,11 @@ namespace OrbModding.ProfileTests;
 
 internal static class GameMcpTestHarness
 {
+    private static readonly Lazy<EntityIdentityCatalogSnapshot> Identities =
+        new(LoadIdentityFixture);
+
+    internal static EntityIdentityCatalogSnapshot EntityCatalog => Identities.Value;
+
     internal static GameMcpFrameContext Context(
         WorldPublication<GameWorldState>? world = null,
         ulong configurationGeneration = 3,
@@ -23,8 +31,9 @@ internal static class GameMcpTestHarness
         FeatureStatusSnapshot[]? features = null,
         DecisionJournalStatus? trace = null,
         GameMcpWritableSettingDescriptor[]? writable = null,
-        SuiteRuntimeConfiguration? configuration = null) =>
-        new(
+        SuiteRuntimeConfiguration? configuration = null)
+    {
+        return new GameMcpFrameContext(
             world,
             runtime: null,
             new ConfigurationPublication(
@@ -37,21 +46,26 @@ internal static class GameMcpTestHarness
             trace ?? DecisionJournalStatus.Unavailable,
             traceWriterRevision: 0,
             writable ?? Array.Empty<GameMcpWritableSettingDescriptor>());
+    }
 
     internal static GameMcpFrameContext Context(
         GameWorldState world,
         ulong generation = 1001)
     {
         var publisher = new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(world, new WorldGeneration(generation));
+        publisher.Publish(
+            world with { EntityIdentities = EntityCatalog },
+            new WorldGeneration(generation));
         return Context(publisher.ReadLatest());
     }
 
     internal static JObject Json(GameMcpObjectBuilder value) =>
-        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(value.Freeze()));
+        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            value.Freeze(), EntityCatalog));
 
     internal static JObject Json(GameMcpValue value) =>
-        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(value));
+        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            value, EntityCatalog));
 
     internal static GameMcpProtocolResponse Handle(
         GameMcpProtocolRouter router,
@@ -76,7 +90,7 @@ internal static class GameMcpTestHarness
         GameMcpFrameContext context)
     {
         var request = operation.Request;
-        return request.ToolName switch
+        return (request.ToolName switch
         {
             "world_overview" => GameMcpToolExecution.Read(
                 GameMcpWorldQuery.Overview(context).Freeze()),
@@ -91,7 +105,10 @@ internal static class GameMcpTestHarness
                     request.Uuids,
                     request.ExpectedNativeType).Freeze()),
             "entity_catalog" => GameMcpToolExecution.Read(
-                GameMcpEntityCatalog.Search(request.Query, request.Limit).Freeze()),
+                GameMcpEntityCatalog.Search(
+                    context.World?.Snapshot.EntityIdentities ?? EntityCatalog,
+                    request.Query,
+                    request.Limit).Freeze()),
             "explain_entity" => GameMcpToolExecution.Read(
                 GameMcpEntityExplainer.Explain(
                     context,
@@ -104,6 +121,36 @@ internal static class GameMcpTestHarness
                 ["code"] = "test_executor_missing",
                 ["reason"] = request.ToolName,
             }.Freeze()),
-        };
+        }).WithEntityIdentities(
+            context.World?.Snapshot.EntityIdentities ?? EntityCatalog);
+    }
+
+    private static EntityIdentityCatalogSnapshot LoadIdentityFixture()
+    {
+        var data = Path.Combine(AppContext.BaseDirectory, "data");
+        var displayByUuid = File.ReadLines(Path.Combine(data, "entity-display-names.tsv"))
+            .Skip(1)
+            .Where(line => line.Length > 0)
+            .Select(line => line.Split('\t'))
+            .ToDictionary(
+                cells => Guid.Parse(cells[0]),
+                cells => cells.Length > 3 ? cells[3] : string.Empty);
+        var rows = File.ReadLines(Path.Combine(data, "entity-mappings.tsv"))
+            .Skip(1)
+            .Where(line => line.Length > 0)
+            .Select(line => line.Split('\t'))
+            .Select(cells =>
+            {
+                var uuid = Guid.Parse(cells[0]);
+                displayByUuid.TryGetValue(uuid, out var displayName);
+                return new EntityIdentityName(
+                    uuid,
+                    cells[2],
+                    displayName ?? string.Empty,
+                    cells[1]);
+            })
+            .OrderBy(row => row.EntityId)
+            .ToArray();
+        return EntityIdentityCatalogSnapshot.Bound(9, rows);
     }
 }

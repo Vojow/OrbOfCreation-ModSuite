@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -273,6 +274,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
     private readonly Type? _registryType;
+    private readonly RuntimeIdentityRegistryBinding _registryBinding;
     private readonly Type? _activeListType;
     private readonly Type? _recipeListType;
     private readonly Type? _recipeType;
@@ -304,6 +306,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     {
         if (resolveType is null) throw new ArgumentNullException(nameof(resolveType));
         _registryType = registryType;
+        _registryBinding = new RuntimeIdentityRegistryBinding(
+            () => registryType, requireStableIdentityContract: false);
         _activeListType = activeListType;
         _recipeListType = recipeListType;
         _recipeType = resolveType("AlchemyRecipeSO");
@@ -356,9 +360,10 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         frame.AlchemyCosts.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
-        var registry = NativeAccessorBinder.StaticDictionary(_registryType, "RuntimeLookup");
-        if (registry is null)
-            return WorldCategoryReport.Missing(Category, "the identity registry was unreadable");
+        var source = _registryBinding.Read();
+        if (!source.IsReady || source.Registry is null)
+            return WorldCategoryReport.Missing(Category, source.Reason);
+        var registry = source.Registry;
 
         var recipeList = registry[KnownEntities.ConceptRecipes.Uuid];
         var activeList = registry[KnownEntities.ActiveConcepts.Uuid];

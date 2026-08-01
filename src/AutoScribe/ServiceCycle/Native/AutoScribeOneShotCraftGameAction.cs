@@ -68,7 +68,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!Invoke<bool>(native.RecipeVisible, recipe))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.RecipeUnavailable,
-                    $"CraftingRecipeSO.IsVisible() refused recipe {action.RecipeId:D}.");
+                    $"CraftingRecipeSO.IsVisible() refused recipe {EntityIdentityFormatter.Format(action.RecipeId)}.");
             if (!Invoke<bool>(native.QueueHasRoom, activeQueue))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.QueueFull,
@@ -82,7 +82,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (craftLevel < action.Level)
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.Unaffordable,
-                    $"Recipe {action.RecipeId:D} could not afford requested level " +
+                    $"Recipe {EntityIdentityFormatter.Format(action.RecipeId)} could not afford requested level " +
                     $"{action.Level} or any stronger level.");
             if (HasCompetingSupply(native, action.RecipeId, craftLevel, out reason))
                 return AutoScribeSubmission.Reject(
@@ -103,7 +103,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!Invoke<bool>(native.CostHasEnough, totalCost))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.Unaffordable,
-                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {action.RecipeId:D}.");
+                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {EntityIdentityFormatter.Format(action.RecipeId)}.");
 
             var before = CaptureBefore(native, recipeType, activeQueue, scroll, craftLevel, totalCost);
             if (!TryCaptureMutationPermit(out reason))
@@ -256,7 +256,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     {
         _quarantineReason =
             $"Auto Scribe is quarantined for this lifecycle after {stage} on " +
-            $"{action.RecipeId:D}: {reason}";
+            $"{EntityIdentityFormatter.Format(action.RecipeId)}: {reason}";
         return new AutoScribeSubmission(
             preflight,
             stage,
@@ -287,7 +287,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             recipeRole.Scroll.Uuid != action.ScrollId)
         {
             reason =
-                $"Action recipe {action.RecipeId:D} and Scroll {action.ScrollId:D} do not identify " +
+                $"Action recipe {EntityIdentityFormatter.Format(action.RecipeId)} and Scroll {EntityIdentityFormatter.Format(action.ScrollId)} do not identify " +
                 "one audited Auto Scribe role.";
             rejection = AutoScribePreflight.RelationshipMismatch;
             return false;
@@ -394,7 +394,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!found)
             {
                 reason =
-                    $"ScribeCraftingRecipes omitted audited recipe {role.Recipe.Value.Uuid:D}.";
+                    $"ScribeCraftingRecipes omitted audited recipe {EntityIdentityFormatter.Format(role.Recipe.Value.Uuid)}.";
                 return false;
             }
         }
@@ -496,7 +496,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     Invoke<Guid>(native.EnchantmentIdentity, enchantment) != expectedEnchantment)
                 {
                     reason =
-                        $"The live Scroll enchantment did not equal audited {expectedEnchantment:D}.";
+                        $"The live Scroll enchantment did not equal audited {EntityIdentityFormatter.Format(expectedEnchantment)}.";
                     return false;
                 }
             }
@@ -532,7 +532,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             }
             if (native.InstanceListValue.GetValue(resolution.Value!) is not IList work)
             {
-                reason = $"{queueIdentity.Uuid:D} did not expose its exact CraftingInstance list.";
+                reason = $"{EntityIdentityFormatter.Format(queueIdentity.Uuid)} did not expose its exact CraftingInstance list.";
                 return true;
             }
             foreach (var value in work)
@@ -540,7 +540,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 if (value is null) continue;
                 if (value.GetType() != native.InstanceType)
                 {
-                    reason = $"{queueIdentity.Uuid:D} contained a non-CraftingInstance value.";
+                    reason = $"{EntityIdentityFormatter.Format(queueIdentity.Uuid)} contained a non-CraftingInstance value.";
                     return true;
                 }
                 if (Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
@@ -548,7 +548,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     !Invoke<bool>(native.InstanceExpired, value))
                 {
                     reason =
-                        $"{queueIdentity.Uuid:D} already supplies recipe {recipeId:D} at level " +
+                        $"{EntityIdentityFormatter.Format(queueIdentity.Uuid)} already supplies recipe {EntityIdentityFormatter.Format(recipeId)} at level " +
                         $"{level} or higher.";
                     return true;
                 }
@@ -587,13 +587,13 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         if (requests != 1 || options is null || options.GetType() != native.OptionsType)
         {
             reason =
-                $"Scroll {scrollId:D} did not expose exactly one exact TargetSelectOptions.";
+                $"Scroll {EntityIdentityFormatter.Format(scrollId)} did not expose exactly one exact TargetSelectOptions.";
             return false;
         }
         var targeting = InvokeObject(native.GetTargeting, options);
         if (targeting.GetType() != native.TargetType)
         {
-            reason = $"Scroll {scrollId:D} did not resolve the exact TargetStructure selector.";
+            reason = $"Scroll {EntityIdentityFormatter.Format(scrollId)} did not resolve the exact TargetStructure selector.";
             return false;
         }
         var scaling = InvokeObject(
@@ -603,12 +603,12 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         if (scaling.GetType() != native.ScalingType ||
             native.GetRandomList.Invoke(targeting, new[] { scaling }) is not ICollection candidates)
         {
-            reason = $"Scroll {scrollId:D} target selection changed contract.";
+            reason = $"Scroll {EntityIdentityFormatter.Format(scrollId)} target selection changed contract.";
             return false;
         }
         if (candidates.Count == 0)
         {
-            reason = $"Scroll {scrollId:D} has no valid live target at level {level}.";
+            reason = $"Scroll {EntityIdentityFormatter.Format(scrollId)} has no valid live target at level {level}.";
             return false;
         }
         reason = string.Empty;

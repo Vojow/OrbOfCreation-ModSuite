@@ -105,7 +105,7 @@ does not refresh it by hidden navigation.
 | `world_categories` | Discover every published table and exact collection availability |
 | `world_list` | Page compact identity-plus-scan rows in one category |
 | `world_get` | Read an ordered 1–200 UUID list from one immutable generation; optional native-type assertion |
-| `entity_catalog` | Search every authored identity and available player-facing name, independent of save visibility |
+| `entity_catalog` | Search every live-registry identity and available player-facing name, including loaded entities hidden by progression |
 | `explain_entity` | Evaluate one UUID's gates, requirement graph, exact costs, and blockers from one immutable generation |
 | `world_search` | Search stable-UUID entity categories; composite diagnostic rows are excluded |
 | `suite_health` | One compact runtime, feature, service, STOP, scene, and contract-health shape |
@@ -145,16 +145,19 @@ successful rows. A typed not-found or invalid result repeats the implicated UUID
 failure evidence. Every row shares the response's one `worldGeneration`; the server does not issue
 or retain a snapshot token across calls.
 
-`entity_catalog` is the save-independent complement to `world_search`. Profiler builds embed the
-canonical 2,792-row authored identity table and join available player-facing display names by UUID.
-Searches cover UUID, native type, internal name, and display name, so hidden or not-yet-revealed
-content is findable without navigation or a direct game read. A match contains `uuid`, `name`,
-`nativeType`, the `category` handle accepted by `world_get` where one exists, and `internalName`
-only when it differs from the player-facing name. When no authored display name exists, the
-internal name is used as `name`. Catalog results are inherently save-independent, so they do not repeat
-`visibilityIndependent`, `hasDisplayName`, or the display name under a second key. This is identity
-and authored-name metadata only, not evidence that an entity is visible, available, or instantiated
-in the current save.
+`entity_catalog` complements `world_search` with the game's complete live runtime identity registry.
+At the first stable Playing world capture after `RuntimeReady`, the suite validates and copies that
+registry once for the lifecycle. Searches cover UUID, exact runtime type, Unity asset name, and
+player-facing `GetName()`, so loaded entities hidden or not yet revealed by progression are findable
+without navigation. Before that bind, or when its declared contracts fail, the tool returns
+`unavailable` rather than substituting the build-time TSV fixtures.
+
+A match contains `uuid`, `name`, `nativeType`, the `category` handle accepted by `world_get` where
+one exists, and `internalName` only when it differs from the player-facing name. The same immutable
+catalog reference is pinned with the answering world and supplies names for every MCP entity
+reference; UUID-only joins are unnecessary. Catalog membership and naming do not prove current
+visibility, availability, or a world-category row. Lifecycle replacement clears the catalog before
+the next bind, so no prior-save Unity reference or label survives.
 
 `world_list` and `world_get` use the same deliberate player-relevant row projection:
 stable identity plus the small set of availability, level, quantity, occupancy, readiness, or

@@ -83,20 +83,6 @@
   </ItemGroup>
 
   <!--
-    The debug-only MCP name catalog is save-independent authored evidence. Embed the canonical
-    identity table and its optional display-name join so installed/profile runs never depend on a
-    checkout path and unrevealed content remains searchable without navigating or reading gameplay.
-  -->
-  <ItemGroup Condition="'$(EnableServiceCycleProfiler)' == 'true'">
-    <EmbeddedResource Include="../data/entity-mappings.tsv"
-                      Link="GameMcp/entity-mappings.tsv"
-                      LogicalName="OrbModSuite.GameMcp.entity-mappings.tsv" />
-    <EmbeddedResource Include="../data/entity-display-names.tsv"
-                      Link="GameMcp/entity-display-names.tsv"
-                      LogicalName="OrbModSuite.GameMcp.entity-display-names.tsv" />
-  </ItemGroup>
-
-  <!--
     Merged InternalsVisibleTo. The OrbAutomata and OrbMentor entries Common used to carry are gone:
     they named this assembly. ProfileTests stays gated on the profiler symbol, because outside a
     profiling build it has nothing here to see.

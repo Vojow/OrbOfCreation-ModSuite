@@ -166,7 +166,10 @@ public sealed class AlchemyGameplayDomainClassifier : IDisposable
 
             var registryResolution = _registryResolver.Resolve(ConceptRecipesUuid, recipeListType);
             if (!registryResolution.IsResolved)
-                return HandleRegistryFailure(KnownEntities.ConceptRecipes.DiagnosticName, registryResolution, out reason);
+                return HandleRegistryFailure(
+                    EntityIdentityFormatter.Format(ConceptRecipesUuid),
+                    registryResolution,
+                    out reason);
             _registryResolution = registryResolution;
             var registry = registryResolution.Value!;
             if (valuesField.GetValue(registry) is not IEnumerable recipes)

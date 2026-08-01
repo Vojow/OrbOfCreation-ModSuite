@@ -158,6 +158,13 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldTreasurePool, WorldTreasurePool> TreasurePools { get; } = new();
 
     /// <summary>
+    /// The once-per-lifecycle identity catalog captured on this same Unity-thread boundary. Every
+    /// later frame in the lifecycle carries the same immutable reference.
+    /// </summary>
+    internal EntityIdentityCatalogSnapshot EntityIdentities { get; set; } =
+        EntityIdentityCatalogSnapshot.Unbound(0);
+
+    /// <summary>
     /// Unity's fixed timestep as of this capture. A Unity static that may only be read on the main
     /// thread, so capture is the only place a worker can be given it.
     /// </summary>
@@ -255,6 +262,7 @@ internal static class GameWorldFrameDeriver
 
         return new GameWorldState
         {
+            EntityIdentities = frame.EntityIdentities,
             CollectionCategories = WorldCollectionCategoryStatus.Build(frame.Report),
             FixedDeltaTime = frame.FixedDeltaTime,
             CollectedAtFrame = frame.CollectedAtFrame,

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -655,7 +656,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
             for (var prior = 0; prior < index; prior++)
             {
                 if (_usageId!(entries[prior]!) != id) continue;
-                failure = $"a consumable usage repeated identity {id:D}";
+                failure = $"a consumable usage repeated identity {EntityIdentityFormatter.Format(id)}";
                 return false;
             }
         }

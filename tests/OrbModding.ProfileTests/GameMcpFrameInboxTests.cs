@@ -160,7 +160,9 @@ public sealed class GameMcpFrameInboxTests
             (operation, _) =>
             {
                 if (operation == encode)
-                    GameMcpDocumentJsonEncoder.Encode(new GameMcpObjectBuilder().Freeze());
+                    GameMcpDocumentJsonEncoder.Encode(
+                        new GameMcpObjectBuilder().Freeze(),
+                        GameMcpTestHarness.EntityCatalog);
                 else if (operation == reflect)
                     GameMcpObjectProjector.Project(new object());
                 else

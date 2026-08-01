@@ -198,8 +198,9 @@ configuration key, and neither adapter nor GameAction has a current-configuratio
 
 The Mods-page picker is UI over this unchanged serialized key. Its main-thread display capture reads
 `ConsumableSO.All`; exact `GetGuid()` identity; the `visible` discovery flag; the
-`consumableTypes` relationship and each type's `GetGuid()` and inherited native `GetName()`; the
-item's native `GetName()` and `GetIcon()`; and the current private `quantity` stock field. It retains
+`consumableTypes` relationship and each type's `GetGuid()`; the item's native `GetIcon()`; and the
+current private `quantity` stock field. Item and family labels come only from Common's already-bound
+live entity catalog, so the picker no longer owns parallel reflection contracts for `GetName()`. It retains
 immutable facts plus the captured sprite, never a consumable or native UI object. The catalog feeds
 each row's supported membership set through the same exact-topology resolver used by worker policy
 and live boundary revalidation. Only rows whose resolved operation is Fruit, Potion, or Thread are

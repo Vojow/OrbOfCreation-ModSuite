@@ -11,6 +11,10 @@
     {
       "id": "assembly-csharp-firstpass",
       "file": "Assembly-CSharp-firstpass.dll"
+    },
+    {
+      "id": "unity-engine-core-module",
+      "file": "UnityEngine.CoreModule.dll"
     }
   ],
   "baselines": [
@@ -68,6 +72,11 @@
           "assembly": "assembly-csharp-firstpass",
           "sha256": "CAFE3F4FC522B3AF33A10CB363731A0985C249A55A51A710EE0ADF94910A0891",
           "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll"
+        },
+        {
+          "assembly": "unity-engine-core-module",
+          "sha256": "026CDD86C17F6E2243C642570CA94ECE089B7B3FD1018850BE9F66E5E31F9E8E",
+          "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll"
         }
       ]
     },
@@ -5492,6 +5501,7 @@
       "parameters": [],
       "owners": [
         "Common typed registry resolver",
+        "Common live entity identity catalog",
         "Common Alchemy classifier",
         "Automata identity",
         "Mentor identity",
@@ -5540,7 +5550,8 @@
       "valueType": "System.Collections.Generic.Dictionary`2<System.Guid,IdScriptableObject>",
       "owners": [
         "Common typed registry resolver",
-        "Common world collection"
+        "Common world collection",
+        "Common live entity identity catalog"
       ],
       "usages": [
         "reflection"
@@ -13364,28 +13375,11 @@
       "returnType": "System.String",
       "parameters": [],
       "owners": [
-        "Automata action diagnostics"
+        "Automata action diagnostics",
+        "Common live entity identity catalog"
       ],
       "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "tooltipable-object.get-name-picker",
-      "assembly": "assembly-csharp",
-      "type": "TooltipableObject",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetName",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.String",
-      "parameters": [],
-      "owners": [
-        "Auto Items temporary-item picker"
-      ],
-      "usages": [
+        "direct",
         "reflection"
       ],
       "place": "capture"
@@ -17482,6 +17476,25 @@
       ],
       "usages": [
         "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "entity-identity-catalog.unity-object-name",
+      "assembly": "unity-engine-core-module",
+      "type": "UnityEngine.Object",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_name",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.String",
+      "parameters": [],
+      "owners": [
+        "Common live entity identity catalog"
+      ],
+      "usages": [
+        "direct"
       ],
       "place": "capture"
     }

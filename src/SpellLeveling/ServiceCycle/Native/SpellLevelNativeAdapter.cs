@@ -382,7 +382,9 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
             if (!upgradeResolution.IsResolved)
             {
                 return HandleRegistryFailure(
-                    KnownEntities.UnlockLevelAllSpells.DiagnosticName, upgradeResolution, out reason);
+                    EntityIdentityFormatter.Format(KnownEntities.UnlockLevelAllSpells.Uuid),
+                    upgradeResolution,
+                    out reason);
             }
 
             _levelAllUpgrade = upgradeResolution.Value;

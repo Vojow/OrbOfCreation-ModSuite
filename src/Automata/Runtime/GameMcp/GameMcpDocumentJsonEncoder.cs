@@ -1,17 +1,21 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
 using Newtonsoft.Json.Linq;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata.GameMcp;
 
 /// <summary>HTTP-side wire encoding for immutable frame-operation results.</summary>
 internal static class GameMcpDocumentJsonEncoder
 {
-    internal static JToken Encode(GameMcpValue value)
+    internal static JToken Encode(
+        GameMcpValue value,
+        EntityIdentityCatalogSnapshot catalog)
     {
         GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("JSON encoding");
         if (value is null) throw new ArgumentNullException(nameof(value));
-        return GameMcpEntityWireNormalizer.Normalize(EncodeValue(value));
+        if (catalog is null) throw new ArgumentNullException(nameof(catalog));
+        return GameMcpEntityWireNormalizer.Normalize(EncodeValue(value), catalog);
     }
 
     private static JToken EncodeValue(GameMcpValue value)

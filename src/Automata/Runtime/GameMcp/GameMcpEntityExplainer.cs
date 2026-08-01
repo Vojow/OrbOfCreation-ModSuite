@@ -56,7 +56,7 @@ internal static class GameMcpEntityExplainer
         };
         var description = TryReadNativeDescription(uuid, nativeType);
         if (description.Length > 0) result["description"] = description;
-        result.CopyFrom(GameMcpEntityCatalog.Lookup(uuid));
+        result.CopyFrom(GameMcpEntityCatalog.Lookup(world.EntityIdentities, uuid));
         result["kind"] = kind.ToString();
         result["state"] = GameMcpEntityCapabilityMap.TryCategoryForNativeType(
             nativeType,

@@ -35,6 +35,13 @@ namespace OrbModding.Common.Runtime.World;
 public sealed record GameWorldState
 {
     /// <summary>
+    /// Names and runtime types from the stable game registry, captured once for this lifecycle. This
+    /// is the exact Common latest-wins catalog reference, not a per-world copy or category join.
+    /// </summary>
+    internal EntityIdentityCatalogSnapshot EntityIdentities { get; init; } =
+        EntityIdentityCatalogSnapshot.Unbound(0);
+
+    /// <summary>
     /// The result of attempting each world category in this exact collection. A zero-row category is
     /// only a fact about the save when its matching row says it was collected cleanly.
     /// </summary>

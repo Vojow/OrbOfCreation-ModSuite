@@ -208,7 +208,7 @@ public sealed class NativeContractManifestTests
             Assert.False(string.IsNullOrWhiteSpace(baseline.GameBuild));
             Assert.False(string.IsNullOrWhiteSpace(baseline.Provenance));
             AssertNoUserSpecificPath(baseline.Provenance);
-            Assert.Equal(manifest.Assemblies.Count, baseline.Assemblies.Count);
+            Assert.NotEmpty(baseline.Assemblies);
             Assert.Equal(
                 baseline.Assemblies.Count,
                 baseline.Assemblies.Select(item => item.Assembly).Distinct(StringComparer.Ordinal).Count());
@@ -221,6 +221,11 @@ public sealed class NativeContractManifestTests
                 Assert.False(Path.IsPathRooted(assembly.Provenance));
             });
         });
+        Assert.All(
+            manifest.Assemblies,
+            declared => Assert.Contains(
+                manifest.Baselines.SelectMany(baseline => baseline.Assemblies),
+                baselineAssembly => baselineAssembly.Assembly == declared.Id));
 
         Assert.Equal(manifest.Contracts.Count, manifest.Contracts.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.All(manifest.Contracts, contract =>
@@ -458,11 +463,13 @@ public sealed class NativeContractManifestTests
         else
         {
             var baseline = manifest.RequireBaseline(audit.MatchedBaselineId);
-            foreach (var assemblyEntry in manifest.Assemblies)
+            foreach (var baselineAssembly in baseline.Assemblies)
             {
+                var assemblyEntry = manifest.Assemblies.Single(
+                    item => item.Id == baselineAssembly.Assembly);
                 using var stream = File.OpenRead(Path.Combine(paths.ManagedDirectory, assemblyEntry.File));
                 var actualHash = Convert.ToHexString(SHA256.HashData(stream));
-                var expectedHash = baseline.RequireAssembly(assemblyEntry.Id).Sha256;
+                var expectedHash = baselineAssembly.Sha256;
                 if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
                 {
                     failures.Add($"{assemblyEntry.File}: expected SHA-256 {expectedHash}, actual {actualHash}");

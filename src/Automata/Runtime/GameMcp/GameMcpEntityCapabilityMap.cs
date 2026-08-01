@@ -62,6 +62,7 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.Purchase => PurchaseTarget(world, target, out reason),
             GameMcpCommandKind.Cast or GameMcpCommandKind.SpellLevel =>
                 Entity(
+                    world.EntityIdentities,
                     world.SpellRecipes,
                     target,
                     "spell-recipes",
@@ -69,6 +70,7 @@ internal static class GameMcpEntityCapabilityMap
                     out reason),
             GameMcpCommandKind.Concept =>
                 Entity(
+                    world.EntityIdentities,
                     world.AlchemyRecipes,
                     target,
                     "alchemy-recipes",
@@ -77,6 +79,7 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.Harvest => HarvestTarget(world, target, out reason),
             GameMcpCommandKind.DiscoveryTreeOffer =>
                 Entity(
+                    world.EntityIdentities,
                     world.DiscoveryTrees,
                     target,
                     "discovery-trees",
@@ -105,9 +108,9 @@ internal static class GameMcpEntityCapabilityMap
             return true;
         }
         reason = structure
-            ? "UUID " + target.ToString("D") +
+            ? "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
               " ambiguously identifies both a structure and an upgrade"
-            : "UUID " + target.ToString("D") +
+            : "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
               " is absent from published structures and upgrades";
         return false;
     }
@@ -121,7 +124,7 @@ internal static class GameMcpEntityCapabilityMap
         }
         if (!WorldLookup.TryFind(world.PlotNodes, target, out _))
         {
-            reason = "UUID " + target.ToString("D") +
+            reason = "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
                 " is absent from published category plot-nodes";
             return false;
         }
@@ -131,12 +134,13 @@ internal static class GameMcpEntityCapabilityMap
             reason = string.Empty;
             return true;
         }
-        reason = "plot " + target.ToString("D") +
+        reason = "plot " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
             " is published but has no audited native harvest capability";
         return false;
     }
 
     private static bool Entity<TRow>(
+        EntityIdentityCatalogSnapshot identities,
         PublicationTable<TRow> table,
         Guid target,
         string category,
@@ -154,7 +158,7 @@ internal static class GameMcpEntityCapabilityMap
             reason = string.Empty;
             return true;
         }
-        reason = "UUID " + target.ToString("D") +
+        reason = "Identity " + EntityIdentityFormatter.Format(target, identities) +
             " is absent from published category " + category;
         return false;
     }

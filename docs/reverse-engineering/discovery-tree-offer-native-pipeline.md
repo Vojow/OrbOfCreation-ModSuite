@@ -139,6 +139,12 @@ canonical spendable `amount`; Choice exposes ordered named offers, optional `sel
 `rerollAvailable`. The published data supports a seven-call two-offer journey with no catalog name
 joins and no post-mutation world reads.
 
+Those labels are not Discovery-owned metadata. The tree row, offers, cost resources, action
+receipts, and refusal evidence all render through Common's lifecycle-bound live entity catalog — the
+same immutable snapshot reference pinned by the world that supplied the tree state. A missing name
+therefore follows the suite-wide formatter fallback/warning contract and never creates a second
+Discovery name lookup or changes UUID/type admission.
+
 ## Admission order
 
 Every mode checks, in order:

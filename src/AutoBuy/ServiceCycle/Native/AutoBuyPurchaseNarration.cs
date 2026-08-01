@@ -40,7 +40,7 @@ internal readonly struct AutoBuyPurchaseNarration
         int reservedSlots) =>
         new(
             AutoBuyPurchaseNarrationLevel.Info,
-            $"Auto Buy failed to purchase {kind} {uuid:D}: queue reserve reached ({freeSlots} slots free, reserving {reservedSlots}).");
+            $"Auto Buy failed to purchase {kind} {EntityIdentityFormatter.Format(uuid)}: queue reserve reached ({freeSlots} slots free, reserving {reservedSlots}).");
 
     /// <summary>
     /// The live queue room could not be read, so the reserve cannot be honoured and no purchase is
@@ -49,7 +49,7 @@ internal readonly struct AutoBuyPurchaseNarration
     public static AutoBuyPurchaseNarration QueueRoomUnavailable(AutoBuyCandidateKind kind, Guid uuid) =>
         new(
             AutoBuyPurchaseNarrationLevel.Warning,
-            $"Auto Buy failed to purchase {kind} {uuid:D}: queue room unavailable.");
+            $"Auto Buy failed to purchase {kind} {EntityIdentityFormatter.Format(uuid)}: queue room unavailable.");
 
     /// <summary>
     /// Renders the human-readable "purchased X of Y" / "failed to purchase" line for a completed
@@ -62,7 +62,7 @@ internal readonly struct AutoBuyPurchaseNarration
         in AutoBuyPurchaseSubmission submission,
         in AutoBuyPlanBelief belief = default)
     {
-        var candidate = $"{kind} {uuid:D}";
+        var candidate = $"{kind} {EntityIdentityFormatter.Format(uuid)}";
         if (submission.Verified)
         {
             return new AutoBuyPurchaseNarration(
@@ -146,7 +146,7 @@ internal readonly struct AutoBuyPurchaseNarration
         }
 
         return $"Planned against {belief.PricedResourceCount} of {belief.CostResourceCount} " +
-            $"cost resource(s); binding {belief.BindingResourceId:D} cost {Magnitude(belief.BindingCost)}, " +
+            $"cost resource(s); binding {EntityIdentityFormatter.Format(belief.BindingResourceId)} cost {Magnitude(belief.BindingCost)}, " +
             $"available {Magnitude(belief.BindingAvailable)}, reserve floor {Magnitude(belief.BindingReserveFloor)}.";
     }
 

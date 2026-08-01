@@ -134,7 +134,7 @@ public sealed class GameMcpWorldQueryTests
             ["cost"] = new GameMcpObjectBuilder { ["resourceUuid"] = resource },
             ["offers"] = new GameMcpArrayBuilder(weak, magnified),
             ["implicated"] = new GameMcpObjectBuilder { ["ownerUuid"] = improvedCasting },
-        }.Freeze());
+        }.Freeze(), GameMcpTestHarness.EntityCatalog);
 
         var banned = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -683,7 +683,9 @@ internal static class GameMcpAcceptanceFixture
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(world, new WorldGeneration(1001));
+        publisher.Publish(
+            world with { EntityIdentities = GameMcpTestHarness.EntityCatalog },
+            new WorldGeneration(1001));
         return Snapshot(publisher.ReadLatest());
     }
 

@@ -52,6 +52,39 @@ only for the request that names them. See
   is published as stale-capable and no action may be authorized by it. "Works when the screen
   is open" is never an accepted state.
 
+### Live entity identity catalog
+
+`RuntimeIdentityRegistryBinding` is the one Common-owned binding for
+`IdScriptableObject.RuntimeLookup` and `IdScriptableObject.GetGuid()`. Typed registry resolution and
+the identity catalog share it; no feature, MCP surface, diagnostic, or log owns another registry or
+UUID-to-name reader.
+
+The first shared world capture after `RuntimeReady` in a Playing generation enumerates that registry
+once on Unity's main thread. The pass records lifecycle generation and registry count before and
+after enumeration, requires every value's `GetGuid()` to equal its dictionary key, and copies only
+UUID, exact runtime type, `TooltipableObject.GetName()` when applicable, and the Unity asset name.
+One entity's name accessor may fail without discarding other identity-correct rows. Any lifecycle or
+count instability discards the entire candidate and retries on a later ordinary capture; an identity
+contradiction or total binding failure publishes an empty unavailable catalog and reports one error
+for that lifecycle. Names never block world publication, a feature, or a mutation.
+
+The successful table is UUID-sorted and immutable. One snapshot reference is attached to every
+`GameWorldState` in that lifecycle and placed in a Common latest-wins holder for non-world
+presentation consumers; it is not rebuilt per publication and its rows are not copied into entity
+categories. A lifecycle transition first replaces both views with an unbound empty snapshot, so no
+Unity asset or name survives save/load, reset, NG+, or scene-generation replacement.
+
+`EntityIdentityFormatter` is the sole rendering facade and never reflects or touches Unity. Its
+total fallback ladder is live display name, live asset name, generated `KnownEntities` diagnostic
+name before the live bind only, then bare canonical UUID. Rendered labels always retain the UUID.
+After bind, a missing label reports one UUID-only warning per `(generation, UUID)` and does not fall
+back to authored bootstrap metadata. MCP entity references, refusal receipts, feature diagnostics,
+logs, and traces all use this same substrate; names remain diagnostics and never identity authority.
+
+Portable and installed-contract gates prove this shape and its exact native members. Stability of
+the live registry at `RuntimeReady` remains a supervised promotion check; this lane does not claim
+live UAT and does not launch the game.
+
 ## Boundary validators and freshness classes
 
 The main thread re-checks live native facts before mutating. Some of the game's own validator

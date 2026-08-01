@@ -172,6 +172,10 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance = this;
         Log = Logger;
+        EntityIdentityFormatter.ConfigureDiagnostics(
+            message => Logger.LogWarning(message),
+            message => Logger.LogError(message));
+        EntityIdentityCatalog.Shared.Reset(GameLifecycleMonitor.Shared.Current.Generation);
 
         RunAutomaticSaveBackup();
 
@@ -272,9 +276,6 @@ public sealed class Plugin : BaseUnityPlugin
                 "Orb Of Creation automation is disabled by General/Enabled; configuration and emergency recovery remain available.");
         }
 #if SERVICE_CYCLE_PROFILE
-        var catalogFailure = GameMcpEntityCatalog.Warm();
-        if (catalogFailure.Length > 0)
-            Logger.LogWarning("Game MCP authored catalog is unavailable: " + catalogFailure);
         if (!GameMcpTooltipNativeAccess.TryCreate(
                 typeof(HoverTooltip),
                 out _gameMcpTooltipNativeAccess,
@@ -1127,6 +1128,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (transition.Current.Generation == _lifecycleGeneration) return;
         _lifecycleGeneration = transition.Current.Generation;
+        EntityIdentityCatalog.Shared.Reset(_lifecycleGeneration);
         _serviceCycleActivation?.InvalidateLifecycle();
         _automataActionFamilyOwnership?.ReleaseLifecycleClaims();
         if (_configurationStore is not null)
@@ -1207,10 +1209,12 @@ public sealed class Plugin : BaseUnityPlugin
 
     private GameMcpToolExecution? ExecuteGameMcpFrameOperation(
         GameMcpFrameOperation operation,
-        GameMcpFrameContext context) =>
-        TryExecuteGameMcpFrameOperation(operation, context, out var result)
-            ? result
-            : null;
+        GameMcpFrameContext context)
+    {
+        if (!TryExecuteGameMcpFrameOperation(operation, context, out var result))
+            return null;
+        return result.WithEntityIdentities(EntityIdentities(context));
+    }
 
     private static GameMcpToolExecution ProjectGameMcpFrameOperationFault(
         GameMcpFrameOperation operation,
@@ -1229,7 +1233,10 @@ public sealed class Plugin : BaseUnityPlugin
         {
             payload = GameMcpWorldQuery.WithEnvelope(context, payload);
         }
-        return GameMcpToolExecution.Error(payload);
+        return GameMcpToolExecution.Error(payload).WithEntityIdentities(
+            context is null
+                ? EntityIdentityCatalogPublication.Current
+                : EntityIdentities(context));
     }
 
     private void CompleteGameMcpCommand(
@@ -1244,7 +1251,8 @@ public sealed class Plugin : BaseUnityPlugin
                 new GameMcpToolExecution(
                     payload,
                     result.InlinePng,
-                    result.IsProtocolError));
+                    result.IsProtocolError,
+                    EntityIdentities(command.FrameContext)));
         }
         Logger.LogInfo(
             "Game MCP operation " + command.Sequence + " completed " +
@@ -1323,7 +1331,8 @@ public sealed class Plugin : BaseUnityPlugin
                 return true;
             case "entity_catalog":
                 execution = GameMcpToolExecution.Read(
-                    GameMcpEntityCatalog.Search(request.Query, request.Limit).Freeze());
+                    GameMcpEntityCatalog.Search(
+                        EntityIdentities(context), request.Query, request.Limit).Freeze());
                 return true;
             case "explain_entity":
                 execution = GameMcpToolExecution.Read(
@@ -1486,6 +1495,11 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
+
+    private static EntityIdentityCatalogSnapshot EntityIdentities(
+        GameMcpFrameContext context) =>
+        context.World?.Snapshot.EntityIdentities ??
+        EntityIdentityCatalogPublication.Current;
 
     private static GameMcpToolExecution ProjectGameMcpCommand(
         GameMcpCommand command,
@@ -2249,7 +2263,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             return GadgetRejected(
                 "native_plot_not_resolved",
-                "stable plot " + stableUuid.ToString("D") + " as " +
+                "stable plot " + EntityIdentityFormatter.Format(stableUuid) + " as " +
                 expectedNativeType + " was not resolved: " + plot.Reason);
         }
 

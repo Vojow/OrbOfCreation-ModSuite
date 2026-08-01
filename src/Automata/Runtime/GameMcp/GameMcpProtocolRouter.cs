@@ -169,7 +169,8 @@ internal sealed class GameMcpProtocolRouter
                 },
             };
         }
-        var encoded = GameMcpDocumentJsonEncoder.Encode(execution.Payload!);
+        var encoded = GameMcpDocumentJsonEncoder.Encode(
+            execution.Payload!, execution.EntityIdentities);
         return new JObject
         {
             ["contents"] = new JArray
@@ -426,8 +427,8 @@ internal sealed class GameMcpProtocolRouter
                 WorldGetSchema()),
             Tool(
                 "entity_catalog",
-                "Search authored entity catalog",
-                "Search every canonical authored UUID, native type, internal name, and available player-facing display name independently of save visibility.",
+                "Search live entity catalog",
+                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression.",
                 ObjectSchema(
                     new JObject
                     {
@@ -1045,11 +1046,16 @@ internal sealed class GameMcpProtocolRouter
 
 internal sealed class GameMcpToolExecution
 {
-    internal GameMcpToolExecution(GameMcpValue payload, byte[]? inlinePng, bool isError)
+    internal GameMcpToolExecution(
+        GameMcpValue payload,
+        byte[]? inlinePng,
+        bool isError,
+        EntityIdentityCatalogSnapshot? entityIdentities = null)
     {
         Payload = payload ?? throw new ArgumentNullException(nameof(payload));
         InlinePng = inlinePng;
         IsError = isError;
+        EntityIdentities = entityIdentities ?? EntityIdentityCatalogPublication.Current;
     }
 
     private GameMcpToolExecution(string text)
@@ -1063,6 +1069,8 @@ internal sealed class GameMcpToolExecution
     internal byte[]? InlinePng { get; }
     internal bool IsError { get; }
     internal string? TextContent { get; }
+    internal EntityIdentityCatalogSnapshot EntityIdentities { get; } =
+        EntityIdentityCatalogSnapshot.Unbound(0);
 
     internal static GameMcpToolExecution Read(GameMcpValue payload) =>
         new(payload, null, false);
@@ -1073,6 +1081,14 @@ internal sealed class GameMcpToolExecution
     internal static GameMcpToolExecution Error(GameMcpObjectBuilder payload) =>
         new(payload.Freeze(), null, true);
     internal static GameMcpToolExecution Text(string text) => new(text);
+
+    internal GameMcpToolExecution WithEntityIdentities(
+        EntityIdentityCatalogSnapshot entityIdentities) =>
+        TextContent is not null
+            ? this
+            : new GameMcpToolExecution(
+                Payload!, InlinePng, IsError,
+                entityIdentities ?? throw new ArgumentNullException(nameof(entityIdentities)));
 
     internal JObject ToProtocolResult()
     {
@@ -1104,7 +1120,8 @@ internal sealed class GameMcpToolExecution
         }
         var result = new JObject
         {
-            ["structuredContent"] = GameMcpDocumentJsonEncoder.Encode(Payload!),
+            ["structuredContent"] = GameMcpDocumentJsonEncoder.Encode(
+                Payload!, EntityIdentities),
         };
         if (content.Count > 0) result["content"] = content;
         if (IsError) result["isError"] = true;

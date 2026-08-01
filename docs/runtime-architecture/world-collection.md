@@ -23,13 +23,14 @@ contract has no capture member at all. See [service-data-flow.md](service-data-f
 ## The pipeline
 
 ```
-StructureSO.All, UpgradeSO.All, … (native registries and list roots, 46 passes)
-        │  Unity thread, once per interval
-        ▼
-GameWorldCollector ──fills──► GameWorldCycleFrame
-                                    (samples + the frame they were read on)
-        │  worker thread
-        ▼
+StructureSO.All, UpgradeSO.All, … ──each interval──► GameWorldCollector ──samples──┐
+                                                                                  │
+IdScriptableObject.RuntimeLookup ──first stable Playing capture──► identity snapshot
+                                                                                  │ exact reference
+                                                                                  ▼
+                                                                        GameWorldCycleFrame
+                                                                                  │ worker thread
+                                                                                  ▼
 GameWorldFrameDeriver ──► GameWorldState ──► one publish action
         │  back on the Unity thread, dispatched before any service starts
         ▼
@@ -47,6 +48,9 @@ Each stage exists for one reason:
 - **Frame** carries raw samples across the thread boundary. It cannot be the collector, because a
   service frame is structurally forbidden from storing delegates and the collector is almost
   entirely delegates.
+- **Identity catalog** validates and copies the live runtime registry once per lifecycle on the
+  Unity thread. The frame and derived world carry that exact immutable snapshot reference; later
+  250-millisecond captures neither enumerate it again nor copy its rows into category tables.
 - **Deriver** turns samples into rows — the ported half of the game's own math, including the full
   resource rate chain. It runs on the worker and holds no native surface to reach for.
 - **Publish action** carries the derived snapshot back to the Unity thread. Publishing is an action
@@ -100,6 +104,12 @@ and affordability refresh on the 250-millisecond cadence. Lifecycle replacement 
 the retained authoring and the compiled native references. The field-by-field ownership table is in
 [Game MCP frame operations](game-mcp-frame-operations.md#data-lifetime-and-owner-inventory), because
 that audit is what exposed the accidental repeated traversal.
+
+The live entity-name catalog follows an even narrower lifecycle contract: it binds at the first
+stable Playing capture after `RuntimeReady`, then reuses one UUID-sorted snapshot until lifecycle
+replacement. It is attached metadata, not a fourth ServiceCycle publication and not a 250-ms reader.
+Its registry and fallback rules are normative in the
+[game boundary doctrine](game-boundary-doctrine.md#live-entity-identity-catalog).
 
 ## What is deliberately not collected
 

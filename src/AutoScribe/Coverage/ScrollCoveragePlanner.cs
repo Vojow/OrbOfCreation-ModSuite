@@ -214,7 +214,7 @@ internal static class ScrollCoveragePlanner
             AutoScribeEvidenceReason.RecipeRegistryIncomplete =>
                 prefix + " is blocked because ScribeCraftingRecipes was not exactly the six audited recipes.",
             AutoScribeEvidenceReason.RecipeMissing =>
-                prefix + $" is blocked because recipe {role.RecipeId:D} was absent.",
+                prefix + $" is blocked because recipe {EntityIdentityFormatter.Format(role.RecipeId)} was absent.",
             AutoScribeEvidenceReason.RecipeRelationshipMismatch =>
                 prefix + " is blocked because its live recipe/type/output/level relationship contradicted the audited role.",
             AutoScribeEvidenceReason.TargetLevelUnavailable =>

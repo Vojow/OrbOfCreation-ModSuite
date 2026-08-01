@@ -666,7 +666,7 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
         structureType.SetStructuresForTests(All);
     }
 
-    public string GetName() => "Structure";
+    public override string GetName() => "Structure";
     public bool IsAvailable() => available;
     public bool IsVisible() => visible;
 
@@ -1107,7 +1107,7 @@ public class ResourceSO : UpgradeableObject
     private bool inLossMode;
     private bool inRestMode;
     private bool inRallyMode;
-    public string GetName() => name;
+    public override string GetName() => name;
     public BigDouble GetQuantity() => quantity;
     // The game's own formula. A settable field here would let the stub's GetTrueQuantity()
     // disagree with its own quantity and quality, which is precisely the drift that makes a
@@ -1807,7 +1807,9 @@ public interface ITooltipable
 
 public class TooltipableObject : IdScriptableObject
 {
+    public string displayName = string.Empty;
     public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
+    public virtual string GetName() => displayName;
     public UnityEngine.Sprite GetIcon() => Icon;
 }
 

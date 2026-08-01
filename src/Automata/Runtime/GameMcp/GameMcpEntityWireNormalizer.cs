@@ -3,28 +3,35 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata.GameMcp;
 
 /// <summary>
 /// One wire vocabulary for entity identity, status, reason codes, and flat tool results. The
-/// profiler's embedded authored catalog is immutable after startup, so this HTTP-side pass performs
-/// no Unity read and never copies mutable world state.
+/// catalog is the exact immutable reference pinned by the answering world, so this HTTP-side pass
+/// performs no Unity read and never copies mutable world state.
 /// </summary>
 internal static class GameMcpEntityWireNormalizer
 {
-    internal static JToken Normalize(JToken source)
+    internal static JToken Normalize(
+        JToken source,
+        EntityIdentityCatalogSnapshot catalog)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        NormalizeToken(source);
+        if (catalog is null) throw new ArgumentNullException(nameof(catalog));
+        NormalizeToken(source, catalog);
         return source;
     }
 
-    private static void NormalizeToken(JToken token)
+    private static void NormalizeToken(
+        JToken token,
+        EntityIdentityCatalogSnapshot catalog)
     {
         if (token is JObject item)
         {
-            NormalizeObject(item);
+            NormalizeObject(item, catalog);
             return;
         }
         if (token is not JArray array) return;
@@ -35,14 +42,16 @@ internal static class GameMcpEntityWireNormalizer
                 Guid.TryParseExact((string?)scalar, "D", out var uuid) &&
                 uuid != Guid.Empty)
             {
-                array[index] = Reference(uuid);
+                array[index] = Reference(uuid, catalog);
                 continue;
             }
-            if (value is not null) NormalizeToken(value);
+            if (value is not null) NormalizeToken(value, catalog);
         }
     }
 
-    private static void NormalizeObject(JObject item)
+    private static void NormalizeObject(
+        JObject item,
+        EntityIdentityCatalogSnapshot catalog)
     {
         FlattenDetails(item);
         FlattenReading(item);
@@ -94,10 +103,10 @@ internal static class GameMcpEntityWireNormalizer
             if (property.Value is JValue { Type: JTokenType.String } scalar &&
                 Guid.TryParseExact((string?)scalar, "D", out var uuid))
             {
-                NormalizeIdentity(item, property, uuid);
+                NormalizeIdentity(item, property, uuid, catalog);
                 continue;
             }
-            NormalizeToken(property.Value);
+            NormalizeToken(property.Value, catalog);
         }
 
         RemovePassingPredicates(item);
@@ -106,7 +115,11 @@ internal static class GameMcpEntityWireNormalizer
         PromoteIdentity(item);
     }
 
-    private static void NormalizeIdentity(JObject parent, JProperty property, Guid uuid)
+    private static void NormalizeIdentity(
+        JObject parent,
+        JProperty property,
+        Guid uuid,
+        EntityIdentityCatalogSnapshot catalog)
     {
         if (uuid == Guid.Empty)
         {
@@ -115,13 +128,13 @@ internal static class GameMcpEntityWireNormalizer
         }
         if (property.Name == "uuid")
         {
-            AddIdentityFields(parent, uuid);
+            AddIdentityFields(parent, uuid, catalog);
             return;
         }
         if (!property.Name.EndsWith("Id", StringComparison.Ordinal) &&
             !property.Name.EndsWith("Uuid", StringComparison.Ordinal))
         {
-            property.Value = Reference(uuid);
+            property.Value = Reference(uuid, catalog);
             return;
         }
 
@@ -138,40 +151,57 @@ internal static class GameMcpEntityWireNormalizer
         {
             property.Remove();
             parent["uuid"] = uuid.ToString("D");
-            AddIdentityFields(parent, uuid);
+            AddIdentityFields(parent, uuid, catalog);
             return;
         }
 
         var suffixLength = property.Name.EndsWith("Uuid", StringComparison.Ordinal) ? 4 : 2;
         var role = property.Name.Substring(0, property.Name.Length - suffixLength);
         property.Remove();
-        parent[role] = Reference(uuid);
+        parent[role] = Reference(uuid, catalog);
     }
 
-    private static JObject Reference(Guid uuid)
+    private static JObject Reference(
+        Guid uuid,
+        EntityIdentityCatalogSnapshot catalog)
     {
         var result = new JObject { ["uuid"] = uuid.ToString("D") };
-        AddIdentityFields(result, uuid);
+        AddIdentityFields(result, uuid, catalog);
         return result;
     }
 
-    private static void AddIdentityFields(JObject target, Guid uuid)
+    private static void AddIdentityFields(
+        JObject target,
+        Guid uuid,
+        EntityIdentityCatalogSnapshot catalog)
     {
-        if (!GameMcpEntityCatalog.TryGet(uuid, out var identity))
+        var identity = EntityIdentityFormatter.Describe(uuid, catalog);
+        if (!identity.HasName)
         {
             target["nameEvidence"] = new JObject
             {
                 ["status"] = "unavailable",
                 ["reasonCode"] = "entity_name_unavailable",
-                ["reason"] = "the authored catalog has no player-facing name for this stable UUID",
+                ["reason"] = catalog.State == EntityIdentityCatalogState.ContractUnavailable
+                    ? "the live entity-name catalog contract is unavailable"
+                    : catalog.State == EntityIdentityCatalogState.Unbound
+                        ? "the live entity-name catalog has not bound in this lifecycle yet"
+                        : "the live registry has no player-facing or asset name for this stable UUID",
             };
             return;
         }
         target["name"] = identity.Name;
-        if (!string.Equals(identity.InternalName, identity.Name, StringComparison.Ordinal))
-            target["internalName"] = identity.InternalName;
-        if (identity.Category.Length > 0) target["category"] = identity.Category;
-        if (identity.NativeType.Length > 0) target["nativeType"] = identity.NativeType;
+        if (identity.AssetName.Length > 0 &&
+            !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
+            target["internalName"] = identity.AssetName;
+        if (identity.RuntimeType.Length > 0)
+        {
+            target["nativeType"] = identity.RuntimeType;
+            if (GameMcpEntityCapabilityMap.TryCategoryForNativeType(
+                    identity.RuntimeType,
+                    out var category))
+                target["category"] = category;
+        }
     }
 
     private static void FlattenDetails(JObject item)

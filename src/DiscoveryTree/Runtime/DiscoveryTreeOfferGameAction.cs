@@ -82,7 +82,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
             if (!native.IsVisible(tree))
                 return DiscoveryTreeOfferSubmission.Reject(
                     DiscoveryTreeOfferPreflight.TreeUnavailable,
-                    $"DiscoveryTreeSO.IsVisible() refused tree {action.TreeId:D}.");
+                    $"DiscoveryTreeSO.IsVisible() refused tree {EntityIdentityFormatter.Format(action.TreeId)}.");
 
             return action.Kind switch
             {
@@ -138,7 +138,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         if (!native.HasEnough(cost))
             return DiscoveryTreeOfferSubmission.Reject(
                 DiscoveryTreeOfferPreflight.Unaffordable,
-                $"GetNextItemCost().HasEnough() refused tree {action.TreeId:D}.");
+                $"GetNextItemCost().HasEnough() refused tree {EntityIdentityFormatter.Format(action.TreeId)}.");
 
         var before = CaptureState(native, tree, Guid.Empty);
         var costs = CaptureCosts(native, cost);
@@ -167,7 +167,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                     "Verified the requested transition to Crafting; payment, rerolls, counters, flags, timer, and pending offers are receipt evidence.")
                 : Quarantine(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls, in receipt,
-                    $"Initiate expected Crafting mode for tree {action.TreeId:D}, observed {after.Mode}.");
+                    $"Initiate expected Crafting mode for tree {EntityIdentityFormatter.Format(action.TreeId)}, observed {after.Mode}.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -218,7 +218,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         if (selected != action.OfferId)
             return DiscoveryTreeOfferSubmission.Reject(
                 DiscoveryTreeOfferPreflight.OfferUnavailable,
-                $"Confirm target {action.OfferId:D} is not the native selected offer {selected:D}.");
+                $"Confirm target {EntityIdentityFormatter.Format(action.OfferId)} is not the native selected offer {EntityIdentityFormatter.Format(selected)}.");
         var before = CaptureState(native, tree, action.OfferId);
         if (!TryCapturePermit(out reason))
             return DiscoveryTreeOfferSubmission.Reject(DiscoveryTreeOfferPreflight.MutationPermitUnavailable, reason);
@@ -278,7 +278,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                     (reason.Length == 0 ? string.Empty : " " + reason))
                 : Quarantine(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls, in receipt,
-                    $"Reroll expected Crafting mode for tree {action.TreeId:D}, observed {after.Mode}.");
+                    $"Reroll expected Crafting mode for tree {EntityIdentityFormatter.Format(action.TreeId)}, observed {after.Mode}.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -356,7 +356,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
     {
         _quarantineReason =
             $"Discovery Tree offers are quarantined for this lifecycle after {stage} on " +
-            $"tree {action.TreeId:D}: {reason}";
+            $"tree {EntityIdentityFormatter.Format(action.TreeId)}: {reason}";
         return new DiscoveryTreeOfferSubmission(preflight, stage, outcome,
             new NativeMutationCallOutcome(nativeCalls, 1, 0), in receipt, _quarantineReason);
     }
@@ -389,8 +389,8 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
             return true;
         }
         reason = matches == 0
-            ? $"No exact DiscoveryTreeSO with UUID {treeId:D} exists in the live registry."
-            : $"DiscoveryTreeSO UUID {treeId:D} is ambiguous across {matches} exact live instances.";
+            ? $"No exact DiscoveryTreeSO with identity {EntityIdentityFormatter.Format(treeId)} exists in the live registry."
+            : $"DiscoveryTreeSO identity {EntityIdentityFormatter.Format(treeId)} is ambiguous across {matches} exact live instances.";
         return false;
     }
 
@@ -405,7 +405,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         item = null!;
         if (!Contains(native, native.ReadCurrentChoices(tree), offerId))
         {
-            reason = $"UUID {offerId:D} is not in the tree's current native offer set.";
+            reason = $"Identity {EntityIdentityFormatter.Format(offerId)} is not in the tree's current native offer set.";
             rejection = DiscoveryTreeOfferPreflight.OfferUnavailable;
             return false;
         }
@@ -413,13 +413,13 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         if (resolved is null || !native.ItemType.IsInstanceOfType(resolved) ||
             native.ReadItemIdentity(resolved) != offerId)
         {
-            reason = $"Current offer {offerId:D} did not resolve to one exact IDiscoverable identity.";
+            reason = $"Current offer {EntityIdentityFormatter.Format(offerId)} did not resolve to one exact IDiscoverable identity.";
             rejection = DiscoveryTreeOfferPreflight.IdentityUnavailable;
             return false;
         }
         if (native.IsItemDiscovered(resolved))
         {
-            reason = $"Current offer {offerId:D} is already discovered.";
+            reason = $"Current offer {EntityIdentityFormatter.Format(offerId)} is already discovered.";
             rejection = DiscoveryTreeOfferPreflight.AlreadyDiscovered;
             return false;
         }
@@ -492,7 +492,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
             if (aggregate.TryGetValue(id, out var prior))
             {
                 if (prior.Quantity.CompareTo(quantity) != 0)
-                    throw new InvalidOperationException($"Resource {id:D} quantity changed during cost capture.");
+                    throw new InvalidOperationException($"Resource {EntityIdentityFormatter.Format(id)} quantity changed during cost capture.");
                 aggregate[id] = new CostBefore(id, prior.Expected + expected, quantity, resource);
             }
             else

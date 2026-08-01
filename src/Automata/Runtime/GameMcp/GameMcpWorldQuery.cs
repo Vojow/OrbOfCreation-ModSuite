@@ -481,7 +481,7 @@ internal static class GameMcpWorldQuery
             for (var rowIndex = 0; rowIndex < count && matches.Count < limit; rowIndex++)
             {
                 var row = category.Row(publication.Snapshot, rowIndex);
-                if (!Matches(category, row, normalized)) continue;
+                if (!Matches(publication.Snapshot, category, row, normalized)) continue;
                 if (category.TryIdentity(row, out var identity))
                     matchedIdentities.Add(identity);
                 matches.Add(new JObject
@@ -1229,7 +1229,11 @@ internal static class GameMcpWorldQuery
                 category.Name,
                 category.ExpectedNativeType);
 
-    private static bool Matches(GameMcpWorldCategory category, object row, string query)
+    private static bool Matches(
+        GameWorldState world,
+        GameMcpWorldCategory category,
+        object row,
+        string query)
     {
         if (category.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
             category.RowTypeName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -1238,7 +1242,7 @@ internal static class GameMcpWorldQuery
             return true;
         }
         return category.TryIdentity(row, out var identity) &&
-            GameMcpEntityCatalog.Matches(identity, query);
+            GameMcpEntityCatalog.Matches(world.EntityIdentities, identity, query);
     }
 
     private static bool TryCategory(

@@ -598,13 +598,27 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(world, new WorldGeneration(generation));
+        publisher.Publish(
+            world with { EntityIdentities = GameMcpTestHarness.EntityCatalog },
+            new WorldGeneration(generation));
         return Snapshot(publisher.ReadLatest());
     }
 
     private static GameMcpFrameContext Snapshot(
-        WorldPublication<GameWorldState> publication) =>
-        GameMcpTestHarness.Context(publication);
+        WorldPublication<GameWorldState> publication)
+    {
+        if (publication.Snapshot.EntityIdentities.IsBound)
+            return GameMcpTestHarness.Context(publication);
+        using var publisher =
+            new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        publisher.Publish(
+            publication.Snapshot with
+            {
+                EntityIdentities = GameMcpTestHarness.EntityCatalog,
+            },
+            publication.Generation);
+        return GameMcpTestHarness.Context(publisher.ReadLatest());
+    }
 
     private static WorldSpellRecipe Spell(
         Guid id,

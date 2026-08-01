@@ -23,31 +23,59 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpStreamableHttpProtocolTests
 {
     [Fact]
-    public void AuthoredCatalogWarmsExactlyOnceAndThenServesWithoutReloading()
+    public void LiveCatalogSnapshotServesHiddenNamesWithoutReloading()
     {
-        Assert.Equal(string.Empty, GameMcpEntityCatalog.Warm());
-        Assert.Equal(string.Empty, GameMcpEntityCatalog.Warm());
-        Assert.Equal(1, GameMcpEntityCatalog.LoadCount);
+        var catalog = GameMcpTestHarness.EntityCatalog;
         Assert.Equal("available", (string?)GameMcpTestHarness.Json(
-            GameMcpEntityCatalog.Search("Hidden Component", 20).Freeze())["status"]);
-        Assert.Equal(1, GameMcpEntityCatalog.LoadCount);
+            GameMcpEntityCatalog.Search(catalog, "Hidden Component", 20).Freeze())["status"]);
+        Assert.Same(catalog, GameMcpTestHarness.EntityCatalog);
     }
 
-    [Theory]
-    [InlineData(
-        "OrbModSuite.GameMcp.entity-mappings.tsv",
-        "72715EC9DD854B3D81CB7D296E163B8136133AB55C9424E7990487860275575F")]
-    [InlineData(
-        "OrbModSuite.GameMcp.entity-display-names.tsv",
-        "7FDCAF26853197E994F55C1041AC4BB913E792CCCC102C86C7DDF7B64987E030")]
-    public void AuthoredCatalogAssetsAreTheDeterministicAuditedBuildInputs(
-        string resourceName,
-        string expectedSha256)
+    [Fact]
+    public void OfflineCatalogAssetsAreNotEmbeddedInTheShippedPlugin()
     {
-        using var stream = typeof(GameMcpEntityCatalog).Assembly
-            .GetManifestResourceStream(resourceName);
-        Assert.NotNull(stream);
-        Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(stream!)));
+        var resources = typeof(GameMcpEntityCatalog).Assembly.GetManifestResourceNames();
+
+        Assert.DoesNotContain(
+            "OrbModSuite.GameMcp.entity-mappings.tsv", resources);
+        Assert.DoesNotContain(
+            "OrbModSuite.GameMcp.entity-display-names.tsv", resources);
+    }
+
+    [Fact]
+    public void ToolEncodingUsesTheWorldPinnedCatalogRatherThanTheLatestLifecycle()
+    {
+        var uuid = Guid.NewGuid();
+        var pinned = EntityIdentityCatalogSnapshot.Bound(
+            41,
+            new[]
+            {
+                new EntityIdentityName(uuid, "ResearchSO", "Pinned Name", "PinnedAsset"),
+            });
+        var later = EntityIdentityCatalogSnapshot.Bound(
+            42,
+            new[]
+            {
+                new EntityIdentityName(uuid, "ResearchSO", "Later Name", "LaterAsset"),
+            });
+        var previous = EntityIdentityCatalogPublication.Current;
+        try
+        {
+            EntityIdentityCatalogPublication.Publish(later);
+
+            var result = GameMcpToolExecution.Read(new GameMcpObjectBuilder
+            {
+                ["uuid"] = uuid,
+            }.Freeze()).WithEntityIdentities(pinned).ToProtocolResult();
+
+            Assert.Equal("Pinned Name", (string?)result["structuredContent"]?["name"]);
+            Assert.Equal("PinnedAsset", (string?)result["structuredContent"]?["internalName"]);
+            Assert.DoesNotContain("Later", result.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            EntityIdentityCatalogPublication.Publish(previous);
+        }
     }
 
     [Fact]
@@ -84,7 +112,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
             ["emptyObject"] = new GameMcpObjectBuilder(),
             ["emptyAfterFiltering"] = nested,
             ["nullValue"] = null,
-        }.Freeze());
+        }.Freeze(), GameMcpTestHarness.EntityCatalog);
 
         var result = Assert.IsType<JObject>(encoded);
         Assert.Equal(new[] { "status" }, result.Properties().Select(property => property.Name));
@@ -415,7 +443,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void AuthoredCatalogCoversCanonicalIdentitiesAndFindsHiddenContentByDisplayName()
+    public void LiveCatalogCoversRuntimeIdentitiesAndFindsHiddenContentByDisplayName()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
@@ -457,10 +485,13 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void EmptyAuthoredCatalogSuccessOmitsEmptyMatchesAndRequestEchoes()
+    public void EmptyLiveCatalogSearchOmitsEmptyMatchesAndRequestEchoes()
     {
         var result = GameMcpTestHarness.Json(
-            GameMcpEntityCatalog.Search("definitely-no-such-authored-entity", 20).Freeze());
+            GameMcpEntityCatalog.Search(
+                GameMcpTestHarness.EntityCatalog,
+                "definitely-no-such-live-entity",
+                20).Freeze());
 
         Assert.Equal("available", (string?)result["status"]);
         Assert.Null(result["totalMatches"]);
@@ -471,7 +502,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void AuthoredCatalogRetainsCanonicalRowsWithoutExtractedDisplayNames()
+    public void LiveCatalogUsesAssetNameWhenPlayerFacingNameIsAbsent()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
@@ -1405,7 +1436,7 @@ public sealed class GameMcpWorldEnvelopeTests
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(1224, responseBytes);
+        Assert.Equal(1230, responseBytes);
         Assert.True(responseBytes < 1461);
 
         Assert.Equal("available", (string?)result["status"]);
@@ -1549,11 +1580,21 @@ public sealed class GameMcpWorldEnvelopeTests
     }
 
     private static GameMcpFrameContext Snapshot(
-        WorldPublication<GameWorldState> publication) =>
-        GameMcpTestHarness.Context(
-            publication,
+        WorldPublication<GameWorldState> publication)
+    {
+        using var publisher =
+            new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        publisher.Publish(
+            publication.Snapshot with
+            {
+                EntityIdentities = GameMcpTestHarness.EntityCatalog,
+            },
+            publication.Generation);
+        return GameMcpTestHarness.Context(
+            publisher.ReadLatest(),
             configurationGeneration: 12,
             lifecycleGeneration: 17);
+    }
 
     private static WorldCollectionCategoryStatus Clean(string category) =>
         new(

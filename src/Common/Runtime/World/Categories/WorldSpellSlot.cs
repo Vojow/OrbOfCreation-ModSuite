@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -236,6 +237,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
     private readonly Type? _registryType;
+    private readonly RuntimeIdentityRegistryBinding _registryBinding;
     private readonly Type? _listType;
     private readonly Type? _spellType;
     private readonly string _unavailable;
@@ -268,6 +270,8 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         if (resolveType is null) throw new ArgumentNullException(nameof(resolveType));
 
         _registryType = registryType;
+        _registryBinding = new RuntimeIdentityRegistryBinding(
+            () => registryType, requireStableIdentityContract: false);
         _listType = listType;
         if (registryType is null)
         {
@@ -338,9 +342,10 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         costs.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
-        var registry = NativeAccessorBinder.StaticDictionary(_registryType, "RuntimeLookup");
-        if (registry is null)
-            return WorldCategoryReport.Missing(Category, "the identity registry was unreadable");
+        var source = _registryBinding.Read();
+        if (!source.IsReady || source.Registry is null)
+            return WorldCategoryReport.Missing(Category, source.Reason);
+        var registry = source.Registry;
 
         // A loadout the registry does not hold yet is a fact about the save rather than about the
         // read: the game registers its list variables during initialisation, and a pass before that

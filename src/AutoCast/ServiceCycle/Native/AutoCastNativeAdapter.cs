@@ -325,7 +325,7 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         var failure = string.Empty;
         var evidence = NativeMutationVerifier.Execute(
             "Auto Cast fire",
-            spellRecipeId.ToString("D"),
+            EntityIdentityFormatter.Format(spellRecipeId),
             "Spell.Fire hook epoch exact delta +1",
             () => AutoCastManualSignal.FireEpoch,
             () =>
