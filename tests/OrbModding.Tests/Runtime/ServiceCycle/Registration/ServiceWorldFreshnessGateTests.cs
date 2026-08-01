@@ -1,10 +1,9 @@
 using System;
-using System.Diagnostics;
-using System.Threading;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.World;
@@ -58,7 +57,7 @@ public sealed class ServiceWorldFreshnessGateTests
         Assert.Equal(0, service.StartCount);
 
         TestWorldCollector.CollectedAtActivation(registry);
-        PumpUntil(pump, () => service.StartCount > 0, 20);
+        PumpUntil(pump, registration, () => service.StartCount > 0, 20);
     }
 
     /// <summary>
@@ -83,7 +82,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        PumpUntil(pump, () => service.StartCount > 0);
+        PumpUntil(pump, registration, () => service.StartCount > 0);
     }
 
     /// <summary>
@@ -102,7 +101,8 @@ public sealed class ServiceWorldFreshnessGateTests
         using var pump = new SuiteFramePump(registry);
 
         TestWorldCollector.CollectedAtActivation(registry);
-        var frame = PumpUntil(pump, () => service.StartCount > 0);
+        var frame = PumpUntil(pump, registration, () => service.StartCount > 0);
+        frame = SettleZeroActionCycle(pump, registration, frame + 1);
 
         // The world moves well past the first runner's arming, and only then is the runner replaced:
         // the replacement takes that newer world as its own floor.
@@ -110,6 +110,7 @@ public sealed class ServiceWorldFreshnessGateTests
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
         frame = PumpUntil(
             pump,
+            registration,
             () => registration.LifecycleSnapshot.ActiveLifecycle.Value == 2,
             frame + 1);
 
@@ -118,7 +119,11 @@ public sealed class ServiceWorldFreshnessGateTests
         Assert.Equal(startsUnderTheReplacement, service.StartCount);
 
         TestWorldCollector.CollectedAt(registry, frame + 21);
-        PumpUntil(pump, () => service.StartCount > startsUnderTheReplacement, frame + 7);
+        PumpUntil(
+            pump,
+            registration,
+            () => service.StartCount > startsUnderTheReplacement,
+            frame + 7);
     }
 
     /// <summary>
@@ -136,7 +141,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var frame = PumpUntilActionExecuted(pump, registry, service);
+        var frame = PumpUntilActionExecuted(pump, registry, registration, service);
         var capturesAfterAction = service.StartCount;
 
         // Collected before the action committed: newly published, but describing an older world.
@@ -162,7 +167,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var frame = PumpUntilActionExecuted(pump, registry, service);
+        var frame = PumpUntilActionExecuted(pump, registry, registration, service);
         var capturesAfterAction = service.StartCount;
 
         TestWorldCollector.CollectedAt(registry, frame - 1);
@@ -170,7 +175,7 @@ public sealed class ServiceWorldFreshnessGateTests
         Assert.Equal(capturesAfterAction, service.StartCount);
 
         TestWorldCollector.CollectedAt(registry, frame + 1);
-        PumpUntil(pump, () => service.StartCount > capturesAfterAction, frame + 7);
+        PumpUntil(pump, registration, () => service.StartCount > capturesAfterAction, frame + 7);
     }
 
     /// <summary>
@@ -193,14 +198,14 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var frame = PumpUntilActionExecuted(pump, registry, service);
+        var frame = PumpUntilActionExecuted(pump, registry, registration, service);
         var capturesAfterAction = service.StartCount;
 
         for (var i = 0; i < 5; i++) pump.PumpFrame(frame + i + 1);
         Assert.Equal(capturesAfterAction, service.StartCount);
 
         TestWorldCollector.CollectedAt(registry, frame + 1);
-        PumpUntil(pump, () => service.StartCount > capturesAfterAction, frame + 7);
+        PumpUntil(pump, registration, () => service.StartCount > capturesAfterAction, frame + 7);
     }
 
     /// <summary>
@@ -227,7 +232,7 @@ public sealed class ServiceWorldFreshnessGateTests
 
         Assert.Equal(ServiceShape.Source, registry.GetSlot(0).ActionDispatchPolicy.Shape);
 
-        var frame = PumpUntilActionExecuted(pump, registry, service);
+        var frame = PumpUntilActionExecuted(pump, registry, registration, service);
         var capturesAfterAction = service.StartCount;
 
         TestWorldCollector.CollectedAt(registry, frame - 1);
@@ -257,10 +262,10 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var frame = PumpUntil(pump, () => service.ActionExecutionCount > 0);
+        var frame = PumpUntil(pump, registration, () => service.ActionExecutionCount > 0);
         var startsAfterAttempt = service.StartCount;
 
-        PumpUntil(pump, () => service.StartCount > startsAfterAttempt, frame + 1);
+        PumpUntil(pump, registration, () => service.StartCount > startsAfterAttempt, frame + 1);
     }
 
     /// <summary>
@@ -283,7 +288,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         var startsAfterAction = service.StartCount;
 
         pump.RequestLifecycleReplacement(new LifecycleGeneration(2));
@@ -293,7 +298,7 @@ public sealed class ServiceWorldFreshnessGateTests
         Assert.Equal(startsAfterAction, service.StartCount);
 
         TestWorldCollector.CollectedAt(registry, actionFrame + 1);
-        PumpUntil(pump, () => service.StartCount > startsAfterAction, actionFrame + 7);
+        PumpUntil(pump, registration, () => service.StartCount > startsAfterAction, actionFrame + 7);
     }
 
     /// <summary>
@@ -354,7 +359,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         var firstHeld = PumpUntilHeld(pump, actionFrame + 1);
         for (var i = 1; i <= 5; i++)
             Assert.Equal(1, pump.PumpFrame(firstHeld + i).WorldGateDeferrals);
@@ -381,7 +386,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         Assert.False(registry.GetSlot(0).LifecycleSnapshot.LatestWorldGateDeferral.IsPresent);
 
         var heldFrame = PumpUntilHeld(pump, actionFrame + 1);
@@ -411,13 +416,17 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         var executions = service.ActionExecutionCount;
         PumpUntilHeld(pump, actionFrame + 1);
         Assert.Equal(executions, service.ActionExecutionCount);
 
         TestWorldCollector.CollectedAt(registry, actionFrame + 1);
-        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+        PumpUntil(
+            pump,
+            registration,
+            () => service.ActionExecutionCount > executions,
+            actionFrame + 2);
     }
 
     /// <summary>
@@ -438,13 +447,17 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         var executions = service.ActionExecutionCount;
         PumpUntilHeld(pump, actionFrame + 1);
         Assert.Equal(executions, service.ActionExecutionCount);
 
         TestWorldCollector.CollectedAt(registry, actionFrame + 1);
-        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+        PumpUntil(
+            pump,
+            registration,
+            () => service.ActionExecutionCount > executions,
+            actionFrame + 2);
     }
 
     /// <summary>
@@ -465,14 +478,18 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var actionFrame = PumpUntilActionExecuted(pump, registry, service);
+        var actionFrame = PumpUntilActionExecuted(pump, registry, registration, service);
         var executions = service.ActionExecutionCount;
         clock.AdvanceTo(registration.Runner.Snapshot.NextWakeDue);
         PumpUntilHeld(pump, actionFrame + 1);
         Assert.Equal(executions, service.ActionExecutionCount);
 
         TestWorldCollector.CollectedAt(registry, actionFrame + 1);
-        PumpUntil(pump, () => service.ActionExecutionCount > executions, actionFrame + 2);
+        PumpUntil(
+            pump,
+            registration,
+            () => service.ActionExecutionCount > executions,
+            actionFrame + 2);
     }
 
     /// <summary>
@@ -498,7 +515,7 @@ public sealed class ServiceWorldFreshnessGateTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        var frame = PumpUntilActionExecuted(pump, registry, service);
+        var frame = PumpUntilActionExecuted(pump, registry, registration, service);
         var capturesAfterAction = service.StartCount;
 
         // Collected under this very lifecycle, but before the action: still held, because the epoch
@@ -512,7 +529,7 @@ public sealed class ServiceWorldFreshnessGateTests
         // anyway, because the frame is the only thing this gate reads.
         var otherEpoch = new GameWorldState { CollectedAtEpoch = 99 };
         TestWorldCollector.CollectedAt(registry, frame + 1, otherEpoch);
-        PumpUntil(pump, () => service.StartCount > capturesAfterAction, frame + 7);
+        PumpUntil(pump, registration, () => service.StartCount > capturesAfterAction, frame + 7);
     }
 
     /// <summary>
@@ -559,29 +576,51 @@ public sealed class ServiceWorldFreshnessGateTests
     private static long PumpUntilActionExecuted(
         SuiteFramePump pump,
         ServiceCycleRegistry registry,
+        ServiceRegistration<ExecutionState, ExecutionAction> registration,
         ExecutionServiceDefinition service)
     {
         TestWorldCollector.CollectedAtActivation(registry);
-        return PumpUntil(pump, () => service.ActionExecutionCount > 0);
+        return PumpUntil(pump, registration, () => service.ActionExecutionCount > 0);
     }
 
     /// <summary>
     /// Returns the exact frame identity the condition became true on — for an action, the frame the
-    /// gate will compare a later snapshot against. The worker runs on its own thread, so this yields
-    /// rather than spinning: a tight loop starves the handoff and never reaches an action at all.
+    /// gate will compare a later snapshot against. Whenever a frame starts worker work, the fixture
+    /// waits on the handoff's response-publication monitor before pumping again. The twenty-frame
+    /// ceiling therefore bounds the pump state machine, not how soon the host schedules a worker.
     /// </summary>
-    private static long PumpUntil(SuiteFramePump pump, Func<bool> condition, long from = 10L)
+    private static long PumpUntil(
+        SuiteFramePump pump,
+        ServiceRegistration<ExecutionState, ExecutionAction> registration,
+        Func<bool> condition,
+        long from = 10L)
     {
-        var frame = from;
-        var deadline = Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(3))
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        for (var frame = from; frame < from + 20; frame++)
         {
-            pump.PumpFrame(frame);
+            var report = pump.PumpFrame(frame);
+            if (report.CyclesStarted != 0)
+                ServiceRunnerTestWait.ForResponse(registration);
             if (condition()) return frame;
-            frame++;
-            Thread.Yield();
+            if (registration.Runner.Snapshot.Handoff.CleanupPending)
+                ServiceRunnerTestWait.ForCleanup(registration.Runner);
         }
 
-        throw new TimeoutException("the pump never reached the expected condition");
+        var handoff = registration.Runner.Snapshot.Handoff;
+        throw new TimeoutException(
+            $"The pump did not reach the expected condition in twenty state transitions; " +
+            $"handoff {handoff.Phase}, cleanup pending {handoff.CleanupPending}.");
+    }
+
+    private static long SettleZeroActionCycle(
+        SuiteFramePump pump,
+        ServiceRegistration<ExecutionState, ExecutionAction> registration,
+        long frame)
+    {
+        Assert.Equal(1, pump.PumpFrame(frame).ResponsesAcquired);
+        Assert.Equal(ServiceHandoffPhase.MainOwnedBatch, registration.Runner.HandoffPhaseHint);
+        pump.PumpFrame(++frame);
+        Assert.Equal(ServiceHandoffPhase.Empty, registration.Runner.HandoffPhaseHint);
+        return frame;
     }
 }

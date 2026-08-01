@@ -171,7 +171,7 @@ public sealed class SuiteFramePumpSemanticCaptureTests
         using var pump = new SuiteFramePump(registry, recorder);
         definition.CaptureCallback = () =>
             Assert.True(pump.RequestLifecycleReplacement(new LifecycleGeneration(2)));
-        Assert.True(registration.Runner.WaitForWorkerReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
 
         Assert.Equal(1, pump.PumpFrame(1).CapturesAttempted);
 

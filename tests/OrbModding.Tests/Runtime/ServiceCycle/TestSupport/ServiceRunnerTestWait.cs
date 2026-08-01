@@ -11,6 +11,40 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 
 internal static class ServiceRunnerTestWait
 {
+    /// <summary>
+    /// Waits until the worker has entered the production handoff wait used to receive a request.
+    /// </summary>
+    internal static void ForWorkerReady<TState, TAction>(
+        ServiceRegistration<TState, TAction> registration)
+    {
+        if (!registration.Runner.WaitForWorkerReady(ServiceCycleTestDeadline.Value))
+            throw new TimeoutException("The service worker never entered its request wait.");
+    }
+
+    /// <summary>
+    /// Waits on the handoff monitor until the worker publishes the response the pump will acquire.
+    /// </summary>
+    /// <remarks>
+    /// Response publication has no production latency contract. The shared deadline is only the
+    /// test-suite wedge guard; unlike a short per-test timeout, it is not an assertion that the host
+    /// schedules the worker within a particular wall-clock interval.
+    /// </remarks>
+    internal static void ForResponse<TState, TAction>(
+        ServiceRegistration<TState, TAction> registration)
+    {
+        var runner = registration.Runner;
+        var snapshot = runner.Snapshot;
+        if (!snapshot.HasInFlightCycle)
+            throw new InvalidOperationException("The service has no in-flight cycle to await.");
+        if (!registration.Slot.WaitForResponseReadyAndWorkerSettled(
+                snapshot.InFlightCycle,
+                ServiceCycleTestDeadline.Value))
+        {
+            throw new TimeoutException(
+                "The service worker never published its response and returned to its request wait.");
+        }
+    }
+
     internal static void ForPhase<TState, TAction>(
         ServiceRunner<TState, TAction> runner,
         ServiceHandoffPhase phase)

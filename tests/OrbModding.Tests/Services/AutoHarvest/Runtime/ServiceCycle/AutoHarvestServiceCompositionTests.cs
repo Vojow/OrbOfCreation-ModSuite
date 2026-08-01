@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
@@ -27,8 +26,9 @@ public sealed class AutoHarvestServiceCompositionTests
         using var pump = new SuiteFramePump(registry);
         TestWorldCollector.CollectedAt(registry, 2, AutoHarvestTestWorlds.Harvestable());
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 

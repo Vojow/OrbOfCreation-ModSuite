@@ -115,8 +115,9 @@ public sealed class ServiceCycleEvaluationInputTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
 
         Assert.Equal(0, definition.LastCapturedWorldStructures);
         Assert.Equal(new WorldGeneration(1), definition.LastEvaluatedWorld);

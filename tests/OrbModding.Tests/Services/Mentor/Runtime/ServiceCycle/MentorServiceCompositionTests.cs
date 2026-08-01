@@ -8,6 +8,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Common.Runtime.World;
+using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
 using Xunit;
 
 namespace OrbModding.Tests.Services.Mentor.Runtime.ServiceCycle;
@@ -33,8 +34,9 @@ public sealed class MentorServiceCompositionTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(500)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 
