@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
@@ -39,8 +38,9 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
             runtimeDiagnostics: runtimeDiagnostics,
             featureStatus);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         var response = pump.PumpFrame(2);
         using (var contention = new HandoffGateContention(registration.Runner))
         {
@@ -145,8 +145,10 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
 
         Assert.NotEqual(0, harvest.Ordinal);
 
+        ServiceRunnerTestWait.ForWorkerReady(harvest);
         pump.PumpFrame(1);
-        Assert.True(harvest.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        Assert.True(harvest.Runner.Snapshot.HasInFlightCycle);
+        ServiceRunnerTestWait.ForResponse(harvest);
         var response = pump.PumpFrame(2);
         bridge.Observe(pump, in response, ownsActionFamily: true);
         var quiet = pump.PumpFrame(3);
@@ -190,8 +192,9 @@ public sealed class AutoHarvestServiceCycleDiagnosticsBridgeTests
             runtimeDiagnostics: null,
             featureStatus);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         var response = pump.PumpFrame(2);
         bridge.Observe(pump, in response, ownsActionFamily: true);
         Assert.Equal(FeatureStatusState.Operational, featureStatus.Current.State);
