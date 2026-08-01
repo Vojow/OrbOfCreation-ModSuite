@@ -1,93 +1,94 @@
 # Releasing Orb Of Creation ModSuite
 
-`main` is continuously publishable. Every push to `main` runs the game-free
-publication workflow from the committed, SHA-locked game references and the
-SDK pinned by `global.json`. An ordinary merge publishes a beta. A maintainer's
-`release:` commit that changes `VERSION` publishes a full release.
+Every change reaches `main` through a pull request. Humans and automation do
+not push commits directly to `main`. GitHub Actions is the only owner of
+publication tags and GitHub releases.
 
-There is no local tag or release command. GitHub Actions creates the annotated
-tag and the GitHub release after every required gate passes.
+`VERSION` and `CHANGELOG.md` are the only tracked version sources:
+
+- `VERSION` contains the current stable suite version as one stable SemVer
+  value.
+- `CHANGELOG.md` contains the curated section for that version and historical
+  release sections. It has no `Unreleased` section.
+
+`Directory.Build.props` reads `VERSION`, the suite project derives its SDK
+assembly/package version from that property, and MSBuild generates the two
+`PluginIds` version constants under the active `obj-*` directory. No generated
+version source is checked in. BepInEx, the in-game version, assembly metadata,
+packages, and publication assets therefore cannot drift from `VERSION`.
+
+## Beta on each ordinary main merge
+
+On every push to `main`, `.github/workflows/release.yml` asks whether annotated
+or lightweight tag `suite-v$(cat VERSION)` already exists.
+
+When it exists, the push is a beta. The workflow:
+
+1. runs portable, profile, refs-contract, release-policy, and manifest-derived
+   hygiene gates without a game installation;
+2. builds the normal Release and perf-debug flavors from the committed refs;
+3. uses `git describe` from the newest existing stable tag, excluding
+   `*+main.*` beta tags, to count commits;
+4. creates annotated tag `suite-v<VERSION>+main.<N>`; and
+5. creates a GitHub prerelease with `OrbModSuite-release.dll`,
+   `OrbModSuite-perf-debug.dll`, and their checksum file.
+
+The prerelease notes are the associated merged PR body. An empty body, no
+associated PR, an API error, or invalid API response falls back to the merge
+commit message; notes lookup never blocks publication.
+
+## Full release through a release PR
+
+The release PR is the promotion. The maintainer writes it by hand:
+
+1. edit `VERSION` to the chosen stable SemVer;
+2. add the curated, dated section for that exact version at the top of
+   `CHANGELOG.md`;
+3. run the private gates below; and
+4. open a PR whose title starts exactly with `release:`.
+
+There is no drafting helper and no local release script. No local tool commits,
+tags, pushes, or creates a release.
+
+The required `release-policy` PR check rejects `VERSION` or `CHANGELOG.md`
+changes from every non-`release:` PR. A real version promotion must be valid
+stable SemVer, strictly greater than the newest existing stable `suite-v` tag,
+and carry exactly one matching changelog section in the same PR. Configure
+`release-policy` as a required branch-protection check so violations cannot
+merge.
+
+Squash-merge the approved release PR without changing its `release:` title.
+The squash commit retains that title as its subject, and the main-push policy
+rechecks that every `VERSION`/`CHANGELOG.md` change belongs to a `release:`
+commit.
+
+Because `suite-v<new VERSION>` does not exist, the state-based classifier takes
+the full-release path. It independently builds both flavors on Ubuntu and
+Windows and requires complete byte equality for both DLLs. Only then does CI
+create annotated tag `suite-v<VERSION>` and the full GitHub release with notes
+from the matching changelog section.
+
+Classification never depends on the before/after edge that introduced
+`VERSION`. If the stable tag remains absent, every later main merge attempts
+that stable release again. Once the tag exists, later merges return to betas.
 
 ## Publication inputs
 
-`VERSION` contains the last released stable version. It does not predict the
-next release. The same version must appear in:
-
-- `Directory.Build.props` as `SuiteVersion`;
-- `src/OrbModSuite.csproj` as the package and assembly versions; and
-- `src/Common/PluginIds.cs` as the BepInEx and displayed release versions.
-
-`tools/build-release-assets.sh` refuses inconsistent version surfaces. Both
-published flavors compile from `lib/game-refs/v1.0.5`; neither Steam nor a game
-installation is a CI input:
+Both publication flavors compile from `lib/game-refs/v1.0.5` with
+`OOC_GAME_DIR` absent and the SDK pinned by `global.json`:
 
 - `OrbModSuite-release.dll` is the normal Release build and must contain no
   ServiceCycle profiling components.
-- `OrbModSuite-perf-debug.dll` is the Debug profiling build intended for the
-  supported `./script/install perf-debug` diagnostic flow.
+- `OrbModSuite-perf-debug.dll` is the Debug profiling build.
 
-These references are full-surface metadata derivations of audited assemblies,
-not the hand-written test stubs. Test stubs remain portable runtime and compile
-doubles and are never installed or published.
+The committed refs are full-surface metadata derivations of audited assemblies,
+not the hand-written test stubs. Test stubs are never installed or published.
+There is no SHA-in-tag attestation: stable-release trust comes from the
+cross-OS reproducibility comparison, the SHA-locked refs, and the pinned SDK.
 
-## Beta on every main merge
+## Private pre-release gates
 
-When a push leaves `VERSION` unchanged, `.github/workflows/release.yml`:
-
-1. runs the portable, profile, refs-contract, release-policy, and repository
-   hygiene gates;
-2. builds both publication flavors from committed refs on Ubuntu;
-3. derives the commit count from
-   `git describe --long --match suite-v<VERSION>`;
-4. creates annotated tag `suite-v<VERSION>+main.<N>`; and
-5. creates a GitHub prerelease with both DLLs and their checksum file.
-
-The prerelease notes are the body of the pull request associated with the main
-commit. If GitHub reports no usable pull-request body, the merge commit message
-is used. A rerun cannot overwrite publication state: an existing tag or release
-fails loudly.
-
-## Full release by VERSION bump
-
-Start from an up-to-date, clean `main` checkout and ask the helper to draft the
-next stable version:
-
-```bash
-./script/promote 0.6.0
-```
-
-The helper reads merged pull-request titles and bodies since
-`suite-v<VERSION>`, adds a dated release section at the top of `CHANGELOG.md`,
-and updates `VERSION` plus every maintained version surface. It changes only
-the working tree. It never commits, tags, pushes, or creates a GitHub release.
-
-Curate the drafted changelog into player-facing release notes. Pull requests
-never edit released changelog sections and there is no `Unreleased` section.
-Run the private gates below, then make one direct promotion commit whose subject
-starts with `release:`:
-
-```bash
-git commit -am "release: promote 0.6.0"
-git push origin main
-```
-
-The push changes `VERSION`, so the main workflow takes the full-release path.
-It runs the game-free gates, independently builds both flavors on Ubuntu and
-Windows, and requires exact byte equality for each DLL. Only then does it create
-annotated tag `suite-v<new VERSION>` and a full GitHub release whose notes come
-from the matching `CHANGELOG.md` section. There is no SHA stored in the tag:
-the trust anchor is the reproducibility comparison, the committed reference
-manifest, and the pinned SDK.
-
-The release-policy CI job rejects any pull request that changes `VERSION` or
-`CHANGELOG.md`. On main, any such change must belong to a commit whose subject
-starts with `release:`. It also rejects an `Unreleased` heading. The one-time
-bootstrap that introduced `VERSION=0.5.0` is accepted only because
-`suite-v0.5.0` already exists in that commit's history.
-
-## Private pre-promotion gates
-
-Before pushing a full-release commit, run the complete local gate serially:
+Before approving a release PR, run the complete local gate serially:
 
 ```bash
 PATH=/usr/local/share/dotnet:$PATH \
@@ -104,18 +105,18 @@ PATH=/usr/local/share/dotnet:$PATH \
   -p:EnableServiceCycleProfiler=false -p:ContinuousIntegrationBuild=true
 ```
 
-Install and playtest the refs-built Release artifact—the bytes built from the
-committed refs are what ship:
+Install and playtest the refs-built Release artifact—the refs-built bytes are
+what ship:
 
 ```bash
 ./script/install release
 ```
 
-The installed-contract gate still pins the real audited game. CI does not
-pretend metadata-only refs repeat that private evidence. Complete the applicable
-V0–V7 [runtime validation protocol](testing/runtime-validation.md) and record
-the installed game, BepInEx, assembly hashes, configuration schema, test and
-contract counts, warnings, and known limitations before promotion.
+Installed contracts remain the private proof against the real audited game.
+CI does not claim metadata-only refs repeat that evidence. Complete the
+applicable V0–V7 [runtime validation protocol](testing/runtime-validation.md)
+and record test, contract, warning, configuration-schema, game/BepInEx, native
+assembly, interactive, and known-limitation evidence in the release PR.
 
 ## Reference-change faithfulness
 
@@ -134,28 +135,33 @@ dotnet run \
 ```
 
 `ReleaseAssemblyCheck` permits only the known compiler debug-identity regions
-(COFF timestamp, PE checksum, module MVID, and debug-directory payloads) to
-differ. Any IL, metadata, reference identity, resource, attribute, or other byte
-difference blocks the refs update. This check belongs in the same reviewed
-change as regenerated refs and their manifest; routine releases do not rerun it.
+to differ. Any IL, metadata, reference identity, resource, attribute, or other
+byte difference blocks the refs update. Routine releases do not rerun it.
 
-## Failure and recovery
+## Recovery runbook
 
-There are no get-or-create or overwrite paths. Invalid promotion ownership,
-version inconsistency, missing changelog notes, a failed test or hygiene gate,
-profile leakage, a non-reproducible stable build, or an existing tag or release
-stops publication.
+All source fixes use PRs; recovery never directly pushes a commit to `main`.
 
-If tag creation succeeds but GitHub release creation later fails, do not delete,
-replace, or move the public tag without explicit maintainer authorization naming
-that target. Diagnose the failed workflow and choose recovery deliberately.
+- **Transient CI failure before tag creation:** re-run the failed workflow. If
+  source changes are needed, merge a normal fix PR. With no stable tag, the
+  next main push retries the stable release automatically.
+- **Reproducibility mismatch:** do not bypass or post-process it. Fix forward in
+  a PR while keeping `VERSION` at the intended release value. Each subsequent
+  main merge re-attempts the stable release until both builds match.
+- **Annotated tag pushed but GitHub release creation failed:** the tag makes the
+  repository look released, so an explicitly authorized maintainer deletes
+  that exact remote tag (`git push origin :refs/tags/suite-v<VERSION>`), and any
+  local copy (`git tag -d suite-v<VERSION>`). The next PR merge retries the full
+  release. Never move or overwrite the published tag.
 
-Local helper checks are safe and publication-free:
+An existing target beta tag or GitHub release remains a loud failure. There is
+no get-or-create or overwrite path.
+
+Local, publication-free helper checks are:
 
 ```bash
 bash -n tools/release-common.sh
 bash -n tools/check-release-policy.sh
 bash -n tools/build-release-assets.sh
-bash -n script/promote
 tools/test-release-helpers.sh
 ```

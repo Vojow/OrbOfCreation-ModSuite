@@ -30,6 +30,11 @@ dotnet build src/OrbModSuite.csproj --configuration Release
 `global.json` pins the exact SDK used for release builds. Install that SDK
 version rather than allowing the compiler to float.
 
+`VERSION` is the only build-version input. `Directory.Build.props` reads it,
+the suite project derives its SDK version, and MSBuild generates the BepInEx
+version constants under the active ignored `obj-*` directory. `CHANGELOG.md`
+is the only other tracked file carrying the maintained release version.
+
 The canonical publication build also sets
 `ContinuousIntegrationBuild=true`. That normalizes SourceLink document roots
 to `/_/`, so the full DLL is byte-identical across checkout locations. A plain

@@ -3,80 +3,63 @@
 [Runtime validation](../testing/runtime-validation.md) ·
 [Release procedure](../releasing.md)
 
-`main` owns publication. An ordinary main merge becomes a game-free beta;
-changing `VERSION` in a direct maintainer `release:` commit becomes a full
-release. GitHub Actions alone creates annotated tags and GitHub releases.
+Every change reaches `main` through a PR. An ordinary merged PR publishes a
+game-free beta when the current stable tag exists. A PR titled `release: ...`
+that advances `VERSION` and adds its curated changelog section is the full
+promotion. GitHub Actions alone creates tags and releases.
+
+## Release PR
+
+The maintainer writes the release PR by hand. It changes only the two tracked
+version authorities:
+
+- `VERSION`: one stable SemVer greater than the newest stable `suite-v` tag;
+- `CHANGELOG.md`: one matching, dated, player-facing release section.
+
+There is no `Unreleased` section and no promotion helper. The PR title starts
+exactly with `release:`. Configure the `release-policy` status check as required
+so ordinary PRs cannot change either file. Squash-merge the approved PR without
+changing its title; the main-push policy uses the squash subject as a second
+ownership check.
 
 ## Candidate review
 
-Before a full promotion, record:
+Before approval, record:
 
-- the exact clean commit and intended stable version;
-- the audited game, BepInEx, and source assembly hashes;
+- the exact commit and intended stable version;
+- audited game, BepInEx, and source-assembly hashes;
 - portable, profile, refs-contract, installed-contract, and interactive evidence;
-- the Release build's zero-profile-string result;
-- exact Release and perf-debug asset names and SHA-256 values;
+- Release zero-profile-string evidence;
+- Release and perf-debug asset names and SHA-256 values;
 - configuration schema and reconciled test, contract, exemption, entity, and
   compiler-warning counts; and
 - known limitations and validation scope.
 
-Build success alone is not publication approval.
+Run portable tests first and installed contracts second, never in parallel.
+Install and playtest with `./script/install release`; it installs the same kind
+of refs-built Release artifact that CI publishes. Hand-written test stubs are
+never an installation or publication input.
 
-## Draft and curate
-
-On clean, current `main`, run:
-
-```bash
-./script/promote <new-stable-version>
-```
-
-The helper updates all version surfaces and drafts a new topmost changelog
-section from merged pull-request titles and bodies since the tag named by the
-old `VERSION`. Review every entry, remove implementation detail, group changes
-for players, and add supported-game and compatibility information where needed.
-The helper creates no commit, tag, push, or release.
-
-PRs do not edit `CHANGELOG.md` or `VERSION`, and the changelog has no
-`Unreleased` section. After local gates and review, the maintainer commits the
-draft directly with a subject beginning `release:` and pushes it to `main`.
-
-## Local installed-game review
-
-Run the portable gate first and installed contracts second, never in parallel.
-Install and playtest with `./script/install release`; this installs a DLL built
-from the committed full-surface refs, exactly as CI does. The hand-written test
-stubs are never an install or publication input.
-
-Use a clean BepInEx profile and freshly generated configuration. Complete the
-applicable V0–V7 [runtime validation](../testing/runtime-validation.md),
-including save backup and restoration, representative automation, emergency
-and lifecycle behavior, native postconditions, configuration Apply/Revert,
-compatibility quarantine, quiet logs, and claimed desktop/Steam Deck behavior.
-
-Installed contracts remain the private proof against the real audited game.
-The ReleaseAssemblyCheck faithfulness comparison is unchanged but runs only
-when refs are regenerated for another game version; see
-[the release procedure](../releasing.md#reference-change-faithfulness).
+Installed contracts remain the private real-game proof. The
+`ReleaseAssemblyCheck` comparison runs only with a regenerated refs closure;
+see [reference-change faithfulness](../releasing.md#reference-change-faithfulness).
 
 ## CI publication review
 
-For every main push, confirm the publication workflow:
+For every main push, confirm the workflow:
 
-- passed portable, profile, refs-contract, promotion-policy, and manifest-based
-  repository-hygiene gates without a game installation;
-- built unmistakably named `OrbModSuite-release.dll` and
-  `OrbModSuite-perf-debug.dll` assets from committed refs;
+- passed portable, profile, refs-contract, required promotion-policy, and
+  manifest-based hygiene gates without a game installation;
+- built `OrbModSuite-release.dll` and `OrbModSuite-perf-debug.dll` from refs;
 - proved the Release flavor contains zero profiling components; and
-- refused any pre-existing target tag or GitHub release.
+- refused any pre-existing target tag or release.
 
-For a beta, verify tag `suite-v<VERSION>+main.<N>`, prerelease status, and notes
-from the associated merged PR body (or merge-message fallback). For a full
-release, verify tag `suite-v<VERSION>`, notes from the matching changelog
-section, and byte-identical Ubuntu/Windows rebuilds of both flavors.
+If `suite-v<VERSION>` exists, verify a prerelease tag
+`suite-v<VERSION>+main.<N>` whose count comes from the newest stable tag and
+whose notes use the associated PR body or merge-message fallback. If the stable
+tag is absent, verify exact Ubuntu/Windows byte identity for both flavors,
+stable tag `suite-v<VERSION>`, and notes from the matching changelog section.
 
-`script/package` remains the supported local archive rehearsal for manual
-installation. It is not a publication owner and its archive is not one of the
-two automatic release assets.
-
-Replacing or deleting an existing public release or tag requires explicit
-maintainer authorization naming that target.
+`script/package` remains a local archive rehearsal, not a publication owner.
+For partial tags, transient failures, or reproducibility mismatches, follow the
+[recovery runbook](../releasing.md#recovery-runbook).
