@@ -364,6 +364,105 @@ public sealed class GameWorldCollectorTests : IDisposable
 
     [Fact]
     [Trait("Category", "AutoConceptReliability")]
+    public void AnEmptyConceptCapacitySlotIsCleanlyIgnored()
+    {
+        var recipe = new FakeAlchemyRecipe();
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.Add(recipe);
+        var instances = new FakeAlchemyInstanceList();
+        instances.value.Add(new FakeAlchemyInstance(null));
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] = instances;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var concepts = report.For("concept instances");
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(concepts.IsClean);
+        Assert.Equal(1, concepts.Sampled);
+        Assert.Equal(0, concepts.Skipped);
+        Assert.Equal(0, collector.Build().AlchemyInstances.Count);
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void ARealConceptBesideAnEmptyCapacitySlotPublishesOnlyTheRealInstance()
+    {
+        var recipe = new FakeAlchemyRecipe();
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.Add(recipe);
+        var instances = new FakeAlchemyInstanceList();
+        instances.value.Add(new FakeAlchemyInstance(recipe) { quantity = 2, queuedQuantity = 3 });
+        instances.value.Add(new FakeAlchemyInstance(null));
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] = instances;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.Equal(0, report.For("concept instances").Skipped);
+        Assert.Equal(1, world.AlchemyInstances.Count);
+        Assert.True(WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, recipe.Identity, out var instance));
+        Assert.Equal(2, instance.Quantity);
+        Assert.Equal(3, instance.QueuedQuantity);
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
+    public void ANonemptyUnscopedConceptInstanceIsStillSkippedLoudly()
+    {
+        var scoped = new FakeAlchemyRecipe();
+        var foreign = new FakeAlchemyRecipe();
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.Add(scoped);
+        var instances = new FakeAlchemyInstanceList();
+        instances.value.Add(new FakeAlchemyInstance(foreign));
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] = instances;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var concepts = report.For("concept instances");
+
+        Assert.False(report.IsComplete);
+        Assert.Equal(1, concepts.Sampled);
+        Assert.Equal(1, concepts.Skipped);
+        Assert.Equal(
+            "active instance 0 did not name a scoped Concept recipe",
+            concepts.FirstFailure);
+        Assert.Equal(0, collector.Build().AlchemyInstances.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Category", "AutoConceptReliability")]
+    public void NullAndWrongRuntimeTypeConceptElementsStayOnTheUnexpectedTypeBranch(bool wrongRuntimeType)
+    {
+        var recipe = new FakeAlchemyRecipe();
+        var recipes = new FakeAlchemyRecipeList();
+        recipes.value.Add(recipe);
+        var instances = new FakeAlchemyInstanceList();
+        instances.value.Add(wrongRuntimeType ? new FakeUnexpectedAlchemyInstance(recipe) : null!);
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ConceptRecipes.Uuid] = recipes;
+        FakeIdRegistry.RuntimeLookup[KnownEntities.ActiveConcepts.Uuid] = instances;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var concepts = report.For("concept instances");
+
+        Assert.False(report.IsComplete);
+        Assert.Equal(1, concepts.Sampled);
+        Assert.Equal(1, concepts.Skipped);
+        Assert.Equal("active instance 0 had an unexpected native type", concepts.FirstFailure);
+        Assert.Equal(0, collector.Build().AlchemyInstances.Count);
+    }
+
+    [Fact]
+    [Trait("Category", "AutoConceptReliability")]
     public void ConceptRankingUsesTheNestedRequiredExperienceWhenTheOrphanAliasesAreDefault()
     {
         var alphaId = Guid.Parse("11111111-1111-1111-1111-111111111111");

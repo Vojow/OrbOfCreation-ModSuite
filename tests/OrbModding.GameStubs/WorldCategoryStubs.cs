@@ -118,6 +118,8 @@ public sealed class CraftingRecipeListVariable : GenericListVariable<CraftingRec
 public class AbstractRefInstance<T> where T : IdScriptableObject
 {
     public T reference = null!;
+    public T get_reference() => reference;
+    public bool IsEmpty() => reference is null;
     public Guid GetGuidReference() => reference.GetGuid();
 }
 

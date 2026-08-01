@@ -285,6 +285,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     private readonly Func<object, Guid>? _recipeId;
     private readonly Func<object, Guid>? _coreTypeId;
     private readonly Func<object, object?>? _recipeDrain;
+    private readonly Func<object, bool>? _instanceIsEmpty;
     private readonly Func<object, Guid>? _instanceRecipeId;
     private readonly Func<object, int>? _quantity;
     private readonly Func<object, int>? _queuedQuantity;
@@ -323,6 +324,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _coreTypeId = NativeAccessorBinder.CallReferenceGuid(_recipeType, "GetCoreType");
         _recipeDrain = NativeAccessorBinder.Reference(_recipeType, "drainCost");
 
+        _instanceIsEmpty = NativeAccessorBinder.Call<bool>(_instanceType, "IsEmpty");
         _instanceRecipeId = NativeAccessorBinder.CallReferenceGuid(_instanceType, "get_reference");
         _quantity = NativeAccessorBinder.Field<int>(_instanceType, "quantity");
         _queuedQuantity = NativeAccessorBinder.Field<int>(_instanceType, "queuedQuantity");
@@ -409,6 +411,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                     continue;
                 }
 
+                if (_instanceIsEmpty!(instance)) continue;
+
                 var id = _instanceRecipeId!(instance);
                 if (!conceptIds.Contains(id))
                 {
@@ -461,7 +465,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _activeValues is not null && _recipeValues is not null && _canAddInstance is not null &&
         _instanceType is not null &&
         _recipeId is not null && _coreTypeId is not null && _recipeDrain is not null &&
-        _instanceRecipeId is not null && _quantity is not null && _queuedQuantity is not null &&
+        _instanceIsEmpty is not null && _instanceRecipeId is not null &&
+        _quantity is not null && _queuedQuantity is not null &&
         _resourceDrain is not null && _drainRatio is not null && _currentDrain is not null &&
         _costEntries is not null && _entryResourceId is not null && _entryAmount is not null;
 
