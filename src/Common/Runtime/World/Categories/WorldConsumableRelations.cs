@@ -655,7 +655,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
             for (var prior = 0; prior < index; prior++)
             {
                 if (_usageId!(entries[prior]!) != id) continue;
-                failure = $"a consumable usage repeated identity {id:D}";
+                failure = $"a consumable usage repeated identity {EntityUuidTranslator.Format(id)}";
                 return false;
             }
         }

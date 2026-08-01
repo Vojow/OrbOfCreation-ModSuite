@@ -93,6 +93,19 @@ public sealed class AutoItemsCycleActionAdapterTests
     }
 
     [Fact]
+    public void AudioUnavailableMapsToANamedExpectedResultCode()
+    {
+        var submission = AutoItemsSubmission.Reject(
+            AutoItemsPreflight.AudioUnavailable,
+            "The permanent consumable audio pool has no reserved completion slot.");
+
+        var result = AutoItemsCycleActionAdapter.Map(in submission);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoItemsActionResultCodes.AudioUnavailable, result.Code);
+    }
+
+    [Fact]
     public void AmbiguousMutationReceiptNamesQuarantineAndRetainsAttemptEvidence()
     {
         var submission = new AutoItemsSubmission(

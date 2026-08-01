@@ -30,6 +30,9 @@ internal sealed class AutoItemsNativeBindings
         Type optionsType,
         Type baseSelectionType,
         Type targetStructureType,
+        Type soundManagerType,
+        Type audioElementType,
+        Type audioSourceType,
         FieldInfo families,
         FieldInfo allConsumables,
         FieldInfo usages,
@@ -44,6 +47,11 @@ internal sealed class AutoItemsNativeBindings
         FieldInfo onUseEffects,
         FieldInfo effectScripts,
         FieldInfo targetOptions,
+        FieldInfo soundManagerInstance,
+        FieldInfo audioMaximum,
+        FieldInfo audioElements,
+        FieldInfo audioCurrentIndex,
+        FieldInfo audioSource,
         MethodInfo familyGuid,
         MethodInfo resourceGuid,
         MethodInfo canFire,
@@ -59,7 +67,9 @@ internal sealed class AutoItemsNativeBindings
         MethodInfo strongestLevel,
         MethodInfo countScaling,
         MethodInfo getTargeting,
-        MethodInfo getRandomList)
+        MethodInfo getRandomList,
+        MethodInfo audioIsPlaying,
+        MethodInfo audioIsLooping)
     {
         ConsumableType = consumableType;
         FamilyType = familyType;
@@ -73,6 +83,9 @@ internal sealed class AutoItemsNativeBindings
         OptionsType = optionsType;
         BaseSelectionType = baseSelectionType;
         TargetStructureType = targetStructureType;
+        SoundManagerType = soundManagerType;
+        AudioElementType = audioElementType;
+        AudioSourceType = audioSourceType;
         Families = families;
         AllConsumables = allConsumables;
         Usages = usages;
@@ -87,6 +100,11 @@ internal sealed class AutoItemsNativeBindings
         OnUseEffects = onUseEffects;
         EffectScripts = effectScripts;
         TargetOptions = targetOptions;
+        SoundManagerInstance = soundManagerInstance;
+        AudioMaximum = audioMaximum;
+        AudioElements = audioElements;
+        AudioCurrentIndex = audioCurrentIndex;
+        AudioSource = audioSource;
         FamilyGuid = familyGuid;
         ResourceGuid = resourceGuid;
         CanFire = canFire;
@@ -103,6 +121,8 @@ internal sealed class AutoItemsNativeBindings
         CountScaling = countScaling;
         GetTargeting = getTargeting;
         GetRandomList = getRandomList;
+        AudioIsPlaying = audioIsPlaying;
+        AudioIsLooping = audioIsLooping;
     }
 
     internal Type ConsumableType { get; }
@@ -117,6 +137,9 @@ internal sealed class AutoItemsNativeBindings
     internal Type OptionsType { get; }
     internal Type BaseSelectionType { get; }
     internal Type TargetStructureType { get; }
+    internal Type SoundManagerType { get; }
+    internal Type AudioElementType { get; }
+    internal Type AudioSourceType { get; }
     internal FieldInfo Families { get; }
     internal FieldInfo AllConsumables { get; }
     internal FieldInfo Usages { get; }
@@ -131,6 +154,11 @@ internal sealed class AutoItemsNativeBindings
     internal FieldInfo OnUseEffects { get; }
     internal FieldInfo EffectScripts { get; }
     internal FieldInfo TargetOptions { get; }
+    internal FieldInfo SoundManagerInstance { get; }
+    internal FieldInfo AudioMaximum { get; }
+    internal FieldInfo AudioElements { get; }
+    internal FieldInfo AudioCurrentIndex { get; }
+    internal FieldInfo AudioSource { get; }
     internal MethodInfo FamilyGuid { get; }
     internal MethodInfo ResourceGuid { get; }
     internal MethodInfo CanFire { get; }
@@ -147,6 +175,8 @@ internal sealed class AutoItemsNativeBindings
     internal MethodInfo CountScaling { get; }
     internal MethodInfo GetTargeting { get; }
     internal MethodInfo GetRandomList { get; }
+    internal MethodInfo AudioIsPlaying { get; }
+    internal MethodInfo AudioIsLooping { get; }
 
     internal static bool TryCreate(out AutoItemsNativeBindings? bindings, out string reason)
     {
@@ -165,10 +195,13 @@ internal sealed class AutoItemsNativeBindings
         var selection = ReflectionUtil.FindLoadedType("Targeting.BaseTargetSelection");
         var structure = ReflectionUtil.FindLoadedType("Targeting.TargetStructure");
         var targetable = ReflectionUtil.FindLoadedType("Targeting.ITargetable");
+        var soundManager = ReflectionUtil.FindLoadedType("SoundManager");
+        var audioElement = ReflectionUtil.FindLoadedType("AudioElement");
         if (consumable is null || family is null || resource is null || inventory is null ||
             targetingManager is null || count is null ||
             scaling is null || block is null || script is null || request is null ||
-            options is null || selection is null || structure is null || targetable is null)
+            options is null || selection is null || structure is null || targetable is null ||
+            soundManager is null || audioElement is null)
         {
             reason =
                 "The complete Auto Items type set is unavailable: ConsumableSO, " +
@@ -176,7 +209,7 @@ internal sealed class AutoItemsNativeBindings
                 "ScalingInfo, InstantEffectBlock, " +
                 "IInstantEffectScript, RequestTargetEffectScript, Targeting.TargetSelectOptions, " +
                 "Targeting.BaseTargetSelection, Targeting.TargetStructure, and " +
-                "Targeting.ITargetable are all required.";
+                "Targeting.ITargetable, SoundManager, and AudioElement are all required.";
             return false;
         }
 
@@ -195,6 +228,12 @@ internal sealed class AutoItemsNativeBindings
         var onUse = consumable.GetField("onUseEffects", AnyInstance);
         var scripts = block.GetField("effectScripts", AnyInstance);
         var targetOptions = request.GetField("targetOptions", AnyInstance);
+        var soundManagerInstance = soundManager.GetField("instance", PublicStatic);
+        var audioMaximum = soundManager.GetField("audioMaximum", PublicInstance);
+        var audioElements = soundManager.GetField("audioElements", AnyInstance);
+        var audioCurrentIndex = soundManager.GetField("currentIndex", AnyInstance);
+        var audioSourceField = audioElement.GetField("audioSource", AnyInstance);
+        var audioSource = audioSourceField?.FieldType;
         var familyGuid = ExactMethod(family, "GetGuid", typeof(Guid), PublicInstance);
         var resourceGuid = ExactMethod(resource, "GetGuid", typeof(Guid), PublicInstance);
         var canFire = ExactMethod(consumable, "CanFire", typeof(bool), PublicInstance);
@@ -220,6 +259,10 @@ internal sealed class AutoItemsNativeBindings
             typeof(List<>).MakeGenericType(targetable),
             PublicInstance,
             scaling);
+        var audioIsPlaying = ExactMethod(
+            audioElement, "IsPlaying", typeof(bool), PublicInstance);
+        var audioIsLooping = ExactMethod(
+            audioElement, "IsLooping", typeof(bool), PublicInstance);
 
         if (families is null || CollectionElementType(families.FieldType) != family)
             return Missing("ConsumableSO.consumableTypes : List<ConsumableTypeSO>", out reason);
@@ -288,6 +331,20 @@ internal sealed class AutoItemsNativeBindings
             return Missing(
                 "Targeting.TargetStructure.GetRandomList(ScalingInfo) : List<Targeting.ITargetable>",
                 out reason);
+        if (soundManagerInstance?.FieldType != soundManager)
+            return Missing("SoundManager.instance : SoundManager", out reason);
+        if (audioMaximum?.FieldType != typeof(int))
+            return Missing("SoundManager.audioMaximum : Int32", out reason);
+        if (audioElements is null || CollectionElementType(audioElements.FieldType) != audioElement)
+            return Missing("SoundManager.audioElements : List<AudioElement>", out reason);
+        if (audioCurrentIndex?.FieldType != typeof(int))
+            return Missing("SoundManager.currentIndex : Int32", out reason);
+        if (audioSource is null || audioSource.FullName != "UnityEngine.AudioSource")
+            return Missing("AudioElement.audioSource : UnityEngine.AudioSource", out reason);
+        if (audioIsPlaying is null)
+            return Missing("AudioElement.IsPlaying() : Boolean", out reason);
+        if (audioIsLooping is null)
+            return Missing("AudioElement.IsLooping() : Boolean", out reason);
 
         bindings = new AutoItemsNativeBindings(
             consumable,
@@ -302,6 +359,9 @@ internal sealed class AutoItemsNativeBindings
             options,
             selection,
             structure,
+            soundManager,
+            audioElement,
+            audioSource!,
             families,
             allConsumables,
             usages,
@@ -316,6 +376,11 @@ internal sealed class AutoItemsNativeBindings
             onUse,
             scripts,
             targetOptions,
+            soundManagerInstance,
+            audioMaximum,
+            audioElements,
+            audioCurrentIndex,
+            audioSourceField!,
             familyGuid,
             resourceGuid,
             canFire,
@@ -331,7 +396,9 @@ internal sealed class AutoItemsNativeBindings
             strongestLevel,
             countScaling,
             getTargeting,
-            getRandomList);
+            getRandomList,
+            audioIsPlaying,
+            audioIsLooping);
         reason = string.Empty;
         return true;
     }

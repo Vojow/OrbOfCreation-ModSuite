@@ -108,7 +108,7 @@ public sealed class AutoScribeIdentityAndConfigurationTests
     public void ActionCarriesOnlyTheCyclePinnedNativeRelationAndFreshnessEpoch()
     {
         Assert.Equal(
-            new[] { "CollectedAtEpoch", "Level", "RecipeId", "ScrollId" },
+            new[] { "CollectedAtEpoch", "CollectedAtFrame", "Level", "RecipeId", "ScrollId" },
             typeof(AutoScribeCycleAction)
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Select(property => property.Name)

@@ -11,7 +11,9 @@ internal sealed class AutoItemsFeatureDependencies
         Func<bool> ownsActionFamily,
         Func<bool> tryCaptureMutationPermit,
         Func<string> readOwnershipFailure,
-        AutomataFeatureStatusReporter featureStatus)
+        AutomataFeatureStatusReporter featureStatus,
+        ConsumableMutationGate? mutationGate = null,
+        Func<long>? readFrameIdentity = null)
     {
         RegistryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
@@ -25,6 +27,8 @@ internal sealed class AutoItemsFeatureDependencies
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         FeatureStatus = featureStatus ??
             throw new ArgumentNullException(nameof(featureStatus));
+        MutationGate = mutationGate ?? new ConsumableMutationGate();
+        ReadFrameIdentity = readFrameIdentity ?? (() => 0);
     }
 
     internal TypedRegistryResolver RegistryResolver { get; }
@@ -33,4 +37,6 @@ internal sealed class AutoItemsFeatureDependencies
     internal Func<bool> TryCaptureMutationPermit { get; }
     internal Func<string> ReadOwnershipFailure { get; }
     internal AutomataFeatureStatusReporter FeatureStatus { get; }
+    internal ConsumableMutationGate MutationGate { get; }
+    internal Func<long> ReadFrameIdentity { get; }
 }

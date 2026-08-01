@@ -120,6 +120,12 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
                     : _gameAction.BindingFailure);
         if (_health.HasFailure && IsQuarantiningFailure(_health.Preflight))
             return FromActionHealth();
+        if (_gameAction.IsQuarantined)
+            return new AutoScribeFeatureStatus(
+                FeatureStatusState.Faulted,
+                FeatureStatusReasonCode.MutationQuarantined,
+                _gameAction.QuarantineReason +
+                " Other Scroll roles remain eligible; this exact Scroll will be retried only for reconciliation.");
         if (!_cycleObserved)
             return new AutoScribeFeatureStatus(
                 FeatureStatusState.NotReady,
@@ -153,9 +159,15 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
 
     private AutoScribeFeatureStatus FromActionHealth()
     {
-        var summary = string.IsNullOrWhiteSpace(_health.Reason)
+        var reason = string.IsNullOrWhiteSpace(_health.Reason)
             ? $"Auto Scribe failed at {_health.Stage}/{_health.Preflight}."
             : _health.Reason;
+        var summary = _health.RecipeId != Guid.Empty && _health.ScrollId != Guid.Empty
+            ? $"Auto Scribe stopped at {_health.Stage}/{_health.Preflight}; " +
+              $"recipe={EntityUuidTranslator.Format(_health.RecipeId)}; " +
+              $"scroll={EntityUuidTranslator.Format(_health.ScrollId)}; " +
+              $"level={_health.Level}. {reason}"
+            : reason;
         return _health.Preflight switch
         {
             AutoScribePreflight.ContractUnavailable =>

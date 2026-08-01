@@ -30,6 +30,12 @@ The importer guarantees UUID uniqueness, not name uniqueness. Consumers must res
 
 The production subset is generated with `tools/generate-known-entities.ps1` (`tools/generate-known-entities.sh` on POSIX hosts). Every build verifies that the checked-in generated source is reproducible and that each selected UUID, name, and managed type still matches the canonical mapping. Add entities deliberately; the full catalog is not generated into the runtime API.
 
+Runtime diagnostics lazily load the two embedded mapping TSVs through
+`EntityUuidTranslator`. The diagnostic union currently contains 2,794 UUIDs: canonical asset/type
+identity is authoritative where present, and display-only rows may add a visible label. Formatting
+always retains the UUID and, when known, the managed type and player-facing or canonical name. This
+facade is diagnostic only and never participates in gameplay identity decisions.
+
 The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Entity catalog](../docs/reverse-engineering/entity-catalog.md) and [Entity correlations](../docs/reverse-engineering/entity-correlations.md).
 
 ## Display names

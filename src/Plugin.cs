@@ -371,6 +371,7 @@ public sealed class Plugin : BaseUnityPlugin
                 // that compiles and looks like a quiet game. The world publication is not
                 // here at all: the registry owns it, because there is one game.
                 Func<long> readFrameIdentity = static () => Time.frameCount;
+                var consumableMutationGate = new ConsumableMutationGate();
                 var scribeCatalog = new AutoScribeIdentityCatalog();
                 IAutomataServiceCycleFeature autoScribeFeature =
                     scribeCatalog.TryGetProfile(_auditedBaselineId, out var scribeProfile)
@@ -387,7 +388,9 @@ public sealed class Plugin : BaseUnityPlugin
                                 readOwnershipFailure: () =>
                                     _automataActionFamilyOwnership!
                                         .ScribeOwnershipFailure,
-                                featureStatus: featureStatuses.AutoScribe))
+                                featureStatus: featureStatuses.AutoScribe,
+                                mutationGate: consumableMutationGate,
+                                readFrameIdentity: readFrameIdentity))
                         : new AutoScribeUnavailableServiceCycleFeature(
                             featureStatuses.AutoScribe);
                 return AutomataServiceCycleComposition.TryCreate(
@@ -434,7 +437,9 @@ public sealed class Plugin : BaseUnityPlugin
                                 readOwnershipFailure: () =>
                                     _automataActionFamilyOwnership!
                                         .ItemsOwnershipFailure,
-                                featureStatus: featureStatuses.AutoItems)),
+                                featureStatus: featureStatuses.AutoItems,
+                                mutationGate: consumableMutationGate,
+                                readFrameIdentity: readFrameIdentity)),
                         autoScribeFeature,
                         new AutoHarvestServiceCycleFeature(
                             new AutoHarvestFeatureDependencies(

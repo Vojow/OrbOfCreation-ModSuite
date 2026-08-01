@@ -15528,6 +15528,134 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "auto-items.sound-manager.instance",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instance",
+      "visibility": "public",
+      "static": true,
+      "valueType": "SoundManager",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.audio-maximum",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioMaximum",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.audio-elements",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioElements",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<AudioElement>",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.sound-manager.current-index",
+      "assembly": "assembly-csharp",
+      "type": "SoundManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentIndex",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.audio-source",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "audioSource",
+      "visibility": "private",
+      "static": false,
+      "valueType": "UnityEngine.AudioSource",
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.is-playing",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsPlaying",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-items.audio-element.is-looping",
+      "assembly": "assembly-csharp",
+      "type": "AudioElement",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsLooping",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Items action boundary"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     }
   ],
   "sourceAudit": {

@@ -13,6 +13,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
     private readonly Func<bool> _ownsActionFamily;
     private readonly Func<string> _readOwnershipFailure;
     private readonly AutoItemsActionHealth _health;
+    private readonly ConsumableMutationGate _mutationGate;
+    private readonly Func<long> _readFrameIdentity;
 
     internal AutoItemsCycleActionAdapter(
         AutoItemsConsumableUseGameAction gameAction,
@@ -20,6 +22,25 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         Func<bool> ownsActionFamily,
         Func<string> readOwnershipFailure,
         AutoItemsActionHealth health)
+        : this(
+            gameAction,
+            readLifecycleEpoch,
+            ownsActionFamily,
+            readOwnershipFailure,
+            health,
+            new ConsumableMutationGate(),
+            static () => 0)
+    {
+    }
+
+    internal AutoItemsCycleActionAdapter(
+        AutoItemsConsumableUseGameAction gameAction,
+        Func<long> readLifecycleEpoch,
+        Func<bool> ownsActionFamily,
+        Func<string> readOwnershipFailure,
+        AutoItemsActionHealth health,
+        ConsumableMutationGate mutationGate,
+        Func<long> readFrameIdentity)
     {
         _gameAction = gameAction ?? throw new ArgumentNullException(nameof(gameAction));
         _readLifecycleEpoch = readLifecycleEpoch ??
@@ -29,6 +50,9 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         _health = health ?? throw new ArgumentNullException(nameof(health));
+        _mutationGate = mutationGate ?? throw new ArgumentNullException(nameof(mutationGate));
+        _readFrameIdentity = readFrameIdentity ??
+            throw new ArgumentNullException(nameof(readFrameIdentity));
     }
 
     public ServiceActionResult TryExecute(
@@ -53,6 +77,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         }
         if (!NativeEpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
+        if (_mutationGate.Blocks(action.CollectedAtEpoch, action.CollectedAtFrame))
+            return ServiceActionResult.Rejected(AutoItemsActionResultCodes.PublicationGap);
 
         AutoItemsSubmission submission;
         try
@@ -70,10 +96,13 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             Plugin.Log?.LogAutomataWarning(reason);
         }
 
+        if (submission.CallOutcome.MutationAttempts > 0)
+            _mutationGate.ObserveAttempt(action.CollectedAtEpoch, ReadFrameIdentity());
         _health.Observe(in submission);
         if (!submission.Verified)
             Plugin.Log?.LogAutomataWarning(
-                $"Auto Items {submission.Preflight}: {submission.Reason}");
+                $"Auto Items {submission.Preflight}; " +
+                $"item={EntityUuidTranslator.Format(action.ItemId)}: {submission.Reason}");
         return Map(in submission);
     }
 
@@ -106,6 +135,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
                 AutoItemsActionResultCodes.TemporaryEffectPresent,
             AutoItemsPreflight.TargetingInProgress =>
                 AutoItemsActionResultCodes.TargetingInProgress,
+            AutoItemsPreflight.AudioUnavailable =>
+                AutoItemsActionResultCodes.AudioUnavailable,
             AutoItemsPreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };
@@ -143,7 +174,8 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             AutoItemsPreflight.TemporaryDurationChanged or
             AutoItemsPreflight.TemporaryCostChanged or
             AutoItemsPreflight.TemporaryEffectPresent or
-            AutoItemsPreflight.TargetingInProgress;
+            AutoItemsPreflight.TargetingInProgress or
+            AutoItemsPreflight.AudioUnavailable;
 
     private bool Owns()
     {
@@ -182,6 +214,15 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
         catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
         {
             return false;
+        }
+    }
+
+    private long ReadFrameIdentity()
+    {
+        try { return _readFrameIdentity(); }
+        catch (Exception ex) when (AutoItemsReflectionAccess.IsExpectedFailure(ex))
+        {
+            return 0;
         }
     }
 }

@@ -82,9 +82,9 @@ public sealed class ScrollCoveragePlannerTests
     }
 
     [Theory]
-    [InlineData(4, 3)]
+    [InlineData(4, 4)]
     [InlineData(1, 1)]
-    public void PositiveCarryLimitKeepsOneSlotFreeWithoutDroppingBelowOne(
+    public void PositiveCarryLimitUsesCompleteNativeCapacity(
         int maximumCarryLoad,
         int expectedDeficit)
     {
@@ -102,6 +102,33 @@ public sealed class ScrollCoveragePlannerTests
             role.Key);
 
         Assert.Equal(expectedDeficit, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+    }
+
+    [Fact]
+    public void LowerLevelStockDoesNotReduceTheStrongestFrontierDeficit()
+    {
+        var role = _profile.Roles[0];
+        var world = World() with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 4,
+                maximumCarryLoad: 2),
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 2,
+                freeQuantity: 2)),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(4, coverage.TargetLevel);
+        Assert.Equal(0, coverage.OwnedSupply);
+        Assert.Equal(2, coverage.Deficit);
         Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
     }
 

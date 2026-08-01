@@ -97,7 +97,8 @@ internal static class AutoItemsFeatureStatusProjector
         return new AutoItemsFeatureStatus(
             FeatureStatusState.Faulted,
             FeatureStatusReasonCode.MutationQuarantined,
-            $"Temporary item {itemId:D} is quarantined for this lifecycle because {evidence}.");
+            $"Temporary item {EntityUuidTranslator.Format(itemId)} is quarantined for this " +
+            $"lifecycle because {evidence}.");
     }
 
     private static AutoItemsFeatureStatus FromActionFailure(

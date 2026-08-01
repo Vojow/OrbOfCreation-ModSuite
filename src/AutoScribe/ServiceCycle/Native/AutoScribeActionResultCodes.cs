@@ -16,4 +16,5 @@ internal static class AutoScribeActionResultCodes
     internal static ServiceActionResultCode Quarantined => new(4209);
     internal static ServiceActionResultCode PostPaymentFault => new(4210);
     internal static ServiceActionResultCode VerificationFailed => new(4211);
+    internal static ServiceActionResultCode PublicationGap => new(4212);
 }

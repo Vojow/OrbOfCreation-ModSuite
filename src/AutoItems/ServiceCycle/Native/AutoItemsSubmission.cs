@@ -21,6 +21,7 @@ internal enum AutoItemsPreflight
     TemporaryCostChanged = 13,
     TemporaryEffectPresent = 14,
     TargetingInProgress = 15,
+    AudioUnavailable = 16,
 }
 
 internal readonly struct AutoItemsSubmission

@@ -8,7 +8,12 @@ namespace OrbAutomata;
 /// </summary>
 internal readonly struct AutoScribeCycleAction
 {
-    internal AutoScribeCycleAction(Guid recipeId, Guid scrollId, int level, long collectedAtEpoch)
+    internal AutoScribeCycleAction(
+        Guid recipeId,
+        Guid scrollId,
+        int level,
+        long collectedAtEpoch,
+        long collectedAtFrame = 0)
     {
         if (recipeId == Guid.Empty)
             throw new ArgumentException("A Scribe recipe identity is required.", nameof(recipeId));
@@ -20,10 +25,12 @@ internal readonly struct AutoScribeCycleAction
         ScrollId = scrollId;
         Level = level;
         CollectedAtEpoch = collectedAtEpoch;
+        CollectedAtFrame = collectedAtFrame;
     }
 
     internal Guid RecipeId { get; }
     internal Guid ScrollId { get; }
     internal int Level { get; }
     internal long CollectedAtEpoch { get; }
+    internal long CollectedAtFrame { get; }
 }

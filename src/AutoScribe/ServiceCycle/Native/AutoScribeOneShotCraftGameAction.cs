@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
 
@@ -18,7 +19,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     private readonly Func<string> _readOwnershipFailure;
     private AutoScribeNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
+    private readonly Dictionary<Guid, QuarantineEntry> _quarantines = new();
 
     internal AutoScribeOneShotCraftGameAction(
         TypedRegistryResolver registry,
@@ -37,21 +38,37 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
-    internal string QuarantineReason => _quarantineReason;
+    internal bool IsQuarantined => _quarantines.Count != 0;
+    internal string QuarantineReason
+    {
+        get
+        {
+            foreach (var entry in _quarantines.Values) return entry.Reason;
+            return string.Empty;
+        }
+    }
 
     internal AutoScribeSubmission Submit(in AutoScribeCycleAction action)
     {
-        if (_quarantineReason.Length != 0)
-            return AutoScribeSubmission.Reject(
-                AutoScribePreflight.Quarantined,
-                _quarantineReason);
         if (_bindings is not { } native)
             return AutoScribeSubmission.Reject(
                 AutoScribePreflight.ContractUnavailable,
                 _bindingFailure.Length == 0
                     ? "The lifecycle-scoped Auto Scribe binding set is unavailable."
                     : _bindingFailure);
+        if (_quarantines.TryGetValue(action.ScrollId, out var quarantine))
+        {
+            if (TryReconcile(in action, native, in quarantine, out var reconciliation))
+            {
+                _quarantines.Remove(action.ScrollId);
+                return AutoScribeSubmission.Reject(
+                    AutoScribePreflight.CompetingSupply,
+                    reconciliation);
+            }
+            return AutoScribeSubmission.Reject(
+                AutoScribePreflight.Quarantined,
+                quarantine.Reason);
+        }
 
         try
         {
@@ -68,7 +85,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!Invoke<bool>(native.RecipeVisible, recipe))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.RecipeUnavailable,
-                    $"CraftingRecipeSO.IsVisible() refused recipe {action.RecipeId:D}.");
+                    $"CraftingRecipeSO.IsVisible() refused recipe " +
+                    $"{EntityUuidTranslator.Format(action.RecipeId)}.");
             if (!Invoke<bool>(native.QueueHasRoom, activeQueue))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.QueueFull,
@@ -82,7 +100,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (craftLevel < action.Level)
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.Unaffordable,
-                    $"Recipe {action.RecipeId:D} could not afford requested level " +
+                    $"Recipe {EntityUuidTranslator.Format(action.RecipeId)} could not afford " +
+                    "requested level " +
                     $"{action.Level} or any stronger level.");
             if (HasCompetingSupply(native, action.RecipeId, craftLevel, out reason))
                 return AutoScribeSubmission.Reject(
@@ -103,7 +122,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!Invoke<bool>(native.CostHasEnough, totalCost))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.Unaffordable,
-                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {action.RecipeId:D}.");
+                    $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe " +
+                    $"{EntityUuidTranslator.Format(action.RecipeId)}.");
 
             var before = CaptureBefore(native, recipeType, activeQueue, scroll, craftLevel, totalCost);
             if (!TryCaptureMutationPermit(out reason))
@@ -138,7 +158,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
+        _quarantines.Clear();
         BindLifecycle();
     }
 
@@ -146,7 +166,7 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
+        _quarantines.Clear();
     }
 
     private AutoScribeSubmission Execute(
@@ -207,10 +227,12 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!verified)
                 return Quarantine(
                     in action,
+                    craftLevel,
                     AutoScribePreflight.VerificationFailed,
                     stage,
                     NativeMutationOutcome.PostconditionFailed,
                     nativeCalls,
+                    in before,
                     in receipt,
                     "Auto Scribe verification failed: " + Describe(in receipt));
             return new AutoScribeSubmission(
@@ -235,10 +257,12 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 paymentInvoked);
             return Quarantine(
                 in action,
+                craftLevel,
                 AutoScribePreflight.PostPaymentFault,
                 stage,
                 NativeMutationOutcome.ExecutionThrew,
                 nativeCalls,
+                in before,
                 in receipt,
                 $"Auto Scribe native {stage} failed after payment began: " +
                 ex.GetBaseException().Message + "; " + Describe(in receipt));
@@ -247,23 +271,76 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
 
     private AutoScribeSubmission Quarantine(
         in AutoScribeCycleAction action,
+        int craftLevel,
         AutoScribePreflight preflight,
         AutoScribeNativeStage stage,
         NativeMutationOutcome outcome,
         int nativeCalls,
+        in BeforeState before,
         in AutoScribeMutationReceipt receipt,
         string reason)
     {
-        _quarantineReason =
-            $"Auto Scribe is quarantined for this lifecycle after {stage} on " +
-            $"{action.RecipeId:D}: {reason}";
+        var quarantineReason =
+            $"Auto Scribe contained only recipe {EntityUuidTranslator.Format(action.RecipeId)}, " +
+            $"Scroll {EntityUuidTranslator.Format(action.ScrollId)}, attempted level {craftLevel} " +
+            $"for this lifecycle after " +
+            $"{stage}/{preflight}: {reason}";
+        _quarantines[action.ScrollId] = new QuarantineEntry(
+            action.RecipeId,
+            action.ScrollId,
+            craftLevel,
+            before.QueueCount,
+            before.StockAtLevel,
+            quarantineReason);
         return new AutoScribeSubmission(
             preflight,
             stage,
             outcome,
             new NativeMutationCallOutcome(nativeCalls, 1, 0),
             in receipt,
-            _quarantineReason);
+            quarantineReason);
+    }
+
+    private bool TryReconcile(
+        in AutoScribeCycleAction action,
+        AutoScribeNativeBindings native,
+        in QuarantineEntry quarantine,
+        out string reason)
+    {
+        reason = string.Empty;
+        try
+        {
+            if (!TryResolveRelation(
+                    in action,
+                    native,
+                    out _,
+                    out var scroll,
+                    out _,
+                    out var activeQueue,
+                    out _,
+                    out _))
+                return false;
+            var queue = RequireList(
+                native.InstanceListValue.GetValue(activeQueue),
+                "ActiveScribeInstances.value");
+            var queueCount = CountNonNull(queue);
+            var stock = StockAt(native, scroll, quarantine.Level);
+            var delayedQueueAdmission = queueCount > quarantine.QueueCount &&
+                ContainsWork(native, queue, quarantine.RecipeId, quarantine.Level);
+            var delayedStockAdmission = stock > quarantine.StockAtLevel;
+            if (!delayedQueueAdmission && !delayedStockAdmission) return false;
+            reason =
+                $"Auto Scribe reconciled a delayed native admission for recipe " +
+                $"{EntityUuidTranslator.Format(quarantine.RecipeId)}, Scroll " +
+                $"{EntityUuidTranslator.Format(quarantine.ScrollId)}, level " +
+                $"{quarantine.Level}; queueDelta={queueCount - quarantine.QueueCount}; " +
+                $"stockDelta={stock - quarantine.StockAtLevel}. No second payment was attempted.";
+            return true;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return false;
+        }
     }
 
     private bool TryResolveRelation(
@@ -287,7 +364,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             recipeRole.Scroll.Uuid != action.ScrollId)
         {
             reason =
-                $"Action recipe {action.RecipeId:D} and Scroll {action.ScrollId:D} do not identify " +
+                $"Action recipe {EntityUuidTranslator.Format(action.RecipeId)} and Scroll " +
+                $"{EntityUuidTranslator.Format(action.ScrollId)} do not identify " +
                 "one audited Auto Scribe role.";
             rejection = AutoScribePreflight.RelationshipMismatch;
             return false;
@@ -394,7 +472,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             if (!found)
             {
                 reason =
-                    $"ScribeCraftingRecipes omitted audited recipe {role.Recipe.Value.Uuid:D}.";
+                    $"ScribeCraftingRecipes omitted audited recipe " +
+                    $"{EntityUuidTranslator.Format(role.Recipe.Value.Uuid)}.";
                 return false;
             }
         }
@@ -496,7 +575,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     Invoke<Guid>(native.EnchantmentIdentity, enchantment) != expectedEnchantment)
                 {
                     reason =
-                        $"The live Scroll enchantment did not equal audited {expectedEnchantment:D}.";
+                        $"The live Scroll enchantment did not equal audited " +
+                        $"{EntityUuidTranslator.Format(expectedEnchantment)}.";
                     return false;
                 }
             }
@@ -532,7 +612,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
             }
             if (native.InstanceListValue.GetValue(resolution.Value!) is not IList work)
             {
-                reason = $"{queueIdentity.Uuid:D} did not expose its exact CraftingInstance list.";
+                reason = $"{EntityUuidTranslator.Format(queueIdentity.Uuid)} did not expose its " +
+                    "exact CraftingInstance list.";
                 return true;
             }
             foreach (var value in work)
@@ -540,7 +621,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                 if (value is null) continue;
                 if (value.GetType() != native.InstanceType)
                 {
-                    reason = $"{queueIdentity.Uuid:D} contained a non-CraftingInstance value.";
+                    reason = $"{EntityUuidTranslator.Format(queueIdentity.Uuid)} contained a " +
+                        "non-CraftingInstance value.";
                     return true;
                 }
                 if (Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
@@ -548,7 +630,8 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
                     !Invoke<bool>(native.InstanceExpired, value))
                 {
                     reason =
-                        $"{queueIdentity.Uuid:D} already supplies recipe {recipeId:D} at level " +
+                        $"{EntityUuidTranslator.Format(queueIdentity.Uuid)} already supplies recipe " +
+                        $"{EntityUuidTranslator.Format(recipeId)} at level " +
                         $"{level} or higher.";
                     return true;
                 }
@@ -587,13 +670,15 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         if (requests != 1 || options is null || options.GetType() != native.OptionsType)
         {
             reason =
-                $"Scroll {scrollId:D} did not expose exactly one exact TargetSelectOptions.";
+                $"Scroll {EntityUuidTranslator.Format(scrollId)} did not expose exactly one exact " +
+                "TargetSelectOptions.";
             return false;
         }
         var targeting = InvokeObject(native.GetTargeting, options);
         if (targeting.GetType() != native.TargetType)
         {
-            reason = $"Scroll {scrollId:D} did not resolve the exact TargetStructure selector.";
+            reason = $"Scroll {EntityUuidTranslator.Format(scrollId)} did not resolve the exact " +
+                "TargetStructure selector.";
             return false;
         }
         var scaling = InvokeObject(
@@ -603,12 +688,13 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         if (scaling.GetType() != native.ScalingType ||
             native.GetRandomList.Invoke(targeting, new[] { scaling }) is not ICollection candidates)
         {
-            reason = $"Scroll {scrollId:D} target selection changed contract.";
+            reason = $"Scroll {EntityUuidTranslator.Format(scrollId)} target selection changed contract.";
             return false;
         }
         if (candidates.Count == 0)
         {
-            reason = $"Scroll {scrollId:D} has no valid live target at level {level}.";
+            reason = $"Scroll {EntityUuidTranslator.Format(scrollId)} has no valid live target at " +
+                $"level {level}.";
             return false;
         }
         reason = string.Empty;
@@ -1019,6 +1105,32 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         internal Guid ResourceId { get; }
         internal BigDouble Expected { get; }
         internal BigDouble Quantity { get; }
+    }
+
+    private readonly struct QuarantineEntry
+    {
+        internal QuarantineEntry(
+            Guid recipeId,
+            Guid scrollId,
+            int level,
+            int queueCount,
+            int stockAtLevel,
+            string reason)
+        {
+            RecipeId = recipeId;
+            ScrollId = scrollId;
+            Level = level;
+            QueueCount = queueCount;
+            StockAtLevel = stockAtLevel;
+            Reason = reason;
+        }
+
+        internal Guid RecipeId { get; }
+        internal Guid ScrollId { get; }
+        internal int Level { get; }
+        internal int QueueCount { get; }
+        internal int StockAtLevel { get; }
+        internal string Reason { get; }
     }
 
     private readonly struct BeforeState

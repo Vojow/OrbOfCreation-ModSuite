@@ -254,13 +254,17 @@ facts. It never substitutes the success call shape for incomplete work.
 
 Native exceptions at payment, construction, initiation, instant admission, or queue admission
 cannot be rolled back. The action captures the strongest available receipt, returns a faulted
-mutation result with the exact stage and native reason, and quarantines Auto Scribe for the
-remainder of that lifecycle. A postcondition mismatch follows the same quarantine path at the
-verification stage.
+mutation result with the exact stage and native reason, and contains only the exact Scroll UUID for
+the remainder of that lifecycle. A postcondition mismatch follows the same containment path at the
+verification stage; sibling Scroll roles remain eligible.
 
 Runtime health gives quarantine priority over later ordinary policy state. It reports the stage,
-recipe UUID, exception or verification reason, and observed receipt. Lifecycle replacement is the
-only recovery.
+translated recipe and Scroll UUIDs, attempted level, exception or verification reason, and observed
+receipt. Before rejecting a contained Scroll again, the action re-resolves its live relation and
+checks for a delayed exact queue or stock admission. Proven delayed admission clears that one
+containment without another payment; otherwise it remains contained until lifecycle replacement.
+The shared mutation-frame gate prevents either Auto Scribe or Auto Items from dispatching a world
+captured at or before the latest mutation attempt.
 
 ## Validator freshness classification
 

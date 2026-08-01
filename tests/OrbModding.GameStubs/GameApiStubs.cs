@@ -2254,6 +2254,8 @@ namespace UnityEngine
 
     public sealed class WaitForEndOfFrame { }
 
+    public sealed class AudioSource : Object { }
+
     public class Texture2D : Object
     {
         public byte[] EncodeToPNG() => new byte[] { 137, 80, 78, 71 };

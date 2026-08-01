@@ -354,6 +354,19 @@ public sealed class InstalledGameContractTests
             false,
             "System.Collections.Generic.List`1<Targeting.ITargetable>",
             "ScalingInfo");
+        Assert.True(assembly.HasType("SoundManager"));
+        Assert.True(assembly.HasType("AudioElement"));
+        Assert.Equal("SoundManager", assembly.GetFieldType("SoundManager", "instance"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("SoundManager", "audioMaximum"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<AudioElement>",
+            assembly.GetFieldType("SoundManager", "audioElements"));
+        Assert.Equal("System.Int32", assembly.GetFieldType("SoundManager", "currentIndex"));
+        Assert.Equal(
+            "UnityEngine.AudioSource",
+            assembly.GetFieldType("AudioElement", "audioSource"));
+        AssertMethod(assembly, "AudioElement", "IsPlaying", false, "System.Boolean");
+        AssertMethod(assembly, "AudioElement", "IsLooping", false, "System.Boolean");
     }
 
     [GameAssemblyFact]

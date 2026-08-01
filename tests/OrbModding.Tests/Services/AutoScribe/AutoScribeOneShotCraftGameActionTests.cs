@@ -205,6 +205,56 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.True(actionBoundary.IsQuarantined);
         Assert.Equal(AutoScribeNativeStage.Admission, health.Stage);
         Assert.Contains("admission", health.Reason);
+
+        var reconciled = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.CompetingSupply, reconciled.Preflight);
+        Assert.Contains("No second payment", reconciled.Reason);
+        Assert.False(actionBoundary.IsQuarantined);
+        Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void DelayedAdmissionReconciliationTracksTheActuallyCraftedStrongerLevel()
+    {
+        var fixture = Fixture();
+        fixture.Recipe.MaximumAffordableLevel = 24;
+        fixture.Active.ThrowAfterAdd = true;
+        var request = AtLevel(fixture.Action, level: 1);
+        using var actionBoundary = GameAction();
+
+        var failed = Submit(actionBoundary, request);
+        var reconciled = Submit(actionBoundary, request);
+
+        Assert.Equal(AutoScribePreflight.PostPaymentFault, failed.Preflight);
+        Assert.Contains("attempted level 24", failed.Reason);
+        Assert.Equal(AutoScribePreflight.CompetingSupply, reconciled.Preflight);
+        Assert.Contains("level 24", reconciled.Reason);
+        Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void OneContainedScrollDoesNotBlockASiblingRole()
+    {
+        var fixture = Fixture();
+        fixture.Recipe.ThrowDuringConstruction = true;
+        using var actionBoundary = GameAction();
+        var contained = Submit(actionBoundary, fixture.Action);
+        var siblingRole = _profile.Roles[1];
+        var siblingRecipe = Assert.IsType<CraftingRecipeSO>(_registry[siblingRole.Recipe!.Value.Uuid]);
+        var siblingScroll = Assert.IsType<ConsumableSO>(_registry[siblingRole.Scroll.Uuid]);
+        var siblingAction = new AutoScribeCycleAction(
+            siblingRecipe.GetGuid(),
+            siblingScroll.GetGuid(),
+            level: 3,
+            collectedAtEpoch: 1);
+
+        var sibling = Submit(actionBoundary, siblingAction);
+
+        Assert.Equal(AutoScribePreflight.PostPaymentFault, contained.Preflight);
+        Assert.True(sibling.Verified, sibling.Reason);
+        Assert.True(actionBoundary.IsQuarantined);
+        Assert.Contains("contained only", actionBoundary.QuarantineReason);
     }
 
     [Fact]

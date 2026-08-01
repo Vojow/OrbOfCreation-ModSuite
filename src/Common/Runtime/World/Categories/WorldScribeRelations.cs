@@ -295,7 +295,8 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                 {
                     if (scriptValue is null || !native.InstantScriptType.IsInstanceOfType(scriptValue))
                         throw new InvalidOperationException(
-                            $"Scribe recipe {recipeId:D} contained a non-IInstantEffectScript output.");
+                            $"Scribe recipe {EntityUuidTranslator.Format(recipeId)} contained a " +
+                            "non-IInstantEffectScript output.");
                     if (scriptValue.GetType() != native.ConsumableGainType) continue;
                     var output = RequireExact(
                         native.GainConsumable.GetValue(scriptValue),
@@ -307,7 +308,8 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             }
             if (typeCount != 1 || outputCount != 1)
                 throw new InvalidOperationException(
-                    $"Scribe recipe {recipeId:D} had {typeCount} recipe types and " +
+                    $"Scribe recipe {EntityUuidTranslator.Format(recipeId)} had {typeCount} " +
+                    "recipe types and " +
                     $"{outputCount} ConsumableGainEffect outputs; exactly one of each is required.");
 
             frame.ScribeRecipes.Append(new WorldScribeRecipe(
@@ -474,9 +476,11 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         }
         if (requestCount != 1 || enchantCount != 1 || enchantment != expectedEnchantment)
             throw new InvalidOperationException(
-                $"Scroll {Invoke<Guid>(native.ConsumableIdentity, consumable):D} had {requestCount} target " +
-                $"requests, {enchantCount} enchant effects, and enchantment {enchantment:D}; " +
-                $"expected exactly one of each and {expectedEnchantment:D}.");
+                $"Scroll {EntityUuidTranslator.Format(Invoke<Guid>(native.ConsumableIdentity, consumable))} " +
+                $"had {requestCount} target " +
+                $"requests, {enchantCount} enchant effects, and enchantment " +
+                $"{EntityUuidTranslator.Format(enchantment)}; expected exactly one of each and " +
+                $"{EntityUuidTranslator.Format(expectedEnchantment)}.");
         var exactOptions = RequireExact(options, native.OptionsType, "TargetSelectOptions");
         var targeting = InvokeObject(native.GetTargeting, exactOptions);
         return RequireExact(targeting, native.TargetStructureType, "TargetStructure");
@@ -487,7 +491,8 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         if (native.Registry.GetValue(null) is not IDictionary registry ||
             !registry.Contains(id))
             throw new InvalidOperationException(
-                $"The identity registry did not contain {exactType.Name} {id:D}.");
+                $"The identity registry did not contain {exactType.Name} " +
+                $"{EntityUuidTranslator.Format(id)}.");
         return RequireExact(registry[id], exactType, exactType.Name);
     }
 

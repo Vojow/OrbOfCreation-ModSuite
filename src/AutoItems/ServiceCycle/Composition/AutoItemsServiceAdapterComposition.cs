@@ -33,7 +33,9 @@ internal sealed class AutoItemsServiceAdapterComposition
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
             dependencies.ReadOwnershipFailure,
-            health);
+            health,
+            dependencies.MutationGate,
+            dependencies.ReadFrameIdentity);
         return new AutoItemsServiceAdapterComposition(
             AutoItemsService.Define(actions),
             gameAction,

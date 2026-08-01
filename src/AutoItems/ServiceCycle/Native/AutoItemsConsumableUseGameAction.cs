@@ -18,6 +18,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readMutationPermitFailure;
     private readonly Dictionary<Guid, string> _temporaryQuarantine = new();
+    private readonly Dictionary<Guid, string> _scrollQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
@@ -46,6 +47,10 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.Quarantined,
                 exactQuarantineReason);
+        if (_scrollQuarantine.TryGetValue(action.ItemId, out var scrollQuarantineReason))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.Quarantined,
+                scrollQuarantineReason);
         if (_quarantineReason.Length != 0)
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.Quarantined,
@@ -72,13 +77,14 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         if (!InvokeBool(native.IsVisible, item))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.NotVisible,
-                $"ConsumableSO.IsVisible() refused {action.ItemId:D}.");
+                $"ConsumableSO.IsVisible() refused {EntityUuidTranslator.Format(action.ItemId)}.");
         if (action.Family == AutoItemsConsumableFamily.Scroll &&
             native.CanBeRandomized.GetValue(item) is not true)
         {
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.RandomizationUnavailable,
-                $"Scroll {action.ItemId:D} no longer has ConsumableSO.canBeRandomized=true.");
+                $"Scroll {EntityUuidTranslator.Format(action.ItemId)} no longer has " +
+                "ConsumableSO.canBeRandomized=true.");
         }
         if (action.Family == AutoItemsConsumableFamily.Scroll &&
             !AutoItemsScrollTargetPreflight.TryHasValidTarget(
@@ -120,7 +126,12 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         if (!InvokeBool(native.CanFire, item))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.CanFireRefused,
-                $"ConsumableSO.CanFire() refused live {action.Family} {action.ItemId:D}.");
+                $"ConsumableSO.CanFire() refused live {action.Family} " +
+                $"{EntityUuidTranslator.Format(action.ItemId)}.");
+        if (!temporary && !TryHasReadyAudioPool(native, out reason))
+            return AutoItemsSubmission.Reject(
+                AutoItemsPreflight.AudioUnavailable,
+                reason);
         if (!TryCaptureMutationPermit(out reason))
             return AutoItemsSubmission.Reject(
                 AutoItemsPreflight.MutationPermitUnavailable,
@@ -135,7 +146,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         {
             evidence = NativeMutationVerifier.Execute(
                 "Auto Items consumable use",
-                itemId.ToString("D"),
+                EntityUuidTranslator.Format(itemId),
                 temporary
                     ? "one item leaves stock, one enters the native queue, and one temporary usage appears"
                     : "one item leaves stock and one item enters the native preparation queue",
@@ -161,15 +172,24 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             if (temporary)
             {
                 failureReason =
-                    $"Temporary item {action.ItemId:D} is quarantined for this lifecycle after " +
+                    $"Temporary item {EntityUuidTranslator.Format(action.ItemId)} is quarantined " +
+                    "for this lifecycle after " +
                     $"an ambiguous consumable mutation: {evidence.Detail}";
                 _temporaryQuarantine[action.ItemId] = failureReason;
+            }
+            else if (action.Family == AutoItemsConsumableFamily.Scroll)
+            {
+                failureReason =
+                    $"Auto Items quarantined only Scroll {EntityUuidTranslator.Format(action.ItemId)} " +
+                    "for this lifecycle after " +
+                    $"an ambiguous consumable mutation: {evidence.Detail}";
+                _scrollQuarantine[action.ItemId] = failureReason;
             }
             else
             {
                 _quarantineReason =
                     "Auto Items is quarantined for this lifecycle after an ambiguous consumable " +
-                    $"mutation on {action.ItemId:D}: {evidence.Detail}";
+                    $"mutation on {EntityUuidTranslator.Format(action.ItemId)}: {evidence.Detail}";
                 failureReason = _quarantineReason;
             }
             preflight = AutoItemsPreflight.Quarantined;
@@ -179,14 +199,15 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             preflight = AutoItemsPreflight.ContractUnavailable;
             failureReason =
                 "Auto Items could not capture consumable before-state evidence for " +
-                $"{action.ItemId:D}: {evidence.Detail}";
+                $"{EntityUuidTranslator.Format(action.ItemId)}: {evidence.Detail}";
         }
         return new AutoItemsSubmission(
             preflight,
             evidence.Outcome,
             callOutcome,
             evidence.IsVerified
-                ? $"Verified {action.Family} {action.ItemId:D}: stock -1, queue +1" +
+                ? $"Verified {action.Family} {EntityUuidTranslator.Format(action.ItemId)}: " +
+                  "stock -1, queue +1" +
                   (temporary ? ", usage +1." : ".")
                 : failureReason);
     }
@@ -197,6 +218,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
+        _scrollQuarantine.Clear();
         BindLifecycle();
     }
 
@@ -206,6 +228,7 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         _bindingFailure = string.Empty;
         _quarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
+        _scrollQuarantine.Clear();
     }
 
     private void BindLifecycle()
@@ -277,18 +300,20 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     {
         if (native.HasDuration.GetValue(item) is not true)
         {
-            reason = $"Temporary item {itemId:D} no longer has ConsumableSO.hasDuration=true.";
+            reason = $"Temporary item {EntityUuidTranslator.Format(itemId)} no longer has " +
+                "ConsumableSO.hasDuration=true.";
             return false;
         }
         if (native.DurationBase.GetValue(item) is not double durationBase)
         {
-            reason = $"Temporary item {itemId:D} did not expose ConsumableSO.durationBase as Double.";
+            reason = $"Temporary item {EntityUuidTranslator.Format(itemId)} did not expose " +
+                "ConsumableSO.durationBase as Double.";
             return false;
         }
         if (durationBase <= 0d || double.IsNaN(durationBase) || double.IsInfinity(durationBase))
         {
             reason =
-                $"Temporary item {itemId:D} has non-finite or non-positive " +
+                $"Temporary item {EntityUuidTranslator.Format(itemId)} has non-finite or non-positive " +
                 $"ConsumableSO.durationBase={durationBase}.";
             return false;
         }
@@ -331,12 +356,12 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     {
         if (costList is null)
         {
-            reason = $"Temporary item {itemId:D} has null {category}.";
+            reason = $"Temporary item {EntityUuidTranslator.Format(itemId)} has null {category}.";
             return false;
         }
         if (native.Costs.GetValue(costList) is not IEnumerable costs)
         {
-            reason = $"Temporary item {itemId:D} has unreadable {category}.costs.";
+            reason = $"Temporary item {EntityUuidTranslator.Format(itemId)} has unreadable {category}.costs.";
             return false;
         }
 
@@ -347,7 +372,8 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             if (entry is null || entry.GetType() != native.CostEntryType)
             {
                 reason =
-                    $"Temporary item {itemId:D} {category}.costs[{index}] is not the exact " +
+                    $"Temporary item {EntityUuidTranslator.Format(itemId)} {category}.costs[{index}] " +
+                    "is not the exact " +
                     "ResourceTuple type.";
                 return false;
             }
@@ -355,7 +381,8 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             if (resource is null || resource.GetType() != native.ResourceType)
             {
                 reason =
-                    $"Temporary item {itemId:D} {category}.costs[{index}].resource is not " +
+                    $"Temporary item {EntityUuidTranslator.Format(itemId)} {category}.costs[{index}]" +
+                    ".resource is not " +
                     "the exact ResourceSO type.";
                 return false;
             }
@@ -363,8 +390,9 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             if (resourceId != KnownEntities.PotionToxicity.Uuid)
             {
                 reason =
-                    $"Temporary item {itemId:D} {category}.costs[{index}] names extra resource " +
-                    $"{resourceId:D}; only Potion Toxicity is permitted.";
+                    $"Temporary item {EntityUuidTranslator.Format(itemId)} {category}.costs[{index}] " +
+                    $"names extra resource {EntityUuidTranslator.Format(resourceId)}; " +
+                    "only Potion Toxicity is permitted.";
                 return false;
             }
             if (native.CostAmount.GetValue(entry) is not BigDouble amount ||
@@ -373,7 +401,8 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
                 amount.CompareTo(BigDouble.Zero) < 0)
             {
                 reason =
-                    $"Temporary item {itemId:D} {category}.costs[{index}].valueBig is invalid.";
+                    $"Temporary item {EntityUuidTranslator.Format(itemId)} {category}.costs[{index}]" +
+                    ".valueBig is invalid.";
                 return false;
             }
             hasToxicity = true;
@@ -382,7 +411,8 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
 
         if (requireToxicity && !hasToxicity)
         {
-            reason = $"Temporary item {itemId:D} {category} has no Potion Toxicity entry.";
+            reason = $"Temporary item {EntityUuidTranslator.Format(itemId)} {category} has no " +
+                "Potion Toxicity entry.";
             return false;
         }
         reason = string.Empty;
@@ -506,6 +536,101 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
                     "ConsumableSO.SetRandomization(true) was not confirmed by IsRandomized().");
         }
         native.SelectAndFire.Invoke(item, Array.Empty<object>());
+    }
+
+    private static bool TryHasReadyAudioPool(
+        AutoItemsNativeBindings native,
+        out string reason)
+    {
+        try
+        {
+            var manager = native.SoundManagerInstance.GetValue(null);
+            if (manager is null || manager.GetType() != native.SoundManagerType)
+            {
+                reason =
+                    "SoundManager.instance was unavailable immediately before permanent " +
+                    "consumable preparation.";
+                return false;
+            }
+            if (native.AudioMaximum.GetValue(manager) is not int maximum || maximum <= 0)
+            {
+                reason =
+                    "SoundManager.audioMaximum was not positive immediately before permanent " +
+                    "consumable preparation.";
+                return false;
+            }
+            if (native.AudioElements.GetValue(manager) is not IList elements)
+            {
+                reason =
+                    "SoundManager.audioElements was unavailable immediately before permanent " +
+                    "consumable preparation.";
+                return false;
+            }
+            if (elements.Count < maximum)
+            {
+                reason =
+                    $"SoundManager.audioElements contained {elements.Count} entries for " +
+                    $"audioMaximum={maximum} immediately before permanent consumable preparation.";
+                return false;
+            }
+            if (native.AudioCurrentIndex.GetValue(manager) is not int currentIndex ||
+                currentIndex < 0 ||
+                currentIndex >= maximum)
+            {
+                reason =
+                    $"SoundManager.currentIndex was outside [0,{maximum}) immediately before " +
+                    "permanent consumable preparation.";
+                return false;
+            }
+
+            var reusable = 0;
+            for (var offset = 0; offset < maximum; offset++)
+            {
+                var index = (currentIndex + offset) % maximum;
+                var element = elements[index];
+                if (element is null || element.GetType() != native.AudioElementType)
+                {
+                    reason =
+                        $"SoundManager.audioElements[{index}] was unavailable immediately before " +
+                        "permanent consumable preparation.";
+                    return false;
+                }
+                var source = native.AudioSource.GetValue(element);
+                if (source is null || source.GetType() != native.AudioSourceType)
+                {
+                    reason =
+                        $"AudioElement.audioSource was unavailable at pool index {index} " +
+                        "immediately before permanent consumable preparation.";
+                    return false;
+                }
+                if (!InvokeBool(native.AudioIsPlaying, element) ||
+                    !InvokeBool(native.AudioIsLooping, element))
+                {
+                    reusable++;
+                }
+            }
+
+            if (reusable >= 2)
+            {
+                reason = string.Empty;
+                return true;
+            }
+
+            reason =
+                $"SoundManager.audioElements had {reusable} idle or reusable non-looping entries; " +
+                "permanent consumable preparation requires two so one remains reserved.";
+            return false;
+        }
+        catch (Exception ex) when (ex is TargetInvocationException or
+                                   InvalidOperationException or
+                                   MemberAccessException or
+                                   ArgumentException)
+        {
+            reason =
+                "The permanent consumable audio-readiness check failed without mutation: " +
+                ex.GetBaseException().Message;
+            return false;
+        }
     }
 
     private static ItemState Capture(object item, AutoItemsNativeBindings native) =>

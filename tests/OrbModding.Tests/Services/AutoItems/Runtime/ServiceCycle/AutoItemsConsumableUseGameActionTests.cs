@@ -18,6 +18,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         ConsumableSO.All.Clear();
         GlobalVariables.MultiBuy = new IntVariable { Value = 1 };
         NativeMultiBuyScope.ResetQuarantineForTests();
+        SoundManager.ResetForTests();
     }
 
     public void Dispose()
@@ -26,6 +27,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         TargetingManager.OpenRequests = 0;
         ConsumableSO.All.Clear();
         NativeMultiBuyScope.ResetQuarantineForTests();
+        SoundManager.ResetForTests();
     }
 
     [Fact]
@@ -59,6 +61,82 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.Equal(0, relic.GetQuantity());
         Assert.Equal(1, relic.GetQueued());
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
+    }
+
+    [Fact]
+    public void MissingSoundManagerRejectsPermanentUseBeforeMutation()
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        SoundManager.instance = null;
+
+        var result = gameAction.Submit(Action(scroll, AutoItemsConsumableFamily.Scroll));
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("SoundManager.instance", result.Reason);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(0, result.CallOutcome.MutationAttempts);
+    }
+
+    [Fact]
+    public void PermanentUseRequiresTwoReachableReusableAudioEntries()
+    {
+        var relic = Item(AutoItemsConsumableFamily.Relic);
+        using var gameAction = GameAction();
+        SoundManager.instance!.SetPoolForTests(
+            new List<AudioElement>
+            {
+                new AudioElement { Playing = true, Looping = true },
+                new AudioElement { Playing = false, Looping = false },
+            },
+            maximum: 2);
+
+        var result = gameAction.Submit(Action(relic, AutoItemsConsumableFamily.Relic));
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains("requires two", result.Reason);
+        Assert.Equal(1, relic.GetQuantity());
+        Assert.Equal(0, result.CallOutcome.MutationAttempts);
+    }
+
+    [Theory]
+    [InlineData(0, "contained 1 entries")]
+    [InlineData(1, "currentIndex was outside")]
+    [InlineData(2, "AudioElement.audioSource was unavailable")]
+    public void InvalidPermanentAudioPoolTopologyRejectsBeforeMutation(
+        int topology,
+        string expectedReason)
+    {
+        var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        using var gameAction = GameAction();
+        var elements = new List<AudioElement> { new AudioElement(), new AudioElement() };
+        if (topology == 0)
+            elements.RemoveAt(1);
+        else if (topology == 2)
+            elements[1].SetAudioSourceForTests(null);
+        SoundManager.instance!.SetPoolForTests(
+            elements,
+            maximum: 2,
+            index: topology == 1 ? 2 : 0);
+
+        var result = gameAction.Submit(Action(scroll, AutoItemsConsumableFamily.Scroll));
+
+        Assert.Equal(AutoItemsPreflight.AudioUnavailable, result.Preflight);
+        Assert.Contains(expectedReason, result.Reason);
+        Assert.Equal(1, scroll.GetQuantity());
+        Assert.Equal(0, result.CallOutcome.MutationAttempts);
+    }
+
+    [Fact]
+    public void TemporaryUseDoesNotReservePermanentPreparationAudio()
+    {
+        var temporary = Item(AutoItemsConsumableFamily.Thread);
+        using var gameAction = GameAction();
+        SoundManager.instance = null;
+
+        var result = gameAction.Submit(Action(temporary, AutoItemsConsumableFamily.Thread));
+
+        Assert.True(result.Verified, result.Reason);
     }
 
     [Fact]
@@ -274,6 +352,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     public void ManualStockRaceAfterPreflightIsAttemptedAndFailsExactPostcondition()
     {
         var scroll = Item(AutoItemsConsumableFamily.Scroll);
+        var healthy = Item(AutoItemsConsumableFamily.Scroll);
         using var gameAction = GameAction(
             () =>
             {
@@ -283,12 +362,16 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         var action = Action(scroll, AutoItemsConsumableFamily.Scroll);
 
         var result = gameAction.Submit(in action);
+        var exactBlocked = gameAction.Submit(in action);
+        var sibling = gameAction.Submit(Action(healthy, AutoItemsConsumableFamily.Scroll));
 
         Assert.Equal(AutoItemsPreflight.Quarantined, result.Preflight);
         Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
         Assert.Contains("ambiguous consumable mutation", result.Reason);
         Assert.Contains("quarantined", result.Reason);
         Assert.Equal(new NativeMutationCallOutcome(2, 1, 0), result.CallOutcome);
+        Assert.Equal(AutoItemsPreflight.Quarantined, exactBlocked.Preflight);
+        Assert.True(sibling.Verified, sibling.Reason);
     }
 
     [Fact]

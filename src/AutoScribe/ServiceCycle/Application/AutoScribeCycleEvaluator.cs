@@ -50,7 +50,8 @@ internal static class AutoScribeCycleEvaluator
                 selected.RecipeId,
                 selected.ScrollId,
                 selected.RequestedCraftLevel,
-                world.CollectedAtEpoch));
+                world.CollectedAtEpoch,
+                world.CollectedAtFrame));
             metrics = new AutoScribeDecisionMetrics(
                 enabled,
                 deficient,

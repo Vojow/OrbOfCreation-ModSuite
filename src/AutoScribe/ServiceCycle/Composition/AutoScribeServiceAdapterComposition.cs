@@ -33,7 +33,9 @@ internal sealed class AutoScribeServiceAdapterComposition
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
             dependencies.ReadOwnershipFailure,
-            health);
+            health,
+            dependencies.MutationGate,
+            dependencies.ReadFrameIdentity);
         return new AutoScribeServiceAdapterComposition(
             AutoScribeService.Define(dependencies.Profile, actionPort),
             gameAction,

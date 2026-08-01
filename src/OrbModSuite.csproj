@@ -77,6 +77,13 @@
     <InternalsVisibleTo Include="OrbModding.ProfileTests" Condition="'$(EnableServiceCycleProfiler)' == 'true'" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="../data/entity-mappings.tsv"
+                      LogicalName="OrbModSuite.EntityMappings.tsv" />
+    <EmbeddedResource Include="../data/entity-display-names.tsv"
+                      LogicalName="OrbModSuite.EntityDisplayNames.tsv" />
+  </ItemGroup>
+
   <!--
     One level up now, not two: this project sits at src/, not src/Common/. The generator
     still writes src/Common/KnownEntities.Generated.cs, which the glob picks up like any

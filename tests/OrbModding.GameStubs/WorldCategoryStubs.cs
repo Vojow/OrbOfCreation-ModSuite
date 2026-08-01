@@ -318,6 +318,39 @@ public sealed class ConsumableTypeSO : IdScriptableObject
     public string GetName() => DisplayName;
 }
 
+public sealed class AudioElement
+{
+    private UnityEngine.AudioSource? audioSource = new UnityEngine.AudioSource();
+
+    public bool Playing;
+    public bool Looping;
+
+    public bool IsPlaying() => Playing;
+    public bool IsLooping() => Looping;
+    public void SetAudioSourceForTests(UnityEngine.AudioSource? source) => audioSource = source;
+}
+
+public sealed class SoundManager : UnityEngine.MonoBehaviour
+{
+    public int audioMaximum = 2;
+    private List<AudioElement>? audioElements =
+        new List<AudioElement> { new AudioElement(), new AudioElement() };
+    private int currentIndex;
+    public static SoundManager? instance = new SoundManager();
+
+    public void SetPoolForTests(
+        List<AudioElement>? elements,
+        int maximum,
+        int index = 0)
+    {
+        audioElements = elements;
+        audioMaximum = maximum;
+        currentIndex = index;
+    }
+
+    public static void ResetForTests() => instance = new SoundManager();
+}
+
 public sealed partial class ConsumableSO : IdScriptableObject
 {
     public static List<ConsumableSO> All = new List<ConsumableSO>();

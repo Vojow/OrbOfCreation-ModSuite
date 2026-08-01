@@ -17,8 +17,17 @@ global live targeting idleness, native inventory idleness, `CanFire()`, Scroll r
 targeting, and temporary
 duration/toxicity-only cost vectors. It captures ownership permits, submits through
 `SelectAndFire()` under native multi-buy quantity one, and verifies exact stock/queue evidence plus
-temporary usage creation where applicable. A Scroll/Relic ambiguous mutation quarantines the whole
-action; a temporary ambiguity quarantines only that exact UUID.
+temporary usage creation where applicable. A Scroll ambiguity quarantines only that exact UUID;
+a temporary ambiguity also quarantines only its UUID, while an ambiguous Relic retains the broader
+permanent-action quarantine. Auto Items shares Auto Scribe's mutation-frame gate, so neither can
+act on a background world captured before the other's latest native attempt.
+
+Immediately before permanent Scroll or Relic mutation, the boundary reads the exact native
+`SoundManager` pool without calling its index-mutating allocator. It requires two idle or reusable
+non-looping entries so preparation cannot consume the last completion/progression sound slot. A
+missing, incomplete, fully occupied, or internally inconsistent pool is a transient
+`AudioUnavailable` refusal with no mutation attempt. Temporary items do not reserve this permanent
+preparation slot.
 
 One lifecycle-scoped follow-up observes the committed temporary item through later publications.
 Exactly one usage must engage before disappearing. Multiple usages, premature expiry, or missing

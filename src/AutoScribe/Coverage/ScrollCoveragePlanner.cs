@@ -211,7 +211,8 @@ internal static class ScrollCoveragePlanner
             AutoScribeEvidenceReason.RecipeRegistryIncomplete =>
                 prefix + " is blocked because ScribeCraftingRecipes was not exactly the six audited recipes.",
             AutoScribeEvidenceReason.RecipeMissing =>
-                prefix + $" is blocked because recipe {role.RecipeId:D} was absent.",
+                prefix + $" is blocked because recipe " +
+                $"{EntityUuidTranslator.Format(role.RecipeId)} was absent.",
             AutoScribeEvidenceReason.RecipeRelationshipMismatch =>
                 prefix + " is blocked because its live recipe/type/output/level relationship contradicted the audited role.",
             AutoScribeEvidenceReason.TargetLevelUnavailable =>
@@ -325,7 +326,10 @@ internal static class ScrollCoveragePlanner
         var queued = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: false);
         var automatic = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: true);
         var pending = CountPending(world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
-        var desired = carry > 0 ? Math.Max(1, carry - 1) : uncovered;
+        // Lower levels do not satisfy this frontier. At full capacity native Gain() replaces the
+        // weakest owned Scroll when the incoming level is strong enough, so no suite discard is
+        // required and the complete native carry limit remains useful.
+        var desired = carry > 0 ? carry : uncovered;
         var deficit = Math.Max(0, desired - owned - queued - pending);
         var state = automatic > 0 && deficit > 0
             ? ScrollCoverageState.ExternallyProducing

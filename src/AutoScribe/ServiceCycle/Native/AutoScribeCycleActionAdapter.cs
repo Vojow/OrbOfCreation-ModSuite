@@ -13,6 +13,8 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
     private readonly Func<bool> _ownsActionFamily;
     private readonly Func<string> _readOwnershipFailure;
     private readonly AutoScribeActionHealth _health;
+    private readonly ConsumableMutationGate _mutationGate;
+    private readonly Func<long> _readFrameIdentity;
 
     internal AutoScribeCycleActionAdapter(
         AutoScribeOneShotCraftGameAction gameAction,
@@ -20,6 +22,25 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
         Func<bool> ownsActionFamily,
         Func<string> readOwnershipFailure,
         AutoScribeActionHealth health)
+        : this(
+            gameAction,
+            readLifecycleEpoch,
+            ownsActionFamily,
+            readOwnershipFailure,
+            health,
+            new ConsumableMutationGate(),
+            static () => 0)
+    {
+    }
+
+    internal AutoScribeCycleActionAdapter(
+        AutoScribeOneShotCraftGameAction gameAction,
+        Func<long> readLifecycleEpoch,
+        Func<bool> ownsActionFamily,
+        Func<string> readOwnershipFailure,
+        AutoScribeActionHealth health,
+        ConsumableMutationGate mutationGate,
+        Func<long> readFrameIdentity)
     {
         _gameAction = gameAction ?? throw new ArgumentNullException(nameof(gameAction));
         _readLifecycleEpoch = readLifecycleEpoch ??
@@ -29,6 +50,9 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
         _health = health ?? throw new ArgumentNullException(nameof(health));
+        _mutationGate = mutationGate ?? throw new ArgumentNullException(nameof(mutationGate));
+        _readFrameIdentity = readFrameIdentity ??
+            throw new ArgumentNullException(nameof(readFrameIdentity));
     }
 
     public ServiceActionResult TryExecute(
@@ -46,18 +70,25 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             var rejected = AutoScribeSubmission.Reject(
                 AutoScribePreflight.MutationPermitUnavailable,
                 ownership);
-            _health.Observe(in rejected);
+            _health.Observe(in action, in rejected);
             return ServiceActionResult.Rejected(
                 AutoScribeActionResultCodes.MutationPermitUnavailable);
         }
         if (!EpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
+        if (_mutationGate.Blocks(action.CollectedAtEpoch, action.CollectedAtFrame))
+            return ServiceActionResult.Rejected(AutoScribeActionResultCodes.PublicationGap);
 
         var submission = _gameAction.Submit(in action);
-        _health.Observe(in submission);
-        if (!submission.Verified)
+        if (submission.CallOutcome.MutationAttempts > 0)
+            _mutationGate.ObserveAttempt(action.CollectedAtEpoch, ReadFrameIdentity());
+        var newlyObserved = _health.Observe(in action, in submission);
+        if (!submission.Verified && newlyObserved)
             Plugin.Log?.LogAutomataWarning(
-                $"Auto Scribe {submission.Stage}/{submission.Preflight}: {submission.Reason}");
+                $"Auto Scribe {submission.Stage}/{submission.Preflight}; " +
+                $"recipe={EntityUuidTranslator.Format(action.RecipeId)}; " +
+                $"scroll={EntityUuidTranslator.Format(action.ScrollId)}; " +
+                $"level={action.Level}: {submission.Reason}");
         return Map(in submission);
     }
 
@@ -148,6 +179,15 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
         catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
         {
             return false;
+        }
+    }
+
+    private long ReadFrameIdentity()
+    {
+        try { return _readFrameIdentity(); }
+        catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
+        {
+            return 0;
         }
     }
 }

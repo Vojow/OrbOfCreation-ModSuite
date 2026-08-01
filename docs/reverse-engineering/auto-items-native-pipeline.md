@@ -89,6 +89,14 @@ Scrolls additionally require `canBeRandomized`, enable the native randomized fla
 for the strongest live owned level, and refuses an empty list with that exact explanation. It never
 enters the manual targeting branch.
 
+Permanent Scroll/Relic preparation also reaches the native sound allocator. Immediately before
+mutation, the boundary reads `SoundManager.instance`, `audioMaximum`, `audioElements`,
+`currentIndex`, and each reachable `AudioElement`/`AudioSource` without calling
+`GetAudioElement()` or moving its index. At least two idle or reusable non-looping entries are
+required: one may be consumed by preparation while one remains available for completion and
+progression callbacks. Invalid topology or insufficient reserve is `AudioUnavailable` and performs
+no mutation.
+
 Temporary items use the same `ConsumableUse` action. They have no service, lease, health row, or
 action family of their own. Worker admission requires the exact item UUID in
 `AutoItems.TemporaryItemAllowlist`, finite positive duration, no preparation or cooldown, stock,
@@ -123,6 +131,7 @@ The protocol applies these classes from the
 | `ConsumableSO.All`, each temporary family membership, and `consumableUsages` | Pure | Re-read all exact native consumables and refuse every family while any temporary usage is pending or active. An unreadable row refuses with its exact reason. |
 | Native busy check, `Inventory.CanUseConsumable()` | Pure | Read the live shared preparation state immediately before mutation. A false result is a named `NativeBusy` refusal. |
 | `ConsumableSO.CanFire()` | Pure | Read live stock, cooldown, and native cost admission immediately before the ownership permit and mutation. A false result is a named `CanFireRefused` refusal. |
+| `SoundManager.instance`, pool fields, `AudioElement.audioSource`, `IsPlaying()`, and `IsLooping()` | Pure | Read the complete reachable pool immediately before permanent mutation. Require two reusable entries without calling the native allocator; otherwise reject `AudioUnavailable` with no mutation. |
 | `GetStrongestLevel()`, `GetStrongest()`, `GetCountScalingInfo()` | Pure | Rebuild the strongest-level scaling input from the live item; a change from the planned level rejects. |
 | `TargetSelectOptions.GetTargeting()` and `TargetStructure.GetRandomList(ScalingInfo)` | UI-cached, revalidatable | Treat published or previously computed targets as stale-capable. Invoke this exact authored chain as the declared scoped recomputation and require a non-empty result; no ambient screen visit or blanket cache warming is trusted. |
 | `SelectAndFire()` and the later durable effect | Unrefreshable / attempt-and-verify | Submit exactly once. Verify stock -1 and queue +1; also verify randomization for Scroll or usage +1 for a temporary item. Never claim durable effect completion, and let later publications supply activation evidence. |
@@ -142,6 +151,8 @@ it validates the complete reflected binding set before resolving an item:
   `ConsumableUsage`, `ResourceCostList`, `ResourceTuple`, and `ScalingInfo`;
 - `InstantEffectBlock`, `IInstantEffectScript`, and exact `RequestTargetEffectScript`;
 - exact target options, base selection, target structure, and targetable types;
+- exact `SoundManager`, `AudioElement`, `AudioSource`, and allocator-pool members used by the
+  permanent audio reserve;
 - every field and method used for family, visibility, randomization, targeting, busy/readiness
   admission, quantity/queue evidence, and `SelectAndFire()`.
 
@@ -157,19 +168,21 @@ The action order is:
    randomization capability and the scoped target recomputation;
 4. scan all temporary families for pending or active usage;
 5. check native busy and `CanFire()`;
-6. capture current cooperative ownership permits with their exact conflict explanation;
-7. enter native multi-buy quantity one;
-8. capture stock, queue, randomization, and usage-count state;
-9. perform the native randomization/use mutation;
-10. capture again and require the exact family-specific immediate deltas.
+6. for a Scroll or Relic, prove the native audio pool retains two reusable entries;
+7. capture current cooperative ownership permits with their exact conflict explanation;
+8. enter native multi-buy quantity one;
+9. capture stock, queue, randomization, and usage-count state;
+10. perform the native randomization/use mutation;
+11. capture again and require the exact family-specific immediate deltas.
 
 An unavailable complete binding set is `ContractUnavailable`. Lost identity, changed family,
 native busy, lost visibility, a native fire refusal, an empty target result, and a lost permit are
 named refusals. A mutation attempt that throws or cannot prove its postcondition faults the receipt
-with its native-call evidence. Scroll or Relic ambiguity quarantines the entire consumable
-GameAction; temporary ambiguity quarantines only the exact item UUID. Health and diagnostics retain
-the same exact reason. A later ordinary publication cannot retry the quarantined target; lifecycle
-replacement is the explicit recovery boundary.
+with its native-call evidence. Scroll ambiguity quarantines only that exact Scroll UUID; temporary
+ambiguity quarantines only the exact temporary UUID; Relic ambiguity retains the broader permanent
+quarantine. Health and diagnostics retain the same exact reason. The shared mutation-frame gate
+also prevents Auto Items or Auto Scribe from acting on background worlds captured at or before
+either feature's latest native mutation attempt.
 
 The pattern is local because the binding topology, preflight vocabulary, and postcondition are
 capability-specific. A follow-up Common extraction should be limited to a small lifecycle-scoped

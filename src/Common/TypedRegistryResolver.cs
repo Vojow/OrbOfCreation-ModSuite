@@ -94,7 +94,7 @@ public sealed class TypedRegistryResolution
         lifecycleGeneration == LifecycleGeneration;
 
     public string Format() =>
-        $"UUID={Uuid}, ExpectedType={ExpectedTypeName}, Status={Status}, Membership={Membership}, " +
+        $"Identity={EntityUuidTranslator.Format(Uuid)}, ExpectedType={ExpectedTypeName}, Status={Status}, Membership={Membership}, " +
         $"Level={Evidence.Level}, Sources={Evidence.Sources}, Reason={Reason}";
 }
 
