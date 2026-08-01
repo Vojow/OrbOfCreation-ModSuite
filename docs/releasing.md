@@ -7,7 +7,22 @@ rebuilds the canonical DLL from public inputs and creates the GitHub release.
 
 The release DLL is reproducible from the repository alone: the committed
 metadata-true game references plus the exact SDK pinned by `global.json`
-produce the release bytes whose SHA-256 is recorded in the tag annotation.
+produce the release bytes whose SHA-256 is recorded in the tag annotation. The
+canonical commands set `ContinuousIntegrationBuild=true`, which maps
+SourceLink document roots to `/_/` instead of embedding the checkout path.
+
+To reproduce those public bytes without the private faithfulness gate:
+
+```bash
+env -u OOC_GAME_DIR dotnet clean src/OrbModSuite.csproj --configuration Release \
+  -p:EnableServiceCycleProfiler=false -p:ContinuousIntegrationBuild=true
+env -u OOC_GAME_DIR dotnet restore src/OrbModSuite.csproj --force-evaluate \
+  --disable-build-servers -p:EnableServiceCycleProfiler=false \
+  -p:ContinuousIntegrationBuild=true
+env -u OOC_GAME_DIR dotnet build src/OrbModSuite.csproj --configuration Release \
+  --disable-build-servers -m:1 --no-incremental --no-restore \
+  -p:EnableServiceCycleProfiler=false -p:ContinuousIntegrationBuild=true
+```
 
 ## Prerequisites
 

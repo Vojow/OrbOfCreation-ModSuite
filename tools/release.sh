@@ -540,7 +540,8 @@ main() {
         "${repository_root}/src/OrbModSuite.csproj" \
         --force-evaluate \
         --disable-build-servers \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "real-game release-build restore failed"
     fi
     echo "Building the real-game faithfulness artifact..."
@@ -551,7 +552,8 @@ main() {
         -m:1 \
         --no-incremental \
         --no-restore \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "real-game release build failed"
     fi
     if [[ ! -f "${suite_dll}" ]]; then
@@ -564,7 +566,8 @@ main() {
     if ! env -u OOC_GAME_DIR dotnet clean \
         "${repository_root}/src/OrbModSuite.csproj" \
         --configuration Release \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "first canonical refs-build clean failed"
     fi
     echo "Restoring the first canonical refs build..."
@@ -572,7 +575,8 @@ main() {
         "${repository_root}/src/OrbModSuite.csproj" \
         --force-evaluate \
         --disable-build-servers \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "first canonical refs-build restore failed"
     fi
     echo "Building the first canonical refs artifact..."
@@ -583,7 +587,8 @@ main() {
         -m:1 \
         --no-incremental \
         --no-restore \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "first canonical refs build failed"
     fi
     if [[ ! -f "${suite_dll}" ]]; then
@@ -596,7 +601,8 @@ main() {
     if ! env -u OOC_GAME_DIR dotnet clean \
         "${repository_root}/src/OrbModSuite.csproj" \
         --configuration Release \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "second canonical refs-build clean failed"
     fi
     echo "Restoring the second canonical refs build..."
@@ -604,7 +610,8 @@ main() {
         "${repository_root}/src/OrbModSuite.csproj" \
         --force-evaluate \
         --disable-build-servers \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "second canonical refs-build restore failed"
     fi
     echo "Building the second canonical refs artifact..."
@@ -615,7 +622,8 @@ main() {
         -m:1 \
         --no-incremental \
         --no-restore \
-        -p:EnableServiceCycleProfiler=false; then
+        -p:EnableServiceCycleProfiler=false \
+        -p:ContinuousIntegrationBuild=true; then
         fail "second canonical refs build failed"
     fi
     if [[ ! -f "${suite_dll}" ]]; then

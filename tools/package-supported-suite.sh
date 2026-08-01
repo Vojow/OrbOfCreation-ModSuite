@@ -166,7 +166,8 @@ echo "Cleaning the canonical checked-in-reference build..."
 env -u OOC_GAME_DIR dotnet clean \
     "${repository_root}/src/OrbModSuite.csproj" \
     --configuration Release \
-    -p:EnableServiceCycleProfiler=false
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
 
 echo "Restoring the canonical checked-in-reference build..."
 env -u OOC_GAME_DIR dotnet restore \
@@ -174,7 +175,8 @@ env -u OOC_GAME_DIR dotnet restore \
     --force-evaluate \
     --disable-build-servers \
     -p:Configuration=Release \
-    -p:EnableServiceCycleProfiler=false
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
 
 echo "Building the canonical suite against checked-in references..."
 env -u OOC_GAME_DIR dotnet build \
@@ -184,7 +186,8 @@ env -u OOC_GAME_DIR dotnet build \
     -m:1 \
     --no-incremental \
     --no-restore \
-    -p:EnableServiceCycleProfiler=false
+    -p:EnableServiceCycleProfiler=false \
+    -p:ContinuousIntegrationBuild=true
 
 assert_plugin_output() {
     local output="${repository_root}/src/bin/Release/netstandard2.1"
