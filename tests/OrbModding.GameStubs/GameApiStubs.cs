@@ -117,6 +117,18 @@ public sealed class ActionManager
     public static int RemainingRoom { get; set; }
 
     public static int GetRemainingRoom() => RemainingRoom;
+
+    /// <summary>
+    /// The queue admission term used by both purchase kinds. Fixtures keep the answer on the
+    /// candidate so two candidates can disagree in one test, while the call still has the native
+    /// <c>ActionManager.CanLoadAction(IActionable)</c> shape.
+    /// </summary>
+    public static bool CanLoadAction(IActionable actionable) => actionable switch
+    {
+        StructureSO structure => structure.purchasable,
+        UpgradeSO upgrade => upgrade.purchasable,
+        _ => false,
+    };
 }
 
 public static class AutoBuyManager
@@ -130,6 +142,11 @@ public class SpellRecipeSO : IdScriptableObject
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
     private string stableUuid = Guid.NewGuid().ToString();
+    /// <summary>
+    /// Fixture-facing string form of the inherited identity. The game declares <c>GetGuid()</c> on
+    /// <see cref="IdScriptableObject"/>, so this surface keeps that base identity synchronized and
+    /// deliberately does not redeclare the method.
+    /// </summary>
     public new string uuid
     {
         get => stableUuid;
@@ -229,6 +246,8 @@ public class ViewSO : IdScriptableObject
     public bool active;
     public bool IsAvailable() => available;
     public bool alwaysActive;
+    public List<AbstractListVariable> relevantLists = new List<AbstractListVariable>();
+    public List<AbstractListVariable> availableLists = new List<AbstractListVariable>();
 }
 
 public sealed class AlchemyTypeSO : IdScriptableObject
@@ -374,12 +393,17 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
 /// it holds every list variable over one element type rather than every instance of one concrete
 /// type — and reflection does not find a base type's static on a derived one at all.
 /// </remarks>
-public class AbstractListVariable<T> : IdScriptableObject
+public abstract class AbstractListVariable : IdScriptableObject
+{
+}
+
+public class AbstractListVariable<T> : AbstractListVariable
 {
     public static List<AbstractListVariable<T>> All = new List<AbstractListVariable<T>>();
     public List<T> value = new List<T>();
     public int Maximum = 4;
-    public int GetMax() => Maximum;
+    public IntVariable? maxSizeVariable;
+    public int GetMax() => maxSizeVariable?.AsInt() ?? Maximum;
     public List<T> ToList() => new List<T>(value);
 }
 
@@ -400,7 +424,7 @@ public class GenericListVariable<T> : AbstractListVariable<T>
         return used;
     }
 
-    public bool HasEmptySpot() => GetUsedSpots() < Maximum;
+    public bool HasEmptySpot() => GetUsedSpots() < GetMax();
 
     public void Add(T element)
     {
@@ -410,6 +434,15 @@ public class GenericListVariable<T> : AbstractListVariable<T>
     }
 
     protected virtual bool IsFilledElement(T element) => element is not null;
+
+    public class AdditionTuple<TList>
+        where TList : GenericListVariable<T>
+    {
+        public TList list = null!;
+        public T element = default!;
+        public void Add() => list.Add(element);
+        public void Remove() => list.value.Remove(element);
+    }
 }
 
 public class EmptyTypeListVariable<T> : GenericListVariable<T>
@@ -429,13 +462,69 @@ public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<P
 {
     protected override bool IsFilledElement(PlotNodeActionInstance element) =>
         element is not null && !element.IsEmpty();
+
+    public PlotNodeActionInstance? FindInstance(PlotNodeActionInstance prototype)
+    {
+        foreach (var candidate in value)
+        {
+            if (candidate is not null &&
+                ReferenceEquals(candidate.GetElement(), prototype.GetElement()) &&
+                ReferenceEquals(candidate.GetAction(), prototype.GetAction()))
+                return candidate;
+        }
+        return null;
+    }
+
+    public bool HasInstance(PlotNodeActionInstance prototype) => FindInstance(prototype) is not null;
+
+    public void AddInstance(PlotNodeActionInstance prototype, int quantity)
+    {
+        var existing = FindInstance(prototype);
+        if (existing is not null)
+        {
+            existing.PlayerChangeInstanceQuantity(quantity);
+            return;
+        }
+        if (!HasEmptySpot()) return;
+
+        prototype.PlayerChangeInstanceQuantity(quantity);
+        prototype.Engage();
+        for (var index = 0; index < value.Count; index++)
+        {
+            if (value[index] is null || value[index].IsEmpty())
+            {
+                value[index] = prototype;
+                return;
+            }
+        }
+        value.Add(prototype);
+    }
 }
 
 public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>
 {
 }
 
-public class UpgradeSO : IdScriptableObject
+public sealed class StructureListVariable : GenericListVariable<StructureSO>
+{
+    public List<StructureSO> GetAll() => value;
+}
+
+public sealed class UpgradeListVariable : GenericListVariable<UpgradeSO>
+{
+    public List<UpgradeSO> GetAll() => value;
+}
+
+public sealed class ViewListVariable : GenericListVariable<ViewSO>
+{
+    public List<ViewSO> GetAll() => value;
+
+    public sealed class ListTuple : AdditionTuple<ViewListVariable>
+    {
+    }
+}
+
+public class UpgradeSO : IdScriptableObject, IActionable
 {
     public static List<UpgradeSO> All = new List<UpgradeSO>();
     private string stableUuid = Guid.NewGuid().ToString();
@@ -469,18 +558,25 @@ public class UpgradeSO : IdScriptableObject
     // checks it as prerequisitesPerLevel.Check(level + queuedLevels + 1), which takes a level and so
     // cannot be a latched boolean the way `available` is.
     public Prerequisites.Container prerequisitesPerLevel = new Prerequisites.Container();
+    public List<ViewListVariable.ListTuple> viewListAdditions = new List<ViewListVariable.ListTuple>();
     public BigDouble buildTime;
     public double developmentTime = 5.0;
-    public new Guid GetGuid() => Guid.Parse(uuid);
     public string GetName() => "Upgrade";
     public bool IsAvailable() => available;
-    public bool CanPurchase() => purchasable && !IsMaxQueuedLevel() && purchaseCost.HasEnough();
+    public bool CanPurchase() =>
+        !IsMaxQueuedLevel() &&
+        purchaseCost.HasEnough() &&
+        IsAvailable() &&
+        HasMetQueuedLevelRequirements() &&
+        ActionManager.CanLoadAction(this);
     public ResourceCostList GetPurchaseCost() => purchaseCost;
     public int GetPurchaseLevel() => level;
     public int GetQueuedPurchaseLevel() => level + queuedLevels;
     public bool HasFiniteLevels() => maxLevel > 0;
     public bool IsMaxLevel() => HasFiniteLevels() && level >= maxLevel;
     public bool IsMaxQueuedLevel() => HasFiniteLevels() && level + queuedLevels >= maxLevel;
+    public bool HasMetQueuedLevelRequirements() =>
+        prerequisitesPerLevel.Check(new Requirements.ConditionInfo(level + queuedLevels + 1));
     public void Purchase()
     {
         // The real upgrade Purchase() honours the global multi-buy multiplier, buying up to that
@@ -489,7 +585,10 @@ public class UpgradeSO : IdScriptableObject
         var target = GlobalVariables.MultiBuy?.Value ?? 1;
         if (target < 1) target = 1;
         for (var bought = 0; bought < target && CanPurchase(); bought++)
+        {
             queuedLevels++;
+            purchaseCost.PerformCost();
+        }
     }
     public void CompleteAction()
     {
@@ -499,7 +598,7 @@ public class UpgradeSO : IdScriptableObject
     }
 }
 
-public class StructureSO : UpgradeableObject, Targeting.ITargetable
+public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
 {
     public static List<StructureSO> All = new List<StructureSO>();
     public StructureTypeSO structureType = new StructureTypeSO();
@@ -558,13 +657,25 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable
     public int PurchaseLevel { get => quantity; set => quantity = value; }
     public int QueuedQuantity { get => queuedQuantity; set => queuedQuantity = value; }
     public ResourceCostList Cost { get => purchaseCost; set => purchaseCost = value; }
+
+    public StructureSO()
+    {
+        // Portable Auto Buy fixtures normally use one synthetic global list for view ownership. A
+        // default structure category points at that same exact registry so the owning-view resolver
+        // can prove category membership without each unrelated test hand-authoring a second copy.
+        structureType.SetStructuresForTests(All);
+    }
+
     public string GetName() => "Structure";
     public bool IsAvailable() => available;
     public bool IsVisible() => visible;
 
-    // The game's own CanPurchase folds the price in alongside its other conditions, which is the
-    // whole premise of reading those conditions apart when it refuses.
-    public bool CanPurchase() => purchasable && purchaseCost.HasEnough();
+    // The shipped StructureSO.CanPurchase() is deliberately thin: it checks only the next-level
+    // requirement and ActionManager queue admission. IsAvailable() and affordability are separate
+    // player-path terms; Purchase(bool) performs the price check for each submitted level.
+    public bool CanPurchase() => HasMetLevelRequirements() && ActionManager.CanLoadAction(this);
+    public bool HasMetLevelRequirements() =>
+        prerequisitesPerLevel.Check(new Requirements.ConditionInfo(quantity));
     public ResourceCostList GetPurchaseCost()
     {
         GetPurchaseCostCalls++;
@@ -574,7 +685,7 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable
     public int GetQueuedQuantity() => queuedQuantity;
     public void Purchase(bool forceOne)
     {
-        if (!forceOne || !CanPurchase() || !ApplyPurchaseMutation) return;
+        if (!forceOne || !CanPurchase() || !purchaseCost.HasEnough() || !ApplyPurchaseMutation) return;
         queuedQuantity++;
         // The game charges when a level is queued, not when it completes.
         purchaseCost.PerformCost();
@@ -773,6 +884,13 @@ public class Prerequisites
 /// </summary>
 public abstract class UpgradeableObject : TooltipableObject
 {
+    private string stableUuid;
+
+    protected UpgradeableObject()
+    {
+        stableUuid = base.GetGuid().ToString("D");
+    }
+
     /// <summary>One effect's modification of one named property of one upgradeable object.</summary>
     /// <remarks>
     /// The property is a string here because it is a string in the game: the names come from each
@@ -787,9 +905,15 @@ public abstract class UpgradeableObject : TooltipableObject
         public bool useTargetRef;
     }
 
-    public new string uuid = Guid.NewGuid().ToString();
-
-    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
 
 }
 
@@ -1401,19 +1525,21 @@ public sealed class ExperienceContainer
     private static int Compare(BigDouble left, BigDouble right) => left.CompareTo(right);
 }
 
-public sealed class AlchemyInstance
+public sealed class AlchemyInstance : AbstractRefInstance<AlchemyRecipeSO>
 {
+    public AlchemyInstance()
+    {
+    }
+
     public AlchemyInstance(AlchemyRecipeSO reference)
     {
         this.reference = reference;
     }
 
-    public AlchemyRecipeSO reference;
     public int quantity;
     public int queuedQuantity;
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
-    public AlchemyRecipeSO get_reference() => reference;
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
@@ -1440,6 +1566,7 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public int GetNumOfType(AlchemyTypeSO type) =>
         value.Count(item =>
             Math.Max(item.quantity, item.queuedQuantity) > 0 &&
+            item.reference is not null &&
             item.reference.alchemyTypes.Contains(type));
 
     public int GetSlotsOnlyForType(AlchemyTypeSO type) =>

@@ -63,7 +63,25 @@ public sealed class AutoHarvestActionResultMapperTests
     [InlineData(
         (int)AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable,
         1029)]
-    public void PrerequisiteRefusalsArePenaltyFreeAndKeepTheirExactCode(
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativePairIdentityRevalidationRefused,
+        1030)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused,
+        1031)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused,
+        1032)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused,
+        1033)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused,
+        1034)]
+    [InlineData(
+        (int)AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused,
+        1035)]
+    public void AdmissionRefusalsArePenaltyFreeAndKeepTheirExactCode(
         int failure,
         int expectedCode)
     {

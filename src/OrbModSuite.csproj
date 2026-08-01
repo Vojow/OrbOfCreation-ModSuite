@@ -3,11 +3,7 @@
     <AssemblyName>OrbModSuite</AssemblyName>
     <RootNamespace>OrbModding</RootNamespace>
     <RequireGameReferences>true</RequireGameReferences>
-    <!-- Literal, not $(SuiteVersion): tools/package-supported-suite.sh reads this with sed. -->
-    <Version>0.5.0</Version>
-    <AssemblyVersion>0.5.0.0</AssemblyVersion>
-    <FileVersion>0.5.0.0</FileVersion>
-    <InformationalVersion>0.5.0</InformationalVersion>
+    <Version>$(SuiteVersion)</Version>
     <Description>Orb Of Creation ModSuite: buying and progression automation, mastery catch-up, and the in-game configuration browser, in one BepInEx 5 plugin.</Description>
     <!--
       The project directory is the source root, so the default **/*.cs glob covers every feature
@@ -20,6 +16,26 @@
   <PropertyGroup Condition="'$(UseGameStubs)' == 'true'">
     <DefineConstants>$(DefineConstants);USE_GAME_STUBS</DefineConstants>
   </PropertyGroup>
+
+  <Target Name="GeneratePluginVersionSource" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <PluginVersionSource>$(IntermediateOutputPath)PluginIds.Version.g.cs</PluginVersionSource>
+    </PropertyGroup>
+    <ItemGroup>
+      <Compile Include="$(PluginVersionSource)" />
+      <_PluginVersionSourceLine Include="// &lt;auto-generated /&gt;" />
+      <_PluginVersionSourceLine Include="namespace OrbModding.Common%3B" />
+      <_PluginVersionSourceLine Include="public static partial class PluginIds" />
+      <_PluginVersionSourceLine Include="{" />
+      <_PluginVersionSourceLine Include="    public const string Version = &quot;$(SuiteVersion)&quot;%3B" />
+      <_PluginVersionSourceLine Include="    public const string ReleaseVersion = &quot;$(SuiteVersion)&quot;%3B" />
+      <_PluginVersionSourceLine Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(PluginVersionSource)"
+                      Lines="@(_PluginVersionSourceLine)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+  </Target>
 
   <!--
     Union of the four retired projects' Unity references. Common needed only UnityEngine.UI;
@@ -62,7 +78,7 @@
     Excluding its runtime asset keeps the suite project from pretending it owns or deploys that DLL.
   -->
   <ItemGroup Condition="'$(EnableServiceCycleProfiler)' == 'true' and '$(UseGameStubs)' == 'true'">
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1"
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4"
                       PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 

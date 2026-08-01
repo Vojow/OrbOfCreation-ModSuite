@@ -1,15 +1,15 @@
-## Summary
+### Why?
 
-- What changed and why?
+<!-- 1–3 sentences: the actual problem or motivation. -->
 
-## Validation
+### How?
 
-- [ ] Portable tests pass with `UseGameStubs=true`.
-- [ ] Real-game assembly contracts pass, or the change does not affect them.
-- [ ] Runtime behavior was tested with a backed-up save when required.
-- [ ] Public configuration or installation changes are documented.
-- [ ] No game binaries, saves, local configuration, or unredacted personal data are included.
+<!-- 1–2 sentences: short technical summary for a technical reader. -->
 
-## Runtime evidence
+### Decisions
 
-Describe the game, BepInEx, and plugin versions plus the scenarios tested. Write `Not required` for documentation-only changes.
+<!-- One bullet per meaningful tradeoff, abandoned alternative, or scope choice, with the reason. `N/A` if none. -->
+
+### Callouts
+
+<!-- One bullet per spot a reviewer should look harder at, or that looks innocuous but has knock-on effects. `N/A` if none. -->

@@ -168,9 +168,17 @@ internal static class WorldCategoryFakes
 /// The game's identity registry, which is how an entity belonging to no per-type <c>All</c> list is
 /// reached. Only the action queues need it.
 /// </summary>
-internal static class FakeIdRegistry
+internal class FakeIdRegistry
 {
     public static readonly Dictionary<Guid, object> RuntimeLookup = new();
+
+    public Guid Identity = Guid.NewGuid();
+
+    public Guid GetGuid() => Identity;
+}
+
+internal class FakeAbstractListVariable : FakeIdRegistry
+{
 }
 
 internal sealed class FakeScribeRecipeList
@@ -576,19 +584,39 @@ internal sealed class FakeAlchemyInstanceList
     public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
 }
 
-internal sealed class FakeAlchemyInstance
+internal class FakeAbstractRefInstance<T>
+    where T : class
 {
-    public FakeAlchemyInstance(FakeAlchemyRecipe recipe)
+    protected FakeAbstractRefInstance(T? recipe)
     {
         reference = recipe;
     }
 
-    public FakeAlchemyRecipe reference;
+    public T? reference;
+
+    public T? get_reference() => reference;
+
+    public bool IsEmpty() => reference is null;
+}
+
+internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
+{
+    public FakeAlchemyInstance(FakeAlchemyRecipe? recipe)
+        : base(recipe)
+    {
+    }
+
     public int quantity;
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
+}
 
-    public FakeAlchemyRecipe get_reference() => reference;
+internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
+{
+    internal FakeUnexpectedAlchemyInstance(FakeAlchemyRecipe recipe)
+        : base(recipe)
+    {
+    }
 }
 
 internal sealed class FakeAlchemyDrain
@@ -1254,15 +1282,15 @@ internal sealed class FakeTutorial
     public Guid GetGuid() => Identity;
 }
 
-internal sealed class FakeView
+internal sealed class FakeView : FakeIdRegistry
 {
     public static readonly List<FakeView> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool active;
     public bool alwaysActive;
+    public List<FakeAbstractListVariable> relevantLists = new();
+    public List<FakeAbstractListVariable> availableLists = new();
 
-    public Guid GetGuid() => Identity;
     public bool IsAvailable() => active || alwaysActive;
 }
 

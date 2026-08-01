@@ -102,16 +102,18 @@ internal readonly struct AutoBuyLiveCostSnapshot
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>CanPurchase()</c> answers with a single bool, so a refusal says nothing about which of the
-/// several conditions folded into it was the one that bit. A planner that disagrees with the game
-/// has a bug in it, and "the game said no" is not a bug report — so the terms the game exposes
-/// individually are asked individually, on the cold path only, after the fold has already refused.
+/// <c>CanPurchase()</c> answers with a single bool, and its folded terms differ by type. A refusal
+/// says nothing about which included condition was the one that bit. A planner that disagrees with
+/// the game has a bug in it, and "the game said no" is not a bug report — so the terms the game
+/// exposes individually are asked individually, on the cold path only, after the fold has already
+/// refused. Owning-view and structure availability are mandatory gates before this path and are not
+/// inferred to be part of either native fold.
 /// </para>
 /// <para>
 /// Some of what <c>CanPurchase()</c> folds in has no parameterless reader: the per-level
-/// prerequisites are checked against a level the caller supplies. When every readable term passes and
-/// the fold still refused, that is what is left, and the diagnosis says so by elimination rather than
-/// pretending to have read it. Since W58 the planner models those conditions itself and refuses to
+/// prerequisites are checked against a level the caller supplies. When every applicable readable
+/// term passes and the fold still refused, that is what is left, and the diagnosis says so by
+/// elimination rather than pretending to have read it. Since W58 the planner models those conditions itself and refuses to
 /// plan a candidate whose next level is gated, so reaching this clause now means the suite's model
 /// and the game disagree — which is the strongest signal this boundary can give and is worth saying
 /// in those words.

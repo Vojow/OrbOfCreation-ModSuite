@@ -26,6 +26,7 @@ internal readonly struct ScalingWeightSOContract { }
 internal readonly struct SpellListVariableContract { }
 internal readonly struct TreasurePoolSOContract { }
 internal readonly struct UpgradeSOContract { }
+internal readonly struct ViewListVariableContract { }
 internal readonly struct ViewSOContract { }
 
 internal readonly struct KnownEntity<TContract>
@@ -68,6 +69,7 @@ internal static class KnownEntities
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollExcellence = new(new Guid("6c5c36ea-4736-46d2-b961-6227d4cce5d3"), "CraftingRecipeSO", "CraftScrollExcellence");
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollLearning = new(new Guid("49da8d21-0f6a-492e-bd9a-15531b1737d5"), "CraftingRecipeSO", "CraftScrollLearning");
     public static readonly KnownEntity<CraftingRecipeSOContract> CraftScrollPower = new(new Guid("9c0a2b96-45fa-4aca-83ba-8efad8895608"), "CraftingRecipeSO", "CraftScrollPower");
+    public static readonly KnownEntity<ViewListVariableContract> CreatedWorldAspects = new(new Guid("74ec1f90-e94c-4cd7-a1d0-7b35016b57ff"), "ViewListVariable", "CreatedWorldAspects");
     public static readonly KnownEntity<AlchemyTypeSOContract> Dismantle = new(new Guid("7b89d22c-75ae-4945-9356-833382c9a167"), "AlchemyTypeSO", "Dismantle");
     public static readonly KnownEntity<EnchantmentSOContract> EnchantAdvancement = new(new Guid("0796ee25-e1f6-4c5c-abba-aad46e02318b"), "EnchantmentSO", "EnchantAdvancement");
     public static readonly KnownEntity<EnchantmentSOContract> EnchantDevelopment = new(new Guid("cb354ece-fd8c-4ffc-a67e-b24cc3fe5fa5"), "EnchantmentSO", "EnchantDevelopment");
@@ -104,4 +106,5 @@ internal static class KnownEntities
     public static readonly KnownEntity<TreasurePoolSOContract> TreasureTreeRewardPool = new(new Guid("1a370ff9-fea7-4a2a-bca7-57fdb2862356"), "TreasurePoolSO", "CoreTreasurePool");
     public static readonly KnownEntity<UpgradeSOContract> UnlockLevelAllSpells = new(new Guid("b5efd19a-9655-4359-ad27-f391bb86c2e4"), "UpgradeSO", "UnlockLevelAllSpells");
     public static readonly KnownEntity<ViewSOContract> WorkshopArtifact = new(new Guid("668a2a7a-468f-4e0e-b182-979b12a4b0ad"), "ViewSO", "WorkshopArtifact");
+    public static readonly KnownEntity<IntVariableContract> WorldAspectSlots = new(new Guid("4b1bb2de-723a-4360-827c-8e4483f3ff8d"), "IntVariable", "WorldAspectSlots");
 }

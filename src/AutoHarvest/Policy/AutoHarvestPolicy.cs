@@ -28,13 +28,13 @@ internal static class AutoHarvestPolicy
     }
 
     /// <summary>
-    /// The same decision, taken again at the action boundary against the live action queue.
+    /// The planned decision, taken again at the action boundary against the live action queue.
     /// </summary>
     /// <remarks>
-    /// The pair facts and the safety verdict are the ones the action carries — the boundary re-judges
-    /// them rather than re-reading them, because the snapshot they came from is the same evidence a
-    /// second live read would be checked against, and one of those reads wrote to the game. Safety and
-    /// the two queue facts are only ever evaluated here. The queue describes a resource every service
+    /// The pair facts and the safety verdict are the ones the action carries, so a plan already known
+    /// to be inadmissible stops here. The mutation adapter separately re-reads the mutable native
+    /// player-click gates after this policy judgment and before <c>AddInstance</c>. Safety and the two
+    /// queue facts are only ever evaluated here. The queue describes a resource every service
     /// competes for and that this service's own actions consume, so an answer read while deciding is
     /// stale by the time it would be acted on. Safety is a structural audit of the build's authored
     /// content — what stands between the suite and a game whose assets changed under an assembly the

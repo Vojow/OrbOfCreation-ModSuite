@@ -7,13 +7,18 @@ namespace OrbAutomata;
 /// chose it.
 /// </summary>
 /// <remarks>
-/// The facts travel with the action because the boundary decides on them. They were derived from the
-/// same snapshot the worker ranked against, so re-deriving them from the live game at submission
-/// time would be asking a second source the question the plan already answered — and one of those
-/// live reads (<c>PlotNodeActionInstance.IsVisible()</c>) reaches
-/// <c>Prerequisites.Container.Check()</c>, which writes. The safety verdict travels the same way and
-/// for the same reason. What the snapshot cannot answer — the live action queue and the instance to
-/// submit into — is still read where the mutation happens.
+/// The facts travel with the action because the policy's boundary judgment decides on them: they
+/// were derived from the same snapshot the worker ranked against, so a plan already known to be
+/// inadmissible stops without touching the game. The safety verdict travels the same way and for the
+/// same reason. The mutable native click gates are the opposite case: after the policy judgment the
+/// mutation adapter re-reads them live — plot and row visibility, offered membership, one-instance
+/// affordability, remaining maximum — because the game enforces them at click time and only the
+/// moment of acting can answer them. One of those reads
+/// (<c>PlotNodeActionInstance.IsVisible()</c>) reaches <c>Prerequisites.Container.Check()</c>, which
+/// writes; that is acceptable at the mutation point and nowhere earlier, which is also why the world
+/// snapshot deliberately publishes the latch instead of the read. What the snapshot cannot answer —
+/// the live action queue and the instance to submit into — is likewise read where the mutation
+/// happens.
 /// </remarks>
 internal readonly struct AutoHarvestCycleAction
 {

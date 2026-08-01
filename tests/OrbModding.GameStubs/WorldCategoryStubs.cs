@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 public sealed class StructureTypeSO : UpgradeableObject
 {
+    private List<StructureSO> structures = StructureSO.All;
+
+    public void RegisterStructure(StructureSO structure) => structures.Add(structure);
+    public List<StructureSO> GetAllStructures() => structures;
+
+    // Purpose-built malformed fixtures can replace the authored membership without reflecting the
+    // private game field themselves.
+    public void SetStructuresForTests(List<StructureSO> value) => structures = value;
 }
 
 public sealed class SpellTypeSO : IdScriptableObject
@@ -118,6 +126,8 @@ public sealed class CraftingRecipeListVariable : GenericListVariable<CraftingRec
 public class AbstractRefInstance<T> where T : IdScriptableObject
 {
     public T reference = null!;
+    public T get_reference() => reference;
+    public bool IsEmpty() => reference is null;
     public Guid GetGuidReference() => reference.GetGuid();
 }
 
@@ -665,7 +675,8 @@ public sealed class PlotNodeActionSO : IdScriptableObject
 
     // Which other nodes the action takes its size multiplier from, and the prerequisites that gate
     // it. Collection reads the list's length and latch; the Auto Harvest action boundary calls the
-    // exact container Check() once after current UUID/type/lifecycle resolution.
+    // exact container Check() after current UUID/type/lifecycle resolution; the native action-row
+    // visibility method reaches that same Check() again.
     public List<PlotNodeSO> sizeModNodes = new List<PlotNodeSO>();
     public Prerequisites.Container prerequisites = new Prerequisites.Container();
 
@@ -852,6 +863,8 @@ public sealed class PlotNodeSO : IdScriptableObject
     public List<PlotNodeActionSO> availableActions = new List<PlotNodeActionSO>();
     private List<PlotNodeActionInstance> actionInstances = new List<PlotNodeActionInstance>();
 
+    public bool IsVisible() => visible;
+
     public List<PlotNodeActionInstance> GetActionInstances() => actionInstances;
 }
 
@@ -866,6 +879,9 @@ public sealed class PlotNodeActionInstance
     public PlotNodeSO? plotNodeRefObj;
     private PlotNodeActionSO? action;
     private bool engaged;
+    public bool EnoughForOneInstance = true;
+    public int MaximumInstances = int.MaxValue;
+    public int MaximumRemainingInstances = int.MaxValue;
 
     public PlotNodeActionInstance()
     {
@@ -877,6 +893,9 @@ public sealed class PlotNodeActionInstance
         this.action = action;
     }
 
+    public PlotNodeActionInstance(PlotNodeSO plot, PlotNodeActionSO action)
+        : this(action) => plotNodeRefObj = plot;
+
     public bool IsEmpty() => quantity <= 0;
 
     public bool IsEngaged() => engaged;
@@ -886,6 +905,22 @@ public sealed class PlotNodeActionInstance
     public PlotNodeSO? GetElement() => plotNodeRefObj;
 
     public PlotNodeActionSO? GetAction() => action;
+
+    /// <summary>The native row asks the exact action prerequisite container again.</summary>
+    public bool IsVisible() => action?.prerequisites.Check() == true;
+
+    public bool HasEnoughForOneInstance() => EnoughForOneInstance;
+
+    public int GetMaximumRemInstances() => MaximumRemainingInstances;
+
+    public int GetMaximumInstances() => MaximumInstances;
+
+    /// <summary>
+    /// Models the shipped existing-row path: it clamps against the absolute maximum, not the
+    /// remaining maximum, and performs no affordability check.
+    /// </summary>
+    public void PlayerChangeInstanceQuantity(int change) =>
+        quantity = Math.Max(0, Math.Min(quantity + change, GetMaximumInstances()));
 
     public void Engage() => engaged = true;
 }

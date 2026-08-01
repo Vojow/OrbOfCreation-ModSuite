@@ -263,18 +263,18 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             uuid = Guid.NewGuid().ToString(),
             quantity = new BigDouble(1.9, 1),
         };
-        var structure = new global::StructureSO
+        var upgrade = new global::UpgradeSO
         {
             uuid = Guid.NewGuid().ToString(),
             available = true,
             purchasable = true,
         };
-        structure.purchaseCost.costs.Add(new global::ResourceTuple(mana, new BigDouble(1.6, 3)));
-        structure.purchaseCost.costs.Add(new global::ResourceTuple(spark, new BigDouble(2.0, 1)));
-        global::StructureSO.All.Add(structure);
+        upgrade.purchaseCost.costs.Add(new global::ResourceTuple(mana, new BigDouble(1.6, 3)));
+        upgrade.purchaseCost.costs.Add(new global::ResourceTuple(spark, new BigDouble(2.0, 1)));
+        global::UpgradeSO.All.Add(upgrade);
 
         var submission = new AutoBuyNativePurchaseAdapter()
-            .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
+            .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 1);
 
         Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
         Assert.Equal(AutoBuyAdmissionTerm.Passed, submission.Diagnosis.IsAvailable);
@@ -352,7 +352,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             uuid = Guid.NewGuid().ToString(),
             quantity = new BigDouble(4.0, 1),
         };
-        var first = new global::StructureSO
+        var first = new global::UpgradeSO
         {
             uuid = Guid.NewGuid().ToString(),
             available = true,
@@ -360,7 +360,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         first.purchaseCost.costs.Add(
             new global::ResourceTuple(shared, new BigDouble(2.0, 1)));
-        var second = new global::StructureSO
+        var second = new global::UpgradeSO
         {
             uuid = Guid.NewGuid().ToString(),
             available = true,
@@ -368,8 +368,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         second.purchaseCost.costs.Add(
             new global::ResourceTuple(shared, new BigDouble(3.0, 1)));
-        global::StructureSO.All.Add(first);
-        global::StructureSO.All.Add(second);
+        global::UpgradeSO.All.Add(first);
+        global::UpgradeSO.All.Add(second);
         var refusals = new RecordingRefusals();
         var adapter = new AutoBuyCycleActionAdapter(
             new AutoBuyNativePurchaseAdapter(),
@@ -381,7 +381,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
 
         var firstResult = adapter.TryExecute(
             new AutoBuyCycleAction(
-                AutoBuyCandidateKind.Structure,
+                AutoBuyCandidateKind.Upgrade,
                 Guid.Parse(first.uuid),
                 PlannedEpoch,
                 count: 1,
@@ -391,7 +391,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             Context(actionIndex: 0, attemptedAt: 130));
         var secondResult = adapter.TryExecute(
             new AutoBuyCycleAction(
-                AutoBuyCandidateKind.Structure,
+                AutoBuyCandidateKind.Upgrade,
                 Guid.Parse(second.uuid),
                 PlannedEpoch,
                 count: 1,
@@ -413,20 +413,157 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void Submit_RefusedOnAvailability_NamesAvailability()
+    public void Submit_StructureUnavailable_RefusesBeforeTheThinCanPurchase()
     {
         var structure = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
             available = false,
-            purchasable = false,
+            purchasable = true,
         };
         global::StructureSO.All.Add(structure);
 
         var submission = new AutoBuyNativePurchaseAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
 
-        Assert.Equal("IsAvailable()", submission.Diagnosis.RefusingTerm);
+        Assert.Equal(AutoBuyPurchasePreflight.StructureUnavailable, submission.Preflight);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_LockedOwningView_RefusesForcedActionWithNamedCode()
+    {
+        global::ViewSO.All[0].available = false;
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewUnavailable, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_MissingOwningViewRelation_RefusesWithNamedCode()
+    {
+        global::ViewSO.All[0].relevantLists.Clear();
+        var structure = new global::StructureSO { uuid = Guid.NewGuid().ToString() };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationMissing, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_UnreadableOwningViewRelation_RefusesWithNamedCode()
+    {
+        global::ViewSO.All[0].relevantLists = null!;
+        var structure = new global::StructureSO { uuid = Guid.NewGuid().ToString() };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationUnreadable, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_AmbiguousOwningViewRelation_RefusesWithNamedCode()
+    {
+        var secondList = new global::StructureListVariable { value = global::StructureSO.All };
+        var secondView = new global::ViewSO { available = true };
+        secondView.availableLists.Add(secondList);
+        global::ViewSO.All.Add(secondView);
+        var structure = new global::StructureSO { uuid = Guid.NewGuid().ToString() };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationAmbiguous, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_ContradictoryOwningViewRelation_RefusesWithNamedCode()
+    {
+        var structure = new global::StructureSO { uuid = Guid.NewGuid().ToString() };
+        structure.structureType.SetStructuresForTests(
+            new System.Collections.Generic.List<global::StructureSO>());
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationContradictory, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_FullAuditedDestination_RefusesBeforePaymentWithNamedCode()
+    {
+        var upgrade = AspectUpgrade(slotCount: 1, occupied: 1);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Upgrade,
+            Guid.Parse(upgrade.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.DestinationCapacityFull, result.Code);
+        Assert.Equal(0, upgrade.queuedLevels);
+        Assert.Equal(0, upgrade.purchaseCost.PerformCalls);
+    }
+
+    [Fact]
+    public void Execute_RoomyAuditedDestination_CommitsUnchanged()
+    {
+        var upgrade = AspectUpgrade(slotCount: 2, occupied: 1);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Upgrade,
+            Guid.Parse(upgrade.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(1, upgrade.queuedLevels);
+        Assert.Equal(1, upgrade.purchaseCost.PerformCalls);
+    }
+
+    [Fact]
+    public void Execute_DestinationMaximumIdentityMismatch_RefusesWithNamedCode()
+    {
+        var upgrade = AspectUpgrade(slotCount: 2, occupied: 1, exactMaximumIdentity: false);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Upgrade,
+            Guid.Parse(upgrade.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(AutoBuyActionResultCodes.DestinationCapacityIdentityMismatch, result.Code);
+        Assert.Equal(0, upgrade.queuedLevels);
+        Assert.Equal(0, upgrade.purchaseCost.PerformCalls);
     }
 
     /// <summary>
@@ -595,16 +732,14 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     /// <summary>
-    /// Availability is decided from the snapshot, not re-read here.
+    /// Structure availability can drop after planning and is therefore re-read at the boundary.
     /// </summary>
     /// <remarks>
-    /// <c>WorldStructure.Unlocked</c> is what the worker admits a candidate on, so an unavailable
-    /// candidate never becomes an action. The boundary asking again was a second answer to a settled
-    /// question; this pins that it is gone, because a boundary that still read
-    /// <c>IsAvailable()</c> would reject this submission.
+    /// The structure CanPurchase contract does not contain this term, so only the explicit live gate
+    /// can stop a previously planned action after its own availability drops.
     /// </remarks>
     [Fact]
-    public void Execute_AvailabilityIsNotReReadAtTheBoundary()
+    public void Execute_StructureAvailabilityDroppedAfterPlanning_RefusesWithNamedCode()
     {
         var structure = new global::StructureSO
         {
@@ -617,8 +752,9 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
 
         var result = Execute(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), nativeEpoch: PlannedEpoch);
 
-        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
-        Assert.Equal(4, structure.queuedQuantity);
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.StructureUnavailable, result.Code);
+        Assert.Equal(3, structure.queuedQuantity);
     }
 
     [Fact]
@@ -1232,10 +1368,52 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         }
     }
 
+    private static global::UpgradeSO AspectUpgrade(
+        int slotCount,
+        int occupied,
+        bool exactMaximumIdentity = true)
+    {
+        var maximum = new global::IntVariable
+        {
+            uuid = exactMaximumIdentity
+                ? KnownEntities.WorldAspectSlots.Uuid
+                : Guid.NewGuid(),
+            Value = slotCount,
+        };
+        var destination = new global::ViewListVariable
+        {
+            uuid = KnownEntities.CreatedWorldAspects.Uuid,
+            maxSizeVariable = maximum,
+        };
+        for (var index = 0; index < occupied; index++)
+            destination.value.Add(new global::ViewSO());
+        var addition = new global::ViewListVariable.ListTuple
+        {
+            list = destination,
+            element = new global::ViewSO(),
+        };
+        var upgrade = new global::UpgradeSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        upgrade.viewListAdditions.Add(addition);
+        global::UpgradeSO.All.Add(upgrade);
+        return upgrade;
+    }
+
     private static void ResetNativeState()
     {
         global::StructureSO.All.Clear();
         global::UpgradeSO.All.Clear();
+        global::ViewSO.All.Clear();
+        var structures = new global::StructureListVariable { value = global::StructureSO.All };
+        var upgrades = new global::UpgradeListVariable { value = global::UpgradeSO.All };
+        var owningView = new global::ViewSO { available = true };
+        owningView.relevantLists.Add(structures);
+        owningView.relevantLists.Add(upgrades);
+        global::ViewSO.All.Add(owningView);
         global::GlobalVariables.MultiBuy = new global::IntVariable();
         NativeMultiBuyScope.ResetQuarantineForTests();
     }

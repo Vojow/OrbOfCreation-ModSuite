@@ -1,8 +1,12 @@
 <Project>
   <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences" Condition="'$(RequireGameReferences)' == 'true' and '$(UseGameStubs)' != 'true'">
-    <Error Condition="'$(GameRoot)' == ''" Text="Set OOC_GAME_DIR to the Orb Of Creation install root before building plugin projects." />
-    <Error Condition="'$(GameRoot)' != '' and '$(ManagedDir)' == ''" Text="No managed assembly directory containing both game assemblies was found. Probed: $(WindowsManagedDir); $(MacAppManagedDir); $(MacInstallManagedDir)." />
-    <Error Condition="'$(GameRoot)' != '' and !Exists('$(BepInExCoreDir)/BepInEx.dll')" Text="BepInEx.dll was not found under $(BepInExCoreDir)." />
+    <Error Condition="'$(ManagedDir)' == ''" Text="No game references were found. Set OOC_GAME_DIR to the Orb Of Creation install root or restore the checked-in references under $(CheckedInGameReferenceDir). Probed game directories: $(WindowsManagedDir); $(MacAppManagedDir); $(MacInstallManagedDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(BepInExCoreDir)/BepInEx.dll')" Text="BepInEx.dll was not found under $(BepInExCoreDir). Set OOC_GAME_DIR to a complete BepInEx 5 game install or restore the checked-in references under $(CheckedInGameReferenceDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(BepInExCoreDir)/0Harmony.dll')" Text="0Harmony.dll was not found under $(BepInExCoreDir). Set OOC_GAME_DIR to a complete BepInEx 5 game install or restore the checked-in references under $(CheckedInGameReferenceDir)." />
     <Error Condition="'$(ManagedDir)' != '' and !Exists('$(ManagedDir)/UnityEngine.dll')" Text="UnityEngine.dll was not found under $(ManagedDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(ManagedDir)/UnityEngine.CoreModule.dll')" Text="UnityEngine.CoreModule.dll was not found under $(ManagedDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(ManagedDir)/UnityEngine.UI.dll')" Text="UnityEngine.UI.dll was not found under $(ManagedDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(ManagedDir)/UnityEngine.UIModule.dll')" Text="UnityEngine.UIModule.dll was not found under $(ManagedDir)." />
+    <Error Condition="'$(ManagedDir)' != '' and !Exists('$(ManagedDir)/Unity.TextMeshPro.dll')" Text="Unity.TextMeshPro.dll was not found under $(ManagedDir)." />
   </Target>
 </Project>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using OrbAutomata;
@@ -79,6 +80,91 @@ public sealed class AutoHarvestNativeStateReaderTests
         world.Instances.Add("not an instance");
 
         Assert.Null(new AutoHarvestNativeStateReader().ReadPrototype(world.Resolved));
+    }
+
+    [Theory]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused)]
+    public void EachLiveClickTermReturnsItsOwnNamedRefusal(int failure)
+    {
+        var expected = (AutoHarvestSubmissionFailureCode)failure;
+        var world = PrototypeWorld.Create();
+        var instance = world.AddInstance(world.Plot, world.Action);
+        switch (expected)
+        {
+            case AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused:
+                world.Plot.Visible = false;
+                break;
+            case AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused:
+                world.Instances.Clear();
+                break;
+            case AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused:
+                instance.RowVisible = false;
+                break;
+            case AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused:
+                instance.EnoughForOneInstance = false;
+                break;
+            case AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused:
+                instance.MaximumRemainingInstances = 0;
+                break;
+            default:
+                throw new InvalidOperationException("unexpected click gate fixture");
+        }
+
+        var actual = new AutoHarvestNativeStateReader().ValidateClickAdmission(
+            world.Resolved,
+            out _);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void CurrentPairResolutionReReadsStableUuidAndExactNativeType()
+    {
+        var world = PrototypeWorld.Create();
+        var currentPlot = new StubPlot();
+        currentPlot.SetGuid(world.Plot.GetGuid());
+        var currentAction = new StubAction();
+        currentAction.SetGuid(world.Action.GetGuid());
+        var registry = new Dictionary<Guid, object>
+        {
+            [currentPlot.GetGuid()] = currentPlot,
+            [currentAction.GetGuid()] = currentAction,
+        };
+        var resolver = new OrbModding.Common.TypedRegistryResolver(
+            () => 1,
+            () => OrbModding.Common.TypedRegistrySourceSnapshot.Ready((IDictionary)registry),
+            value => ((IdScriptableObject)value).GetGuid());
+        var reader = new AutoHarvestNativeStateReader(resolver);
+
+        var succeeded = reader.TryResolveCurrentPair(world.Resolved, out var current);
+
+        Assert.True(succeeded);
+        Assert.Same(currentPlot, current.Target.Plot);
+        Assert.Same(currentAction, current.Target.Action);
+    }
+
+    [Fact]
+    public void ExistingRowNativeStubClampsToWrongAbsoluteMaximumWithoutClickAdmission()
+    {
+        var plot = new PlotNodeSO();
+        var action = new PlotNodeActionSO();
+        var existing = new PlotNodeActionInstance(plot, action)
+        {
+            quantity = 1,
+            EnoughForOneInstance = false,
+            MaximumInstances = 5,
+            MaximumRemainingInstances = 0,
+        };
+        var active = new PlotNodeActionInstanceListVariable();
+        active.value.Add(existing);
+
+        active.AddInstance(new PlotNodeActionInstance(plot, action), 1);
+
+        Assert.Equal(2, existing.quantity);
     }
 
     [Fact]
@@ -241,12 +327,20 @@ public sealed class AutoHarvestNativeStateReaderTests
                 AutoHarvestStableIdAccessor.Bind(typeof(StubPlot)));
             Set(contract, nameof(AutoHarvestReflectionContract.ActionStableId),
                 AutoHarvestStableIdAccessor.Bind(typeof(StubAction)));
+            Set(contract, nameof(AutoHarvestReflectionContract.PlotIsVisible),
+                typeof(StubPlot).GetMethod(nameof(StubPlot.IsVisible))!);
             Set(contract, nameof(AutoHarvestReflectionContract.PlotGetActionInstances),
                 typeof(StubPlot).GetMethod(nameof(StubPlot.GetActionInstances))!);
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetElement),
                 typeof(StubInstance).GetMethod(nameof(StubInstance.GetElement))!);
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetAction),
                 typeof(StubInstance).GetMethod(nameof(StubInstance.GetAction))!);
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsVisible),
+                typeof(StubInstance).GetMethod(nameof(StubInstance.IsVisible))!);
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceHasEnoughForOneInstance),
+                typeof(StubInstance).GetMethod(nameof(StubInstance.HasEnoughForOneInstance))!);
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetMaximumRemInstances),
+                typeof(StubInstance).GetMethod(nameof(StubInstance.GetMaximumRemInstances))!);
             return contract;
         }
 
@@ -257,7 +351,9 @@ public sealed class AutoHarvestNativeStateReaderTests
     private sealed class StubPlot : IdScriptableObject
     {
         public readonly List<object> instances = new();
+        public bool Visible { get; set; } = true;
 
+        public bool IsVisible() => Visible;
         public List<object> GetActionInstances() => instances;
     }
 
@@ -276,7 +372,14 @@ public sealed class AutoHarvestNativeStateReaderTests
             _action = action;
         }
 
+        internal bool RowVisible { get; set; } = true;
+        internal bool EnoughForOneInstance { get; set; } = true;
+        internal int MaximumRemainingInstances { get; set; } = 1;
+
         public StubPlot GetElement() => _plot;
         public StubAction GetAction() => _action;
+        public bool IsVisible() => RowVisible;
+        public bool HasEnoughForOneInstance() => EnoughForOneInstance;
+        public int GetMaximumRemInstances() => MaximumRemainingInstances;
     }
 }

@@ -25,10 +25,11 @@ total bonus scales with collection size. Every grant carries the source's
 exclusive mastery ceiling; no recipient at or above that mastery is eligible.
 
 Fresh installs start with `General.Mode=Disabled`. Set it to `Active`, press
-`Left Alt + M`, or use the `M ON/OFF` gameplay control. The button's label and
-colour show saved intent. Waiting, unavailable contracts, emergency blocking,
-degradation, and faults are a separate runtime-health axis in its tooltip and
-the Mods Runtime page.
+`Left Alt + M`, or use Mentor's Mods feature command or drawer control. Its
+recessed/raised native frame shows saved intent structurally; color is secondary.
+Waiting, unavailable contracts, emergency blocking, partial capability loss, and
+faults are a separate runtime-health axis in its tooltip and the Mods Runtime
+page.
 
 ## Service-cycle shape
 
@@ -90,4 +91,5 @@ and trace-schema coverage lives under
 ServiceCycle suites. Installed-game tests audit every capture, action, and patch
 contract against the supported assembly. Real Unity/Harmony wiring, visible
 controls, recursion suppression, save transitions, and exact in-game XP remain
-the interactive gates in `docs/testing/mentor-runtime-validation.md`.
+the Mentor V4, persistence, and combined-suite gates in
+`docs/testing/runtime-validation.md`.

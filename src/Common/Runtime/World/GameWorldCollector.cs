@@ -77,6 +77,7 @@ internal sealed class GameWorldCollector
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
+    private readonly WorldPurchaseViewRelationReader _purchaseViewRelations;
     private readonly IWorldMasteryExperienceSource _masteryExperience;
     private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
@@ -253,6 +254,7 @@ internal sealed class GameWorldCollector
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
             resolveType("UpgradeSO"), resolveType("StructureSO"));
+        _purchaseViewRelations = new WorldPurchaseViewRelationReader(resolveType);
 
         _readers = new IWorldCategoryReader[]
         {
@@ -266,7 +268,8 @@ internal sealed class GameWorldCollector
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,
-            _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks, _entityRequirements,
+            _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks,
+            _entityRequirements, _purchaseViewRelations,
         };
 
         _isStructural = new bool[_readers.Length];
@@ -276,7 +279,8 @@ internal sealed class GameWorldCollector
             _isStructural[index] =
                 ReferenceEquals(_readers[index], _plotAuthoring) ||
                 ReferenceEquals(_readers[index], _effectBlocks) ||
-                ReferenceEquals(_readers[index], _entityRequirements);
+                ReferenceEquals(_readers[index], _entityRequirements) ||
+                ReferenceEquals(_readers[index], _purchaseViewRelations);
         }
     }
 

@@ -1,97 +1,60 @@
-# Testing documentation
+# Testing doctrine
 
-This directory is the maintained entry point for test strategy, test selection,
-module ownership, installed-game contracts, and runtime validation.
+[Native contract workflow](native-contracts.md) ·
+[Runtime validation protocol](runtime-validation.md)
 
-## Start here
+Tests are the executable specification. Prose earns its place by explaining how
+to choose evidence, not by restating test classes or enumerating their cases.
+When prose and a test disagree, inspect the product contract and fix the wrong
+one; do not preserve both stories.
 
-- [Repository test strategy](strategy.md) — evidence layers, merge policy,
-  coverage, compatibility, and release gates.
-- [Headless E2E](headless-e2e.md) — deterministic simulation boundaries,
-  scenarios, metrics, and performance reports.
-- [ServiceCycle observability](../runtime-architecture/observability.md) — decode a
-  production trace artifact into bounded timing and causal evidence.
-- [Native contracts](native-contracts.md) — manifest and installed-assembly
-  verification.
-- [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
-- [UI overhaul validation](ui-overhaul-validation.md) — post-install native styling,
-  interaction ownership, emergency resume, responsive layout, and Runtime-action checks.
-Run the complete normal-development feedback loop with:
+## Evidence has boundaries
 
-```bash
-./script/test
-```
-
-This runs every portable partition with a hard 60-second wall-clock deadline,
-including deterministic performance/allocation simulations and external-process
-tests. The deadline exposes deadlocks or accidental soak behavior promptly.
-It is per attempt, not for the whole gate: a failing run is retried up to
-`ORB_TEST_ATTEMPTS` times (default 3), and a pass-after-retry is a broken test
-rather than a pass. Set `ORB_TEST_ATTEMPTS=1` when you want the first answer.
-
-On Windows, the equivalent lane helper remains:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane All
-```
-
-Run a focused risk lane with:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
-```
-
-## Module guides
-
-| Change area | Test guide | First focused scope |
+| Evidence | What it can prove | What it cannot prove |
 |---|---|---|
-| Orb Automata | [Automata test map](automata/README.md) | select the changed feature below |
-| Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
-| Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
-| Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `AutoConceptReliability`, then `FullyQualifiedName~AutoConcept` |
-| Auto Items Scroll/Relic/temporary planner and GameAction | [Auto Items](automata/auto-items.md) | `FullyQualifiedName~AutoItems` |
-| Auto Scribe coverage planner and crafting GameAction | [Auto Scribe](automata/auto-scribe.md) | `FullyQualifiedName~AutoScribe` |
-| Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
-| Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
-| Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
-| Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
-| Orb Modding Common | [Common](common.md) | select the changed Common contract |
-| Cross-feature scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~ServiceCycle|FullyQualifiedName~ActionFamilyIntegration` |
+| Portable tests against stubs | Policy, state transitions, ServiceCycle journeys, failure containment, and native-adapter behavior for the modeled contract | Installed metadata, Unity wiring, Harmony order, save behavior, layout, or real frame cost |
+| Installed-game contracts | The admitted assembly pair and exact native types, members, signatures, visibility, inheritance, and source coverage | That a call has the intended runtime effect or that its postcondition is observable |
+| Live runtime evidence | Actual wiring, mutations, persistence, player control, UI behavior, and performance on the recorded build/save/configuration | Broad deterministic regression coverage or behavior outside the observed scenario |
 
-The fully qualified name filters are navigation aids, not complete merge gates.
-After the focused scope passes, use the guide’s required portable, contract, and
-runtime gates.
+A claim stops at the edge of its evidence. A self-consistent stub that disagrees
+with Unity is a defective model, not permission to weaken production behavior.
+Installed metadata proves shape, not semantics. Live observation proves one
+run, so preserve enough provenance to reproduce it.
 
-## Evidence boundaries
+The tests themselves show ownership and available scopes. While iterating, use
+one generic selector and replace the token with the behavior or contract at
+issue: `dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true --filter "FullyQualifiedName~<scope>"`.
 
-```text
-policy/component → headless adapter → headless E2E → installed contract → Unity UAT
-```
+## Design scenarios around authority
 
-- Portable success proves only game-independent behavior against stubs and
-  deterministic models.
-- Installed contracts prove exact audited metadata without launching Unity.
-- Runtime UAT proves Harmony wiring, save behavior, controls, native side
-  effects, and visible responsiveness on a disposable save.
-- Deterministic performance uses modeled frames and operation counts. Host
-  wall-clock timing is diagnostic and cannot replace desktop/Deck profiling.
+- Exercise the production engine through its real seams; a simulator that
+  reimplements the decision algorithm can only agree with itself.
+- Keep the simulated game authoritative for identity, availability, resources,
+  cost, queue room, and mutation acceptance. Recreate native objects on
+  lifecycle changes while retaining stable UUID plus expected type.
+- Include manual or external interference wherever capacity, ownership, or
+  freshness matters. Model exceptions, no-ops, partial results, and ambiguous
+  postconditions, not only accepted actions.
+- Cross a boundary deliberately: delayed callbacks go through the lifecycle
+  kernel, mutation requests carry stable identities, and mixed-feature journeys
+  assert uniqueness rather than relying on timing luck.
+- Prefer several small journeys plus a bounded stress invariant over one large
+  scenario whose failure explains nothing.
+- Keep trace fixtures inside the versioned schema. Opaque payload bags, private
+  save fields, and free-text log parsing create unreviewable second protocols.
 
-## Maintaining these guides
+## Turn traces into regressions
 
-When a test is added or its ownership changes:
+A trace is a hypothesis generator, not a test. Preserve the trace or recent-event
+dump with the log, exact DLL hash, effective configuration, and audited game
+identity. Reconstruct the causal sequence using stable entity identity, action
+kind, receipt, planned and settled quantities, lifecycle/world/configuration
+generations, and monotonic time.
 
-1. Put it in the narrowest module/feature guide that explains its risk.
-2. Add a stable category when the test belongs to a reusable risk lane.
-3. Put allocation probes, large deterministic stress workloads, and soak-style
-   iteration counts in `PerformanceSimulation`, even when they happen to run
-   quickly on one machine.
-4. Keep `PerformanceSimulation` and `ExternalProcess` mutually exclusive.
-5. Update the relevant runtime handoff when portable evidence changes what UAT
-   must still prove.
-6. Record results only when they ran on the current tree or exact release
-   artifact.
-
-Do not duplicate large test inventories across pages. Feature pages own detailed
-file maps; this hub owns navigation and shared rules.
+First encode the smallest evaluator or boundary case that fails for the same
+reason. Add a headless journey only when the defect crosses a receipt,
+settlement, lifecycle edge, or multiple native actions. Add a deterministic
+long-run invariant only when the claim concerns churn, fairness, retry bounds,
+or total action count. The regression must fail against a faithful model before
+the fix; if the relevant native fact cannot be modeled honestly, keep the claim
+in runtime evidence instead of manufacturing certainty.

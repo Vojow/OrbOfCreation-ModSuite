@@ -26,6 +26,24 @@ internal static class AutoHarvestActionResultMapper
                 AutoHarvestSubmissionFailureCode.NativePrerequisiteValidationUnavailable =>
                     ServiceActionResult.Rejected(
                         AutoHarvestActionResultCodes.NativePrerequisiteValidationUnavailable),
+                AutoHarvestSubmissionFailureCode.NativePairIdentityRevalidationRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativePairIdentityRevalidationRefused),
+                AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativePlotVisibilityRefused),
+                AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativeOfferedInstanceMembershipRefused),
+                AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativeActionRowVisibilityRefused),
+                AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativeHasEnoughForOneInstanceRefused),
+                AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused =>
+                    ServiceActionResult.Rejected(
+                        AutoHarvestActionResultCodes.NativeMaximumRemainingInstancesRefused),
                 _ => ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault),
             };
         }

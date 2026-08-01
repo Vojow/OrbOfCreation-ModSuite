@@ -1,6 +1,6 @@
 # Auto Buy stage profiles
 
-[Reverse-engineering index](README.md) · [Auto Buy testing](../testing/automata/auto-buy.md) · [Entity catalog](entity-catalog.md)
+[Reverse-engineering index](README.md) · [Testing doctrine](../testing/README.md) · [Entity catalog](entity-catalog.md)
 
 ## Two different profile classes
 

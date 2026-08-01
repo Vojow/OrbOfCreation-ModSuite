@@ -181,7 +181,7 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(835, manifest.Contracts.Count);
+        Assert.Equal(862, manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
@@ -487,6 +487,44 @@ public sealed class NativeContractManifestTests
         {
             using var metadata = new GameAssemblyMetadata(
                 Path.Combine(paths.ManagedDirectory, assemblyEntry.File));
+            foreach (var contract in manifest.Contracts.Where(contract => contract.Assembly == assemblyEntry.Id))
+            {
+                ValidateContract(metadata, contract, failures);
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>
+    /// Every declared contract resolves member-exact against the metadata-only references committed
+    /// for game-free builds and CI contract verification.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately independent of <c>OOC_GAME_DIR</c>. In particular, the private-member
+    /// count prevents a public-only Refasmer regeneration from looking complete merely because the
+    /// suite's ordinary source build does not compile directly against those reflected members.
+    /// </remarks>
+    [Fact]
+    public void CheckedInGameReferences_MatchEveryDeclaredContract()
+    {
+        var manifest = NativeContractManifest.Load();
+        var repositoryRoot = RepositoryPaths.RequireRoot();
+        var referenceRoot = Path.Combine(repositoryRoot, "lib", "game-refs", "v1.0.5");
+        var failures = new List<string>();
+
+        Assert.Equal(70, manifest.Contracts.Count(contract => contract.Visibility == "private"));
+
+        foreach (var assemblyEntry in manifest.Assemblies)
+        {
+            var path = Path.Combine(referenceRoot, assemblyEntry.File);
+            if (!File.Exists(path))
+            {
+                failures.Add($"{assemblyEntry.File}: checked-in reference assembly was not found at {path}");
+                continue;
+            }
+
+            using var metadata = new GameAssemblyMetadata(path);
             foreach (var contract in manifest.Contracts.Where(contract => contract.Assembly == assemblyEntry.Id))
             {
                 ValidateContract(metadata, contract, failures);

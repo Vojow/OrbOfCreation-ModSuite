@@ -33,8 +33,9 @@ public sealed class AutoConceptServiceCompositionTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 
@@ -103,8 +104,9 @@ public sealed class AutoConceptServiceCompositionTests
             owned: true,
             featureStatus: status);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         var training = pump.PumpFrame(2);
         bridge.Observe(pump, in training, owned: true);
 
@@ -113,8 +115,9 @@ public sealed class AutoConceptServiceCompositionTests
 
         pump.PumpFrame(3);
         clock.Advance(MonotonicDuration.FromTimeSpan(TimeSpan.FromSeconds(61)));
-        pump.PumpFrame(4);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(4).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         var idle = pump.PumpFrame(5);
         bridge.Observe(pump, in idle, owned: true);
 

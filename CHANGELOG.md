@@ -1,5 +1,21 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.5.1 — 2026-08-01
+
+### Fixed
+
+- Auto Buy no longer pays for structures it cannot reach or has no empty spot to place.
+- Auto Harvest skips a harvest that changed between planning and clicking.
+- The false "concept instances: 1 skipped" warning is gone; empty concept slots are
+  capacity, not lost data.
+
+### Improved
+
+- Auto Scribe crafts only the Scrolls your structures still need, and never pays for a
+  craft the game would silently discard.
+- Every release is built twice on independent systems and ships only if both builds
+  match byte for byte.
+
 ## Orb Of Creation ModSuite 0.5.0 — 2026-08-01
 
 ### New

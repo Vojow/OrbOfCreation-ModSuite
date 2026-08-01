@@ -31,15 +31,18 @@ The active ServiceCycle service decides from the shared world snapshot:
 candidates, availability, level, queued state and price all arrive as published
 rows, and the cost chain in particular is now computed by `GameCostMath` rather
 than asked for. What Auto Buy calls natively is the action boundary —
-`CanPurchase()`, `Purchase()`, and `ActionManager.GetRemainingRoom()` — plus a
-refusal-diagnostics cold path that runs only after `CanPurchase()` has already
-said no.
+the shared owning-view resolver, type-specific availability, `CanPurchase()`,
+destination capacity, `Purchase()`, and `ActionManager.GetRemainingRoom()` —
+plus a refusal-diagnostics cold path that runs only after `CanPurchase()` has
+already said no.
 
 ## Audited native surface
 
 | Concern | Structure contract | Upgrade contract | Evidence |
 |---|---|---|---|
 | Registry | `StructureSO.All` | `UpgradeSO.All` | Static contract |
+| Owning UI route | exact `structureType` + `StructureTypeSO.structures`; exact `StructureListVariable.GetAll()` through `ViewSO.relevantLists` / `availableLists` | exact `UpgradeListVariable.GetAll()` through `ViewSO.relevantLists` / `availableLists` | Static contract |
+| Owning UI availability | `ViewSO.IsAvailable()` | `ViewSO.IsAvailable()` | Static contract |
 | Availability | `IsAvailable()` | `IsAvailable()` | Static contract |
 | Native admission | `CanPurchase()` | `CanPurchase()` | Static contract |
 | Cost | `GetPurchaseCost()` → `ResourceCostList` | `GetPurchaseCost()` → `ResourceCostList` | Static contract |
@@ -49,12 +52,17 @@ said no.
 | Completion | `CompleteAction()` | `CompleteAction()` | Static contract/Harmony target |
 | Queue signal | `QueueBuild(int)` | `Purchase()` | Static contract |
 | Finite lifecycle | not used by adapter | `HasFiniteLevels()`, `IsMaxLevel()`, `IsMaxQueuedLevel()` | Static contract |
+| Authored list additions | none | `viewListAdditions : List<ViewListVariable.ListTuple>` | Static contract |
+| Capacity-bound destination | none | exact tuple `list`/`element`, `maxSizeVariable : IntVariable`, `HasEmptySpot()` | Static contract |
 
 This table records what the installed assemblies offer, not what the suite calls
-each cycle. On the ordinary path only `CanPurchase()` and `Purchase()` are
-invoked, at the action boundary; the rest are read once per collection into the
-shared world snapshot, and nothing prices through `GetPurchaseCost()` — the suite
-owns that arithmetic and publishes `WorldPurchaseCost`.
+each cycle. World collection publishes the exact candidate-to-category/list/view
+relation and the view's captured availability. The action boundary rebuilds that
+same relation from live native objects immediately before payment, then reads the
+live owning-view verdict, the structure's own verdict when applicable, native
+admission, and any authored destination capacity. Nothing prices through
+`GetPurchaseCost()` on the planning path — the suite owns that arithmetic and
+publishes `WorldPurchaseCost`.
 
 One cold path adds to that. When `CanPurchase()` refuses, the adapter asks the
 game *why*, so a refusal can name a cause instead of being a silent skip:
@@ -63,15 +71,67 @@ game *why*, so a refusal can name a cause instead of being a silent skip:
 re-pricing. The same exact cost list is decoded into every resource UUID, cost,
 bandwidth flag, and live `GetTrueQuantity()`/`GetMissing()` value. An incomplete
 read carries an explicit status rather than a partial list. The manifest carries
-these under the owner *Automata Auto Buy refusal diagnostics* at place `action`;
-`IsAvailable` remains at place `capture`, since collection already calls it on
-every entity of every cycle.
+these under the owner *Automata Auto Buy refusal diagnostics* at place `action`.
+Separate action-place contracts now record the admitting `ViewSO.IsAvailable()`
+and `StructureSO.IsAvailable()` calls; their capture-place counterparts remain
+because world collection also publishes both kinds of availability.
 
 The shared queue contract is `ActionManager.GetRemainingRoom()` plus
 `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Upgrade
 single-level isolation additionally uses `GlobalVariables.GetMultiBuy()` and
 `IntVariable.AsInt()/SetValue(int)`. Structure fallback grouping may read
 `Player.GetBulkDevelopment()`.
+
+## Owning-view reachability chain
+
+The player-facing progression gate lives on the owning `ViewSO`, not on every
+item rendered inside it. `ViewSO.prerequisites` determines whether that tab is
+available. The authored ownership edge is indirect:
+
+```text
+candidate exact UUID + exact native type
+    -> exact StructureListVariable / UpgradeListVariable membership
+    -> ViewSO.relevantLists or ViewSO.availableLists
+    -> exact owning ViewSO
+    -> ViewSO.IsAvailable()
+```
+
+For a structure the resolver also proves that `StructureSO.structureType` is an
+exact `StructureTypeSO`, has a non-empty stable UUID, and contains that exact
+structure reference exactly once in its private `structures` list. Both view
+list fields participate, while the same view/list route repeated in both is
+collapsed. Different matching routes are ambiguous. A missing, unreadable,
+ambiguous, or contradictory route is retained in the world as a candidate row
+with that named status; the planner excludes it and publishes the corresponding
+skip count. It is never an empty gap that can be proposed forever.
+
+The released-0.5.0 Construction Aura incident proves why this is progression
+state rather than only an action refusal. Structure
+`6a361a01-8405-4fbc-9af1-42f471911d9e` was present in the
+`ArtificerStructures` list (`2c3b16bc-…`) and natively purchasable while its
+owning `WorkshopArtificer` view (`b8ebce37-…`) was unavailable. The item itself
+did not carry the tab prerequisite, so item-only collection could not see the
+player-reachability gate.
+
+## `CanPurchase()` truth table
+
+Selected IL from the audited v1.0.5 assembly proves the two methods are not
+equivalent admission oracles:
+
+| Native term | `StructureSO.CanPurchase()` (`0x060017A1`) | `UpgradeSO.CanPurchase()` (`0x060018C2`) |
+| --- | ---: | ---: |
+| per-level requirements | `HasMetLevelRequirements()` | `HasMetQueuedLevelRequirements()` |
+| max queued level | no | rejects `IsMaxQueuedLevel()` |
+| affordability | no | `GetPurchaseCost().HasEnough()` |
+| candidate `IsAvailable()` | no | yes |
+| owning `ViewSO.IsAvailable()` | no | no |
+| action queue admission | `ActionManager.CanLoadAction(this)` | `ActionManager.CanLoadAction(this)` |
+
+For structures in particular, `CanPurchase()` means only per-level requirements
+and action-load admission. It does not imply the structure is available and it
+does not imply the player can pay. The boundary therefore treats the owning-view
+and structure-availability reads as independent mandatory gates, not as
+diagnostic restatements of `CanPurchase()`.
 
 ## What the deleted incremental catalog established
 
@@ -100,14 +160,23 @@ is allowed to mutate:
 1. read live queue room through `ActionManager.GetRemainingRoom()` and subtract
    the configured reserve; the worker does not bound its plan by the queue at all,
    so this read is the only queue authority;
-2. resolve the candidate from its stable UUID to the live native object;
-3. call `CanPurchase()`, which folds in live requirements and queue admission —
-   the two things that can change between planning and acting;
-4. call the candidate adapter.
+2. resolve the candidate by stable UUID and exact native type;
+3. rebuild the exact owning category/list/view relation with the shared audited
+   resolver, then require live `ViewSO.IsAvailable()`;
+4. for a structure, require live `StructureSO.IsAvailable()` independently of
+   native admission;
+5. call the type-specific `CanPurchase()` described in the truth table above;
+6. for an upgrade, traverse every exact `viewListAdditions` tuple. If its target
+   list has a `maxSizeVariable`, validate the audited list/variable identities and
+   require live `HasEmptySpot()`;
+7. detach the live refusal-cost evidence and enter the existing mutation verifier.
 
-`IsAvailable()` is deliberately *not* read on the admitting path. Availability is
-a published snapshot field, so the worker never plans an unavailable candidate,
-and re-reading it to admit would pay for a fact already known.
+The view and structure availability reads are deliberately repeated at the
+admitting boundary even though planning used published availability. These are
+mutable native progression facts, and `StructureSO.CanPurchase()` does not cover
+either of them. Each additional level of a grouped structure purchase repeats
+the owning-view relation, both availability gates, and native admission before
+the next `Purchase(true)` call.
 
 The same is now true of the per-level prerequisites, which used to be the one
 admitting term the snapshot could not carry, because the game's own answer takes
@@ -120,13 +189,17 @@ an unfinished `ImprovedScribing`. See W58.
 
 ## Refusal diagnosis
 
-`CanPurchase()` refusing a purchase the worker planned means one of two things.
-If `HasEnough()` is the only refusing term, resource quantities moved after
-collection through drain or queue-time spending. That is expected snapshot
-staleness: the action records every live row, same-batch resource overlap,
-collection-to-admission time, and world-generation delta, then returns a
-pre-native skip. Common holds the service behind its world-freshness gate until
-a later collection; configuration is untouched.
+All owning-view relation failures, a locked owning view, a structure whose own
+availability dropped, and a full or untrusted destination are named pre-payment
+refusals. They do not enter the `CanPurchase()` diagnostic path because their
+contracts are independent of that bool.
+
+When `CanPurchase()` itself refuses, a sole `HasEnough()` failure is expected
+snapshot staleness for upgrades: resource quantities moved after collection
+through drain or queue-time spending. The action records every live row,
+same-batch resource overlap, collection-to-admission time, and world-generation
+delta, then returns a pre-native skip. Common holds the service behind its
+world-freshness gate until a later collection; configuration is untouched.
 
 An availability or level-cap contradiction is structural. If every readable
 term passes, the parameterized per-level prerequisite is the remaining term by
@@ -134,21 +207,53 @@ elimination. Those cases remain invariant violations: they terminate the batch
 and stand Auto Buy down after writing the full diagnostic. None of these cold
 reads happen on an admitted purchase.
 
+## Destination-capacity admission
+
+An aspect acquisition is an ordinary `UpgradeSO`. Its authored
+`viewListAdditions` contains `ViewListVariable.ListTuple` values whose inherited
+`list` and `element` fields cause `UpgradeSO.ApplyListAdditions()` to add a view.
+The world-aspect destination is `CreatedWorldAspects`
+(`74ec1f90-e94c-4cd7-a1d0-7b35016b57ff`), whose
+`AbstractListVariable<ViewSO>.maxSizeVariable` must be the exact
+`WorldAspectSlots` `IntVariable`
+(`4b1bb2de-723a-4360-827c-8e4483f3ff8d`). Neither `CanPurchase()` nor
+`Purchase()` inspects this destination before applying the tuple.
+
+The boundary is generic over the authored tuple list, not over aspect upgrade
+names. Every exact tuple is validated. A tuple targeting an unbounded list needs
+no capacity gate. A capacity-bound tuple must match an audited exact list/max
+identity pair and its live list must answer `HasEmptySpot() == true`; an unknown
+pair, malformed tuple, identity contradiction, or full destination refuses
+before payment. The currently audited capacity profile contains the world-aspect
+pair above.
+
+**Maintainer live observation (released 0.5.0):** purchasing an aspect with zero
+free slots invented an extra slot in the UI. Buying the later slot upgrade then
+added another slot which stayed permanently empty. This supersedes the earlier
+IL-only expectation that the list addition might silently no-op. Three aspect
+upgrades exist; the observed one was likely the crafting/Workshop aspect
+(`d9f1a5c3-…`), with Alchemy Lab (`2f37d7a7-…`) and Rituals
+(`38f53d08-…`) as the other candidates, but the exact overflowing upgrade remains
+authored-data/live territory. The suite's contract is narrower and firm: it must
+never create the full-destination state, whichever upgrade authored the tuple.
+
 ## Mutation transaction
 
 ### Structure
 
 1. Capture `GetQueuedQuantity()`.
 2. Invoke `StructureSO.Purchase(true)`, once per requested level, re-reading
-   `CanPurchase()` before each level past the first.
+   the owning-view relation, both live availability gates, and `CanPurchase()`
+   before each level past the first.
 3. Capture `GetQueuedQuantity()` again.
 4. Accept an exact delta of `+1` for a single-level request, and a delta in
    `[1, count]` for a group.
 
 `Purchase(true)` forces exactly one level and consults no multiplier, so a bulk
 structure buy is the same call repeated inside one verifier scope — which is what
-the Bulk Development grouping mode asks for. A group that stops early because the
-game stopped admitting is a partial success, not a refusal. The Boolean argument
+the Bulk Development grouping mode asks for. A group that stops early because a
+gate changed or `Purchase(true)` committed no further affordable level is a
+partial success once at least one level committed, not a refusal. The Boolean argument
 shape and exact queued-state methods are statically verified. The meaning of the
 `true` argument and the internal native order of resource spending versus
 `QueueBuild` are not asserted here without a reviewed IL/runtime observation.
@@ -204,7 +309,9 @@ recovery.
 - whether all completion/echo paths produce the same Harmony callback order;
 - whether queue capacity can change outside the currently observed progression
   paths;
-- exact availability/registry populations at named player progression stages.
+- exact availability/registry populations at named player progression stages;
+- which exact authored aspect upgrade produced the observed overflowing-slot
+  incident.
 
 These unknowns require an installed-assembly IL audit or sanitized runtime
 observation before they can strengthen simulation authority.

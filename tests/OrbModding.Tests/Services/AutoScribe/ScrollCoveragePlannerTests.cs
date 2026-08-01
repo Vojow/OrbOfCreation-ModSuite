@@ -81,12 +81,29 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(4, coverage.RequestedCraftLevel);
     }
 
-    [Theory]
-    [InlineData(4, 3)]
-    [InlineData(1, 1)]
-    public void PositiveCarryLimitKeepsOneSlotFreeWithoutDroppingBelowOne(
-        int maximumCarryLoad,
-        int expectedDeficit)
+    [Fact]
+    public void DemandBelowCarryRequestsOnlyUncoveredCount()
+    {
+        var role = _profile.Roles[0];
+        var world = World(candidateCount: 2) with
+        {
+            Consumables = ScrollsWithOverride(
+                role.Key,
+                maxCreatedLevel: 3,
+                maximumCarryLoad: 4),
+        };
+
+        var coverage = FindRole(
+            ScrollCoveragePlanner.Build(world, _profile),
+            role.Key);
+
+        Assert.Equal(2, coverage.ValidTargets);
+        Assert.Equal(2, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+    }
+
+    [Fact]
+    public void DemandAboveCarryClampsInFlightSupplyToCarry()
     {
         var role = _profile.Roles[0];
         var world = World(candidateCount: 7) with
@@ -94,29 +111,120 @@ public sealed class ScrollCoveragePlannerTests
             Consumables = ScrollsWithOverride(
                 role.Key,
                 maxCreatedLevel: 3,
-                maximumCarryLoad),
+                maximumCarryLoad: 4),
         };
 
         var coverage = FindRole(
             ScrollCoveragePlanner.Build(world, _profile),
             role.Key);
 
-        Assert.Equal(expectedDeficit, coverage.Deficit);
+        Assert.Equal(7, coverage.ValidTargets);
+        Assert.Equal(4, coverage.Deficit);
         Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
     }
 
     [Fact]
-    public void ZeroCarryLimitContinuesToFollowUncoveredDemand()
+    public void FullTargetLevelInventoryStallsWithoutEqualLevelChurn()
     {
         var role = _profile.Roles[0];
+        var world = World(candidateCount: 7) with
+        {
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 4,
+                freeQuantity: 0)),
+        };
 
         var coverage = FindRole(
-            ScrollCoveragePlanner.Build(World(candidateCount: 3), _profile),
+            ScrollCoveragePlanner.Build(world, _profile),
             role.Key);
 
-        Assert.Equal(3, coverage.ValidTargets);
-        Assert.Equal(3, coverage.Deficit);
+        Assert.Equal(4, coverage.OwnedSupply);
+        Assert.Equal(0, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.Covered, coverage.State);
+        Assert.False(coverage.ShouldProduce);
+        Assert.True(coverage.ShouldProbeProgression);
+        Assert.Equal(4, coverage.RequestedCraftLevel);
+    }
+
+    [Fact]
+    public void ExternalGiftShrinksDeficitOnNextPublication()
+    {
+        var role = _profile.Roles[0];
+        var before = FindRole(
+            ScrollCoveragePlanner.Build(World(candidateCount: 3), _profile),
+            role.Key);
+        var afterWorld = World(candidateCount: 3) with
+        {
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 3,
+                quantity: 1,
+                freeQuantity: 1)),
+        };
+
+        var after = FindRole(
+            ScrollCoveragePlanner.Build(afterWorld, _profile),
+            role.Key);
+
+        Assert.Equal(3, before.Deficit);
+        Assert.Equal(1, after.OwnedSupply);
+        Assert.Equal(2, after.Deficit);
+    }
+
+    [Fact]
+    public void WeakerOwnedStockDoesNotReduceDemandOrRequestCleanup()
+    {
+        var role = _profile.Roles[0];
+        var world = World(candidateCount: 2) with
+        {
+            ConsumableCounts = Table(new WorldConsumableCount(
+                role.Scroll.Uuid,
+                level: 2,
+                quantity: 4,
+                freeQuantity: 0)),
+        };
+
+        var plan = ScrollCoveragePlanner.Build(world, _profile);
+        var coverage = FindRole(plan, role.Key);
+        var selection = plan.ChooseCraft(Table(role.Key), afterCraftCostOrder: -1);
+
+        Assert.Equal(3, coverage.TargetLevel);
+        Assert.Equal(0, coverage.OwnedSupply);
+        Assert.Equal(2, coverage.Deficit);
         Assert.Equal(ScrollCoverageState.ProductionNeeded, coverage.State);
+        Assert.Equal(ScrollCraftSelectionKind.Selected, selection.Kind);
+        Assert.Equal(3, selection.SelectedScroll.RequestedCraftLevel);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void NonPositiveCarryRefusesGuaranteedPaidLossWithNamedReason(
+        int maximumCarryLoad)
+    {
+        var role = _profile.Roles[0];
+        var plan = ScrollCoveragePlanner.Build(
+            World(candidateCount: 3, maximumCarryLoad: maximumCarryLoad),
+            _profile);
+        var coverage = FindRole(plan, role.Key);
+        var selection = plan.ChooseCraft(Table(role.Key), afterCraftCostOrder: -1);
+
+        Assert.Equal(3, coverage.ValidTargets);
+        Assert.Equal(0, coverage.Deficit);
+        Assert.Equal(ScrollCoverageState.NativeGainUnavailable, coverage.State);
+        Assert.Equal(
+            AutoScribeEvidenceReason.NonPositiveCarryLimit,
+            coverage.EvidenceReason);
+        Assert.False(coverage.ShouldAttemptCraft);
+        Assert.Equal(ScrollCraftSelectionKind.EvidenceBlocked, selection.Kind);
+        Assert.Equal(
+            AutoScribeEvidenceReason.NonPositiveCarryLimit,
+            selection.BlockedReason);
+        Assert.Contains(
+            "native Gain() silently drops",
+            ScrollCoveragePlanner.DescribeEvidence(in coverage));
     }
 
     [Fact]
@@ -213,7 +321,7 @@ public sealed class ScrollCoveragePlannerTests
     [Fact]
     public void IdleSelectionDoesNotMasqueradeAsEvidenceBlocked()
     {
-        var world = World(candidateCount: 0);
+        var world = World(candidateCount: 0, maxCreatedLevel: int.MaxValue);
         var selection = ScrollCoveragePlanner.Build(world, _profile).ChooseCraft(
             enabledRoles: null,
             afterCraftCostOrder: -1);
@@ -311,7 +419,10 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(0, blocked);
         Assert.Equal(
             WakePolicy.OnPublication,
-            Evaluate(World(candidateCount: 0), active, out var idle));
+            Evaluate(
+                World(candidateCount: 0, maxCreatedLevel: int.MaxValue),
+                active,
+                out var idle));
         Assert.Equal(0, idle);
     }
 
@@ -336,7 +447,9 @@ public sealed class ScrollCoveragePlannerTests
 
     private GameWorldState World(
         int omitTargetEvidenceForRole = -1,
-        int candidateCount = 1)
+        int candidateCount = 1,
+        int maxCreatedLevel = 3,
+        int maximumCarryLoad = 4)
     {
         var recipes = new List<WorldScribeRecipe>();
         var consumables = new List<WorldConsumable>();
@@ -352,7 +465,10 @@ public sealed class ScrollCoveragePlannerTests
                 role.Scroll.Uuid,
                 visible: true,
                 usesQuantityAsLevel: true));
-            consumables.Add(Scroll(role.Scroll.Uuid, maxCreatedLevel: 3));
+            consumables.Add(Scroll(
+                role.Scroll.Uuid,
+                maxCreatedLevel,
+                maximumCarryLoad));
             for (var candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
                 targets.Add(new WorldScrollTarget(
                     role.Scroll.Uuid,
@@ -418,7 +534,7 @@ public sealed class ScrollCoveragePlannerTests
     private PublicationTable<WorldConsumable> ScrollsWithOverride(
         ScrollRoleKey overrideRole,
         int maxCreatedLevel,
-        int maximumCarryLoad = 0)
+        int maximumCarryLoad = 4)
     {
         var rows = new List<WorldConsumable>();
         for (var index = 0; index < _profile.Roles.Count; index++)
@@ -428,7 +544,7 @@ public sealed class ScrollCoveragePlannerTests
             rows.Add(Scroll(
                 role.Scroll.Uuid,
                 role.Key == overrideRole ? maxCreatedLevel : 3,
-                role.Key == overrideRole ? maximumCarryLoad : 0));
+                role.Key == overrideRole ? maximumCarryLoad : 4));
         }
         return Table(rows.ToArray());
     }
@@ -436,7 +552,7 @@ public sealed class ScrollCoveragePlannerTests
     private static WorldConsumable Scroll(
         Guid scrollId,
         int maxCreatedLevel,
-        int maximumCarryLoad = 0)
+        int maximumCarryLoad = 4)
     {
         var modifiers = default(RawConsumableModifiers);
         return new WorldConsumable(

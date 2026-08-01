@@ -14,7 +14,8 @@ internal enum AutoScribeEvidenceReason
     RecipeRelationshipMismatch = 4,
     TargetLevelUnavailable = 5,
     TargetEvidenceMissing = 6,
-    TargetEvidenceContradictory = 7,
+    NonPositiveCarryLimit = 7,
+    TargetEvidenceContradictory = 8,
 }
 
 internal enum ScrollCoverageState
@@ -25,6 +26,7 @@ internal enum ScrollCoverageState
     ProductionNeeded = 3,
     ExternallyProducing = 4,
     Unavailable = 5,
+    NativeGainUnavailable = 6,
 }
 
 internal readonly record struct ScrollRoleCoverage(
@@ -130,8 +132,8 @@ internal sealed class ScrollCoveragePlan
     internal ScrollRoleCoverage[] Roles { get; }
 
     /// <summary>
-    /// F4 fail-closed selection: an unknown enabled role blocks the whole publication before cost
-    /// rank can select a different, apparently healthy role.
+    /// F4 fail-closed selection: an evidence-blocked enabled role blocks the whole publication
+    /// before cost rank can select a different, apparently healthy role.
     /// </summary>
     internal ScrollCraftSelectionResult ChooseCraft(
         PublicationTable<ScrollRoleKey>? enabledRoles,
@@ -141,7 +143,8 @@ internal sealed class ScrollCoveragePlan
         {
             var candidate = Roles[index];
             if (!AutoScribeRoleSelection.Contains(enabledRoles, candidate.Role) ||
-                candidate.State != ScrollCoverageState.EvidenceUnknown)
+                candidate.State is not (ScrollCoverageState.EvidenceUnknown or
+                    ScrollCoverageState.NativeGainUnavailable))
                 continue;
             return ScrollCraftSelectionResult.EvidenceBlocked(
                 candidate.RoleOrdinal,
@@ -218,6 +221,9 @@ internal static class ScrollCoveragePlanner
                 prefix + " is blocked because its per-Scroll progression frontier was unavailable.",
             AutoScribeEvidenceReason.TargetEvidenceMissing =>
                 prefix + " is blocked because its Scroll target relationship was unavailable.",
+            AutoScribeEvidenceReason.NonPositiveCarryLimit =>
+                prefix + " is blocked because native Gain() silently drops positive Scroll " +
+                "output when maximum carry load is non-positive.",
             AutoScribeEvidenceReason.TargetEvidenceContradictory =>
                 prefix + " is blocked because its Scroll target count contradicted the completeness marker.",
             _ => prefix + " has complete evidence.",
@@ -325,15 +331,34 @@ internal static class ScrollCoveragePlanner
         var queued = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: false);
         var automatic = CountWork(world.ScribeWork, recipeId, targetLevel, automatic: true);
         var pending = CountPending(world.ConsumableUsages, role.Scroll.Uuid, targetLevel);
-        var desired = carry > 0 ? Math.Max(1, carry - 1) : uncovered;
+        if (carry <= 0)
+            return new ScrollRoleCoverage(
+                role.Ordinal,
+                role.Key,
+                role.DisplayName,
+                role.Scroll.Uuid,
+                role.Enchantment.Uuid,
+                recipeId,
+                role.CraftCostOrder,
+                targetLevel,
+                0,
+                targets,
+                Math.Max(0, targets - uncovered),
+                owned,
+                queued,
+                pending,
+                automatic,
+                0,
+                AutoScribeEvidenceReason.NonPositiveCarryLimit,
+                ScrollCoverageState.NativeGainUnavailable);
+
+        var desired = Math.Min(uncovered, carry);
         var deficit = Math.Max(0, desired - owned - queued - pending);
         var state = automatic > 0 && deficit > 0
             ? ScrollCoverageState.ExternallyProducing
             : deficit > 0
                 ? ScrollCoverageState.ProductionNeeded
                 : ScrollCoverageState.Covered;
-        if (targets == 0 && carry == 0)
-            progressionLevel = 0;
         return new ScrollRoleCoverage(
             role.Ordinal,
             role.Key,

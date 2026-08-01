@@ -29,4 +29,16 @@ internal static class AutoHarvestActionResultCodes
 
     /// <summary>The exact prerequisite validation evidence could not be read safely.</summary>
     public static ServiceActionResultCode NativePrerequisiteValidationUnavailable => new(1029);
+
+    public static ServiceActionResultCode NativePairIdentityRevalidationRefused => new(1030);
+
+    public static ServiceActionResultCode NativePlotVisibilityRefused => new(1031);
+
+    public static ServiceActionResultCode NativeOfferedInstanceMembershipRefused => new(1032);
+
+    public static ServiceActionResultCode NativeActionRowVisibilityRefused => new(1033);
+
+    public static ServiceActionResultCode NativeHasEnoughForOneInstanceRefused => new(1034);
+
+    public static ServiceActionResultCode NativeMaximumRemainingInstancesRefused => new(1035);
 }

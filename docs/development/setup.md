@@ -1,55 +1,124 @@
 # Development setup
 
-[Back to documentation](../README.md) · [Contributing](../../CONTRIBUTING.md)
+[Back to documentation](../README.md) · [Contributing](../../CONTRIBUTING.md) ·
+[Engineering doctrine](engineering-doctrine.md)
 
-Portable tests require only the .NET SDK. Production builds also require local Orb of Creation managed assemblies and BepInEx 5 build references because those binaries are not committed. BepInEx does not need to be installed into the game for a build: a gitignored staging root may provide the expected layout.
+## Repository flow
+
+Branch from `develop` and keep the pull request focused. Pull requests target
+`develop`; `main` is updated by the release flow in
+[the release procedure](../releasing.md) and
+[release review checklist](releases.md). Use an area-prefixed commit subject such
+as `autobuy: ...`, `ui: ...`, `build: ...`, or `docs: ...`.
+
+## Dependencies
+
+The default build requires only the pinned .NET SDK. The repository commits a
+metadata-only, full-surface reference closure generated from the audited Orb of
+Creation v1.0.5 assemblies. These references preserve native assembly, type,
+and member identities but contain no method bodies. They are not the
+hand-written test stubs.
+
+With no `OOC_GAME_DIR` set, both configurations build against the committed
+references:
+
+```bash
+dotnet build src/OrbModSuite.csproj --configuration Debug
+dotnet build src/OrbModSuite.csproj --configuration Release
+```
+
+`global.json` pins the exact SDK used for release builds. Install that SDK
+version rather than allowing the compiler to float.
+
+`VERSION` is the only build-version input. `Directory.Build.props` reads it,
+the suite project derives its SDK version, and MSBuild generates the BepInEx
+version constants under the active ignored `obj-*` directory. `CHANGELOG.md`
+is the only other tracked file carrying the maintained release version.
+
+The canonical publication build also sets
+`ContinuousIntegrationBuild=true`. That normalizes SourceLink document roots
+to `/_/`, so the full DLL is byte-identical across checkout locations. A plain
+development build remains deterministic within its checkout but is not the
+cross-checkout release-byte reproduction command.
+
+Set `OOC_GAME_DIR` only for operations that need the real installation: local
+installation, installed contracts, refs regeneration, and the per-refs-change
+faithfulness comparison. Both CI publication flavors compile from committed
+refs without a game. The game is never launched by the contract gate.
+
+On Windows, point `OOC_GAME_DIR` at the game root:
 
 ```powershell
 $env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
-dotnet build src/OrbModSuite.csproj -c Release
+dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj -c Release
 ```
 
-Expected external references are documented in the [source layout](../../src/README.md). Run portable tests with:
-
-```powershell
-dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true
-```
-
-Stub-linked outputs are isolated under `bin-stubs/` and `obj-stubs/`. Never deploy them to BepInEx. For installed-game checks, continue with the [testing hub](../testing/README.md) and the [runtime validation protocol](../testing/runtime-validation.md).
-
-On Linux or macOS, stage the same layout under ignored `lib/`, point
-`lib/Orb Of Creation_Data/Managed` at the platform's real Managed directory, and place the official
-BepInEx 5 `core` files under `lib/BepInEx/core`. Then build without PowerShell:
+On Linux or macOS, `OOC_GAME_DIR` may point to a staged ignored copy with game
+assemblies under `Orb Of Creation_Data/Managed` and BepInEx under `BepInEx/core`.
 
 ```bash
 export OOC_GAME_DIR="$PWD/lib"
-dotnet build src/OrbModSuite.csproj -c Release
+dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
 ```
 
-Keep user-specific absolute paths out of tracked files. Staging and building do not authorize copying
-anything into the game installation.
+Keep absolute local paths out of tracked files. Building does not authorize an
+installation into the game.
 
-For an explicitly authorized local smoke-test installation, use one of the supported installer modes:
+## Development gate
+
+Run the portable/profile and installed-contract lanes one after the other:
+
+```bash
+ORB_TEST_ATTEMPTS=1 ./script/test
+OOC_GAME_DIR="$PWD/lib" dotnet test \
+  tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
+```
+
+The first command has a 60-second wall-clock limit and runs the ordinary suite,
+the compile-time profile suite, and the profiled trace-tool build. The second
+reads PE metadata from the audited game copy without launching Unity. Record and
+reconcile all test and manifest counts; when compiler-warning counts matter,
+use `tools/build-release-assets.sh` or the serial, non-incremental command in
+[the release procedure](../releasing.md) so caching cannot hide a delta.
+
+Stub-linked outputs live under `bin-stubs/` and `obj-stubs/`; metadata-true
+reference builds use the normal `bin/` tree. The canonical publication build
+adds the cross-checkout setting above. Never install a
+hand-written-stub-linked DLL. Continue with the
+[testing hub](../testing/README.md) and
+[runtime validation protocol](../testing/runtime-validation.md).
+
+## Supported operator commands
+
+Only after the user explicitly authorizes a local installation:
 
 ```bash
 ./script/install release
 ./script/install perf-debug
 ```
 
-`release` builds the ordinary Release assemblies without ServiceCycle profiling probes. `perf-debug` builds
-Debug assemblies with `EnableServiceCycleProfiler=true`. Both modes refuse to run while the game is open,
-run the complete portable gate and installed-game contracts, build the one supported assembly,
-reject duplicate ModSuite DLLs and any retired per-plugin DLL still installed, back up active top-level saves and installed DLLs, install
-the verified outputs, and print their SHA-256 hashes. Set `OOC_GAME_DIR` or `OOC_SAVE_DIR` when local Steam
-discovery does not match the installation. The command never packages, tags, publishes, or launches the game.
+Both modes refuse to run while the game is open, run the gates, back up saves and
+installed DLLs, reject duplicate or retired DLLs, install the verified output,
+and print SHA-256 hashes. `release` installs the same committed-reference build
+that ships. The local `perf-debug` installer includes ServiceCycle profiling
+and continues to compile against the real game closure; the CI perf-debug asset
+uses the matching committed profile refs. Both installers also need the game
+directory as the destination and for installed-contract validation. Neither
+command tags, publishes, or launches the game.
 
-From a clean commit, rehearse the complete supported-suite package on macOS or Linux with the same ignored
-staging root:
+From a clean commit, rehearse the supported package without installing it:
 
 ```bash
 ./script/package
 ```
 
-The command runs the bounded portable gate, installed contracts, and all real-reference Release builds
-before creating an allowlisted ZIP and SHA-256 manifest under `artifacts/releases/`. It never writes to the
-game installation and refuses to overwrite an existing rehearsal for the same suite version.
+The package rehearsal runs the portable and installed-contract gates, then
+builds the canonical Release DLL from committed references before writing an
+allowlisted archive and hash manifest under `artifacts/releases/`.
+
+When a new audited game version requires regenerating `lib/game-refs`, run the
+`ReleaseAssemblyCheck` comparison in
+[the release procedure](../releasing.md#reference-change-faithfulness) in that
+same refs change. It is a reference-faithfulness gate, not a per-release gate.

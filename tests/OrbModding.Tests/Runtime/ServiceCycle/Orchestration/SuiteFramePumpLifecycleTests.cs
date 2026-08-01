@@ -125,13 +125,11 @@ public sealed class SuiteFramePumpLifecycleTests
         Assert.Equal(ServiceRunnerPositionState.Retiring, registration.LifecycleSnapshot.Position0.State);
         Assert.Equal((ulong)2, registration.Runner.Lifecycle.Value);
         gate.Release.Set();
-        Assert.True(SpinWait.SpinUntil(
-            () => oldRunner.HandoffPhaseHint == ServiceHandoffPhase.Stopped,
-            TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForPhase(oldRunner, ServiceHandoffPhase.Stopped);
 
         PumpUntil(pump, ref frame, () => freshGate.Entered.IsSet, collector: registry);
         freshGate.Release.Set();
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(3)));
+        ServiceRunnerTestWait.ForResponse(registration);
         PumpUntil(pump, ref frame, () => registration.Runner.Snapshot.Projection.IsPresent, collector: registry);
         Assert.Equal((ulong)2, registration.Runner.Snapshot.Projection.Context.Cycle.Lifecycle.Value);
         Assert.Equal(0, definition.ExecutionCount(1));

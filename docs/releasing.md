@@ -1,92 +1,167 @@
 # Releasing Orb Of Creation ModSuite
 
-This is the release procedure for Vojow, the upstream repository owner. Run it from Git Bash on
-Windows, in a clean checkout of the merged release commit. The script builds and publishes the
-checked-out commit; it does not select another branch or commit for you.
+Every change reaches `main` through a pull request. Humans and automation do
+not push commits directly to `main`. GitHub Actions is the only owner of
+publication tags and GitHub releases.
 
-## Prerequisites
+`VERSION` and `CHANGELOG.md` are the only tracked version sources:
 
-- .NET SDK 10 (`dotnet --version` must begin with `10.`).
-- GitHub CLI installed and authenticated for GitHub (`gh auth login`).
-- Orb of Creation installed with a complete BepInEx 5 setup, and the game closed.
-- A clean checkout of the merged release commit, with `origin` pointing at the GitHub repository
-  that should receive the tag and release.
-- `shasum` or `sha256sum`. Git for Windows supplies the other shell tools used by the script.
+- `VERSION` contains the current stable suite version as one stable SemVer
+  value.
+- `CHANGELOG.md` contains the curated section for that version and historical
+  release sections. It has no `Unreleased` section.
 
-The game-directory lookup follows the supported installer and also checks the two standard Windows
-Steam locations. If it does not find the install, set `OOC_GAME_DIR`; Windows paths are normalized
-through `cygpath`:
+`Directory.Build.props` reads `VERSION`, the suite project derives its SDK
+assembly/package version from that property, and MSBuild generates the two
+`PluginIds` version constants under the active `obj-*` directory. No generated
+version source is checked in. BepInEx, the in-game version, assembly metadata,
+packages, and publication assets therefore cannot drift from `VERSION`.
+
+## Beta on each ordinary main merge
+
+On every push to `main`, `.github/workflows/release.yml` asks whether annotated
+or lightweight tag `suite-v$(cat VERSION)` already exists.
+
+When it exists, the push is a beta. The workflow:
+
+1. runs portable, profile, refs-contract, release-policy, and manifest-derived
+   hygiene gates without a game installation;
+2. builds the normal Release and perf-debug flavors from the committed refs;
+3. uses `git describe` from the newest existing stable tag, excluding
+   `*+main.*` beta tags, to count commits;
+4. creates annotated tag `suite-v<VERSION>+main.<N>`; and
+5. creates a GitHub prerelease with `OrbModSuite-release.dll`,
+   `OrbModSuite-perf-debug.dll`, and their checksum file.
+
+The prerelease notes are the associated merged PR body. An empty body, no
+associated PR, an API error, or invalid API response falls back to the merge
+commit message; notes lookup never blocks publication.
+
+## Full release through a release PR
+
+The release PR is the promotion. The maintainer writes it by hand:
+
+1. edit `VERSION` to the chosen stable SemVer;
+2. add the curated, dated section for that exact version at the top of
+   `CHANGELOG.md`;
+3. run the private gates below; and
+4. open a PR whose title starts exactly with `release:`.
+
+There is no drafting helper and no local release script. No local tool commits,
+tags, pushes, or creates a release.
+
+The required `release-policy` PR check rejects `VERSION` or `CHANGELOG.md`
+changes from every non-`release:` PR. A real version promotion must be valid
+stable SemVer, strictly greater than the newest existing stable `suite-v` tag,
+and carry exactly one matching changelog section in the same PR. Configure
+`release-policy` as a required branch-protection check so violations cannot
+merge.
+
+Squash-merge the approved release PR without changing its `release:` title.
+The squash commit retains that title as its subject, and the main-push policy
+rechecks that every `VERSION`/`CHANGELOG.md` change belongs to a `release:`
+commit.
+
+Because `suite-v<new VERSION>` does not exist, the state-based classifier takes
+the full-release path. It independently builds both flavors on Ubuntu and
+Windows and requires complete byte equality for both DLLs. Only then does CI
+create annotated tag `suite-v<VERSION>` and the full GitHub release with notes
+from the matching changelog section.
+
+Classification never depends on the before/after edge that introduced
+`VERSION`. If the stable tag remains absent, every later main merge attempts
+that stable release again. Once the tag exists, later merges return to betas.
+
+## Publication inputs
+
+Both publication flavors compile from `lib/game-refs/v1.0.5` with
+`OOC_GAME_DIR` absent and the SDK pinned by `global.json`:
+
+- `OrbModSuite-release.dll` is the normal Release build and must contain no
+  ServiceCycle profiling components.
+- `OrbModSuite-perf-debug.dll` is the Debug profiling build.
+
+The committed refs are full-surface metadata derivations of audited assemblies,
+not the hand-written test stubs. Test stubs are never installed or published.
+There is no SHA-in-tag attestation: stable-release trust comes from the
+cross-OS reproducibility comparison, the SHA-locked refs, and the pinned SDK.
+
+## Private pre-release gates
+
+Before approving a release PR, run the complete local gate serially:
 
 ```bash
-export OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
+PATH=/usr/local/share/dotnet:$PATH \
+  ORB_TEST_TIMEOUT_SECONDS=600 ORB_TEST_ATTEMPTS=1 ./script/test
+
+PATH=/usr/local/share/dotnet:$PATH \
+  OOC_GAME_DIR=/absolute/path/to/audited/game-v105 \
+  dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
+
+PATH=/usr/local/share/dotnet:$PATH \
+  env -u OOC_GAME_DIR dotnet build src/OrbModSuite.csproj \
+  --configuration Release --disable-build-servers -m:1 --no-incremental \
+  -p:EnableServiceCycleProfiler=false -p:ContinuousIntegrationBuild=true
 ```
 
-## Recommended sequence
-
-Always rehearse the exact commit first:
+Install and playtest the refs-built Release artifact—the refs-built bytes are
+what ship:
 
 ```bash
-tools/release.sh 0.5.0 --dry-run
+./script/install release
 ```
 
-Read the printed commit, repository target, tag, title, asset path, and DLL SHA-256. If all are
-correct, run the real release:
+Installed contracts remain the private proof against the real audited game.
+CI does not claim metadata-only refs repeat that evidence. Complete the
+applicable V0–V7 [runtime validation protocol](testing/runtime-validation.md)
+and record test, contract, warning, configuration-schema, game/BepInEx, native
+assembly, interactive, and known-limitation evidence in the release PR.
+
+## Reference-change faithfulness
+
+Real-game versus refs-built faithfulness is a reference-generation gate, not a
+per-release ceremony. Whenever `lib/game-refs` is regenerated for a new audited
+game version, run `tools/make-game-refs.sh`, clean-build the suite once against
+the real audited closure and once against the regenerated refs, retain both
+DLLs, and invoke:
 
 ```bash
-tools/release.sh 0.5.0
+dotnet run \
+  --project tools/OrbModding.ReleaseAssemblyCheck/OrbModding.ReleaseAssemblyCheck.csproj \
+  --configuration Release -- \
+  /path/to/refs-built/OrbModSuite.dll \
+  /path/to/game-built/OrbModSuite.dll
 ```
 
-The real run repeats every check, gate, and build. Before anything irreversible it prints the
-GitHub repository again and asks you to retype the version. It then:
+`ReleaseAssemblyCheck` permits only the known compiler debug-identity regions
+to differ. Any IL, metadata, reference identity, resource, attribute, or other
+byte difference blocks the refs update. Routine releases do not rerun it.
 
-1. creates annotated tag `suite-v<version>` at the checked-out commit;
-2. pushes that tag to `origin`; and
-3. creates the GitHub release in the repository resolved from `origin`, using the matching
-   changelog heading as the title and that section's text as the notes.
+## Recovery runbook
 
-`OrbModSuite.dll` is the attached asset. A version with a prerelease suffix is marked as a GitHub
-prerelease.
+All source fixes use PRs; recovery never directly pushes a commit to `main`.
 
-## What the script verifies
+- **Transient CI failure before tag creation:** re-run the failed workflow. If
+  source changes are needed, merge a normal fix PR. With no stable tag, the
+  next main push retries the stable release automatically.
+- **Reproducibility mismatch:** do not bypass or post-process it. Fix forward in
+  a PR while keeping `VERSION` at the intended release value. Each subsequent
+  main merge re-attempts the stable release until both builds match.
+- **Annotated tag pushed but GitHub release creation failed:** the tag makes the
+  repository look released, so an explicitly authorized maintainer deletes
+  that exact remote tag (`git push origin :refs/tags/suite-v<VERSION>`), and any
+  local copy (`git tag -d suite-v<VERSION>`). The next PR merge retries the full
+  release. Never move or overwrite the published tag.
 
-Before the gate, the script verifies:
+An existing target beta tag or GitHub release remains a loud failure. There is
+no get-or-create or overwrite path.
 
-- the version is valid SemVer;
-- Git, GitHub CLI, .NET 10, process-inspection tools, and a SHA-256 tool are available;
-- GitHub CLI is authenticated;
-- the tracked working tree is clean and HEAD can be fixed as the release source;
-- `origin` resolves through `gh repo view`, and the exact repository is printed;
-- the local checkout and `origin` do not already contain `suite-v<version>`;
-- `CHANGELOG.md` contains exactly one matching section with non-empty notes;
-- the project, package, informational, loader, file, and in-game release versions all agree;
-- the game directory contains the required game, Unity, BepInEx, and Harmony assemblies; and
-- Orb of Creation is not running. On Windows the native PowerShell process query runs before any
-  POSIX fallback and fails closed if inspection itself fails.
-
-The gate runs the source and ordinary test-project stub builds, then `./script/test` for the full
-portable and profile suites, followed by installed-game contracts against the located game. The
-script then performs the same non-profile Release build used by the supported installer, rejects
-profiling components in the output, and prints the DLL SHA-256. It checks that HEAD and every tracked
-file stayed unchanged after both the gate and the build.
-
-## What it refuses to do
-
-There are no skip flags. A dirty tracked tree, changed HEAD, version mismatch, missing changelog
-section, missing tool or game assembly, unauthenticated GitHub CLI, running game, existing tag,
-failed gate, failed build, or mistyped confirmation stops the release. The script never forces a
-tag or push and never replaces an existing release.
-
-`--dry-run` performs every preflight, gate, and build, but creates no tag, push, or GitHub release.
-If a real run fails after pushing the tag, the script leaves that tag in place and reports the
-failed publish step; it does not delete or rewrite published state.
-
-For maintainers, the release helpers are checked without invoking the release entry point:
+Local, publication-free helper checks are:
 
 ```bash
-bash -n tools/release.sh
-bash -n tools/test-release-helpers.sh
+bash -n tools/release-common.sh
+bash -n tools/check-release-policy.sh
+bash -n tools/build-release-assets.sh
 tools/test-release-helpers.sh
 ```
-
-SteamCMD-based CI release automation is the planned follow-up so future releases no longer depend
-on any one person's game installation or machine.

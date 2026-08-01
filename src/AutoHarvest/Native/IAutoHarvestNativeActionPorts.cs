@@ -10,18 +10,19 @@ internal interface IAutoHarvestBindingPort
 }
 
 /// <summary>
-/// The action boundary's view of the live game: what it must re-check before mutating, and the
-/// instance it mutates.
+/// The action boundary's view of the live game: fresh target identity, queue state, every native
+/// click-time admission term, and the exact instance it mutates.
 /// </summary>
 /// <remarks>
-/// There is no capture-side counterpart. Everything a harvest pair's decision rests on comes from
-/// the world snapshot — through <see cref="AutoHarvestWorldFacts"/> and
-/// <see cref="AutoHarvestActionSafety"/> — and rides on the action; the two things that cannot — the
-/// live action queue, and the instance object to submit into — are read here, where acting on them is
-/// the next statement.
+/// The immutable publication remains the planning authority. Mutable player-click terms are read
+/// again here because planning evidence cannot authorize a later mutation after the world moves.
 /// </remarks>
 internal interface IAutoHarvestSubmissionStatePort
 {
+    bool TryResolveCurrentPair(
+        in ResolvedAutoHarvestPair resolved,
+        out ResolvedAutoHarvestPair current);
+
     AutoHarvestSubmissionState CaptureSubmissionState(in ResolvedAutoHarvestPair resolved);
 
     /// <summary>
@@ -29,6 +30,10 @@ internal interface IAutoHarvestSubmissionStatePort
     /// instance, holds more than one, or holds something this contract cannot identify.
     /// </summary>
     object? ReadPrototype(in ResolvedAutoHarvestPair resolved);
+
+    AutoHarvestSubmissionFailureCode ValidateClickAdmission(
+        in ResolvedAutoHarvestPair resolved,
+        out object? prototype);
 }
 
 internal interface IAutoHarvestMutationPort

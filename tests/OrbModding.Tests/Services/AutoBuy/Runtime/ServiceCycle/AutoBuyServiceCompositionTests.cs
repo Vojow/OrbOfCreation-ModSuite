@@ -41,8 +41,9 @@ public sealed class AutoBuyServiceCompositionTests
         using var pump = new SuiteFramePump(registry);
         TestWorldCollector.CollectedAtActivation(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 
@@ -74,8 +75,9 @@ public sealed class AutoBuyServiceCompositionTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 
@@ -120,12 +122,30 @@ public sealed class AutoBuyServiceCompositionTests
     private static GameWorldState AffordableStructureWorld()
     {
         var structureId = Guid.NewGuid();
+        var structureTypeId = Guid.NewGuid();
+        var listId = Guid.NewGuid();
+        var viewId = Guid.NewGuid();
         var resourceId = Guid.NewGuid();
         var costs = new[] { new WorldPurchaseCost(structureId, resourceId, new BigDouble(1.0, 0)) };
+        var relation = new WorldPurchaseViewRelation(
+            structureId,
+            WorldPurchaseCandidateKind.Structure,
+            structureTypeId,
+            listId,
+            viewId,
+            WorldPurchaseViewRelationStatus.Resolved);
         return new GameWorldState
         {
             Structures = WorldTable.Create(
-                new[] { WorldStructureDeriver.Shared.Derive(WorldSamples.Structure(structureId)) }),
+                new[]
+                {
+                    WorldStructureDeriver.Shared.Derive(
+                        WorldSamples.Structure(structureId, structureTypeId: structureTypeId)),
+                }),
+            Views = WorldTable.Create(new[] { new WorldView(viewId, false, false, true) }),
+            PurchaseViewRelations = PublicationTable<WorldPurchaseViewRelation>.Create(
+                new[] { relation },
+                1),
             Resources = WorldTable.Create(
                 new[]
                 {

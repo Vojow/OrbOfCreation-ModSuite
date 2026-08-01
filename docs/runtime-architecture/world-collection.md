@@ -164,8 +164,12 @@ stop freezes the generation for the same reason and with the same effect.
 **Auto Buy** asks the game nothing while deciding. Its candidates *are* the snapshot's structures
 and upgrades; identity, availability, current and queued levels, prices, resource quantities, the
 economic priority a candidate's authored effects earn it, and the multi-buy and bulk-development
-counts all come from published rows. `CanPurchase()` and the queue's capacity and remaining room are
-read at the action boundary, which re-checks them before mutating anyway
+counts all come from published rows. The snapshot also publishes each candidate's exact
+category/list/owning-view relation from both `ViewSO.relevantLists` and `availableLists`, including a
+named fail-closed row when that relation is missing, unreadable, ambiguous, or contradictory. The
+planner therefore excludes content behind an unavailable owning view instead of repeatedly proposing
+work that only the boundary can refuse. The type-specific `CanPurchase()` fold and the queue's
+capacity and remaining room are read at the action boundary, which re-checks them before mutating anyway
 ([W39](world-collection-decisions.md)); the effect classification is a lookup into the published
 effect table ([W43](world-collection-decisions.md)); and the candidate walk is over the published
 tables rather than the two registries ([W44](world-collection-decisions.md)).

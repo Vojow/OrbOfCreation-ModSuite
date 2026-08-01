@@ -225,7 +225,7 @@ internal static class AutoBuyCycleEvaluator
     }
 
     /// <summary>One more than the highest <see cref="AutoBuyExclusion"/> member.</summary>
-    private const int ExclusionTermCount = (int)AutoBuyExclusion.Unpriceable + 1;
+    private const int ExclusionTermCount = (int)AutoBuyExclusion.OwningViewRelationContradictory + 1;
 
     private static AutoBuyExclusionHistogram Histogram(int[] excluded) =>
         new(
@@ -234,7 +234,12 @@ internal static class AutoBuyCycleEvaluator
             excluded[(int)AutoBuyExclusion.RequirementsUnmet],
             excluded[(int)AutoBuyExclusion.Terminal],
             excluded[(int)AutoBuyExclusion.Unaffordable],
-            excluded[(int)AutoBuyExclusion.Unpriceable]);
+            excluded[(int)AutoBuyExclusion.Unpriceable],
+            excluded[(int)AutoBuyExclusion.OwningViewUnavailable],
+            excluded[(int)AutoBuyExclusion.OwningViewRelationMissing],
+            excluded[(int)AutoBuyExclusion.OwningViewRelationUnreadable],
+            excluded[(int)AutoBuyExclusion.OwningViewRelationAmbiguous],
+            excluded[(int)AutoBuyExclusion.OwningViewRelationContradictory]);
 
     /// <summary>
     /// Which admission term excluded this candidate, or <see cref="AutoBuyExclusion.None"/> when
@@ -254,6 +259,24 @@ internal static class AutoBuyCycleEvaluator
         // between planning and execution can never commit an unwanted purchase.
         if (!AutoBuyConfigurationPolicy.IsSelected(config, candidate.Kind))
             return AutoBuyExclusion.KindNotSelected;
+
+        switch (candidate.OwningView)
+        {
+            case AutoBuyOwningViewStatus.Unavailable:
+                return AutoBuyExclusion.OwningViewUnavailable;
+            case AutoBuyOwningViewStatus.RelationMissing:
+                return AutoBuyExclusion.OwningViewRelationMissing;
+            case AutoBuyOwningViewStatus.RelationUnreadable:
+                return AutoBuyExclusion.OwningViewRelationUnreadable;
+            case AutoBuyOwningViewStatus.RelationAmbiguous:
+                return AutoBuyExclusion.OwningViewRelationAmbiguous;
+            case AutoBuyOwningViewStatus.RelationContradictory:
+                return AutoBuyExclusion.OwningViewRelationContradictory;
+            case AutoBuyOwningViewStatus.Available:
+                break;
+            default:
+                return AutoBuyExclusion.OwningViewRelationUnreadable;
+        }
 
         if (!candidate.IsAvailable)
             return AutoBuyExclusion.Unavailable;

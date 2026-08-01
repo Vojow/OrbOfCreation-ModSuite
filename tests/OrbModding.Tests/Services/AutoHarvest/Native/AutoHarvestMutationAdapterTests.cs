@@ -23,8 +23,8 @@ public sealed class AutoHarvestMutationAdapterTests
     }
 
     /// <summary>
-    /// Apart from the exact prerequisite oracle, the facts the boundary judges are the ones the
-    /// action carries; the reader is asked only for the instance to submit into.
+    /// The facts the boundary judges are the ones the action carries. A rejected carried plan stops
+    /// before the additional live click-time terms are read.
     /// </summary>
     /// <remarks>
     /// A pair the world said was not ready is refused without a second opinion. The prerequisite is
@@ -44,7 +44,7 @@ public sealed class AutoHarvestMutationAdapterTests
 
         Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
         Assert.Equal(1, state.CaptureCount);
-        Assert.Equal(1, state.PrototypeCount);
+        Assert.Equal(0, state.PrototypeCount);
         Assert.False(result.MutationAttempted);
     }
 
@@ -147,7 +147,9 @@ public sealed class AutoHarvestMutationAdapterTests
 
         var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
 
-        Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
+        Assert.Equal(
+            AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused,
+            result.FailureCode);
         Assert.Equal(1, state.PrototypeCount);
         Assert.False(result.MutationAttempted);
     }
@@ -172,6 +174,56 @@ public sealed class AutoHarvestMutationAdapterTests
         Assert.Equal(AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected, result.FailureCode);
         Assert.Equal(1, state.CaptureCount);
         Assert.False(result.MutationAttempted);
+    }
+
+    [Theory]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused)]
+    [InlineData((int)AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused)]
+    public void AClickTermMovingAfterPlanningRefusesWithItsExactNamedCode(int failure)
+    {
+        var expected = (AutoHarvestSubmissionFailureCode)failure;
+        var state = new RecordingStatePort(admissionFailure: expected);
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
+
+        Assert.Equal(expected, result.FailureCode);
+        Assert.Equal(1, state.CaptureCount);
+        Assert.Equal(1, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    [Fact]
+    public void PairIdentityMovingAfterPlanningRefusesBeforeAnyLiveGateOrMutation()
+    {
+        var state = new RecordingStatePort(resolvesCurrentPair: false);
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(), ReadyFacts(), Preserving);
+
+        Assert.Equal(
+            AutoHarvestSubmissionFailureCode.NativePairIdentityRevalidationRefused,
+            result.FailureCode);
+        Assert.Equal(0, state.CaptureCount);
+        Assert.Equal(0, state.PrototypeCount);
+        Assert.False(result.MutationAttempted);
+    }
+
+    [Fact]
+    public void EveryLiveClickTermHoldingCommitsTheExistingExactTransition()
+    {
+        var active = new TestActiveActions();
+        var state = new RecordingStatePort(activeActions: active);
+        var adapter = new AutoHarvestMutationAdapter(state);
+
+        var result = adapter.Submit(ResolvedPair(activeActions: active), ReadyFacts(), Preserving);
+
+        Assert.True(result.Verified);
+        Assert.Equal(1, active.AddCalls);
+        Assert.Equal(1, state.PrototypeCount);
     }
 
     /// <summary>
@@ -353,7 +405,9 @@ public sealed class AutoHarvestMutationAdapterTests
     private const AutoHarvestActionSafetyState Preserving =
         AutoHarvestActionSafetyState.NativePhaseCyclePreserving;
 
-    private static ResolvedAutoHarvestPair ResolvedPair(PlotNodeActionSO? action = null)
+    private static ResolvedAutoHarvestPair ResolvedPair(
+        PlotNodeActionSO? action = null,
+        TestActiveActions? activeActions = null)
     {
         if (action is null)
         {
@@ -361,6 +415,13 @@ public sealed class AutoHarvestMutationAdapterTests
             action.prerequisites.available = true;
         }
         var contract = PrerequisiteContract();
+        if (activeActions is not null)
+        {
+            Set(
+                contract,
+                nameof(AutoHarvestReflectionContract.ActiveAddInstance),
+                typeof(TestActiveActions).GetMethod(nameof(TestActiveActions.AddInstance))!);
+        }
         var target = new AutoHarvestPairBinding(
             AutoHarvestPair.FruitTree,
             new PlotNodeSO(),
@@ -371,7 +432,7 @@ public sealed class AutoHarvestMutationAdapterTests
             null!,
             null!,
             null!);
-        var shared = new AutoHarvestSharedBinding(new object(), null!, null!, 1);
+        var shared = new AutoHarvestSharedBinding(activeActions ?? new object(), null!, null!, 1);
         return new ResolvedAutoHarvestPair(contract, shared, target, target, null);
     }
 
@@ -407,20 +468,43 @@ public sealed class AutoHarvestMutationAdapterTests
 
     private sealed class ThrowingStatePort : IAutoHarvestSubmissionStatePort
     {
+        public bool TryResolveCurrentPair(
+            in ResolvedAutoHarvestPair resolved,
+            out ResolvedAutoHarvestPair current)
+        {
+            current = resolved;
+            return true;
+        }
+
         public AutoHarvestSubmissionState CaptureSubmissionState(in ResolvedAutoHarvestPair resolved) =>
             throw new InvalidOperationException("capture failed");
 
         public object? ReadPrototype(in ResolvedAutoHarvestPair resolved) =>
             throw new NotSupportedException();
+
+        public AutoHarvestSubmissionFailureCode ValidateClickAdmission(
+            in ResolvedAutoHarvestPair resolved,
+            out object? prototype) => throw new NotSupportedException();
     }
 
     private sealed class RecordingStatePort : IAutoHarvestSubmissionStatePort
     {
         private readonly object? _prototype;
+        private readonly AutoHarvestSubmissionFailureCode _admissionFailure;
+        private readonly bool _resolvesCurrentPair;
+        private readonly TestActiveActions? _activeActions;
 
-        internal RecordingStatePort(int supported = 0, bool resolvesPrototype = true)
+        internal RecordingStatePort(
+            int supported = 0,
+            bool resolvesPrototype = true,
+            AutoHarvestSubmissionFailureCode admissionFailure = AutoHarvestSubmissionFailureCode.None,
+            bool resolvesCurrentPair = true,
+            TestActiveActions? activeActions = null)
         {
             _prototype = resolvesPrototype ? new object() : null;
+            _admissionFailure = admissionFailure;
+            _resolvesCurrentPair = resolvesCurrentPair;
+            _activeActions = activeActions;
             Captured = State(
                 used: 2,
                 empty: 1,
@@ -436,17 +520,58 @@ public sealed class AutoHarvestMutationAdapterTests
         public int CaptureCount { get; private set; }
         public int PrototypeCount { get; private set; }
 
+        public bool TryResolveCurrentPair(
+            in ResolvedAutoHarvestPair resolved,
+            out ResolvedAutoHarvestPair current)
+        {
+            current = resolved;
+            return _resolvesCurrentPair;
+        }
+
         public AutoHarvestSubmissionState CaptureSubmissionState(
             in ResolvedAutoHarvestPair resolved)
         {
             CaptureCount++;
-            return Captured;
+            return _activeActions?.AddCalls > 0
+                ? State(
+                    used: 3,
+                    empty: 0,
+                    nativeHasEmptyEntry: false,
+                    supported: 1,
+                    matches: 1,
+                    quantity: 1,
+                    engaged: true)
+                : Captured;
         }
 
         public object? ReadPrototype(in ResolvedAutoHarvestPair resolved)
         {
             PrototypeCount++;
             return _prototype;
+        }
+
+        public AutoHarvestSubmissionFailureCode ValidateClickAdmission(
+            in ResolvedAutoHarvestPair resolved,
+            out object? prototype)
+        {
+            prototype = ReadPrototype(resolved);
+            return _admissionFailure != AutoHarvestSubmissionFailureCode.None
+                ? _admissionFailure
+                : prototype is null
+                    ? AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused
+                    : AutoHarvestSubmissionFailureCode.None;
+        }
+    }
+
+    private sealed class TestActiveActions
+    {
+        public int AddCalls { get; private set; }
+
+        public void AddInstance(object prototype, int quantity)
+        {
+            Assert.NotNull(prototype);
+            Assert.Equal(1, quantity);
+            AddCalls++;
         }
     }
 }

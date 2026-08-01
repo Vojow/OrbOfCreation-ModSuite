@@ -39,8 +39,9 @@ public sealed class AutoCastServiceCompositionTests
         using var pump = new SuiteFramePump(registry);
         TestWorldCollector.CollectedAtActivation(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 
@@ -69,8 +70,9 @@ public sealed class AutoCastServiceCompositionTests
         registry.Seal();
         using var pump = new SuiteFramePump(registry);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromMilliseconds(250)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         pump.PumpFrame(2);
         pump.PumpFrame(3);
 

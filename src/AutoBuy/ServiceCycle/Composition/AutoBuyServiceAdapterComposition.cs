@@ -9,9 +9,9 @@ namespace OrbAutomata;
 
 /// <summary>
 /// Builds the Auto Buy action adapter and the plain typed service definition from the feature's
-/// dependencies. The action adapter is self-contained, so — unlike Auto Harvest — there is no shared
-/// binding resolver, gate set, or contract circuit to thread through. There is no capture adapter at
-/// all: the runtime pins the world and the worker projects it, so nothing is left for capture to do.
+/// dependencies. World collection and the native purchase boundary both bind the one shared audited
+/// owning-view resolver implementation; the runtime pins the resulting world relation and the
+/// worker projects it, so there is no separate capture adapter.
 /// </summary>
 internal sealed class AutoBuyServiceAdapterComposition
 {

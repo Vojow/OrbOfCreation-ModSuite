@@ -101,6 +101,13 @@ internal sealed class GameWorldCycleFrame
     /// and not one row per entity, so it cannot ride on the category buffers.
     /// </summary>
     internal WorldEntityRequirementBuffer EntityRequirements { get; } = new();
+
+    /// <summary>
+    /// Exact candidate-to-list/view routes for Auto Buy. Authored structure, so the collector keeps
+    /// the rows for the whole lifecycle and only the ordinary <c>views</c> category refreshes each
+    /// view's live availability.
+    /// </summary>
+    internal WorldRelationBuffer<WorldPurchaseViewRelation> PurchaseViewRelations { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
     internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
@@ -320,6 +327,9 @@ internal static class GameWorldFrameDeriver
             ThoughtStreams = frame.ThoughtStreams.Build(WorldIdentityDeriver<WorldThoughtStream>.Shared),
             Tutorials = frame.Tutorials.Build(WorldIdentityDeriver<WorldTutorial>.Shared),
             Views = frame.Views.Build(WorldIdentityDeriver<WorldView>.Shared),
+            PurchaseViewRelations = WorldScribeRelationDeriver.Build(
+                frame.PurchaseViewRelations,
+                static (left, right) => left.CandidateId.CompareTo(right.CandidateId)),
             PlotNodeActions = plotNodeActions,
             PassiveAbilities = frame.PassiveAbilities.Build(WorldIdentityDeriver<WorldPassiveAbility>.Shared),
             Characters = frame.Characters.Build(WorldIdentityDeriver<WorldCharacter>.Shared),

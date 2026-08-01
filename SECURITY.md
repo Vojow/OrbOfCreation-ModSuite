@@ -8,7 +8,7 @@ Use GitHub's **Report a vulnerability** option in the repository Security tab to
 
 ## Supported versions
 
-Security fixes target the latest published beta. Older prereleases may receive documentation or upgrade guidance but are not maintained as separate supported lines.
+Security fixes target the latest published release. Older prereleases may receive documentation or upgrade guidance but are not maintained as separate supported lines.
 
 ## Scope
 

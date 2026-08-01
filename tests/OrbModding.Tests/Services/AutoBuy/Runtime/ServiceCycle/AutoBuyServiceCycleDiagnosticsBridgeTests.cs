@@ -108,8 +108,9 @@ public sealed class AutoBuyServiceCycleDiagnosticsBridgeTests
         Assert.Equal(FeatureStatusState.NotReady, status.Current.State);
         Assert.Equal(FeatureStatusReasonCode.Initializing, status.Current.Reason.Code);
 
-        pump.PumpFrame(1);
-        Assert.True(registration.WaitForResponseReady(TimeSpan.FromSeconds(2)));
+        ServiceRunnerTestWait.ForWorkerReady(registration);
+        Assert.Equal(1, pump.PumpFrame(1).CyclesStarted);
+        ServiceRunnerTestWait.ForResponse(registration);
         var response = pump.PumpFrame(2);
         bridge.Observe(pump, in response, AutoBuyCandidateKinds.All);
         var quiet = pump.PumpFrame(3);
