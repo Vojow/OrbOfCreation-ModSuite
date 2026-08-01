@@ -476,6 +476,12 @@ public sealed class ModConfigPerformanceTests
     }
 
     [Fact]
+    public void ChronicleRunsIconUsesTheExactSingularNativeRitualIdentity()
+    {
+        Assert.Equal("ScreenRitual", NativeViewAdapter.RunsIconItemName);
+    }
+
+    [Fact]
     public void RailFailureCensusReportsInactiveLifecycleItemAndEveryVisualField()
     {
         var canvas = new GameObject("Canvas");

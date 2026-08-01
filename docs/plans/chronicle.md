@@ -201,6 +201,10 @@ No arbitrary path, member name, save operation, or native action is accepted.
 
 ### Slice 4 — runtime evidence and refinements
 
+- [x] Validate the installed perf-debug DLL exposes `Mods -> Runs` through the audited native
+  screen catalog, navigate there through Game MCP, and capture the rendered Chronicle frame.
+- [x] Validate the live MCP status includes all eight major splits, all seven resource subsections,
+  and the exact archived-run comparison selector.
 - [ ] Validate a disposable fresh run through each split and Restoration completion.
 - [ ] Validate title/load/reset/NG+ transitions and another save without mixed histories.
 - [ ] Validate Chronomancer speeds and manual/Automata progression paths.
@@ -213,5 +217,7 @@ Portable tests cover state transitions, duplicate/simultaneous observations, pre
 blocked splits, lifecycle loss, partial source collections, exact monotonic ticks, regression
 detection, authored Restoration contracts, final-edge behavior, and MCP schemas/terminal commands.
 Installed-game contracts and the real-reference build prove the shared predicates retain their
-admitted native shape. Interactive runtime validation remains required for claims about actual UI
+admitted native shape. Installed Game MCP evidence additionally proves the current DLL can discover
+the native Mods shell, navigate to Runs, render the dormant Chronicle, and publish the complete
+split/resource schema. Interactive runtime validation remains required for claims about active-run
 timing, save/load behavior, or end-to-end Restoration completion.
