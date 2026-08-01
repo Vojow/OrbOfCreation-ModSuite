@@ -2229,6 +2229,25 @@
       "place": "capture"
     },
     {
+      "id": "auto-harvest.instance.has-enough-for-one",
+      "assembly": "assembly-csharp",
+      "type": "PlotNodeActionInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasEnoughForOneInstance",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Harvest click-time admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "auto-harvest.instance.is-empty",
       "assembly": "assembly-csharp",
       "type": "PlotNodeActionInstance",
@@ -2267,6 +2286,44 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "auto-harvest.instance.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "PlotNodeActionInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Harvest click-time admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-harvest.instance.maximum-remaining",
+      "assembly": "assembly-csharp",
+      "type": "PlotNodeActionInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaximumRemInstances",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Harvest click-time admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "auto-harvest.instance.type",
@@ -2417,6 +2474,25 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "auto-harvest.plot.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "PlotNodeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Harvest click-time admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "auto-harvest.plot.type",

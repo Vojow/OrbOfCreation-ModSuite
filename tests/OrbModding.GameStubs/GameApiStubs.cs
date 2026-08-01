@@ -434,6 +434,43 @@ public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<P
 {
     protected override bool IsFilledElement(PlotNodeActionInstance element) =>
         element is not null && !element.IsEmpty();
+
+    public PlotNodeActionInstance? FindInstance(PlotNodeActionInstance prototype)
+    {
+        foreach (var candidate in value)
+        {
+            if (candidate is not null &&
+                ReferenceEquals(candidate.GetElement(), prototype.GetElement()) &&
+                ReferenceEquals(candidate.GetAction(), prototype.GetAction()))
+                return candidate;
+        }
+        return null;
+    }
+
+    public bool HasInstance(PlotNodeActionInstance prototype) => FindInstance(prototype) is not null;
+
+    public void AddInstance(PlotNodeActionInstance prototype, int quantity)
+    {
+        var existing = FindInstance(prototype);
+        if (existing is not null)
+        {
+            existing.PlayerChangeInstanceQuantity(quantity);
+            return;
+        }
+        if (!HasEmptySpot()) return;
+
+        prototype.PlayerChangeInstanceQuantity(quantity);
+        prototype.Engage();
+        for (var index = 0; index < value.Count; index++)
+        {
+            if (value[index] is null || value[index].IsEmpty())
+            {
+                value[index] = prototype;
+                return;
+            }
+        }
+        value.Add(prototype);
+    }
 }
 
 public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyRecipeSO>

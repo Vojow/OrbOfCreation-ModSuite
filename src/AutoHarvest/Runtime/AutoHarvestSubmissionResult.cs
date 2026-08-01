@@ -11,6 +11,12 @@ internal enum AutoHarvestSubmissionFailureCode
     PolicyRevalidationRejected = 5,
     NativePrerequisitesCurrentlyUnmet = 6,
     NativePrerequisiteValidationUnavailable = 7,
+    NativePairIdentityRevalidationRefused = 8,
+    NativePlotVisibilityRefused = 9,
+    NativeOfferedInstanceMembershipRefused = 10,
+    NativeActionRowVisibilityRefused = 11,
+    NativeHasEnoughForOneInstanceRefused = 12,
+    NativeMaximumRemainingInstancesRefused = 13,
 }
 
 /// <summary>The exact latch/check/latch sequence observed before native quantity mutation.</summary>

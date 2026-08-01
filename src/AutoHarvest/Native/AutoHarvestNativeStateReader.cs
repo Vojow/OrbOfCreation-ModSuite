@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Reflection;
+using OrbModding.Common;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 #endif
@@ -9,21 +10,143 @@ namespace OrbAutomata;
 
 internal sealed partial class AutoHarvestNativeStateReader : IAutoHarvestSubmissionStatePort
 {
+    private readonly TypedRegistryResolver? _registryResolver;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataProfileOperations _profileOperations;
 
     internal AutoHarvestNativeStateReader(AutomataProfileOperations profileOperations) =>
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
+
+    internal AutoHarvestNativeStateReader(
+        TypedRegistryResolver registryResolver,
+        AutomataProfileOperations profileOperations)
+        : this(profileOperations) =>
+        _registryResolver = registryResolver ?? throw new ArgumentNullException(nameof(registryResolver));
+#else
+    internal AutoHarvestNativeStateReader()
+    {
+    }
+
+    internal AutoHarvestNativeStateReader(TypedRegistryResolver registryResolver) =>
+        _registryResolver = registryResolver ?? throw new ArgumentNullException(nameof(registryResolver));
 #endif
 
+    public bool TryResolveCurrentPair(
+        in ResolvedAutoHarvestPair resolved,
+        out ResolvedAutoHarvestPair current)
+    {
+        current = default;
+        if (_registryResolver is null ||
+            !Guid.TryParse(resolved.Target.PlotUuid, out var plotUuid) ||
+            !Guid.TryParse(resolved.Target.ActionUuid, out var actionUuid))
+            return false;
+
+        var contract = resolved.Contract;
+        var plotResolution = _registryResolver.Resolve(plotUuid, contract.Types.Plot);
+        var actionResolution = _registryResolver.Resolve(actionUuid, contract.Types.Action);
+#if SERVICE_CYCLE_PROFILE
+        if (plotResolution.IsResolved) _profileOperations.AddStableIdRead();
+        if (actionResolution.IsResolved) _profileOperations.AddStableIdRead();
+#endif
+        if (!plotResolution.IsResolved ||
+            !actionResolution.IsResolved ||
+            plotResolution.LifecycleGeneration != resolved.LifecycleGeneration ||
+            actionResolution.LifecycleGeneration != resolved.LifecycleGeneration)
+            return false;
+
+        var target = resolved.Target;
+        var refreshed = new AutoHarvestPairBinding(
+            target.Pair,
+            plotResolution.Value!,
+            actionResolution.Value!,
+            target.PlotUuid,
+            target.ActionUuid,
+            target.RewardPool,
+            plotResolution,
+            actionResolution,
+            target.RewardResolution);
+        current = target.Pair == AutoHarvestPair.FruitTree
+            ? new ResolvedAutoHarvestPair(
+                contract,
+                resolved.Shared,
+                refreshed,
+                refreshed,
+                resolved.Treasure)
+            : new ResolvedAutoHarvestPair(
+                contract,
+                resolved.Shared,
+                refreshed,
+                resolved.Fruit,
+                refreshed);
+        return true;
+    }
+
+    public AutoHarvestSubmissionFailureCode ValidateClickAdmission(
+        in ResolvedAutoHarvestPair resolved,
+        out object? prototype)
+    {
+        prototype = null;
+        try
+        {
+            if (!InvokeBool(resolved.Contract.PlotIsVisible, resolved.Target.Plot))
+                return AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            return AutoHarvestSubmissionFailureCode.NativePlotVisibilityRefused;
+        }
+
+        try
+        {
+            prototype = ReadPrototype(resolved);
+            if (prototype is null)
+                return AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            return AutoHarvestSubmissionFailureCode.NativeOfferedInstanceMembershipRefused;
+        }
+
+        try
+        {
+            if (!InvokeBool(resolved.Contract.InstanceIsVisible, prototype))
+                return AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            return AutoHarvestSubmissionFailureCode.NativeActionRowVisibilityRefused;
+        }
+
+        try
+        {
+            if (!InvokeBool(resolved.Contract.InstanceHasEnoughForOneInstance, prototype))
+                return AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            return AutoHarvestSubmissionFailureCode.NativeHasEnoughForOneInstanceRefused;
+        }
+
+        try
+        {
+            if (InvokeInt(resolved.Contract.InstanceGetMaximumRemInstances, prototype) <= 0)
+                return AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused;
+        }
+        catch (Exception ex) when (AutoHarvestReflectionAccess.IsExpectedFailure(ex))
+        {
+            return AutoHarvestSubmissionFailureCode.NativeMaximumRemainingInstancesRefused;
+        }
+
+        return AutoHarvestSubmissionFailureCode.None;
+    }
+
     /// <summary>
-    /// Resolves the live instance the action boundary submits into.
+    /// Resolves the live offered instance the action boundary submits into.
     /// </summary>
     /// <remarks>
-    /// This is all that is left of the boundary's re-read. Every fact the submission decision rests
-    /// on was derived from the world snapshot and rides on the action; what no snapshot can carry is
-    /// the object itself, and prototype resolution is the one live read the north star keeps.
+    /// The exact membership/count result is one of the click-time gates. Returning null is a named
+    /// ordinary refusal at the caller, never permission to fall back to a planned instance.
     /// </remarks>
     public object? ReadPrototype(in ResolvedAutoHarvestPair resolved)
     {
@@ -100,6 +223,14 @@ internal sealed partial class AutoHarvestNativeStateReader : IAutoHarvestSubmiss
 
     private static object? Invoke(MethodInfo method, object owner, object[] arguments) =>
         method.Invoke(owner, arguments);
+
+    private static bool InvokeBool(MethodInfo method, object owner) =>
+        (bool)(method.Invoke(owner, Array.Empty<object>()) ??
+            throw new InvalidOperationException($"{method.DeclaringType?.FullName}.{method.Name} returned null"));
+
+    private static int InvokeInt(MethodInfo method, object owner, params object[] arguments) =>
+        (int)(method.Invoke(owner, arguments) ??
+            throw new InvalidOperationException($"{method.DeclaringType?.FullName}.{method.Name} returned null"));
 
     private static bool TryRead(
         AutoHarvestStableIdAccessor accessor,

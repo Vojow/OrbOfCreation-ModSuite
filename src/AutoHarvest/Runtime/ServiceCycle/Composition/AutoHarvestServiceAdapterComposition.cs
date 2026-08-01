@@ -56,12 +56,14 @@ internal sealed class AutoHarvestServiceAdapterComposition
             dependencies.RegistryResolver,
             contractCircuit,
             profileOperations);
-        var reader = new AutoHarvestNativeStateReader(profileOperations);
+        var reader = new AutoHarvestNativeStateReader(
+            dependencies.RegistryResolver,
+            profileOperations);
 #else
         var bindings = new AutoHarvestBindingResolver(
             dependencies.RegistryResolver,
             contractCircuit);
-        var reader = new AutoHarvestNativeStateReader();
+        var reader = new AutoHarvestNativeStateReader(dependencies.RegistryResolver);
 #endif
         var gates = new AutoHarvestNativeGateSet();
         var actions = new AutoHarvestCycleActionAdapter(

@@ -49,10 +49,14 @@ internal sealed class AutoHarvestReflectionContract
     public Func<object, bool> PrerequisitesAvailable { get; private set; } = null!;
     public Func<object, bool> PrerequisitesCheck { get; private set; } = null!;
 
+    public MethodInfo PlotIsVisible { get; private set; } = null!;
     public MethodInfo PlotGetActionInstances { get; private set; } = null!;
 
     public MethodInfo InstanceGetAction { get; private set; } = null!;
     public MethodInfo InstanceGetElement { get; private set; } = null!;
+    public MethodInfo InstanceIsVisible { get; private set; } = null!;
+    public MethodInfo InstanceHasEnoughForOneInstance { get; private set; } = null!;
+    public MethodInfo InstanceGetMaximumRemInstances { get; private set; } = null!;
     public MethodInfo InstanceIsEmpty { get; private set; } = null!;
     public MethodInfo InstanceIsEngaged { get; private set; } = null!;
     public MethodInfo InstanceGetActualQuantity { get; private set; } = null!;
@@ -80,10 +84,16 @@ internal sealed class AutoHarvestReflectionContract
             NativeAccessorBinder.Call<bool>(prerequisitesField.FieldType, "Check") ??
             throw new InvalidOperationException(
                 $"{prerequisitesField.FieldType.FullName}.Check() Boolean contract is unavailable");
+        contract.PlotIsVisible = RequireMethod(types.Plot, "IsVisible", typeof(bool));
         contract.PlotGetActionInstances = RequireListMethod(types.Plot, "GetActionInstances", types.Instance);
 
         contract.InstanceGetAction = RequireMethod(types.Instance, "GetAction", types.Action);
         contract.InstanceGetElement = RequireMethod(types.Instance, "GetElement", types.Plot);
+        contract.InstanceIsVisible = RequireMethod(types.Instance, "IsVisible", typeof(bool));
+        contract.InstanceHasEnoughForOneInstance =
+            RequireMethod(types.Instance, "HasEnoughForOneInstance", typeof(bool));
+        contract.InstanceGetMaximumRemInstances =
+            RequireMethod(types.Instance, "GetMaximumRemInstances", typeof(int));
         contract.InstanceIsEmpty = RequireMethod(types.Instance, "IsEmpty", typeof(bool));
         contract.InstanceIsEngaged = RequireMethod(types.Instance, "IsEngaged", typeof(bool));
         contract.InstanceGetActualQuantity = RequireMethod(types.Instance, "GetActualQuantity", typeof(int));
