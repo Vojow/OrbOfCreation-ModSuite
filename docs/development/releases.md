@@ -3,14 +3,17 @@
 [Runtime validation](../testing/runtime-validation.md) ·
 [Release procedure](../releasing.md)
 
-The publication procedure itself — building, tagging, and creating the GitHub release with
-`tools/release.sh` — is documented in [Releasing Orb Of Creation ModSuite](../releasing.md). The
-published GitHub release attaches the single `OrbModSuite.dll` asset. This page is the review
-checklist that precedes it.
+The split publication procedure is documented in
+[Releasing Orb Of Creation ModSuite](../releasing.md). `tools/release.sh` runs the private
+installed-game and faithfulness gates, proves the committed-reference build is reproducible,
+records its SHA-256 in an annotated tag, and pushes the tag. The tag workflow independently
+rebuilds those exact public bytes and owns GitHub release creation. This page is the review
+checklist that precedes that handoff.
 
 ## Supported package
 
-`script/package` additionally builds a standalone distribution archive for manual installs:
+`script/package` additionally packages the canonical committed-reference DLL in a standalone
+distribution archive for manual installs:
 
 ```text
 OrbOfCreation-ModSuite-<SuiteVersion>.zip
@@ -35,7 +38,8 @@ Before publishing, record:
 - suite version and plugin GUID;
 - installed game, BepInEx, and audited assembly hashes;
 - exact archive entries and SHA-256 checksums;
-- portable, real-reference, installed-contract, and interactive evidence; and
+- portable, committed-reference reproducibility, real-game faithfulness,
+  installed-contract, and interactive evidence; and
 - known limitations.
 
 Build success alone is not publication approval.
@@ -43,9 +47,9 @@ Build success alone is not publication approval.
 ## Package gate
 
 Run `./script/package` from a clean commit with `OOC_GAME_DIR` pointing at a game
-installation. It refuses a dirty or moved working tree, then runs the bounded portable
-gate, the installed-game contracts, and a real-reference Release build before staging the
-archive.
+installation. It refuses a dirty or moved working tree, runs the bounded portable gate and
+installed-game contracts, then builds the archive's DLL from the committed metadata-true
+references. The hand-written test stubs are never a package input.
 
 It fails the release when:
 
@@ -75,7 +79,10 @@ applicable V0–V7 [runtime validation](../testing/runtime-validation.md), inclu
 
 ## Publication
 
-Create the tag and artifacts only from the reviewed clean commit. Release notes must state
+Create the tag only from the reviewed clean commit through `tools/release.sh`. The annotated
+tag records the canonical DLL SHA-256. The `suite-v*` workflow must reproduce that exact hash
+before it creates the release and attaches `OrbModSuite.dll`, the supported archive, and its
+checksum manifest; a pre-existing release or hash mismatch fails publication. Release notes must state
 the supported game/BepInEx baseline, the audited assembly baselines, important behavior
 changes, known limitations, and validation scope. A release that changes the plugin GUID or
 the configuration schema must say so as a breaking change, because settings do not migrate

@@ -13,24 +13,41 @@ as `autobuy: ...`, `ui: ...`, `build: ...`, or `docs: ...`.
 
 ## Dependencies
 
-Portable tests require only the .NET SDK. Production builds and installed
-contracts require local Orb of Creation managed assemblies and BepInEx 5
-references because those binaries are not committed.
+The default build requires only the pinned .NET SDK. The repository commits a
+metadata-only, full-surface reference closure generated from the audited Orb of
+Creation v1.0.5 assemblies. These references preserve native assembly, type,
+and member identities but contain no method bodies. They are not the
+hand-written test stubs.
+
+With no `OOC_GAME_DIR` set, both configurations build against the committed
+references:
+
+```bash
+dotnet build src/OrbModSuite.csproj --configuration Debug
+dotnet build src/OrbModSuite.csproj --configuration Release
+```
+
+`global.json` pins the exact SDK used for release builds. Install that SDK
+version rather than allowing the compiler to float.
+
+Set `OOC_GAME_DIR` only for gates that inspect the full installed assemblies,
+including installed contracts, release faithfulness, and perf-debug builds.
+The game is never launched by the contract gate.
 
 On Windows, point `OOC_GAME_DIR` at the game root:
 
 ```powershell
 $env:OOC_GAME_DIR='C:\Program Files (x86)\Steam\steamapps\common\Orb of Creation'
-dotnet build src/OrbModSuite.csproj -c Release
+dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj -c Release
 ```
 
-On Linux or macOS, stage the same ignored layout under `lib/`: the game managed
-assemblies at `lib/Orb Of Creation_Data/Managed` and the official BepInEx 5 core
-files at `lib/BepInEx/core`.
+On Linux or macOS, `OOC_GAME_DIR` may point to a staged ignored copy with game
+assemblies under `Orb Of Creation_Data/Managed` and BepInEx under `BepInEx/core`.
 
 ```bash
 export OOC_GAME_DIR="$PWD/lib"
-dotnet build src/OrbModSuite.csproj -c Release
+dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
 ```
 
 Keep absolute local paths out of tracked files. Building does not authorize an
@@ -54,8 +71,9 @@ reconcile all test and manifest counts; when compiler-warning counts matter, use
 the serial, non-incremental build commands from `tools/release.sh` so caching
 cannot hide a delta.
 
-Stub-linked outputs live under `bin-stubs/` and `obj-stubs/`; deployable builds
-use the normal `bin/` tree. Never install a stub-linked DLL. Continue with the
+Stub-linked outputs live under `bin-stubs/` and `obj-stubs/`; metadata-true
+reference builds use the normal `bin/` tree and produce the canonical release
+artifact. Never install a hand-written-stub-linked DLL. Continue with the
 [testing hub](../testing/README.md) and
 [runtime validation protocol](../testing/runtime-validation.md).
 
@@ -70,8 +88,10 @@ Only after the user explicitly authorizes a local installation:
 
 Both modes refuse to run while the game is open, run the gates, back up saves and
 installed DLLs, reject duplicate or retired DLLs, install the verified output,
-and print SHA-256 hashes. `perf-debug` includes ServiceCycle profiling; `release`
-does not. Neither command tags, publishes, or launches the game.
+and print SHA-256 hashes. `release` installs the same committed-reference build
+that ships. `perf-debug` includes ServiceCycle profiling and still resolves its
+extra debug-only dependencies from the game. Neither command tags, publishes,
+or launches the game.
 
 From a clean commit, rehearse the supported package without installing it:
 
@@ -79,6 +99,6 @@ From a clean commit, rehearse the supported package without installing it:
 ./script/package
 ```
 
-The package rehearsal runs the portable, installed-contract, and real-reference
-Release gates before writing an allowlisted archive and hash manifest under
-`artifacts/releases/`.
+The package rehearsal runs the portable and installed-contract gates, then
+builds the canonical Release DLL from committed references before writing an
+allowlisted archive and hash manifest under `artifacts/releases/`.
