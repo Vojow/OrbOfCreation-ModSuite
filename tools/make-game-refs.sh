@@ -68,6 +68,9 @@ files=(
     Unity.TextMeshPro.dll
     BepInEx.dll
     0Harmony.dll
+    Newtonsoft.Json.dll
+    UnityEngine.ScreenCaptureModule.dll
+    UnityEngine.ImageConversionModule.dll
 )
 entry_count="$(grep -c '"file":' "${manifest_path}")"
 if [[ "${entry_count}" -ne "${#files[@]}" ]]; then
@@ -107,7 +110,7 @@ dotnet tool install "${refasmer_package}" \
     --version "${refasmer_version}" >/dev/null
 
 echo "Generating full-surface, metadata-only references..."
-"${temporary_root}/tool/refasmer" --all \
+"${temporary_root}/tool/refasmer" --refasm --all \
     --outputdir="${temporary_root}/generated" \
     "${source_paths[@]}"
 
