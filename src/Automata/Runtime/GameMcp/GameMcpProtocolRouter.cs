@@ -144,6 +144,7 @@ internal sealed class GameMcpProtocolRouter
                 OptionalString(arguments, "detail"))),
             "suite_configuration" => GameMcpToolExecution.Read(Configuration(state)),
             "trace_health" => GameMcpToolExecution.Read(TraceHealth(state)),
+            "chronicle_status" => GameMcpToolExecution.Read(ChronicleStatus(state)),
             "game_purchase" => SubmitPurchase(state, arguments),
             "game_cast" => SubmitCast(state, arguments),
             "game_concept" => SubmitConcept(state, arguments),
@@ -182,6 +183,10 @@ internal sealed class GameMcpProtocolRouter
                 OptionalBool(arguments, "capture", false),
                 saveCapture: false),
             "game_probe" => SubmitProbe(state, arguments),
+            "chronicle_start" => SubmitChronicle(state, GameMcpCommandKind.ChronicleStart, "start"),
+            "chronicle_pause" => SubmitChronicle(state, GameMcpCommandKind.ChroniclePause, "pause"),
+            "chronicle_resume" => SubmitChronicle(state, GameMcpCommandKind.ChronicleResume, "resume"),
+            "chronicle_abandon" => SubmitChronicle(state, GameMcpCommandKind.ChronicleAbandon, "abandon"),
             _ => GameMcpToolExecution.Error(GameMcpWorldQuery.WithEnvelope(
                 state,
                 new JObject
@@ -276,6 +281,9 @@ internal sealed class GameMcpProtocolRouter
             health["runtimeNotAvailableReason"] = captured["runtimeNotAvailableReason"];
         return GameMcpWorldQuery.WithEnvelope(state, health);
     }
+
+    private static JObject ChronicleStatus(GameMcpStateSnapshot state) =>
+        GameMcpWorldQuery.WithEnvelope(state, ParseObject(state.ChronicleJson));
 
     private static JArray CompactFeatures(JArray? captured)
     {
@@ -550,6 +558,20 @@ internal sealed class GameMcpProtocolRouter
             capture: true,
             saveCapture: OptionalBool(arguments, "save", false));
 
+    private GameMcpToolExecution SubmitChronicle(
+        GameMcpStateSnapshot state,
+        GameMcpCommandKind kind,
+        string mode) =>
+        SubmitGadget(
+            state,
+            kind,
+            mode,
+            Guid.Empty,
+            1,
+            string.Empty,
+            capture: false,
+            saveCapture: false);
+
     private GameMcpToolExecution SubmitNavigation(
         GameMcpStateSnapshot state,
         JObject arguments)
@@ -787,6 +809,8 @@ internal sealed class GameMcpProtocolRouter
             value = Configuration(state);
         else if (uri == "orb://trace/health")
             value = TraceHealth(state);
+        else if (uri == "orb://chronicle/status")
+            value = ChronicleStatus(state);
         else if (uri.StartsWith("orb://world/category/", StringComparison.Ordinal))
         {
             var category = Uri.UnescapeDataString(uri.Substring("orb://world/category/".Length));
@@ -880,6 +904,11 @@ internal sealed class GameMcpProtocolRouter
                 "trace_health",
                 "Read trace-writer health",
                 "Read bounded segment, record, and byte counters. Individual decisions remain in trace files for offline analysis.",
+                ObjectSchema()),
+            Tool(
+                "chronicle_status",
+                "Read Chronicle run status",
+                "Read the immutable active run, clock, lifecycle, major splits, and first-visible feature-resource KPIs.",
                 ObjectSchema()),
             Tool(
                 "game_purchase",
@@ -1032,6 +1061,35 @@ internal sealed class GameMcpProtocolRouter
                         ["probe"] = EnumSchema("runtime", "action_queue_room", "navigation"),
                     },
                     "probe")),
+            Tool(
+                "chronicle_start",
+                "Start a Chronicle run",
+                "Start timing from the latest lifecycle-valid published world; satisfied splits become Preexisting.",
+                ObjectSchema(),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "chronicle_pause",
+                "Pause the Chronicle run",
+                "Pause the active run clock without changing game state.",
+                ObjectSchema(),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "chronicle_resume",
+                "Resume the Chronicle run",
+                "Resume only when the current published world belongs to the run's original lifecycle.",
+                ObjectSchema(),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "chronicle_abandon",
+                "Abandon the Chronicle run",
+                "Abandon the active in-memory timing record without changing or resetting the game.",
+                ObjectSchema(),
+                readOnly: false,
+                idempotent: false,
+                destructive: true),
         },
     };
 
@@ -1053,6 +1111,7 @@ internal sealed class GameMcpProtocolRouter
             Resource("orb://suite/health", "suite-health", "Compact feature, service, emergency, collection, and MCP health."),
             Resource("orb://suite/configuration", "suite-configuration", "Committed suite configuration generation."),
             Resource("orb://trace/health", "trace-health", "Trace-writer health and retained volume."),
+            Resource("orb://chronicle/status", "chronicle-status", "Current Chronicle run, major splits, and first-visible feature-resource KPIs."),
         },
     };
 
@@ -1077,7 +1136,8 @@ internal sealed class GameMcpProtocolRouter
         string description,
         JObject inputSchema,
         bool readOnly = true,
-        bool idempotent = true) => new()
+        bool idempotent = true,
+        bool destructive = false) => new()
     {
         ["name"] = name,
         ["title"] = title,
@@ -1086,7 +1146,7 @@ internal sealed class GameMcpProtocolRouter
         ["annotations"] = new JObject
         {
             ["readOnlyHint"] = readOnly,
-            ["destructiveHint"] = false,
+            ["destructiveHint"] = destructive,
             ["idempotentHint"] = idempotent,
             ["openWorldHint"] = false,
         },

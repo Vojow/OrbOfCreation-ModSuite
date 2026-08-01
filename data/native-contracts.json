@@ -15521,6 +15521,7 @@
       "src/AutoItems",
       "src/AutoScribe",
       "src/Automata",
+      "src/Chronicle",
       "src/Common",
       "src/Mentor",
       "src/ModConfig",

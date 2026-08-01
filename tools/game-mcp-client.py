@@ -230,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("measure-reads")
     commands.add_parser("catalog")
     commands.add_parser("continue")
+    commands.add_parser("chronicle-status")
+    commands.add_parser("chronicle-start")
+    commands.add_parser("chronicle-pause")
+    commands.add_parser("chronicle-resume")
+    commands.add_parser("chronicle-abandon")
     tooltips = commands.add_parser("tooltips")
     tooltips.add_argument("--offset", type=int, default=0)
     tooltips.add_argument("--limit", type=int, default=25)
@@ -292,6 +297,11 @@ def doctor(client: GameMcpClient, initialized: dict[str, Any]) -> dict[str, Any]
         "game_navigate",
         "game_tooltips",
         "game_tooltip",
+        "chronicle_status",
+        "chronicle_start",
+        "chronicle_pause",
+        "chronicle_resume",
+        "chronicle_abandon",
     }
     missing = sorted(required.difference(names))
     if missing:
@@ -524,6 +534,16 @@ def main() -> int:
             result = client.call_tool("game_screen_catalog", {})
         elif args.command == "continue":
             result = client.call_tool("game_continue", {})
+        elif args.command == "chronicle-status":
+            result = client.call_tool("chronicle_status", {})
+        elif args.command == "chronicle-start":
+            result = client.call_tool("chronicle_start", {})
+        elif args.command == "chronicle-pause":
+            result = client.call_tool("chronicle_pause", {})
+        elif args.command == "chronicle-resume":
+            result = client.call_tool("chronicle_resume", {})
+        elif args.command == "chronicle-abandon":
+            result = client.call_tool("chronicle_abandon", {})
         elif args.command == "tooltips":
             result = client.call_tool(
                 "game_tooltips",

@@ -169,6 +169,28 @@ public sealed class AutomataServiceCycleActivationTests
         Assert.Equal(0, attempts);
     }
 
+    [Fact]
+    public void PublishedWorldCaptureIsAvailableOnlyFromALiveRuntime()
+    {
+        var ready = false;
+        var runtime = new RecordingRuntime();
+        var activation = new AutomataServiceCycleActivation(
+            () => ready,
+            (_, _) => runtime,
+            Configuration(),
+            new ConfigGeneration(1));
+
+        Assert.False(activation.TryCapturePublishedWorld(out _));
+        ready = true;
+        activation.Tick(0.25f);
+        Assert.True(activation.TryCapturePublishedWorld(out _));
+        Assert.Equal(1, runtime.WorldCaptures);
+
+        activation.Dispose();
+        Assert.False(activation.TryCapturePublishedWorld(out _));
+        Assert.Equal(1, runtime.WorldCaptures);
+    }
+
     private sealed class RecordingRuntime : IAutomataServiceCycleRuntime
     {
         public List<float> TickDurations { get; } = new();
@@ -176,6 +198,7 @@ public sealed class AutomataServiceCycleActivationTests
         public int Invalidations { get; private set; }
         public int Cancellations { get; private set; }
         public int Disposals { get; private set; }
+        public int WorldCaptures { get; private set; }
 
         public void Tick(float unscaledDeltaTime) => TickDurations.Add(unscaledDeltaTime);
         public void PublishSavedConfiguration(
@@ -183,6 +206,11 @@ public sealed class AutomataServiceCycleActivationTests
             ConfigGeneration configurationGeneration) =>
             Publications++;
         public void InvalidateLifecycle() => Invalidations++;
+        public AutomataPublishedWorldCapture CapturePublishedWorld()
+        {
+            WorldCaptures++;
+            return default;
+        }
         public void CancelPreparedWork() => Cancellations++;
         public void Dispose() => Disposals++;
     }

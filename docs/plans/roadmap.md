@@ -9,8 +9,9 @@ to state, not this file's.
 
 ## What remains
 
-1. Compare Auto Buy, Auto Harvest, and Mentor traces to identify measured runtime costs, and act only on material findings.
-2. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
+1. Build [Chronicle run comparison](chronicle.md): published-world milestone timing, durable compatible-run comparisons, a Mods Runs page, and Game MCP controls.
+2. Compare Auto Buy, Auto Harvest, and Mentor traces to identify measured runtime costs, and act only on material findings.
+3. Build the strategist: a service that publishes a real `SuiteStrategy` bulletin instead of the neutral constant every consumer reads today, so per-resource, time-varying policy replaces per-feature thresholds.
 
 ## Completed
 

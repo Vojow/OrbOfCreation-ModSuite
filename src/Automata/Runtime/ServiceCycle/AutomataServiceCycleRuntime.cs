@@ -101,6 +101,17 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 _configurationGeneration);
     }
 
+    public AutomataPublishedWorldCapture CapturePublishedWorld()
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(AutomataServiceCycleRuntime));
+        var publication = _host.Pump.DiagnosticsRegistry.World.ReadLatest();
+        return new AutomataPublishedWorldCapture(
+            publication.Snapshot,
+            publication.Generation,
+            _host.CurrentLifecycle,
+            _host.Pump.DiagnosticsRegistry.Clock.Now);
+    }
+
 #if SERVICE_CYCLE_PROFILE
     public GameMcpRuntimeState CaptureGameMcpState()
     {

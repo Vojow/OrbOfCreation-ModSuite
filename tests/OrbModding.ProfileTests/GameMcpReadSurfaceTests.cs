@@ -79,6 +79,11 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Contains("game_tooltips", toolNames);
         Assert.Contains("game_tooltip", toolNames);
         Assert.Contains("game_probe", toolNames);
+        Assert.Contains("chronicle_status", toolNames);
+        Assert.Contains("chronicle_start", toolNames);
+        Assert.Contains("chronicle_pause", toolNames);
+        Assert.Contains("chronicle_resume", toolNames);
+        Assert.Contains("chronicle_abandon", toolNames);
 
         var resources = router.Handle(Request(3, "resources/list", new JObject()));
         Assert.Contains(
@@ -87,6 +92,9 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Contains(
             resources.Body!["result"]!["resources"]!.Values<JObject>(),
             resource => (string?)resource!["uri"] == "orb://trace/health");
+        Assert.Contains(
+            resources.Body!["result"]!["resources"]!.Values<JObject>(),
+            resource => (string?)resource!["uri"] == "orb://chronicle/status");
         Assert.DoesNotContain(
             resources.Body!["result"]!["resources"]!.Values<JObject>(),
             resource => (string?)resource!["uri"] == "orb://journal/status");

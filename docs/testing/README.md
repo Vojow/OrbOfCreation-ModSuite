@@ -57,6 +57,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lan
 | Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
 | Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
 | Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
+| Chronicle run timing and MCP controls | [Chronicle](chronicle.md) | `FullyQualifiedName~Chronicle` |
 | Orb Modding Common | [Common](common.md) | select the changed Common contract |
 | Cross-feature scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~ServiceCycle|FullyQualifiedName~ActionFamilyIntegration` |
 

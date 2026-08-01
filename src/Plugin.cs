@@ -9,6 +9,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using OrbAutomata;
+using OrbChronicle;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.GameMcp;
 using Newtonsoft.Json;
@@ -108,6 +109,7 @@ public sealed class Plugin : BaseUnityPlugin
     private readonly MentorMasteryEventJournal _mentorMasteryJournal = new();
     private AutomataActionFamilyOwnership? _automataActionFamilyOwnership;
     private AutomataServiceCycleActivation? _serviceCycleActivation;
+    private readonly ChronicleRunTracker _chronicle = new();
     private AutomationFeatureControlRegistry? _automationFeatureControls;
     private QuickControlColumn? _quickControls;
     private EmergencyStopControl? _emergencyStopControl;
@@ -602,6 +604,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         UpdateAutomata();
+        UpdateChronicle();
 #if SERVICE_CYCLE_PROFILE
         _gameMcpCommands?.ObserveEmergencyStop(
             _configurationStore!.Current.Safety.EmergencyDisable);
@@ -823,6 +826,31 @@ public sealed class Plugin : BaseUnityPlugin
                 _lifecycleGeneration,
                 _configurationStore.CurrentGeneration);
         }
+    }
+
+    private void UpdateChronicle()
+    {
+        ChronicleWorldObservation observation;
+        if (!_nativeContractsAvailable || !IsLifecycleReady())
+        {
+            observation = ChronicleWorldObservation.Unavailable(
+                "gameplay is not lifecycle-ready in the Main scene");
+        }
+        else if (_serviceCycleActivation is not null &&
+                 _serviceCycleActivation.TryCapturePublishedWorld(out var capture))
+        {
+            observation = ChronicleWorldObservationProjector.Project(
+                capture.World,
+                capture.WorldGeneration.Value,
+                checked((long)capture.LifecycleGeneration.Value),
+                capture.ObservedAt.Ticks);
+        }
+        else
+        {
+            observation = ChronicleWorldObservation.Unavailable(
+                "the ServiceCycle runtime is not active in this scene");
+        }
+        _chronicle.Observe(in observation);
     }
 
     private void UpdateMentor()
@@ -1208,7 +1236,7 @@ public sealed class Plugin : BaseUnityPlugin
                     result = ExecuteAdministrativeGameMcp(command);
                 }
                 else if (command.Kind is >= GameMcpCommandKind.Screenshot and
-                         <= GameMcpCommandKind.ContinueRun)
+                         <= GameMcpCommandKind.ChronicleAbandon)
                 {
                     completeNow = TryExecuteGameMcpGadget(command, out result);
                 }
@@ -1349,6 +1377,10 @@ public sealed class Plugin : BaseUnityPlugin
             GameMcpCommandKind.TooltipCatalog => CaptureTooltipCatalogGameMcp(command),
             GameMcpCommandKind.TooltipRead => ReadTooltipGameMcp(command),
             GameMcpCommandKind.ContinueRun => ContinueRunGameMcp(),
+            GameMcpCommandKind.ChronicleStart or
+            GameMcpCommandKind.ChroniclePause or
+            GameMcpCommandKind.ChronicleResume or
+            GameMcpCommandKind.ChronicleAbandon => ExecuteChronicleGameMcp(command),
             _ => GameMcpCommandResult.Rejected(
                 "unsupported_gadget",
                 "the requested gadget is not allowlisted",
@@ -1362,6 +1394,37 @@ public sealed class Plugin : BaseUnityPlugin
             return false;
         }
         return true;
+    }
+
+    private GameMcpCommandResult ExecuteChronicleGameMcp(GameMcpCommand command)
+    {
+        var outcome = command.Kind switch
+        {
+            GameMcpCommandKind.ChronicleStart => _chronicle.Start(),
+            GameMcpCommandKind.ChroniclePause => _chronicle.Pause(),
+            GameMcpCommandKind.ChronicleResume => _chronicle.Resume(),
+            GameMcpCommandKind.ChronicleAbandon => _chronicle.Abandon(),
+            _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
+        };
+        var observation = _chronicle.LatestObservation;
+        if (!outcome.Accepted)
+        {
+            return GameMcpCommandResult.Rejected(
+                outcome.Code,
+                outcome.Reason,
+                observation.WorldGeneration,
+                observation.LifecycleGeneration,
+                _configurationStore?.CurrentGeneration.Value ?? 0);
+        }
+        var details = GameMcpObjectProjector.Project(_chronicle.Snapshot)
+            .ToString(Formatting.None);
+        return GameMcpCommandResult.Committed(
+            outcome.Code,
+            outcome.Reason,
+            observation.WorldGeneration,
+            observation.LifecycleGeneration,
+            _configurationStore?.CurrentGeneration.Value ?? 0,
+            details);
     }
 
     private GameMcpCommandResult ContinueRunGameMcp()
@@ -2102,7 +2165,8 @@ public sealed class Plugin : BaseUnityPlugin
             FeatureStatusRegistry.Shared.GetSnapshot(),
             DecisionJournalStatusRegistry.Shared.Status,
             DecisionJournalStatusRegistry.Shared.Revision,
-            runtime);
+            runtime,
+            _chronicle.Snapshot);
     }
 #endif
 

@@ -8,6 +8,7 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
+using OrbChronicle;
 
 namespace OrbAutomata.GameMcp;
 
@@ -31,12 +32,14 @@ internal sealed class GameMcpStateStore
         IReadOnlyList<FeatureStatusSnapshot> featureStatuses,
         DecisionJournalStatus journalStatus,
         long journalRevision,
-        GameMcpRuntimeState? runtime)
+        GameMcpRuntimeState? runtime,
+        ChronicleRunSnapshot chronicle)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (writableConfigurationJson is null)
             throw new ArgumentNullException(nameof(writableConfigurationJson));
         if (featureStatuses is null) throw new ArgumentNullException(nameof(featureStatuses));
+        if (chronicle is null) throw new ArgumentNullException(nameof(chronicle));
 
         var featureArray = new FeatureStatusSnapshot[featureStatuses.Count];
         for (var index = 0; index < featureArray.Length; index++)
@@ -53,6 +56,7 @@ internal sealed class GameMcpStateStore
             runtime);
         var traceHealth = GameMcpObjectProjector.Project(journalStatus) as JObject ?? new JObject();
         traceHealth["revision"] = journalRevision;
+        var chronicleJson = GameMcpObjectProjector.Project(chronicle).ToString(Formatting.None);
 
         Volatile.Write(
             ref _latest,
@@ -68,7 +72,8 @@ internal sealed class GameMcpStateStore
                 runtime is not null,
                 runtime is null
                     ? "the ServiceCycle runtime has not published a world in this scene"
-                    : string.Empty));
+                    : string.Empty,
+                chronicleJson));
     }
 
     private static JObject BuildHealth(
@@ -135,7 +140,8 @@ internal sealed class GameMcpStateSnapshot
         string healthJson,
         string traceHealthJson,
         bool runtimeAvailable,
-        string runtimeNotAvailableReason)
+        string runtimeNotAvailableReason,
+        string chronicleJson = "{}")
     {
         World = world;
         ConfigurationGeneration = configurationGeneration;
@@ -147,6 +153,7 @@ internal sealed class GameMcpStateSnapshot
         TraceHealthJson = traceHealthJson;
         RuntimeAvailable = runtimeAvailable;
         RuntimeNotAvailableReason = runtimeNotAvailableReason;
+        ChronicleJson = chronicleJson ?? "{}";
     }
 
     internal GameMcpStateSnapshot(
@@ -160,7 +167,8 @@ internal sealed class GameMcpStateSnapshot
         string healthJson,
         string traceHealthJson,
         bool runtimeAvailable,
-        string runtimeNotAvailableReason)
+        string runtimeNotAvailableReason,
+        string chronicleJson = "{}")
         : this(
             world is null ? null : new ServiceWorldPublication(world),
             configurationGeneration,
@@ -171,7 +179,8 @@ internal sealed class GameMcpStateSnapshot
             healthJson,
             traceHealthJson,
             runtimeAvailable,
-            runtimeNotAvailableReason)
+            runtimeNotAvailableReason,
+            chronicleJson)
     {
     }
 
@@ -185,6 +194,7 @@ internal sealed class GameMcpStateSnapshot
     internal string TraceHealthJson { get; }
     internal bool RuntimeAvailable { get; }
     internal string RuntimeNotAvailableReason { get; }
+    internal string ChronicleJson { get; }
 
     internal static GameMcpStateSnapshot Unavailable(string reason) =>
         new(
@@ -197,7 +207,8 @@ internal sealed class GameMcpStateSnapshot
             "{}",
             "{}",
             false,
-            reason);
+            reason,
+            "{}");
 }
 
 /// <summary>Non-generic wrapper so the state snapshot exposes one simple nullable world slot.</summary>
