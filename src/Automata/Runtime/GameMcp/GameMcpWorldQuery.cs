@@ -888,7 +888,8 @@ internal static class GameMcpWorldQuery
         },
         "time-runes" => new[]
         {
-            "entityId", "discovered", "level", "masteryLevel", "masteryXp", "seen",
+            "entityId", "label", "archetypes", "discovered", "level", "masteryLevel",
+            "masteryXp", "seen",
         },
         "glyphs" => new[]
         {

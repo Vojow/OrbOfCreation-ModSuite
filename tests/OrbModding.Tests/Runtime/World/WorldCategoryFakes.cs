@@ -1015,6 +1015,8 @@ internal sealed class FakeTimeRune
     public static readonly List<FakeTimeRune> All = new();
 
     public Guid Identity = Guid.NewGuid();
+    public string Name = "Time rune";
+    public List<FakeTimeRuneType> timeRuneTypes = new();
     public bool discovered;
     public int level;
     public int discRarityLevel;
@@ -1026,6 +1028,14 @@ internal sealed class FakeTimeRune
     public FakeModifierRecord power = new(0d);
     public FakeModifierRecord powerScalingMod = new(0d);
     public FakeModifierRecord masteryXpMod = new(0d);
+
+    public Guid GetGuid() => Identity;
+    public string GetName() => Name;
+}
+
+internal sealed class FakeTimeRuneType
+{
+    public Guid Identity = Guid.NewGuid();
 
     public Guid GetGuid() => Identity;
 }

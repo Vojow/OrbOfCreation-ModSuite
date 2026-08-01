@@ -49,7 +49,8 @@ public sealed class ModConfigTests
 
         var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
 
-        Assert.Equal("Orb Of Creation ModSuite · Auto Buy", ModConfigTopNavigation.DetailTitle(catalog, pages[1]));
+        Assert.Equal(ModConfigTopPageKind.Runs, pages[1].Kind);
+        Assert.Equal("Orb Of Creation ModSuite · Auto Buy", ModConfigTopNavigation.DetailTitle(catalog, pages[2]));
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public sealed class ModConfigTests
                 Array.Empty<ConfigSectionDescriptor>()),
         });
 
-        var page = ModConfigTopNavigation.Build(catalog, attentionCount: 0)[1];
+        var page = ModConfigTopNavigation.Build(catalog, attentionCount: 0)[2];
 
         Assert.Equal(-1, page.SectionIndex);
         Assert.Equal("Orb Of Creation ModSuite", page.Label);
@@ -287,7 +288,7 @@ public sealed class ModConfigTests
         Assert.Equal(
             new[] { "General", "Auto Buy", "Auto Cast", "Auto Concept", "Auto Harvest", "Auto Items", "Auto Scribe", "Mentor", "Advanced" },
             mod.Sections.Select(section => section.Name));
-        Assert.Equal(10, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
+        Assert.Equal(11, ModConfigTopNavigation.Build(new ConfigCatalogSnapshot(new[] { mod }), 0).Count);
         Assert.All(
             mod.Sections.Where(section => section.Name is "Auto Buy" or "Auto Cast" or "Auto Concept" or "Auto Harvest" or "Auto Items" or "Auto Scribe" or "Mentor"),
             section => Assert.True(ModSettingsPage.IsImmediateCommandSetting(
@@ -355,6 +356,7 @@ public sealed class ModConfigTests
             new Sprite(),
             new Sprite(),
             new Sprite(),
+            new Sprite(),
             new Sprite());
         var parent = (RectTransform)new GameObject(
             "RailParent",
@@ -402,6 +404,7 @@ public sealed class ModConfigTests
             new Sprite(),
             new Sprite(),
             duplicate,
+            new Sprite(),
             duplicate,
             new Sprite(),
             new Sprite(),

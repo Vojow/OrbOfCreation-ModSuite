@@ -81,9 +81,10 @@ internal static class ModConfigNativeRailFactory
                 RemoveNativeWriters(buttonObject, primitives.FeatureRailButtonPrototype.GetType());
 
                 var rect = (RectTransform)buttonObject.transform;
-                var top = 1f - index * 0.115f;
-                rect.anchorMin = new Vector2(0.08f, top - 0.105f);
-                rect.anchorMax = new Vector2(0.92f, top - 0.01f);
+                var slot = Math.Min(0.115f, 0.98f / labels.Count);
+                var top = 1f - index * slot;
+                rect.anchorMin = new Vector2(0.08f, top - slot * 0.91f);
+                rect.anchorMax = new Vector2(0.92f, top - slot * 0.09f);
                 rect.offsetMin = Vector2.zero;
                 rect.offsetMax = Vector2.zero;
 

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using BepInEx.Configuration;
 using Newtonsoft.Json.Linq;
 using OrbAutomata;
 using OrbAutomata.GameMcp;
+using OrbChronicle;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
@@ -411,6 +414,162 @@ public sealed class GameMcpEmergencyStopTests
     }
 }
 
+public sealed class GameMcpChronicleTests
+{
+    [Fact]
+    public void StatusReadsTheImmutableCapturedSnapshot()
+    {
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(),
+            new GameMcpCommandBus());
+
+        var result = GameMcpAcceptanceFixture.Call(router, "chronicle_status");
+
+        Assert.Equal("Dormant", (string?)result["state"]);
+        Assert.Equal("orb-major-v1", (string?)result["milestoneSchemaId"]);
+        Assert.Equal(
+            "orb-feature-resource-discoveries-v2",
+            (string?)result["resourceSchemaId"]);
+        Assert.Equal("orb-time-rune-build-v1", (string?)result["runeSchemaId"]);
+        Assert.Equal(0, (int?)result["runeEventCount"]);
+        Assert.Null(result["runeTimeline"]);
+        Assert.Equal(0, (long?)result["runeMix"]!["coreLevels"]);
+        Assert.Equal(8, result["milestones"]!.Count());
+        Assert.Equal(7, result["resourceSections"]!.Count());
+        Assert.Equal("magic", (string?)result["resourceSections"]![0]!["id"]);
+        Assert.Equal(
+            "spell-output",
+            (string?)result["resourceSections"]![0]!["relationship"]);
+        Assert.Equal("first-visible", (string?)result["resourceSections"]![0]!["captureMode"]);
+        Assert.Equal(11, result["resourceSections"]![0]!["resources"]!.Count());
+        Assert.Equal(
+            "ResourceSO",
+            (string?)result["resourceSections"]![0]!["resources"]![0]!["expectedNativeType"]);
+    }
+
+    [Fact]
+    public void RuneQueryExposesBoundedSourceArchetypeAndPagingFilters()
+    {
+        var events = new[]
+        {
+            new ChronicleRuneLevelEvent(
+                1, Guid.NewGuid(), "Magic Tempo", ChronicleRuneArchetype.Tempo,
+                TimeSpan.FromSeconds(4).Ticks, 0, 2, 3, 0),
+            new ChronicleRuneLevelEvent(
+                2, Guid.NewGuid(), "Magic Scaling", ChronicleRuneArchetype.Scaling,
+                TimeSpan.FromSeconds(6).Ticks, 1, 4, 2, 0),
+        };
+        var chronicle = new ChronicleRunSnapshot(
+            2,
+            Guid.NewGuid(),
+            ChronicleRunState.Running,
+            TimeSpan.FromSeconds(6).Ticks,
+            9,
+            1,
+            "run is active",
+            Array.Empty<ChronicleMilestoneSnapshot>(),
+            Array.Empty<ChronicleResourceSectionSnapshot>(),
+            events,
+            new ChronicleRuneBuildMix(2, 3, 0, 0),
+            runeTimelineTruncated: false);
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(chronicle),
+            new GameMcpCommandBus());
+
+        var result = GameMcpAcceptanceFixture.Call(
+            router,
+            "chronicle_runes",
+            new JObject
+            {
+                ["source"] = "Current",
+                ["archetype"] = "Tempo",
+                ["offset"] = 0,
+                ["limit"] = 25,
+            });
+
+        Assert.Equal("available", (string?)result["status"]);
+        Assert.Equal("Current", (string?)result["source"]);
+        Assert.Equal("Tempo", (string?)result["archetype"]);
+        Assert.True((bool?)result["runeDataAvailable"]);
+        Assert.Equal(1, (int?)result["total"]);
+        Assert.Equal(25, (int?)result["limit"]);
+        var item = Assert.Single(result["events"]!);
+        Assert.Equal("Magic Tempo", (string?)item!["label"]);
+        Assert.Equal(2, (int?)item["levelsGained"]);
+        Assert.Contains(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "chronicle_runes");
+    }
+
+    [Fact]
+    public async Task StartCrossesTheMailboxAndReturnsOneTerminalResult()
+    {
+        var commands = new GameMcpCommandBus();
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(),
+            commands);
+        var call = Task.Run(() =>
+            GameMcpAcceptanceFixture.Call(router, "chronicle_start"));
+
+        Assert.True(SpinWait.SpinUntil(() => commands.PendingCount == 1, 500));
+        Assert.True(commands.TryDequeue(out var command));
+        Assert.Equal(GameMcpCommandKind.ChronicleStart, command.Kind);
+        commands.Complete(
+            command,
+            GameMcpCommandResult.Committed(
+                "chronicle_started",
+                "Chronicle run started",
+                0,
+                9,
+                3));
+
+        var result = await call;
+        Assert.Equal("committed", (string?)result["status"]);
+        Assert.Equal("chronicle_started", (string?)result["resultCode"]);
+        Assert.Equal(0, (int?)result["nativeCallsAttempted"]);
+        Assert.Equal(0, (int?)result["mutationAttempts"]);
+    }
+
+    [Fact]
+    public void AbandonIsDeclaredDestructiveButClosedWorld()
+    {
+        var tool = Assert.Single(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "chronicle_abandon");
+        Assert.True((bool?)tool["annotations"]?["destructiveHint"]);
+        Assert.False((bool?)tool["annotations"]?["openWorldHint"]);
+    }
+
+    [Fact]
+    public async Task ComparisonSelectionUsesTheBoundedMainThreadMailbox()
+    {
+        var commands = new GameMcpCommandBus();
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(),
+            commands);
+        var call = Task.Run(() => GameMcpAcceptanceFixture.Call(
+            router,
+            "chronicle_select_comparison",
+            new JObject { ["mode"] = "Previous" }));
+
+        Assert.True(SpinWait.SpinUntil(() => commands.PendingCount == 1, 500));
+        Assert.True(commands.TryDequeue(out var command));
+        Assert.Equal(GameMcpCommandKind.ChronicleSelectComparison, command.Kind);
+        Assert.Equal("Previous", command.Mode);
+        Assert.Empty(command.PayloadValue);
+        commands.Complete(command, GameMcpCommandResult.Committed(
+            "chronicle_comparison_selected",
+            "comparison changed",
+            0,
+            9,
+            3));
+
+        var result = await call;
+        Assert.Equal("committed", (string?)result["status"]);
+        Assert.Equal("chronicle_comparison_selected", (string?)result["resultCode"]);
+    }
+}
+
 public sealed class GameMcpForbiddenSurfaceTests
 {
     [Fact]
@@ -467,7 +626,12 @@ internal static class GameMcpAcceptanceFixture
         return (JObject)response.Body!["result"]!["structuredContent"]!;
     }
 
-    internal static GameMcpStateStore ConfiguredStore(string writableConfiguration = "[]")
+    internal static GameMcpStateStore ConfiguredStore(string writableConfiguration = "[]") =>
+        ConfiguredStore(new ChronicleRunTracker().Snapshot, writableConfiguration);
+
+    internal static GameMcpStateStore ConfiguredStore(
+        ChronicleRunSnapshot chronicle,
+        string writableConfiguration = "[]")
     {
         var store = new GameMcpStateStore();
         store.Capture(
@@ -480,7 +644,8 @@ internal static class GameMcpAcceptanceFixture
             Array.Empty<FeatureStatusSnapshot>(),
             DecisionJournalStatus.Unavailable,
             journalRevision: 2,
-            runtime: null);
+            runtime: null,
+            chronicle: chronicle);
         return store;
     }
 

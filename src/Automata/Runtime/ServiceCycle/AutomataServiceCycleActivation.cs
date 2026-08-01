@@ -20,6 +20,7 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
         ConfigGeneration configurationGeneration);
     void CancelPreparedWork();
     void InvalidateLifecycle();
+    AutomataPublishedWorldCapture CapturePublishedWorld();
 #if SERVICE_CYCLE_PROFILE
     GameMcpRuntimeState CaptureGameMcpState();
     GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
@@ -107,6 +108,17 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
     {
         if (_disposed) return;
         _runtime?.InvalidateLifecycle();
+    }
+
+    internal bool TryCapturePublishedWorld(out AutomataPublishedWorldCapture capture)
+    {
+        if (_disposed || _runtime is null)
+        {
+            capture = default;
+            return false;
+        }
+        capture = _runtime.CapturePublishedWorld();
+        return true;
     }
 
 #if SERVICE_CYCLE_PROFILE

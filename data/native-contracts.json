@@ -13214,6 +13214,24 @@
       "place": "capture"
     },
     {
+      "id": "time-rune.types",
+      "assembly": "assembly-csharp",
+      "type": "TimeRuneSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "timeRuneTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<TimeRuneTypeSO>",
+      "owners": [
+        "Chronicle time-rune build capture"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "timer-list.quantity",
       "assembly": "assembly-csharp",
       "type": "TimerList",
@@ -13282,7 +13300,8 @@
       "returnType": "System.String",
       "parameters": [],
       "owners": [
-        "Auto Items temporary-item picker"
+        "Auto Items temporary-item picker",
+        "Chronicle time-rune build capture"
       ],
       "usages": [
         "reflection"
@@ -15521,6 +15540,7 @@
       "src/AutoItems",
       "src/AutoScribe",
       "src/Automata",
+      "src/Chronicle",
       "src/Common",
       "src/Mentor",
       "src/ModConfig",

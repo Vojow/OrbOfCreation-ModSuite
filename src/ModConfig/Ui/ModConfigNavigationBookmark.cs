@@ -8,9 +8,12 @@ internal readonly record struct ModConfigNavigationBookmark(
     string SectionName,
     float ScrollOffset)
 {
+    private const string RunsGuid = "chronicle:runs";
     public bool IsRuntime => string.IsNullOrEmpty(PluginGuid);
+    public bool IsRuns => string.Equals(PluginGuid, RunsGuid, StringComparison.Ordinal);
 
     public static ModConfigNavigationBookmark Runtime => new(string.Empty, string.Empty, 0f);
+    public static ModConfigNavigationBookmark Runs => new(RunsGuid, string.Empty, 0f);
 }
 
 internal static class ModConfigNavigationBookmarkPolicy
@@ -21,8 +24,9 @@ internal static class ModConfigNavigationBookmarkPolicy
     {
         if (catalog is null) throw new ArgumentNullException(nameof(catalog));
         if (bookmark.IsRuntime) return 0;
+        if (bookmark.IsRuns) return 1;
         var pages = ModConfigTopNavigation.Build(catalog, attentionCount: 0);
-        for (var index = 1; index < pages.Count; index++)
+        for (var index = 2; index < pages.Count; index++)
         {
             var page = pages[index];
             var mod = catalog.Mods[page.PluginIndex];

@@ -16,7 +16,7 @@ $OOC_GAME_DIR/
 The suite ships as one BepInEx 5 DLL built by the single project `OrbModSuite.csproj` at this directory's root, which compiles every feature folder below it. `Common` owns gameplay-neutral safety and runtime-orchestration contracts shared by the features. It must not own domain policy, retain native game objects, or become a gameplay feature merely because several services use its scheduler.
 
 The feature folders are `AutoBuy`, `AutoCast`, `AutoConcept`, `AutoHarvest`, `AutoItems`,
-`AutoScribe`, `Automata`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and
+`AutoScribe`, `Automata`, `Chronicle`, `Common`, `Mentor`, `ModConfig`, and `SpellLeveling`; `Plugin.cs` and
 `SuiteConfiguration.cs` at this root are the one `BaseUnityPlugin` and the one configuration
 transaction that bind them together.
 

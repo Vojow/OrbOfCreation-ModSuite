@@ -26,6 +26,7 @@ public sealed class AutoItemsTemporaryItemPickerViewTests : IDisposable
             new Sprite(),
             new Sprite(),
             new Sprite(),
+            new Sprite(),
             new Sprite()));
     }
 

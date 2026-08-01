@@ -6,7 +6,8 @@ namespace OrbModConfig;
 internal enum ModConfigTopPageKind
 {
     Runtime = 0,
-    PluginSettings = 1,
+    Runs = 1,
+    PluginSettings = 2,
 }
 
 internal readonly struct ModConfigTopPage
@@ -34,6 +35,12 @@ internal readonly struct ModConfigTopPage
         pluginIndex: -1,
         sectionIndex: -1);
 
+    public static ModConfigTopPage Runs() => new(
+        ModConfigTopPageKind.Runs,
+        "Runs",
+        pluginIndex: -1,
+        sectionIndex: -1);
+
     public static ModConfigTopPage Plugin(string label, int pluginIndex, int sectionIndex)
     {
         if (pluginIndex < 0) throw new ArgumentOutOfRangeException(nameof(pluginIndex));
@@ -53,6 +60,7 @@ internal static class ModConfigTopNavigation
     {
         if (catalog is null) throw new ArgumentNullException(nameof(catalog));
         if (page.Kind == ModConfigTopPageKind.Runtime) return "Orb Of Creation ModSuite · Runtime";
+        if (page.Kind == ModConfigTopPageKind.Runs) return "Orb Of Creation ModSuite - Chronicle";
         var mod = catalog.Mods[page.PluginIndex];
         return page.SectionIndex < 0
             ? mod.Name
@@ -63,7 +71,11 @@ internal static class ModConfigTopNavigation
     {
         if (catalog is null) throw new ArgumentNullException(nameof(catalog));
         if (attentionCount < 0) throw new ArgumentOutOfRangeException(nameof(attentionCount));
-        var pages = new List<ModConfigTopPage> { ModConfigTopPage.Runtime(attentionCount) };
+        var pages = new List<ModConfigTopPage>
+        {
+            ModConfigTopPage.Runtime(attentionCount),
+            ModConfigTopPage.Runs(),
+        };
         for (var index = 0; index < catalog.Mods.Count; index++)
         {
             var mod = catalog.Mods[index];

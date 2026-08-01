@@ -277,6 +277,7 @@ public sealed class HarvestElementSO : IdScriptableObject
 public sealed class TimeRuneSO : IdScriptableObject
 {
     public static List<TimeRuneSO> All = new List<TimeRuneSO>();
+    public List<TimeRuneTypeSO> timeRuneTypes = new List<TimeRuneTypeSO>();
     public bool discovered;
     public int level;
     public int discRarityLevel;
@@ -288,7 +289,10 @@ public sealed class TimeRuneSO : IdScriptableObject
     public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord powerScalingMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord masteryXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public string GetName() => name;
 }
+
+public sealed class TimeRuneTypeSO : IdScriptableObject { }
 
 
 public sealed class GlyphSO : IdScriptableObject
