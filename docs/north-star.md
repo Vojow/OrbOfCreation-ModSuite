@@ -1,187 +1,114 @@
 # The North Star
 
-Read this first. It is the goal every change in this repository serves; when a change seems
-to conflict with it, either the change is wrong or this document is. Say which — don't
-quietly split the difference.
+Read this first. It states what the tree is trying to be. If code and this page
+disagree, identify which one is wrong; do not preserve two stories.
 
-## The system in one paragraph
+## The system
 
-This suite is a background brain for Orb of Creation. The main thread does three small jobs:
-read raw numbers out of the game, swap published references, and apply decided actions back
-into the game. Everything else — all math, all policy — happens on worker threads against
-immutable snapshots. Stale data is accepted by design: a decision made against a 200 ms old
-world is a good decision, because the game barely moves frame to frame and the payoff is a
-main thread we barely touch.
+OrbOfCreation-ModSuite is one BepInEx plugin, one configuration authority, and
+one ServiceCycle runtime. The Unity main thread collects native-free facts,
+publishes immutable readings, and applies actions. Workers derive state and make
+policy decisions only from the world, configuration, and strategy publications
+they were handed.
 
-## The dataflow
+The game owns identity, authored structure, mutable availability, and transaction
+execution. The suite owns audited formulas and policy. Stable identity is UUID
+plus expected native type, never a display name. A mutation is successful only
+when its exact postcondition is observed.
 
-1. **Collect** (main thread): the world collector reads raw values out of the game and stamps a
-   generation. Almost all of it is a plain field read. The one derived computation on the main
-   thread is deliberate: a modifier record is read the way the game's own `GetValue()` reads it —
-   its memo while it is clean, its fold over base value and modifiers while it is dirty — because
-   the alternative is publishing a number the game will not act on. Nothing is written, and the
-   collect it sits inside is measured rather than assumed — the trace dashboard is the instrument —
-   so it is a cost we accept knowingly.
-2. **Derive** (worker): compute everything we would otherwise have to ask the game for
-   (costs, rates, availability) into a new immutable `GameWorldState`.
-3. **Publish** (action): the finished snapshot returns through the ordinary action pipeline;
-   applying it swaps the current-world reference and advances the live generation.
-4. **Consume**: an ordinary service starts only against a world collected strictly after it went
-   live, and strictly after the frame of its own last game-facing action attempt. Generations
-   and frames share one clock — a snapshot's generation is the pump frame it was collected on —
-   so the comparison is like with like. The gate is born armed: acting on the seed publication
-   means acting on an empty world where nothing is priced, so a service waits for a reading
-   later than itself before its first cycle. After that, every attempted ordinary action raises
-   the floor, not a declaration or one terminal disposition. A commit is absent from the pinned
-   world; a skip, rejection, or fault proves its facts insufficient at the live boundary. The
-   Source's publication attempts are the sole exemption. A service therefore never acts on a
-   world it does not appear in, never acts twice on one generation, and never acts on a world
-   collected before its own last attempt. A held service is simply skipped and asked again next
-   frame, and every held frame is recorded. The worker receives `(world, config, strategy)` as
-   arguments and returns actions; the main thread applies them.
+## Dataflow
 
-Configuration is the same shape with a different source (the config file); strategy is the
-same shape with a neutral constant bulletin until a strategist exists. BepInEx entries are only
-the persistence boundary. One application store owns the committed immutable reading and its
-`ConfigGeneration`; runtime code and controls do not read an unpublished entry snapshot.
+1. **Collect:** the one Source service reads bounded native facts on the main
+   thread every 250 milliseconds and stamps the capture with the current frame.
+2. **Derive:** a worker turns that capture into an immutable `GameWorldState` and
+   computes the suite-owned formulas.
+3. **Publish:** the completed world returns through the action pipeline and
+   replaces the suite-wide world publication.
+4. **Consume:** each Ordinary service evaluates a pinned
+   `(world, configuration, strategy)` tuple on a worker and returns actions to the
+   main thread.
+5. **Validate and act:** the action boundary resolves current native identity and
+   mutable facts, performs at most its declared mutation, and verifies the exact
+   before/after evidence.
 
-Every configuration writer converges at that store. Quick buttons and shortcuts compute their
-next value from committed state and publish the fresh saved snapshot before returning, while
-Mods-page and external-file changes are coalesced and committed at the start of the next
-main-thread pass. The store sends the same `(snapshot, generation)` once to the registry and to
-the presentation join. Feature runtimes publish health only; status combines that health with
-committed intent centrally and is never a second configuration path.
+An Ordinary service starts only on a world collected after it became live and
+after its own last game-facing attempt. Commit, skip, rejection, and fault all
+raise that freshness floor; Source publication attempts are the sole exemption.
+No service acts twice on one world or retries against facts its last attempt may
+have changed.
 
-## The three publications
+## Three publications
 
-World, configuration, strategy. Each is:
+World, configuration, and strategy each have one suite-wide immutable slot and
+one suite-wide generation. The main thread replaces them; workers hold pinned
+readings without locks. A stale reading costs memory, not thread safety, and its
+permission to act is bounded by the freshness and action rules above.
 
-- **one** suite-wide slot with **one** suite-wide generation — never per-service;
-- deeply immutable (machine-checked), shared across threads without locks;
-- replaced only by the main thread; old generations die by GC when the last worker drops
-  them. Holding a stale snapshot is a memory cost, not a correctness bug.
+All configuration writers converge on the committed configuration store. Direct
+controls publish a freshly saved snapshot synchronously; Mods-page and external
+file changes commit through the same store. A running batch keeps its pinned
+configuration. Re-reading current configuration inside each action would create
+a second authority to narrow only a frame-scale window; lifecycle, emergency,
+ownership, and live native facts remain immediate boundaries.
 
-Every service is handed all three and ignores what it doesn't need.
+Strategy is advisory beneath user configuration and native validation. The
+current neutral bulletin cannot authorize a spend configuration refused; a
+future strategist may only narrow policy.
 
-## Two service shapes — there is no third
+## Two service shapes
 
-- **Source**: captures raw values on the main thread, derives on the worker, publishes the
-  result as an action. The world collector is one; a future strategist is another.
-- **Ordinary**: no capture phase at all. Generation gate, then worker
-  `Evaluate(world, config, strategy, ref state) → actions`, then main-thread execution.
+- **Source:** bounded main-thread capture, worker derivation, main-thread
+  publication. World collection is the current Source.
+- **Ordinary:** publication gate, worker evaluation, main-thread action. Every
+  gameplay feature uses this shape.
 
-## Where the game may be touched
+There is no third scheduler, feature-local timer, alternate configuration store,
+or second mutation path. Local UI maintenance and lifecycle repair bounds remain
+local delivery mechanisms, not service engines.
 
-Two places for a migrated service — a source service's capture and action application — plus
-the one declared exception below. Every feature now runs on ServiceCycle. The manifest contains
-661 capture, 84 action and 9 patch contracts; its one remaining `legacy` contract is a read-only
-UI icon lookup unrelated to a runtime engine. No worker, evaluator, or policy code touches the
-game anywhere. This is enforced, not hoped for:
+## Native boundary
 
-- the **native-contract manifest** is a closed audit of the game surface: every game member a
-  source file names must be a declared, audited contract, and each contract declares the place
-  it is touched — capture, action, patch, or legacy — with the legacy set ratcheted so it can
-  only shrink;
-- the **worker-storage audit** ensures worker-thread code can only reach inert types —
-  value types and sealed, deeply immutable objects on an explicit allowlist. The ban is on
-  holding a *path back to the game* (delegates, interfaces, adapters, mutable shared
-  objects): whatever a worker holds, worker code can call, and touching Unity off the main
-  thread is a data race. Immutable snapshots are inert and fine to hold.
+Every native member used at a capture, action, or patch boundary is declared in
+the schema-3 native contract manifest. Remaining source-audit hits require
+narrow, reasoned exemptions; an exemption is not gameplay authority. Workers
+cannot retain a path back to Unity or mutable runtime owners.
 
-One declared exception: the **differential verifiers** — read-only, off-by-default,
-main-thread diagnostics that prove our ported math against the live game. They exist
-precisely because we own formulas the game also computes; they are an audited exemption,
-not a third service shape. A verifier's before/after probe belongs to the exemption too:
-`Spell.Fire` is patched so a mutation verifier can tell a fire that happened from one that
-did not.
+The canonical rules for owned math, freshness classes, GameActions, UI capture,
+and failure handling live in the
+[game-boundary doctrine](runtime-architecture/game-boundary-doctrine.md). The
+[engineering doctrine](development/engineering-doctrine.md) records the review
+rules learned while applying them.
 
-Not every Harmony patch is scheduled to die, and the honest accounting is three groups.
-The **signal patches** die with the generation gate: the queue pair and the completion
-postfix are both gone, the latter with Spell Leveling's migration.
-The **five lifecycle hooks** die when the snapshot's collected epoch is proven to detect a
-save-load; until that is measured they are the intended "we are moving to a new game,
-trash everything" signal rather than a wart. The **four Mentor mastery hooks** are deliberate
-exact-XP inputs published with the world, while the **fire hook** is Auto Cast's
-mutation-verifier probe. Discovery, loadout, reset, and other feature signal patches retired
-with their legacy runtimes.
+## Simplicity
 
-## The simplicity doctrine
+Every seam pays rent. The released tree has one DLL, one plugin identity, one
+configuration file, one runtime, one lifecycle model, one diagnostics join, and
+one action definition per capability. New work extends those shared boundaries;
+it does not add feature-specific publishers, current-state side channels,
+schedulers, fallback renderers, or mutation adapters.
 
-Every seam must pay rent. Scheduled for deletion because they don't:
+Prefer an explicit refusal over partial operation whose truth cannot be proved.
+Prefer a clean pinned input over machinery that reacts a few frames sooner.
+Prefer deleting a retired compatibility seam or duplicate guide over preserving
+history in the active reading path.
 
-- the assembly split — everything merges into one DLL; features ship together and users
-  enable or disable services in the config UI;
-- per-service configuration publishers and per-service `ConfigGeneration`;
-- the `TConfig` and `TFrame` type parameters — configuration arrives as an argument exactly
-  like the world, and scratch space lives in worker state. Both are gone; the contract is
-  `<TState, TAction>`;
-- the capture phase and its adapters for ordinary services. Also gone: an ordinary service
-  evaluates straight off the publications its cycle pinned, and only the world collector
-  still captures;
-- the `Bind*` registration ceremony — registration is a list of services, not a negotiation;
-- the three plugin identities — one `BaseUnityPlugin`, one GUID, one config file. A clean
-  break, taken deliberately while no release is pending; the config itself gets reimagined
-  as part of the strategist work;
-- every reference to OrbChronomancer and OrbAchievementResonance. They exist only on
-  abandoned branches; with one DLL built from one tree, "not in the source" *is* the
-  exclusion, and the name-based denylists retire with the split;
-- the tree converges on one mod with a folder per feature — but files move only after the
-  native-contract manifest stops naming hand-maintained source paths, never as a side
-  effect of the merge commit itself. `sources[]` has been dropped, so that precondition is
-  met;
-- the CPU-budget / resumable-work-across-frames regime. Every feature now performs bounded
-  boundary work through ServiceCycle, so `CpuBudgetMilliseconds`, weighted admission,
-  mutation leases, and the coordinator evidence product are gone. The Mods UI keeps its
-  one-maintenance-pass-per-frame guard and gameplay invalidation keeps its explicit
-  per-frame operation cap because those are local delivery bounds, not another scheduler.
-- the application-level service registry that once hosted ServiceCycle beside legacy engines.
-  With those engines gone, `Plugin` owns one deferred ServiceCycle activation directly; Common's
-  typed eight-service registry remains the engine's ordering boundary.
-- per-feature configuration relays and cached mode/emergency facts. Feature diagnostics report
-  runtime health; one application status join supplies saved intent and emergency state.
+## Observability
 
-No compatibility concern may block a simplification: replay formats bump freely (recordings
-are disposable test artifacts), upstream's project layout is not a constraint, and an
-existing seam is never its own justification.
+- **Performance profile:** compile-time opt-in measurements for owner and worker
+  stages; absent from release builds.
+- **Manual full trace:** opt-in semantic events plus configuration and strategy
+  publication stores. Raw world payloads are not recorded.
+- **Decision journal:** bounded rolling numeric service decisions with durable
+  health and lifecycle evidence.
+- **Recent-event dump:** an on-demand bounded snapshot of current host evidence
+  for a bug report.
 
-## Observability — four systems, four mandates
+Observation may fail without changing gameplay, but it must report that failure
+and may not start a substitute writer or format. Runtime replay is not a product
+system; deterministic scenarios own reproducible re-execution.
 
-What each system is **for**. Code and older docs that claim otherwise are wrong; this
-section wins.
+## Direction
 
-1. **Profiler** — debug builds only, compiles out of release entirely (zero overhead).
-   OpenTelemetry-style measured spans with globally enumerated integer span ids: every
-   pump-frame phase, every worker stage. Worker-stage spans are deferred: a worker
-   definition may not hold runtime-owned storage, so it cannot hold the probe, and the
-   runtime times the whole evaluation instead — the stage ids that tried are burned.
-   Pre-allocation is welcome here as a performance detail. Reported through the dashboard
-   script. This is internal "how fast is this part" tooling.
-2. **Full trace** — the bug-report recorder, available in release builds: a user presses
-   record, reproduces the problem, shares the artifact, and the trace answers "what did the
-   service see and decide". It records the four streams — raw capture data, configuration
-   publications, strategy publications, action outcomes — plus the high-level runtime
-   events needed to follow a session. Near-zero cost while idle; while recording, extra
-   cost and allocation are acceptable. In debug builds, where it may run alongside the
-   profiler, its own overhead must never appear inside profiler spans as a red herring.
-3. **Decision log** — always on, high signal, low noise: lifecycle boundaries, strategy
-   changes, configuration saves, emergency stops, service health transitions — not
-   per-cycle minutiae. Size-capped and rotated; the suite (BepInEx's own logs included)
-   keeps at most ~100 MB on disk no matter how many days it runs unattended.
-4. **Replay** — retired as a runtime system. Scripted re-execution of recorded runs
-   (clock scripting, causal joining, derived-state feedback) is deleted, not rebuilt. Its
-   testing value is served by hand-crafted scenario fixtures; the full trace keeps the
-   door open by recording exactly the inputs a future recompute harness would need,
-   without the runtime carrying a line of machinery for it.
-
-Fixed-size frames and ring buffers were a regime designed for per-service input shapes.
-With every service taking the same three inputs, pre-allocation survives only where it
-pays (profiler spans) — it is not a system-wide constraint.
-
-## Sequence
-
-1. this document;
-2. aggressive seam cleanup, including the one-DLL merge;
-3. game reads reduced to the two allowed places;
-4. one reviewed, squashed commit to the public fork;
-5. migrate the remaining services onto the runtime (complete);
-6. build out strategy and new features.
+Keep the released runtime small and measure before optimizing. New capabilities
+reuse lifecycle, ownership, binding, verification, freshness, diagnostics, and
+GameAction infrastructure.

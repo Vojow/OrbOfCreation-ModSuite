@@ -7,7 +7,7 @@
 
 [Back to reverse-engineering index](README.md) ·
 [Game boundary doctrine](../runtime-architecture/game-boundary-doctrine.md) ·
-[Auto Scribe tests](../testing/automata/auto-scribe.md)
+[Testing doctrine](../testing/README.md)
 
 ## Evidence and compatibility boundary
 

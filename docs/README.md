@@ -15,16 +15,15 @@ Choose the path that matches what you are trying to do.
 
 ## Contributors and maintainers
 
+- [Engineering doctrine](development/engineering-doctrine.md)
 - [Development setup](development/setup.md)
-- [Testing hub](testing/README.md)
-- [Repository test strategy](testing/strategy.md)
-- [Headless E2E simulation](testing/headless-e2e.md)
+- [Contributing workflow](../CONTRIBUTING.md)
+- [Testing doctrine](testing/README.md)
+- [Native contract workflow](testing/native-contracts.md)
 - [Runtime validation protocol](testing/runtime-validation.md)
-- [Mentor interactive runtime checklist](testing/mentor-runtime-validation.md)
 - [Release review checklist](development/releases.md)
 - [Release procedure](releasing.md)
 - [Source layout](../src/README.md)
-- [Contributing guidelines](../CONTRIBUTING.md)
 
 ## Reverse-engineering research
 
@@ -35,13 +34,9 @@ Choose the path that matches what you are trying to do.
 
 Research pages distinguish **Verified**, **Inferred**, and **Candidate** findings. They document the supported installed-game baseline and do not include game binaries.
 
-## Roadmap and design plans
+## Architecture and direction
 
 - [The north star](north-star.md)
-- [Project roadmap](plans/roadmap.md)
-- [Plan index and lifecycle status](plans/README.md)
 - [Runtime architecture dossier](runtime-architecture/README.md)
 - [Accepted service-cycle runtime](runtime-architecture/service-cycle-runtime.md)
 - [Service-cycle observability](runtime-architecture/observability.md)
-
-Plans explain intended or historical design. Released behavior is documented in the relevant feature-area README, not inferred from a plan.

@@ -58,16 +58,10 @@ Migration code must use explicit known-key maps and closed safe failure codes. I
 `OrbModding.Common.Runtime` holds monotonic time, catalogs, configuration and strategy publications, the shared world collection, diagnostics, and tracing. The contracts contain no Unity objects or gameplay policy, and the configuration UI consumes their typed projections. The earlier R0 scheduler it once carried was deleted at the Auto Harvest cutover.
 
 `OrbModding.Common.Runtime.ServiceCycle` is the accepted foundation and is production-composed: it
-drives world collection, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast, Auto Concept, Auto
-Items, and Auto Scribe. The ordinary runner through semantic export, snapshot export, and schema-v7
+drives world collection, Auto Items, Auto Scribe, Auto Harvest, Auto Buy, Spell Leveling, Auto Cast,
+Auto Concept, and Mentor. The ordinary runner through semantic export, snapshot export, and schema-v7
 recording is verified by the portable suite. Replay was retired as a runtime system rather than
 rebuilt. See the [runtime architecture dossier](../docs/runtime-architecture/README.md).
-
-## Shared automation decisions
-
-`OrbModding.Common.AutomationDecision` is the suite-wide automation diagnostics boundary. Producers use explicit codes, dispositions, retry triggers, stable identity plus expected native type, validated queue snapshots, structured native state, and normalized resource constraints. `ConditionKey` owns deduplication; English `TechnicalDetail` and display names are evidence for people only. Logs and tooltips render with `AutomationDecisionPresenter`, while future Insights consumers subscribe through `AutomationDecisionPublisher` and must tolerate missed/coalesced equivalent conditions rather than influencing automation.
-
-Auto Buy is the first production adopter. Auto Cast, Auto Concept, Mentor, feature-health state, and configuration transaction results remain outside this contract for now.
 
 ## Shared gameplay controls
 

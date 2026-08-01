@@ -1,6 +1,6 @@
 # Public release checklist
 
-[Back to roadmap](../plans/roadmap.md) · [Runtime validation](../testing/runtime-validation.md) ·
+[Runtime validation](../testing/runtime-validation.md) ·
 [Release procedure](../releasing.md)
 
 The publication procedure itself — building, tagging, and creating the GitHub release with
