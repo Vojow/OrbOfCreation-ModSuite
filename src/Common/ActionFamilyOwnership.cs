@@ -15,6 +15,7 @@ public enum AutomationActionFamily
     HarvestAction = 400,
     ConsumableUse = 500,
     CraftingQueueSubmission = 501,
+    DiscoveryTreeOfferLifecycle = 502,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,

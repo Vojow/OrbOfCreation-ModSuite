@@ -21,6 +21,42 @@ internal enum WorldRequirementVerdict
 }
 
 /// <summary>
+/// The exact value selection and thresholds behind one requirement-leaf verdict.
+/// </summary>
+internal readonly struct WorldRequirementLeafEvaluation
+{
+    internal WorldRequirementLeafEvaluation(
+        WorldRequirementVerdict verdict,
+        string reasonCode,
+        string selectedValueKind,
+        BigDouble current,
+        BigDouble required,
+        BigDouble baseThreshold,
+        BigDouble scaledThreshold,
+        BigDouble effectiveThreshold)
+    {
+        Verdict = verdict;
+        ReasonCode = reasonCode ?? string.Empty;
+        SelectedValueKind = selectedValueKind ?? string.Empty;
+        Current = current;
+        Required = required;
+        BaseThreshold = baseThreshold;
+        ScaledThreshold = scaledThreshold;
+        EffectiveThreshold = effectiveThreshold;
+    }
+
+    internal WorldRequirementVerdict Verdict { get; }
+    internal string ReasonCode { get; }
+    internal string SelectedValueKind { get; }
+    internal BigDouble Current { get; }
+    internal BigDouble Required { get; }
+    internal BigDouble BaseThreshold { get; }
+    internal BigDouble ScaledThreshold { get; }
+    internal BigDouble EffectiveThreshold { get; }
+    internal bool Met => Verdict == WorldRequirementVerdict.Met;
+}
+
+/// <summary>
 /// Answers <c>prerequisitesPerLevel.Check(level)</c> from the published snapshot, on the worker.
 /// </summary>
 /// <remarks>
@@ -64,6 +100,9 @@ internal static class WorldRequirementEvaluator
     private const int RitualReachedLevel = 1;
     private const int NumberValue = 0;
     private const int GenericLevel = 1;
+    private const int PrerequisiteLinkBase = 0;
+    private const int PrerequisiteLinkTier = 1;
+    private const int MaximumExpansionDepth = 32;
 
     /// <summary>
     /// The level an upgrade's per-level container is checked at, matching the game's
@@ -100,23 +139,8 @@ internal static class WorldRequirementEvaluator
     internal static WorldRequirementVerdict Evaluate(GameWorldState world, Guid ownerId, long level)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
-
-        if (!WorldEntityRequirementLookup.TryFindRange(
-                world.EntityRequirements, ownerId, out var start, out var count))
-        {
-            return WorldRequirementVerdict.Met;
-        }
-
-        var rows = world.EntityRequirements.AsSpan();
-        var verdict = WorldRequirementVerdict.Met;
-        for (var offset = 0; offset < count; offset++)
-        {
-            var one = Evaluate(world, in rows[start + offset], level);
-            if (one == WorldRequirementVerdict.Unevaluable) return WorldRequirementVerdict.Unevaluable;
-            if (one == WorldRequirementVerdict.Unmet) verdict = WorldRequirementVerdict.Unmet;
-        }
-
-        return verdict;
+        Span<RequirementContainerKey> trail = stackalloc RequirementContainerKey[MaximumExpansionDepth];
+        return EvaluateContainer(world, ownerId, containerIndex: 0, level, trail, trailDepth: 0);
     }
 
     /// <summary>One condition, at the level being bought.</summary>
@@ -126,6 +150,265 @@ internal static class WorldRequirementEvaluator
         long level)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
+        if (row.NodeKind != WorldRequirementNodeKind.Leaf)
+            return WorldRequirementVerdict.Unevaluable;
+        Span<RequirementContainerKey> trail = stackalloc RequirementContainerKey[MaximumExpansionDepth];
+        return EvaluateLeaf(world, in row, level, trail, trailDepth: 0);
+    }
+
+    /// <summary>
+    /// Explains which published value the native leaf evaluator selects. The verdict still comes
+    /// from <see cref="Evaluate(GameWorldState,in WorldEntityRequirement,long)"/>; this method does
+    /// not maintain a second condition evaluator.
+    /// </summary>
+    internal static WorldRequirementLeafEvaluation ExplainLeaf(
+        GameWorldState world,
+        in WorldEntityRequirement row,
+        long level)
+    {
+        if (world is null) throw new ArgumentNullException(nameof(world));
+        var verdict = Evaluate(world, in row, level);
+        var baseThreshold = new BigDouble(row.BaseValue);
+        if (!TryThreshold(in row, level, out var scaledThreshold))
+        {
+            return new WorldRequirementLeafEvaluation(
+                WorldRequirementVerdict.Unevaluable,
+                "threshold_scaling_unavailable",
+                "unsupported",
+                default,
+                default,
+                baseThreshold,
+                default,
+                default);
+        }
+
+        var whole = BigDouble.Round(scaledThreshold).ToLong();
+        var required = new BigDouble(whole);
+        var effective = required;
+        BigDouble current;
+        string selected;
+        var supported = true;
+
+        switch (row.Kind)
+        {
+            case WorldRequirementConditionKind.Upgrade
+                when WorldLookup.TryFind(world.Upgrades, row.TargetId, out var upgrade):
+                selected = "purchased_level";
+                current = new BigDouble(upgrade.Reading.Level);
+                if (row.ReqType == UpgradeOneLevel) effective = required = BigDouble.One;
+                else if (row.ReqType == UpgradeMaxLevel)
+                    effective = required = new BigDouble(upgrade.Reading.MaxLevel);
+                else supported = row.ReqType == UpgradeAtLeast;
+                break;
+            case WorldRequirementConditionKind.Research
+                when WorldLookup.TryFind(world.Research, row.TargetId, out var research):
+                selected = "total_level";
+                current = new BigDouble(ResearchLevel(in research));
+                if (row.ReqType == UpgradeOneLevel) effective = required = BigDouble.One;
+                else if (row.ReqType == UpgradeMaxLevel)
+                    effective = required = new BigDouble(research.MaxLevel);
+                else supported = row.ReqType == UpgradeAtLeast;
+                break;
+            case WorldRequirementConditionKind.Structure
+                when WorldLookup.TryFind(world.Structures, row.TargetId, out var structure):
+                selected = "purchased_quantity";
+                current = new BigDouble(structure.Reading.Quantity);
+                supported = row.ReqType == StructureQuantity;
+                break;
+            case WorldRequirementConditionKind.Spell
+                when WorldLookup.TryFind(world.SpellRecipes, row.TargetId, out var spell):
+                if (row.ReqType == SpellDiscovered)
+                {
+                    selected = "discovered";
+                    current = spell.Discovered ? BigDouble.One : BigDouble.Zero;
+                    effective = required = BigDouble.One;
+                }
+                else
+                {
+                    selected = "mastery_level";
+                    current = new BigDouble(spell.MasteryLevel);
+                    supported = row.ReqType is SpellLevel or SpellMasteryLevel;
+                }
+                break;
+            case WorldRequirementConditionKind.AlchemyRecipe
+                when WorldLookup.TryFind(world.AlchemyRecipes, row.TargetId, out var alchemy):
+                if (row.ReqType == AlchemyDiscovered)
+                {
+                    selected = "discovered";
+                    current = alchemy.Discovered ? BigDouble.One : BigDouble.Zero;
+                    effective = required = BigDouble.One;
+                }
+                else if (row.ReqType == AlchemyRecipeLevel)
+                {
+                    selected = "recipe_level";
+                    current = new BigDouble(alchemy.MaxLevel);
+                }
+                else if (row.ReqType == AlchemyMasteryLevel)
+                {
+                    selected = "mastery_level";
+                    current = new BigDouble(alchemy.MasteryLevel);
+                }
+                else
+                {
+                    selected = "advancement_level";
+                    current = new BigDouble(alchemy.AdvancementLevel);
+                    supported = row.ReqType == AlchemyAdvancementLevel;
+                }
+                break;
+            case WorldRequirementConditionKind.Ritual
+                when WorldLookup.TryFind(world.Rituals, row.TargetId, out var ritual):
+                if (row.ReqType == RitualDiscovered)
+                {
+                    selected = "discovered";
+                    current = ritual.Discovered ? BigDouble.One : BigDouble.Zero;
+                    effective = required = BigDouble.One;
+                }
+                else
+                {
+                    selected = "reached_level";
+                    current = new BigDouble(ritual.ReachedLevel);
+                    supported = row.ReqType == RitualReachedLevel;
+                }
+                break;
+            case WorldRequirementConditionKind.Number
+                when TryFindNumber(world, row.TargetId, out var number):
+                selected = "numeric_value";
+                current = number.Value;
+                required = effective = scaledThreshold;
+                supported = row.ReqType == NumberValue;
+                break;
+            case WorldRequirementConditionKind.Generic
+                when TryFindNumber(world, row.TargetId, out var generic):
+                selected = "numeric_value";
+                current = new BigDouble(generic.Value.ToInt());
+                supported = row.ReqType == GenericLevel;
+                break;
+            case WorldRequirementConditionKind.PrerequisiteLink:
+                selected = "prerequisite_link_gate";
+                current = verdict == WorldRequirementVerdict.Met
+                    ? BigDouble.One
+                    : BigDouble.Zero;
+                required = effective = BigDouble.One;
+                supported = row.ReqType is PrerequisiteLinkBase or PrerequisiteLinkTier;
+                break;
+            default:
+                selected = "unsupported";
+                current = default;
+                supported = false;
+                break;
+        }
+
+        if (!supported)
+        {
+            return new WorldRequirementLeafEvaluation(
+                WorldRequirementVerdict.Unevaluable,
+                "unsupported_requirement_value",
+                selected,
+                current,
+                required,
+                baseThreshold,
+                scaledThreshold,
+                effective);
+        }
+
+        return new WorldRequirementLeafEvaluation(
+            verdict,
+            verdict switch
+            {
+                WorldRequirementVerdict.Met => "requirement_met",
+                WorldRequirementVerdict.Unmet => "requirement_unmet",
+                _ => "requirement_unevaluable",
+            },
+            selected,
+            current,
+            required,
+            baseThreshold,
+            scaledThreshold,
+            effective);
+    }
+
+    private static WorldRequirementVerdict EvaluateContainer(
+        GameWorldState world,
+        Guid ownerId,
+        int containerIndex,
+        long level,
+        Span<RequirementContainerKey> trail,
+        int trailDepth)
+    {
+        if (trailDepth >= trail.Length) return WorldRequirementVerdict.Unevaluable;
+        var key = new RequirementContainerKey(ownerId, containerIndex);
+        for (var index = 0; index < trailDepth; index++)
+            if (trail[index].Equals(key)) return WorldRequirementVerdict.Unevaluable;
+        trail[trailDepth] = key;
+
+        if (!WorldEntityRequirementLookup.TryFindContainerRange(
+                world.EntityRequirements, ownerId, containerIndex, out var start, out var count))
+        {
+            return WorldRequirementVerdict.Met;
+        }
+
+        var rows = world.EntityRequirements.AsSpan();
+        var verdict = WorldRequirementVerdict.Met;
+        for (var offset = 0; offset < count; offset++)
+        {
+            ref readonly var row = ref rows[start + offset];
+            if (row.ParentOrdinal >= 0) continue;
+            var one = EvaluateNode(
+                world, rows, start, count, in row, level, trail, trailDepth + 1);
+            if (one == WorldRequirementVerdict.Unevaluable) return one;
+            if (one == WorldRequirementVerdict.Unmet) verdict = one;
+        }
+
+        return verdict;
+    }
+
+    private static WorldRequirementVerdict EvaluateNode(
+        GameWorldState world,
+        ReadOnlySpan<WorldEntityRequirement> rows,
+        int start,
+        int count,
+        in WorldEntityRequirement row,
+        long level,
+        Span<RequirementContainerKey> trail,
+        int trailDepth)
+    {
+        if (row.NodeKind == WorldRequirementNodeKind.Leaf)
+            return EvaluateLeaf(world, in row, level, trail, trailDepth);
+
+        var hasUnevaluable = false;
+        var hasUnmet = false;
+        for (var offset = 0; offset < count; offset++)
+        {
+            ref readonly var child = ref rows[start + offset];
+            if (child.ParentOrdinal != row.Ordinal) continue;
+            var one = EvaluateNode(
+                world, rows, start, count, in child, level, trail, trailDepth);
+            if (row.Operator == WorldRequirementOperator.Or && one == WorldRequirementVerdict.Met)
+                return WorldRequirementVerdict.Met;
+            if (one == WorldRequirementVerdict.Unevaluable) hasUnevaluable = true;
+            if (one == WorldRequirementVerdict.Unmet) hasUnmet = true;
+        }
+
+        if (row.Operator == WorldRequirementOperator.And)
+        {
+            if (hasUnevaluable) return WorldRequirementVerdict.Unevaluable;
+            return hasUnmet ? WorldRequirementVerdict.Unmet : WorldRequirementVerdict.Met;
+        }
+        if (row.Operator == WorldRequirementOperator.Or)
+        {
+            if (hasUnevaluable) return WorldRequirementVerdict.Unevaluable;
+            return WorldRequirementVerdict.Unmet;
+        }
+        return WorldRequirementVerdict.Unevaluable;
+    }
+
+    private static WorldRequirementVerdict EvaluateLeaf(
+        GameWorldState world,
+        in WorldEntityRequirement row,
+        long level,
+        Span<RequirementContainerKey> trail,
+        int trailDepth)
+    {
         if (row.Kind == WorldRequirementConditionKind.Unknown) return WorldRequirementVerdict.Unevaluable;
         if (!TryThreshold(in row, level, out var threshold)) return WorldRequirementVerdict.Unevaluable;
 
@@ -143,8 +426,56 @@ internal static class WorldRequirementEvaluator
             WorldRequirementConditionKind.Ritual => Ritual(world, in row, whole),
             WorldRequirementConditionKind.Number => Number(world, in row, threshold),
             WorldRequirementConditionKind.Generic => Generic(world, in row, whole),
+            WorldRequirementConditionKind.PrerequisiteLink => PrerequisiteLink(
+                world, in row, whole, level, trail, trailDepth),
             _ => WorldRequirementVerdict.Unevaluable,
         };
+    }
+
+    private static WorldRequirementVerdict PrerequisiteLink(
+        GameWorldState world,
+        in WorldEntityRequirement row,
+        long threshold,
+        long level,
+        Span<RequirementContainerKey> trail,
+        int trailDepth)
+    {
+        var tier = row.ReqType switch
+        {
+            PrerequisiteLinkBase => 0,
+            PrerequisiteLinkTier => threshold,
+            _ => -1,
+        };
+        if (tier < 0 || tier > int.MaxValue) return WorldRequirementVerdict.Unevaluable;
+        if (!WorldPrerequisiteLinkTierLookup.TryFind(
+                world.PrerequisiteLinkTiers, row.TargetId, (int)tier, out var nativeTier))
+        {
+            return WorldRequirementVerdict.Unevaluable;
+        }
+        if (!nativeTier.ActiveEnabled) return WorldRequirementVerdict.Unmet;
+        if (nativeTier.PassiveEnabled) return WorldRequirementVerdict.Met;
+        if (nativeTier.EvaluatedThisFrame) return WorldRequirementVerdict.Unmet;
+        if (!WorldEntityRequirementLookup.TryFindContainerRange(
+                world.EntityRequirements, row.TargetId, (int)tier, out _, out _))
+        {
+            return WorldRequirementVerdict.Unevaluable;
+        }
+        return EvaluateContainer(world, row.TargetId, (int)tier, level, trail, trailDepth);
+    }
+
+    private readonly struct RequirementContainerKey : IEquatable<RequirementContainerKey>
+    {
+        internal RequirementContainerKey(Guid ownerId, int containerIndex)
+        {
+            OwnerId = ownerId;
+            ContainerIndex = containerIndex;
+        }
+
+        private Guid OwnerId { get; }
+        private int ContainerIndex { get; }
+
+        public bool Equals(RequirementContainerKey other) =>
+            OwnerId == other.OwnerId && ContainerIndex == other.ContainerIndex;
     }
 
     /// <summary>
@@ -230,8 +561,8 @@ internal static class WorldRequirementEvaluator
     }
 
     /// <summary>
-    /// Ported from <c>ResearchSO.GetLevel()</c>: <c>GetBaseLevel() + GetBonusLevels()</c>, which
-    /// expands to <c>level + baseLevels.AsInt() + bonusLevels.AsInt()</c>.
+    /// The collector's direct result from <c>ResearchSO.GetLevel()</c>:
+    /// <c>GetBaseLevel() + GetBonusLevels()</c>.
     /// </summary>
     /// <remarks>
     /// Three terms, not one. The <c>level</c> field alone is what a research entry has bought for
@@ -239,8 +570,7 @@ internal static class WorldRequirementEvaluator
     /// compares against the sum. Reading the field would under-report every entry with a bonus and
     /// make the planner skip purchases the game would have allowed.
     /// </remarks>
-    internal static long ResearchLevel(in WorldResearch research) =>
-        research.Level + research.Modifiers.BaseLevels.ToInt() + research.Modifiers.BonusLevels.ToInt();
+    internal static long ResearchLevel(in WorldResearch research) => research.TotalLevel;
 
     /// <summary>Ported from <c>StructureRequirement.InternalIsValid</c>.</summary>
     private static WorldRequirementVerdict Structure(

@@ -107,6 +107,12 @@ public enum GenericRequirementType
     Discovered,
 }
 
+public enum PrerequisiteLinkType
+{
+    Base,
+    Tier,
+}
+
 public sealed class UpgradeRequirement : BaseCondition<UpgradeSO, UpgradeRequirementType>
 {
 }
@@ -145,12 +151,26 @@ public sealed class GenericRequirement : BaseCondition<UpgradeableObject, Generi
 {
 }
 
+public sealed class PrerequisiteLinkRequirement :
+    BaseCondition<global::PrerequisiteLinkSO, PrerequisiteLinkType>
+{
+}
+
 /// <summary>
-/// A composite. Present so a fixture can author one, and deliberately not modelled by the collector:
-/// it derives from the non-generic base and holds a nested list rather than an item, so it reads as a
-/// condition nobody can evaluate — which is what must make its owner inadmissible.
+/// The two native composite shapes. Their nested lists must remain explicit because flattening an OR
+/// into the container's implicit AND changes the game's answer.
 /// </summary>
 public sealed class OrRequirement : IRequirementCondition
 {
     public System.Collections.Generic.List<IRequirementCondition> orConditions = new();
+}
+
+public sealed class AndRequirement : IRequirementCondition
+{
+    public System.Collections.Generic.List<IRequirementCondition> andConditions = new();
+}
+
+/// <summary>A future native condition shape the suite deliberately has no binding for.</summary>
+public sealed class UnsupportedRequirement : IRequirementCondition
+{
 }

@@ -20,6 +20,22 @@ contract fails loudly and enumerably at audit time, before anything acts. An und
 dependency on UI state fails per-screen, per-session, invisibly. When a choice exists, take
 the risk the manifest can see.
 
+### Perf-debug inspection exception
+
+The Game MCP is a debugger, not an ordinary service or a production gameplay dependency. A
+parameterized tooltip, inspected panel, active-screen catalog, fixed probe, or framebuffer cannot be
+truthfully published as general world state. A perf-debug MCP operation may read that exact fact
+directly provided the HTTP worker submits one immutable operation, Unity performs the read on its
+main thread, the result is native-free and terminal, and no gameplay mutation occurs. UI state
+changes such as navigation or opening an inspected tooltip are classified and audited as UI
+mutations, not called read-only.
+
+This exception does not permit speculative capture. There is no periodic MCP snapshot, cache warm,
+hidden navigation, or “freshness” loop. Broadly reusable changing facts go into `GameWorldState`;
+authored graphs are build-time or lifecycle-structural; genuinely parameterized UI facts are read
+only for the request that names them. See
+[Game MCP frame operations](game-mcp-frame-operations.md).
+
 ## Reads and owned math
 
 - Compute what we can; collect what we cannot. Collection cost is a real budget: every native
@@ -125,3 +141,56 @@ carries its own cooldown, retry timer, or candidate memory.
   reinventing it.
 - Bespoke per-feature variants of already-solved problems (binding, verification, freshness
   handling, asset capture) are findings, not style choices.
+- The Game MCP owns transport only. All stateful tools cross its single post-pump frame-operation
+  inbox; an empty inbox performs no projection, health read, native read, or authority refresh.
+
+## Proposed ruling: verification protects the action, not the ledger
+
+> **Pending maintainer ratification at landing.** This wording records the round-2 ruling for review;
+> it is not presented as doctrine that predates that ratification.
+
+A GameAction postcondition proves that the exact stable target and expected native type performed
+the requested transition. Wrong target, wrong type, an absent transition, or an ambiguous outcome
+fails verification and may quarantine the capability. Payment deltas, resource balances, counters,
+timers, flags, and other accounting facts remain exact receipt evidence, but they never gate,
+downgrade, or quarantine an otherwise observed target outcome. In particular, a sub-ULP native
+`BigDouble` subtraction cannot disprove a transition the game performed.
+
+After a native exception, capture the strongest available after-state before classifying it. If the
+requested identity and outcome are present, commit verified and retain the exception plus all ledger
+facts as evidence. If the requested outcome is absent or target identity is ambiguous after a
+mutation began, fail closed and quarantine. Admission checks still prevent unaffordable or otherwise
+ineligible attempts; this ruling changes postcondition meaning, not preflight authority.
+
+## Proposed ruling: MCP responses are signal-dense
+
+> **Pending maintainer ratification at landing.** This wording records the round-2 ruling for review;
+> it is not presented as doctrine that predates that ratification.
+
+An MCP success contains status, stable code, the requested data or outcome, and only facts needed for
+the next decision. It omits request echoes, zero counters, empty collections, inapplicable predicate
+stanzas, and matching expected/observed generation pairs. Absence means not applicable. There is one
+honest response shape per tool and no response-verbosity option.
+
+A refusal or fault keeps the evidence that explains it: exact reason, native call/mutation audit,
+generation mismatch where present, and the decomposed action receipt. Brevity is a success posture,
+not permission to hide uncertainty or failure evidence.
+
+## Proposed round-5 clarification: the MCP is a player surface, not an audit envelope
+
+> **Pending maintainer ratification at landing.** This clarification supersedes conflicting response
+> examples in the preceding round-2 proposal without rewriting that historical ruling.
+
+MCP reads use `available`/`unavailable`; mutations use `committed`/`refused`/`faulted`. A success has
+no code that restates its status, no static mutation-scope label, no attempts/committed counters, no
+request echo, and no payment or generation-mismatch stanza. Failure retains decomposed evidence.
+Every entity reference carries stable UUID plus player-facing name, category/type when relevant, and
+internal name only when it differs. Every game-domain magnitude is one rounded string: zero is `0`;
+all nonzero values use a lowercase scientific exponent and at most two mantissa decimals.
+
+Read tools retain one `worldGeneration` naming the immutable publication that answered. Action
+schemas and results have no world generation: the GameAction revalidates live identity and mutable
+facts, then the operation returns the newer published post-state that would otherwise require a
+follow-up read. Resource and cost rows use one canonical spendable `amount`; deeper collector and
+factor internals remain outside the player surface. Compact text is legitimate when it is faster for
+an agent to read than structured data and no handle extraction is required.

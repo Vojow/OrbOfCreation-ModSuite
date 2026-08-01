@@ -2,7 +2,6 @@
 using System;
 using System.Globalization;
 using BepInEx.Configuration;
-using Newtonsoft.Json.Linq;
 
 namespace OrbAutomata.GameMcp;
 
@@ -89,24 +88,22 @@ internal static class GameMcpConfigurationValuePolicy
         return true;
     }
 
-    internal static JObject Describe(ConfigEntryBase entry)
+    internal static GameMcpConfigurationConstraint Describe(ConfigEntryBase entry)
     {
         if (entry is null) throw new ArgumentNullException(nameof(entry));
-        var result = new JObject
-        {
-            ["mode"] = "exact_parse_and_domain",
-            ["acceptableValues"] =
-                entry.Description.AcceptableValues?.ToDescriptionString() ?? string.Empty,
-        };
+        var domain = string.Empty;
         if (Is(entry, "Reserves", "AbsoluteReserve"))
-            result["domain"] = "finite invariant number >= 0";
+            domain = "finite invariant number >= 0";
         else if (Is(entry, "Reserves", "RelativeReserveMultiplier"))
-            result["domain"] = "finite float >= 0";
+            domain = "finite float >= 0";
         else if (Is(entry, "AutoBuy", "LeaveQueueSlots"))
-            result["domain"] = "integer >= 0";
+            domain = "integer >= 0";
         else if (entry.SettingType.IsEnum)
-            result["domain"] = "one of: " + string.Join(", ", Enum.GetNames(entry.SettingType));
-        return result;
+            domain = "one of: " + string.Join(", ", Enum.GetNames(entry.SettingType));
+        return new GameMcpConfigurationConstraint(
+            "exact_parse_and_domain",
+            entry.Description.AcceptableValues?.ToDescriptionString() ?? string.Empty,
+            domain);
     }
 
     private static bool TryParse(Type settingType, string serialized, out object? value)
@@ -152,5 +149,22 @@ internal static class GameMcpConfigurationValuePolicy
 
     private static string FriendlyTypeName(Type type) =>
         type.IsEnum ? string.Join(", ", Enum.GetNames(type)) : type.Name;
+}
+
+internal sealed class GameMcpConfigurationConstraint
+{
+    internal GameMcpConfigurationConstraint(
+        string mode,
+        string acceptableValues,
+        string domain)
+    {
+        Mode = mode ?? string.Empty;
+        AcceptableValues = acceptableValues ?? string.Empty;
+        Domain = domain ?? string.Empty;
+    }
+
+    internal string Mode { get; }
+    internal string AcceptableValues { get; }
+    internal string Domain { get; }
 }
 #endif

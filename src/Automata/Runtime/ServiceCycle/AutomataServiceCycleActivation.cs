@@ -21,7 +21,7 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
     void CancelPreparedWork();
     void InvalidateLifecycle();
 #if SERVICE_CYCLE_PROFILE
-    GameMcpRuntimeState CaptureGameMcpState();
+    AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices);
     GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
 #endif
 }
@@ -110,14 +110,16 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
     }
 
 #if SERVICE_CYCLE_PROFILE
-    internal bool TryCaptureGameMcpState(out GameMcpRuntimeState state)
+    internal bool TryCaptureFrameFacts(
+        bool includeServices,
+        out AutomataRuntimeFrameFacts state)
     {
         if (_disposed || _runtime is null)
         {
             state = null!;
             return false;
         }
-        state = _runtime.CaptureGameMcpState();
+        state = _runtime.CaptureFrameFacts(includeServices);
         return true;
     }
 

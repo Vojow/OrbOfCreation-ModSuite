@@ -108,6 +108,12 @@ internal sealed class GameWorldCycleFrame
     /// view's live availability.
     /// </summary>
     internal WorldRelationBuffer<WorldPurchaseViewRelation> PurchaseViewRelations { get; } = new();
+
+    /// <summary>The safe native parameterized verdict for each structure and upgrade.</summary>
+    internal WorldRequirementNativeVerdictBuffer RequirementNativeVerdicts { get; } = new();
+
+    /// <summary>The volatile active/passive gates around the structural prerequisite-link graph.</summary>
+    internal WorldPrerequisiteLinkTierBuffer PrerequisiteLinkTiers { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
     internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
@@ -116,6 +122,11 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldEquipmentType, WorldEquipmentType> EquipmentTypes { get; } = new();
     internal WorldSampleBuffer<WorldResourceType, WorldResourceType> ResourceTypes { get; } = new();
     internal WorldSampleBuffer<WorldCraftingRecipeType, WorldCraftingRecipeType> CraftingRecipeTypes { get; } = new();
+    internal WorldRelationBuffer<RawCraftingRecipeSample> CraftingRecipes { get; } = new();
+    internal WorldRelationBuffer<WorldCraftingRecipeTypeLink> CraftingRecipeTypeLinks { get; } = new();
+    internal WorldRelationBuffer<RawCraftingRecipeResource> CraftingRecipeResources { get; } = new();
+    internal WorldRelationBuffer<WorldCraftingRecipeConsumableOutput> CraftingRecipeConsumableOutputs { get; } = new();
+    internal WorldRelationBuffer<WorldCraftingRecipeDrainBlock> CraftingRecipeDrainBlocks { get; } = new();
     internal WorldSampleBuffer<WorldHarvestElement, WorldHarvestElement> HarvestElements { get; } = new();
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
@@ -267,6 +278,13 @@ internal static class GameWorldFrameDeriver
             EquipmentTypes = frame.EquipmentTypes.Build(WorldIdentityDeriver<WorldEquipmentType>.Shared),
             ResourceTypes = frame.ResourceTypes.Build(WorldIdentityDeriver<WorldResourceType>.Shared),
             CraftingRecipeTypes = frame.CraftingRecipeTypes.Build(WorldIdentityDeriver<WorldCraftingRecipeType>.Shared),
+            CraftingRecipes = WorldCraftingRecipeDeriver.Build(
+                frame.CraftingRecipes,
+                frame.CraftingRecipeTypeLinks,
+                frame.CraftingRecipeResources,
+                frame.CraftingRecipeConsumableOutputs,
+                frame.CraftingRecipeDrainBlocks,
+                resources),
             HarvestElements = frame.HarvestElements.Build(WorldIdentityDeriver<WorldHarvestElement>.Shared),
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
@@ -351,6 +369,10 @@ internal static class GameWorldFrameDeriver
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),
             EffectBlocks = WorldEffectBlockDeriver.Build(frame.EffectBlocks),
             EntityRequirements = WorldEntityRequirementDeriver.Build(frame.EntityRequirements),
+            RequirementNativeVerdicts =
+                WorldRequirementNativeVerdictDeriver.Build(frame.RequirementNativeVerdicts),
+            PrerequisiteLinkTiers =
+                WorldPrerequisiteLinkTierDeriver.Build(frame.PrerequisiteLinkTiers),
             TreasurePools = frame.TreasurePools.Build(WorldIdentityDeriver<WorldTreasurePool>.Shared),
         };
     }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
 namespace OrbModding.GameContractTests;
@@ -43,6 +44,39 @@ internal sealed class GameAssemblyMetadata : IDisposable
             fullName,
             GetTypeVisibility(definition.Attributes),
             DecodeTypeHandle(definition.BaseType));
+    }
+
+    public IReadOnlyList<string> GetTypesImplementing(string interfaceName)
+    {
+        var result = new List<string>();
+        foreach (var handle in Reader.TypeDefinitions)
+        {
+            var definition = Reader.GetTypeDefinition(handle);
+            foreach (var implementationHandle in definition.GetInterfaceImplementations())
+            {
+                var implementation = Reader.GetInterfaceImplementation(implementationHandle);
+                if (!string.Equals(DecodeTypeHandle(implementation.Interface), interfaceName,
+                        StringComparison.Ordinal)) continue;
+                result.Add(GetFullTypeName(handle));
+            }
+        }
+        result.Sort(StringComparer.Ordinal);
+        return result;
+    }
+
+    public bool ImplementsInterface(string fullName, string interfaceName)
+    {
+        var direct = new HashSet<string>(
+            GetTypesImplementing(interfaceName),
+            StringComparer.Ordinal);
+        var current = fullName;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (HasType(current) && visited.Add(current))
+        {
+            if (direct.Contains(current)) return true;
+            current = GetBaseType(current);
+        }
+        return false;
     }
 
     public string GetFieldType(string fullName, string fieldName)
@@ -154,6 +188,116 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return methods;
     }
 
+    /// <summary>
+    /// Whether one uniquely named method body contains the exact metadata token for a target field.
+    /// This pins which native value an evaluator consumes, not merely that both members exist.
+    /// </summary>
+    public bool MethodReferencesField(
+        string sourceType,
+        string sourceMethod,
+        string targetType,
+        string targetField)
+    {
+        var method = RequireUniqueMethod(sourceType, sourceMethod);
+        var field = RequireField(targetType, targetField);
+        return MethodBodyContainsToken(method, MetadataTokens.GetToken(field));
+    }
+
+    public bool MethodReferencesMethod(
+        string sourceType,
+        string sourceMethod,
+        string targetType,
+        string targetMethod) =>
+        MethodReferenceOffset(sourceType, sourceMethod, targetType, targetMethod) >= 0;
+
+    public int MethodReferenceOffset(
+        string sourceType,
+        string sourceMethod,
+        string targetType,
+        string targetMethod)
+    {
+        var source = RequireUniqueMethod(sourceType, sourceMethod);
+        var target = RequireUniqueMethod(targetType, targetMethod);
+        return MethodBodyTokenOffset(source, MetadataTokens.GetToken(target));
+    }
+
+    public int GetMethodToken(string fullName, string methodName) =>
+        MetadataTokens.GetToken(RequireUniqueMethod(fullName, methodName));
+
+    public int GetFieldToken(string fullName, string fieldName) =>
+        MetadataTokens.GetToken(RequireField(fullName, fieldName));
+
+    public MethodDispatchContract GetMethodDispatch(string fullName, string methodName)
+    {
+        var method = Reader.GetMethodDefinition(RequireUniqueMethod(fullName, methodName));
+        return new MethodDispatchContract(
+            (method.Attributes & MethodAttributes.Virtual) != 0,
+            (method.Attributes & MethodAttributes.Abstract) != 0,
+            (method.Attributes & MethodAttributes.NewSlot) != 0);
+    }
+
+    /// <summary>The one-byte IL opcode immediately preceding an exact definition-token operand.</summary>
+    public byte GetMethodReferenceOpcode(
+        string sourceType,
+        string sourceMethod,
+        string targetType,
+        string targetMethod)
+    {
+        var source = RequireUniqueMethod(sourceType, sourceMethod);
+        var target = RequireUniqueMethod(targetType, targetMethod);
+        var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(target));
+        if (offset <= 0)
+            throw new InvalidOperationException(
+                $"Method {sourceType}.{sourceMethod} did not reference " +
+                $"{targetType}.{targetMethod} with a one-byte opcode.");
+        var sourceDefinition = Reader.GetMethodDefinition(source);
+        var bytes = _peReader.GetMethodBody(sourceDefinition.RelativeVirtualAddress).GetILBytes();
+        return bytes![offset - 1];
+    }
+
+    /// <summary>
+    /// Definition tokens referenced by one uniquely named native method body. This deliberately
+    /// reports only methods and fields defined by the inspected game assembly; it is intended for
+    /// pinning the game's own state-machine edges rather than producing a general IL disassembly.
+    /// </summary>
+    public IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyDefinitionReferences(
+        string sourceType,
+        string sourceMethod)
+    {
+        var source = RequireUniqueMethod(sourceType, sourceMethod);
+        var references = new List<MethodBodyDefinitionReference>();
+        foreach (var typeHandle in Reader.TypeDefinitions)
+        {
+            var type = Reader.GetTypeDefinition(typeHandle);
+            var typeName = GetFullTypeName(typeHandle);
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(methodHandle));
+                if (offset < 0) continue;
+                var method = Reader.GetMethodDefinition(methodHandle);
+                references.Add(new MethodBodyDefinitionReference(
+                    offset,
+                    MetadataTokens.GetToken(methodHandle),
+                    "method",
+                    typeName,
+                    Reader.GetString(method.Name)));
+            }
+            foreach (var fieldHandle in type.GetFields())
+            {
+                var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(fieldHandle));
+                if (offset < 0) continue;
+                var field = Reader.GetFieldDefinition(fieldHandle);
+                references.Add(new MethodBodyDefinitionReference(
+                    offset,
+                    MetadataTokens.GetToken(fieldHandle),
+                    "field",
+                    typeName,
+                    Reader.GetString(field.Name)));
+            }
+        }
+        return references.OrderBy(reference => reference.Offset).ToArray();
+    }
+
     private static string GetTypeVisibility(TypeAttributes attributes) =>
         (attributes & TypeAttributes.VisibilityMask) switch
         {
@@ -201,6 +345,54 @@ internal sealed class GameAssemblyMetadata : IDisposable
         }
 
         throw new InvalidOperationException($"Type {fullName} was not found.");
+    }
+
+    private FieldDefinitionHandle RequireField(string fullName, string fieldName)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        foreach (var handle in definition.GetFields())
+        {
+            if (Reader.GetString(Reader.GetFieldDefinition(handle).Name) == fieldName)
+                return handle;
+        }
+        throw new InvalidOperationException($"Field {fullName}.{fieldName} was not found.");
+    }
+
+    private MethodDefinitionHandle RequireUniqueMethod(string fullName, string methodName)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        MethodDefinitionHandle found = default;
+        foreach (var handle in definition.GetMethods())
+        {
+            if (Reader.GetString(Reader.GetMethodDefinition(handle).Name) != methodName) continue;
+            if (!found.IsNil)
+                throw new InvalidOperationException(
+                    $"Method {fullName}.{methodName} is overloaded; an exact selector is required.");
+            found = handle;
+        }
+        if (found.IsNil)
+            throw new InvalidOperationException($"Method {fullName}.{methodName} was not found.");
+        return found;
+    }
+
+    private bool MethodBodyContainsToken(MethodDefinitionHandle methodHandle, int token)
+        => MethodBodyTokenOffset(methodHandle, token) >= 0;
+
+    private int MethodBodyTokenOffset(MethodDefinitionHandle methodHandle, int token)
+    {
+        var method = Reader.GetMethodDefinition(methodHandle);
+        if (method.RelativeVirtualAddress == 0) return -1;
+        var bytes = _peReader.GetMethodBody(method.RelativeVirtualAddress).GetILBytes();
+        if (bytes is null || bytes.Length < sizeof(int)) return -1;
+        for (var offset = 0; offset <= bytes.Length - sizeof(int); offset++)
+        {
+            if (bytes[offset] == (byte)token &&
+                bytes[offset + 1] == (byte)(token >> 8) &&
+                bytes[offset + 2] == (byte)(token >> 16) &&
+                bytes[offset + 3] == (byte)(token >> 24))
+                return offset;
+        }
+        return -1;
     }
 
     private bool TryGetType(string fullName, out TypeDefinitionHandle handle)
@@ -266,6 +458,18 @@ internal sealed record TypeContract(
     string Name,
     string Visibility,
     string BaseType);
+
+internal sealed record MethodBodyDefinitionReference(
+    int Offset,
+    int Token,
+    string Kind,
+    string DeclaringType,
+    string MemberName);
+
+internal sealed record MethodDispatchContract(
+    bool IsVirtual,
+    bool IsAbstract,
+    bool IsNewSlot);
 
 internal sealed class MetadataTypeNameProvider : ISignatureTypeProvider<string, object?>
 {

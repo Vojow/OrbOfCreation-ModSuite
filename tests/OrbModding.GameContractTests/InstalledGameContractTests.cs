@@ -570,6 +570,42 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void CraftingRecipeWorldCapture_MatchesConcreteRecipeContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<CraftingRecipeSO>",
+            assembly.GetFieldType("CraftingRecipeSO", "All"));
+        Assert.Equal("ResourceCostList", assembly.GetFieldType("CraftingRecipeSO", "recipeCost"));
+        Assert.Equal(
+            "ResourceCostList",
+            assembly.GetFieldType("CraftingRecipeSO", "generatedResources"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<PersistentEffectBlock>",
+            assembly.GetFieldType("CraftingRecipeSO", "engagementEffects"));
+        Assert.Equal("System.Double", assembly.GetFieldType("CraftingRecipeSO", "timeToComplete"));
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "GetStartingQuantity",
+            false,
+            "BigDouble");
+        AssertMethod(
+            assembly,
+            "ResourceCostList",
+            "IsWithinCapacity",
+            false,
+            "System.Boolean");
+        AssertMethod(
+            assembly,
+            "EffectBlock",
+            "GetEffectNecessaryDrainRatio",
+            false,
+            "BigDouble");
+    }
+
+    [GameAssemblyFact]
     public void AlchemyGameplayDomainClassifier_MatchesStableIdentityTypeAndRegistryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

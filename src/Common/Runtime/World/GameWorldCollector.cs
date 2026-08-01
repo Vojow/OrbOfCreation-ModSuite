@@ -78,6 +78,8 @@ internal sealed class GameWorldCollector
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
     private readonly WorldPurchaseViewRelationReader _purchaseViewRelations;
+    private readonly WorldRequirementNativeVerdictReader _requirementNativeVerdicts;
+    private readonly WorldPrerequisiteLinkTierReader _prerequisiteLinkTiers;
     private readonly IWorldMasteryExperienceSource _masteryExperience;
     private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
@@ -87,6 +89,8 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldEquipmentType, WorldEquipmentType> _equipmentTypes;
     private readonly WorldCategoryReader<WorldResourceType, WorldResourceType> _resourceTypes;
     private readonly WorldCategoryReader<WorldCraftingRecipeType, WorldCraftingRecipeType> _craftingRecipeTypes;
+    private readonly WorldCraftingRecipeAuthoringReader _craftingRecipeAuthoring;
+    private readonly WorldCraftingRecipeReader _craftingRecipes;
     private readonly WorldCategoryReader<WorldHarvestElement, WorldHarvestElement> _harvestElements;
     private readonly WorldCategoryReader<RawHarvestResourceSample, WorldHarvestResource> _harvestResources;
     private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
@@ -214,6 +218,8 @@ internal sealed class GameWorldCollector
         _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
         _resourceTypes = Reader(new WorldResourceTypeBinder(), resolveType, static frame => frame.ResourceTypes);
         _craftingRecipeTypes = Reader(new WorldCraftingRecipeTypeBinder(), resolveType, static frame => frame.CraftingRecipeTypes);
+        _craftingRecipes = new WorldCraftingRecipeReader(resolveType);
+        _craftingRecipeAuthoring = new WorldCraftingRecipeAuthoringReader(_craftingRecipes);
         _harvestElements = Reader(new WorldHarvestElementBinder(), resolveType, static frame => frame.HarvestElements);
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
         _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
@@ -253,8 +259,16 @@ internal sealed class GameWorldCollector
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
-            resolveType("UpgradeSO"), resolveType("StructureSO"));
+            resolveType("UpgradeSO"),
+            resolveType("StructureSO"),
+            resolveType("ResearchSO"),
+            resolveType("PrerequisiteLinkSO"));
         _purchaseViewRelations = new WorldPurchaseViewRelationReader(resolveType);
+        _requirementNativeVerdicts = new WorldRequirementNativeVerdictReader(
+            _entityRequirements);
+        _prerequisiteLinkTiers = new WorldPrerequisiteLinkTierReader(
+            resolveType("PrerequisiteLinkSO"),
+            resolveType("GameManager"));
 
         _readers = new IWorldCategoryReader[]
         {
@@ -262,6 +276,7 @@ internal sealed class GameWorldCollector
             _doubleVariables, _intVariables, _boolVariables, _modifierVariables,
             _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellTypes,
             _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
+            _craftingRecipeAuthoring, _craftingRecipes,
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
             _scribeRelations,
             _rituals, _achievements, _advancements, _challenges,
@@ -269,7 +284,8 @@ internal sealed class GameWorldCollector
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,
             _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks,
-            _entityRequirements, _purchaseViewRelations,
+            _entityRequirements, _purchaseViewRelations, _requirementNativeVerdicts,
+            _prerequisiteLinkTiers,
         };
 
         _isStructural = new bool[_readers.Length];
@@ -280,7 +296,11 @@ internal sealed class GameWorldCollector
                 ReferenceEquals(_readers[index], _plotAuthoring) ||
                 ReferenceEquals(_readers[index], _effectBlocks) ||
                 ReferenceEquals(_readers[index], _entityRequirements) ||
-                ReferenceEquals(_readers[index], _purchaseViewRelations);
+                ReferenceEquals(_readers[index], _purchaseViewRelations) ||
+                ReferenceEquals(_readers[index], _craftingRecipeTypes) ||
+                ReferenceEquals(_readers[index], _craftingRecipeAuthoring) ||
+                ReferenceEquals(_readers[index], _purchaseCosts) ||
+                ReferenceEquals(_readers[index], _upgradeCosts);
         }
     }
 
@@ -330,6 +350,7 @@ internal sealed class GameWorldCollector
         if (frame is null) throw new ArgumentNullException(nameof(frame));
 
         _claimed.Clear();
+        var structuralIsCurrent = IsStructuralReadingCurrent(frame);
         frame.FixedDeltaTime = _readFixedDeltaTime();
         frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
         frame.MasteryExperience.Reset();
@@ -337,14 +358,13 @@ internal sealed class GameWorldCollector
 
         // Two readers append here, so neither may reset it: whichever ran second would discard the
         // other's rows, and which that is depends on traversal order rather than on anything stated.
-        frame.PurchaseCosts.Reset();
+        if (!structuralIsCurrent) frame.PurchaseCosts.Reset();
 
         // One extra row when the modifier fold had to reconstruct an input. It is reported as an
         // unavailable pseudo-category rather than logged, because it makes every folded number in the
         // pass suspect and a report that still called itself complete would be lying about all of
         // them. When nothing degraded the row is absent and the report is exactly as it was.
         var degradation = _rateGlobals.Degradation;
-        var structuralIsCurrent = IsStructuralReadingCurrent(frame);
         var reports = new WorldCategoryReport[_readers.Length + (degradation.Length == 0 ? 0 : 1)];
         if (degradation.Length > 0)
         {

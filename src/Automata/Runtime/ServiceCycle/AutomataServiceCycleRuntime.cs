@@ -24,6 +24,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly IAutomataServiceCycleFeatureRuntime[] _features;
     private readonly ServiceConfigurationPublisher _configurationPublication;
     private ConfigGeneration _configurationGeneration;
+    private readonly DiscoveryTreeOfferGameAction? _discoveryTreeOffers;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -34,7 +35,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         ServiceConfigurationPublisher configurationPublication,
         AutomataServiceCycleHost host,
         IAutomataServiceCycleFeatureRuntime[] features,
-        ConfigGeneration configurationGeneration)
+        ConfigGeneration configurationGeneration,
+        DiscoveryTreeOfferGameAction? discoveryTreeOffers = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -42,6 +44,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _features = features ?? throw new ArgumentNullException(nameof(features));
         _configurationGeneration = configurationGeneration;
+        _discoveryTreeOffers = discoveryTreeOffers;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -99,13 +102,17 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _features[index].ObserveLifecycle(
                 nativeLifecycle,
                 _configurationGeneration);
+        _discoveryTreeOffers?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
-    public GameMcpRuntimeState CaptureGameMcpState()
+    public AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(AutomataServiceCycleRuntime));
-        return GameMcpRuntimeState.Capture(_host);
+        return AutomataRuntimeFrameFacts.Capture(
+            _host,
+            _configurationPublication,
+            includeServices);
     }
 
     public GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command)
@@ -122,7 +129,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var lifecycle = checked((long)_host.CurrentLifecycle.Value);
         if (GameMcpNativeActionAdmission.TryReject(
                 command,
-                world.Generation.Value,
                 lifecycle,
                 configuration.Generation.Value,
                 _host.EmergencyStopEngaged,
@@ -131,6 +137,11 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
 
         try
         {
+            if (command.Kind == GameMcpCommandKind.DiscoveryTreeOffer)
+                return ExecuteDiscoveryTreeOffer(
+                    command,
+                    lifecycle,
+                    configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -148,7 +159,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return GameMcpCommandResult.FromAction(
                 in result,
                 command.Kind,
-                world.Generation.Value,
                 lifecycle,
                 configuration.Generation.Value,
                 exactReason);
@@ -158,7 +168,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return GameMcpCommandResult.Rejected(
                 exception.Code,
                 exception.Message,
-                world.Generation.Value,
                 lifecycle,
                 configuration.Generation.Value);
         }
@@ -169,10 +178,45 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return GameMcpCommandResult.Faulted(
                 "main_thread_execution_fault",
                 exception.GetBaseException().Message,
-                world.Generation.Value,
                 lifecycle,
                 configuration.Generation.Value);
         }
+    }
+
+    private GameMcpCommandResult ExecuteDiscoveryTreeOffer(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "DiscoveryTreeSO");
+        if (_discoveryTreeOffers is null)
+            return GameMcpCommandResult.Rejected(
+                "contract_unavailable",
+                "the shared Discovery Tree offer GameAction was not composed",
+                lifecycle,
+                configurationGeneration);
+        var kind = command.Mode switch
+        {
+            "initiate" => DiscoveryTreeOfferActionKind.Initiate,
+            "select" => DiscoveryTreeOfferActionKind.Select,
+            "confirm" => DiscoveryTreeOfferActionKind.Confirm,
+            "reroll" => DiscoveryTreeOfferActionKind.Reroll,
+            _ => throw new ArgumentException("unsupported Discovery Tree offer mode " + command.Mode),
+        };
+        var action = new DiscoveryTreeOfferAction(
+            kind,
+            command.TargetId,
+            command.SecondaryId,
+            command.ExpectedLifecycleGeneration);
+        var submission = _discoveryTreeOffers.Submit(in action);
+        var result = DiscoveryTreeOfferActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpDiscoveryTreeOfferProjection.Project(kind, in submission));
     }
 
     private static string? ExactGameMcpReason(
@@ -428,6 +472,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _disposed = true;
         try
         {
+            _discoveryTreeOffers?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

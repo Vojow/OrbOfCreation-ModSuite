@@ -409,6 +409,15 @@ internal sealed class WorldMemberBinding
     internal Func<object, TValue>? Call<TValue>(string name) =>
         Record(name, NativeAccessorBinder.Call<TValue>(_type, name));
 
+    internal Func<object, object?>? CallObject(string name, Type? exactReturnType) =>
+        Record(name, NativeAccessorBinder.CallObject(_type, name, exactReturnType));
+
+    internal Func<object, IList?>? CallList(string name, Type? exactElementType) =>
+        Record(name, NativeAccessorBinder.CallList(_type, name, exactElementType));
+
+    internal Func<object, TArgument, TValue>? Call<TArgument, TValue>(string name) =>
+        Record(name, NativeAccessorBinder.Call<TArgument, TValue>(_type, name));
+
     internal Func<object, int>? EnumField(string name) =>
         Record(name, NativeAccessorBinder.EnumField(_type, name));
 
@@ -459,6 +468,9 @@ internal sealed class WorldMemberBinding
     internal Func<object, Guid>? ReferenceGuid(string name) =>
         Record(name, NativeAccessorBinder.ReferenceGuid(_type, name));
 
+    internal Func<object, object?>? Reference(string name, Type? exactFieldType) =>
+        Record(name, NativeAccessorBinder.Reference(_type, name, exactFieldType));
+
     /// <summary>The same edge, where the game exposes it as an accessor rather than as a field.</summary>
     internal Func<object, Guid>? CallReferenceGuid(string name) =>
         Record(name, NativeAccessorBinder.CallReferenceGuid(_type, name));
@@ -485,6 +497,26 @@ internal sealed class WorldMemberBinding
         {
             var owner = root(source);
             return owner is null ? default! : accessor(owner);
+        };
+    }
+
+    private Func<object, TArgument, TValue>? Record<TArgument, TValue>(
+        string name,
+        Func<object, TArgument, TValue>? accessor)
+    {
+        if (accessor is null)
+        {
+            _failures.Add(Qualify(name));
+            return null;
+        }
+
+        var root = _root;
+        if (root is null) return accessor;
+
+        return (source, argument) =>
+        {
+            var owner = root(source);
+            return owner is null ? default! : accessor(owner, argument);
         };
     }
 

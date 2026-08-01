@@ -1152,9 +1152,9 @@ Mentor still installs these" is not a fact a headless test can assert.
 
 ## W58 — The per-level prerequisite becomes rows, because the game's own answer takes an argument
 
-**Live.** `WorldEntityRequirement` is one published row per authored condition on an entity's *next*
-level, keyed by the upgrade or structure it gates, read once per lifecycle by
-`WorldEntityRequirementReader` and sorted by owner and then authored position.
+**Live.** `WorldEntityRequirement` is one published row per authored condition or explicit composite
+on an entity's *next* level, keyed by the upgrade or structure it gates, read once per lifecycle by
+`WorldEntityRequirementReader` and sorted by owner, container, and authored tree position.
 
 An entity carries two prerequisite containers and they answer different questions. `prerequisites`
 gates the entity at all, and its verdict latches into a `available` field the snapshot already
@@ -1208,6 +1208,23 @@ names it. An entity with no rows reads as unconditional, which is precisely the 
 gated by something nobody modelled — so the two cases are never allowed to look alike. The capture
 port deduplicates its announcement on the report's text and the reader runs once per lifecycle, so
 that is one line per run of the game rather than one per pass.
+
+**The graph stays a graph.** A prerequisite container is an implicit AND. Native `AndRequirement`
+and `OrRequirement` nodes publish as explicit group rows with parent ordinals and depth; their leaves
+remain in authored order. Flattening either composite would change the native answer, so missing child
+bindings become an unknown leaf and a graph deeper than the bounded 32-node expansion fails closed.
+
+`PrerequisiteLinkRequirement` is expanded through the complete `PrerequisiteLinkSO.All` registry.
+Every authored link tier publishes an implicit-AND container root, including an empty tier, so an
+empty authored tier retains the game's unconditional pass while a selected tier that does not exist
+is distinguishable and unevaluable. A separate per-cycle tier table publishes `isActiveEnabled`, the
+passive-success latch, its evaluated frame, and `GameManager.currentFrame`. The evaluator follows the
+native short-circuit order: inactive is false; passive-latched is true; a false result already checked
+this frame remains false; only an unchecked tier walks the published passive graph. No collection
+path calls `IsEnabled()` or the latching `Check()` beneath it. Link-to-link recursion uses the same
+evaluator and a bounded owner/tier trail; cycles and over-depth graphs are unevaluable rather than
+admitted. The installed manifest declares the link registry, tier definitions, live cache fields,
+game frame, composite child lists, and all three new condition types as fourteen capture contracts.
 
 **Structural, on the collector's own epoch.** Authored conditions change at a lifecycle boundary and
 nowhere else, so the reader joins `WorldPlotAuthoringReader` and `WorldEffectBlockReader` on the
@@ -1458,3 +1475,63 @@ described contention that no longer existed. They are deleted rather than retain
 second scheduler. The two local guards remain because they bound their own delivery queues.
 ServiceCycle's debug profiler, full trace, decision journal, and dashboard remain the
 performance and causal evidence for feature work; their formats did not change.
+
+## W68 — The parameterized prerequisite check publishes only as a differential oracle
+
+**Live; this narrows W58's “one place only” statement.** W58 established that
+`Prerequisites.Container.Check(Requirements.ConditionInfo)` is different from the parameterless
+`Check()`: it accepts the level being bought and neither stamps the frame nor latches `available`.
+The read-side explainer now needs the native verdict in the same immutable generation as the suite's
+expanded graph. World collection therefore calls that safe overload once for every upgrade and
+structure and publishes `WorldRequirementNativeVerdict` beside the authored rows.
+
+**The input is part of the evidence.** Upgrades are checked at purchased level plus queued levels plus
+one; structures are checked at persisted `quantity`. Each row carries owner kind and exact input level
+with the boolean. A comparison refuses a row captured for another owner or level. The installed v1.05
+contract separately pins the most error-prone leaf: `StructureRequirement.InternalIsValid` reads
+`StructureSO.quantity` directly and does not reference `selfBonusLevels`, so granted/effective levels
+cannot accidentally satisfy a purchased-quantity requirement.
+
+**The graph remains authoritative evidence, not duplicated dead weight.** A native boolean cannot
+explain which leaf failed, preserve authored AND/OR structure, or expose a chain-planning dependency.
+The worker still evaluates the immutable graph and expands every prerequisite-link tier. It then
+compares the complete suite verdict with the native row. Missing native evidence, an unevaluable
+suite leaf, or a disagreement fails the explanation loudly; a disagreement returns both verdicts.
+The native row is not an action admission result and cannot authorize a later mutation.
+
+**Binding is lifecycle-only and fail-closed.** Construction binds the exact container field, exact
+one-parameter `Check` overload, exact public `ConditionInfo(long)` constructor, and exact boolean
+return. Collection invokes compiled delegates only. Any missing or ambiguous member makes the entity-
+requirements category unavailable before it can emit a misleading parity result. The manifest names
+the overload, argument type, and constructor as capture contracts.
+
+**Rejected:** collecting `StructureSO.CanPurchase`, `UpgradeSO.CanPurchase`, or
+`ConsumableSO.CanFire` merely to make the debug explanation more complete. Those calls are action/use
+oracles with larger unpublished dependency surfaces; this change supplied no static proof that they
+are side-effect free under collection. `explain_entity` instead marks them
+`native_can_purchase_not_published` or `native_can_fire_not_published` and exposes the safe component
+facts already in the world. A later publication decision requires its own audit.
+
+## W69 — Research explanation publishes the native split between prerequisite, completion, and cap levels
+
+The installed v1.05 pipeline does not have one interchangeable “Research level.”
+`ResearchRequirement.InternalIsValid` dispatches the virtual `UpgradeableObject.GetLevel()` slot,
+whose `ResearchSO` override returns total level and therefore includes bonus levels. By contrast,
+`ResearchSO.IsMaxLevel()` calls `GetBaseLevel()` and references neither `GetBonusLevels()` nor
+`GetLevel()`: completion and the native maximum-level cap exclude bonus levels. Installed metadata
+tests pin the method tokens, references, and virtual dispatch rather than inferring this distinction
+from one save.
+
+World collection consequently publishes `GetPurchasedLevels()`, `GetBaseLevel()`,
+`GetBonusLevels()`, and `GetLevel()` as separately named values. It also publishes the native
+`IsVisible()`, `IsComplete()`, `CanDevelop()`, `IsWithinDevelopRange()`,
+`MeetsLevelRequirements()`, `StillHasLeeway()`, `IsBelowArtificialMaxLevel()`, and
+`IsBelowMaxInvestmentLevel()` verdicts in the same main-thread generation. The explainer decomposes
+false reasons from those facts but never substitutes its reason selection for the native top-level
+verdict.
+
+Research `levelPrerequisites` joins the same authored requirement graph as upgrades and structures,
+using native `GetRequirementLevel()` as both the graph check level and the parameterized
+`Container.Check(ConditionInfo)` differential-oracle input. This preserves explicit OR groups while
+failing loud on unsupported leaves or native/suite disagreement. No MCP-only snapshot, reflection,
+or parallel level formula is introduced.

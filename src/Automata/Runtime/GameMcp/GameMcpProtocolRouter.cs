@@ -23,18 +23,25 @@ internal sealed class GameMcpProtocolRouter
         "2025-06-18",
         "2025-03-26",
     };
-
-    private readonly GameMcpStateStore _state;
-    private readonly GameMcpCommandBus _commands;
-
-    internal GameMcpProtocolRouter(GameMcpStateStore state, GameMcpCommandBus commands)
+    private static readonly string[] ProtocolOnlyMethodNames =
     {
-        _state = state ?? throw new ArgumentNullException(nameof(state));
-        _commands = commands ?? throw new ArgumentNullException(nameof(commands));
+        "initialize",
+        "ping",
+        "tools/list",
+        "resources/list",
+        "resources/templates/list",
+    };
+
+    private readonly GameMcpFrameInbox _operations;
+
+    internal GameMcpProtocolRouter(GameMcpFrameInbox operations)
+    {
+        _operations = operations ?? throw new ArgumentNullException(nameof(operations));
     }
 
     internal GameMcpProtocolResponse Handle(JObject request)
     {
+        GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("MCP protocol routing");
         if ((string?)request["jsonrpc"] != "2.0")
             return GameMcpProtocolResponse.Json(Error(null, -32600, "jsonrpc must be exactly '2.0'"));
 
@@ -53,10 +60,10 @@ internal sealed class GameMcpProtocolRouter
                 "initialize" => Initialize(request),
                 "ping" => new JObject(),
                 "tools/list" => ListTools(),
-                "tools/call" => CallTool(request),
+                "tools/call" => CallToolNew(request),
                 "resources/list" => ListResources(),
                 "resources/templates/list" => ListResourceTemplates(),
-                "resources/read" => ReadResource(request),
+                "resources/read" => ReadResourceNew(request),
                 _ => null,
             };
             return result is null
@@ -65,7 +72,8 @@ internal sealed class GameMcpProtocolRouter
         }
         catch (GameMcpInvalidParamsException exception)
         {
-            return GameMcpProtocolResponse.Json(Error(id, -32602, exception.Message));
+            return GameMcpProtocolResponse.Json(
+                Error(id, -32602, exception.Message, exception.DataObject));
         }
         catch (Exception exception)
         {
@@ -76,6 +84,9 @@ internal sealed class GameMcpProtocolRouter
 
     internal static bool IsSupportedProtocolVersion(string? value) =>
         value is not null && SupportedProtocolVersions.Contains(value);
+
+    internal static string[] ProtocolOnlyMethods() =>
+        (string[])ProtocolOnlyMethodNames.Clone();
 
     private static JObject Initialize(JObject request)
     {
@@ -109,699 +120,56 @@ internal sealed class GameMcpProtocolRouter
             },
             ["instructions"] =
                 "Every read names one published world. Actions are live-revalidated on Unity's " +
-                "main thread and return their terminal outcome inline; worldGeneration is optional " +
-                "decision-audit metadata, never an age gate.",
+                "main thread and return their terminal outcome plus observed post-state inline.",
         };
     }
 
-    private JObject CallTool(JObject request)
+    private JObject CallToolNew(JObject request)
     {
         var parameters = RequireObject(request, "params");
         var name = RequireString(parameters, "name");
-        var arguments = parameters["arguments"] as JObject ?? new JObject();
-        var state = _state.ReadLatest();
-
-        var execution = name switch
+        var argumentsToken = parameters["arguments"];
+        var arguments = argumentsToken switch
         {
-            "world_overview" => GameMcpToolExecution.Read(GameMcpWorldQuery.Overview(state)),
-            "world_categories" => GameMcpToolExecution.Read(GameMcpWorldQuery.ListCategories(state)),
-            "world_list" => GameMcpToolExecution.Read(GameMcpWorldQuery.ListRows(
-                state,
-                RequireString(arguments, "category"),
-                OptionalInt(arguments, "offset", 0),
-                OptionalInt(arguments, "limit", GameMcpWorldQuery.DefaultLimit))),
-            "world_get" => GameMcpToolExecution.Read(GameMcpWorldQuery.GetRow(
-                state,
-                RequireString(arguments, "category"),
-                RequireString(arguments, "uuid"),
-                OptionalString(arguments, "expectedNativeType"))),
-            "world_search" => GameMcpToolExecution.Read(GameMcpWorldQuery.Search(
-                state,
-                RequireString(arguments, "query"),
-                OptionalInt(arguments, "limit", GameMcpWorldQuery.DefaultLimit))),
-            "suite_health" => GameMcpToolExecution.Read(Health(
-                state,
-                OptionalString(arguments, "detail"))),
-            "suite_configuration" => GameMcpToolExecution.Read(Configuration(state)),
-            "trace_health" => GameMcpToolExecution.Read(TraceHealth(state)),
-            "game_purchase" => SubmitPurchase(state, arguments),
-            "game_cast" => SubmitCast(state, arguments),
-            "game_concept" => SubmitConcept(state, arguments),
-            "game_harvest" => SubmitHarvest(state, arguments),
-            "game_spell_level" => SubmitSpellLevel(state, arguments),
-            "suite_config_set" => SubmitConfiguration(state, arguments),
-            "suite_emergency_stop" => SubmitEmergencyStop(state, arguments),
-            "game_screenshot" => SubmitScreenshot(state, arguments),
-            "game_continue" => SubmitGadget(
-                state,
-                GameMcpCommandKind.ContinueRun,
-                "continue",
-                Guid.Empty,
-                1,
-                string.Empty,
-                capture: false,
-                saveCapture: false),
-            "game_screen_catalog" => SubmitGadget(
-                state,
-                GameMcpCommandKind.ScreenCatalog,
-                "catalog",
-                Guid.Empty,
-                1,
-                string.Empty,
-                capture: false,
-                saveCapture: false),
-            "game_navigate" => SubmitNavigation(state, arguments),
-            "game_tooltips" => SubmitTooltipCatalog(state, arguments),
-            "game_tooltip" => SubmitGadget(
-                state,
-                GameMcpCommandKind.TooltipRead,
-                "read",
-                Guid.Empty,
-                1,
-                RequireString(arguments, "path"),
-                OptionalBool(arguments, "capture", false),
-                saveCapture: false),
-            "game_probe" => SubmitProbe(state, arguments),
-            _ => GameMcpToolExecution.Error(GameMcpWorldQuery.WithEnvelope(
-                state,
-                new JObject
-                {
-                    ["status"] = "not_available",
-                    ["code"] = "unknown_tool",
-                    ["reason"] = "unknown tool '" + name + "'; call tools/list",
-                })),
+            null => new JObject(),
+            JObject value => value,
+            _ => throw new GameMcpInvalidParamsException("arguments must be an object"),
         };
-        return execution.ToProtocolResult();
+        ValidateToolArguments(name, arguments);
+        return SubmitAndWait(BuildOperation(name, arguments)).ToProtocolResult();
     }
 
-    private JObject Health(GameMcpStateSnapshot state, string detail)
-    {
-        var captured = ParseObject(state.HealthJson);
-        var features = captured["features"] as JArray ?? new JArray();
-        var services = captured["services"] as JArray ?? new JArray();
-        if (detail.Length > 0)
-        {
-            var serviceMatches = services
-                .OfType<JObject>()
-                .Where(service => string.Equals(
-                    (string?)service["serviceId"],
-                    detail,
-                    StringComparison.Ordinal))
-                .ToArray();
-            var featureMatches = features
-                .OfType<JObject>()
-                .Where(feature => string.Equals(
-                    (string?)feature["key"]?["featureId"],
-                    detail,
-                    StringComparison.Ordinal))
-                .ToArray();
-            if (serviceMatches.Length + featureMatches.Length != 1)
-            {
-                return GameMcpWorldQuery.WithEnvelope(
-                    state,
-                    new JObject
-                    {
-                        ["status"] = "not_available",
-                        ["code"] = "health_detail_match_failed",
-                        ["reason"] = "exact health detail selector '" + detail +
-                            "' matched " + serviceMatches.Length + " services and " +
-                            featureMatches.Length +
-                            " features; choose one serviceId or featureId from suite_health",
-                        ["detail"] = detail,
-                    });
-            }
-            var exact = new JObject
-            {
-                ["status"] = "available",
-                ["scope"] = serviceMatches.Length == 1
-                    ? "exact_service_detail"
-                    : "exact_feature_detail",
-                ["detail"] = detail,
-                ["capturedAtUtc"] = FormatTicks(state.CapturedAtUtcTicks),
-                ["configurationGeneration"] = captured["configurationGeneration"],
-                ["lifecycleGeneration"] = captured["lifecycleGeneration"],
-            };
-            if (serviceMatches.Length == 1)
-                exact["service"] = serviceMatches[0].DeepClone();
-            else
-                exact["feature"] = featureMatches[0].DeepClone();
-            return GameMcpWorldQuery.WithEnvelope(state, exact);
-        }
-
-        var health = new JObject
-        {
-            ["status"] = "available",
-            ["scope"] = "situational",
-            ["capturedAtUtc"] = FormatTicks(state.CapturedAtUtcTicks),
-            ["runtimeAvailable"] = captured["runtimeAvailable"],
-            ["runtimeNotAvailableReason"] = captured["runtimeNotAvailableReason"],
-            ["scene"] = captured["scene"],
-            ["nativeContractsAvailable"] = captured["nativeContractsAvailable"],
-            ["configurationGeneration"] = captured["configurationGeneration"],
-            ["lifecycleGeneration"] = captured["lifecycleGeneration"],
-            ["emergencyStopEngaged"] = captured["emergencyStopEngaged"],
-            ["features"] = CompactFeatures(features),
-            ["services"] = CompactServices(services),
-            ["mailbox"] = new JObject
-            {
-                ["pending"] = _commands.PendingCount,
-                ["ordinaryCapacity"] = GameMcpCommandBus.MaximumPending,
-                ["priorityCapacity"] = GameMcpCommandBus.MaximumPriorityPending,
-                ["emergencyStopSlots"] = GameMcpCommandBus.EmergencyStopPrioritySlots,
-                ["totalCapacity"] = GameMcpCommandBus.MaximumTotalPending,
-            },
-            ["detailSelector"] = "exact featureId or serviceId",
-        };
-        if (((string?)captured["runtimeNotAvailableReason"] ?? string.Empty).Length > 0)
-            health["runtimeNotAvailableReason"] = captured["runtimeNotAvailableReason"];
-        return GameMcpWorldQuery.WithEnvelope(state, health);
-    }
-
-    private static JArray CompactFeatures(JArray? captured)
-    {
-        var result = new JArray();
-        if (captured is null) return result;
-        foreach (var feature in captured.OfType<JObject>())
-        {
-            var key = feature["key"] as JObject;
-            var reason = feature["reason"] as JObject;
-            result.Add(new JObject
-            {
-                ["featureId"] = key?["featureId"],
-                ["state"] = feature["state"],
-                ["reasonCode"] = reason?["code"],
-            });
-        }
-        return result;
-    }
-
-    private static JArray CompactServices(JArray captured)
-    {
-        var result = new JArray();
-        foreach (var service in captured.OfType<JObject>())
-        {
-            var runner = service["runner"] as JObject;
-            var fault = runner?["fault"] as JObject;
-            result.Add(new JObject
-            {
-                ["serviceId"] = service["serviceId"],
-                ["state"] = (bool?)service["hasRunner"] == true
-                    ? runner?["phase"]
-                    : "Unavailable",
-                ["faulted"] = fault?["isValid"],
-            });
-        }
-        return result;
-    }
-
-    private static JObject Configuration(GameMcpStateSnapshot state) =>
-        GameMcpWorldQuery.WithEnvelope(
-            state,
-            new JObject
-            {
-                ["status"] = state.ConfigurationGeneration.IsValid
-                    ? "available"
-                    : "not_available",
-                ["code"] = state.ConfigurationGeneration.IsValid
-                    ? string.Empty
-                    : "configuration_not_published",
-                ["reason"] = state.ConfigurationGeneration.IsValid
-                    ? string.Empty
-                    : "the suite has not published configuration yet",
-                ["configurationGeneration"] = state.ConfigurationGeneration.Value,
-                ["configuration"] = ParseObject(state.ConfigurationJson),
-                ["writableSettings"] = ParseArray(state.WritableConfigurationJson),
-            });
-
-    private static JObject TraceHealth(GameMcpStateSnapshot state) =>
-        GameMcpWorldQuery.WithEnvelope(
-            state,
-            new JObject
-            {
-                ["status"] = "available",
-                ["traceWriterStatus"] = ParseObject(state.TraceHealthJson),
-                ["scope"] =
-                    "writer health, retained segment counts, record totals, and byte volume only",
-                ["events"] = "not_available",
-                ["eventsNotAvailableReason"] =
-                    "individual decisions belong to the trace folder and offline analysis; " +
-                    "the strategist surface does not duplicate them",
-            });
-
-    private GameMcpToolExecution SubmitPurchase(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var target = RequireUuid(arguments, "uuid");
-        if (!TryResolvePurchase(state, target, out var mode, out var nativeType, out var reason))
-            return TerminalRejection(state, arguments, "unknown_purchase_target", reason);
-        return SubmitAction(
-            state,
-            arguments,
-            GameMcpCommandKind.Purchase,
-            mode,
-            target,
-            Guid.Empty,
-            nativeType,
-            OptionalString(arguments, "expectedNativeType"),
-            OptionalIntInRange(arguments, "count", 1, 1, 1000));
-    }
-
-    private GameMcpToolExecution SubmitCast(GameMcpStateSnapshot state, JObject arguments)
-    {
-        var target = RequireUuid(arguments, "spellRecipeUuid");
-        if (!TryResolveEntity(state, target, "spell-recipes", out var reason))
-            return TerminalRejection(state, arguments, "unknown_spell_recipe", reason);
-        var slotIndex = RequiredInt(arguments, "slotIndex", 0, 255);
-        return SubmitAction(
-            state,
-            arguments,
-            GameMcpCommandKind.Cast,
-            RequireOneOf(arguments, "mode", "fire", "release"),
-            target,
-            Guid.Empty,
-            "SpellRecipeSO",
-            OptionalString(arguments, "expectedNativeType"),
-            checked(slotIndex + 1));
-    }
-
-    private GameMcpToolExecution SubmitConcept(GameMcpStateSnapshot state, JObject arguments)
-    {
-        var target = RequireUuid(arguments, "recipeUuid");
-        if (!TryResolveEntity(state, target, "alchemy-recipes", out var reason))
-            return TerminalRejection(state, arguments, "unknown_alchemy_recipe", reason);
-        var mode = RequireOneOf(arguments, "mode", "add", "remove_owned", "rotate_out");
-        var replacement = OptionalUuid(arguments, "replacementUuid");
-        if (mode == "rotate_out" && replacement == Guid.Empty)
-            throw new GameMcpInvalidParamsException("replacementUuid is required for rotate_out");
-        if (replacement != Guid.Empty &&
-            !TryResolveEntity(state, replacement, "alchemy-recipes", out var replacementReason))
-        {
-            return TerminalRejection(
-                state,
-                arguments,
-                "unknown_replacement_recipe",
-                replacementReason);
-        }
-        return SubmitAction(
-            state,
-            arguments,
-            GameMcpCommandKind.Concept,
-            mode,
-            target,
-            replacement,
-            "AlchemyRecipeSO",
-            OptionalString(arguments, "expectedNativeType"),
-            OptionalIntInRange(arguments, "amount", 1, 1, 1_000_000));
-    }
-
-    private GameMcpToolExecution SubmitHarvest(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var target = RequireUuid(arguments, "plotNodeUuid");
-        if (!TryResolveHarvest(state, target, out var mode, out var reason))
-            return TerminalRejection(state, arguments, "unsupported_harvest_target", reason);
-        return SubmitAction(
-            state,
-            arguments,
-            GameMcpCommandKind.Harvest,
-            mode,
-            target,
-            Guid.Empty,
-            "PlotNodeSO",
-            OptionalString(arguments, "expectedNativeType"),
-            1);
-    }
-
-    private GameMcpToolExecution SubmitSpellLevel(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var target = RequireUuid(arguments, "spellRecipeUuid");
-        if (!TryResolveEntity(state, target, "spell-recipes", out var reason))
-            return TerminalRejection(state, arguments, "unknown_spell_recipe", reason);
-        return SubmitAction(
-            state,
-            arguments,
-            GameMcpCommandKind.SpellLevel,
-            RequireOneOf(arguments, "mode", "single", "all"),
-            target,
-            Guid.Empty,
-            "SpellRecipeSO",
-            OptionalString(arguments, "expectedNativeType"),
-            1);
-    }
-
-    private GameMcpToolExecution SubmitAction(
-        GameMcpStateSnapshot state,
-        JObject arguments,
-        GameMcpCommandKind kind,
-        string mode,
-        Guid targetId,
-        Guid secondaryId,
-        string derivedNativeType,
-        string expectedNativeType,
-        int amount)
-    {
-        if (state.World is null)
-            return TerminalRejection(state, arguments, "world_not_available", state.RuntimeNotAvailableReason);
-        if (state.LifecycleGeneration <= 0)
-            return TerminalRejection(
-                state,
-                arguments,
-                "lifecycle_not_available",
-                "the main-thread state has no valid lifecycle generation");
-        if (!state.ConfigurationGeneration.IsValid)
-            return TerminalRejection(
-                state,
-                arguments,
-                "configuration_not_available",
-                "the main thread has not published a configuration");
-        if (expectedNativeType.Length > 0 &&
-            !string.Equals(expectedNativeType, derivedNativeType, StringComparison.Ordinal))
-        {
-            return TerminalRejection(
-                state,
-                arguments,
-                "native_type_mismatch",
-                "the server derived " + derivedNativeType +
-                " from the target UUID, but expectedNativeType asserted " + expectedNativeType);
-        }
-
-        return WaitForTerminal(
-            state,
-            _commands.Submit(
-                kind,
-                OptionalUlong(arguments, "worldGeneration"),
-                state.LifecycleGeneration,
-                state.ConfigurationGeneration.Value,
-                mode,
-                targetId,
-                secondaryId,
-                derivedNativeType,
-                expectedNativeType,
-                amount));
-    }
-
-    private GameMcpToolExecution SubmitConfiguration(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var expected = RequiredUlong(arguments, "configurationGeneration");
-        if (!state.ConfigurationGeneration.IsValid)
-            return GameMcpToolExecution.Read(ConfigurationNotAvailable(state));
-        if (expected != state.ConfigurationGeneration.Value)
-            return GameMcpToolExecution.Read(StaleConfiguration(state, expected));
-        return WaitForTerminal(
-            state,
-            _commands.SubmitConfiguration(
-                expected,
-                RequireString(arguments, "section"),
-                RequireString(arguments, "key"),
-                RequireRawString(arguments, "serializedValue")));
-    }
-
-    private GameMcpToolExecution SubmitEmergencyStop(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var expected = RequiredUlong(arguments, "configurationGeneration");
-        if (!state.ConfigurationGeneration.IsValid)
-            return GameMcpToolExecution.Read(ConfigurationNotAvailable(state));
-        if (expected != state.ConfigurationGeneration.Value)
-            return GameMcpToolExecution.Read(StaleConfiguration(state, expected));
-        var mode = RequireOneOf(arguments, "mode", "engage", "resume");
-        return WaitForTerminal(
-            state,
-            _commands.SubmitEmergencyStop(expected, mode == "engage"));
-    }
-
-    private GameMcpToolExecution SubmitScreenshot(
-        GameMcpStateSnapshot state,
-        JObject arguments) =>
-        SubmitGadget(
-            state,
-            GameMcpCommandKind.Screenshot,
-            "capture",
-            Guid.Empty,
-            1,
-            string.Empty,
-            capture: true,
-            saveCapture: OptionalBool(arguments, "save", false));
-
-    private GameMcpToolExecution SubmitNavigation(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var payload = new JObject
-        {
-            ["tab"] = RequireSelector(arguments, "tab"),
-        };
-        if (arguments.TryGetValue("subtab", out _))
-            payload["subtab"] = RequireSelector(arguments, "subtab");
-        var plotNode = OptionalUuid(arguments, "plotNodeUuid");
-        if (plotNode != Guid.Empty &&
-            !TryResolveEntity(state, plotNode, "plot-nodes", out var reason))
-        {
-            return TerminalRejection(
-                state,
-                arguments,
-                "unknown_plot_node",
-                reason);
-        }
-        return SubmitGadget(
-            state,
-            GameMcpCommandKind.Navigation,
-            "navigate",
-            plotNode,
-            1,
-            payload.ToString(Formatting.None),
-            OptionalBool(arguments, "capture", false),
-            saveCapture: false);
-    }
-
-    private GameMcpToolExecution SubmitProbe(
-        GameMcpStateSnapshot state,
-        JObject arguments) =>
-        SubmitGadget(
-            state,
-            GameMcpCommandKind.Probe,
-            RequireOneOf(arguments, "probe", "runtime", "action_queue_room", "navigation"),
-            Guid.Empty,
-            1,
-            string.Empty,
-            capture: false,
-            saveCapture: false);
-
-    private GameMcpToolExecution SubmitTooltipCatalog(
-        GameMcpStateSnapshot state,
-        JObject arguments)
-    {
-        var offset = OptionalInt(arguments, "offset", 0);
-        var limit = OptionalInt(arguments, "limit", GameMcpWorldQuery.DefaultLimit);
-        if (offset < 0)
-            return TerminalRejection(
-                state,
-                arguments,
-                "tooltip_offset_invalid",
-                "tooltip catalog offset must be non-negative");
-        if (limit is < 1 or > 200)
-            return TerminalRejection(
-                state,
-                arguments,
-                "tooltip_limit_invalid",
-                "tooltip catalog limit must be between 1 and 200");
-        return SubmitGadget(
-            state,
-            GameMcpCommandKind.TooltipCatalog,
-            "catalog",
-            Guid.Empty,
-            limit,
-            offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            capture: false,
-            saveCapture: false);
-    }
-
-    private GameMcpToolExecution SubmitGadget(
-        GameMcpStateSnapshot state,
-        GameMcpCommandKind kind,
-        string mode,
-        Guid targetId,
-        int amount,
-        string payloadValue,
-        bool capture,
-        bool saveCapture) =>
-        WaitForTerminal(
-            state,
-            _commands.SubmitGadget(
-                kind,
-                mode,
-                targetId,
-                amount,
-                payloadValue,
-                capture,
-                saveCapture));
-
-    private GameMcpToolExecution WaitForTerminal(
-        GameMcpStateSnapshot state,
-        GameMcpCommand command)
-    {
-        if (!command.Completion.TryWait(
-                TimeSpan.FromMilliseconds(TerminalWaitMilliseconds),
-                out var terminal))
-        {
-            var timeout = GameMcpCommandResult.Faulted(
-                "terminal_wait_timeout",
-                "server defect: MCP command " + command.Sequence + " (" + command.Kind +
-                ") did not finish within " + TerminalWaitMilliseconds +
-                " ms; no pending state or polling fallback exists");
-            return GameMcpToolExecution.Error(
-                GameMcpWorldQuery.WithEnvelope(state, timeout.Project(command)));
-        }
-        return new GameMcpToolExecution(
-            GameMcpWorldQuery.WithEnvelope(state, terminal.Project(command)),
-            terminal.InlinePng,
-            isError: string.Equals(terminal.Status, "faulted", StringComparison.Ordinal));
-    }
-
-    private static GameMcpToolExecution TerminalRejection(
-        GameMcpStateSnapshot state,
-        JObject arguments,
-        string code,
-        string reason)
-    {
-        var payload = new JObject
-        {
-            ["status"] = "rejected",
-            ["disposition"] = "Rejected",
-            ["resultCode"] = code,
-            ["resultCodeName"] = code,
-            ["reason"] = reason,
-            ["nativeCallsAttempted"] = 0,
-            ["mutationAttempts"] = 0,
-            ["mutationsCommitted"] = 0,
-            ["verifiedMutations"] = 0,
-        };
-        var generation = OptionalUlong(arguments, "worldGeneration");
-        if (generation.HasValue)
-            payload["decisionWorldGeneration"] = generation.Value;
-        return GameMcpToolExecution.Read(GameMcpWorldQuery.WithEnvelope(state, payload));
-    }
-
-    private static bool TryResolvePurchase(
-        GameMcpStateSnapshot state,
-        Guid target,
-        out string mode,
-        out string nativeType,
-        out string reason)
-    {
-        mode = string.Empty;
-        nativeType = string.Empty;
-        if (state.World is null)
-        {
-            reason = "the published world is unavailable";
-            return false;
-        }
-        var world = state.World.Snapshot;
-        var structure = WorldLookup.TryFind(world.Structures, target, out _);
-        var upgrade = WorldLookup.TryFind(world.Upgrades, target, out _);
-        if (structure == upgrade)
-        {
-            reason = structure
-                ? "UUID " + target.ToString("D") +
-                  " ambiguously identifies both a structure and an upgrade"
-                : "UUID " + target.ToString("D") +
-                  " is absent from published structures and upgrades";
-            return false;
-        }
-        mode = structure ? "structure" : "upgrade";
-        nativeType = structure ? "StructureSO" : "UpgradeSO";
-        reason = string.Empty;
-        return true;
-    }
-
-    private static bool TryResolveHarvest(
-        GameMcpStateSnapshot state,
-        Guid target,
-        out string mode,
-        out string reason)
-    {
-        mode = string.Empty;
-        if (!TryResolveEntity(state, target, "plot-nodes", out reason))
-            return false;
-        if (target == KnownEntities.FruitTreePlot.Uuid)
-        {
-            mode = "fruit_tree";
-            return true;
-        }
-        if (target == KnownEntities.TreasureTreePlot.Uuid)
-        {
-            mode = "treasure_tree";
-            return true;
-        }
-        reason = "plot " + target.ToString("D") +
-            " is published but is not one of the two audited native harvest pairs";
-        return false;
-    }
-
-    private static bool TryResolveEntity(
-        GameMcpStateSnapshot state,
-        Guid target,
-        string category,
-        out string reason)
-    {
-        if (state.World is null)
-        {
-            reason = "the published world is unavailable";
-            return false;
-        }
-        var world = state.World.Snapshot;
-        var found = category switch
-        {
-            "spell-recipes" => WorldLookup.TryFind(world.SpellRecipes, target, out _),
-            "alchemy-recipes" => WorldLookup.TryFind(world.AlchemyRecipes, target, out _),
-            "plot-nodes" => WorldLookup.TryFind(world.PlotNodes, target, out _),
-            _ => false,
-        };
-        reason = found
-            ? string.Empty
-            : "UUID " + target.ToString("D") +
-              " is absent from published category " + category;
-        return found;
-    }
-
-    private JObject ReadResource(JObject request)
+    private JObject ReadResourceNew(JObject request)
     {
         var parameters = RequireObject(request, "params");
         var uri = RequireString(parameters, "uri");
-        var state = _state.ReadLatest();
-        JObject value;
-        if (uri == "orb://world/overview")
-            value = GameMcpWorldQuery.Overview(state);
-        else if (uri == "orb://world/categories")
-            value = GameMcpWorldQuery.ListCategories(state);
-        else if (uri == "orb://suite/health")
-            value = Health(state, string.Empty);
-        else if (uri == "orb://suite/configuration")
-            value = Configuration(state);
-        else if (uri == "orb://trace/health")
-            value = TraceHealth(state);
-        else if (uri.StartsWith("orb://world/category/", StringComparison.Ordinal))
-        {
-            var category = Uri.UnescapeDataString(uri.Substring("orb://world/category/".Length));
-            value = GameMcpWorldQuery.ListRows(
-                state,
-                category,
-                0,
-                GameMcpWorldQuery.DefaultLimit);
-        }
-        else
-        {
+        if (!IsKnownResourceUri(uri))
             throw new GameMcpInvalidParamsException(
                 "unknown resource URI '" + uri + "'; call resources/list");
+        var operation = new GameMcpOperationRequestBuilder
+        {
+            ToolName = "resource_read",
+            Classification = GameMcpOperationClass.ReadOnly,
+            RequiredData = ResourceData(uri),
+            ResourceUri = uri,
+        }.Freeze();
+        var execution = SubmitAndWait(operation);
+        if (execution.TextContent is not null)
+        {
+            return new JObject
+            {
+                ["contents"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["uri"] = uri,
+                        ["mimeType"] = "text/plain",
+                        ["text"] = execution.TextContent,
+                    },
+                },
+            };
         }
-
+        var encoded = GameMcpDocumentJsonEncoder.Encode(execution.Payload!);
         return new JObject
         {
             ["contents"] = new JArray
@@ -810,11 +178,220 @@ internal sealed class GameMcpProtocolRouter
                 {
                     ["uri"] = uri,
                     ["mimeType"] = "application/json",
-                    ["text"] = value.ToString(Formatting.None),
+                    ["text"] = encoded.ToString(Formatting.None),
                 },
             },
         };
     }
+
+    private GameMcpToolExecution SubmitAndWait(GameMcpOperationRequest request)
+    {
+        var operation = _operations.Submit(request);
+        if (!operation.Completion.TryWait(
+                TimeSpan.FromMilliseconds(TerminalWaitMilliseconds),
+                out var terminal))
+        {
+            var canceled = GameMcpToolExecution.Error(new GameMcpObjectBuilder
+            {
+                ["status"] = "rejected",
+                ["code"] = "request_canceled_before_claim",
+                ["reason"] = "Unity did not claim " + request.ToolName +
+                    " within " + TerminalWaitMilliseconds +
+                    " ms; it was canceled before execution",
+            }.Freeze());
+            if (operation.Completion.TryCancelBeforeClaim(canceled)) return canceled;
+            terminal = operation.Completion.WaitForClaimedTerminal();
+        }
+        return terminal;
+    }
+
+    internal static GameMcpOperationRequest BuildOperation(string name, JObject arguments)
+    {
+        var builder = new GameMcpOperationRequestBuilder
+        {
+            ToolName = name,
+            Limit = GameMcpWorldQuery.DefaultLimit,
+            Amount = 1,
+        };
+        switch (name)
+        {
+            case "world_overview":
+            case "world_categories":
+            case "suite_configuration":
+            case "trace_health":
+            case "game_continue":
+            case "game_screen_catalog":
+                break;
+            case "world_list":
+                builder.Category = RequireString(arguments, "category");
+                builder.Offset = OptionalInt(arguments, "offset", 0);
+                builder.Limit = OptionalInt(
+                    arguments, "limit", GameMcpWorldQuery.DefaultLimit);
+                break;
+            case "world_get":
+                builder.Category = RequireString(arguments, "category");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Uuids = RequireStringArray(
+                    arguments, "uuids", GameMcpWorldQuery.MaximumBatchSize);
+                break;
+            case "entity_catalog":
+            case "world_search":
+                builder.Query = RequireString(arguments, "query");
+                builder.Limit = OptionalInt(
+                    arguments, "limit", GameMcpWorldQuery.DefaultLimit);
+                break;
+            case "explain_entity":
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                break;
+            case "suite_health":
+                break;
+            case "game_purchase":
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Amount = OptionalIntInRange(arguments, "count", 1, 1, 1000);
+                break;
+            case "game_cast":
+                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(arguments, "mode", "fire", "release");
+                builder.SlotIndex = RequiredInt(arguments, "slotIndex", 0, 255);
+                break;
+            case "game_concept":
+                builder.Uuid = RequireUuid(arguments, "recipeUuid");
+                builder.SecondaryUuid = OptionalUuid(arguments, "replacementUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(
+                    arguments, "mode", "add", "remove_owned", "rotate_out");
+                if (builder.Mode == "rotate_out" && builder.SecondaryUuid == Guid.Empty)
+                    throw new GameMcpInvalidParamsException(
+                        "replacementUuid is required for rotate_out");
+                builder.Amount = OptionalIntInRange(
+                    arguments, "amount", 1, 1, 1_000_000);
+                break;
+            case "game_harvest":
+                builder.Uuid = RequireUuid(arguments, "plotNodeUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
+            case "game_spell_level":
+                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
+                break;
+            case "game_discovery_offer":
+                builder.Uuid = RequireUuid(arguments, "treeUuid");
+                builder.SecondaryUuid = OptionalUuid(arguments, "offerUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(
+                    arguments, "mode", "initiate", "select", "confirm", "reroll");
+                if (builder.Mode is "select" or "confirm" &&
+                    builder.SecondaryUuid == Guid.Empty)
+                    throw new GameMcpInvalidParamsException(
+                        "offerUuid is required for " + builder.Mode);
+                if (builder.Mode is "initiate" or "reroll" &&
+                    builder.SecondaryUuid != Guid.Empty)
+                    throw new GameMcpInvalidParamsException(
+                        "offerUuid is accepted only for select or confirm");
+                break;
+            case "suite_config_set":
+                builder.ConfigurationGeneration = RequiredUlong(
+                    arguments, "configurationGeneration");
+                builder.Section = RequireString(arguments, "section");
+                builder.Key = RequireString(arguments, "key");
+                builder.SerializedValue = RequireRawString(arguments, "serializedValue");
+                break;
+            case "suite_emergency_stop":
+                builder.ConfigurationGeneration = RequiredUlong(
+                    arguments, "configurationGeneration");
+                builder.Mode = RequireOneOf(arguments, "mode", "engage", "resume");
+                break;
+            case "game_screenshot":
+                builder.SaveCapture = OptionalBool(arguments, "save", false);
+                break;
+            case "game_navigate":
+                builder.Tab = ParseNavigationSelector(RequireSelector(arguments, "tab"));
+                if (arguments.TryGetValue("subtab", out _))
+                    builder.Subtab = ParseNavigationSelector(RequireSelector(arguments, "subtab"));
+                builder.Uuid = OptionalUuid(arguments, "plotNodeUuid");
+                builder.Capture = OptionalBool(arguments, "capture", false);
+                break;
+            case "game_tooltips":
+                builder.Offset = OptionalInt(arguments, "offset", 0);
+                builder.Limit = OptionalInt(
+                    arguments, "limit", GameMcpWorldQuery.DefaultLimit);
+                break;
+            case "game_tooltip":
+                builder.Path = RequireString(arguments, "path");
+                builder.Capture = OptionalBool(arguments, "capture", false);
+                break;
+            case "game_probe":
+                builder.Probe = RequireOneOf(
+                    arguments, "probe", "runtime", "action_queue_room", "navigation");
+                break;
+            default:
+                throw new GameMcpInvalidParamsException(
+                    "unknown tool '" + name + "'; call tools/list");
+        }
+        builder.Classification = Classification(name, builder);
+        builder.RequiredData = RequiredData(name, builder);
+        return builder.Freeze();
+    }
+
+    private static GameMcpNavigationSelector ParseNavigationSelector(string label) => new(label);
+
+    private static bool IsKnownResourceUri(string uri) =>
+        uri is "orb://world/overview" or
+            "orb://world/categories" or
+            "orb://suite/health" or
+            "orb://suite/configuration" or
+            "orb://trace/health" ||
+        uri.StartsWith("orb://world/category/", StringComparison.Ordinal);
+
+    private static GameMcpFrameData ResourceData(string uri) => uri switch
+    {
+        "orb://suite/health" => RequiredData("suite_health"),
+        "orb://suite/configuration" => RequiredData("suite_configuration"),
+        "orb://trace/health" => RequiredData("trace_health"),
+        _ => GameMcpFrameData.World,
+    };
+
+    private static GameMcpOperationClass Classification(
+        string name,
+        GameMcpOperationRequestBuilder request) => name switch
+    {
+        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
+            "game_spell_level" or "game_discovery_offer" => GameMcpOperationClass.Gameplay,
+        "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
+        "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
+        "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
+        "suite_config_set" or "suite_emergency_stop" =>
+            GameMcpOperationClass.SuiteAdministration,
+        _ => GameMcpOperationClass.ReadOnly,
+    };
+
+    private static GameMcpFrameData RequiredData(
+        string name,
+        GameMcpOperationRequestBuilder? request = null) => name switch
+    {
+        "entity_catalog" => GameMcpFrameData.None,
+        "world_overview" or "world_categories" or "world_list" or "world_get" or
+            "world_search" or "explain_entity" => GameMcpFrameData.World,
+        "suite_health" => GameMcpFrameData.World | GameMcpFrameData.Configuration |
+            GameMcpFrameData.FeatureHealth | GameMcpFrameData.ServiceHealth |
+            GameMcpFrameData.Scene | GameMcpFrameData.NativeContractHealth,
+        "suite_configuration" or "suite_config_set" =>
+            GameMcpFrameData.Configuration | GameMcpFrameData.WritableConfiguration,
+        "trace_health" => GameMcpFrameData.TraceWriterHealth,
+        "suite_emergency_stop" => GameMcpFrameData.Configuration,
+        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
+            "game_spell_level" or "game_discovery_offer" =>
+            GameMcpFrameData.World | GameMcpFrameData.Configuration,
+        "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
+        "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
+            "game_screen_catalog" or "game_tooltips" or "game_tooltip" =>
+            GameMcpFrameData.None,
+        _ => throw new InvalidOperationException("no frame-data policy exists for tool " + name),
+    };
+
 
     private static JObject ListTools() => new()
     {
@@ -844,21 +421,34 @@ internal sealed class GameMcpProtocolRouter
                     "category")),
             Tool(
                 "world_get",
-                "Get one exact world row",
-                "Read a stable entity by UUID. expectedNativeType is an optional fail-closed assertion.",
+                "Get exact world rows",
+                "Read one or more stable UUIDs as one ordered result list from exactly one immutable world generation. expectedNativeType is an optional fail-closed assertion.",
+                WorldGetSchema()),
+            Tool(
+                "entity_catalog",
+                "Search authored entity catalog",
+                "Search every canonical authored UUID, native type, internal name, and available player-facing display name independently of save visibility.",
                 ObjectSchema(
                     new JObject
                     {
-                        ["category"] = StringSchema("Exact name returned by world_categories."),
-                        ["uuid"] = StringSchema("Canonical D-format stable UUID."),
-                        ["expectedNativeType"] =
-                            StringSchema("Optional exact assertion returned by world_categories."),
+                        ["query"] = StringSchema("Case-insensitive UUID, native type, internal name, or player-facing display name fragment."),
+                        ["limit"] = IntegerSchema(1, 200),
                     },
-                    "category", "uuid")),
+                    "query")),
+            Tool(
+                "explain_entity",
+                "Explain one entity",
+                "Evaluate visibility, availability, player verbs, recursive prerequisites, thresholds, exact costs, affordability, and typed blockers for one UUID from exactly one immutable world generation.",
+                ObjectSchema(
+                    new JObject
+                    {
+                        ["uuid"] = StringSchema("Canonical stable entity UUID."),
+                    },
+                    "uuid")),
             Tool(
                 "world_search",
-                "Search the published world",
-                "Search projected row values and UUIDs. Partial collection is reported explicitly.",
+                "Search published entities",
+                "Search stable-UUID entity categories only. Composite diagnostic categories are intentionally excluded; use world_list for those rows and their localized partiality evidence.",
                 ObjectSchema(
                     new JObject
                     {
@@ -869,12 +459,8 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "suite_health",
                 "Read suite runtime health",
-                "Read compact lifecycle, STOP, feature, service, collector, and MCP mailbox health. Set detail to one exact returned featureId or serviceId for its complete record.",
-                ObjectSchema(new JObject
-                {
-                    ["detail"] = StringSchema(
-                        "Optional exact featureId or serviceId returned by the compact arrays."),
-                })),
+                "Read one compact scene/runtime/STOP/native-contract line plus feature and service names grouped by state.",
+                ObjectSchema()),
             Tool("suite_configuration", "Read committed configuration", "Read the single committed suite configuration and its generation.", ObjectSchema()),
             Tool(
                 "trace_health",
@@ -939,6 +525,20 @@ internal sealed class GameMcpProtocolRouter
                     },
                     "mode", "spellRecipeUuid")),
             Tool(
+                "game_discovery_offer",
+                "Drive a Discovery Tree offer",
+                "Initiate a paid discovery, select or confirm one exact live offer, or reroll. Success returns the newer named tree state; failures retain the decomposed receipt.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("initiate", "select", "confirm", "reroll"),
+                        ["treeUuid"] = StringSchema("Published DiscoveryTreeSO UUID."),
+                        ["offerUuid"] = StringSchema("Required for select and confirm; must be in the current live native offer set."),
+                    },
+                    "mode", "treeUuid"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "suite_config_set",
                 "Commit one suite setting",
                 "Write one allowlisted setting through the single committed configuration-store publication path.",
@@ -983,23 +583,24 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_screen_catalog",
                 "Discover navigable screens",
-                "Enumerate live top tabs and current subtabs by exact stable label and zero-based index.",
+                "List live top tabs with the active tab marked and its current subtabs grouped beneath it.",
                 ObjectSchema()),
             Tool(
                 "game_navigate",
                 "Navigate the live screen catalog",
-                "Select one catalog tab, optional subtab, and optional published plot node; capture returns an inline PNG after arrival.",
+                "UI-only, no gameplay/save mutation. Select one catalog tab, optional subtab, and optional published plot node; capture returns an inline PNG after arrival.",
                 ObjectSchema(
                     new JObject
                     {
-                        ["tab"] = SelectorSchema("Exact catalog label or zero-based index."),
-                        ["subtab"] = SelectorSchema("Optional exact current-screen label or zero-based index."),
+                        ["tab"] = StringSchema("Exact player-facing tab name."),
+                        ["subtab"] = StringSchema("Optional exact player-facing subtab name."),
                         ["plotNodeUuid"] = StringSchema("Optional published plot UUID to select after navigation."),
                         ["capture"] = BooleanSchema("Return an inline PNG after arrival."),
                     },
                     "tab"),
                 readOnly: false,
-                idempotent: false),
+                idempotent: false,
+                classification: "UI-only, no gameplay/save mutation"),
             Tool(
                 "game_tooltips",
                 "Discover visible tooltips",
@@ -1012,7 +613,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_tooltip",
                 "Read a visible tooltip",
-                "Read core tooltip text and nested tooltip structure for one exact path; optionally capture the opened tooltip.",
+                "Read typed authored/computed TooltipNode trees, nested links, and open inspected panels for one exact path; optionally capture the opened tooltip.",
                 ObjectSchema(
                     new JObject
                     {
@@ -1035,10 +636,88 @@ internal sealed class GameMcpProtocolRouter
         },
     };
 
+    private static JObject WorldGetSchema()
+    {
+        return ObjectSchema(
+            new JObject
+            {
+                ["category"] = StringSchema("Exact name returned by world_categories."),
+                ["uuids"] = ArraySchema(
+                    StringSchema("Canonical D-format stable UUID."),
+                    1,
+                    GameMcpWorldQuery.MaximumBatchSize),
+                ["expectedNativeType"] =
+                    StringSchema("Optional exact assertion returned by world_categories."),
+            },
+            "category", "uuids");
+    }
+
+    private static void ValidateToolArguments(string name, JObject arguments)
+    {
+        var tool = (ListTools()["tools"] as JArray ?? new JArray())
+            .OfType<JObject>()
+            .FirstOrDefault(candidate => string.Equals(
+                (string?)candidate["name"],
+                name,
+                StringComparison.Ordinal));
+        if (tool?["inputSchema"] is not JObject schema) return;
+
+        var properties = schema["properties"] as JObject ?? new JObject();
+        var errors = new JArray();
+        if (schema["required"] is JArray required)
+        {
+            foreach (var field in required.Values<string>())
+            {
+                if (field is not null && !arguments.ContainsKey(field))
+                    errors.Add(ValidationError(
+                        "missing_required",
+                        field,
+                        "required field '" + field + "' is missing"));
+            }
+        }
+
+        foreach (var supplied in arguments.Properties())
+        {
+            if (properties.ContainsKey(supplied.Name)) continue;
+            errors.Add(ValidationError(
+                "unexpected_field",
+                supplied.Name,
+                "field '" + supplied.Name + "' is not accepted by " + name));
+        }
+
+        if (string.Equals(name, "game_discovery_offer", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var hasOffer = arguments.ContainsKey("offerUuid");
+            if (mode is "select" or "confirm" && !hasOffer)
+            {
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "offerUuid",
+                    "required field 'offerUuid' is missing for mode '" + mode + "'"));
+            }
+            else if (mode is "initiate" or "reroll" && hasOffer)
+            {
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "offerUuid",
+                    "field 'offerUuid' is not accepted for mode '" + mode + "'"));
+            }
+        }
+
+        if (errors.Count > 0) throw GameMcpInvalidParamsException.Validation(errors);
+    }
+
+    private static JObject ValidationError(string code, string field, string message) => new()
+    {
+        ["code"] = code,
+        ["field"] = field,
+        ["message"] = message,
+    };
+
     private static JObject ActionSchema(JObject properties, params string[] required)
     {
-        properties["worldGeneration"] =
-            UlongSchema("Optional audit metadata naming the world that motivated the decision.");
         properties["expectedNativeType"] =
             StringSchema("Optional exact assertion; the server derives the native type from UUID.");
         return ObjectSchema(properties, required);
@@ -1077,20 +756,26 @@ internal sealed class GameMcpProtocolRouter
         string description,
         JObject inputSchema,
         bool readOnly = true,
-        bool idempotent = true) => new()
+        bool idempotent = true,
+        string classification = "")
     {
-        ["name"] = name,
-        ["title"] = title,
-        ["description"] = description,
-        ["inputSchema"] = inputSchema,
-        ["annotations"] = new JObject
+        var result = new JObject
         {
-            ["readOnlyHint"] = readOnly,
-            ["destructiveHint"] = false,
-            ["idempotentHint"] = idempotent,
-            ["openWorldHint"] = false,
-        },
-    };
+            ["name"] = name,
+            ["title"] = title,
+            ["description"] = description,
+            ["inputSchema"] = inputSchema,
+            ["annotations"] = new JObject
+            {
+                ["readOnlyHint"] = readOnly,
+                ["destructiveHint"] = false,
+                ["idempotentHint"] = idempotent,
+                ["openWorldHint"] = false,
+            },
+        };
+        if (classification.Length > 0) result["classification"] = classification;
+        return result;
+    }
 
     private static JObject Resource(string uri, string name, string description) => new()
     {
@@ -1113,16 +798,6 @@ internal sealed class GameMcpProtocolRouter
         return result;
     }
 
-    private static JObject SelectorSchema(string description) => new()
-    {
-        ["description"] = description,
-        ["oneOf"] = new JArray
-        {
-            new JObject { ["type"] = "string", ["minLength"] = 1 },
-            new JObject { ["type"] = "integer", ["minimum"] = 0, ["maximum"] = 63 },
-        },
-    };
-
     private static JObject StringSchema(string description) => new()
     {
         ["type"] = "string",
@@ -1133,6 +808,14 @@ internal sealed class GameMcpProtocolRouter
     {
         ["type"] = "boolean",
         ["description"] = description,
+    };
+
+    private static JObject ArraySchema(JObject items, int minimum, int maximum) => new()
+    {
+        ["type"] = "array",
+        ["items"] = items,
+        ["minItems"] = minimum,
+        ["maxItems"] = maximum,
     };
 
     private static JObject IntegerSchema(int minimum, int maximum) => new()
@@ -1178,6 +861,27 @@ internal sealed class GameMcpProtocolRouter
         if (value.Length == 0)
             throw new GameMcpInvalidParamsException(name + " must not be empty when supplied");
         return value;
+    }
+
+    private static string[] RequireStringArray(JObject source, string name, int maximum)
+    {
+        if (source[name] is not JArray array)
+            throw new GameMcpInvalidParamsException(name + " must be an array");
+        if (array.Count == 0 || array.Count > maximum)
+            throw new GameMcpInvalidParamsException(
+                name + " must contain between 1 and " + maximum + " entries");
+        var result = new string[array.Count];
+        for (var index = 0; index < array.Count; index++)
+        {
+            if (array[index]?.Type != JTokenType.String)
+                throw new GameMcpInvalidParamsException(
+                    name + "[" + index + "] must be a string");
+            result[index] = ((string?)array[index] ?? string.Empty).Trim();
+            if (result[index].Length == 0)
+                throw new GameMcpInvalidParamsException(
+                    name + "[" + index + "] must not be empty");
+        }
+        return result;
     }
 
     private static string RequireRawString(JObject source, string name)
@@ -1297,7 +1001,7 @@ internal sealed class GameMcpProtocolRouter
             name + " must be one of: " + string.Join(", ", allowed));
     }
 
-    private static JObject RequireSelector(JObject source, string name)
+    private static string RequireSelector(JObject source, string name)
     {
         if (!source.TryGetValue(name, out var token))
             throw new GameMcpInvalidParamsException(name + " is required");
@@ -1306,69 +1010,10 @@ internal sealed class GameMcpProtocolRouter
             var label = ((string?)token ?? string.Empty).Trim();
             if (label.Length == 0)
                 throw new GameMcpInvalidParamsException(name + " must not be empty");
-            return new JObject { ["kind"] = "name", ["value"] = label };
+            return label;
         }
-        if (token.Type == JTokenType.Integer)
-        {
-            int index;
-            try { index = token.Value<int>(); }
-            catch (Exception)
-            {
-                throw new GameMcpInvalidParamsException(name + " index is outside the integer range");
-            }
-            if (index < 0 || index > 63)
-                throw new GameMcpInvalidParamsException(name + " index must be between 0 and 63");
-            return new JObject { ["kind"] = "index", ["value"] = index };
-        }
-        throw new GameMcpInvalidParamsException(name + " must be an exact string or integer index");
+        throw new GameMcpInvalidParamsException(name + " must be an exact player-facing name");
     }
-
-    private static JObject ParseObject(string json)
-    {
-        try { return JObject.Parse(json); }
-        catch (JsonException)
-        {
-            return new JObject
-            {
-                ["status"] = "not_available",
-                ["reason"] = "the main-thread snapshot could not be decoded",
-            };
-        }
-    }
-
-    private static JArray ParseArray(string json)
-    {
-        try { return JArray.Parse(json); }
-        catch (JsonException) { return new JArray(); }
-    }
-
-    private static string FormatTicks(long ticks) =>
-        ticks <= 0 || ticks > DateTime.MaxValue.Ticks
-            ? string.Empty
-            : new DateTime(ticks, DateTimeKind.Utc).ToString("O");
-
-    private static JObject ConfigurationNotAvailable(GameMcpStateSnapshot state) =>
-        GameMcpWorldQuery.WithEnvelope(
-            state,
-            new JObject
-            {
-                ["status"] = "not_available",
-                ["code"] = "configuration_not_available",
-                ["reason"] = "the main thread has not published a configuration",
-            });
-
-    private static JObject StaleConfiguration(GameMcpStateSnapshot state, ulong expected) =>
-        GameMcpWorldQuery.WithEnvelope(
-            state,
-            new JObject
-            {
-                ["status"] = "rejected",
-                ["code"] = "stale_configuration_generation",
-                ["reason"] =
-                    "request names configuration generation " + expected +
-                    " but the HTTP snapshot is generation " +
-                    state.ConfigurationGeneration.Value,
-            });
 
     private static JObject Success(JToken? id, JObject result) => new()
     {
@@ -1377,44 +1022,77 @@ internal sealed class GameMcpProtocolRouter
         ["result"] = result,
     };
 
-    internal static JObject Error(JToken? id, int code, string message) => new()
+    internal static JObject Error(
+        JToken? id,
+        int code,
+        string message,
+        JObject? data = null)
     {
-        ["jsonrpc"] = "2.0",
-        ["id"] = id?.DeepClone() ?? JValue.CreateNull(),
-        ["error"] = new JObject
+        var error = new JObject
         {
             ["code"] = code,
             ["message"] = message,
-        },
-    };
+        };
+        if (data is not null) error["data"] = data;
+        return new JObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = id?.DeepClone() ?? JValue.CreateNull(),
+            ["error"] = error,
+        };
+    }
 }
 
 internal sealed class GameMcpToolExecution
 {
-    internal GameMcpToolExecution(JObject payload, byte[]? inlinePng, bool isError)
+    internal GameMcpToolExecution(GameMcpValue payload, byte[]? inlinePng, bool isError)
     {
         Payload = payload ?? throw new ArgumentNullException(nameof(payload));
         InlinePng = inlinePng;
         IsError = isError;
     }
 
-    internal JObject Payload { get; }
+    private GameMcpToolExecution(string text)
+    {
+        TextContent = string.IsNullOrWhiteSpace(text)
+            ? throw new ArgumentException("Text tool content must not be empty.", nameof(text))
+            : text;
+    }
+
+    internal GameMcpValue? Payload { get; }
     internal byte[]? InlinePng { get; }
     internal bool IsError { get; }
+    internal string? TextContent { get; }
 
-    internal static GameMcpToolExecution Read(JObject payload) => new(payload, null, false);
-    internal static GameMcpToolExecution Error(JObject payload) => new(payload, null, true);
+    internal static GameMcpToolExecution Read(GameMcpValue payload) =>
+        new(payload, null, false);
+    internal static GameMcpToolExecution Read(GameMcpObjectBuilder payload) =>
+        new(payload.Freeze(), null, false);
+    internal static GameMcpToolExecution Error(GameMcpValue payload) =>
+        new(payload, null, true);
+    internal static GameMcpToolExecution Error(GameMcpObjectBuilder payload) =>
+        new(payload.Freeze(), null, true);
+    internal static GameMcpToolExecution Text(string text) => new(text);
 
     internal JObject ToProtocolResult()
     {
-        var content = new JArray
+        if (TextContent is not null)
         {
-            new JObject
+            return new JObject
             {
-                ["type"] = "text",
-                ["text"] = Payload.ToString(Formatting.None),
-            },
-        };
+                ["content"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["type"] = "text",
+                        ["text"] = TextContent,
+                    },
+                },
+            };
+        }
+        // The structured JSON is authoritative and emitted once. Content is reserved for media;
+        // repeating the payload as text made clients decode and truncate the same result twice.
+        var content = new JArray();
         if (InlinePng is not null)
         {
             content.Add(new JObject
@@ -1424,12 +1102,13 @@ internal sealed class GameMcpToolExecution
                 ["mimeType"] = "image/png",
             });
         }
-        return new JObject
+        var result = new JObject
         {
-            ["content"] = content,
-            ["structuredContent"] = Payload,
-            ["isError"] = IsError,
+            ["structuredContent"] = GameMcpDocumentJsonEncoder.Encode(Payload!),
         };
+        if (content.Count > 0) result["content"] = content;
+        if (IsError) result["isError"] = true;
+        return result;
     }
 }
 
@@ -1450,5 +1129,22 @@ internal readonly struct GameMcpProtocolResponse
 internal sealed class GameMcpInvalidParamsException : Exception
 {
     internal GameMcpInvalidParamsException(string message) : base(message) { }
+
+    private GameMcpInvalidParamsException(string message, JObject dataObject)
+        : base(message)
+    {
+        DataObject = dataObject;
+    }
+
+    internal JObject? DataObject { get; }
+
+    internal static GameMcpInvalidParamsException Validation(JArray errors) =>
+        new(
+            "tool arguments failed schema validation",
+            new JObject
+            {
+                ["kind"] = "argument_validation_failed",
+                ["validationErrors"] = errors,
+            });
 }
 #endif

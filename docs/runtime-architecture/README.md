@@ -25,6 +25,8 @@ Read the maintained contracts in this order:
 8. [Game boundary doctrine](game-boundary-doctrine.md) governs every touch of the game: owned
    math, freshness-classified validators, GameActions as the only mutation path, and suite UI
    that speaks the game's idiom.
+9. [Game MCP frame operations](game-mcp-frame-operations.md) defines the perf-debug transport's
+   one request-scoped inbox, frame ordering, data lifetimes, and HTTP/Unity boundary.
 
 ## Production boundary
 

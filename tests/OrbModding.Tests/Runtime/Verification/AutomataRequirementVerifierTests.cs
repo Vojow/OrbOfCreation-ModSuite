@@ -90,14 +90,14 @@ public sealed class AutomataRequirementVerifierTests : IDisposable
     {
         var upgrade = new global::UpgradeSO { maxLevel = -1 };
         global::UpgradeSO.All.Add(upgrade);
-        upgrade.prerequisitesPerLevel.prerequisites.Add(new Requirements.OrRequirement());
+        upgrade.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
 
         var verifier = new AutomataRequirementVerifier(typeof(global::UpgradeSO), isUpgrade: true);
         var run = new DifferentialRun("Upgrade requirement");
 
         Assert.False(verifier.TryVerify(upgrade, Collect(), run, out var failure));
 
-        Assert.Contains("OrRequirement", failure, StringComparison.Ordinal);
+        Assert.Contains("UnsupportedRequirement", failure, StringComparison.Ordinal);
         Assert.Equal(0, run.Compared);
     }
 
@@ -112,6 +112,8 @@ public sealed class AutomataRequirementVerifierTests : IDisposable
     {
         global::UpgradeSO.All.Clear();
         global::StructureSO.All.Clear();
+        global::PrerequisiteLinkSO.All.Clear();
+        global::GameManager.currentFrame = 0;
     }
 
     /// <summary>A build whose container exposes only the overload that writes.</summary>

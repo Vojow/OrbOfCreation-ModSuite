@@ -182,6 +182,194 @@ public sealed class WorldStructuralEpochTests : IDisposable
             WorldCategoryOutcome.Collected, second.For("entity requirements").Outcome);
     }
 
+    [Fact]
+    public void PrerequisiteLinkAuthoredGraphStaysStructuralWhileItsNativeGatesRefresh()
+    {
+        var link = new global::PrerequisiteLinkSO();
+        var tier = new global::PrerequisiteLinkSO.LinkDefinition();
+        link.linkTiers.Add(tier);
+        global::PrerequisiteLinkSO.All.Add(link);
+        var collector = new GameWorldCollector();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 5 };
+
+        collector.Collect(frame);
+        var first = GameWorldFrameDeriver.Build(frame);
+        Assert.True(WorldPrerequisiteLinkTierLookup.TryFind(
+            first.PrerequisiteLinkTiers, link.GetGuid(), 0, out var firstTier));
+        Assert.True(firstTier.ActiveEnabled);
+        Assert.Equal(1, first.EntityRequirements.Count);
+
+        tier.isActiveEnabled = false;
+        global::GameManager.currentFrame = 1;
+        collector.Collect(frame);
+        var second = GameWorldFrameDeriver.Build(frame);
+
+        Assert.Equal(1, second.EntityRequirements.Count);
+        Assert.True(WorldPrerequisiteLinkTierLookup.TryFind(
+            second.PrerequisiteLinkTiers, link.GetGuid(), 0, out var secondTier));
+        Assert.False(secondTier.ActiveEnabled);
+        Assert.Equal(1, secondTier.CollectedFrame);
+    }
+
+    [Fact]
+    public void RequirementGraphStaysStructuralWhileTheExactNativeCheckLevelRefreshes()
+    {
+        Author();
+        var upgrade = global::UpgradeSO.All[0];
+        var collector = new GameWorldCollector();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 5 };
+
+        collector.Collect(frame);
+        var first = GameWorldFrameDeriver.Build(frame);
+        Assert.Equal(1, first.EntityRequirements.Count);
+        Assert.True(WorldRequirementNativeVerdictLookup.TryFind(
+            first.RequirementNativeVerdicts, upgrade.GetGuid(), out var firstVerdict));
+        Assert.Equal(1L, firstVerdict.CheckLevel);
+        Assert.Equal(1, upgrade.prerequisitesPerLevel.ParameterizedCheckCalls);
+
+        // Both sides move. The authored list is deliberately destroyed, while the played level moves
+        // to the exact next level the game would evaluate. Only the latter may affect pass two.
+        upgrade.prerequisitesPerLevel.prerequisites.Clear();
+        upgrade.level = 3;
+        upgrade.queuedLevels = 2;
+        collector.Collect(frame);
+        var second = GameWorldFrameDeriver.Build(frame);
+
+        Assert.Equal(1, second.EntityRequirements.Count);
+        Assert.True(WorldRequirementNativeVerdictLookup.TryFind(
+            second.RequirementNativeVerdicts, upgrade.GetGuid(), out var secondVerdict));
+        Assert.Equal(6L, secondVerdict.CheckLevel);
+        Assert.True(secondVerdict.Met);
+        Assert.Equal(2, upgrade.prerequisitesPerLevel.ParameterizedCheckCalls);
+    }
+
+    [Fact]
+    public void CraftingGraphStaysStructuralWhileEveryLiveRecipeVerdictRefreshes()
+    {
+        var type = new global::CraftingRecipeTypeSO { isLevelType = true };
+        var input = new global::ResourceSO { quantity = new BigDouble(100d) };
+        var output = new global::ResourceSO { quantity = new BigDouble(5d) };
+        var consumable = new global::ConsumableSO();
+        var engagement = new global::PersistentEffectBlock
+        {
+            NecessaryDrainRatio = BigDouble.One,
+        };
+        var completion = new global::InstantEffectBlock();
+        completion.effectScripts.Add(new global::ConsumableSO.ConsumableGainEffect
+        {
+            consumable = consumable,
+        });
+        var recipe = new global::CraftingRecipeSO
+        {
+            visible = true,
+            BuyAllowed = true,
+            StartingQuantity = BigDouble.One,
+            useQuantityAsLevel = true,
+            timeToComplete = 4d,
+        };
+        recipe.craftingTypes.Add(type);
+        recipe.recipeCost.costs.Add(new global::ResourceTuple(input, new BigDouble(3d)));
+        recipe.generatedResources.costs.Add(new global::ResourceTuple(output, new BigDouble(2d)));
+        recipe.engagementEffects.Add(engagement);
+        recipe.completeEffects.Add(completion);
+        global::CraftingRecipeTypeSO.All.Add(type);
+        global::ResourceSO.All.Add(input);
+        global::ResourceSO.All.Add(output);
+        global::ConsumableSO.All.Add(consumable);
+        global::CraftingRecipeSO.All.Add(recipe);
+
+        var collector = new GameWorldCollector();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 5 };
+        collector.Collect(frame);
+        var first = GameWorldFrameDeriver.Build(frame);
+        Assert.True(WorldLookup.TryFind(first.CraftingRecipes, recipe.GetGuid(), out var firstRow));
+        Assert.True(firstRow.Reading.Visible);
+        Assert.True(firstRow.Reading.CanBuyAtStartingQuantity);
+        Assert.True(firstRow.Reading.OutputWithinCapacity);
+        Assert.Equal(1, firstRow.Types.Count);
+        Assert.Equal(2, firstRow.Resources.Count);
+        Assert.Equal(1, firstRow.ConsumableOutputs.Count);
+        Assert.Equal(1, firstRow.DrainBlocks.Count);
+        Assert.Equal(1, recipe.VisibilityCalls);
+        Assert.Equal(1, recipe.StartingQuantityCalls);
+        Assert.Equal(1, recipe.CanBuyCalls);
+
+        // Destroy every authored edge and independently move every live verdict. A second ordinary
+        // capture must retain the former and observe the latter without traversing the registries.
+        recipe.craftingTypes.Clear();
+        recipe.recipeCost.costs.Clear();
+        recipe.generatedResources.costs.Clear();
+        recipe.completeEffects.Clear();
+        recipe.engagementEffects.Clear();
+        recipe.visible = false;
+        recipe.BuyAllowed = false;
+        recipe.generatedResources.WithinCapacity = false;
+        engagement.NecessaryDrainRatio = new BigDouble(0.5d);
+        global::CraftingRecipeSO.All.Clear();
+        global::CraftingRecipeTypeSO.All.Clear();
+        collector.Collect(frame);
+        var second = GameWorldFrameDeriver.Build(frame);
+
+        Assert.True(WorldLookup.TryFind(second.CraftingRecipes, recipe.GetGuid(), out var secondRow));
+        Assert.False(secondRow.Reading.Visible);
+        Assert.False(secondRow.Reading.CanBuyAtStartingQuantity);
+        Assert.False(secondRow.Reading.OutputWithinCapacity);
+        Assert.Equal(1, secondRow.Types.Count);
+        Assert.Equal(2, secondRow.Resources.Count);
+        Assert.Equal(1, secondRow.ConsumableOutputs.Count);
+        var drain = Assert.Single(secondRow.DrainBlocks.AsSpan().ToArray());
+        Assert.Equal(0.5d, drain.NecessaryRatio.ToDouble());
+        Assert.Equal(2, recipe.VisibilityCalls);
+        Assert.Equal(2, recipe.StartingQuantityCalls);
+        Assert.Equal(2, recipe.CanBuyCalls);
+    }
+
+    [Fact]
+    public void StaticBaseCostStaysStructuralWhileCurrentAffordabilityRefreshes()
+    {
+        var resource = new global::ResourceSO
+        {
+            quantity = new BigDouble(5d),
+            visible = true,
+        };
+        var perQuantity = new global::ValueModifierVariable
+        {
+            value = new ValueModifier(
+                ValueModifier.ValueModifierType.Raw,
+                BigDouble.Zero),
+        };
+        var structure = new global::StructureSO();
+        structure.costPerQuantity.variable = perQuantity;
+        structure.baseCost.costs.Add(
+            new global::ResourceTuple(resource, new BigDouble(10d)));
+        global::ResourceSO.All.Add(resource);
+        global::ValueModifierVariable.All.Add(perQuantity);
+        global::StructureSO.All.Add(structure);
+
+        var collector = new GameWorldCollector();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 5 };
+        collector.Collect(frame);
+        var first = GameWorldFrameDeriver.Build(frame);
+        Assert.True(WorldPurchaseCostLookup.TryFindRange(
+            first.PurchaseCosts, structure.GetGuid(), out var firstStart, out var firstCount));
+        Assert.Equal(1, firstCount);
+        Assert.Equal(10d, first.PurchaseCosts[firstStart].BaseExactAmount.ToDouble());
+        Assert.False(first.PurchaseCosts[firstStart].Affordable);
+
+        structure.baseCost.costs[0] =
+            new global::ResourceTuple(resource, new BigDouble(999d));
+        resource.quantity = new BigDouble(100d);
+        collector.Collect(frame);
+        var second = GameWorldFrameDeriver.Build(frame);
+
+        Assert.True(WorldPurchaseCostLookup.TryFindRange(
+            second.PurchaseCosts, structure.GetGuid(), out var secondStart, out var secondCount));
+        Assert.Equal(1, secondCount);
+        Assert.Equal(10d, second.PurchaseCosts[secondStart].BaseExactAmount.ToDouble());
+        Assert.Equal(100d, second.PurchaseCosts[secondStart].AvailableAmount.ToDouble());
+        Assert.True(second.PurchaseCosts[secondStart].Affordable);
+    }
+
     /// <summary>
     /// One plot authoring the three phases the game ships, and one action whose completion applies one
     /// block. Enough shape for both structural readers to produce rows; the terms themselves are the
@@ -222,6 +410,14 @@ public sealed class WorldStructuralEpochTests : IDisposable
         global::PlotNodeSO.All.Clear();
         global::PlotNodeActionSO.All.Clear();
         global::UpgradeSO.All.Clear();
+        global::StructureSO.All.Clear();
+        global::PrerequisiteLinkSO.All.Clear();
+        global::GameManager.currentFrame = 0;
         global::ResearchSO.All.Clear();
+        global::ResourceSO.All.Clear();
+        global::ValueModifierVariable.All.Clear();
+        global::CraftingRecipeTypeSO.All.Clear();
+        global::CraftingRecipeSO.All.Clear();
+        global::ConsumableSO.All.Clear();
     }
 }

@@ -179,18 +179,19 @@ Composition is explicit:
 SuiteFramePump
   -> Register world collection definition and adapters   (source shape)
   -> Register Auto Items definition and adapters         (ordinary)
+  -> Register Auto Scribe definition and adapters        (ordinary)
   -> Register Auto Harvest definition and adapters       (ordinary)
   -> Register Auto Buy definition and adapters           (ordinary)
   -> Register Spell Leveling definition and adapters     (ordinary)
   -> Register Auto Cast definition and adapters          (ordinary)
   -> Register Auto Concept definition and adapters       (ordinary)
+  -> Register Mentor definition and adapters             (ordinary)
 ```
 
 World collection registers first so the world is published before the services that read it
 evaluate. That ordering is a convenience, not a guarantee: nothing enforces order between
 services, and a consumer whose first cycle beat the first collection would simply wait a
-frame. Mentor is the eighth registration and uses the same ordinary-service path as the other
-feature services. This list is the complete production runtime roster.
+frame. These nine registrations are the complete production runtime roster.
 
 Registration:
 

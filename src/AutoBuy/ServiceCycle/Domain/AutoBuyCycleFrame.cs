@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
@@ -245,7 +246,7 @@ internal readonly struct AutoBuyResourceRow
 /// the answer that decides affordability — what a bandwidth cost is actually paid out of — lives on
 /// the resource row. Two copies of one fact is one copy too many when only one of them is consulted.
 /// </remarks>
-internal readonly struct AutoBuyCostRow
+internal readonly struct AutoBuyCostRow : IExactCostRow<int>
 {
     public AutoBuyCostRow(int resourceRowIndex, BigDouble cost)
         : this(resourceRowIndex, cost, exactGroupedLevels: 1, cost)
@@ -268,6 +269,11 @@ internal readonly struct AutoBuyCostRow
     public BigDouble Cost { get; }
     public int ExactGroupedLevels { get; }
     public BigDouble ExactGroupedCost { get; }
+
+    int IExactCostRow<int>.CostResourceKey => ResourceRowIndex;
+    BigDouble IExactCostRow<int>.EffectiveExactAmount => Cost;
+    int IExactCostRow<int>.ExactGroupedLevels => ExactGroupedLevels;
+    BigDouble IExactCostRow<int>.ExactGroupedAmount => ExactGroupedCost;
 }
 
 /// <summary>

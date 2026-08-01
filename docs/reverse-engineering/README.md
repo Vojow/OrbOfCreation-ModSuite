@@ -55,6 +55,12 @@ The findings come from assembly metadata and selected IL method bodies read with
   levelled coverage facts, freshness-classified preflights, exact payment/admission evidence,
   partial commits, and remaining live-evidence limits.
 
+## Discovery Tree offer dossier
+
+- [Native Discovery Tree offer pipeline](discovery-tree-offer-native-pipeline.md) — audited paid
+  initiate, delayed offers, selection, confirmation, reroll exclusion, exact receipts,
+  lifecycle quarantine, MCP invocation, and the outstanding disposable-save promotion checklist.
+
 Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
 
 ## Important discovered identifier

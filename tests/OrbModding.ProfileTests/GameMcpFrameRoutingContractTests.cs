@@ -1,0 +1,205 @@
+using System;
+using System.Linq;
+using Newtonsoft.Json.Linq;
+using OrbAutomata.GameMcp;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpFrameRoutingContractTests
+{
+    [Fact]
+    public void EveryAdvertisedToolBuildsOneImmutableOperationForTheSoleInbox()
+    {
+        var tools = GameMcpAcceptanceFixture.Tools();
+        Assert.Equal(25, tools.Count);
+        var inbox = new GameMcpFrameInbox();
+        var operations = tools
+            .Select(tool => GameMcpProtocolRouter.BuildOperation(
+                (string)tool["name"]!,
+                Arguments((string)tool["name"]!)))
+            .Select(inbox.Submit)
+            .ToArray();
+
+        Assert.Equal(tools.Count, operations.Length);
+        Assert.Equal(operations, inbox.ClaimPending());
+        Assert.Empty(inbox.ClaimPending());
+        Assert.All(operations, operation =>
+            Assert.Equal(operation.Request.ToolName, operation.Request.ToolName.Trim()));
+    }
+
+    [Fact]
+    public void ProtocolOnlyBypassSetIsFiniteAndNeverTouchesTheFrameInbox()
+    {
+        Assert.Equal(
+            new[]
+            {
+                "initialize",
+                "ping",
+                "tools/list",
+                "resources/list",
+                "resources/templates/list",
+            },
+            GameMcpProtocolRouter.ProtocolOnlyMethods());
+
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
+        foreach (var method in GameMcpProtocolRouter.ProtocolOnlyMethods())
+        {
+            var parameters = method == "initialize"
+                ? new JObject
+                {
+                    ["protocolVersion"] = GameMcpProtocolRouter.LatestProtocolVersion,
+                    ["capabilities"] = new JObject(),
+                    ["clientInfo"] = new JObject(),
+                }
+                : new JObject();
+            var response = router.Handle(GameMcpAcceptanceFixture.Request(1, method, parameters));
+            Assert.Equal(200, response.StatusCode);
+            Assert.Null(response.Body?["error"]);
+            Assert.Empty(inbox.ClaimPending());
+        }
+
+        var notification = new JObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["method"] = "notifications/initialized",
+        };
+        Assert.Equal(202, router.Handle(notification).StatusCode);
+        Assert.Empty(inbox.ClaimPending());
+    }
+
+    [Fact]
+    public void ReadUiAdministrationAndGameplayHaveExactDataAndMutationClasses()
+    {
+        var read = GameMcpProtocolRouter.BuildOperation(
+            "world_get",
+            Arguments("world_get"));
+        Assert.Equal(GameMcpOperationClass.ReadOnly, read.Classification);
+        Assert.Equal(GameMcpFrameData.World, read.RequiredData);
+
+        var catalog = GameMcpProtocolRouter.BuildOperation(
+            "entity_catalog",
+            Arguments("entity_catalog"));
+        Assert.Equal(GameMcpFrameData.None, catalog.RequiredData);
+
+        var health = GameMcpProtocolRouter.BuildOperation(
+            "suite_health",
+            Arguments("suite_health"));
+        Assert.Equal(
+            GameMcpFrameData.World | GameMcpFrameData.Configuration |
+            GameMcpFrameData.FeatureHealth | GameMcpFrameData.ServiceHealth |
+            GameMcpFrameData.Scene | GameMcpFrameData.NativeContractHealth,
+            health.RequiredData);
+
+        var ui = GameMcpProtocolRouter.BuildOperation(
+            "game_navigate",
+            Arguments("game_navigate"));
+        Assert.Equal(GameMcpOperationClass.UiState, ui.Classification);
+        Assert.Equal(GameMcpFrameData.None, ui.RequiredData);
+
+        var administration = GameMcpProtocolRouter.BuildOperation(
+            "suite_emergency_stop",
+            Arguments("suite_emergency_stop"));
+        Assert.Equal(GameMcpOperationClass.SuiteAdministration, administration.Classification);
+        Assert.Equal(GameMcpFrameData.Configuration, administration.RequiredData);
+
+        var gameplay = GameMcpProtocolRouter.BuildOperation(
+            "game_discovery_offer",
+            Arguments("game_discovery_offer"));
+        Assert.Equal(GameMcpOperationClass.Gameplay, gameplay.Classification);
+        Assert.Equal(
+            GameMcpFrameData.World | GameMcpFrameData.Configuration,
+            gameplay.RequiredData);
+    }
+
+    [Fact]
+    public void OptionalUiAndDiagnosticWritesEscalateOnlyTheirOwnOperation()
+    {
+        var tooltipRead = GameMcpProtocolRouter.BuildOperation(
+            "game_tooltip",
+            new JObject { ["path"] = "Canvas[0]/Button[0]" });
+        var tooltipOpen = GameMcpProtocolRouter.BuildOperation(
+            "game_tooltip",
+            new JObject
+            {
+                ["path"] = "Canvas[0]/Button[0]",
+                ["capture"] = true,
+            });
+        var screenshot = GameMcpProtocolRouter.BuildOperation(
+            "game_screenshot",
+            new JObject());
+        var savedScreenshot = GameMcpProtocolRouter.BuildOperation(
+            "game_screenshot",
+            new JObject { ["save"] = true });
+
+        Assert.Equal(GameMcpOperationClass.ReadOnly, tooltipRead.Classification);
+        Assert.Equal(GameMcpOperationClass.UiState, tooltipOpen.Classification);
+        Assert.Equal(GameMcpOperationClass.ReadOnly, screenshot.Classification);
+        Assert.Equal(GameMcpOperationClass.SuiteAdministration, savedScreenshot.Classification);
+        Assert.Equal(GameMcpFrameData.None, screenshot.RequiredData);
+        Assert.Equal(GameMcpFrameData.Configuration, savedScreenshot.RequiredData);
+    }
+
+    private static JObject Arguments(string tool) => tool switch
+    {
+        "world_overview" or "world_categories" or "suite_configuration" or
+            "trace_health" or "game_screenshot" or "game_screen_catalog" or
+            "game_continue" => new JObject(),
+        "world_list" => new JObject { ["category"] = "resources" },
+        "world_get" => new JObject
+        {
+            ["category"] = "resources",
+            ["uuids"] = new JArray(Guid.NewGuid().ToString("D")),
+        },
+        "entity_catalog" or "world_search" => new JObject { ["query"] = "mana" },
+        "explain_entity" => new JObject { ["uuid"] = Guid.NewGuid().ToString("D") },
+        "suite_health" => new JObject(),
+        "game_purchase" => new JObject { ["uuid"] = Guid.NewGuid().ToString("D") },
+        "game_cast" => new JObject
+        {
+            ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "fire",
+            ["slotIndex"] = 0,
+        },
+        "game_concept" => new JObject
+        {
+            ["recipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "add",
+        },
+        "game_harvest" => new JObject
+        {
+            ["plotNodeUuid"] = Guid.NewGuid().ToString("D"),
+        },
+        "game_spell_level" => new JObject
+        {
+            ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "single",
+        },
+        "game_discovery_offer" => new JObject
+        {
+            ["treeUuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "initiate",
+        },
+        "suite_config_set" => new JObject
+        {
+            ["configurationGeneration"] = 1,
+            ["section"] = "AutoCast",
+            ["key"] = "Mode",
+            ["serializedValue"] = "Disabled",
+        },
+        "suite_emergency_stop" => new JObject
+        {
+            ["configurationGeneration"] = 1,
+            ["mode"] = "engage",
+        },
+        "game_navigate" => new JObject
+        {
+            ["tab"] = "Magic",
+        },
+        "game_probe" => new JObject { ["probe"] = "runtime" },
+        "game_tooltips" => new JObject(),
+        "game_tooltip" => new JObject { ["path"] = "Canvas[0]/Button[0]" },
+        _ => throw new InvalidOperationException("no operation fixture exists for " + tool),
+    };
+}

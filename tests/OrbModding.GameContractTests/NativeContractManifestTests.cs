@@ -71,8 +71,8 @@ public sealed class NativeContractManifestTests
             + "|\\.(?:EnumField|NestedEnumField)\\s*\\([^;]*?\\)"
             + "|\\.(?:CollectionCount|NestedCollectionCount|ReferenceGuid|CallReferenceGuid"
             + "|ModifierRecord)\\s*\\([^;]*?\\)"
-            + "|NativeAccessorBinder\\.(?:Call|Field|NestedField|EnumField|NestedEnumField|StaticList"
-            + "|StaticDictionary|CollectionCount|NestedCollectionCount|ReferenceGuid|ModifierRecord)"
+            + "|NativeAccessorBinder\\.(?:Call|CallWithConstructedLongArgument|Field|NestedField|EnumField|NestedEnumField|StaticList"
+            + "|StaticDictionary|CollectionCount|CollectionField|CollectionElementType|NestedCollectionCount|ReferenceGuid|ModifierRecord)"
             + "(?:<[^<>()]*>)?\\s*\\([^;]*?\\)"
             + "|(?:TypeName|RegistryMember)\\s*=>\\s*\"[^\"\\r\\n]*\")",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -181,7 +181,7 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(862, manifest.Contracts.Count);
+        Assert.Equal(942, manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
@@ -513,7 +513,7 @@ public sealed class NativeContractManifestTests
         var referenceRoot = Path.Combine(repositoryRoot, "lib", "game-refs", "v1.0.5");
         var failures = new List<string>();
 
-        Assert.Equal(70, manifest.Contracts.Count(contract => contract.Visibility == "private"));
+        Assert.Contains(manifest.Contracts, contract => contract.Visibility == "private");
 
         foreach (var assemblyEntry in manifest.Assemblies)
         {

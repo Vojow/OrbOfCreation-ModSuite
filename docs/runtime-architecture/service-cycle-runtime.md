@@ -96,9 +96,10 @@ Feature runtimes do not tick, dispose, or select individual observation controll
 observability-options value when attaching the host. Sharing the host attachment point does not make the
 three observation products one sink. Feature-specific profiling stage codes remain at the native adapter edge.
 
-Seven services are composed today — world collection, Auto Harvest, Auto Buy, Spell Leveling,
-Auto Cast, Auto Concept, and Mentor — each through an explicit typed registration, and none of them
-introduces another registry abstraction, pump, or generic service locator.
+Nine services are composed today — world collection, Auto Items, Auto Scribe, Auto Harvest,
+Auto Buy, Spell Leveling, Auto Cast, Auto Concept, and Mentor — each through an explicit typed
+registration, and none of them introduces another registry abstraction, pump, or generic service
+locator.
 
 Orb Automata chooses one complete `SuiteRuntimeConfiguration` for every service. BepInEx entries deserialize
 and persist values, but they are not application state. `AutomataConfigurationStore` owns the one committed
@@ -186,6 +187,16 @@ The strategy bulletin is the neutral one until a strategist exists, and the neut
 unstrategised behaviour exactly.
 
 Native game state remains authoritative. Pinning policy context does not permit an action that current native validation rejects.
+
+### Perf-debug MCP placement
+
+In profiler builds, `Plugin.Update` drains the one MCP frame-operation inbox immediately after
+`UpdateAutomata`. It atomically claims every request pending at that boundary, pins the world and
+configuration publications already visible after the ServiceCycle pump, and executes the complete
+claim in submission order. It is not a ServiceCycle service and does not add another world cadence or
+gameplay scheduler; MCP gameplay operations enter the same canonical GameActions and live native
+admission used by the runtime. An empty inbox returns before reading any publication or diagnostic
+owner. The complete contract is [Game MCP frame operations](game-mcp-frame-operations.md).
 
 ## The source's world buffer
 

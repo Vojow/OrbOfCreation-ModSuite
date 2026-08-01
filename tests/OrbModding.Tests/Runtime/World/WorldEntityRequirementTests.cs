@@ -1,23 +1,23 @@
 using System;
+using System.Collections.Generic;
 using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Runtime.World;
 
 /// <summary>
-/// The per-level prerequisite container becomes published rows.
+/// The per-level prerequisite container becomes published rows and one same-generation native verdict.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The game gates each level of a purchase on <c>prerequisitesPerLevel.Check(level)</c>, which takes
 /// the level being bought and so cannot be published as a latched boolean the way the whole-entity
-/// gate is. What can be published is the container's contents, and these tests are about reading them
-/// off the live objects: which entity a condition looks at, which comparison it makes, and what its
-/// threshold is before scaling.
+/// gate is. The collector publishes both the container's contents and the result of the native,
+/// parameterized <c>Check(ConditionInfo)</c> call for the exact level the game would check next.
 /// </para>
 /// <para>
-/// Nothing here evaluates a condition. Whether one currently holds is arithmetic over other published
-/// rows, done on a worker; this is only the reading.
+/// The native result is a differential oracle, not a replacement evaluator. Worker code still
+/// evaluates the immutable rows, then compares its answer with this same-generation native verdict.
 /// </para>
 /// </remarks>
 public sealed class WorldEntityRequirementTests : IDisposable
@@ -98,6 +98,66 @@ public sealed class WorldEntityRequirementTests : IDisposable
             world.EntityRequirements, global::UpgradeSO.All[0].GetGuid(), out _, out _));
     }
 
+    [Fact]
+    public void NativeParameterizedVerdictsUseTheExactUpgradeAndStructureCheckLevels()
+    {
+        var emptyUpgrade = Author(new global::UpgradeSO
+        {
+            level = 2,
+            queuedLevels = 1,
+            maxLevel = -1,
+        });
+        var gatedUpgrade = Author(new global::UpgradeSO
+        {
+            level = 4,
+            queuedLevels = 2,
+            maxLevel = -1,
+        });
+        gatedUpgrade.prerequisitesPerLevel.prerequisites.Add(
+            new Requirements.UnsupportedRequirement());
+        var structure = new global::StructureSO { quantity = 7, queuedQuantity = 3 };
+        global::StructureSO.All.Add(structure);
+
+        var world = Collect();
+
+        Assert.True(WorldRequirementNativeVerdictLookup.TryFind(
+            world.RequirementNativeVerdicts, emptyUpgrade.GetGuid(), out var empty));
+        Assert.Equal(WorldRequirementOwnerKind.Upgrade, empty.OwnerKind);
+        Assert.Equal(4L, empty.CheckLevel);
+        Assert.True(empty.Met);
+
+        Assert.True(WorldRequirementNativeVerdictLookup.TryFind(
+            world.RequirementNativeVerdicts, gatedUpgrade.GetGuid(), out var gated));
+        Assert.Equal(7L, gated.CheckLevel);
+        Assert.False(gated.Met);
+
+        Assert.True(WorldRequirementNativeVerdictLookup.TryFind(
+            world.RequirementNativeVerdicts, structure.GetGuid(), out var structureVerdict));
+        Assert.Equal(WorldRequirementOwnerKind.Structure, structureVerdict.OwnerKind);
+        Assert.Equal(7L, structureVerdict.CheckLevel);
+        Assert.True(structureVerdict.Met);
+    }
+
+    [Fact]
+    public void MissingParameterizedCheckMakesTheCategoryUnavailableBeforeCollection()
+    {
+        MissingCheckContainer.ParameterlessCalls = 0;
+        var reader = new WorldEntityRequirementReader(
+            typeof(MissingCheckUpgrade),
+            typeof(MissingCheckStructure),
+            typeof(global::ResearchSO),
+            typeof(MissingCheckLink));
+
+        Assert.False(reader.IsAvailable);
+        var report = reader.Collect(
+            new HashSet<Guid>(),
+            new GameWorldCycleFrame { CollectedAtEpoch = 1 });
+
+        Assert.Equal(WorldCategoryOutcome.Unavailable, report.Outcome);
+        Assert.Contains("Check(Requirements.ConditionInfo)", report.FirstFailure);
+        Assert.Equal(0, MissingCheckContainer.ParameterlessCalls);
+    }
+
     /// <summary>
     /// A threshold that grows with the level travels as the authored modifier, not as one number.
     /// </summary>
@@ -140,12 +200,12 @@ public sealed class WorldEntityRequirementTests : IDisposable
     public void AConditionClassTheSuiteDoesNotModelPublishesAnUnknownRow()
     {
         var gated = Author(new global::UpgradeSO { maxLevel = 1 });
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OrRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
 
         var row = Single(Collect());
 
         Assert.Equal(WorldRequirementConditionKind.Unknown, row.Kind);
-        Assert.Equal("OrRequirement", row.ConditionTypeName);
+        Assert.Equal("UnsupportedRequirement", row.ConditionTypeName);
         Assert.Equal(Guid.Empty, row.TargetId);
     }
 
@@ -158,7 +218,7 @@ public sealed class WorldEntityRequirementTests : IDisposable
     public void AnUnmodelledConditionClassIsNamedInThePassReport()
     {
         var gated = Author(new global::UpgradeSO { maxLevel = 1 });
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OrRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
 
         var collector = new GameWorldCollector();
         var report = collector.Collect(new GameWorldCycleFrame { CollectedAtEpoch = 1 });
@@ -166,8 +226,94 @@ public sealed class WorldEntityRequirementTests : IDisposable
 
         Assert.Equal(1, category.Sampled);
         Assert.Equal(1, category.Skipped);
-        Assert.Contains("OrRequirement", category.FirstFailure, StringComparison.Ordinal);
+        Assert.Contains("UnsupportedRequirement", category.FirstFailure, StringComparison.Ordinal);
         Assert.False(report.IsComplete);
+    }
+
+    [Fact]
+    public void NestedAndOrGroupsPreserveTheirAuthoredTree()
+    {
+        var gated = Author(new global::UpgradeSO { maxLevel = 1 });
+        var scribing = new global::ResearchSO();
+        global::ResearchSO.All.Add(scribing);
+        var quarry = new global::StructureSO();
+        global::StructureSO.All.Add(quarry);
+
+        var outer = new Requirements.OrRequirement();
+        outer.orConditions.Add(new Requirements.ResearchRequirement
+        {
+            item = scribing,
+            reqType = Requirements.UpgradeRequirementType.AtLeast,
+            value = new Requirements.LeveledValue { baseValue = 6d },
+        });
+        var nested = new Requirements.AndRequirement();
+        nested.andConditions.Add(new Requirements.StructureRequirement
+        {
+            item = quarry,
+            reqType = Requirements.StructureRequirementType.Quantity,
+            value = new Requirements.LeveledValue { baseValue = 3d },
+        });
+        outer.orConditions.Add(nested);
+        gated.prerequisitesPerLevel.prerequisites.Add(outer);
+
+        var rows = Collect().EntityRequirements.AsSpan();
+
+        Assert.Equal(4, rows.Length);
+        Assert.Equal(WorldRequirementNodeKind.Group, rows[0].NodeKind);
+        Assert.Equal(WorldRequirementOperator.Or, rows[0].Operator);
+        Assert.Equal(-1, rows[0].ParentOrdinal);
+        Assert.Equal(0, rows[0].Depth);
+        Assert.Equal(WorldRequirementConditionKind.Research, rows[1].Kind);
+        Assert.Equal(0, rows[1].ParentOrdinal);
+        Assert.Equal(1, rows[1].Depth);
+        Assert.Equal(WorldRequirementNodeKind.Group, rows[2].NodeKind);
+        Assert.Equal(WorldRequirementOperator.And, rows[2].Operator);
+        Assert.Equal(0, rows[2].ParentOrdinal);
+        Assert.Equal(WorldRequirementConditionKind.Structure, rows[3].Kind);
+        Assert.Equal(2, rows[3].ParentOrdinal);
+        Assert.Equal(2, rows[3].Depth);
+    }
+
+    [Fact]
+    public void EveryPrerequisiteLinkTierIsPublishedAsItsOwnOrderedContainer()
+    {
+        var link = new global::PrerequisiteLinkSO();
+        global::PrerequisiteLinkSO.All.Add(link);
+        var scribing = new global::ResearchSO();
+        global::ResearchSO.All.Add(scribing);
+
+        var baseTier = new global::PrerequisiteLinkSO.LinkDefinition();
+        baseTier.prerequisites.prerequisites.Add(new Requirements.ResearchRequirement
+        {
+            item = scribing,
+            reqType = Requirements.UpgradeRequirementType.AtLeast,
+            value = new Requirements.LeveledValue { baseValue = 1d },
+        });
+        link.linkTiers.Add(baseTier);
+        var secondTier = new global::PrerequisiteLinkSO.LinkDefinition();
+        secondTier.prerequisites.prerequisites.Add(new Requirements.ResearchRequirement
+        {
+            item = scribing,
+            reqType = Requirements.UpgradeRequirementType.AtLeast,
+            value = new Requirements.LeveledValue { baseValue = 7d },
+        });
+        link.linkTiers.Add(secondTier);
+
+        var world = Collect();
+
+        Assert.True(WorldEntityRequirementLookup.TryFindContainerRange(
+            world.EntityRequirements, link.GetGuid(), 0, out var first, out var firstCount));
+        Assert.True(WorldEntityRequirementLookup.TryFindContainerRange(
+            world.EntityRequirements, link.GetGuid(), 1, out var second, out var secondCount));
+        Assert.Equal(2, firstCount);
+        Assert.Equal(2, secondCount);
+        Assert.Equal(WorldRequirementOwnerKind.PrerequisiteLink,
+            world.EntityRequirements[first].OwnerKind);
+        Assert.Equal(WorldRequirementNodeKind.Group, world.EntityRequirements[first].NodeKind);
+        Assert.Equal(WorldRequirementOperator.And, world.EntityRequirements[first].Operator);
+        Assert.Equal(0, world.EntityRequirements[first + 1].ParentOrdinal);
+        Assert.Equal(1d, world.EntityRequirements[first + 1].BaseValue);
+        Assert.Equal(7d, world.EntityRequirements[second + 1].BaseValue);
     }
 
     /// <summary>
@@ -232,5 +378,56 @@ public sealed class WorldEntityRequirementTests : IDisposable
         global::StructureSO.All.Clear();
         global::ResearchSO.All.Clear();
         global::IntVariable.All.Clear();
+        global::PrerequisiteLinkSO.All.Clear();
+        global::GameManager.currentFrame = 0;
+    }
+
+    private sealed class MissingCheckUpgrade
+    {
+        public MissingCheckUpgrade()
+        {
+            level = 0;
+            queuedLevels = 0;
+        }
+
+        public static List<MissingCheckUpgrade> All { get; } = new();
+        public MissingCheckContainer prerequisitesPerLevel = new();
+        public int level;
+        public int queuedLevels;
+        public Guid GetGuid() => Guid.NewGuid();
+        public int GetPurchaseLevel() => level;
+    }
+
+    private sealed class MissingCheckStructure
+    {
+        public MissingCheckStructure() => quantity = 0;
+
+        public static List<MissingCheckStructure> All { get; } = new();
+        public MissingCheckContainer prerequisitesPerLevel = new();
+        public int quantity;
+        public Guid GetGuid() => Guid.NewGuid();
+    }
+
+    private sealed class MissingCheckLink
+    {
+        public sealed class LinkDefinition
+        {
+            public MissingCheckContainer prerequisites = new();
+        }
+
+        public static List<MissingCheckLink> All { get; } = new();
+        public List<LinkDefinition> linkTiers = new();
+        public Guid GetGuid() => Guid.NewGuid();
+    }
+
+    private sealed class MissingCheckContainer
+    {
+        internal static int ParameterlessCalls;
+        public List<object> prerequisites = new();
+        public bool Check()
+        {
+            ParameterlessCalls++;
+            return true;
+        }
     }
 }

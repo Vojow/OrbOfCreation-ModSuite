@@ -74,9 +74,10 @@ public sealed class WorldIdentityWalkTests
     /// is that edge several times over, one row per instance the plot holds. <c>PlotAuthoring</c>,
     /// <c>PlotPhaseDescriptors</c> and <c>EffectBlocks</c> are all second readings of an entity the
     /// plot and action tables already claim, said about the entity rather than as it. So is
-    /// <c>EntityRequirements</c>, whose rows are conditions on an upgrade or a structure the two
-    /// purchasable categories already own. <c>ActionQueueSlots</c> is a position in a list, which is
-    /// no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
+    /// <c>EntityRequirements</c>, whose rows are conditions on an upgrade, structure, or prerequisite
+    /// link already owned elsewhere. <c>PrerequisiteLinkTiers</c> is the volatile state for each
+    /// `(link, tier)` relation, and its link identity belongs to the authored catalog. <c>ActionQueueSlots</c>
+    /// is a position in a list, which is no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
     /// source identity points at a recipe or equipment row that already owns that identity.
     /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
     /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
@@ -116,6 +117,8 @@ public sealed class WorldIdentityWalkTests
         "PlotPhaseDescriptors",
         "EffectBlocks",
         "EntityRequirements",
+        "RequirementNativeVerdicts",
+        "PrerequisiteLinkTiers",
     };
 
     /// <summary>

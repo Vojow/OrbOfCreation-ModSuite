@@ -47,6 +47,7 @@ internal static class WorldCategoryFakes
         ["ScalingInfo"] = typeof(FakeScribeScalingInfo),
         ["BigDouble"] = typeof(BigDouble),
         ["InstantEffectBlock"] = typeof(FakeScribeInstantBlock),
+        ["EffectBlock"] = typeof(FakeCraftingEffectBlock),
         ["IInstantEffectScript"] = typeof(IFakeScribeInstantScript),
         ["ConsumableSO+ConsumableGainEffect"] = typeof(FakeScribeConsumableGainEffect),
         ["RequestTargetEffectScript"] = typeof(FakeScribeRequestTargetEffect),
@@ -99,6 +100,7 @@ internal static class WorldCategoryFakes
         FakeEquipmentType.All.Clear();
         FakeResourceType.All.Clear();
         FakeCraftingRecipeType.All.Clear();
+        FakeScribeRecipe.All.Clear();
         FakeHarvestElement.All.Clear();
         FakeTimeRune.All.Clear();
         FakeGlyph.All.Clear();
@@ -188,13 +190,56 @@ internal sealed class FakeScribeRecipeList
 
 internal sealed class FakeScribeRecipe
 {
+    public static readonly List<FakeScribeRecipe> All = new();
+
     public Guid Identity = Guid.NewGuid();
     public List<FakeCraftingRecipeType> craftingTypes = new();
+    public FakeCraftingResourceCostList recipeCost = new();
+    public FakeCraftingResourceCostList generatedResources = new();
+    public List<FakeCraftingEngagementBlock> engagementEffects = new();
     public List<FakeScribeInstantBlock> completeEffects = new();
     public bool useQuantityAsLevel = false;
+    public double timeToComplete;
+    public bool visible = true;
+    public bool canBuy = true;
+    public BigDouble startingQuantity = BigDouble.One;
 
     public Guid GetGuid() => Identity;
-    public bool IsVisible() => true;
+    public bool IsVisible() => visible;
+    public BigDouble GetStartingQuantity() => startingQuantity;
+    public bool CanBuyAt(BigDouble quantity) =>
+        canBuy && quantity.CompareTo(BigDouble.Zero) > 0;
+}
+
+internal sealed class FakeCraftingResourceCostList
+{
+    public List<FakeCraftingResourceTuple> costs = new();
+    public bool withinCapacity = true;
+
+    public bool IsWithinCapacity() => withinCapacity;
+
+    internal FakeCraftingResourceCostList With(FakeResource resource, BigDouble amount)
+    {
+        costs.Add(new FakeCraftingResourceTuple { resource = resource, valueBig = amount });
+        return this;
+    }
+}
+
+internal sealed class FakeCraftingResourceTuple
+{
+    public FakeResource? resource;
+    public BigDouble valueBig;
+}
+
+internal class FakeCraftingEffectBlock
+{
+    public BigDouble necessaryDrainRatio = BigDouble.One;
+
+    private BigDouble GetEffectNecessaryDrainRatio() => necessaryDrainRatio;
+}
+
+internal sealed class FakeCraftingEngagementBlock : FakeCraftingEffectBlock
+{
 }
 
 internal sealed class FakeScribeInstanceList
@@ -398,9 +443,14 @@ internal struct FakeValueModifier
     public BigDouble adjustReal;
     public FakeModifierKind type;
     public int order;
+    public global::IdScriptableObject? reference;
 
-    internal FakeValueModifier(FakeModifierKind type, double amount, int order)
-        : this(type, new BigDouble(amount), order)
+    internal FakeValueModifier(
+        FakeModifierKind type,
+        double amount,
+        int order,
+        global::IdScriptableObject? reference = null)
+        : this(type, new BigDouble(amount), order, reference)
     {
     }
 
@@ -409,11 +459,16 @@ internal struct FakeValueModifier
     /// and this game's modifiers live past 1e308, so a fake that could only be built from a double
     /// could not exercise the range the fold exists for.
     /// </summary>
-    internal FakeValueModifier(FakeModifierKind type, BigDouble amount, int order = 0)
+    internal FakeValueModifier(
+        FakeModifierKind type,
+        BigDouble amount,
+        int order = 0,
+        global::IdScriptableObject? reference = null)
     {
         this.type = type;
         adjustReal = amount;
         this.order = order;
+        this.reference = reference;
     }
 }
 
@@ -509,6 +564,29 @@ internal sealed class FakeModifierRecord
     {
         GetValueCalls++;
         return calculatedValue;
+    }
+
+    /// <summary>
+    /// Purpose-built support for the research fake's native evaluator. The regression fixture uses
+    /// the authored challenge shape: one passive raw adjustment. Other modifier kinds are rejected
+    /// instead of turning this test double into a second implementation of native modifier math.
+    /// </summary>
+    internal int AdjustRawLevel(int value)
+    {
+        BigDouble adjusted = value;
+        foreach (var modifier in passiveModifiers.Values)
+        {
+            if (modifier.type != FakeModifierKind.Raw)
+                throw new InvalidOperationException("The research fake only models raw requirement adjustments.");
+            adjusted += modifier.adjustReal;
+        }
+        foreach (var modifier in activeModifiers.Values)
+        {
+            if (modifier.type != FakeModifierKind.Raw)
+                throw new InvalidOperationException("The research fake only models raw requirement adjustments.");
+            adjusted += modifier.adjustReal;
+        }
+        return adjusted.ToInt();
     }
 }
 
@@ -673,6 +751,8 @@ internal sealed class FakeGuidContainer
     }
 
     internal FakeGuidContainer(Guid guid) => _guid = guid;
+
+    public Guid get_guid() => _guid;
 }
 
 /// <summary>
@@ -995,6 +1075,8 @@ internal sealed class FakeResource
     public Guid GetGuid() => Identity;
 
     public BigDouble GetQuantity() => Quantity;
+
+    public BigDouble GetTrueQuantity() => Quantity;
 
     public BigDouble GetTrueRate() =>
         ThrowOnRate ? throw new InvalidOperationException("rate unavailable") : Rate;
@@ -1391,6 +1473,13 @@ internal sealed class FakePrerequisites
 {
     public bool available;
     public List<object> prerequisites = new();
+
+    /// <summary>
+    /// The read-only parameterized overload world collection binds as a differential oracle. This
+    /// traversal fake intentionally answers only the unconditional case; requirement arithmetic is
+    /// covered by the native-shaped shared stubs and evaluator tests.
+    /// </summary>
+    public bool Check(Requirements.ConditionInfo conditionInfo) => prerequisites.Count == 0;
 }
 
 internal sealed class FakePassiveAbility
@@ -1438,10 +1527,17 @@ internal sealed class FakeDiscoveryTree
     public bool usedRerollsLastDiscover;
     public FakeState actionMode;
     public FakeGuidContainer selectedChoiceId = new();
+    public List<FakeGuidContainer> currentChoiceIds = new();
     public FakeReferencedEntity? overrideDiscoveryRerolls;
     public FakeReferencedEntity? overrideDiscoveryChoices;
+    public bool visible = true;
+    public bool immediateRequired;
+    public FakeDiscoveryCostList nextItemCost = new();
 
     public Guid GetGuid() => Identity;
+    public bool IsVisible() => visible;
+    public bool HasImmediateRequiredDiscover() => immediateRequired;
+    public FakeDiscoveryCostList GetNextItemCost() => nextItemCost;
     public int additionalDiscoveryChoices;
     public int discoveryBonusLevelCost;
     public bool debugMode;
@@ -1450,6 +1546,28 @@ internal sealed class FakeDiscoveryTree
     public bool hasRequiredDiscovery;
     public bool hasRemainingDiscovery;
     public bool hasCompletedAllDiscoveries;
+}
+
+internal sealed class FakeDiscoveryCostList
+{
+    public bool affordable = true;
+    public List<FakeDiscoveryCost> costs = new();
+
+    public bool HasEnough() => affordable;
+    public List<FakeDiscoveryCost> GetEntries() => costs;
+}
+
+internal sealed class FakeDiscoveryCost
+{
+    public FakeDiscoveryCost(FakeResource resource, BigDouble amount)
+    {
+        this.resource = resource;
+        Amount = amount;
+    }
+
+    public FakeResource resource;
+    internal BigDouble Amount { get; }
+    public BigDouble GetValue() => Amount;
 }
 
 internal sealed class FakeRecipeBook

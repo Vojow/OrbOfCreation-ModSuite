@@ -1,11 +1,12 @@
 using System;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
 
 /// <summary>
-/// One research entry as published. Nothing is derived: research state is what the game persists,
-/// and the one number the game itself composes — queued levels including the one in flight — is
-/// carried here as the game composes it.
+/// One research entry as published. Persisted state is read directly; base and effective
+/// requirement levels are results returned by the game's own evaluators. The only suite-derived
+/// field is their explicitly labeled difference.
 /// </summary>
 internal readonly struct WorldResearch : IWorldEntity
 {
@@ -21,11 +22,26 @@ internal readonly struct WorldResearch : IWorldEntity
         bool isActive,
         bool flagged,
         bool available,
+        bool visible,
+        bool complete,
+        bool canDevelop,
+        bool withinDevelopRange,
+        bool meetsLevelRequirements,
+        bool stillHasLeeway,
+        bool belowArtificialMaxLevel,
+        bool belowMaxInvestmentLevel,
+        int purchasedLevels,
+        int baseLevel,
+        int bonusLevel,
+        int totalLevel,
+        int artificialMaxLevel,
         bool hiddenLevel,
         int levelVisibilityRange,
         int requiredStagesCached,
         BigDouble requiredTimeCached,
-        int requirementsAdjustModifiers,
+        int baseRequirementLevel,
+        int effectiveRequirementLevel,
+        PublicationTable<WorldResearchRequirementAdjustment> requirementAdjustments,
         in RawResearchModifiers modifiers)
     {
         ResearchId = researchId;
@@ -39,11 +55,26 @@ internal readonly struct WorldResearch : IWorldEntity
         IsActive = isActive;
         Flagged = flagged;
         Available = available;
+        Visible = visible;
+        Complete = complete;
+        CanDevelop = canDevelop;
+        WithinDevelopRange = withinDevelopRange;
+        MeetsLevelRequirements = meetsLevelRequirements;
+        StillHasLeeway = stillHasLeeway;
+        BelowArtificialMaxLevel = belowArtificialMaxLevel;
+        BelowMaxInvestmentLevel = belowMaxInvestmentLevel;
+        PurchasedLevels = purchasedLevels;
+        BaseLevel = baseLevel;
+        BonusLevel = bonusLevel;
+        TotalLevel = totalLevel;
+        ArtificialMaxLevel = artificialMaxLevel;
         HiddenLevel = hiddenLevel;
         LevelVisibilityRange = levelVisibilityRange;
         RequiredStagesCached = requiredStagesCached;
         RequiredTimeCached = requiredTimeCached;
-        RequirementsAdjustModifiers = requirementsAdjustModifiers;
+        BaseRequirementLevel = baseRequirementLevel;
+        EffectiveRequirementLevel = effectiveRequirementLevel;
+        RequirementAdjustments = requirementAdjustments;
         Modifiers = modifiers;
     }
 
@@ -83,6 +114,34 @@ internal readonly struct WorldResearch : IWorldEntity
     /// <summary>Whether prerequisites currently permit developing.</summary>
     internal bool Available { get; }
 
+    /// <summary>Read-only native ResearchSO evaluator results from the same collector generation.</summary>
+    internal bool Visible { get; }
+
+    internal bool Complete { get; }
+
+    internal bool CanDevelop { get; }
+
+    internal bool WithinDevelopRange { get; }
+
+    internal bool MeetsLevelRequirements { get; }
+
+    internal bool StillHasLeeway { get; }
+
+    internal bool BelowArtificialMaxLevel { get; }
+
+    internal bool BelowMaxInvestmentLevel { get; }
+
+    /// <summary>The game's distinct level accessors; completion uses BaseLevel, not TotalLevel.</summary>
+    internal int PurchasedLevels { get; }
+
+    internal int BaseLevel { get; }
+
+    internal int BonusLevel { get; }
+
+    internal int TotalLevel { get; }
+
+    internal int ArtificialMaxLevel { get; }
+
     /// <summary>Whether the game hides this research's level, and how far around it levels are shown.</summary>
     internal bool HiddenLevel { get; }
 
@@ -97,11 +156,25 @@ internal readonly struct WorldResearch : IWorldEntity
     internal BigDouble RequiredTimeCached { get; }
 
     /// <summary>
-    /// How many active modifiers adjust this research's requirements. <c>requirementsAdjust</c> is a
-    /// plain <c>ModifierRecord</c> with no cached value of its own, so the count — the game's
-    /// <c>HasActiveElements()</c> — is what there is to read.
+    /// The level supplied to the native requirement evaluator before and after its exact
+    /// <c>GetRequirementLevelMod().Adjust(...)</c> fold. Challenge effects are persistent/passive,
+    /// so projecting only <c>activeModifiers.Count</c> hid their adjustment while the native tooltip
+    /// and evaluator both applied it.
     /// </summary>
-    internal int RequirementsAdjustModifiers { get; }
+    internal int BaseRequirementLevel { get; }
+
+    internal int EffectiveRequirementLevel { get; }
+
+    internal int RequirementLevelAdjustment => EffectiveRequirementLevel - BaseRequirementLevel;
+
+    /// <summary>
+    /// Every direct modifier on this research's <c>requirementsAdjust</c> record, including whether
+    /// it is passive and the stable identity/type of its native tooltip source when available.
+    /// Research-type adjustments are already reflected in <see cref="EffectiveRequirementLevel"/>
+    /// by the native evaluator; their authored records are not direct members of this research and
+    /// are deliberately not misattributed here.
+    /// </summary>
+    internal PublicationTable<WorldResearchRequirementAdjustment> RequirementAdjustments { get; }
 
     internal RawResearchModifiers Modifiers { get; }
 }
@@ -138,13 +211,14 @@ internal readonly struct RawResearchModifiers
 }
 
 /// <summary>
-/// Research entries. Nothing is derived, so the reading is the row.
+/// Research entries. Read-only native evaluators supply visibility, completion, development gates,
+/// distinct level values, and requirement levels from one main-thread collection generation; the
+/// collector does not reimplement those verdicts.
 /// </summary>
 /// <remarks>
-/// Progress state is read as fields rather than through the game's predicates, all three of which are
-/// nothing but the field: <c>IsDeveloping() => isDeveloping</c> and <c>IsActive() => isActive</c>.
-/// <c>IsAvailable()</c> is the exception — it walks a prerequisite graph — and is the last call in
-/// this binder still waiting on a port.
+/// Mutable progress fields remain plain reads. The predicate and accessor calls are side-effect-free
+/// queries over that same native state, and every reflected member is pinned by the installed-game
+/// contract manifest.
 /// </remarks>
 internal sealed class WorldResearchBinder : WorldPlainBinder<WorldResearch>
 {
@@ -159,11 +233,27 @@ internal sealed class WorldResearchBinder : WorldPlainBinder<WorldResearch>
     private Func<object, bool>? _isActive;
     private Func<object, bool>? _flagged;
     private Func<object, bool>? _available;
+    private Func<object, bool>? _visible;
+    private Func<object, bool>? _complete;
+    private Func<object, bool>? _canDevelop;
+    private Func<object, bool>? _withinDevelopRange;
+    private Func<object, bool>? _meetsLevelRequirements;
+    private Func<object, bool>? _stillHasLeeway;
+    private Func<object, bool>? _belowArtificialMaxLevel;
+    private Func<object, bool>? _belowMaxInvestmentLevel;
+    private Func<object, int>? _purchasedLevels;
+    private Func<object, int>? _baseLevel;
+    private Func<object, int>? _bonusLevel;
+    private Func<object, int>? _totalLevel;
+    private Func<object, int>? _artificialMaxLevel;
     private Func<object, bool>? _hiddenLevel;
     private Func<object, int>? _levelVisibilityRange;
     private Func<object, int>? _requiredStagesCached;
     private Func<object, BigDouble>? _requiredTimeCached;
-    private Func<object, int>? _requirementsAdjust;
+    private Func<object, int>? _baseRequirementLevel;
+    private Func<object, int>? _effectiveRequirementLevel;
+    private NativeModifierAdjustmentAccess? _requirementAdjustments;
+    private string _requirementAdjustmentFailure = string.Empty;
     private Func<object, BigDouble>? _bonusLevels;
     private Func<object, BigDouble>? _baseLevels;
     private Func<object, BigDouble>? _power;
@@ -188,19 +278,43 @@ internal sealed class WorldResearchBinder : WorldPlainBinder<WorldResearch>
         _isActive = bind.Field<bool>("isActive");
         _flagged = bind.Field<bool>("flagged");
         _available = bind.Call<bool>("IsAvailable");
+        _visible = bind.Call<bool>("IsVisible");
+        _complete = bind.Call<bool>("IsComplete");
+        _canDevelop = bind.Call<bool>("CanDevelop");
+        _withinDevelopRange = bind.Call<bool>("IsWithinDevelopRange");
+        _meetsLevelRequirements = bind.Call<bool>("MeetsLevelRequirements");
+        _stillHasLeeway = bind.Call<bool>("StillHasLeeway");
+        _belowArtificialMaxLevel = bind.Call<bool>("IsBelowArtificialMaxLevel");
+        _belowMaxInvestmentLevel = bind.Call<bool>("IsBelowMaxInvestmentLevel");
+        _purchasedLevels = bind.Call<int>("GetPurchasedLevels");
+        _baseLevel = bind.Call<int>("GetBaseLevel");
+        _bonusLevel = bind.Call<int>("GetBonusLevels");
+        _totalLevel = bind.Call<int>("GetLevel");
+        _artificialMaxLevel = bind.Call<int>("GetArtificialMaxLevel");
         _hiddenLevel = bind.Field<bool>("hiddenLevel");
         _levelVisibilityRange = bind.Field<int>("levelVisibilityRange");
         _requiredStagesCached = bind.Field<int>("requiredStagesCached");
         _requiredTimeCached = bind.Field<BigDouble>("requiredTimeCached");
 
-        // A plain ModifierRecord with no cached value of its own; the active count is the fact.
-        _requirementsAdjust = bind.NestedCollectionCount("requirementsAdjust", "activeModifiers");
+        // Both are native, read-only evaluators. GetRequirementLevel folds research-type records and
+        // this research's passive and active requirementsAdjust sets exactly as the tooltip does.
+        _baseRequirementLevel = bind.Call<int>("GetBaseLevel");
+        _effectiveRequirementLevel = bind.Call<int>("GetRequirementLevel");
+        _requirementAdjustments = NativeModifierAdjustmentAccess.Bind(
+            type,
+            "requirementsAdjust",
+            out _requirementAdjustmentFailure);
         _bonusLevels = bind.ModifierRecord("bonusLevels");
         _baseLevels = bind.ModifierRecord("baseLevels");
         _power = bind.ModifierRecord("power");
         _maxLevelCap = bind.ModifierRecord("maxLevelCap");
         _leewayPoints = bind.ModifierRecord("leewayPoints");
-        return bind.Failure;
+        if (_requirementAdjustmentFailure.Length == 0) return bind.Failure;
+        var adjustmentFailure = TypeName + " did not expose " +
+            _requirementAdjustmentFailure + " on this build";
+        return bind.Failure.Length == 0
+            ? adjustmentFailure
+            : bind.Failure + "; " + adjustmentFailure;
     }
 
     internal override WorldResearch Read(object entity) =>
@@ -216,15 +330,66 @@ internal sealed class WorldResearchBinder : WorldPlainBinder<WorldResearch>
             _isActive!(entity),
             _flagged!(entity),
             _available!(entity),
+            _visible!(entity),
+            _complete!(entity),
+            _canDevelop!(entity),
+            _withinDevelopRange!(entity),
+            _meetsLevelRequirements!(entity),
+            _stillHasLeeway!(entity),
+            _belowArtificialMaxLevel!(entity),
+            _belowMaxInvestmentLevel!(entity),
+            _purchasedLevels!(entity),
+            _baseLevel!(entity),
+            _bonusLevel!(entity),
+            _totalLevel!(entity),
+            _artificialMaxLevel!(entity),
             _hiddenLevel!(entity),
             _levelVisibilityRange!(entity),
             _requiredStagesCached!(entity),
             _requiredTimeCached!(entity),
-            _requirementsAdjust!(entity),
+            _baseRequirementLevel!(entity),
+            _effectiveRequirementLevel!(entity),
+            _requirementAdjustments!.Read(entity),
             new RawResearchModifiers(
                 _bonusLevels!(entity),
                 _baseLevels!(entity),
                 _power!(entity),
                 _maxLevelCap!(entity),
                 _leewayPoints!(entity)));
+}
+
+/// <summary>One modifier contributing directly to a research requirement-level adjustment.</summary>
+internal readonly struct WorldResearchRequirementAdjustment
+{
+    internal WorldResearchRequirementAdjustment(
+        Guid modifierId,
+        Guid sourceId,
+        string sourceNativeType,
+        int modifierType,
+        BigDouble amount,
+        int order,
+        bool passive)
+    {
+        ModifierId = modifierId;
+        SourceId = sourceId;
+        SourceNativeType = sourceNativeType ?? string.Empty;
+        ModifierType = modifierType;
+        Amount = amount;
+        Order = order;
+        Passive = passive;
+    }
+
+    internal Guid ModifierId { get; }
+
+    internal Guid SourceId { get; }
+
+    internal string SourceNativeType { get; }
+
+    internal int ModifierType { get; }
+
+    internal BigDouble Amount { get; }
+
+    internal int Order { get; }
+
+    internal bool Passive { get; }
 }

@@ -23,7 +23,7 @@ contract has no capture member at all. See [service-data-flow.md](service-data-f
 ## The pipeline
 
 ```
-StructureSO.All, UpgradeSO.All, … (34 registries, 42 passes)
+StructureSO.All, UpgradeSO.All, … (native registries and list roots, 46 passes)
         │  Unity thread, once per interval
         ▼
 GameWorldCollector ──fills──► GameWorldCycleFrame
@@ -86,6 +86,21 @@ world been re-read since I last changed it" and get the right answer. See
 in `WorldCollectionReport` with the member that could not be found. A build that renamed one field
 still publishes the other forty.
 
+### Authored facts are lifecycle-structural
+
+Seven readers describe authoring rather than played state: plot authoring, effect blocks, entity
+requirement graphs, crafting recipe types, crafting recipe authored edges, structure costs, and
+upgrade costs. `GameWorldCollector` traverses those readers only once for a lifecycle epoch and
+retains their raw buffers and category reports. It still derives immutable output tables on the
+worker for every publication; only repeated Unity/native traversal is skipped.
+
+Their paired live facts remain ordinary collection: prerequisite-link and native requirement
+verdicts, crafting visibility/purchase/capacity/drain verdicts, resources, active modifier inputs,
+and affordability refresh on the 250-millisecond cadence. Lifecycle replacement invalidates both
+the retained authoring and the compiled native references. The field-by-field ownership table is in
+[Game MCP frame operations](game-mcp-frame-operations.md#data-lifetime-and-owner-inventory), because
+that audit is what exposed the accidental repeated traversal.
+
 ## What is deliberately not collected
 
 An immutable publication may not carry a list, and wrapping each list in an audited table is a
@@ -114,6 +129,14 @@ Three cases that look like they belong on that list do not:
 - **A plot's action instances.** They travel, one row each in `PlotActionInstances`, keyed by the pair
   and by the instance's position in the plot's own list — that position is the plot's, not a queue's.
   The pair table's count of them stayed where it was; the rows joined it rather than replacing it.
+- **A crafting recipe's authored edges and evaluated blockers.** `CraftingRecipes` is one entity row
+  per concrete `CraftingRecipeSO`, with immutable nested tables for its crafting types, authored
+  resource inputs, generated resource outputs, consumable completion outputs, and engagement-drain
+  blocks. The Unity-thread reader invokes the native visibility, starting-quantity purchase,
+  generated-output capacity, and necessary-drain evaluators through lifecycle-compiled bindings.
+  It copies only their values. The worker then enriches each resource edge from the already-derived
+  `Resources` table in the same frame; it never follows a retained native reference. These verdicts
+  remain separate because none implies the others.
 
 **The live action queue** is collected — a queue is a list variable carrying its own uuid — and what
 is deliberately absent is not the reading but the *authority*. A collected queue reading may shape a
@@ -214,6 +237,17 @@ matching second walk of the upgrade registry, and appends into the same buffer �
 collector, not either reader, is what resets it. Read the result through `WorldPurchaseCostLookup`,
 which returns an entity's whole range — a partial price is worse than none.
 
+Each purchase-cost row keeps the authored `BaseExactAmount` separate from the verified port's
+`EffectiveExactAmount`. Its immutable modifier-source table names every structure-chain input or
+upgrade per-level modifier, including the stable resource/entity/variable UUID when one exists.
+Affordability is a same-generation fact over the complete entity range: ordinary costs compare with
+true holdings, bandwidth costs compare with headroom, and duplicate authored entries for one
+resource are combined before either comparison. `WorldExactCostMath.TryCombinedExactCost` is the
+single aggregation definition used here and by Auto Buy; a grouped request is refused unless every
+row carries that exact rising-curve group, and no caller approximates it as `levels * next cost`.
+The row's affordability deliberately excludes Auto Buy reserves and excess modes, which are feature
+policy rather than facts about whether the native price is covered.
+
 Plot actions are the second, and go further: a row is a *pair*, so it has no identity of its own at
 all. `Categories/WorldPlotAction.cs` walks the plot registry a second time, recording which actions
 each plot offers and which it is running, and prices each pair against the plot's remaining quantity
@@ -240,11 +274,16 @@ by uuid through the identity registry rather than through the spell-manager sing
 bespoke reader rather than a plain binder so that `Spell`'s unread serialized fields are not dragged
 into the declared surface ([W60](world-collection-decisions.md)).
 
-Entity requirements are the fourth. `Categories/WorldEntityRequirement.cs` reads every upgrade's and
-every structure's per-level prerequisite container, so a row is one condition and an entity has as
+Entity requirements are the fourth. `Categories/WorldEntityRequirement.cs` reads every upgrade's,
+structure's, and Research entry's per-level prerequisite container, so a row is one condition and an entity has as
 many as it was authored with. It claims no identities at all — the rows are keyed by an entity its
 own category already claimed, and claiming again would report every upgrade as a duplicate of itself.
 Its list is `[SerializeReference]`, so accessors are compiled per concrete condition class on first
 sight; a class that does not bind yields a row of kind `Unknown` rather than none, because an
 unmodelled condition has to be visible as a requirement nobody can evaluate rather than as an entity
-with no requirements ([W58](world-collection-decisions.md)).
+with no requirements. Beside the authored graph, one non-identity table carries the native
+parameterized `Check(ConditionInfo)` verdict and its exact input level for every upgrade, structure,
+and Research entry.
+It is a same-generation differential oracle, not a replacement for the graph or an admission result;
+the worker fails loud if its graph verdict disagrees ([W58](world-collection-decisions.md),
+[W68](world-collection-decisions.md)).

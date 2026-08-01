@@ -135,11 +135,16 @@ public sealed class CraftingRecipeSO : IdScriptableObject
 {
     public static List<CraftingRecipeSO> All = new List<CraftingRecipeSO>();
     public List<CraftingRecipeTypeSO> craftingTypes = new List<CraftingRecipeTypeSO>();
+    public ResourceCostList recipeCost = new ResourceCostList();
+    public ResourceCostList generatedResources = new ResourceCostList();
+    public List<PersistentEffectBlock> engagementEffects = new List<PersistentEffectBlock>();
     public List<InstantEffectBlock> completeEffects = new List<InstantEffectBlock>();
     public bool useQuantityAsLevel;
+    public double timeToComplete;
     public bool visible;
     public bool BuyAllowed = true;
     public int MaximumAffordableLevel = int.MaxValue;
+    public BigDouble StartingQuantity = BigDouble.One;
     public ResourceCostList TotalCost = new ResourceCostList();
     public CraftingRecipeTypeSO MainType = new CraftingRecipeTypeSO
     {
@@ -153,13 +158,28 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool ThrowAfterInitiation;
     public bool ThrowAfterInstantAdmission;
     public int PurchaseCalls;
+    public int VisibilityCalls;
+    public int StartingQuantityCalls;
+    public int CanBuyCalls;
 
-    public bool IsVisible() => visible;
-    public bool CanBuyAt(BigDouble quantity) =>
-        BuyAllowed &&
-        quantity > BigDouble.Zero &&
-        quantity.ToDouble() <= MaximumAffordableLevel &&
-        TotalCost.HasEnough();
+    public bool IsVisible()
+    {
+        VisibilityCalls++;
+        return visible;
+    }
+    public bool CanBuyAt(BigDouble quantity)
+    {
+        CanBuyCalls++;
+        return BuyAllowed &&
+            quantity > BigDouble.Zero &&
+            quantity.ToDouble() <= MaximumAffordableLevel &&
+            TotalCost.HasEnough();
+    }
+    public BigDouble GetStartingQuantity()
+    {
+        StartingQuantityCalls++;
+        return StartingQuantity;
+    }
     public ResourceCostList GetTotalCost(BigDouble previousQuantity, BigDouble purchasedQuantity) =>
         TotalCost;
     public CraftingRecipeTypeSO GetMainType() => MainType;
@@ -301,9 +321,11 @@ public sealed class TimeRuneSO : IdScriptableObject
 }
 
 
-public sealed class GlyphSO : IdScriptableObject
+public sealed class GlyphSO : IdScriptableObject, ITooltipable
 {
     public static List<GlyphSO> All = new List<GlyphSO>();
+    public string DisplayName = string.Empty;
+    public string Description = string.Empty;
     public int level;
     public int freeLevels;
     public int discRarityLevel;
@@ -317,6 +339,16 @@ public sealed class GlyphSO : IdScriptableObject
     public ValueModifierRecord freeUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord freeLoadoutUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
+
+    public string GetName() => DisplayName;
+    public string GetDisplayType() => "Glyph";
+    public UnityEngine.Sprite GetIcon() => new UnityEngine.Sprite();
+    public UnityEngine.Color GetColor() => default;
+    public bool IsColoredIcon() => false;
+    public bool HasAltTooltips() => false;
+    public string GetDescription() => Description;
+    public List<TooltipNode> GetTooltipNodes() => new List<TooltipNode>();
+    public List<TooltipNode> GetAltTooltipNodes() => new List<TooltipNode>();
 }
 
 public sealed class ConsumableTypeSO : IdScriptableObject
@@ -695,6 +727,9 @@ public class EffectBlock
 {
     public Prerequisites.Container prerequisites = new Prerequisites.Container();
     public List<object> effectMods = new List<object>();
+    public BigDouble NecessaryDrainRatio = BigDouble.One;
+
+    private BigDouble GetEffectNecessaryDrainRatio() => NecessaryDrainRatio;
 }
 
 public class InstantEffectBlock : EffectBlock
@@ -776,12 +811,58 @@ public sealed class CharacterSO : IdScriptableObject
     public bool floats;
 }
 
+public interface IHasGuid
+{
+    Guid GetGuid();
+}
+
+public interface IDiscoverable : IHasGuid
+{
+    ResourceCostList GetDiscoverCost();
+    bool IsDiscoverVisible();
+    bool CanDiscover();
+    bool IsDiscovered();
+    bool IsDiscoverRequired();
+    void Discover();
+}
+
+public sealed class DiscoveryTestItemSO : IdScriptableObject, IDiscoverable
+{
+    public ResourceCostList discoverCost = new ResourceCostList();
+    public bool discoverVisible = true;
+    public bool canDiscover = true;
+    public bool discovered;
+    public bool required;
+    public bool suppressDiscover;
+    public bool throwBeforeDiscover;
+    public bool throwAfterDiscover;
+    public int discoverCalls;
+
+    ResourceCostList IDiscoverable.GetDiscoverCost() => discoverCost;
+    bool IDiscoverable.IsDiscoverVisible() => discoverVisible;
+    bool IDiscoverable.CanDiscover() => canDiscover;
+    bool IDiscoverable.IsDiscovered() => discovered;
+    bool IDiscoverable.IsDiscoverRequired() => required;
+    Guid IHasGuid.GetGuid() => GetGuid();
+
+    void IDiscoverable.Discover()
+    {
+        discoverCalls++;
+        if (throwBeforeDiscover)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!suppressDiscover) discovered = true;
+        if (throwAfterDiscover)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
+}
+
 public sealed class DiscoveryTreeSO : IdScriptableObject
 {
     public enum DiscoveryTreeModes
     {
         Idle,
-        Discovering,
+        Crafting,
+        Choice,
     }
 
     public static List<DiscoveryTreeSO> All = new List<DiscoveryTreeSO>();
@@ -789,6 +870,8 @@ public sealed class DiscoveryTreeSO : IdScriptableObject
     public BigDouble actionTime;
     public int rerollsLeft;
     public bool usedRerollsLastDiscover;
+    public List<GuidContainer> currentChoiceIds = new List<GuidContainer>();
+    public List<GuidContainer> nextExcludedIds = new List<GuidContainer>();
 
     /// <summary>An identity the game already holds as one, rather than a live reference.</summary>
     public GuidContainer selectedChoiceId = new GuidContainer();
@@ -801,8 +884,153 @@ public sealed class DiscoveryTreeSO : IdScriptableObject
     private int totalDiscoveredCount;
     private int poolDiscoveredCount;
     private bool hasRequiredDiscovery;
-    private bool hasRemainingDiscovery;
+    private bool hasRemainingDiscovery = true;
     private bool hasCompletedAllDiscoveries;
+
+    public ResourceCostList nextItemCost = new ResourceCostList();
+    public List<IDiscoverable> allDiscoverableItems = new List<IDiscoverable>();
+    public int maximumRerolls = 1;
+    public bool visible = true;
+    public bool immediateRequired;
+    public bool suppressInitiate;
+    public bool suppressSelect;
+    public bool suppressConfirm;
+    public bool suppressReroll;
+    public bool throwAfterInitiate;
+    public bool throwAfterSelect;
+    public bool throwAfterConfirmReset;
+    public bool throwAfterReroll;
+    public bool throwAfterSelectionClear;
+    public bool driftInitiateEvidence;
+    public bool driftSelectEvidence;
+    public bool driftConfirmEvidence;
+    public bool driftRerollEvidence;
+    public int initiateCalls;
+    public int selectCalls;
+    public int confirmCalls;
+    public int rerollCalls;
+
+    public bool IsVisible() => visible;
+    public bool IsInIdleMode() => actionMode == DiscoveryTreeModes.Idle;
+    public bool IsInCraftingMode() => actionMode == DiscoveryTreeModes.Crafting;
+    public bool IsInChoiceMode() => actionMode == DiscoveryTreeModes.Choice;
+    public bool HasCurrentlyRemMainPoolDiscoveries() => hasRemainingDiscovery;
+    public bool HasImmediateRequiredDiscover() => immediateRequired;
+    public int GetCurrentRerolls() => rerollsLeft;
+    public int GetMaxRerolls() => maximumRerolls;
+    public ResourceCostList GetNextItemCost() => nextItemCost;
+
+    public IDiscoverable? GetItemFromGuid(Guid guid)
+    {
+        for (var index = 0; index < allDiscoverableItems.Count; index++)
+            if (allDiscoverableItems[index].GetGuid() == guid) return allDiscoverableItems[index];
+        return null;
+    }
+
+    public void InitiateCraftingMode()
+    {
+        initiateCalls++;
+        if (!suppressInitiate)
+        {
+            if (!usedRerollsLastDiscover)
+                rerollsLeft = Math.Min(rerollsLeft + 1, maximumRerolls);
+            usedRerollsLastDiscover = false;
+            actionMode = DiscoveryTreeModes.Crafting;
+            actionTime = BigDouble.Zero;
+            if (driftInitiateEvidence)
+            {
+                actionTime = new BigDouble(7, 0);
+                rerollsLeft = 99;
+                usedRerollsLastDiscover = true;
+                currentChoiceIds.Add(new GuidContainer(Guid.NewGuid()));
+                totalDiscoveredCount += 3;
+                poolDiscoveredCount += 2;
+            }
+        }
+        if (throwAfterInitiate)
+            throw new InvalidOperationException("injected failure after initiate");
+    }
+
+    public void SelectItemId(Guid guid)
+    {
+        selectCalls++;
+        if (!suppressSelect)
+        {
+            selectedChoiceId = new GuidContainer(guid);
+            if (driftSelectEvidence)
+            {
+                actionMode = DiscoveryTreeModes.Idle;
+                actionTime = new BigDouble(8, 0);
+                currentChoiceIds.Clear();
+                nextExcludedIds.Add(new GuidContainer(Guid.NewGuid()));
+                rerollsLeft += 4;
+                usedRerollsLastDiscover = !usedRerollsLastDiscover;
+                totalDiscoveredCount += 2;
+                poolDiscoveredCount += 1;
+            }
+        }
+        if (throwAfterSelect || (guid == Guid.Empty && throwAfterSelectionClear))
+            throw new InvalidOperationException("injected failure after selection");
+    }
+
+    public void DiscoverSelectedItem()
+    {
+        confirmCalls++;
+        var selected = selectedChoiceId.guid;
+        if (selected == Guid.Empty) return;
+        var item = GetItemFromGuid(selected);
+        if (item is null) return;
+        if (!suppressConfirm)
+        {
+            totalDiscoveredCount++;
+            if (!item.IsDiscoverRequired()) poolDiscoveredCount++;
+            actionMode = DiscoveryTreeModes.Idle;
+            actionTime = BigDouble.Zero;
+            currentChoiceIds.Clear();
+            selectedChoiceId = new GuidContainer();
+        }
+        if (throwAfterConfirmReset)
+            throw new InvalidOperationException("injected failure after confirm reset");
+        item.Discover();
+        if (driftConfirmEvidence)
+        {
+            actionMode = DiscoveryTreeModes.Choice;
+            actionTime = new BigDouble(9, 0);
+            currentChoiceIds.Add(new GuidContainer(selected));
+            selectedChoiceId = new GuidContainer(selected);
+            totalDiscoveredCount += 4;
+            poolDiscoveredCount += 3;
+            rerollsLeft += 2;
+            usedRerollsLastDiscover = !usedRerollsLastDiscover;
+        }
+    }
+
+    public void RerollChoices()
+    {
+        rerollCalls++;
+        if (actionMode != DiscoveryTreeModes.Choice || rerollsLeft <= 0) return;
+        if (!suppressReroll)
+        {
+            nextExcludedIds = new List<GuidContainer>(currentChoiceIds);
+            currentChoiceIds = new List<GuidContainer>();
+            rerollsLeft--;
+            usedRerollsLastDiscover = true;
+            actionMode = DiscoveryTreeModes.Crafting;
+            actionTime = BigDouble.Zero;
+            if (driftRerollEvidence)
+            {
+                actionTime = new BigDouble(10, 0);
+                rerollsLeft += 5;
+                usedRerollsLastDiscover = false;
+                currentChoiceIds.Add(new GuidContainer(Guid.NewGuid()));
+                nextExcludedIds.Clear();
+                totalDiscoveredCount += 2;
+                poolDiscoveredCount += 1;
+            }
+        }
+        if (throwAfterReroll)
+            throw new InvalidOperationException("injected failure after reroll");
+    }
 }
 
 public sealed class RecipeBookSO : IdScriptableObject

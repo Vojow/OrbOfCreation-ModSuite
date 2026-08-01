@@ -1,6 +1,9 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common;
+#if SERVICE_CYCLE_PROFILE
+using OrbAutomata.GameMcp;
+#endif
 
 namespace OrbAutomata;
 
@@ -26,6 +29,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.ConsumableUse };
     private static readonly AutomationActionFamily[] ScribeFamilies =
         { AutomationActionFamily.CraftingQueueSubmission };
+    private static readonly AutomationActionFamily[] DiscoveryTreeOfferFamilies =
+        { AutomationActionFamily.DiscoveryTreeOfferLifecycle };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -39,6 +44,11 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     private ActionFamilyLeaseSet? _harvest;
     private ActionFamilyLeaseSet? _items;
     private ActionFamilyLeaseSet? _scribe;
+#if SERVICE_CYCLE_PROFILE
+    private ActionFamilyLeaseSet? _gameMcpOperationLease;
+    private AutomationActionFamily[] _gameMcpOperationFamilies =
+        Array.Empty<AutomationActionFamily>();
+#endif
     private IDisposable? _knownExternal;
     private int _pluginInventoryCount = -1;
     private long _structuresRetryFrame;
@@ -62,9 +72,12 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
 
     public bool OwnsAutoBuy(AutoBuyCandidateKind kind) => kind switch
     {
-        AutoBuyCandidateKind.Structure => _structures?.IsHeld == true,
+        AutoBuyCandidateKind.Structure => _structures?.IsHeld == true ||
+            OwnsGameMcpOperationFamily(AutomationActionFamily.StructurePurchase),
         AutoBuyCandidateKind.Upgrade =>
-            _upgrades?.IsHeld == true && _multiBuy?.IsHeld == true,
+            (_upgrades?.IsHeld == true && _multiBuy?.IsHeld == true) ||
+            (OwnsGameMcpOperationFamily(AutomationActionFamily.UpgradePurchase) &&
+             OwnsGameMcpOperationFamily(AutomationActionFamily.NativeMultiBuyOverride)),
         _ => false,
     };
 
@@ -78,18 +91,28 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         return owned;
     }
 
-    public bool OwnsCast => _cast?.IsHeld == true;
-    public bool OwnsConcept => _concept?.IsHeld == true;
-    public bool OwnsSpellLevel => _spellLevel?.IsHeld == true;
-    public bool OwnsHarvest => _harvest?.IsHeld == true;
+    public bool OwnsCast => _cast?.IsHeld == true ||
+        OwnsGameMcpOperationFamily(AutomationActionFamily.SpellCast);
+    public bool OwnsConcept => _concept?.IsHeld == true ||
+        OwnsGameMcpOperationFamily(AutomationActionFamily.ConceptAssignment);
+    public bool OwnsSpellLevel => _spellLevel?.IsHeld == true ||
+        OwnsGameMcpOperationFamily(AutomationActionFamily.SpellLevelPurchase);
+    public bool OwnsHarvest => _harvest?.IsHeld == true ||
+        OwnsGameMcpOperationFamily(AutomationActionFamily.HarvestAction);
     public bool OwnsItems => _items?.IsHeld == true && _multiBuy?.IsHeld == true;
     public bool OwnsScribe => _scribe?.IsHeld == true;
-    public bool TryCaptureHarvestMutationPermit() => _harvest?.TryCaptureMutationPermit() == true;
+    public bool OwnsDiscoveryTreeOffers =>
+        OwnsGameMcpOperationFamily(AutomationActionFamily.DiscoveryTreeOfferLifecycle);
+    public bool TryCaptureHarvestMutationPermit() =>
+        _harvest?.TryCaptureMutationPermit() == true ||
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.HarvestAction);
     public bool TryCaptureItemMutationPermit() =>
         _items?.TryCaptureMutationPermit() == true &&
         _multiBuy?.TryCaptureMutationPermit() == true;
     public bool TryCaptureScribeMutationPermit() =>
         _scribe?.TryCaptureMutationPermit() == true;
+    public bool TryCaptureDiscoveryTreeOfferMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.DiscoveryTreeOfferLifecycle);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -100,6 +123,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _scribeClaimFailure.Length != 0
             ? _scribeClaimFailure
             : "Auto Scribe does not hold CraftingQueueSubmission.";
+    public string DiscoveryTreeOfferOwnershipFailure =>
+        "The current MCP operation does not hold DiscoveryTreeOfferLifecycle.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -124,34 +149,66 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
     }
 
     public void Refresh(SuiteRuntimeConfiguration config, bool lifecycleReady, long frame = 0)
-        => RefreshCore(config, lifecycleReady, frame, allowManualMcpActions: false);
+        => RefreshCore(config, lifecycleReady, frame);
 
 #if SERVICE_CYCLE_PROFILE
-    /// <summary>
-    /// Holds the same cooperative leases for explicit MCP requests without making an automation
-    /// feature operational. A conflicting owner still wins and every native boundary rechecks.
-    /// </summary>
-    internal void RefreshForGameMcp(
-        SuiteRuntimeConfiguration config,
-        bool lifecycleReady,
-        long frame = 0) =>
-        RefreshCore(config, lifecycleReady, frame, allowManualMcpActions: true);
+    internal bool TryBeginGameMcpOperation(
+        GameMcpCommandKind kind,
+        string mode,
+        out IDisposable scope,
+        out string reason)
+    {
+        if (_gameMcpOperationLease is not null)
+            throw new InvalidOperationException(
+                "MCP gameplay operation ownership cannot be nested");
+        var families = GameMcpFamilies(kind, mode);
+        if (families.Length == 0)
+        {
+            scope = NoopGameMcpOperationScope.Instance;
+            reason = "command " + kind + " has no gameplay action family";
+            return false;
+        }
+        if (AlreadyOwns(families))
+        {
+            scope = NoopGameMcpOperationScope.Instance;
+            reason = string.Empty;
+            return true;
+        }
+        ClaimAttempts++;
+        var missingFamilies = MissingFamilies(families);
+        if (!_registry.TryClaimSet(
+                new ActionFamilyOwner(
+                    new FeatureStatusKey(
+                        PluginIds.SuiteGuid,
+                        "GameMcp." + kind),
+                    "Game MCP " + kind + " operation"),
+                missingFamilies,
+                out _gameMcpOperationLease,
+                out var conflict))
+        {
+            scope = NoopGameMcpOperationScope.Instance;
+            reason = "could not claim " + conflict.Family + "; " +
+                conflict.Owner.DisplayName + " currently owns it";
+            return false;
+        }
+        _gameMcpOperationFamilies = families;
+        scope = new GameMcpOperationScope(this);
+        reason = string.Empty;
+        return true;
+    }
 #endif
 
     private void RefreshCore(
         SuiteRuntimeConfiguration config,
         bool lifecycleReady,
-        long frame,
-        bool allowManualMcpActions)
+        long frame)
     {
         var suiteReady = lifecycleReady && config.General.Enabled;
         RefreshLease(ref _structures, ref _structuresRetryFrame, frame,
-            suiteReady && (allowManualMcpActions ||
-                config.CanStartAutoBuyActively && config.AutoBuy.IncludeStructures),
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeStructures,
             "AutoBuy.Structures", "Automata Auto Buy Structures", StructureFamilies);
         RefreshLease(ref _upgrades, ref _upgradesRetryFrame, frame,
-            suiteReady && (allowManualMcpActions ||
-                config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades),
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades,
             "AutoBuy.Upgrades", "Automata Auto Buy Upgrades", UpgradeFamilies);
         RefreshLeaseWithReason(
             ref _multiBuy,
@@ -159,8 +216,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             ref _multiBuyClaimFailure,
             frame,
             suiteReady &&
-            (allowManualMcpActions ||
-             config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades ||
+            (config.CanStartAutoBuyActively && config.AutoBuy.IncludeUpgrades ||
              config.CanStartAutoItemsActively &&
              AutoItemsConfigurationPolicy.HasEnabledFamily(config.AutoItems)),
             "NativeMultiBuy",
@@ -168,19 +224,17 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
             MultiBuyFamilies,
             "No enabled service currently requires NativeMultiBuyOverride.");
         RefreshLease(ref _cast, ref _castRetryFrame, frame,
-            suiteReady && (allowManualMcpActions || config.CanStartAutoCastActively),
+            suiteReady && config.CanStartAutoCastActively,
             "AutoCast", "Automata Auto Cast", CastFamilies);
         RefreshLease(ref _concept, ref _conceptRetryFrame, frame,
-            suiteReady && (allowManualMcpActions || config.CanStartAutoConceptActively),
+            suiteReady && config.CanStartAutoConceptActively,
             "AutoConcept", "Automata Auto Concept", ConceptFamilies);
         RefreshLease(ref _spellLevel, ref _spellLevelRetryFrame, frame,
-            suiteReady && (allowManualMcpActions ||
-                config.CanStartAutoBuyActively && config.AutoBuy.AutoLevelSpells),
+            suiteReady && config.CanStartAutoBuyActively && config.AutoBuy.AutoLevelSpells,
             "SpellLevel", "Automata Spell Leveling", SpellLevelFamilies);
         RefreshLease(ref _harvest, ref _harvestRetryFrame, frame,
-            suiteReady && (allowManualMcpActions ||
-                config.CanStartAutoHarvestActively &&
-                (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees)),
+            suiteReady && config.CanStartAutoHarvestActively &&
+                (config.AutoHarvest.CollectFruitTrees || config.AutoHarvest.CollectTreasureTrees),
             "AutoHarvest", "Automata Auto Harvest", HarvestFamilies);
         RefreshLeaseWithReason(
             ref _items,
@@ -209,6 +263,9 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
 
     public void ReleaseLifecycleClaims()
     {
+#if SERVICE_CYCLE_PROFILE
+        EndGameMcpOperation();
+#endif
         Release(ref _scribe);
         Release(ref _items);
         Release(ref _harvest);
@@ -313,6 +370,104 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         lease?.Dispose();
         lease = null;
     }
+
+    private bool OwnsGameMcpOperationFamily(AutomationActionFamily family)
+    {
+#if SERVICE_CYCLE_PROFILE
+        if (_gameMcpOperationLease?.IsHeld != true) return false;
+        for (var index = 0; index < _gameMcpOperationFamilies.Length; index++)
+            if (_gameMcpOperationFamilies[index] == family) return true;
+#endif
+        return false;
+    }
+
+    private bool TryCaptureGameMcpOperationPermit(AutomationActionFamily family)
+    {
+#if SERVICE_CYCLE_PROFILE
+        return OwnsGameMcpOperationFamily(family) &&
+            _gameMcpOperationLease?.TryCaptureMutationPermit() == true;
+#else
+        return false;
+#endif
+    }
+
+#if SERVICE_CYCLE_PROFILE
+    private static AutomationActionFamily[] GameMcpFamilies(
+        GameMcpCommandKind kind,
+        string mode) => kind switch
+    {
+        GameMcpCommandKind.Purchase when mode == "structure" => StructureFamilies,
+        GameMcpCommandKind.Purchase when mode == "upgrade" => new[]
+        {
+            AutomationActionFamily.UpgradePurchase,
+            AutomationActionFamily.NativeMultiBuyOverride,
+        },
+        GameMcpCommandKind.Cast => CastFamilies,
+        GameMcpCommandKind.Concept => ConceptFamilies,
+        GameMcpCommandKind.SpellLevel => SpellLevelFamilies,
+        GameMcpCommandKind.Harvest => HarvestFamilies,
+        GameMcpCommandKind.DiscoveryTreeOffer => DiscoveryTreeOfferFamilies,
+        _ => Array.Empty<AutomationActionFamily>(),
+    };
+
+    private bool AlreadyOwns(AutomationActionFamily[] families)
+    {
+        for (var index = 0; index < families.Length; index++)
+            if (!PermanentlyOwns(families[index])) return false;
+        return true;
+    }
+
+    private AutomationActionFamily[] MissingFamilies(AutomationActionFamily[] families)
+    {
+        var missing = new AutomationActionFamily[families.Length];
+        var count = 0;
+        for (var index = 0; index < families.Length; index++)
+            if (!PermanentlyOwns(families[index])) missing[count++] = families[index];
+        if (count == missing.Length) return missing;
+        Array.Resize(ref missing, count);
+        return missing;
+    }
+
+    private bool PermanentlyOwns(AutomationActionFamily family) => family switch
+    {
+        AutomationActionFamily.StructurePurchase => _structures?.IsHeld == true,
+        AutomationActionFamily.UpgradePurchase => _upgrades?.IsHeld == true,
+        AutomationActionFamily.NativeMultiBuyOverride => _multiBuy?.IsHeld == true,
+        AutomationActionFamily.SpellCast => _cast?.IsHeld == true,
+        AutomationActionFamily.ConceptAssignment => _concept?.IsHeld == true,
+        AutomationActionFamily.SpellLevelPurchase => _spellLevel?.IsHeld == true,
+        AutomationActionFamily.HarvestAction => _harvest?.IsHeld == true,
+        AutomationActionFamily.DiscoveryTreeOfferLifecycle => false,
+        _ => false,
+    };
+
+    private void EndGameMcpOperation()
+    {
+        _gameMcpOperationLease?.Dispose();
+        _gameMcpOperationLease = null;
+        _gameMcpOperationFamilies = Array.Empty<AutomationActionFamily>();
+    }
+
+    private sealed class GameMcpOperationScope : IDisposable
+    {
+        private AutomataActionFamilyOwnership? _owner;
+
+        internal GameMcpOperationScope(AutomataActionFamilyOwnership owner) => _owner = owner;
+
+        public void Dispose()
+        {
+            var owner = _owner;
+            _owner = null;
+            owner?.EndGameMcpOperation();
+        }
+    }
+
+    private sealed class NoopGameMcpOperationScope : IDisposable
+    {
+        internal static readonly NoopGameMcpOperationScope Instance = new();
+        public void Dispose() { }
+    }
+#endif
 
     public void Dispose()
     {

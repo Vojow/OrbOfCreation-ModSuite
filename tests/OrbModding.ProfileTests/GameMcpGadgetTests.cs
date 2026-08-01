@@ -7,6 +7,27 @@ namespace OrbModding.ProfileTests;
 
 public sealed class GameMcpGadgetTests
 {
+    [Fact]
+    public void EveryRequestTimeGadgetHasOneDistinctAccessorAndGameplayHasNone()
+    {
+        var mappings = new[]
+        {
+            (GameMcpCommandKind.Screenshot, GameMcpGadgetAccess.Framebuffer),
+            (GameMcpCommandKind.Navigation, GameMcpGadgetAccess.Navigation),
+            (GameMcpCommandKind.Probe, GameMcpGadgetAccess.Probe),
+            (GameMcpCommandKind.ScreenCatalog, GameMcpGadgetAccess.ScreenCatalog),
+            (GameMcpCommandKind.TooltipCatalog, GameMcpGadgetAccess.TooltipCatalog),
+            (GameMcpCommandKind.TooltipRead, GameMcpGadgetAccess.TooltipRead),
+            (GameMcpCommandKind.ContinueRun, GameMcpGadgetAccess.ContinueRun),
+        };
+
+        Assert.Equal(7, mappings.Select(mapping => mapping.Item2).Distinct().Count());
+        Assert.All(mappings, mapping =>
+            Assert.Equal(mapping.Item2, GameMcpGadgetPolicy.AccessFor(mapping.Item1)));
+        Assert.Throws<System.ArgumentException>(() =>
+            GameMcpGadgetPolicy.AccessFor(GameMcpCommandKind.Purchase));
+    }
+
     [Theory]
     [InlineData("runtime", true)]
     [InlineData("action_queue_room", true)]
@@ -61,6 +82,17 @@ public sealed class GameMcpGadgetTests
     }
 
     [Fact]
+    public void TooltipReadAdvertisesTypedComputedAndInspectedDepth()
+    {
+        var tooltip = Tool("game_tooltip");
+        var description = (string?)tooltip["description"];
+
+        Assert.Contains("TooltipNode", description, System.StringComparison.Ordinal);
+        Assert.Contains("computed", description, System.StringComparison.Ordinal);
+        Assert.Contains("inspected", description, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NavigationUsesGenericCatalogSelectorsOnly()
     {
         var navigation = Tool("game_navigate");
@@ -70,13 +102,198 @@ public sealed class GameMcpGadgetTests
             properties.Properties().Select(property => property.Name));
         Assert.Null(properties["operation"]);
         Assert.Null(properties["tabIndex"]);
+        Assert.Equal("string", (string?)properties["tab"]!["type"]);
+        Assert.Equal("string", (string?)properties["subtab"]!["type"]);
+        Assert.Equal(
+            "UI-only, no gameplay/save mutation",
+            (string?)navigation["classification"]);
+        Assert.StartsWith(
+            "UI-only, no gameplay/save mutation.",
+            (string?)navigation["description"]);
+        Assert.False((bool)navigation["annotations"]!["readOnlyHint"]!);
     }
+
+    [Fact]
+    public void NavigationReturnsFlatDestinationStateWithoutMutationCeremony()
+    {
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Navigation,
+            0,
+            0,
+            "navigate",
+            System.Guid.Empty,
+            System.Guid.Empty,
+            string.Empty,
+            string.Empty,
+            1,
+            string.Empty,
+            string.Empty,
+            capture: false,
+            saveCapture: false);
+        var terminal = GameMcpCommandResult.Committed(
+            "navigation_arrived",
+            "the requested catalog destination was invoked through native UI controls",
+            observedLifecycleGeneration: 12,
+            observedConfigurationGeneration: 34,
+            details: new GameMcpObjectBuilder
+            {
+                ["tab"] = "Research",
+                ["activeSubtab"] = "Discover",
+                ["subtabs"] = new GameMcpArrayBuilder("Discover", "Development"),
+            }.Freeze());
+
+        var projected = GameMcpTestHarness.Json(terminal.Project(command));
+
+        Assert.Equal("committed", (string?)projected["status"]);
+        Assert.Null(projected["mutationScope"]);
+        Assert.Null(projected["uiStateMutationAttempts"]);
+        Assert.Null(projected["uiStateMutationsCommitted"]);
+        Assert.Null(projected["mutationAttempts"]);
+        Assert.Null(projected["mutationsCommitted"]);
+        Assert.Null(projected["worldGeneration"]);
+        Assert.Null(projected["observedLifecycleGeneration"]);
+        Assert.Null(projected["observedConfigurationGeneration"]);
+        Assert.Null(projected["operation"]);
+        Assert.Equal("Research", (string?)projected["tab"]);
+        Assert.Equal("Discover", (string?)projected["activeSubtab"]);
+        Assert.Equal(new[] { "Discover", "Development" }, projected["subtabs"]!.Values<string>());
+
+        var partial = GameMcpCommandResult.Rejected(
+                "subtab_selection_failed",
+                "the tab committed before the subtab refused")
+            .WithDetails(
+                new GameMcpObjectBuilder
+                {
+                    ["tab"] = "Research",
+                    ["subtabCandidates"] = new GameMcpArrayBuilder("Discover", "Development"),
+                }.Freeze());
+        var partialProjection = GameMcpTestHarness.Json(partial.Project(command));
+        Assert.Equal("refused", (string?)partialProjection["status"]);
+        Assert.Null(partialProjection["uiStateMutationAttempts"]);
+        Assert.Equal("Research", (string?)partialProjection["tab"]);
+        Assert.Equal(new[] { "Discover", "Development" },
+            partialProjection["subtabCandidates"]!.Values<string>());
+    }
+
+    [Fact]
+    public void ScreenCatalogGroupsSubtabsUnderTheActiveNamedTab()
+    {
+        var projected = Plugin.ProjectGameMcpScreenCatalog(
+            "Main",
+            navigationAvailable: true,
+            new[] { ("Magic", false), ("Scholar", true), ("Mods", false) },
+            new[] { ("Loadout", false), ("Discover", true), ("Research", false) });
+
+        Assert.Equal(
+            "scene: Main\n" +
+            "tabs:\n" +
+            "    Magic\n" +
+            "  * Scholar\n" +
+            "    subtabs:\n" +
+            "        Loadout\n" +
+            "      * Discover\n" +
+            "        Research\n" +
+            "    Mods",
+            projected);
+        Assert.DoesNotContain("index", projected, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Canvas", projected, System.StringComparison.Ordinal);
+        Assert.Equal(111, System.Text.Encoding.UTF8.GetByteCount(projected));
+    }
+
+    [Fact]
+    public void ContinueSuccessIsFlatSceneAndRuntimePostState()
+    {
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.ContinueRun,
+            0,
+            0,
+            "continue",
+            System.Guid.Empty,
+            System.Guid.Empty,
+            string.Empty,
+            string.Empty,
+            1,
+            string.Empty,
+            string.Empty,
+            capture: false,
+            saveCapture: false);
+        var terminal = GameMcpCommandResult.Committed(
+            "continue_invoked",
+            "the selected save entered its live scene",
+            observedLifecycleGeneration: 2,
+            observedConfigurationGeneration: 3,
+            details: new GameMcpObjectBuilder
+            {
+                ["scene"] = "Main",
+                ["runtimeAvailable"] = true,
+            }.Freeze());
+
+        var projected = GameMcpTestHarness.Json(terminal.Project(command));
+
+        Assert.Equal(new[] { "status", "scene", "runtimeAvailable" },
+            projected.Properties().Select(property => property.Name));
+        Assert.Equal("committed", (string?)projected["status"]);
+        Assert.Equal("Main", (string?)projected["scene"]);
+        Assert.True((bool)projected["runtimeAvailable"]!);
+    }
+
+    [Fact]
+    public void ReadAndMutationCommandsUseDisjointStatusVocabulary()
+    {
+        var inbox = new GameMcpFrameInbox();
+        var readOperation = inbox.Submit(new GameMcpOperationRequestBuilder
+        {
+            ToolName = "game_probe",
+            Classification = GameMcpOperationClass.ReadOnly,
+            Mode = "runtime",
+        }.Freeze());
+        var mutationOperation = inbox.Submit(new GameMcpOperationRequestBuilder
+        {
+            ToolName = "game_navigate",
+            Classification = GameMcpOperationClass.UiState,
+            Mode = "navigate",
+        }.Freeze());
+        var read = Command(GameMcpCommandKind.Probe, "runtime", readOperation);
+        var mutation = Command(GameMcpCommandKind.Navigation, "navigate", mutationOperation);
+
+        Assert.Equal("available", (string?)GameMcpTestHarness.Json(
+            GameMcpCommandResult.Committed("probe_read", "ok", 1, 1).Project(read))["status"]);
+        Assert.Equal("unavailable", (string?)GameMcpTestHarness.Json(
+            GameMcpCommandResult.Rejected("probe_unavailable", "no data").Project(read))["status"]);
+        Assert.Equal("committed", (string?)GameMcpTestHarness.Json(
+            GameMcpCommandResult.Committed("navigation_arrived", "ok", 1, 1)
+                .Project(mutation))["status"]);
+        Assert.Equal("refused", (string?)GameMcpTestHarness.Json(
+            GameMcpCommandResult.Rejected("tab_match_failed", "no match")
+                .Project(mutation))["status"]);
+    }
+
+    private static GameMcpCommand Command(
+        GameMcpCommandKind kind,
+        string mode,
+        GameMcpFrameOperation operation) =>
+        new(
+            operation.Sequence,
+            kind,
+            0,
+            0,
+            mode,
+            System.Guid.Empty,
+            System.Guid.Empty,
+            string.Empty,
+            string.Empty,
+            1,
+            string.Empty,
+            string.Empty,
+            capture: false,
+            saveCapture: false,
+            sourceOperation: operation);
 
     private static JObject Tool(string name)
     {
-        var router = new GameMcpProtocolRouter(
-            new GameMcpStateStore(),
-            new GameMcpCommandBus());
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
         var response = router.Handle(GameMcpAcceptanceFixture.Request(
             1,
             "tools/list",

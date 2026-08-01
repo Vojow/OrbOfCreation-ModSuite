@@ -1,0 +1,1078 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using BepInEx.Configuration;
+using BepInEx.Logging;
+using Newtonsoft.Json.Linq;
+using OrbAutomata;
+using OrbAutomata.GameMcp;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Configuration;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpDiscoveryTreeOfferTests
+{
+    [Fact]
+    public void Tool_is_advertised_as_one_four_mode_mutating_surface()
+    {
+        var tool = Assert.Single(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_discovery_offer");
+
+        Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
+        var schema = tool["inputSchema"]!;
+        Assert.Equal(
+            new[] { "mode", "treeUuid" },
+            schema["required"]!.Values<string>().ToArray());
+        Assert.Equal(
+            new[] { "initiate", "select", "confirm", "reroll" },
+            schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
+        Assert.NotNull(schema["properties"]!["offerUuid"]);
+        Assert.Null(schema["properties"]!["worldGeneration"]);
+        Assert.NotNull(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["verbosity"]);
+        Assert.Null(schema["properties"]!["detail"]);
+    }
+
+    [Fact]
+    public void Conditional_offer_identity_errors_are_structured()
+    {
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var response = router.Handle(GameMcpAcceptanceFixture.Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = "game_discovery_offer",
+                ["arguments"] = new JObject
+                {
+                    ["mode"] = "select",
+                    ["treeUuid"] = Guid.NewGuid().ToString("D"),
+                },
+            }));
+
+        Assert.Equal(-32602, (int)response.Body!["error"]!["code"]!);
+        var error = Assert.Single(
+            response.Body["error"]!["data"]!["validationErrors"]!.Values<JObject>());
+        Assert.Equal("missing_required", (string?)error!["code"]);
+        Assert.Equal("offerUuid", (string?)error["field"]);
+    }
+
+    [Fact]
+    public void Emergency_stop_closes_discovery_offer_admission_as_gameplay()
+    {
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.DiscoveryTreeOffer,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 1,
+            mode: "reroll",
+            Guid.NewGuid(),
+            Guid.Empty,
+            "DiscoveryTreeSO",
+            string.Empty,
+            1,
+            string.Empty,
+            string.Empty,
+            false,
+            false);
+
+        Assert.True(GameMcpNativeActionAdmission.TryReject(
+            command,
+            currentLifecycleGeneration: 9,
+            currentConfigurationGeneration: 1,
+            emergencyStopEngaged: true,
+            out var terminal));
+        Assert.Equal("emergency_stop", terminal.Code);
+    }
+
+    [Fact]
+    public void Preflight_refusal_without_native_evidence_omits_the_receipt_body()
+    {
+        var submission = DiscoveryTreeOfferSubmission.Reject(
+            DiscoveryTreeOfferPreflight.TreeUnavailable,
+            "the exact tree is unavailable");
+
+        var projected = GameMcpTestHarness.Json(
+            GameMcpDiscoveryTreeOfferProjection.Project(
+                DiscoveryTreeOfferActionKind.Initiate,
+                in submission));
+
+        Assert.Equal(new[] { "preflight" },
+            projected.Properties().Select(property => property.Name));
+        Assert.Equal("tree_unavailable", (string?)projected["preflight"]);
+        Assert.Null(projected["receipt"]);
+        Assert.Null(projected["nativeStage"]);
+        Assert.Null(projected["outcome"]);
+        Assert.Null(projected["quarantined"]);
+    }
+
+    [Fact]
+    public void FaultReceiptKeepsNamedEvidenceWithoutExactDeltaVerdictsOrNativeVocabulary()
+    {
+        var offer = Guid.Parse("168e3734-1ecb-4938-bd4a-d011ff13e201");
+        var resource = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+        var before = new DiscoveryTreeOfferState(
+            2, BigDouble.Zero, 1, 1, false, new[] { offer }, Array.Empty<Guid>(),
+            offer, 3, 1, true, false, false);
+        var after = new DiscoveryTreeOfferState(
+            2, BigDouble.Zero, 1, 1, false, new[] { offer }, Array.Empty<Guid>(),
+            offer, 3, 1, true, false, false);
+        var costs = new[]
+        {
+            new DiscoveryTreeCostReceipt(
+                resource,
+                new BigDouble(1.1d, 24),
+                new BigDouble(5.63d, 24),
+                new BigDouble(4.530000000000001d, 24)),
+        };
+        var receipt = new DiscoveryTreeOfferMutationReceipt(
+            true, true, true, false, false, in before, in after, costs);
+        var submission = new DiscoveryTreeOfferSubmission(
+            DiscoveryTreeOfferPreflight.VerificationFailed,
+            DiscoveryTreeOfferNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 1),
+            in receipt,
+            "the requested transition was not observed");
+
+        var projected = GameMcpTestHarness.Json(
+            GameMcpDiscoveryTreeOfferProjection.Project(
+                DiscoveryTreeOfferActionKind.Initiate,
+                in submission));
+
+        Assert.Equal("choice", (string?)projected["receipt"]!["before"]!["mode"]);
+        Assert.Equal("Weak", (string?)projected["receipt"]!["before"]!
+            ["selectedOffer"]!["name"]);
+        var cost = Assert.Single(projected["receipt"]!["costs"]!.Values<JObject>())!;
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("1.1e24", (string?)cost["cost"]);
+        Assert.Equal("1.1e24", (string?)cost["observedDelta"]);
+        Assert.Null(cost["exactDeltaMatched"]);
+        Assert.Null(projected["receipt"]!["before"]!["currentChoices"]);
+        Assert.NotNull(projected["receipt"]!["before"]!["currentOffers"]);
+    }
+
+    [Fact]
+    public void WorldGetAndOfferAdmissionShareTheSameDiscoveryTreeIdentityAndNativeType()
+    {
+        var treeId = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
+        var tree = new WorldDiscoveryTree(
+            treeId,
+            visible: true,
+            actionMode: 0,
+            actionTime: BigDouble.Zero,
+            rerollsLeft: 2,
+            usedRerollsLastDiscover: false,
+            selectedChoiceId: Guid.Empty,
+            currentOfferIds: Array.Empty<Guid>(),
+            hasImmediateRequiredDiscovery: false,
+            nextItemAffordable: true,
+            nextItemCosts: Array.Empty<WorldDiscoveryTreeCost>(),
+            overrideRerollsId: Guid.Empty,
+            overrideChoicesId: Guid.Empty,
+            additionalDiscoveryChoices: 0,
+            discoveryBonusLevelCost: 0,
+            debugMode: false,
+            totalDiscoveredCount: 0,
+            poolDiscoveredCount: 3,
+            hasRequiredDiscovery: true,
+            hasRemainingDiscovery: true,
+            hasCompletedAllDiscoveries: false);
+        var world = new GameWorldState
+        {
+            DiscoveryTrees = PublicationTable<WorldDiscoveryTree>.Create(new[] { tree }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "discovery-trees",
+                    WorldCategoryOutcome.Collected,
+                    sampled: 1,
+                    skipped: 0,
+                    firstFailure: string.Empty),
+            }),
+            CollectedAtEpoch = 7,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        var context = GameMcpTestHarness.Context(world, generation: 81);
+
+        var read = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context,
+            "discovery-trees",
+            treeId.ToString("D"),
+            "DiscoveryTreeSO"));
+
+        Assert.Equal("available", (string?)read["status"]);
+        Assert.Null(read["expectedNativeType"]);
+        Assert.Equal("idle", (string?)read["row"]!["mode"]);
+        Assert.Equal("DiscoveryTreeSO", (string?)read["row"]!["nativeType"]);
+        Assert.Equal("Glyph Discoveries", (string?)read["row"]!["name"]);
+        Assert.Null(read["row"]!["treeId"]);
+        Assert.Null(read["row"]!["debugMode"]);
+        Assert.Null(read["row"]!["overrideChoicesId"]);
+        Assert.True(GameMcpEntityCapabilityMap.Contains(
+            world,
+            treeId,
+            GameMcpCommandKind.DiscoveryTreeOffer,
+            out var reason), reason);
+        Assert.True(GameMcpEntityCapabilityMap.Supports(
+            "discovery-trees",
+            GameMcpCommandKind.DiscoveryTreeOffer));
+    }
+
+    [Fact]
+    public void IdleTreeReadPublishesExactScalarCostAndOnlyDecisionFields()
+    {
+        var treeId = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
+        var currencyId = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+        var world = DiscoveryWorld(new WorldDiscoveryTree(
+            treeId, true, 0, BigDouble.Zero, 1, false, Guid.Empty,
+            Array.Empty<Guid>(), false, true,
+            new[]
+            {
+                new WorldDiscoveryTreeCost(
+                    currencyId,
+                    new BigDouble(11, 23),
+                    new BigDouble(563, 22)),
+            },
+            Guid.NewGuid(), Guid.NewGuid(), 9, 17, true, 2, 8, true, true, false));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 82),
+            "discovery-trees",
+            0,
+            10));
+        var row = Assert.Single(response["rows"]!).Value<JObject>()!;
+
+        Assert.Equal("Glyph Discoveries", (string?)row["name"]);
+        Assert.Equal(treeId.ToString("D"), (string?)row["uuid"]);
+        Assert.Equal("idle", (string?)row["mode"]);
+        Assert.True((bool)row["initiate"]!["available"]!);
+        Assert.Null(row["initiate"]!["affordable"]);
+        var cost = Assert.Single(row["initiate"]!["costs"]!).Value<JObject>()!;
+        Assert.Equal(currencyId.ToString("D"), (string?)cost["resource"]!["uuid"]);
+        Assert.NotNull(cost["resource"]!["name"]);
+        Assert.Equal("1.1e24", (string?)cost["cost"]);
+        Assert.Equal("5.63e24", (string?)cost["amount"]);
+        Assert.Null(row["reroll"]);
+        Assert.DoesNotContain("debugMode", response.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("override", response.ToString(), StringComparison.Ordinal);
+        var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
+            response.ToString(Newtonsoft.Json.Formatting.None));
+        Assert.Equal(518, responseBytes);
+        Assert.True(responseBytes < 650);
+
+        var unaffordableTree = new WorldDiscoveryTree(
+            treeId, true, 0, BigDouble.Zero, 1, false, Guid.Empty,
+            Array.Empty<Guid>(), false, false,
+            new[]
+            {
+                new WorldDiscoveryTreeCost(
+                    currencyId,
+                    new BigDouble(11, 23),
+                    new BigDouble(1, 2)),
+            },
+            Guid.Empty, Guid.Empty, 0, 0, false, 2, 8, true, true, false);
+        var unaffordable = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(DiscoveryWorld(unaffordableTree), generation: 83),
+            "discovery-trees",
+            treeId.ToString("D"),
+            "DiscoveryTreeSO"));
+        Assert.False((bool)unaffordable["row"]!["initiate"]!["available"]!);
+        Assert.Equal("unaffordable",
+            (string?)unaffordable["row"]!["initiate"]!["reasonCode"]);
+        Assert.Equal("1.1e24",
+            (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["cost"]);
+        Assert.Equal("1e2",
+            (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["amount"]);
+    }
+
+    [Fact]
+    public void ChoiceTreeOffersAreOrderedResolvableAndExplainableFromOneWorld()
+    {
+        var treeId = Guid.NewGuid();
+        var runeId = Guid.Parse("a98e5e7d-3bf5-46cf-a6df-73747ed57797");
+        var glyphId = Guid.Parse("81894d9f-4e91-43da-9f47-2a97d77a2294");
+        var tree = new WorldDiscoveryTree(
+            treeId, true, 2, BigDouble.Zero, 1, false, Guid.Empty,
+            new[] { runeId, glyphId }, false, false,
+            Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+            0, 0, false, 2, 8, true, true, false);
+        var world = DiscoveryWorld(
+            tree,
+            timeRunes: new[]
+            {
+                new WorldTimeRune(
+                    runeId, false, 0, 1, BigDouble.Zero, 0, false, false,
+                    BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            },
+            glyphs: new[]
+            {
+                new WorldGlyph(
+                    glyphId, 0, 0, 1, false, true, false, false, false, false,
+                    0, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            });
+        var context = GameMcpTestHarness.Context(world, generation: 83);
+
+        var treeRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "discovery-trees", treeId.ToString("D"), "DiscoveryTreeSO"));
+        var offers = treeRead["row"]!["offers"]!.Values<JObject>().ToArray();
+        Assert.Equal(new[] { runeId.ToString("D"), glyphId.ToString("D") },
+            offers.Select(offer => (string?)offer!["uuid"]));
+        Assert.Equal(new[] { "time-runes", "glyphs" },
+            offers.Select(offer => (string?)offer!["category"]));
+        Assert.All(offers, offer => Assert.NotNull(offer!["name"]));
+        Assert.True((bool)treeRead["row"]!["rerollAvailable"]!);
+
+        var runeRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "time-runes", runeId.ToString("D"), "TimeRuneSO"));
+        Assert.Equal("available", (string?)runeRead["status"]);
+        var explanation = GameMcpTestHarness.Json(
+            GameMcpEntityExplainer.Explain(context, runeId.ToString("D")));
+        Assert.Equal("available", (string?)explanation["status"]);
+        Assert.Equal("Ability Persist", (string?)explanation["name"]);
+        Assert.Null(explanation["predicates"]);
+    }
+
+    [Fact]
+    public void UnresolvedChoiceIsLocalizedToItsTreeAndFailsClosed()
+    {
+        var treeId = Guid.NewGuid();
+        var missing = Guid.NewGuid();
+        var world = DiscoveryWorld(new WorldDiscoveryTree(
+            treeId, true, 2, BigDouble.Zero, 1, false, Guid.Empty,
+            new[] { missing }, false, false, Array.Empty<WorldDiscoveryTreeCost>(),
+            Guid.Empty, Guid.Empty, 0, 0, false, 0, 1, true, true, false));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, generation: 84),
+            "discovery-trees",
+            treeId.ToString("D"),
+            "DiscoveryTreeSO"));
+
+        Assert.Equal("unavailable", (string?)response["status"]);
+        Assert.Equal("discovery_offer_read_incomplete", (string?)response["reasonCode"]);
+        var implicated = Assert.Single(response["implicatedOffers"]!).Value<JObject>()!;
+        Assert.Equal(treeId.ToString("D"), (string?)implicated["tree"]!["uuid"]);
+        Assert.Equal(missing.ToString("D"), (string?)implicated["offer"]!["uuid"]);
+        Assert.Equal("unavailable", (string?)implicated["offer"]!["nameEvidence"]!["status"]);
+        Assert.Equal(0, (int)implicated["ordinal"]!);
+    }
+
+    [Theory]
+    [InlineData(false, 2, false, 1, "tree_unavailable")]
+    [InlineData(true, 0, false, 1, "not_in_choice")]
+    [InlineData(true, 2, true, 1, "immediate_required_discovery")]
+    [InlineData(true, 2, false, 0, "no_current_offers")]
+    [InlineData(true, 2, false, -1, "already_used")]
+    [InlineData(true, 2, false, -2, "no_rerolls_left")]
+    public void RerollReadNamesEveryUnavailableState(
+        bool visible,
+        int mode,
+        bool immediateRequired,
+        int offerState,
+        string reasonCode)
+    {
+        var treeId = Guid.NewGuid();
+        var offerId = Guid.Parse("a98e5e7d-3bf5-46cf-a6df-73747ed57797");
+        var offers = offerState == 0 ? Array.Empty<Guid>() : new[] { offerId };
+        var rerolls = offerState < 0 ? 0 : 1;
+        var used = offerState == -1;
+        var tree = new WorldDiscoveryTree(
+            treeId, visible, mode, BigDouble.Zero, rerolls, used, Guid.Empty,
+            offers, immediateRequired, false, Array.Empty<WorldDiscoveryTreeCost>(),
+            Guid.Empty, Guid.Empty, 0, 0, false, 1, 1, true, true, false);
+        var world = DiscoveryWorld(
+            tree,
+            timeRunes: new[]
+            {
+                new WorldTimeRune(
+                    offerId, false, 0, 1, BigDouble.Zero, 0, false, false,
+                    BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            });
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, generation: 85),
+            "discovery-trees",
+            treeId.ToString("D"),
+            "DiscoveryTreeSO"));
+
+        if (mode == 2)
+            Assert.False((bool)response["row"]!["rerollAvailable"]!);
+        else
+            Assert.Null(response["row"]!["rerollAvailable"]);
+        Assert.DoesNotContain(reasonCode, response.ToString(), StringComparison.Ordinal);
+        if (offers.Length == 0) Assert.Null(response["row"]!["offers"]);
+    }
+
+    [Fact]
+    public void McpPureJourneyNeedsNoNameJoinsOrPostMutationReadBacks()
+    {
+        DiscoveryTreeSO.All.Clear();
+        var tree = new DiscoveryTreeSO
+        {
+            actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Idle,
+            visible = true,
+            rerollsLeft = 1,
+        };
+        tree.SetGuid(Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8"));
+        var firstId = Guid.Parse("a98e5e7d-3bf5-46cf-a6df-73747ed57797");
+        var secondId = Guid.Parse("81894d9f-4e91-43da-9f47-2a97d77a2294");
+        var firstNative = new DiscoveryTestItemSO();
+        firstNative.SetGuid(firstId);
+        var secondNative = new DiscoveryTestItemSO();
+        secondNative.SetGuid(secondId);
+        tree.allDiscoverableItems.Add(firstNative);
+        tree.allDiscoverableItems.Add(secondNative);
+        DiscoveryTreeSO.All.Add(tree);
+        const long lifecycle = 7;
+        var calls = 0;
+        var postMutationReadBacks = 0;
+        var nameJoins = 0;
+
+        try
+        {
+            using var action = new DiscoveryTreeOfferGameAction(
+                () => lifecycle,
+                () => true,
+                () => string.Empty);
+
+            var idle = DiscoveryWorld(new WorldDiscoveryTree(
+                tree.GetGuid(), true, 0, BigDouble.Zero, 1, false, Guid.Empty,
+                Array.Empty<Guid>(), false, true, Array.Empty<WorldDiscoveryTreeCost>(),
+                Guid.Empty, Guid.Empty, 0, 0, false, 0, 2, true, true, false));
+            var idleRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+                GameMcpTestHarness.Context(idle, generation: 90),
+                "discovery-trees", tree.GetGuid().ToString("D"), "DiscoveryTreeSO"));
+            calls++;
+            Assert.True((bool)idleRead["row"]!["initiate"]!["available"]!);
+            Assert.NotNull(idleRead["row"]!["name"]);
+            var readTreeId = Guid.Parse((string)idleRead["row"]!["uuid"]!);
+
+            var initiated = action.Submit(new DiscoveryTreeOfferAction(
+                DiscoveryTreeOfferActionKind.Initiate,
+                readTreeId,
+                Guid.Empty,
+                lifecycle));
+            calls++;
+            Assert.True(initiated.Verified, initiated.Reason);
+
+            // The native update loop materializes offers after Crafting. The fixture advances that
+            // external transition, then every player decision below comes back from MCP reads.
+            tree.actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Choice;
+            tree.currentChoiceIds.Add(new GuidContainer(firstId));
+            tree.currentChoiceIds.Add(new GuidContainer(secondId));
+            var timeRuneRows = new[]
+            {
+                new WorldTimeRune(
+                    firstId, false, 0, 1, BigDouble.Zero, 0, false, false,
+                    BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            };
+            var glyphRows = new[]
+            {
+                new WorldGlyph(
+                    secondId, 0, 0, 1, false, true, false, false, false, false,
+                    0, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            };
+            var choice = DiscoveryWorld(
+                new WorldDiscoveryTree(
+                    tree.GetGuid(), true, 2, BigDouble.Zero, tree.rerollsLeft, false,
+                    Guid.Empty, new[] { firstId, secondId }, false, false,
+                    Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+                    0, 0, false, 0, 2, true, true, false),
+                timeRunes: timeRuneRows,
+                glyphs: glyphRows);
+            var choiceContext = GameMcpTestHarness.Context(choice, generation: 91);
+            var initiatedResponse = GameMcpTestHarness.Json(
+                GameMcpWorldQuery.ProjectPostState(
+                    choiceContext, "discovery-trees", readTreeId));
+            var readOffers = initiatedResponse["offers"]!
+                .Values<JObject>()
+                .Select(offer => Guid.Parse((string)offer!["uuid"]!))
+                .ToArray();
+            Assert.Equal(new[] { firstId, secondId }, readOffers);
+            Assert.All(initiatedResponse["offers"]!.Values<JObject>(), offer =>
+                Assert.NotNull(offer!["name"]));
+
+            var rerolled = action.Submit(new DiscoveryTreeOfferAction(
+                DiscoveryTreeOfferActionKind.Reroll,
+                readTreeId,
+                Guid.Empty,
+                lifecycle));
+            calls++;
+            Assert.True(rerolled.Verified, rerolled.Reason);
+            Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+
+            tree.actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Choice;
+            tree.currentChoiceIds.Add(new GuidContainer(firstId));
+            tree.currentChoiceIds.Add(new GuidContainer(secondId));
+            var rerollWorld = DiscoveryWorld(
+                new WorldDiscoveryTree(
+                    tree.GetGuid(), true, 2, BigDouble.Zero, tree.rerollsLeft, false,
+                    Guid.Empty, new[] { firstId, secondId }, false, false,
+                    Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+                    0, 0, false, 1, 2, true, true, false),
+                timeRunes: timeRuneRows,
+                glyphs: glyphRows);
+            var rerollContext = GameMcpTestHarness.Context(rerollWorld, generation: 92);
+            var rerollResponse = GameMcpTestHarness.Json(
+                GameMcpWorldQuery.ProjectPostState(
+                    rerollContext, "discovery-trees", readTreeId));
+            Assert.Equal("choice", (string?)rerollResponse["mode"]);
+            Assert.False((bool)rerollResponse["rerollAvailable"]!);
+
+            foreach (var readOffer in readOffers)
+            {
+                var explanation = GameMcpTestHarness.Json(
+                    GameMcpEntityExplainer.Explain(rerollContext, readOffer.ToString("D")));
+                calls++;
+                Assert.Equal("available", (string?)explanation["status"]);
+                Assert.NotNull(explanation["name"]);
+                Assert.Null(explanation["predicates"]);
+            }
+
+            var selected = action.Submit(new DiscoveryTreeOfferAction(
+                DiscoveryTreeOfferActionKind.Select,
+                readTreeId,
+                readOffers[0],
+                lifecycle));
+            calls++;
+            Assert.True(selected.Verified, selected.Reason);
+            var selectedWorld = DiscoveryWorld(
+                new WorldDiscoveryTree(
+                    tree.GetGuid(), true, 2, BigDouble.Zero, tree.rerollsLeft, false,
+                    tree.selectedChoiceId.guid, readOffers, false, false,
+                    Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+                    0, 0, false, 0, 2, true, true, false),
+                timeRunes: timeRuneRows,
+                glyphs: glyphRows);
+            var selectedResponse = GameMcpTestHarness.Json(
+                GameMcpWorldQuery.ProjectPostState(
+                    GameMcpTestHarness.Context(selectedWorld, generation: 93),
+                    "discovery-trees",
+                    readTreeId));
+            var selectedOffer = Guid.Parse(
+                (string)selectedResponse["selectedOffer"]!["uuid"]!);
+            Assert.Equal(firstId.ToString("D"), selectedOffer.ToString("D"));
+
+            var confirmed = action.Submit(new DiscoveryTreeOfferAction(
+                DiscoveryTreeOfferActionKind.Confirm,
+                readTreeId,
+                selectedOffer,
+                lifecycle));
+            calls++;
+            Assert.True(confirmed.Verified, confirmed.Reason);
+
+            var nextCostResource = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+            var confirmedWorld = DiscoveryWorld(
+                new WorldDiscoveryTree(
+                    tree.GetGuid(), true, 0, BigDouble.Zero, tree.rerollsLeft, false,
+                    Guid.Empty, Array.Empty<Guid>(), false, true,
+                    new[]
+                    {
+                        new WorldDiscoveryTreeCost(
+                            nextCostResource,
+                            new BigDouble(1.4d, 4),
+                            new BigDouble(2d, 25)),
+                    },
+                    Guid.Empty, Guid.Empty, 0, 0, false, 1, 2, true, true, false));
+            var confirmResponse = GameMcpTestHarness.Json(
+                GameMcpWorldQuery.ProjectPostState(
+                    GameMcpTestHarness.Context(confirmedWorld, generation: 94),
+                    "discovery-trees",
+                    readTreeId));
+            Assert.Equal("idle", (string?)confirmResponse["mode"]);
+            Assert.True((bool)confirmResponse["initiate"]!["available"]!);
+            var nextCost = Assert.Single(confirmResponse["initiate"]!["costs"]!.Values<JObject>())!;
+            Assert.Equal("Knowledge", (string?)nextCost["resource"]!["name"]);
+            Assert.Equal("1.4e4", (string?)nextCost["cost"]);
+            Assert.Equal("2e25", (string?)nextCost["amount"]);
+
+            static int CommittedBytes(JObject postState)
+            {
+                var response = (JObject)postState.DeepClone();
+                response.AddFirst(new JProperty("status", "committed"));
+                return System.Text.Encoding.UTF8.GetByteCount(
+                    response.ToString(Newtonsoft.Json.Formatting.None));
+            }
+            Assert.Equal(
+                new[] { 573, 748, 472 },
+                new[]
+                {
+                    CommittedBytes(rerollResponse),
+                    CommittedBytes(selectedResponse),
+                    CommittedBytes(confirmResponse),
+                });
+
+            Assert.Equal(7, calls);
+            Assert.Equal(0, postMutationReadBacks);
+            Assert.Equal(0, nameJoins);
+        }
+        finally
+        {
+            DiscoveryTreeSO.All.Clear();
+        }
+    }
+
+    [Fact]
+    public void Localhost_mcp_owns_offer_family_only_during_one_operation()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var configuration = BepInExAutomataConfiguration.Bind(new ConfigFile()).Current;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+
+        ownership.Refresh(configuration, lifecycleReady: true);
+        Assert.False(ownership.OwnsDiscoveryTreeOffers);
+
+        Assert.True(ownership.TryBeginGameMcpOperation(
+            GameMcpCommandKind.DiscoveryTreeOffer,
+            "reroll",
+            out var scope,
+            out var reason), reason);
+        using (scope)
+        {
+            Assert.True(ownership.OwnsDiscoveryTreeOffers);
+            Assert.True(ownership.TryCaptureDiscoveryTreeOfferMutationPermit());
+        }
+        Assert.False(ownership.OwnsDiscoveryTreeOffers);
+        Assert.False(ownership.TryCaptureDiscoveryTreeOfferMutationPermit());
+    }
+
+    [Fact]
+    public void CommittedConfirmReturnsIdleTreeWithNextDecisionFacts()
+    {
+        var tree = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
+        var offer = Guid.Parse("a98e5e7d-3bf5-46cf-a6df-73747ed57797");
+        var resource = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+        var before = new DiscoveryTreeOfferState(
+            2, BigDouble.Zero, 1, 2, false, new[] { offer }, Array.Empty<Guid>(), offer,
+            4, 3, true, false, false);
+        var after = new DiscoveryTreeOfferState(
+            0, BigDouble.Zero, 1, 2, false, Array.Empty<Guid>(), Array.Empty<Guid>(), Guid.Empty,
+            5, 4, true, true, false);
+        var receipt = new DiscoveryTreeOfferMutationReceipt(
+            true, false, false, true, false, in before, in after,
+            Array.Empty<DiscoveryTreeCostReceipt>());
+        var submission = new DiscoveryTreeOfferSubmission(
+            DiscoveryTreeOfferPreflight.Proceeded,
+            DiscoveryTreeOfferNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(1, 1, 1),
+            in receipt,
+            "verified confirm");
+        var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.DiscoveryTreeOffer, 9, 3, "confirm",
+            tree, offer, "DiscoveryTreeSO", string.Empty, 1,
+            string.Empty, string.Empty, false, false);
+        var terminal = GameMcpCommandResult.FromAction(
+            in mapped,
+            command.Kind,
+            9,
+            3,
+            submission.Reason,
+            GameMcpDiscoveryTreeOfferProjection.Project(
+                DiscoveryTreeOfferActionKind.Confirm,
+                in submission));
+        var postState = DiscoveryWorld(new WorldDiscoveryTree(
+            tree, true, 0, BigDouble.Zero, 0, false, Guid.Empty,
+            Array.Empty<Guid>(), false, true,
+            new[]
+            {
+                new WorldDiscoveryTreeCost(
+                    resource, new BigDouble(7.5d, 6), new BigDouble(2.43d, 25)),
+            },
+            Guid.Empty, Guid.Empty, 0, 0, false, 5, 4, false, true, false));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectPostState(
+            GameMcpTestHarness.Context(postState, generation: 95),
+            "discovery-trees",
+            tree));
+
+        var projected = GameMcpTestHarness.Json(terminal.Project(command));
+        var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
+            projected.ToString(Newtonsoft.Json.Formatting.None));
+        Assert.True(responseBytes < 700);
+        Assert.True(responseBytes < 1719);
+        Assert.Equal(new[]
+            {
+                "status", "uuid", "name", "internalName", "category", "nativeType",
+                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "initiate",
+            },
+            projected.Properties().Select(property => property.Name));
+        Assert.Equal("idle", (string?)projected["mode"]);
+        Assert.Equal(5, (int)projected["discoveredCount"]!);
+        Assert.True((bool)projected["initiate"]!["available"]!);
+        var cost = Assert.Single(projected["initiate"]!["costs"]!.Values<JObject>())!;
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("7.5e6", (string?)cost["cost"]);
+        Assert.Equal("2.43e25", (string?)cost["amount"]);
+        Assert.Null(projected["discovered"]);
+        Assert.Null(projected["totalDiscovered"]);
+        Assert.Null(projected["mutationScope"]);
+        Assert.Null(projected["receiptId"]);
+    }
+
+    [Fact]
+    public void CommittedInitiateReturnsNamedOrderedOffersAndErasesPaymentCeremony()
+    {
+        var tree = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
+        var resourceOne = Guid.Parse("a1000000-0000-4000-8000-000000000001");
+        var resourceTwo = Guid.Parse("a1000000-0000-4000-8000-000000000002");
+        var balanceOne = new BigDouble(2.1, 19);
+        var balanceTwo = new BigDouble(5.7, 23);
+        var before = new DiscoveryTreeOfferState(
+            0, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(),
+            Guid.Empty, 2, 2, true, false, false);
+        var after = new DiscoveryTreeOfferState(
+            1, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(),
+            Guid.Empty, 2, 2, true, false, false);
+        var costs = new[]
+        {
+            new DiscoveryTreeCostReceipt(
+                resourceOne, new BigDouble(4.4, 3), balanceOne, balanceOne),
+            new DiscoveryTreeCostReceipt(
+                resourceTwo, new BigDouble(8.9, 6), balanceTwo, balanceTwo),
+        };
+        var receipt = new DiscoveryTreeOfferMutationReceipt(
+            true, true, false, true, true, in before, in after, costs);
+        var submission = new DiscoveryTreeOfferSubmission(
+            DiscoveryTreeOfferPreflight.Proceeded,
+            DiscoveryTreeOfferNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(2, 2, 2),
+            in receipt,
+            "verified initiate");
+        var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.DiscoveryTreeOffer, 9, 3, "initiate",
+            tree, Guid.Empty, "DiscoveryTreeSO", string.Empty, 1,
+            string.Empty, string.Empty, false, false);
+        var terminal = GameMcpCommandResult.FromAction(
+            in mapped,
+            command.Kind,
+            9,
+            3,
+            submission.Reason,
+            GameMcpDiscoveryTreeOfferProjection.Project(
+                DiscoveryTreeOfferActionKind.Initiate,
+                in submission));
+        var firstOffer = Guid.Parse("168e3734-1ecb-4938-bd4a-d011ff13e201");
+        var secondOffer = Guid.Parse("b0387ddd-2bd8-4799-8cd0-f8c624458930");
+        var postState = DiscoveryWorld(
+            new WorldDiscoveryTree(
+                tree, true, 2, BigDouble.Zero, 1, false, Guid.Empty,
+                new[] { firstOffer, secondOffer }, false, false,
+                Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+                0, 0, false, 2, 2, false, true, false),
+            glyphs: new[]
+            {
+                new WorldGlyph(
+                    firstOffer, 0, 0, 1, false, true, false, false, false, false,
+                    0, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+                new WorldGlyph(
+                    secondOffer, 0, 0, 1, false, true, false, false, false, false,
+                    0, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero),
+            });
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectPostState(
+            GameMcpTestHarness.Context(postState, generation: 96),
+            "discovery-trees",
+            tree));
+
+        var projected = GameMcpTestHarness.Json(terminal.Project(command));
+        var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
+            projected.ToString(Newtonsoft.Json.Formatting.None));
+
+        Assert.Equal(523, responseBytes);
+        Assert.True(responseBytes < 1721);
+        Assert.True(responseBytes < 4096);
+        Assert.Equal(new[]
+            {
+                "status", "uuid", "name", "internalName", "category", "nativeType",
+                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "offers", "rerollAvailable",
+            },
+            projected.Properties().Select(property => property.Name));
+        Assert.Equal("choice", (string?)projected["mode"]);
+        Assert.Equal(
+            new[] { "Weak", "Magnified" },
+            projected["offers"]!.Values<JObject>().Select(offer => (string?)offer!["name"]));
+        Assert.True((bool)projected["rerollAvailable"]!);
+        Assert.Null(projected["payment"]);
+        Assert.Null(projected["reason"]);
+        Assert.Null(projected["nativeCallsAttempted"]);
+        Assert.Null(projected["mutationAttempts"]);
+        Assert.Null(projected["mutationsCommitted"]);
+        Assert.Null(projected["decisionWorldGeneration"]);
+        Assert.Null(projected["targetUuid"]);
+        Assert.Null(projected["crafting"]);
+        Assert.Null(projected["offersPending"]);
+    }
+
+    [Fact]
+    public void Main_thread_runtime_delegates_to_the_shared_GameAction()
+    {
+        DiscoveryTreeSO.All.Clear();
+        var tree = new DiscoveryTreeSO
+        {
+            actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Idle,
+            visible = true,
+        };
+        DiscoveryTreeSO.All.Add(tree);
+        var lifecycle = 7L;
+        var configuration = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+        };
+        var resolver = new TypedRegistryResolver(
+            () => lifecycle,
+            () => TypedRegistrySourceSnapshot.NotReady("not used"),
+            _ => null);
+        var status = new AutomataFeatureStatusReporter(
+            new FeatureStatusRegistry(),
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoHarvestFeatureId),
+                "Auto Harvest",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(FeatureStatusReasonCode.RegistryNotReady, "waiting"),
+                lifecycle));
+        var feature = new AutoHarvestServiceCycleFeature(
+            new AutoHarvestFeatureDependencies(
+                resolver,
+                ownsActionFamily: () => false,
+                tryCaptureMutationPermit: () => false,
+                runtimeDiagnostics: null,
+                featureStatus: status));
+
+        try
+        {
+            using var runtime = AutomataServiceCycleComposition.Create(
+                configuration,
+                new ConfigGeneration(1),
+                new AutomataServiceCycleHostDependencies(
+                    () => 1,
+                    () => lifecycle,
+                    new ServiceActionOutcomeWindowRegistry()),
+                new IAutomataServiceCycleFeature[] { feature },
+                new ManualLogSource(),
+                createDiscoveryTreeOffers: () => new DiscoveryTreeOfferGameAction(
+                    () => lifecycle,
+                    () => true,
+                    () => string.Empty));
+            var command = new GameMcpCommand(
+                1,
+                GameMcpCommandKind.DiscoveryTreeOffer,
+                lifecycle,
+                1,
+                "initiate",
+                tree.GetGuid(),
+                Guid.Empty,
+                "DiscoveryTreeSO",
+                string.Empty,
+                1,
+                string.Empty,
+                string.Empty,
+                false,
+                false);
+
+            var result = runtime.ExecuteGameMcp(command);
+            var projected = GameMcpTestHarness.Json(result.Project(command));
+
+            Assert.Equal("committed", result.Status);
+            Assert.Equal(1, tree.initiateCalls);
+            Assert.Equal(new[] { "status" },
+                projected.Properties().Select(property => property.Name));
+            Assert.Null(projected["nativeCallsAttempted"]);
+        }
+        finally
+        {
+            DiscoveryTreeSO.All.Clear();
+        }
+    }
+
+    [Fact]
+    public void TwoClaimedOfferActionsShareOnePinnedContextAndSecondRevalidatesFirstMutation()
+    {
+        DiscoveryTreeSO.All.Clear();
+        var tree = new DiscoveryTreeSO
+        {
+            actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Idle,
+            visible = true,
+        };
+        DiscoveryTreeSO.All.Add(tree);
+        var lifecycle = 7L;
+        var configuration = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+        };
+        var resolver = new TypedRegistryResolver(
+            () => lifecycle,
+            () => TypedRegistrySourceSnapshot.NotReady("not used"),
+            _ => null);
+        var status = new AutomataFeatureStatusReporter(
+            new FeatureStatusRegistry(),
+            new FeatureStatusSnapshot(
+                new FeatureStatusKey(PluginIds.SuiteGuid, AutomataFeatureStatuses.AutoHarvestFeatureId),
+                "Auto Harvest",
+                true,
+                FeatureStatusState.NotReady,
+                new FeatureStatusReason(FeatureStatusReasonCode.RegistryNotReady, "waiting"),
+                lifecycle));
+        var feature = new AutoHarvestServiceCycleFeature(
+            new AutoHarvestFeatureDependencies(
+                resolver,
+                ownsActionFamily: () => false,
+                tryCaptureMutationPermit: () => false,
+                runtimeDiagnostics: null,
+                featureStatus: status));
+
+        try
+        {
+            using var runtime = AutomataServiceCycleComposition.Create(
+                configuration,
+                new ConfigGeneration(1),
+                new AutomataServiceCycleHostDependencies(
+                    () => 1,
+                    () => lifecycle,
+                    new ServiceActionOutcomeWindowRegistry()),
+                new IAutomataServiceCycleFeature[] { feature },
+                new ManualLogSource(),
+                createDiscoveryTreeOffers: () => new DiscoveryTreeOfferGameAction(
+                    () => lifecycle,
+                    () => true,
+                    () => string.Empty));
+            var worldTree = new WorldDiscoveryTree(
+                tree.GetGuid(), true, 0, BigDouble.Zero, 0, false, Guid.Empty,
+                Array.Empty<Guid>(), false, true, Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty,
+                Guid.Empty, 0, 0, false, 0, 1, true, true, false);
+            var world = new GameWorldState
+            {
+                DiscoveryTrees = PublicationTable<WorldDiscoveryTree>.Create(new[] { worldTree }),
+                CollectedAtEpoch = lifecycle,
+                CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            };
+            var context = GameMcpTestHarness.Context(world, generation: 44);
+            var inbox = new GameMcpFrameInbox();
+            var operations = new[]
+            {
+                inbox.Submit(OfferRequest(tree.GetGuid())),
+                inbox.Submit(OfferRequest(tree.GetGuid())),
+            };
+            var observedContexts = new List<GameMcpFrameContext>();
+            var terminals = new List<GameMcpCommandResult>();
+            var faults = new List<Exception>();
+
+            var drained = GameMcpFrameBatchExecutor.Drain(
+                inbox,
+                _ => context,
+                (operation, pinned) =>
+                {
+                    observedContexts.Add(pinned);
+                    var command = new GameMcpCommand(
+                        operation.Sequence,
+                        GameMcpCommandKind.DiscoveryTreeOffer,
+                        expectedLifecycleGeneration: lifecycle,
+                        expectedConfigurationGeneration: 1,
+                        mode: "initiate",
+                        tree.GetGuid(),
+                        Guid.Empty,
+                        "DiscoveryTreeSO",
+                        string.Empty,
+                        1,
+                        string.Empty,
+                        string.Empty,
+                        false,
+                        false,
+                        operation,
+                        pinned);
+                    var result = runtime.ExecuteGameMcp(command);
+                    terminals.Add(result);
+                    return new GameMcpToolExecution(
+                        result.Project(command),
+                        result.InlinePng,
+                        result.IsProtocolError);
+                },
+                (_, _, exception) =>
+                {
+                    faults.Add(exception);
+                    return GameMcpToolExecution.Error(new GameMcpObjectBuilder
+                    {
+                        ["status"] = "faulted",
+                        ["reason"] = exception.Message,
+                    }.Freeze());
+                });
+
+            Assert.Equal(2, drained);
+            Assert.Empty(faults);
+            Assert.Equal("committed", terminals[0].Status);
+            Assert.Equal("refused", terminals[1].Status);
+            Assert.Equal("wrong_mode", terminals[1].Code);
+            Assert.Equal(1, tree.initiateCalls);
+            Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+            Assert.All(observedContexts, observed => Assert.Same(context, observed));
+            Assert.All(operations, operation => Assert.True(operation.Completion.TryWait(
+                TimeSpan.FromMilliseconds(50), out _)));
+        }
+        finally
+        {
+            DiscoveryTreeSO.All.Clear();
+        }
+    }
+
+    private static GameMcpOperationRequest OfferRequest(Guid treeId) =>
+        new GameMcpOperationRequestBuilder
+        {
+            ToolName = "game_discovery_offer",
+            Classification = GameMcpOperationClass.Gameplay,
+            RequiredData = GameMcpFrameData.World | GameMcpFrameData.Configuration,
+            Uuid = treeId,
+            Mode = "initiate",
+        }.Freeze();
+
+    private static GameWorldState DiscoveryWorld(
+        WorldDiscoveryTree tree,
+        WorldTimeRune[]? timeRunes = null,
+        WorldGlyph[]? glyphs = null) =>
+        new()
+        {
+            DiscoveryTrees = PublicationTable<WorldDiscoveryTree>.Create(new[] { tree }),
+            TimeRunes = timeRunes is null
+                ? PublicationTable<WorldTimeRune>.Empty
+                : PublicationTable<WorldTimeRune>.Create(timeRunes),
+            Glyphs = glyphs is null
+                ? PublicationTable<WorldGlyph>.Empty
+                : PublicationTable<WorldGlyph>.Create(glyphs),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "discovery-trees",
+                    WorldCategoryOutcome.Collected,
+                    sampled: 1,
+                    skipped: 0,
+                    firstFailure: string.Empty),
+                new WorldCollectionCategoryStatus(
+                    "time runes",
+                    WorldCategoryOutcome.Collected,
+                    sampled: timeRunes?.Length ?? 0,
+                    skipped: 0,
+                    firstFailure: string.Empty),
+                new WorldCollectionCategoryStatus(
+                    "glyphs",
+                    WorldCategoryOutcome.Collected,
+                    sampled: glyphs?.Length ?? 0,
+                    skipped: 0,
+                    firstFailure: string.Empty),
+            }),
+            CollectedAtEpoch = 7,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+}

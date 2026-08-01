@@ -1,0 +1,659 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using OrbAutomata;
+using OrbModding.Common;
+using Xunit;
+
+namespace OrbModding.Tests.Services.DiscoveryTree;
+
+public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
+{
+    private const long Epoch = 17;
+
+    public DiscoveryTreeOfferGameActionTests()
+    {
+        DiscoveryTreeSO.All.Clear();
+        ResourceSO.All.Clear();
+    }
+
+    public void Dispose()
+    {
+        DiscoveryTreeSO.All.Clear();
+        ResourceSO.All.Clear();
+    }
+
+    [Fact]
+    public void Initiate_reports_exact_cost_evidence_and_delayed_offer_transition()
+    {
+        var resource = Resource();
+        var tree = Tree();
+        tree.nextItemCost.costs.Add(new ResourceTuple(resource, new BigDouble(25, 0)));
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.Equal(1, tree.nextItemCost.PerformCalls);
+        Assert.Equal(1, tree.initiateCalls);
+        Assert.True(result.Receipt.PaymentInvoked);
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.True(result.Receipt.PostconditionMatched);
+        Assert.True(result.Receipt.OffersPendingNativeIncrement);
+        var cost = Assert.Single(result.Receipt.Costs);
+        Assert.Equal(resource.GetGuid(), cost.ResourceId);
+        Assert.Equal(0, cost.Expected.CompareTo(new BigDouble(25, 0)));
+        Assert.Equal(0, cost.Charged.CompareTo(new BigDouble(25, 0)));
+        Assert.Equal(2, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(1, result.CallOutcome.MutationsCommitted);
+    }
+
+    [Fact]
+    public void Initiate_sub_ulp_cost_evidence_does_not_gate_the_requested_transition()
+    {
+        var mana = Resource(new BigDouble(2.1, 19));
+        var knowledge = Resource(new BigDouble(5.7, 23));
+        var tree = Tree();
+        tree.nextItemCost.costs.Add(new ResourceTuple(mana, new BigDouble(4.4, 3)));
+        tree.nextItemCost.costs.Add(new ResourceTuple(knowledge, new BigDouble(8.9, 6)));
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.True(result.Receipt.PaymentInvoked);
+        Assert.False(result.Receipt.ResourcesCharged);
+        Assert.All(result.Receipt.Costs, cost => Assert.Equal(0, cost.Charged.CompareTo(BigDouble.Zero)));
+        Assert.True(result.Receipt.OffersPendingNativeIncrement);
+        Assert.True(result.Receipt.PostconditionMatched);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Initiate_accepts_the_native_maximum_reroll_clamp_even_when_it_reduces_saved_rerolls()
+    {
+        var tree = Tree();
+        tree.rerollsLeft = 1;
+        tree.maximumRerolls = 0;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(0, tree.rerollsLeft);
+        Assert.Equal(0, result.Receipt.After.Rerolls);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Initiate_accounting_axis_drift_is_evidence_not_a_gate()
+    {
+        var tree = Tree();
+        tree.driftInitiateEvidence = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.Equal(99, result.Receipt.After.Rerolls);
+        Assert.True(result.Receipt.After.UsedRerollsLastDiscover);
+        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
+        Assert.Equal(3, result.Receipt.After.TotalDiscovered);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Initiate_exception_after_crafting_landed_is_evidence_and_commits()
+    {
+        var tree = Tree();
+        tree.throwAfterInitiate = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(result.Receipt.PostconditionMatched);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Initiate_that_returns_idle_without_offers_still_quarantines_with_exact_mode_evidence()
+    {
+        var tree = Tree();
+        tree.suppressInitiate = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
+        Assert.Empty(result.Receipt.After.CurrentChoices);
+        Assert.True(result.Receipt.PaymentInvoked);
+        Assert.False(result.Receipt.ResourcesCharged);
+        Assert.Contains("expected Crafting mode", result.Reason, StringComparison.Ordinal);
+        Assert.Contains("observed 0", result.Reason, StringComparison.Ordinal);
+        Assert.True(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Select_uses_offer_membership_not_CanDiscover_and_changes_only_selection()
+    {
+        var (tree, item) = ChoiceTree();
+        item.canDiscover = false; // Native future-choice offers are intentionally selectable.
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(item.GetGuid(), tree.selectedChoiceId.guid);
+        Assert.False(item.discovered);
+        Assert.Equal(new[] { item.GetGuid() }, result.Receipt.After.CurrentChoices);
+        Assert.Equal(1, tree.selectCalls);
+        Assert.False(result.Receipt.PaymentInvoked);
+    }
+
+    [Fact]
+    public void Select_non_identity_axis_drift_is_evidence_not_a_gate()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.driftSelectEvidence = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(item.GetGuid(), result.Receipt.After.SelectedChoice);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
+        Assert.Empty(result.Receipt.After.CurrentChoices);
+        Assert.Equal(2, result.Receipt.After.TotalDiscovered);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Select_exception_after_selection_landed_is_evidence_and_commits()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.throwAfterSelect = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(item.GetGuid(), result.Receipt.After.SelectedChoice);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Confirm_receipts_exact_discovery_and_required_versus_pool_count_delta()
+    {
+        var (tree, item) = ChoiceTree();
+        item.required = false;
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(item.discovered);
+        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
+        Assert.Equal(1, result.Receipt.After.PoolDiscovered);
+        Assert.Empty(result.Receipt.After.CurrentChoices);
+        Assert.Equal(Guid.Empty, result.Receipt.After.SelectedChoice);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
+    }
+
+    [Fact]
+    public void Confirm_required_offer_does_not_increment_pool_count()
+    {
+        var (tree, item) = ChoiceTree();
+        item.required = true;
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
+        Assert.Equal(0, result.Receipt.After.PoolDiscovered);
+    }
+
+    [Fact]
+    public void Confirm_accounting_and_cleanup_drift_is_evidence_not_a_gate()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        tree.driftConfirmEvidence = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(result.Receipt.After.TargetDiscovered);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Choice, tree.actionMode);
+        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
+        Assert.Equal(5, result.Receipt.After.TotalDiscovered);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Confirm_exception_after_target_discovery_landed_is_evidence_and_commits()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        item.throwAfterDiscover = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(result.Receipt.After.TargetDiscovered);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Reroll_receipts_debit_exclusions_and_suite_stale_selection_clear()
+    {
+        var (tree, item) = ChoiceTree();
+        var second = Item();
+        tree.allDiscoverableItems.Add(second);
+        tree.currentChoiceIds.Add(new GuidContainer(second.GetGuid()));
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        tree.rerollsLeft = 2;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Reroll, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(1, tree.rerollsLeft);
+        Assert.True(tree.usedRerollsLastDiscover);
+        Assert.Empty(tree.currentChoiceIds);
+        Assert.Equal(new[] { item.GetGuid(), second.GetGuid() },
+            tree.nextExcludedIds.Select(value => value.guid));
+        Assert.Equal(Guid.Empty, tree.selectedChoiceId.guid);
+        Assert.Equal(2, result.CallOutcome.NativeCallsAttempted);
+        Assert.True(result.Receipt.OffersPendingNativeIncrement);
+    }
+
+    [Fact]
+    public void Reroll_accounting_and_cleanup_drift_is_evidence_not_a_gate()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        tree.rerollsLeft = 2;
+        tree.driftRerollEvidence = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Reroll, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.Equal(6, result.Receipt.After.Rerolls);
+        Assert.False(result.Receipt.After.UsedRerollsLastDiscover);
+        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
+        Assert.Empty(result.Receipt.After.NextExclusions);
+        Assert.Equal(2, result.Receipt.After.TotalDiscovered);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Reroll_exception_after_crafting_landed_is_evidence_and_commits()
+    {
+        var (tree, _) = ChoiceTree();
+        tree.rerollsLeft = 1;
+        tree.throwAfterReroll = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Reroll, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Unaffordable_initiate_has_zero_native_mutation_calls()
+    {
+        var resource = Resource(quantity: 10);
+        var tree = Tree();
+        tree.nextItemCost.costs.Add(new ResourceTuple(resource, new BigDouble(25, 0)));
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.Unaffordable, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.nextItemCost.PerformCalls);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    [Fact]
+    public void Invisible_tree_has_zero_native_mutation_calls()
+    {
+        var tree = Tree();
+        tree.visible = false;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.TreeUnavailable, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.nextItemCost.PerformCalls);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    [Fact]
+    public void Wrong_mode_has_zero_native_mutation_calls()
+    {
+        var tree = Tree();
+        var item = Item();
+        tree.allDiscoverableItems.Add(item);
+        tree.currentChoiceIds.Add(new GuidContainer(item.GetGuid()));
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.WrongMode, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.selectCalls);
+    }
+
+    [Fact]
+    public void No_remaining_discovery_has_zero_native_mutation_calls()
+    {
+        var tree = Tree();
+        typeof(DiscoveryTreeSO).GetField(
+                "hasRemainingDiscovery",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(tree, false);
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.NoDiscoveries, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.nextItemCost.PerformCalls);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    [Fact]
+    public void Missing_or_stale_offer_has_zero_native_mutation_calls()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.currentChoiceIds.Clear();
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.OfferUnavailable, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.selectCalls);
+    }
+
+    [Fact]
+    public void Already_discovered_offer_has_zero_native_mutation_calls()
+    {
+        var (tree, item) = ChoiceTree();
+        item.discovered = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.AlreadyDiscovered, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.selectCalls);
+    }
+
+    [Fact]
+    public void Reroll_without_native_allowance_has_zero_native_mutation_calls()
+    {
+        var (tree, _) = ChoiceTree();
+        tree.rerollsLeft = 0;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Reroll, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.RerollUnavailable, result.Preflight);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, tree.rerollCalls);
+    }
+
+    [Fact]
+    public void Duplicate_tree_identity_fails_closed_before_mutation()
+    {
+        var tree = Tree();
+        var duplicate = Tree();
+        duplicate.SetGuid(tree.GetGuid());
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.IdentityUnavailable, result.Preflight);
+        Assert.Contains("ambiguous", result.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+    }
+
+    [Fact]
+    public async Task Off_thread_submission_is_rejected_without_touching_Unity_state()
+    {
+        var tree = Tree();
+        using var action = Action();
+
+        var result = await Task.Run(() => action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch)));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.WrongThread, result.Preflight);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    [Fact]
+    public void Partial_payment_is_receipted_and_quarantines_lifecycle()
+    {
+        var first = Resource();
+        var second = Resource();
+        var tree = Tree();
+        tree.nextItemCost.costs.Add(new ResourceTuple(first, new BigDouble(10, 0)));
+        tree.nextItemCost.costs.Add(new ResourceTuple(second, new BigDouble(20, 0)));
+        tree.nextItemCost.ThrowAfterCostRows = 1;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, result.Preflight);
+        Assert.True(result.Receipt.PaymentInvoked);
+        Assert.True(result.Receipt.ResourcesCharged);
+        Assert.True(action.IsQuarantined);
+        Assert.Equal(0, result.CallOutcome.MutationsCommitted);
+        var next = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+        Assert.Equal(DiscoveryTreeOfferPreflight.Quarantined, next.Preflight);
+    }
+
+    [Fact]
+    public void Confirm_fault_after_native_reset_preserves_partial_evidence_and_quarantines()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        tree.throwAfterConfirmReset = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, result.Preflight);
+        Assert.True(result.Receipt.EvidenceAvailable);
+        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
+        Assert.False(result.Receipt.After.TargetDiscovered);
+        Assert.True(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Reroll_clear_fault_after_transition_is_evidence_and_commits()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.selectedChoiceId = new GuidContainer(item.GetGuid());
+        tree.rerollsLeft = 1;
+        tree.throwAfterSelectionClear = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Reroll, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(DiscoveryTreeOfferNativeStage.Verification, result.Stage);
+        Assert.Equal(Guid.Empty, result.Receipt.After.SelectedChoice);
+        Assert.Equal(0, result.Receipt.After.Rerolls);
+        Assert.False(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Native_postcondition_mismatch_is_partial_and_quarantines()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.suppressSelect = true;
+        using var action = Action();
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.True(result.Receipt.EvidenceAvailable);
+        Assert.False(result.Receipt.PostconditionMatched);
+        Assert.Equal(1, result.CallOutcome.NativeCallsAttempted);
+        Assert.Equal(0, result.CallOutcome.MutationsCommitted);
+        Assert.True(action.IsQuarantined);
+    }
+
+    [Fact]
+    public void Lifecycle_invalidation_clears_quarantine_but_stale_action_still_refuses()
+    {
+        var (tree, item) = ChoiceTree();
+        tree.throwAfterSelect = true;
+        tree.suppressSelect = true;
+        var epoch = Epoch;
+        using var action = Action(() => epoch);
+        var stale = new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), epoch);
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, action.Submit(stale).Preflight);
+        epoch++;
+        tree.throwAfterSelect = false;
+        tree.suppressSelect = false;
+        action.InvalidateLifecycle();
+
+        Assert.False(action.IsQuarantined);
+        Assert.Equal(DiscoveryTreeOfferPreflight.LifecycleReplaced, action.Submit(stale).Preflight);
+        var fresh = new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), epoch);
+        Assert.True(action.Submit(fresh).Verified);
+    }
+
+    [Fact]
+    public void Every_missing_lifecycle_contract_disables_the_complete_binding_set()
+    {
+        var tree = Tree();
+        foreach (var missing in DiscoveryTreeOfferNativeBindings.ContractIds)
+        {
+            using var action = Action(includeContract: id => id != missing);
+            Assert.False(action.BindingsAvailable);
+            Assert.Contains(missing, action.BindingFailure, StringComparison.Ordinal);
+            var result = action.Submit(new DiscoveryTreeOfferAction(
+                DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+            Assert.Equal(DiscoveryTreeOfferPreflight.ContractUnavailable, result.Preflight);
+            Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        }
+        Assert.Equal(0, tree.nextItemCost.PerformCalls);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    [Fact]
+    public void Mutation_permit_is_the_last_suite_gate()
+    {
+        var tree = Tree();
+        using var action = Action(permit: false, ownershipFailure: "manual MCP ownership was revoked");
+
+        var result = action.Submit(new DiscoveryTreeOfferAction(
+            DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
+
+        Assert.Equal(DiscoveryTreeOfferPreflight.MutationPermitUnavailable, result.Preflight);
+        Assert.Contains("revoked", result.Reason, StringComparison.Ordinal);
+        Assert.Equal(0, tree.nextItemCost.PerformCalls);
+        Assert.Equal(0, tree.initiateCalls);
+    }
+
+    private static DiscoveryTreeOfferGameAction Action(
+        Func<long>? epoch = null,
+        bool permit = true,
+        string ownershipFailure = "",
+        Func<string, bool>? includeContract = null) =>
+        new(epoch ?? (() => Epoch), () => permit, () => ownershipFailure,
+            includeContract: includeContract);
+
+    private static DiscoveryTreeSO Tree()
+    {
+        var tree = new DiscoveryTreeSO
+        {
+            actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Idle,
+            actionTime = BigDouble.Zero,
+            maximumRerolls = 2,
+        };
+        DiscoveryTreeSO.All.Add(tree);
+        return tree;
+    }
+
+    private static (DiscoveryTreeSO Tree, DiscoveryTestItemSO Item) ChoiceTree()
+    {
+        var tree = Tree();
+        var item = Item();
+        tree.actionMode = DiscoveryTreeSO.DiscoveryTreeModes.Choice;
+        tree.allDiscoverableItems.Add(item);
+        tree.currentChoiceIds.Add(new GuidContainer(item.GetGuid()));
+        return (tree, item);
+    }
+
+    private static DiscoveryTestItemSO Item() => new DiscoveryTestItemSO();
+
+    private static ResourceSO Resource(int quantity = 1000)
+    {
+        var resource = new ResourceSO { quantity = new BigDouble(quantity, 0) };
+        ResourceSO.All.Add(resource);
+        return resource;
+    }
+
+    private static ResourceSO Resource(BigDouble quantity)
+    {
+        var resource = new ResourceSO { quantity = quantity };
+        ResourceSO.All.Add(resource);
+        return resource;
+    }
+}

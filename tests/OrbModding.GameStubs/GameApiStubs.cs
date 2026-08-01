@@ -753,6 +753,8 @@ public class SaveStateManager
 
 public class GameManager
 {
+    public static long currentFrame;
+
     public static void ResetGameState()
     {
     }
@@ -844,7 +846,9 @@ public class Prerequisites
     {
         public bool available;
         public bool NativeCheckResult { get; set; }
+        public bool? ParameterizedCheckResult { get; set; }
         public int CheckCalls { get; private set; }
+        public int ParameterizedCheckCalls { get; private set; }
 
         /// <summary>
         /// The conditions themselves. The suite reads how many there are — none is what an
@@ -874,7 +878,11 @@ public class Prerequisites
         /// mean nothing.
         /// </para>
         /// </remarks>
-        public bool Check(Requirements.ConditionInfo conditionInfo) => prerequisites.Count == 0;
+        public bool Check(Requirements.ConditionInfo conditionInfo)
+        {
+            ParameterizedCheckCalls++;
+            return ParameterizedCheckResult ?? prerequisites.Count == 0;
+        }
     }
 }
 
@@ -937,6 +945,7 @@ public class PersistentEffectDeprecated
 public class ResourceCostList
 {
     public List<ResourceTuple> costs = new List<ResourceTuple>();
+    public bool WithinCapacity = true;
     public int CostPrintReads { get; private set; }
     private string _costPrint
     {
@@ -948,11 +957,14 @@ public class ResourceCostList
     }
     public bool affordable = true;
 
+    public bool IsWithinCapacity() => WithinCapacity;
+
     // How many more purchases the holdings cover. Spending is what makes a price unaffordable in the
     // game, so a fixture that wants a purchase to stop being possible partway says how far the
     // holdings go rather than reaching in and flipping a flag mid-call.
     public int AffordableLevels = int.MaxValue;
     public int PerformCalls { get; private set; }
+    public int? ThrowAfterCostRows { get; set; }
     public bool HasEnough()
     {
         if (!affordable || AffordableLevels <= 0) return false;
@@ -976,6 +988,8 @@ public class ResourceCostList
         {
             var row = costs[index];
             row.resource?.Spend(row.GetValue());
+            if (ThrowAfterCostRows == index + 1)
+                throw new InvalidOperationException($"injected failure after {index + 1} cost rows");
         }
         if (AffordableLevels is > 0 and < int.MaxValue) AffordableLevels--;
     }
@@ -1142,6 +1156,7 @@ public class ResearchSO
     public bool isActive;
     public bool flagged;
     public bool available = true;
+    public Prerequisites.Container levelPrerequisites = new Prerequisites.Container();
     public bool hiddenLevel;
     public int levelVisibilityRange = 2;
     public ModifierRecord requirementsAdjust = new ModifierRecord();
@@ -1156,7 +1171,27 @@ public class ResearchSO
     public string GetName() => "Research";
     public bool IsDeveloping() => isDeveloping;
     public bool IsActive() => isActive;
-    public bool IsAvailable() => available;
+    public bool IsVisible() => available;
+    public bool IsAvailable() => IsVisible() && !IsComplete();
+    public bool IsComplete() => IsMaxLevel();
+    public bool HasMaxLevel() => maxLevel > 0;
+    public bool IsMaxLevel() => HasMaxLevel() && GetBaseLevel() >= maxLevel;
+    public bool MeetsLevelRequirements() =>
+        levelPrerequisites.Check(new Requirements.ConditionInfo(GetRequirementLevel()));
+    public bool StillHasLeeway() => true;
+    public bool IsBelowArtificialMaxLevel() => true;
+    public bool IsBelowMaxInvestmentLevel() => !IsComplete();
+    public bool IsWithinDevelopRange() =>
+        !IsComplete() && MeetsLevelRequirements() && StillHasLeeway() &&
+        IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel();
+    public bool CanDevelop() => IsWithinDevelopRange() && !IsDeveloping();
+    public int GetPurchasedLevels() => level;
+    public int GetBaseLevel() => level + baseLevels.GetValue().ToInt();
+    public int GetBonusLevels() => bonusLevels.GetValue().ToInt();
+    public int GetLevel() => GetBaseLevel() + GetBonusLevels();
+    public int GetMaxLevel() => maxLevel;
+    public int GetArtificialMaxLevel() => maxLevelCap.GetValue().ToInt();
+    public int GetRequirementLevel() => requirementsAdjust.Adjust(new BigDouble(GetBaseLevel())).ToInt();
 }
 
 public struct ResourceTuple
@@ -1219,6 +1254,18 @@ public class ModifierRecord
     public Dictionary<Guid, ValueModifier> activeModifiers = new Dictionary<Guid, ValueModifier>();
 
     public bool HasActiveElements() => activeModifiers.Count > 0;
+
+    public BigDouble Adjust(BigDouble value)
+    {
+        foreach (var modifier in passiveModifiers.Values.Concat(activeModifiers.Values)
+                     .OrderBy(static modifier => modifier.order))
+        {
+            if (modifier.type != ValueModifier.ValueModifierType.Raw)
+                throw new InvalidOperationException("The portable research stub models raw requirement adjustments only.");
+            value += modifier.adjustReal;
+        }
+        return value;
+    }
 }
 
 /// <summary>
@@ -1239,12 +1286,16 @@ public struct ValueModifier
     public BigDouble adjustReal;
     public ValueModifierType type;
     public int order;
+#pragma warning disable CS0414 // Native private field read by the collector through a bound accessor.
+    private IdScriptableObject? reference;
+#pragma warning restore CS0414
 
     public ValueModifier(ValueModifierType type, BigDouble amount, int order = 0)
     {
         this.type = type;
         adjustReal = amount;
         this.order = order;
+        reference = null;
     }
 }
 
@@ -1766,10 +1817,42 @@ public sealed class AttributeSO : TooltipableObject
 
 public class TooltipNode
 {
-    public TooltipNode(string text) { Text = text; }
-    public TooltipNode(string text, UnityEngine.Color color) { Text = text; Color = color; }
-    public string Text { get; }
-    public UnityEngine.Color? Color { get; }
+    public enum NodeType { Text, Icon, IconText, Divider, Parent }
+    public enum ParentType { Plain, Boxed, SoftBoxed }
+
+    public TooltipNode(string text)
+    {
+        this.text = text;
+        textColor = UnityEngine.Color.white;
+        color = UnityEngine.Color.white;
+    }
+
+    public TooltipNode(string text, UnityEngine.Color color)
+        : this(text)
+    {
+        this.color = color;
+    }
+
+    public string Text => text;
+    public UnityEngine.Color? Color => color;
+    public List<TooltipNode> children = new();
+    public UnityEngine.Color color;
+    public UnityEngine.Sprite? icon;
+    public bool isIconBacked;
+    public NodeType nodeType;
+    public ParentType parentType;
+    public float size = 1f;
+    public List<ITooltipable> subTooltips = new();
+    public string text;
+    public UnityEngine.Color textColor;
+    public Func<string>? textFn;
+    public ITooltipable? tooltipable;
+}
+
+public class UITooltipContainer : UnityEngine.MonoBehaviour
+{
+    public static List<UITooltipContainer> globalTooltips = new();
+    public ITooltipable? item;
 }
 
 public class HoverTooltip : UnityEngine.MonoBehaviour

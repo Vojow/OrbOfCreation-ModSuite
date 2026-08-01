@@ -16004,6 +16004,1486 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "crafting-recipe.all",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<CraftingRecipeSO>",
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.can-buy-at",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanBuyAt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [
+        "BigDouble"
+      ],
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.engagement-effects",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "engagementEffects",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<PersistentEffectBlock>",
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.generated-resources",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "generatedResources",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.get-starting-quantity",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetStartingQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.recipe-cost",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "recipeCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.time-to-complete",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "timeToComplete",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Double",
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "crafting-recipe.visible",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "effect-block.get-effect-necessary-drain-ratio",
+      "assembly": "assembly-csharp",
+      "type": "EffectBlock",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetEffectNecessaryDrainRatio",
+      "visibility": "private",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "game-manager.current-frame",
+      "assembly": "assembly-csharp",
+      "type": "GameManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentFrame",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Int64",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.all",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<PrerequisiteLinkSO>",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.definition.active-enabled",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO+LinkDefinition",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isActiveEnabled",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.definition.current-frame",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO+LinkDefinition",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentFrame",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Int64",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.definition.passive-enabled",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO+LinkDefinition",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isPassiveEnabled",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.definition.prerequisites",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO+LinkDefinition",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "prerequisites",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Prerequisites+Container",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.definition.type",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO+LinkDefinition",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.link-tiers",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "linkTiers",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<PrerequisiteLinkSO+LinkDefinition>",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "prerequisite-link.type",
+      "assembly": "assembly-csharp",
+      "type": "PrerequisiteLinkSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition-info.constructor",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.ConditionInfo",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": ".ctor",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Int64"
+      ],
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.and.conditions",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.AndRequirement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "andConditions",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<Requirements.IRequirementCondition>",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.and.type",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.AndRequirement",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.or.conditions",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.OrRequirement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "orConditions",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<Requirements.IRequirementCondition>",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.or.type",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.OrRequirement",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.prerequisite-link.type",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.PrerequisiteLinkRequirement",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection",
+        "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.can-develop",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanDevelop",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-artificial-max-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetArtificialMaxLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-base-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetBaseLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-bonus-levels",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetBonusLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-purchased-levels",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetPurchasedLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.get-requirement-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRequirementLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.is-below-artificial-max-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsBelowArtificialMaxLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.is-below-max-investment-level",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsBelowMaxInvestmentLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.is-complete",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsComplete",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.is-within-develop-range",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsWithinDevelopRange",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.level-prerequisites",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "levelPrerequisites",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Prerequisites+Container",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.meets-level-requirements",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "MeetsLevelRequirements",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research.still-has-leeway",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "StillHasLeeway",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "resource-cost-list.is-within-capacity",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsWithinCapacity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common crafting recipe world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "value-modifier.reference",
+      "assembly": "assembly-csharp",
+      "type": "ValueModifier",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "reference",
+      "visibility": "private",
+      "static": false,
+      "valueType": "ITooltipable",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "game-mcp-entity-description.get-description",
+      "assembly": "assembly-csharp",
+      "type": "ITooltipable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDescription",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.String",
+      "parameters": [],
+      "owners": [
+        "Game MCP entity explanation"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.discoverable.type",
+      "assembly": "assembly-csharp",
+      "type": "IDiscoverable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.has-guid.type",
+      "assembly": "assembly-csharp",
+      "type": "IHasGuid",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.current-choice-ids",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentChoiceIds",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<GuidContainer>",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.next-excluded-ids",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "nextExcludedIds",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<GuidContainer>",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.guid-container-value",
+      "assembly": "assembly-csharp",
+      "type": "GuidContainer",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_guid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-is-visible",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-is-idle",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsInIdleMode",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-is-crafting",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsInCraftingMode",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-is-choice",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsInChoiceMode",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-has-remaining",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasCurrentlyRemMainPoolDiscoveries",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-has-immediate-required",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasImmediateRequiredDiscover",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-next-cost",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetNextItemCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-max-rerolls",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaxRerolls",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-get-item",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetItemFromGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "IDiscoverable",
+      "parameters": [
+        "System.Guid"
+      ],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-initiate",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "InitiateCraftingMode",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-select",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SelectItemId",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Guid"
+      ],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-confirm",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "DiscoverSelectedItem",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-reroll",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "RerollChoices",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.has-guid-get-guid",
+      "assembly": "assembly-csharp",
+      "type": "IHasGuid",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.item-is-discovered",
+      "assembly": "assembly-csharp",
+      "type": "IDiscoverable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsDiscovered",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.item-is-required",
+      "assembly": "assembly-csharp",
+      "type": "IDiscoverable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsDiscoverRequired",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-all",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<DiscoveryTreeSO>",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-mode",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "actionMode",
+      "visibility": "public",
+      "static": false,
+      "valueType": "DiscoveryTreeSO+DiscoveryTreeModes",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-action-time",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "actionTime",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-rerolls",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "rerollsLeft",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-used-rerolls",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "usedRerollsLastDiscover",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-selected",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selectedChoiceId",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GuidContainer",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-total-discovered",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "totalDiscoveredCount",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-offer.tree-pool-discovered",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "poolDiscoveredCount",
+      "visibility": "private",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata Discovery Tree offer GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "discovery-tree-reader.current-choice-ids",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentChoiceIds",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<GuidContainer>",
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.guid-container-value",
+      "assembly": "assembly-csharp",
+      "type": "GuidContainer",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_guid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.is-visible",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsVisible",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.has-immediate-required",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasImmediateRequiredDiscover",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.next-item-cost",
+      "assembly": "assembly-csharp",
+      "type": "DiscoveryTreeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetNextItemCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.cost-entries",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetEntries",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<ResourceTuple>",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.cost-has-enough",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasEnough",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.cost-value",
+      "assembly": "assembly-csharp",
+      "type": "ResourceTuple",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetValue",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "discovery-tree-reader.resource-true-quantity",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTrueQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Automata Discovery Tree decision world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -16017,6 +17497,7 @@
       "src/AutoScribe",
       "src/Automata",
       "src/Common",
+      "src/DiscoveryTree",
       "src/Mentor",
       "src/ModConfig",
       "src/SpellLeveling"

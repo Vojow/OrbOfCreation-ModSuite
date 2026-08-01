@@ -106,6 +106,13 @@ public sealed record GameWorldState
     internal PublicationTable<WorldCraftingRecipeType> CraftingRecipeTypes { get; init; } =
         PublicationTable<WorldCraftingRecipeType>.Empty;
 
+    /// <summary>
+    /// Every concrete crafting recipe with authored inputs/outputs and current native visibility,
+    /// purchase, output-capacity, bandwidth, and engagement-drain evidence.
+    /// </summary>
+    internal PublicationTable<WorldCraftingRecipe> CraftingRecipes { get; init; } =
+        PublicationTable<WorldCraftingRecipe>.Empty;
+
     internal PublicationTable<WorldHarvestElement> HarvestElements { get; init; } =
         PublicationTable<WorldHarvestElement>.Empty;
 
@@ -295,8 +302,8 @@ public sealed record GameWorldState
         PublicationTable<WorldEffectBlock>.Empty;
 
     /// <summary>
-    /// Every authored condition on an entity's next level, keyed by the entity it gates and read
-    /// through <see cref="WorldEntityRequirementLookup"/>.
+    /// Every authored condition and explicit group on an entity's next level, keyed by the entity or
+    /// prerequisite-link tier it gates and read through <see cref="WorldEntityRequirementLookup"/>.
     /// </summary>
     /// <remarks>
     /// The game's own answer takes a level argument — <c>prerequisitesPerLevel.Check(level)</c> — so
@@ -304,9 +311,25 @@ public sealed record GameWorldState
     /// be, and everything they compare against is already a row in this same snapshot, which is what
     /// lets a worker reach the verdict without asking the game. An entity with no row here authored no
     /// per-level condition, which is the game's own unconditional pass rather than a gap in the read.
+    /// Link tiers additionally carry a container-root row so an authored empty tier cannot be confused
+    /// with a selected tier that does not exist.
     /// </remarks>
     internal PublicationTable<WorldEntityRequirement> EntityRequirements { get; init; } =
         PublicationTable<WorldEntityRequirement>.Empty;
+
+    /// <summary>
+    /// Native parameterized prerequisite verdicts captured on the Unity thread at the exact check
+    /// level recorded in each row. These are differential oracles for worker-owned evaluation, not
+    /// whole-entity availability latches.
+    /// </summary>
+    internal PublicationTable<WorldRequirementNativeVerdict> RequirementNativeVerdicts { get; init; } =
+        PublicationTable<WorldRequirementNativeVerdict>.Empty;
+
+    /// <summary>
+    /// The live active-link and passive-cache gates for every authored prerequisite-link tier.
+    /// </summary>
+    internal PublicationTable<WorldPrerequisiteLinkTier> PrerequisiteLinkTiers { get; init; } =
+        PublicationTable<WorldPrerequisiteLinkTier>.Empty;
 
     internal PublicationTable<WorldTreasurePool> TreasurePools { get; init; } =
         PublicationTable<WorldTreasurePool>.Empty;
